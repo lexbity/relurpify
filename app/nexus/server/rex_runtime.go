@@ -5,17 +5,17 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	relruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/ayenitd"
-	relconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/named/rex"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
@@ -23,10 +23,75 @@ import (
 	rexctx "codeburg.org/lexbit/relurpify/named/rex/rexctx"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
+	rexstore "codeburg.org/lexbit/relurpify/named/rex/store"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 const rexCapabilityID = "nexus.runtime.rex.execute"
+
+// WorkflowStore is a stub for the deleted framework/memory/db type
+type WorkflowStore struct{}
+
+func (s *WorkflowStore) Close() error { return nil }
+func (s *WorkflowStore) GetWorkflow(ctx context.Context, id string) (memory.WorkflowRecord, bool, error) {
+	return memory.WorkflowRecord{}, false, nil
+}
+func (s *WorkflowStore) GetRun(ctx context.Context, id string) (memory.WorkflowRunRecord, bool, error) {
+	return memory.WorkflowRunRecord{}, false, nil
+}
+
+// FindLineageBindingsByLineageID implements nexus.LineageBindingStore
+func (s *WorkflowStore) FindLineageBindingsByLineageID(ctx context.Context, lineageID string) ([]rexstore.LineageBindingRecord, error) {
+	return nil, nil
+}
+
+// FindLineageBindingsByAttemptID implements nexus.LineageBindingStore
+func (s *WorkflowStore) FindLineageBindingsByAttemptID(ctx context.Context, attemptID string) ([]rexstore.LineageBindingRecord, error) {
+	return nil, nil
+}
+
+// UpsertLineageBinding implements nexus.LineageBindingStore
+func (s *WorkflowStore) UpsertLineageBinding(ctx context.Context, record rexstore.LineageBindingRecord) error {
+	return nil
+}
+
+// CreateWorkflow creates a new workflow record (stub).
+func (s *WorkflowStore) CreateWorkflow(ctx context.Context, workflow *memory.WorkflowRecord) error {
+	return nil
+}
+
+// CreateRun creates a new run record (stub).
+func (s *WorkflowStore) CreateRun(ctx context.Context, run *memory.WorkflowRunRecord) error {
+	return nil
+}
+
+// ListWorkflows lists all workflows (stub).
+func (s *WorkflowStore) ListWorkflows(ctx context.Context) ([]memory.WorkflowRecord, error) {
+	return nil, nil
+}
+
+// ListWorkflowArtifacts lists artifacts for a workflow (stub).
+func (s *WorkflowStore) ListWorkflowArtifacts(ctx context.Context, workflowID, runID string) ([]memory.WorkflowArtifactRecord, error) {
+	return nil, nil
+}
+
+// AppendEvent appends an event to a run (stub).
+func (s *WorkflowStore) AppendEvent(ctx context.Context, workflowID, runID string, event *rexstore.WorkflowEventRecord) error {
+	return nil
+}
+
+// GetLineageBinding gets a lineage binding (stub).
+func (s *WorkflowStore) GetLineageBinding(ctx context.Context, workflowID, runID string) (*rexstore.LineageBindingRecord, bool, error) {
+	return nil, false, nil
+}
+
+// ListEvents lists events for a run (stub).
+func (s *WorkflowStore) ListEvents(ctx context.Context, workflowID, runID string) ([]rexstore.WorkflowEventRecord, error) {
+	return nil, nil
+}
+
+// CheckpointStore is a stub for the deleted framework/memory/db type
+type CheckpointStore struct{}
 
 type RexRuntimeProvider struct {
 	Agent           *rex.Agent
@@ -35,9 +100,9 @@ type RexRuntimeProvider struct {
 	LineageBridge   *rexnexus.LineageBridge
 	RuntimeEndpoint *rexnexus.RuntimeEndpoint
 	Packager        fwfmp.ContextPackager
-	WorkflowStore   *memdb.SQLiteWorkflowStateStore
-	CheckpointStore *memdb.SQLiteCheckpointStore
-	Bundle          *relruntime.CapabilityBundle
+	WorkflowStore   *rexstore.SQLiteWorkflowStore
+	CheckpointStore *CheckpointStore
+	Bundle          *CapabilityBundle
 	TrustedResolver rexctx.TrustedContextResolver
 	EventBridge     interface{ Health() (bool, string) }
 	// Phase 7.1: Admission control for gateway routing
@@ -55,32 +120,31 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	paths := relconfig.New(workspace)
+	paths := relmanifest.New(workspace)
 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
 		return nil, err
 	}
-	workflowStore, err := memdb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
+	workflowStore, err := rexstore.NewSQLiteWorkflowStore(filepath.Join(paths.MemoryDir(), "rex_workflow.db"))
 	if err != nil {
 		return nil, err
 	}
-	checkpointStore := memdb.NewSQLiteCheckpointStoreWithEvents(workflowStore.DB(), workflowStore, "", "")
 	runner := sandbox.NewLocalCommandRunner(workspace, nil)
-	bundle, err := relruntime.BuildBuiltinCapabilityBundle(workspace, runner, relruntime.CapabilityRegistryOptions{
+	bundle, err := BuildBuiltinCapabilityBundle(workspace, runner, CapabilityRegistryOptions{
 		Context: ctx,
 	})
 	if err != nil {
 		_ = workflowStore.Close()
 		return nil, err
 	}
-	agent := rex.NewWithWorkspace(ayenitd.WorkspaceEnvironment{
-		Registry:     bundle.Registry,
-		IndexManager: bundle.IndexManager,
-		SearchEngine: bundle.SearchEngine,
-		Memory:       memory.NewCompositeRuntimeStore(workflowStore, nil, checkpointStore),
-		Config:       &core.Config{Name: "rex"},
+	agent := rex.NewWithWorkspace(&agentenv.WorkspaceEnvironment{
+		Registry:      bundle.Registry,
+		IndexManager:  bundle.IndexManager,
+		SearchEngine:  bundle.SearchEngine,
+		WorkingMemory: memory.NewWorkingMemoryStore(),
+		Config:        &core.Config{Name: "rex"},
 	}, workspace)
 	agent.Runtime.Start(ctx)
 	provider := &RexRuntimeProvider{
@@ -88,7 +152,7 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		Adapter:         agent.ManagedAdapter(),
 		SnapshotStore:   &rexnexus.SnapshotStore{WorkflowStore: workflowStore},
 		WorkflowStore:   workflowStore,
-		CheckpointStore: checkpointStore,
+		CheckpointStore: &CheckpointStore{},
 		Bundle:          bundle,
 		TrustedResolver: &rexctx.DefaultTrustedContextResolver{},
 		// Phase 7.1: Initialize admission controller with default capacity and fairness quotas
@@ -140,15 +204,15 @@ func (p *RexRuntimeProvider) RuntimeProjection() rexnexus.Projection {
 	if p.WorkflowStore != nil && strings.TrimSpace(projection.WorkflowID) != "" {
 		ctx := context.Background()
 		workflow, ok, err := p.WorkflowStore.GetWorkflow(ctx, projection.WorkflowID)
-		if err == nil && ok && workflow != nil {
+		if err == nil && ok {
 			var run *memory.WorkflowRunRecord
 			if strings.TrimSpace(projection.RunID) != "" {
 				candidate, ok, err := p.WorkflowStore.GetRun(ctx, projection.RunID)
 				if err == nil && ok {
-					run = candidate
+					run = &candidate
 				}
 			}
-			metadata := rexcontrolplane.BuildDRMetadata(*workflow, run)
+			metadata := rexcontrolplane.BuildDRMetadata(workflow, run)
 			projection.FailoverReady = metadata.FailoverReady
 			projection.RecoveryState = metadata.RecoveryState
 			projection.RuntimeVersion = metadata.RuntimeVersion
@@ -218,11 +282,10 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		LocalRecipient: mediationRecipient,
 	}
 	p.LineageBridge = &rexnexus.LineageBridge{
-		Service:             service,
-		WorkflowStore:       p.WorkflowStore,
-		LineageBindingStore: p.WorkflowStore,
-		RuntimeID:           p.runtimeDescriptor().RuntimeID,
-		PolicyResolver:      p.TrustedResolver,
+		Service:        service,
+		LifecycleRepo:   p.Agent.Environment.AgentLifecycle,
+		RuntimeID:      p.runtimeDescriptor().RuntimeID,
+		PolicyResolver: p.TrustedResolver,
 	}
 	p.Agent.Observer = p.LineageBridge
 	p.Agent.Reconciler = &rexreconcile.FMPBackedReconciler{
@@ -234,7 +297,7 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 				return nil, err
 			}
 			return &rexreconcile.AttemptView{
-				State:  attempt.State,
+				State:  rexreconcile.AttemptState(attempt.State),
 				Fenced: attempt.Fenced,
 			}, nil
 		},
@@ -245,7 +308,7 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		Packager:            packager,
 		WorkflowStore:       p.WorkflowStore,
 		LineageBindingStore: p.WorkflowStore,
-		Schedule: func(ctx context.Context, workflowID, runID string, task *core.Task, state *core.Context) error {
+		Schedule: func(ctx context.Context, workflowID, runID string, task *core.Task, state *contextdata.Envelope) error {
 			item := rexnexusWorkItem(workflowID, runID, task, state, p.Agent)
 			if !p.Agent.Runtime.Enqueue(item) {
 				return fmt.Errorf("rex runtime queue full")
@@ -264,7 +327,7 @@ func (p *RexRuntimeProvider) PublishFMPTrustBundle(ctx context.Context, service 
 	runtimeKey := sha256.Sum256([]byte(recipient))
 	mediationRecipient := fwfmp.QualifiedGatewayRecipient(p.runtimeDescriptor().TrustDomain, p.runtimeDescriptor().NodeID)
 	mediationKey := sha256.Sum256([]byte(mediationRecipient))
-	return service.PublishLocalTrustBundle(ctx, p.runtimeDescriptor().TrustDomain, p.runtimeDescriptor().TrustDomain+":nexus", []core.RecipientKeyAdvertisement{
+	return service.PublishLocalTrustBundle(ctx, p.runtimeDescriptor().TrustDomain, p.runtimeDescriptor().TrustDomain+":nexus", []fwfmp.RecipientKeyAdvertisement{
 		{
 			Recipient: recipient,
 			KeyID:     "runtime",
@@ -344,10 +407,10 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 		return nil, err
 	}
 	if sessionKey != "" {
-		state.Set(rexkeys.GatewaySessionID, sessionKey)
+		state.SetWorkingValue(rexkeys.GatewaySessionID, sessionKey, contextdata.MemoryClassTask)
 	}
 	if principalTenantID != "" {
-		state.Set(rexkeys.GatewayTenantID, principalTenantID)
+		state.SetWorkingValue(rexkeys.GatewayTenantID, principalTenantID, contextdata.MemoryClassTask)
 	}
 	result, err := p.Adapter.Invoke(ctx, task, state)
 	out := &core.CapabilityExecutionResult{Success: err == nil, Data: map[string]any{}}
@@ -355,8 +418,8 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 		out.Success = result.Success
 		out.Data = result.Data
 		out.Metadata = result.Metadata
-		if result.Error != nil {
-			out.Error = result.Error.Error()
+		if strings.TrimSpace(result.Error) != "" {
+			out.Error = result.Error
 		}
 	}
 	if err != nil {
@@ -365,32 +428,32 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 	return out, err
 }
 
-func rexTaskFromArgs(args map[string]any) (*core.Task, *core.Context, error) {
+func rexTaskFromArgs(args map[string]any) (*core.Task, *contextdata.Envelope, error) {
 	instruction := strings.TrimSpace(stringValue(args["instruction"]))
 	if instruction == "" {
 		return nil, nil, fmt.Errorf("instruction required")
 	}
 	task := &core.Task{
 		ID:          strings.TrimSpace(stringValue(args["task_id"])),
-		Type:        core.TaskType(strings.TrimSpace(stringValue(args["task_type"]))),
+		Type:        strings.TrimSpace(stringValue(args["task_type"])),
 		Instruction: instruction,
 		Context:     mapStringAny(args["context"]),
-		Metadata:    mapStringString(args["metadata"]),
+		Metadata:    mapStringAny(args["metadata"]),
 	}
 	if task.Type == "" {
-		task.Type = core.TaskTypeCodeGeneration
+		task.Type = string(core.TaskTypeCodeGeneration)
 	}
-	state := core.NewContext()
+	state := contextdata.NewEnvelope(task.ID, "")
 	for key, value := range task.Context {
-		state.Set(key, value)
+		state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 	}
 	if workflowID := strings.TrimSpace(stringValue(args[rexkeys.WorkflowID])); workflowID != "" {
-		state.Set(rexkeys.WorkflowID, workflowID)
-		state.Set(rexkeys.RexWorkflowID, workflowID)
+		state.SetWorkingValue(rexkeys.WorkflowID, workflowID, contextdata.MemoryClassTask)
+		state.SetWorkingValue(rexkeys.RexWorkflowID, workflowID, contextdata.MemoryClassTask)
 	}
 	if runID := strings.TrimSpace(stringValue(args[rexkeys.RunID])); runID != "" {
-		state.Set(rexkeys.RunID, runID)
-		state.Set(rexkeys.RexRunID, runID)
+		state.SetWorkingValue(rexkeys.RunID, runID, contextdata.MemoryClassTask)
+		state.SetWorkingValue(rexkeys.RexRunID, runID, contextdata.MemoryClassTask)
 	}
 	return task, state, nil
 }
@@ -415,21 +478,21 @@ func mapStringAny(value any) map[string]any {
 }
 
 func mapStringString(value any) map[string]string {
-	raw, ok := value.(map[string]any)
+	raw, ok := value.(map[string]string)
 	if !ok || len(raw) == 0 {
 		return nil
 	}
 	out := make(map[string]string, len(raw))
 	for key, entry := range raw {
-		if text := strings.TrimSpace(stringValue(entry)); text != "" {
+		if text := strings.TrimSpace(entry); text != "" {
 			out[key] = text
 		}
 	}
 	return out
 }
 
-func (p *RexRuntimeProvider) runtimeDescriptor() core.RuntimeDescriptor {
-	return core.RuntimeDescriptor{
+func (p *RexRuntimeProvider) runtimeDescriptor() fwfmp.RuntimeDescriptor {
+	return fwfmp.RuntimeDescriptor{
 		RuntimeID:                 "rex",
 		NodeID:                    "nexus",
 		TrustDomain:               "local",
@@ -442,7 +505,7 @@ func (p *RexRuntimeProvider) runtimeDescriptor() core.RuntimeDescriptor {
 	}
 }
 
-func (p *RexRuntimeProvider) RuntimeDescriptor(context.Context) (core.RuntimeDescriptor, error) {
+func (p *RexRuntimeProvider) RuntimeDescriptor(context.Context) (fwfmp.RuntimeDescriptor, error) {
 	if p != nil && p.RuntimeEndpoint != nil {
 		if descriptor, err := p.RuntimeEndpoint.Descriptor(context.Background()); err == nil {
 			return descriptor, nil
@@ -456,14 +519,14 @@ func (p *RexRuntimeProvider) runtimeRecipient() string {
 	return "runtime://" + descriptor.TrustDomain + "/" + descriptor.RuntimeID
 }
 
-func rexnexusWorkItem(workflowID, runID string, task *core.Task, state *core.Context, agent *rex.Agent) rexruntime.WorkItem {
+func rexnexusWorkItem(workflowID, runID string, task *core.Task, state *contextdata.Envelope, agent *rex.Agent) rexruntime.WorkItem {
 	return rexruntime.WorkItem{
 		WorkflowID: workflowID,
 		RunID:      runID,
 		Task:       task,
-		State:      state,
+		Envelope:   state,
 		Execute: func(ctx context.Context, item rexruntime.WorkItem) error {
-			_, err := agent.Execute(ctx, item.Task, item.State)
+			_, err := agent.Execute(ctx, item.Task, item.Envelope)
 			return err
 		},
 	}

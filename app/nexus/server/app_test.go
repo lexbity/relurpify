@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	nexusgateway "codeburg.org/lexbit/relurpify/app/nexus/gateway"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	rexproof "codeburg.org/lexbit/relurpify/named/rex/proof"
@@ -111,7 +112,7 @@ func TestSnapshotForPrincipalIncludesRexSnapshot(t *testing.T) {
 
 type fakeRexRuntime struct{}
 
-func (fakeRexRuntime) Execute(context.Context, *core.Task, *core.Context) (*core.Result, error) {
+func (fakeRexRuntime) Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
 	return &core.Result{Success: true, Data: map[string]any{"ok": true}}, nil
 }
 
@@ -119,8 +120,8 @@ func (fakeRexRuntime) RuntimeProjection() rexnexus.Projection {
 	return rexnexus.Projection{Health: rexruntime.HealthHealthy, LastProof: rexproof.ProofSurface{VerificationStatus: "pass"}}
 }
 
-func (fakeRexRuntime) Capabilities() []core.Capability {
-	return []core.Capability{core.CapabilityExecute}
+func (fakeRexRuntime) Capabilities() []string {
+	return []string{"execute"}
 }
 
 func mustSnapshotJSON(t *testing.T, snapshot nexusgateway.StateSnapshot) []byte {

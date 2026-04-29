@@ -15,7 +15,7 @@ func FederationInboundHandler(mesh *fwfmp.Service, transport *fwgateway.FMPTrans
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mesh == nil || mesh.Forwarder == nil {
 			writeFederationForwardResponse(w, http.StatusServiceUnavailable, fwfmp.GatewayForwardTransportResponse{
-				Refusal: &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "federation forwarder unavailable"},
+				Refusal: &fwfmp.TransferRefusal{Code: fwfmp.RefusalAdmissionClosed, Message: "federation forwarder unavailable"},
 			})
 			return
 		}
@@ -23,23 +23,23 @@ func FederationInboundHandler(mesh *fwfmp.Service, transport *fwgateway.FMPTrans
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		var req core.GatewayForwardRequest
+		var req fwfmp.GatewayForwardRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeFederationForwardResponse(w, http.StatusBadRequest, fwfmp.GatewayForwardTransportResponse{
-				Refusal: &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()},
+				Refusal: &fwfmp.TransferRefusal{Code: fwfmp.RefusalUnauthorized, Message: err.Error()},
 			})
 			return
 		}
 		if err := req.Validate(); err != nil {
 			writeFederationForwardResponse(w, http.StatusBadRequest, fwfmp.GatewayForwardTransportResponse{
-				Refusal: &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()},
+				Refusal: &fwfmp.TransferRefusal{Code: fwfmp.RefusalUnauthorized, Message: err.Error()},
 			})
 			return
 		}
 		if err := validateFederationTransport(r, transport, req.TrustDomain); err != nil {
 			auditFederationTransport(r, mesh, req, "denied", err.Error())
 			writeFederationForwardResponse(w, http.StatusForbidden, fwfmp.GatewayForwardTransportResponse{
-				Refusal: &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()},
+				Refusal: &fwfmp.TransferRefusal{Code: fwfmp.RefusalUnauthorized, Message: err.Error()},
 			})
 			return
 		}
@@ -48,7 +48,7 @@ func FederationInboundHandler(mesh *fwfmp.Service, transport *fwgateway.FMPTrans
 		switch {
 		case err != nil:
 			writeFederationForwardResponse(w, http.StatusInternalServerError, fwfmp.GatewayForwardTransportResponse{
-				Refusal: &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: err.Error()},
+				Refusal: &fwfmp.TransferRefusal{Code: fwfmp.RefusalAdmissionClosed, Message: err.Error()},
 			})
 		case refusal != nil:
 			writeFederationForwardResponse(w, http.StatusForbidden, fwfmp.GatewayForwardTransportResponse{Refusal: refusal})
@@ -92,7 +92,7 @@ func parseFederationTransportTime(raw string) (time.Time, error) {
 	return parsed.UTC(), nil
 }
 
-func auditFederationTransport(r *http.Request, mesh *fwfmp.Service, req core.GatewayForwardRequest, result, reason string) {
+func auditFederationTransport(r *http.Request, mesh *fwfmp.Service, req fwfmp.GatewayForwardRequest, result, reason string) {
 	if mesh == nil || mesh.Audit == nil {
 		return
 	}

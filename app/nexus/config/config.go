@@ -52,7 +52,7 @@ type NodesConfig struct {
 	PairingCodeTTL   time.Duration `yaml:"pairing_code_ttl,omitempty"`
 }
 
-// SecurityWarnings returns operator-visible warnings about the current config.
+// SecurityWarnings returns operator-visible warnings about the current manifest.
 func (cfg Config) SecurityWarnings(pendingPairings int) []string {
 	var warnings []string
 	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !IsLoopbackBind(bind) {

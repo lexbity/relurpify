@@ -8,6 +8,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,11 +20,11 @@ func TestUpdateNodeCapabilitiesPersistsApprovedSet(t *testing.T) {
 	require.NoError(t, err)
 	defer nodeStore.Close()
 
-	require.NoError(t, nodeStore.UpsertNode(context.Background(), core.NodeDescriptor{
+	require.NoError(t, nodeStore.UpsertNode(context.Background(), fwnode.NodeDescriptor{
 		ID:         "node-1",
 		TenantID:   "tenant-1",
 		Name:       "Node One",
-		Platform:   core.NodePlatformLinux,
+		Platform:   relurpnet.NodePlatformLinux,
 		TrustClass: core.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
 		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
@@ -65,11 +67,11 @@ func TestUpdateNodeCapabilitiesDeniesCrossTenantAccess(t *testing.T) {
 	require.NoError(t, err)
 	defer nodeStore.Close()
 
-	require.NoError(t, nodeStore.UpsertNode(context.Background(), core.NodeDescriptor{
+	require.NoError(t, nodeStore.UpsertNode(context.Background(), fwnode.NodeDescriptor{
 		ID:         "node-1",
 		TenantID:   "tenant-b",
 		Name:       "Node One",
-		Platform:   core.NodePlatformLinux,
+		Platform:   relurpnet.NodePlatformLinux,
 		TrustClass: core.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
 		Owner:      core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindNode, ID: "node-1"},

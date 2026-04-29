@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,7 +78,7 @@ func TestBindExternalIdentity(t *testing.T) {
 	result, err := svc.BindExternalIdentity(context.Background(), BindExternalIdentityRequest{
 		AdminRequest:    AdminRequest{TenantID: "tenant-1"},
 		SubjectTenantID: "tenant-1",
-		Provider:        core.ExternalProviderDiscord,
+		Provider:        identity.ExternalProviderDiscord,
 		AccountID:       "guild-1",
 		ExternalID:      "discord-user-1",
 		SubjectKind:     core.SubjectKindUser,
@@ -89,7 +90,7 @@ func TestBindExternalIdentity(t *testing.T) {
 	require.Equal(t, "tenant-1", result.Identity.TenantID)
 	require.Equal(t, "user-1", result.Identity.Subject.ID)
 
-	record, err := identityStore.GetExternalIdentity(context.Background(), "tenant-1", core.ExternalProviderDiscord, "guild-1", "discord-user-1")
+	record, err := identityStore.GetExternalIdentity(context.Background(), "tenant-1", identity.ExternalProviderDiscord, "guild-1", "discord-user-1")
 	require.NoError(t, err)
 	require.NotNil(t, record)
 	require.Equal(t, "user-1", record.Subject.ID)

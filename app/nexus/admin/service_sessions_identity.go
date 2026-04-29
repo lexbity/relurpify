@@ -126,7 +126,7 @@ func (s *service) GrantSessionDelegation(ctx context.Context, req GrantSessionDe
 	record := core.SessionDelegationRecord{
 		TenantID:   boundary.TenantID,
 		SessionID:  boundary.SessionID,
-		Grantee:    core.SubjectRef{TenantID: boundary.TenantID, Kind: req.SubjectKind, ID: subjectID},
+		Grantee:    core.DelegationSubjectRef{TenantID: boundary.TenantID, Kind: string(req.SubjectKind), ID: subjectID},
 		Operations: append([]core.SessionOperation(nil), req.Operations...),
 		CreatedAt:  time.Now().UTC(),
 	}

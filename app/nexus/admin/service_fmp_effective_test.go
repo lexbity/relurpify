@@ -18,10 +18,10 @@ func TestGetEffectiveFMPFederationPolicyCombinesTenantAndBoundaryControls(t *tes
 	federationStore, err := db.NewSQLiteFMPFederationStore(filepath.Join(t.TempDir(), "fmp_federation.db"))
 	require.NoError(t, err)
 	defer federationStore.Close()
-	require.NoError(t, federationStore.SetTenantFederationPolicy(context.Background(), core.TenantFederationPolicy{
+	require.NoError(t, federationStore.SetTenantFederationPolicy(context.Background(), fwfmp.TenantFederationPolicy{
 		TenantID:            "tenant-1",
 		AllowedTrustDomains: []string{"mesh.remote"},
-		AllowedRouteModes:   []core.RouteMode{core.RouteModeGateway, core.RouteModeMediated},
+		AllowedRouteModes:   []fwfmp.RouteMode{fwfmp.RouteModeGateway, fwfmp.RouteModeMediated},
 		AllowMediation:      true,
 		MaxTransferBytes:    2048,
 	}))
@@ -30,16 +30,16 @@ func TestGetEffectiveFMPFederationPolicyCombinesTenantAndBoundaryControls(t *tes
 		Trust:      &fwfmp.InMemoryTrustBundleStore{},
 		Boundaries: &fwfmp.InMemoryBoundaryPolicyStore{},
 	}
-	require.NoError(t, mesh.RegisterTrustBundle(context.Background(), core.TrustBundle{
+	require.NoError(t, mesh.RegisterTrustBundle(context.Background(), fwfmp.TrustBundle{
 		TrustDomain: "mesh.remote",
 		BundleID:    "bundle-1",
 		IssuedAt:    time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
 		ExpiresAt:   time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC),
 	}))
-	require.NoError(t, mesh.SetBoundaryPolicy(context.Background(), core.BoundaryPolicy{
+	require.NoError(t, mesh.SetBoundaryPolicy(context.Background(), fwfmp.BoundaryPolicy{
 		TrustDomain:                  "mesh.remote",
 		AcceptedSourceDomains:        []string{"mesh.remote"},
-		AllowedRouteModes:            []core.RouteMode{core.RouteModeGateway},
+		AllowedRouteModes:            []fwfmp.RouteMode{fwfmp.RouteModeGateway},
 		RequireGatewayAuthentication: true,
 		MaxTransferBytes:             1024,
 	}))
@@ -64,7 +64,7 @@ func TestGetEffectiveFMPFederationPolicyCombinesTenantAndBoundaryControls(t *tes
 	require.True(t, result.Policy.TrustBundlePresent)
 	require.True(t, result.Policy.BoundaryPolicyPresent)
 	require.True(t, result.Policy.AllowedTrustDomain)
-	require.Equal(t, []string{string(core.RouteModeGateway)}, result.Policy.AllowedRouteModes)
+	require.Equal(t, []string{string(fwfmp.RouteModeGateway)}, result.Policy.AllowedRouteModes)
 	require.False(t, result.Policy.AllowMediation)
 	require.Equal(t, int64(1024), result.Policy.MaxTransferBytes)
 	require.True(t, result.Policy.RequireGatewayAuth)

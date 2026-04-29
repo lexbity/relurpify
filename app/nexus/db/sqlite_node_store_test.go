@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet"
 	"codeburg.org/lexbit/relurpify/relurpnet/node"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestSQLiteNodeStoreListPendingPairingsFiltersExpiredRows(t *testing.T) {
 	now := time.Now().UTC()
 	require.NoError(t, store.SavePendingPairing(context.Background(), node.PendingPairing{
 		Code: "expired",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "node-expired",
 			IssuedAt:  now.Add(-2 * time.Minute),
 			PublicKey: []byte("expired-key"),
@@ -28,7 +29,7 @@ func TestSQLiteNodeStoreListPendingPairingsFiltersExpiredRows(t *testing.T) {
 	}))
 	require.NoError(t, store.SavePendingPairing(context.Background(), node.PendingPairing{
 		Code: "active",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "node-active",
 			IssuedAt:  now.Add(-time.Minute),
 			PublicKey: []byte("active-key"),
@@ -54,7 +55,7 @@ func TestSQLiteNodeStoreDeleteExpiredPendingPairingsRemovesExpiredRows(t *testin
 	now := time.Now().UTC()
 	require.NoError(t, store.SavePendingPairing(context.Background(), node.PendingPairing{
 		Code: "expired-1",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "node-1",
 			IssuedAt:  now.Add(-3 * time.Minute),
 			PublicKey: []byte("expired-key-1"),
@@ -63,7 +64,7 @@ func TestSQLiteNodeStoreDeleteExpiredPendingPairingsRemovesExpiredRows(t *testin
 	}))
 	require.NoError(t, store.SavePendingPairing(context.Background(), node.PendingPairing{
 		Code: "expired-2",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "node-2",
 			IssuedAt:  now.Add(-2 * time.Minute),
 			PublicKey: []byte("expired-key-2"),
@@ -72,7 +73,7 @@ func TestSQLiteNodeStoreDeleteExpiredPendingPairingsRemovesExpiredRows(t *testin
 	}))
 	require.NoError(t, store.SavePendingPairing(context.Background(), node.PendingPairing{
 		Code: "active",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "node-3",
 			IssuedAt:  now.Add(-time.Minute),
 			PublicKey: []byte("active-key"),
@@ -95,11 +96,11 @@ func TestSQLiteNodeStorePersistsTenantOwnerAndCredentialMetadata(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	require.NoError(t, store.UpsertNode(context.Background(), core.NodeDescriptor{
+	require.NoError(t, store.UpsertNode(context.Background(), node.NodeDescriptor{
 		ID:         "node-1",
 		TenantID:   "tenant-1",
 		Name:       "Node One",
-		Platform:   core.NodePlatformLinux,
+		Platform:   relurpnet.NodePlatformLinux,
 		TrustClass: core.TrustClassWorkspaceTrusted,
 		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
 		PairedAt:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
@@ -109,7 +110,7 @@ func TestSQLiteNodeStorePersistsTenantOwnerAndCredentialMetadata(t *testing.T) {
 			Kind: core.CapabilityKindTool,
 		}},
 	}))
-	require.NoError(t, store.SaveCredential(context.Background(), core.NodeCredential{
+	require.NoError(t, store.SaveCredential(context.Background(), node.NodeCredential{
 		DeviceID:  "node-1",
 		TenantID:  "tenant-1",
 		PublicKey: []byte("public-key"),

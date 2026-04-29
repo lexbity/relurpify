@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,9 +16,9 @@ func TestSQLiteIdentityStoreExternalIdentityRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	identity := core.ExternalIdentity{
+	record := core.ExternalIdentity{
 		TenantID:   "tenant-1",
-		Provider:   core.ExternalProviderDiscord,
+		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "user-42",
 		Subject: core.SubjectRef{
@@ -30,13 +31,13 @@ func TestSQLiteIdentityStoreExternalIdentityRoundTrip(t *testing.T) {
 		DisplayName:   "Lex",
 		ProviderLabel: "discord-main",
 	}
-	require.NoError(t, store.UpsertExternalIdentity(context.Background(), identity))
+	require.NoError(t, store.UpsertExternalIdentity(context.Background(), record))
 
-	got, err := store.GetExternalIdentity(context.Background(), "tenant-1", core.ExternalProviderDiscord, "guild-1", "user-42")
+	got, err := store.GetExternalIdentity(context.Background(), "tenant-1", identity.ExternalProviderDiscord, "guild-1", "user-42")
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	require.Equal(t, identity.Subject.ID, got.Subject.ID)
-	require.Equal(t, identity.DisplayName, got.DisplayName)
+	require.Equal(t, record.Subject.ID, got.Subject.ID)
+	require.Equal(t, record.DisplayName, got.DisplayName)
 
 	list, err := store.ListExternalIdentities(context.Background(), "tenant-1")
 	require.NoError(t, err)
@@ -91,7 +92,7 @@ func TestSQLiteIdentityStoreNodeEnrollmentRoundTrip(t *testing.T) {
 	enrollment := core.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-1",
-		TrustClass: core.TrustClassWorkspaceTrusted,
+		TrustClass: identity.TrustClassWorkspaceTrusted,
 		Owner: core.SubjectRef{
 			TenantID: "tenant-1",
 			Kind:     core.SubjectKindNode,

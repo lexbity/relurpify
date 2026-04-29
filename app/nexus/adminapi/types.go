@@ -5,6 +5,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 const APIVersionV1Alpha1 = "v1alpha1"
@@ -21,7 +23,7 @@ type PageResult struct {
 
 type AdminRequest struct {
 	APIVersion string
-	Principal  core.AuthenticatedPrincipal
+	Principal  identity.AuthenticatedPrincipal
 	TenantID   string
 	RequestID  string
 }
@@ -46,24 +48,24 @@ type SessionInfo struct {
 }
 
 type SubjectInfo struct {
-	TenantID    string           `json:"tenant_id"`
-	Kind        core.SubjectKind `json:"kind"`
-	ID          string           `json:"id"`
-	DisplayName string           `json:"display_name,omitempty"`
-	Roles       []string         `json:"roles,omitempty"`
+	TenantID    string               `json:"tenant_id"`
+	Kind        identity.SubjectKind `json:"kind"`
+	ID          string               `json:"id"`
+	DisplayName string               `json:"display_name,omitempty"`
+	Roles       []string             `json:"roles,omitempty"`
 }
 
 type TokenInfo struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name,omitempty"`
-	TenantID    string           `json:"tenant_id,omitempty"`
-	SubjectKind core.SubjectKind `json:"subject_kind,omitempty"`
-	SubjectID   string           `json:"subject_id,omitempty"`
-	Scope       []string         `json:"scope,omitempty"`
-	IssuedAt    time.Time        `json:"issued_at"`
-	ExpiresAt   *time.Time       `json:"expires_at,omitempty"`
-	LastUsedAt  *time.Time       `json:"last_used_at,omitempty"`
-	RevokedAt   *time.Time       `json:"revoked_at,omitempty"`
+	ID          string               `json:"id"`
+	Name        string               `json:"name,omitempty"`
+	TenantID    string               `json:"tenant_id,omitempty"`
+	SubjectKind identity.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID   string               `json:"subject_id,omitempty"`
+	Scope       []string             `json:"scope,omitempty"`
+	IssuedAt    time.Time            `json:"issued_at"`
+	ExpiresAt   *time.Time           `json:"expires_at,omitempty"`
+	LastUsedAt  *time.Time           `json:"last_used_at,omitempty"`
+	RevokedAt   *time.Time           `json:"revoked_at,omitempty"`
 }
 
 type ChannelInfo struct {
@@ -86,7 +88,7 @@ type FMPContinuationInfo struct {
 	TenantID            string                `json:"tenant_id"`
 	TaskClass           string                `json:"task_class"`
 	ContextClass        string                `json:"context_class"`
-	Owner               core.SubjectRef       `json:"owner"`
+	Owner               identity.SubjectRef   `json:"owner"`
 	SessionID           string                `json:"session_id,omitempty"`
 	TrustClass          core.TrustClass       `json:"trust_class,omitempty"`
 	CurrentOwnerAttempt string                `json:"current_owner_attempt,omitempty"`
@@ -237,7 +239,7 @@ type CloseSessionResult struct {
 type GrantSessionDelegationRequest struct {
 	AdminRequest
 	SessionID   string                  `json:"session_id"`
-	SubjectKind core.SubjectKind        `json:"subject_kind"`
+	SubjectKind identity.SubjectKind    `json:"subject_kind"`
 	SubjectID   string                  `json:"subject_id"`
 	Operations  []core.SessionOperation `json:"operations,omitempty"`
 	ExpiresAt   *time.Time              `json:"expires_at,omitempty"`
@@ -261,11 +263,11 @@ type ListSubjectsResult struct {
 
 type CreateSubjectRequest struct {
 	AdminRequest
-	SubjectTenantID string           `json:"subject_tenant_id,omitempty"`
-	SubjectKind     core.SubjectKind `json:"subject_kind"`
-	SubjectID       string           `json:"subject_id"`
-	DisplayName     string           `json:"display_name,omitempty"`
-	Roles           []string         `json:"roles,omitempty"`
+	SubjectTenantID string               `json:"subject_tenant_id,omitempty"`
+	SubjectKind     identity.SubjectKind `json:"subject_kind"`
+	SubjectID       string               `json:"subject_id"`
+	DisplayName     string               `json:"display_name,omitempty"`
+	Roles           []string             `json:"roles,omitempty"`
 }
 
 type CreateSubjectResult struct {
@@ -275,32 +277,32 @@ type CreateSubjectResult struct {
 
 type BindExternalIdentityRequest struct {
 	AdminRequest
-	SubjectTenantID string                `json:"subject_tenant_id,omitempty"`
-	Provider        core.ExternalProvider `json:"provider"`
-	AccountID       string                `json:"account_id,omitempty"`
-	ExternalID      string                `json:"external_id"`
-	SubjectKind     core.SubjectKind      `json:"subject_kind"`
-	SubjectID       string                `json:"subject_id"`
-	DisplayName     string                `json:"display_name,omitempty"`
-	ProviderLabel   string                `json:"provider_label,omitempty"`
+	SubjectTenantID string                    `json:"subject_tenant_id,omitempty"`
+	Provider        identity.ExternalProvider `json:"provider"`
+	AccountID       string                    `json:"account_id,omitempty"`
+	ExternalID      string                    `json:"external_id"`
+	SubjectKind     identity.SubjectKind      `json:"subject_kind"`
+	SubjectID       string                    `json:"subject_id"`
+	DisplayName     string                    `json:"display_name,omitempty"`
+	ProviderLabel   string                    `json:"provider_label,omitempty"`
 }
 
 type BindExternalIdentityResult struct {
 	AdminResult
-	Identity core.ExternalIdentity `json:"identity"`
+	Identity identity.ExternalIdentity `json:"identity"`
 }
 
 type ListExternalIdentitiesRequest struct {
 	AdminRequest
-	Page        PageRequest      `json:"page,omitempty"`
-	SubjectKind core.SubjectKind `json:"subject_kind,omitempty"`
-	SubjectID   string           `json:"subject_id,omitempty"`
+	Page        PageRequest          `json:"page,omitempty"`
+	SubjectKind identity.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID   string               `json:"subject_id,omitempty"`
 }
 
 type ListExternalIdentitiesResult struct {
 	AdminResult
 	PageResult
-	Identities []core.ExternalIdentity `json:"identities"`
+	Identities []identity.ExternalIdentity `json:"identities"`
 }
 
 type ListTokensRequest struct {
@@ -316,10 +318,10 @@ type ListTokensResult struct {
 
 type IssueTokenRequest struct {
 	AdminRequest
-	SubjectTenantID string           `json:"subject_tenant_id,omitempty"`
-	SubjectKind     core.SubjectKind `json:"subject_kind,omitempty"`
-	SubjectID       string           `json:"subject_id"`
-	Scopes          []string         `json:"scopes,omitempty"`
+	SubjectTenantID string               `json:"subject_tenant_id,omitempty"`
+	SubjectKind     identity.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID       string               `json:"subject_id"`
+	Scopes          []string             `json:"scopes,omitempty"`
 }
 
 type IssueTokenResult struct {
@@ -451,17 +453,17 @@ type ListFMPTrustBundlesRequest struct {
 type ListFMPTrustBundlesResult struct {
 	AdminResult
 	PageResult
-	Bundles []core.TrustBundle `json:"bundles"`
+	Bundles []fwfmp.TrustBundle `json:"bundles"`
 }
 
 type UpsertFMPTrustBundleRequest struct {
 	AdminRequest
-	Bundle core.TrustBundle `json:"bundle"`
+	Bundle fwfmp.TrustBundle `json:"bundle"`
 }
 
 type UpsertFMPTrustBundleResult struct {
 	AdminResult
-	Bundle core.TrustBundle `json:"bundle"`
+	Bundle fwfmp.TrustBundle `json:"bundle"`
 }
 
 type ListFMPBoundaryPoliciesRequest struct {
@@ -472,17 +474,17 @@ type ListFMPBoundaryPoliciesRequest struct {
 type ListFMPBoundaryPoliciesResult struct {
 	AdminResult
 	PageResult
-	Policies []core.BoundaryPolicy `json:"policies"`
+	Policies []fwfmp.BoundaryPolicy `json:"policies"`
 }
 
 type SetFMPBoundaryPolicyRequest struct {
 	AdminRequest
-	Policy core.BoundaryPolicy `json:"policy"`
+	Policy fwfmp.BoundaryPolicy `json:"policy"`
 }
 
 type SetFMPBoundaryPolicyResult struct {
 	AdminResult
-	Policy core.BoundaryPolicy `json:"policy"`
+	Policy fwfmp.BoundaryPolicy `json:"policy"`
 }
 
 type TenantFMPExportInfo struct {
@@ -550,16 +552,16 @@ type EffectiveFMPFederationPolicyInfo struct {
 	TrustDomain              string                        `json:"trust_domain"`
 	TenantPolicy             TenantFMPFederationPolicyInfo `json:"tenant_policy"`
 	TrustBundlePresent       bool                          `json:"trust_bundle_present"`
-	TrustBundle              *core.TrustBundle             `json:"trust_bundle,omitempty"`
+	TrustBundle              *fwfmp.TrustBundle            `json:"trust_bundle,omitempty"`
 	BoundaryPolicyPresent    bool                          `json:"boundary_policy_present"`
-	BoundaryPolicy           *core.BoundaryPolicy          `json:"boundary_policy,omitempty"`
+	BoundaryPolicy           *fwfmp.BoundaryPolicy         `json:"boundary_policy,omitempty"`
 	AllowedTrustDomain       bool                          `json:"allowed_trust_domain"`
 	AllowedRouteModes        []string                      `json:"allowed_route_modes,omitempty"`
 	AllowMediation           bool                          `json:"allow_mediation"`
 	MaxTransferBytes         int64                         `json:"max_transfer_bytes,omitempty"`
 	RequireGatewayAuth       bool                          `json:"require_gateway_authentication,omitempty"`
 	AcceptedSourceDomains    []string                      `json:"accepted_source_domains,omitempty"`
-	AcceptedSourceIdentities []core.SubjectRef             `json:"accepted_source_identities,omitempty"`
+	AcceptedSourceIdentities []identity.SubjectRef         `json:"accepted_source_identities,omitempty"`
 }
 
 type GetEffectiveFMPFederationPolicyRequest struct {
@@ -613,14 +615,14 @@ type SetTenantEnabledResult struct {
 }
 
 type NodeEnrollmentInfo struct {
-	TenantID       string          `json:"tenant_id"`
-	NodeID         string          `json:"node_id"`
-	Owner          core.SubjectRef `json:"owner"`
-	TrustClass     core.TrustClass `json:"trust_class"`
-	KeyID          string          `json:"key_id,omitempty"`
-	PairedAt       time.Time       `json:"paired_at"`
-	LastVerifiedAt time.Time       `json:"last_verified_at,omitempty"`
-	AuthMethod     core.AuthMethod `json:"auth_method,omitempty"`
+	TenantID       string              `json:"tenant_id"`
+	NodeID         string              `json:"node_id"`
+	Owner          identity.SubjectRef `json:"owner"`
+	TrustClass     core.TrustClass     `json:"trust_class"`
+	KeyID          string              `json:"key_id,omitempty"`
+	PairedAt       time.Time           `json:"paired_at"`
+	LastVerifiedAt time.Time           `json:"last_verified_at,omitempty"`
+	AuthMethod     identity.AuthMethod `json:"auth_method,omitempty"`
 }
 
 type ListNodeEnrollmentsRequest struct {

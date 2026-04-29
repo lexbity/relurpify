@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,19 +35,19 @@ func TestListNodeEnrollmentsReturnsEnrollmentsForTenant(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	require.NoError(t, store.UpsertNodeEnrollment(ctx, core.NodeEnrollment{
+	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-a",
 		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-a"},
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-a"),
 		PairedAt:   now,
 	}))
-	require.NoError(t, store.UpsertNodeEnrollment(ctx, core.NodeEnrollment{
+	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-2",
 		NodeID:     "node-b",
 		Owner:      core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindNode, ID: "node-b"},
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-b"),
 		PairedAt:   now,
 	}))
@@ -68,11 +69,11 @@ func TestRevokeNodeEnrollmentDeletesEnrollment(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	require.NoError(t, store.UpsertNodeEnrollment(ctx, core.NodeEnrollment{
+	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-x",
 		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-x"},
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-x"),
 		PairedAt:   now,
 	}))

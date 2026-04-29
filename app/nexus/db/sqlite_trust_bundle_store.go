@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -64,13 +64,13 @@ func (s *SQLiteTrustBundleStore) init() error {
 	return nil
 }
 
-func (s *SQLiteTrustBundleStore) ListTrustBundles(ctx context.Context) ([]core.TrustBundle, error) {
+func (s *SQLiteTrustBundleStore) ListTrustBundles(ctx context.Context) ([]fwfmp.TrustBundle, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT trust_domain, bundle_id, gateway_identities_json, trust_anchors_json, recipient_keys_json, issued_at, expires_at, signature FROM fmp_trust_bundles ORDER BY trust_domain ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.TrustBundle
+	var out []fwfmp.TrustBundle
 	for rows.Next() {
 		record, err := scanTrustBundle(rows)
 		if err != nil {
@@ -81,7 +81,7 @@ func (s *SQLiteTrustBundleStore) ListTrustBundles(ctx context.Context) ([]core.T
 	return out, rows.Err()
 }
 
-func (s *SQLiteTrustBundleStore) UpsertTrustBundle(ctx context.Context, bundle core.TrustBundle) error {
+func (s *SQLiteTrustBundleStore) UpsertTrustBundle(ctx context.Context, bundle fwfmp.TrustBundle) error {
 	if err := bundle.Validate(); err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func (s *SQLiteTrustBundleStore) UpsertTrustBundle(ctx context.Context, bundle c
 	return err
 }
 
-func (s *SQLiteTrustBundleStore) GetTrustBundle(ctx context.Context, trustDomain string) (*core.TrustBundle, error) {
+func (s *SQLiteTrustBundleStore) GetTrustBundle(ctx context.Context, trustDomain string) (*fwfmp.TrustBundle, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT trust_domain, bundle_id, gateway_identities_json, trust_anchors_json, recipient_keys_json, issued_at, expires_at, signature FROM fmp_trust_bundles WHERE trust_domain = ?`, strings.TrimSpace(trustDomain))
 	record, err := scanTrustBundle(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -135,9 +135,9 @@ func (s *SQLiteTrustBundleStore) GetTrustBundle(ctx context.Context, trustDomain
 	return record, nil
 }
 
-func scanTrustBundle(scanner interface{ Scan(dest ...any) error }) (*core.TrustBundle, error) {
+func scanTrustBundle(scanner interface{ Scan(dest ...any) error }) (*fwfmp.TrustBundle, error) {
 	var (
-		record            core.TrustBundle
+		record            fwfmp.TrustBundle
 		identitiesJSON    string
 		trustAnchorsJSON  string
 		recipientKeysJSON string

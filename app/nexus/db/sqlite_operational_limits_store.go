@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -70,7 +69,7 @@ func (s *SQLiteOperationalLimiter) init() error {
 	return nil
 }
 
-func (s *SQLiteOperationalLimiter) AcquireResume(ctx context.Context, slotID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error) {
+func (s *SQLiteOperationalLimiter) AcquireResume(ctx context.Context, slotID string, sizeBytes int64, now time.Time) (*fwfmp.TransferRefusal, error) {
 	if strings.TrimSpace(slotID) == "" {
 		return nil, fmt.Errorf("resume slot id required")
 	}
@@ -101,10 +100,10 @@ func (s *SQLiteOperationalLimiter) AcquireResume(ctx context.Context, slotID str
 		return nil, err
 	}
 	if s.Limits.MaxActiveResumeSlots > 0 && activeCount >= s.Limits.MaxActiveResumeSlots {
-		return &core.TransferRefusal{Code: core.RefusalDestinationBusy, Message: "resume slot limit reached"}, nil
+		return &fwfmp.TransferRefusal{Code: fwfmp.RefusalDestinationBusy, Message: "resume slot limit reached"}, nil
 	}
 	if s.Limits.MaxResumeBytesWindow > 0 && state.ResumeBytesInWindow+sizeBytes > s.Limits.MaxResumeBytesWindow {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "resume bandwidth limit reached"}, nil
+		return &fwfmp.TransferRefusal{Code: fwfmp.RefusalTransferBudget, Message: "resume bandwidth limit reached"}, nil
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO fmp_active_resume_slots (slot_id, size_bytes, created_at) VALUES (?, ?, ?)`,
 		strings.TrimSpace(slotID), sizeBytes, now.UTC().Format(time.RFC3339Nano)); err != nil {
@@ -125,7 +124,7 @@ func (s *SQLiteOperationalLimiter) ReleaseResume(ctx context.Context, slotID str
 	return err
 }
 
-func (s *SQLiteOperationalLimiter) AllowForward(ctx context.Context, transferID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error) {
+func (s *SQLiteOperationalLimiter) AllowForward(ctx context.Context, transferID string, sizeBytes int64, now time.Time) (*fwfmp.TransferRefusal, error) {
 	if strings.TrimSpace(transferID) == "" {
 		return nil, fmt.Errorf("transfer id required")
 	}
@@ -142,10 +141,10 @@ func (s *SQLiteOperationalLimiter) AllowForward(ctx context.Context, transferID 
 		return nil, err
 	}
 	if s.Limits.MaxForwardBytesWindow > 0 && state.ForwardBytesInWindow+sizeBytes > s.Limits.MaxForwardBytesWindow {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "forward bandwidth limit reached"}, nil
+		return &fwfmp.TransferRefusal{Code: fwfmp.RefusalTransferBudget, Message: "forward bandwidth limit reached"}, nil
 	}
 	if s.Limits.MaxFederatedForwards > 0 && state.FederatedForwards >= s.Limits.MaxFederatedForwards {
-		return &core.TransferRefusal{Code: core.RefusalDestinationBusy, Message: "federated forward limit reached"}, nil
+		return &fwfmp.TransferRefusal{Code: fwfmp.RefusalDestinationBusy, Message: "federated forward limit reached"}, nil
 	}
 	state.ForwardBytesInWindow += sizeBytes
 	state.FederatedForwards++

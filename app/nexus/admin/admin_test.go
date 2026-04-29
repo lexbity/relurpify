@@ -8,8 +8,8 @@ import (
 
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	relconfig "codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/relurpnet/node"
 	"gopkg.in/yaml.v3"
 )
@@ -19,7 +19,7 @@ func TestApproveAndRejectPairing(t *testing.T) {
 
 	ctx := context.Background()
 	workspace := t.TempDir()
-	paths := relconfig.New(workspace)
+	paths := frameworkmanifest.New(workspace)
 	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestApproveAndRejectPairing(t *testing.T) {
 	}
 	if err := nodeStore.SavePendingPairing(ctx, node.PendingPairing{
 		Code: "approve-me",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "device-1",
 			PublicKey: []byte("pk"),
 			IssuedAt:  time.Now().UTC(),
@@ -50,7 +50,7 @@ func TestApproveAndRejectPairing(t *testing.T) {
 	}
 	if err := nodeStore.SavePendingPairing(ctx, node.PendingPairing{
 		Code: "reject-me",
-		Cred: core.NodeCredential{
+		Cred: node.NodeCredential{
 			DeviceID:  "device-2",
 			PublicKey: []byte("pk2"),
 			IssuedAt:  time.Now().UTC(),

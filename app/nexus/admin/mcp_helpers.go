@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
@@ -357,18 +358,18 @@ func timeArg(args map[string]any, key string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-func trustBundleArg(args map[string]any, key string) (core.TrustBundle, error) {
-	var bundle core.TrustBundle
+func trustBundleArg(args map[string]any, key string) (fwfmp.TrustBundle, error) {
+	var bundle fwfmp.TrustBundle
 	if err := decodeJSONArg(args, key, &bundle); err != nil {
-		return core.TrustBundle{}, AdminError{Code: AdminErrorInvalidArgument, Message: "bundle invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
+		return fwfmp.TrustBundle{}, AdminError{Code: AdminErrorInvalidArgument, Message: "bundle invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
 	}
 	return bundle, nil
 }
 
-func boundaryPolicyArg(args map[string]any, key string) (core.BoundaryPolicy, error) {
-	var policy core.BoundaryPolicy
+func boundaryPolicyArg(args map[string]any, key string) (fwfmp.BoundaryPolicy, error) {
+	var policy fwfmp.BoundaryPolicy
 	if err := decodeJSONArg(args, key, &policy); err != nil {
-		return core.BoundaryPolicy{}, AdminError{Code: AdminErrorInvalidArgument, Message: "policy invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
+		return fwfmp.BoundaryPolicy{}, AdminError{Code: AdminErrorInvalidArgument, Message: "policy invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
 	}
 	return policy, nil
 }

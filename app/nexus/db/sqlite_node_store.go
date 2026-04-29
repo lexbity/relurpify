@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/node"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -92,9 +92,9 @@ func (s *SQLiteNodeStore) init() error {
 	return nil
 }
 
-func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*core.NodeDescriptor, error) {
+func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*node.NodeDescriptor, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json, approved_capabilities_json FROM nodes WHERE id = ?`, id)
-	var nodeDesc core.NodeDescriptor
+	var nodeDesc node.NodeDescriptor
 	var pairedAt, ownerKind, ownerID, tagsJSON, approvedCapabilitiesJSON string
 	err := row.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON, &approvedCapabilitiesJSON)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -108,9 +108,9 @@ func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*core.NodeDes
 		return nil, err
 	}
 	if ownerID != "" || ownerKind != "" {
-		nodeDesc.Owner = core.SubjectRef{
+		nodeDesc.Owner = identity.SubjectRef{
 			TenantID: nodeDesc.TenantID,
-			Kind:     core.SubjectKind(ownerKind),
+			Kind:     identity.SubjectKind(ownerKind),
 			ID:       ownerID,
 		}
 	}
@@ -120,15 +120,15 @@ func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*core.NodeDes
 	return &nodeDesc, nil
 }
 
-func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor, error) {
+func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]node.NodeDescriptor, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json, approved_capabilities_json FROM nodes ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.NodeDescriptor
+	var out []node.NodeDescriptor
 	for rows.Next() {
-		var nodeDesc core.NodeDescriptor
+		var nodeDesc node.NodeDescriptor
 		var pairedAt, ownerKind, ownerID, tagsJSON, approvedCapabilitiesJSON string
 		if err := rows.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON, &approvedCapabilitiesJSON); err != nil {
 			return nil, err
@@ -138,9 +138,9 @@ func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor,
 			return nil, err
 		}
 		if ownerID != "" || ownerKind != "" {
-			nodeDesc.Owner = core.SubjectRef{
+			nodeDesc.Owner = identity.SubjectRef{
 				TenantID: nodeDesc.TenantID,
-				Kind:     core.SubjectKind(ownerKind),
+				Kind:     identity.SubjectKind(ownerKind),
 				ID:       ownerID,
 			}
 		}
@@ -152,7 +152,7 @@ func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor,
 	return out, rows.Err()
 }
 
-func (s *SQLiteNodeStore) UpsertNode(ctx context.Context, nodeDesc core.NodeDescriptor) error {
+func (s *SQLiteNodeStore) UpsertNode(ctx context.Context, nodeDesc node.NodeDescriptor) error {
 	if nodeDesc.PairedAt.IsZero() {
 		nodeDesc.PairedAt = time.Now().UTC()
 	}
@@ -185,9 +185,9 @@ func (s *SQLiteNodeStore) RemoveNode(ctx context.Context, id string) error {
 	return err
 }
 
-func (s *SQLiteNodeStore) GetCredential(ctx context.Context, deviceID string) (*core.NodeCredential, error) {
+func (s *SQLiteNodeStore) GetCredential(ctx context.Context, deviceID string) (*node.NodeCredential, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT device_id, tenant_id, public_key, key_id, issued_at, expires_at FROM node_credentials WHERE device_id = ?`, deviceID)
-	var cred core.NodeCredential
+	var cred node.NodeCredential
 	var issuedAt, expiresAt string
 	err := row.Scan(&cred.DeviceID, &cred.TenantID, &cred.PublicKey, &cred.KeyID, &issuedAt, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -209,7 +209,7 @@ func (s *SQLiteNodeStore) GetCredential(ctx context.Context, deviceID string) (*
 	return &cred, nil
 }
 
-func (s *SQLiteNodeStore) SaveCredential(ctx context.Context, cred core.NodeCredential) error {
+func (s *SQLiteNodeStore) SaveCredential(ctx context.Context, cred node.NodeCredential) error {
 	expiresAt := ""
 	if !cred.ExpiresAt.IsZero() {
 		expiresAt = cred.ExpiresAt.UTC().Format(time.RFC3339Nano)

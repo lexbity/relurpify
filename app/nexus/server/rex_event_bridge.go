@@ -2,13 +2,13 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
@@ -17,6 +17,7 @@ import (
 	rexctx "codeburg.org/lexbit/relurpify/named/rex/rexctx"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 const rexEventBridgeConsumerID = "rex_event_bridge.v1"
@@ -53,13 +54,13 @@ func NewRexEventBridge(log event.Log, partition string, runtime *RexRuntimeProvi
 	if log == nil {
 		return nil, fmt.Errorf("event log required")
 	}
-	if runtime == nil || runtime.Agent == nil || runtime.WorkflowStore == nil {
-		return nil, fmt.Errorf("rex runtime with workflow store required")
+	if runtime == nil || runtime.Agent == nil {
+		return nil, fmt.Errorf("rex runtime required")
 	}
 	return &RexEventBridge{
 		Log:             log,
 		Partition:       partitionOrDefault(partition),
-		Cursor:          newSQLiteRexEventCursorStore(runtime.WorkflowStore.DB(), partitionOrDefault(partition), rexEventBridgeConsumerID),
+		Cursor:          newInMemoryRexEventCursorStore(partitionOrDefault(partition), rexEventBridgeConsumerID),
 		Gateway:         rexgateway.DefaultGateway{Store: runtime.WorkflowStore},
 		Handle:          runtime.handleEventDecision,
 		TrustedResolver: runtime.TrustedResolver,
@@ -190,7 +191,7 @@ func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.F
 
 func isRexControlPlaneEvent(eventType string) bool {
 	switch strings.TrimSpace(eventType) {
-	case core.FrameworkEventFMPHandoffOffered, core.FrameworkEventFMPHandoffAccepted, core.FrameworkEventFMPResumeCommitted, core.FrameworkEventFMPFenceIssued:
+	case fwfmp.FrameworkEventFMPHandoffOffered, fwfmp.FrameworkEventFMPHandoffAccepted, fwfmp.FrameworkEventFMPResumeCommitted, fwfmp.FrameworkEventFMPFenceIssued:
 		return true
 	default:
 		return false
@@ -282,56 +283,38 @@ func extractSessionMessageInstruction(raw json.RawMessage) string {
 	return ""
 }
 
-type sqliteRexEventCursorStore struct {
-	db        *sql.DB
+type inMemoryRexEventCursorStore struct {
+	mu        sync.RWMutex
 	partition string
 	consumer  string
+	lastSeq   uint64
 }
 
-func newSQLiteRexEventCursorStore(db *sql.DB, partition, consumer string) *sqliteRexEventCursorStore {
-	store := &sqliteRexEventCursorStore{
-		db:        db,
+func newInMemoryRexEventCursorStore(partition, consumer string) *inMemoryRexEventCursorStore {
+	return &inMemoryRexEventCursorStore{
 		partition: partitionOrDefault(partition),
 		consumer:  strings.TrimSpace(consumer),
+		lastSeq:   0,
 	}
-	store.ensureSchema()
-	return store
 }
 
-func (s *sqliteRexEventCursorStore) ensureSchema() {
-	if s == nil || s.db == nil {
-		return
-	}
-	_, _ = s.db.Exec(`CREATE TABLE IF NOT EXISTS nexus_runtime_cursors (
-		partition TEXT NOT NULL,
-		consumer_id TEXT NOT NULL,
-		last_seq INTEGER NOT NULL DEFAULT 0,
-		updated_at TEXT NOT NULL,
-		PRIMARY KEY (partition, consumer_id)
-	);`)
-}
-
-func (s *sqliteRexEventCursorStore) Load(ctx context.Context) (uint64, error) {
-	if s == nil || s.db == nil {
+func (s *inMemoryRexEventCursorStore) Load(ctx context.Context) (uint64, error) {
+	if s == nil {
 		return 0, nil
 	}
-	var seq uint64
-	err := s.db.QueryRowContext(ctx, `SELECT last_seq FROM nexus_runtime_cursors WHERE partition = ? AND consumer_id = ?`, s.partition, s.consumer).Scan(&seq)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
-	return seq, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastSeq, nil
 }
 
-func (s *sqliteRexEventCursorStore) Save(ctx context.Context, seq uint64) error {
-	if s == nil || s.db == nil {
+func (s *inMemoryRexEventCursorStore) Save(ctx context.Context, seq uint64) error {
+	if s == nil {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO nexus_runtime_cursors (partition, consumer_id, last_seq, updated_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(partition, consumer_id) DO UPDATE SET last_seq = excluded.last_seq, updated_at = excluded.updated_at`,
-		s.partition, s.consumer, seq, time.Now().UTC().Format(time.RFC3339Nano))
-	return err
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastSeq = seq
+	return nil
 }
 
 func partitionOrDefault(partition string) string {
@@ -436,46 +419,46 @@ func (p *RexRuntimeProvider) handleEventDecision(ctx context.Context, decision r
 	}
 	trusted, _ := rexctx.TrustedExecutionContextFromContext(ctx)
 	task := rexevents.ToTask(event)
-	state := core.NewContext()
+	state := contextdata.NewEnvelope(task.ID, "")
 	for key, value := range task.Context {
-		state.Set(key, value)
+		state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 	}
 	if strings.TrimSpace(trusted.TenantID) != "" {
 		task.Context[rexkeys.RexAdmissionTenantID] = trusted.TenantID
-		state.Set(rexkeys.RexAdmissionTenantID, trusted.TenantID)
+		state.SetWorkingValue(rexkeys.RexAdmissionTenantID, trusted.TenantID, contextdata.MemoryClassTask)
 	}
 	if strings.TrimSpace(string(trusted.WorkloadClass)) != "" {
 		task.Context[rexkeys.RexWorkloadClass] = string(trusted.WorkloadClass)
-		state.Set(rexkeys.RexWorkloadClass, string(trusted.WorkloadClass))
+		state.SetWorkingValue(rexkeys.RexWorkloadClass, string(trusted.WorkloadClass), contextdata.MemoryClassTask)
 	}
 	if strings.TrimSpace(trusted.SessionID) != "" {
-		state.Set(rexkeys.GatewaySessionID, trusted.SessionID)
+		state.SetWorkingValue(rexkeys.GatewaySessionID, trusted.SessionID, contextdata.MemoryClassTask)
 	}
 	admissionReq, releaseAdmission := admissionRequestFromContext(task.Context)
 	if decision.WorkflowID != "" {
 		task.Context[rexkeys.WorkflowID] = decision.WorkflowID
-		state.Set(rexkeys.WorkflowID, decision.WorkflowID)
-		state.Set(rexkeys.RexWorkflowID, decision.WorkflowID)
+		state.SetWorkingValue(rexkeys.WorkflowID, decision.WorkflowID, contextdata.MemoryClassTask)
+		state.SetWorkingValue(rexkeys.RexWorkflowID, decision.WorkflowID, contextdata.MemoryClassTask)
 	}
 	if decision.RunID != "" {
 		task.Context[rexkeys.RunID] = decision.RunID
-		state.Set(rexkeys.RunID, decision.RunID)
-		state.Set(rexkeys.RexRunID, decision.RunID)
+		state.SetWorkingValue(rexkeys.RunID, decision.RunID, contextdata.MemoryClassTask)
+		state.SetWorkingValue(rexkeys.RexRunID, decision.RunID, contextdata.MemoryClassTask)
 	}
-	state.Set(rexkeys.RexEventType, event.Type)
-	state.Set(rexkeys.RexEventID, event.ID)
-	state.Set(rexkeys.RexEventPartition, event.Partition)
-	state.Set(rexkeys.RexEventIngressOrigin, event.IngressOrigin)
+	state.SetWorkingValue(rexkeys.RexEventType, event.Type, contextdata.MemoryClassTask)
+	state.SetWorkingValue(rexkeys.RexEventID, event.ID, contextdata.MemoryClassTask)
+	state.SetWorkingValue(rexkeys.RexEventPartition, event.Partition, contextdata.MemoryClassTask)
+	state.SetWorkingValue(rexkeys.RexEventIngressOrigin, event.IngressOrigin, contextdata.MemoryClassTask)
 	item := rexruntime.WorkItem{
 		WorkflowID: decision.WorkflowID,
 		RunID:      decision.RunID,
 		Task:       task,
-		State:      state,
+		Envelope:   state,
 		Execute: func(ctx context.Context, item rexruntime.WorkItem) error {
 			if releaseAdmission && p.Admission != nil {
 				defer p.Admission.Release(admissionReq)
 			}
-			_, err := p.Agent.Execute(ctx, item.Task, item.State)
+			_, err := p.Agent.Execute(ctx, item.Task, item.Envelope)
 			return err
 		},
 	}

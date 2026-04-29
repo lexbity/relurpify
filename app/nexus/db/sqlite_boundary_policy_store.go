@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -56,13 +56,13 @@ func (s *SQLiteBoundaryPolicyStore) init() error {
 	return err
 }
 
-func (s *SQLiteBoundaryPolicyStore) ListBoundaryPolicies(ctx context.Context) ([]core.BoundaryPolicy, error) {
+func (s *SQLiteBoundaryPolicyStore) ListBoundaryPolicies(ctx context.Context) ([]fwfmp.BoundaryPolicy, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT trust_domain, accepted_source_domains_json, accepted_source_identities_json, allowed_route_modes_json, require_gateway_authentication, allow_mediation, max_transfer_bytes, max_retries, retry_backoff_seconds FROM fmp_boundary_policies ORDER BY trust_domain ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.BoundaryPolicy
+	var out []fwfmp.BoundaryPolicy
 	for rows.Next() {
 		record, err := scanBoundaryPolicy(rows)
 		if err != nil {
@@ -73,7 +73,7 @@ func (s *SQLiteBoundaryPolicyStore) ListBoundaryPolicies(ctx context.Context) ([
 	return out, rows.Err()
 }
 
-func (s *SQLiteBoundaryPolicyStore) UpsertBoundaryPolicy(ctx context.Context, policy core.BoundaryPolicy) error {
+func (s *SQLiteBoundaryPolicyStore) UpsertBoundaryPolicy(ctx context.Context, policy fwfmp.BoundaryPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *SQLiteBoundaryPolicyStore) UpsertBoundaryPolicy(ctx context.Context, po
 	return err
 }
 
-func (s *SQLiteBoundaryPolicyStore) GetBoundaryPolicy(ctx context.Context, trustDomain string) (*core.BoundaryPolicy, error) {
+func (s *SQLiteBoundaryPolicyStore) GetBoundaryPolicy(ctx context.Context, trustDomain string) (*fwfmp.BoundaryPolicy, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT trust_domain, accepted_source_domains_json, accepted_source_identities_json, allowed_route_modes_json, require_gateway_authentication, allow_mediation, max_transfer_bytes, max_retries, retry_backoff_seconds FROM fmp_boundary_policies WHERE trust_domain = ?`, strings.TrimSpace(trustDomain))
 	record, err := scanBoundaryPolicy(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -127,9 +127,9 @@ func (s *SQLiteBoundaryPolicyStore) GetBoundaryPolicy(ctx context.Context, trust
 	return record, nil
 }
 
-func scanBoundaryPolicy(scanner interface{ Scan(dest ...any) error }) (*core.BoundaryPolicy, error) {
+func scanBoundaryPolicy(scanner interface{ Scan(dest ...any) error }) (*fwfmp.BoundaryPolicy, error) {
 	var (
-		record                core.BoundaryPolicy
+		record                fwfmp.BoundaryPolicy
 		sourceDomainsJSON     string
 		sourceIdentitiesJSON  string
 		allowedRouteModesJSON string

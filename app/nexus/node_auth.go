@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/identity"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
@@ -81,7 +80,7 @@ func verifyGatewayNodeChallenge(ctx context.Context, store identity.Store, princ
 	if err != nil {
 		return err
 	}
-	cred := core.NodeCredential{
+	cred := fwnode.NodeCredential{
 		DeviceID:  enrollment.NodeID,
 		TenantID:  enrollment.TenantID,
 		PublicKey: enrollment.PublicKey,
@@ -105,20 +104,20 @@ var generateNodeChallenge = func() ([]byte, error) {
 	return nonce, nil
 }
 
-func nodeEnrollmentFromPairing(pairing fwnode.PendingPairing) core.NodeEnrollment {
+func nodeEnrollmentFromPairing(pairing fwnode.PendingPairing) identity.NodeEnrollment {
 	tenantID := normalizeTenantID(pairing.Cred.TenantID)
-	return core.NodeEnrollment{
+	return identity.NodeEnrollment{
 		TenantID:   tenantID,
 		NodeID:     pairing.Cred.DeviceID,
-		TrustClass: core.TrustClassRemoteApproved,
-		Owner: core.SubjectRef{
+		TrustClass: identity.TrustClassRemoteApproved,
+		Owner: identity.SubjectRef{
 			TenantID: tenantID,
-			Kind:     core.SubjectKindNode,
+			Kind:     identity.SubjectKindNode,
 			ID:       pairing.Cred.DeviceID,
 		},
 		PublicKey:  append([]byte(nil), pairing.Cred.PublicKey...),
 		KeyID:      pairing.Cred.KeyID,
 		PairedAt:   pairing.Cred.IssuedAt,
-		AuthMethod: core.AuthMethodNodeChallenge,
+		AuthMethod: identity.AuthMethodNodeChallenge,
 	}
 }

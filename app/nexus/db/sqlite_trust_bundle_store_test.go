@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,12 +19,12 @@ func TestSQLiteTrustBundleStoreRoundTrip(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, store.UpsertTrustBundle(context.Background(), core.TrustBundle{
+	require.NoError(t, store.UpsertTrustBundle(context.Background(), fwfmp.TrustBundle{
 		TrustDomain:       "mesh.remote",
 		BundleID:          "bundle-1",
 		GatewayIdentities: []core.SubjectRef{{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}},
 		TrustAnchors:      []string{"cert-a"},
-		RecipientKeys: []core.RecipientKeyAdvertisement{{
+		RecipientKeys: []fwfmp.RecipientKeyAdvertisement{{
 			Recipient: "runtime://mesh.remote/node-1/rt-1",
 			KeyID:     "key-1",
 			Version:   "v1",

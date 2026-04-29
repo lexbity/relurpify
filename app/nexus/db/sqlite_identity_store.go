@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/identity"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -90,7 +89,7 @@ func (s *SQLiteIdentityStore) init() error {
 	return nil
 }
 
-func (s *SQLiteIdentityStore) UpsertTenant(ctx context.Context, tenant core.TenantRecord) error {
+func (s *SQLiteIdentityStore) UpsertTenant(ctx context.Context, tenant identity.TenantRecord) error {
 	if err := tenant.Validate(); err != nil {
 		return err
 	}
@@ -109,7 +108,7 @@ func (s *SQLiteIdentityStore) UpsertTenant(ctx context.Context, tenant core.Tena
 	return err
 }
 
-func (s *SQLiteIdentityStore) GetTenant(ctx context.Context, tenantID string) (*core.TenantRecord, error) {
+func (s *SQLiteIdentityStore) GetTenant(ctx context.Context, tenantID string) (*identity.TenantRecord, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, display_name, created_at, disabled_at FROM tenants WHERE tenant_id = ?`, tenantID)
 	tenant, err := scanTenantRecord(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -121,13 +120,13 @@ func (s *SQLiteIdentityStore) GetTenant(ctx context.Context, tenantID string) (*
 	return tenant, nil
 }
 
-func (s *SQLiteIdentityStore) ListTenants(ctx context.Context) ([]core.TenantRecord, error) {
+func (s *SQLiteIdentityStore) ListTenants(ctx context.Context) ([]identity.TenantRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, display_name, created_at, disabled_at FROM tenants ORDER BY tenant_id ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.TenantRecord
+	var out []identity.TenantRecord
 	for rows.Next() {
 		tenant, err := scanTenantRecord(rows)
 		if err != nil {
@@ -138,7 +137,7 @@ func (s *SQLiteIdentityStore) ListTenants(ctx context.Context) ([]core.TenantRec
 	return out, rows.Err()
 }
 
-func (s *SQLiteIdentityStore) UpsertSubject(ctx context.Context, subject core.SubjectRecord) error {
+func (s *SQLiteIdentityStore) UpsertSubject(ctx context.Context, subject identity.SubjectRecord) error {
 	if err := subject.Validate(); err != nil {
 		return err
 	}
@@ -161,7 +160,7 @@ func (s *SQLiteIdentityStore) UpsertSubject(ctx context.Context, subject core.Su
 	return err
 }
 
-func (s *SQLiteIdentityStore) GetSubject(ctx context.Context, tenantID string, kind core.SubjectKind, subjectID string) (*core.SubjectRecord, error) {
+func (s *SQLiteIdentityStore) GetSubject(ctx context.Context, tenantID string, kind identity.SubjectKind, subjectID string) (*identity.SubjectRecord, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, subject_kind, subject_id, display_name, roles_json, created_at, disabled_at
 		FROM subjects WHERE tenant_id = ? AND subject_kind = ? AND subject_id = ?`, tenantID, string(kind), subjectID)
 	subject, err := scanSubjectRecord(row)
@@ -174,14 +173,14 @@ func (s *SQLiteIdentityStore) GetSubject(ctx context.Context, tenantID string, k
 	return subject, nil
 }
 
-func (s *SQLiteIdentityStore) ListSubjects(ctx context.Context, tenantID string) ([]core.SubjectRecord, error) {
+func (s *SQLiteIdentityStore) ListSubjects(ctx context.Context, tenantID string) ([]identity.SubjectRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, subject_kind, subject_id, display_name, roles_json, created_at, disabled_at
 		FROM subjects WHERE tenant_id = ? ORDER BY subject_kind ASC, subject_id ASC`, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.SubjectRecord
+	var out []identity.SubjectRecord
 	for rows.Next() {
 		subject, err := scanSubjectRecord(rows)
 		if err != nil {
@@ -192,7 +191,7 @@ func (s *SQLiteIdentityStore) ListSubjects(ctx context.Context, tenantID string)
 	return out, rows.Err()
 }
 
-func (s *SQLiteIdentityStore) UpsertExternalIdentity(ctx context.Context, identity core.ExternalIdentity) error {
+func (s *SQLiteIdentityStore) UpsertExternalIdentity(ctx context.Context, identity identity.ExternalIdentity) error {
 	if err := identity.Validate(); err != nil {
 		return err
 	}
@@ -220,7 +219,7 @@ func (s *SQLiteIdentityStore) UpsertExternalIdentity(ctx context.Context, identi
 	return err
 }
 
-func (s *SQLiteIdentityStore) GetExternalIdentity(ctx context.Context, tenantID string, provider core.ExternalProvider, accountID, externalID string) (*core.ExternalIdentity, error) {
+func (s *SQLiteIdentityStore) GetExternalIdentity(ctx context.Context, tenantID string, provider identity.ExternalProvider, accountID, externalID string) (*identity.ExternalIdentity, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, provider, account_id, external_id, subject_kind, subject_id, verified_at, last_seen_at, display_name, provider_label
 		FROM external_identities WHERE tenant_id = ? AND provider = ? AND account_id = ? AND external_id = ?`,
 		tenantID, string(provider), accountID, externalID)
@@ -234,14 +233,14 @@ func (s *SQLiteIdentityStore) GetExternalIdentity(ctx context.Context, tenantID 
 	return identity, nil
 }
 
-func (s *SQLiteIdentityStore) ListExternalIdentities(ctx context.Context, tenantID string) ([]core.ExternalIdentity, error) {
+func (s *SQLiteIdentityStore) ListExternalIdentities(ctx context.Context, tenantID string) ([]identity.ExternalIdentity, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, provider, account_id, external_id, subject_kind, subject_id, verified_at, last_seen_at, display_name, provider_label
 		FROM external_identities WHERE tenant_id = ? ORDER BY provider ASC, account_id ASC, external_id ASC`, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.ExternalIdentity
+	var out []identity.ExternalIdentity
 	for rows.Next() {
 		identity, err := scanExternalIdentity(rows)
 		if err != nil {
@@ -252,7 +251,7 @@ func (s *SQLiteIdentityStore) ListExternalIdentities(ctx context.Context, tenant
 	return out, rows.Err()
 }
 
-func (s *SQLiteIdentityStore) UpsertNodeEnrollment(ctx context.Context, enrollment core.NodeEnrollment) error {
+func (s *SQLiteIdentityStore) UpsertNodeEnrollment(ctx context.Context, enrollment identity.NodeEnrollment) error {
 	if err := enrollment.Validate(); err != nil {
 		return err
 	}
@@ -282,7 +281,7 @@ func (s *SQLiteIdentityStore) UpsertNodeEnrollment(ctx context.Context, enrollme
 	return err
 }
 
-func (s *SQLiteIdentityStore) GetNodeEnrollment(ctx context.Context, tenantID, nodeID string) (*core.NodeEnrollment, error) {
+func (s *SQLiteIdentityStore) GetNodeEnrollment(ctx context.Context, tenantID, nodeID string) (*identity.NodeEnrollment, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, node_id, owner_kind, owner_id, trust_class, public_key, key_id, paired_at, last_verified_at, auth_method
 		FROM node_enrollments WHERE tenant_id = ? AND node_id = ?`, tenantID, nodeID)
 	enrollment, err := scanNodeEnrollment(row)
@@ -295,14 +294,14 @@ func (s *SQLiteIdentityStore) GetNodeEnrollment(ctx context.Context, tenantID, n
 	return enrollment, nil
 }
 
-func (s *SQLiteIdentityStore) ListNodeEnrollments(ctx context.Context, tenantID string) ([]core.NodeEnrollment, error) {
+func (s *SQLiteIdentityStore) ListNodeEnrollments(ctx context.Context, tenantID string) ([]identity.NodeEnrollment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, node_id, owner_kind, owner_id, trust_class, public_key, key_id, paired_at, last_verified_at, auth_method
 		FROM node_enrollments WHERE tenant_id = ? ORDER BY node_id ASC`, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.NodeEnrollment
+	var out []identity.NodeEnrollment
 	for rows.Next() {
 		enrollment, err := scanNodeEnrollment(rows)
 		if err != nil {
@@ -329,9 +328,9 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanTenantRecord(row scanner) (*core.TenantRecord, error) {
+func scanTenantRecord(row scanner) (*identity.TenantRecord, error) {
 	var (
-		record     core.TenantRecord
+		record     identity.TenantRecord
 		createdAt  string
 		disabledAt string
 		err        error
@@ -348,9 +347,9 @@ func scanTenantRecord(row scanner) (*core.TenantRecord, error) {
 	return &record, nil
 }
 
-func scanSubjectRecord(row scanner) (*core.SubjectRecord, error) {
+func scanSubjectRecord(row scanner) (*identity.SubjectRecord, error) {
 	var (
-		record      core.SubjectRecord
+		record      identity.SubjectRecord
 		subjectKind string
 		rolesJSON   string
 		createdAt   string
@@ -360,7 +359,7 @@ func scanSubjectRecord(row scanner) (*core.SubjectRecord, error) {
 	if err := row.Scan(&record.TenantID, &subjectKind, &record.ID, &record.DisplayName, &rolesJSON, &createdAt, &disabledAt); err != nil {
 		return nil, err
 	}
-	record.Kind = core.SubjectKind(subjectKind)
+	record.Kind = identity.SubjectKind(subjectKind)
 	record.Roles = unmarshalStringSlice(rolesJSON)
 	if record.CreatedAt, err = parseOptionalTime(createdAt); err != nil {
 		return nil, err
@@ -371,36 +370,36 @@ func scanSubjectRecord(row scanner) (*core.SubjectRecord, error) {
 	return &record, nil
 }
 
-func scanExternalIdentity(row scanner) (*core.ExternalIdentity, error) {
+func scanExternalIdentity(row scanner) (*identity.ExternalIdentity, error) {
 	var (
-		identity    core.ExternalIdentity
+		record      identity.ExternalIdentity
 		provider    string
 		subjectKind string
 		verifiedAt  string
 		lastSeenAt  string
 	)
-	if err := row.Scan(&identity.TenantID, &provider, &identity.AccountID, &identity.ExternalID, &subjectKind, &identity.Subject.ID, &verifiedAt, &lastSeenAt, &identity.DisplayName, &identity.ProviderLabel); err != nil {
+	if err := row.Scan(&record.TenantID, &provider, &record.AccountID, &record.ExternalID, &subjectKind, &record.Subject.ID, &verifiedAt, &lastSeenAt, &record.DisplayName, &record.ProviderLabel); err != nil {
 		return nil, err
 	}
-	identity.Provider = core.ExternalProvider(provider)
-	identity.Subject = core.SubjectRef{
-		TenantID: identity.TenantID,
-		Kind:     core.SubjectKind(subjectKind),
-		ID:       identity.Subject.ID,
+	record.Provider = identity.ExternalProvider(provider)
+	record.Subject = identity.SubjectRef{
+		TenantID: record.TenantID,
+		Kind:     identity.SubjectKind(subjectKind),
+		ID:       record.Subject.ID,
 	}
 	var err error
-	if identity.VerifiedAt, err = parseOptionalTime(verifiedAt); err != nil {
+	if record.VerifiedAt, err = parseOptionalTime(verifiedAt); err != nil {
 		return nil, err
 	}
-	if identity.LastSeenAt, err = parseOptionalTime(lastSeenAt); err != nil {
+	if record.LastSeenAt, err = parseOptionalTime(lastSeenAt); err != nil {
 		return nil, err
 	}
-	return &identity, nil
+	return &record, nil
 }
 
-func scanNodeEnrollment(row scanner) (*core.NodeEnrollment, error) {
+func scanNodeEnrollment(row scanner) (*identity.NodeEnrollment, error) {
 	var (
-		enrollment   core.NodeEnrollment
+		enrollment   identity.NodeEnrollment
 		ownerKind    string
 		trustClass   string
 		pairedAt     string
@@ -410,13 +409,13 @@ func scanNodeEnrollment(row scanner) (*core.NodeEnrollment, error) {
 	if err := row.Scan(&enrollment.TenantID, &enrollment.NodeID, &ownerKind, &enrollment.Owner.ID, &trustClass, &enrollment.PublicKey, &enrollment.KeyID, &pairedAt, &lastVerified, &authMethod); err != nil {
 		return nil, err
 	}
-	enrollment.Owner = core.SubjectRef{
+	enrollment.Owner = identity.SubjectRef{
 		TenantID: enrollment.TenantID,
-		Kind:     core.SubjectKind(ownerKind),
+		Kind:     identity.SubjectKind(ownerKind),
 		ID:       enrollment.Owner.ID,
 	}
-	enrollment.TrustClass = core.TrustClass(trustClass)
-	enrollment.AuthMethod = core.AuthMethod(authMethod)
+	enrollment.TrustClass = identity.TrustClass(trustClass)
+	enrollment.AuthMethod = identity.AuthMethod(authMethod)
 	var err error
 	if enrollment.PairedAt, err = parseOptionalTime(pairedAt); err != nil {
 		return nil, err

@@ -37,7 +37,7 @@ func TestGrantSessionDelegation(t *testing.T) {
 		Scope:      core.SessionScopePerChannelPeer,
 		ChannelID:  "webchat",
 		PeerID:     "conv-1",
-		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+		Owner:      core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(core.SubjectKindUser), ID: "user-1"},
 		TrustClass: core.TrustClassRemoteApproved,
 		CreatedAt:  time.Now().UTC(),
 	}))

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type FederatedMeshGateway struct {
@@ -35,7 +35,7 @@ func (g *FederatedMeshGateway) RegisterExportHandler(trustDomain, exportName str
 	return g.Forwarder.RegisterExportHandler(trustDomain, exportName, handler)
 }
 
-func (g *FederatedMeshGateway) ImportAdvertisements(ctx context.Context, gateway core.SubjectRef, ads []core.ExportAdvertisement, sourceDomain string) error {
+func (g *FederatedMeshGateway) ImportAdvertisements(ctx context.Context, gateway identity.SubjectRef, ads []fwfmp.ExportAdvertisement, sourceDomain string) error {
 	if g == nil || g.Mesh == nil {
 		return fmt.Errorf("federated mesh gateway unavailable")
 	}
@@ -47,7 +47,7 @@ func (g *FederatedMeshGateway) ImportAdvertisements(ctx context.Context, gateway
 	return nil
 }
 
-func (g *FederatedMeshGateway) ForwardSealedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, *core.TransferRefusal, error) {
+func (g *FederatedMeshGateway) ForwardSealedContext(ctx context.Context, req fwfmp.GatewayForwardRequest) (*fwfmp.GatewayForwardResult, *fwfmp.TransferRefusal, error) {
 	if g == nil || g.Mesh == nil {
 		return nil, nil, fmt.Errorf("federated mesh gateway unavailable")
 	}

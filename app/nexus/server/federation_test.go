@@ -36,9 +36,9 @@ func TestFederatedMeshGatewayRegistersHandlerAndForwards(t *testing.T) {
 	mesh := &fwfmp.Service{}
 	gateway := EnsureFederatedMeshGateway(mesh)
 	called := false
-	if err := gateway.RegisterExportHandler("mesh.remote", "agent.resume", func(_ context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, error) {
+	if err := gateway.RegisterExportHandler("mesh.remote", "agent.resume", func(_ context.Context, req fwfmp.GatewayForwardRequest) (*fwfmp.GatewayForwardResult, error) {
 		called = true
-		return &core.GatewayForwardResult{
+		return &fwfmp.GatewayForwardResult{
 			TrustDomain:       req.TrustDomain,
 			DestinationExport: req.DestinationExport,
 			RouteMode:         req.RouteMode,
@@ -47,15 +47,15 @@ func TestFederatedMeshGatewayRegistersHandlerAndForwards(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RegisterExportHandler() error = %v", err)
 	}
-	result, err := gateway.Forwarder.ForwardSealedContext(context.Background(), core.GatewayForwardRequest{
+	result, err := gateway.Forwarder.ForwardSealedContext(context.Background(), fwfmp.GatewayForwardRequest{
 		TrustDomain:        "mesh.remote",
 		SourceDomain:       "mesh.remote",
 		GatewayIdentity:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"},
 		DestinationExport:  "mesh://mesh.remote/agent.resume",
-		RouteMode:          core.RouteModeGateway,
+		RouteMode:          fwfmp.RouteModeGateway,
 		SizeBytes:          128,
 		ContextManifestRef: "ctx-1",
-		SealedContext: core.SealedContext{
+		SealedContext: fwfmp.SealedContext{
 			EnvelopeVersion:    "v1",
 			ContextManifestRef: "ctx-1",
 			CipherSuite:        "age",
@@ -77,7 +77,7 @@ func TestFederatedMeshGatewayRegistersHandlerAndForwards(t *testing.T) {
 func TestHTTPGatewayForwarderPostsToRemoteFederationEndpoint(t *testing.T) {
 	t.Parallel()
 
-	var got core.GatewayForwardRequest
+	var got fwfmp.GatewayForwardRequest
 	forwarder := fwfmp.NewHTTPGatewayForwarder(fwfmp.StaticFederationEndpointResolver{
 		"mesh.remote": "https://mesh.remote.test",
 	})
@@ -102,7 +102,7 @@ func TestHTTPGatewayForwarderPostsToRemoteFederationEndpoint(t *testing.T) {
 			t.Fatalf("Decode: %v", err)
 		}
 		body, err := json.Marshal(fwfmp.GatewayForwardTransportResponse{
-			Result: &core.GatewayForwardResult{
+			Result: &fwfmp.GatewayForwardResult{
 				TrustDomain:       got.TrustDomain,
 				DestinationExport: got.DestinationExport,
 				RouteMode:         got.RouteMode,
@@ -119,16 +119,16 @@ func TestHTTPGatewayForwarderPostsToRemoteFederationEndpoint(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(string(body))),
 		}, nil
 	})}
-	result, err := forwarder.ForwardSealedContext(context.Background(), core.GatewayForwardRequest{
+	result, err := forwarder.ForwardSealedContext(context.Background(), fwfmp.GatewayForwardRequest{
 		TenantID:           "tenant-1",
 		TrustDomain:        "mesh.remote",
 		SourceDomain:       "mesh.local",
 		GatewayIdentity:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-local"},
 		DestinationExport:  "mesh://mesh.remote/agent.resume",
-		RouteMode:          core.RouteModeGateway,
+		RouteMode:          fwfmp.RouteModeGateway,
 		SizeBytes:          128,
 		ContextManifestRef: "ctx-1",
-		SealedContext: core.SealedContext{
+		SealedContext: fwfmp.SealedContext{
 			EnvelopeVersion:    "v1",
 			ContextManifestRef: "ctx-1",
 			CipherSuite:        "age",

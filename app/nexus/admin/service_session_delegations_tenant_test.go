@@ -24,14 +24,14 @@ func TestListSessionDelegationsReturnsDelegationsForTenant(t *testing.T) {
 	require.NoError(t, sessionStore.UpsertDelegation(ctx, core.SessionDelegationRecord{
 		TenantID:   "tenant-1",
 		SessionID:  "sess-1",
-		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "operator-1"},
+		Grantee:    core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(core.SubjectKindServiceAccount), ID: "operator-1"},
 		Operations: []core.SessionOperation{core.SessionOperationSend},
 		CreatedAt:  now,
 	}))
 	require.NoError(t, sessionStore.UpsertDelegation(ctx, core.SessionDelegationRecord{
 		TenantID:   "tenant-2",
 		SessionID:  "sess-2",
-		Grantee:    core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindServiceAccount, ID: "operator-2"},
+		Grantee:    core.DelegationSubjectRef{TenantID: "tenant-2", Kind: string(core.SubjectKindServiceAccount), ID: "operator-2"},
 		Operations: []core.SessionOperation{core.SessionOperationResume},
 		CreatedAt:  now,
 	}))

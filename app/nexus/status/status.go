@@ -9,9 +9,9 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/app/nexus/gateway"
-	relconfig "codeburg.org/lexbit/relurpify/framework/config"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
 type Snapshot struct {
@@ -28,7 +28,7 @@ type Snapshot struct {
 	ObservedChannels     int
 	PairedNodeCount      int
 	PendingPairingCount  int
-	PairedNodes          []core.NodeDescriptor
+	PairedNodes          []fwnode.NodeDescriptor
 	ChannelActivity      map[string]gateway.ChannelState
 	EventTypeCounts      map[string]uint64
 	LogRetentionDays     int
@@ -46,7 +46,7 @@ type PendingPairingInfo struct {
 }
 
 func Load(ctx context.Context, workspace, configPath string) (Snapshot, error) {
-	paths := relconfig.New(workspace)
+	paths := frameworkmanifest.New(workspace)
 	if configPath == "" {
 		configPath = paths.NexusConfigFile()
 	}

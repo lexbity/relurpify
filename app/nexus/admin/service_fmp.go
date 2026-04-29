@@ -12,7 +12,7 @@ import (
 )
 
 type fmpLineageLister interface {
-	ListLineages(ctx context.Context) ([]core.LineageRecord, error)
+	ListLineages(ctx context.Context) ([]fwfmp.LineageRecord, error)
 }
 
 type fmpAuditChainReader interface {
@@ -149,7 +149,7 @@ func (s *service) VerifyFMPAuditTrail(ctx context.Context, req VerifyFMPAuditTra
 	}, nil
 }
 
-func continuationInfoFromLineage(lineage core.LineageRecord) FMPContinuationInfo {
+func continuationInfoFromLineage(lineage fwfmp.LineageRecord) FMPContinuationInfo {
 	return FMPContinuationInfo{
 		LineageID:           lineage.LineageID,
 		TenantID:            lineage.TenantID,
@@ -162,7 +162,7 @@ func continuationInfoFromLineage(lineage core.LineageRecord) FMPContinuationInfo
 		CurrentOwnerRuntime: lineage.CurrentOwnerRuntime,
 		LineageVersion:      lineage.LineageVersion,
 		UpdatedAt:           lineage.UpdatedAt,
-		SensitivityClass:    lineage.SensitivityClass,
+		SensitivityClass:    core.SensitivityClass(lineage.SensitivityClass),
 	}
 }
 
@@ -184,7 +184,7 @@ func eventLineageID(ev core.FrameworkEvent) string {
 	return ""
 }
 
-func (s *service) authorizeFMPLineage(ctx context.Context, principal core.AuthenticatedPrincipal, requestedTenantID, lineageID string) (string, *core.LineageRecord, error) {
+func (s *service) authorizeFMPLineage(ctx context.Context, principal core.AuthenticatedPrincipal, requestedTenantID, lineageID string) (string, *fwfmp.LineageRecord, error) {
 	tenantID, err := authorizeTenant(principal, requestedTenantID)
 	if err != nil {
 		return "", nil, err

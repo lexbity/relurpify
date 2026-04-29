@@ -6,14 +6,15 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 type fmpTrustBundleGetter interface {
-	GetTrustBundle(ctx context.Context, trustDomain string) (*core.TrustBundle, error)
+	GetTrustBundle(ctx context.Context, trustDomain string) (*fwfmp.TrustBundle, error)
 }
 
 type fmpBoundaryPolicyGetter interface {
-	GetBoundaryPolicy(ctx context.Context, trustDomain string) (*core.BoundaryPolicy, error)
+	GetBoundaryPolicy(ctx context.Context, trustDomain string) (*fwfmp.BoundaryPolicy, error)
 }
 
 func (s *service) GetEffectiveFMPFederationPolicy(ctx context.Context, req GetEffectiveFMPFederationPolicyRequest) (GetEffectiveFMPFederationPolicyResult, error) {
@@ -49,7 +50,7 @@ func (s *service) GetEffectiveFMPFederationPolicy(ctx context.Context, req GetEf
 	if len(policyInfo.AllowedRouteModes) > 0 {
 		info.AllowedRouteModes = append([]string(nil), policyInfo.AllowedRouteModes...)
 	} else {
-		info.AllowedRouteModes = []string{string(core.RouteModeDirect), string(core.RouteModeGateway), string(core.RouteModeMediated)}
+		info.AllowedRouteModes = []string{string(fwfmp.RouteModeDirect), string(fwfmp.RouteModeGateway), string(fwfmp.RouteModeMediated)}
 	}
 	sort.Strings(info.AllowedRouteModes)
 
@@ -93,7 +94,7 @@ func (s *service) GetEffectiveFMPFederationPolicy(ctx context.Context, req GetEf
 		}
 	}
 
-	if !containsFold(info.AllowedRouteModes, string(core.RouteModeMediated)) {
+	if !containsFold(info.AllowedRouteModes, string(fwfmp.RouteModeMediated)) {
 		info.AllowMediation = false
 	}
 	sort.Strings(info.AcceptedSourceDomains)

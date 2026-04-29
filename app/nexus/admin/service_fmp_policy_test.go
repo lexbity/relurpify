@@ -39,7 +39,7 @@ func TestUpsertAndListFMPTrustBundles(t *testing.T) {
 	mesh := &fwfmp.Service{Trust: &fwfmp.InMemoryTrustBundleStore{}}
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
 	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
-	bundle := core.TrustBundle{
+	bundle := fwfmp.TrustBundle{
 		TrustDomain:       "mesh.remote",
 		BundleID:          "bundle-1",
 		GatewayIdentities: []core.SubjectRef{{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}},
@@ -71,10 +71,10 @@ func TestSetAndListFMPBoundaryPolicies(t *testing.T) {
 
 	mesh := &fwfmp.Service{Boundaries: &fwfmp.InMemoryBoundaryPolicyStore{}}
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
-	policy := core.BoundaryPolicy{
+	policy := fwfmp.BoundaryPolicy{
 		TrustDomain:                  "mesh.remote",
 		AcceptedSourceDomains:        []string{"mesh.remote"},
-		AllowedRouteModes:            []core.RouteMode{core.RouteModeGateway, core.RouteModeMediated},
+		AllowedRouteModes:            []fwfmp.RouteMode{fwfmp.RouteModeGateway, fwfmp.RouteModeMediated},
 		RequireGatewayAuthentication: true,
 		AllowMediation:               true,
 		MaxTransferBytes:             4096,

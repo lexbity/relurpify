@@ -11,13 +11,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/framework/identity"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
-	"codeburg.org/lexbit/relurpify/relurpnet/session"
+	netsession "codeburg.org/lexbit/relurpify/relurpnet/session"
 )
 
 const APIVersionV1Alpha1 = adminapi.APIVersionV1Alpha1
@@ -232,7 +232,7 @@ type AdminService interface {
 type ServiceConfig struct {
 	Nodes         fwnode.NodeStore
 	NodeManager   *fwnode.Manager
-	Sessions      session.Store
+	Sessions      netsession.Store
 	Identities    identity.Store
 	Tokens        TokenStore
 	Policies      PolicyRuleStore
@@ -256,10 +256,10 @@ type RexSLOProvider interface {
 }
 
 type TokenStore interface {
-	ListTokens(ctx context.Context) ([]core.AdminTokenRecord, error)
-	GetToken(ctx context.Context, id string) (*core.AdminTokenRecord, error)
-	GetTokenByHash(ctx context.Context, tokenHash string) (*core.AdminTokenRecord, error)
-	CreateToken(ctx context.Context, record core.AdminTokenRecord) error
+	ListTokens(ctx context.Context) ([]identity.AdminTokenRecord, error)
+	GetToken(ctx context.Context, id string) (*identity.AdminTokenRecord, error)
+	GetTokenByHash(ctx context.Context, tokenHash string) (*identity.AdminTokenRecord, error)
+	CreateToken(ctx context.Context, record identity.AdminTokenRecord) error
 	RevokeToken(ctx context.Context, id string, revokedAt time.Time) error
 }
 
@@ -275,8 +275,8 @@ type TenantFMPExportStore interface {
 }
 
 type TenantFMPFederationPolicyStore interface {
-	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*core.TenantFederationPolicy, error)
-	SetTenantFederationPolicy(ctx context.Context, policy core.TenantFederationPolicy) error
+	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*fwfmp.TenantFederationPolicy, error)
+	SetTenantFederationPolicy(ctx context.Context, policy fwfmp.TenantFederationPolicy) error
 }
 
 // Type aliases for Phase 6.4 and 6.5 admin API types

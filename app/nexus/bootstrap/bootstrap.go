@@ -5,13 +5,14 @@ import (
 
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/relurpnet"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
-func ResolveConfig(workspace, configPath string) (config.Paths, nexuscfg.Config, error) {
-	paths := config.New(workspace)
+func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
+	paths := manifest.New(workspace)
 	if configPath == "" {
 		configPath = paths.NexusConfigFile()
 	}
@@ -22,7 +23,7 @@ func ResolveConfig(workspace, configPath string) (config.Paths, nexuscfg.Config,
 	return paths, cfg, nil
 }
 
-func OpenNodeManager(paths config.Paths, cfg nexuscfg.Config) (*fwnode.Manager, *db.SQLiteNodeStore, *db.SQLiteEventLog, error) {
+func OpenNodeManager(paths manifest.Paths, cfg nexuscfg.Config) (*fwnode.Manager, *db.SQLiteNodeStore, *db.SQLiteEventLog, error) {
 	store, err := db.NewSQLiteNodeStore(paths.NodesFile())
 	if err != nil {
 		return nil, nil, nil, err
@@ -43,11 +44,11 @@ func OpenNodeManager(paths config.Paths, cfg nexuscfg.Config) (*fwnode.Manager, 
 	return manager, store, logStore, nil
 }
 
-func DefaultNodeDescriptor(deviceID string) core.NodeDescriptor {
-	return core.NodeDescriptor{
+func DefaultNodeDescriptor(deviceID string) relurpnet.NodeDescriptor {
+	return relurpnet.NodeDescriptor{
 		ID:         deviceID,
 		Name:       deviceID,
-		Platform:   core.NodePlatformHeadless,
+		Platform:   relurpnet.NodePlatformHeadless,
 		TrustClass: core.TrustClassWorkspaceTrusted,
 		PairedAt:   time.Now().UTC(),
 	}

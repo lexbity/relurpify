@@ -4,8 +4,11 @@ import (
 	"encoding/base64"
 	"strconv"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
 func resultEnvelope(req AdminRequest) AdminResult {
@@ -83,15 +86,75 @@ func copyEventCounts(in map[string]uint64) map[string]uint64 {
 	return out
 }
 
-func filterNodesByTenant(nodes []core.NodeDescriptor, tenantID string) []core.NodeDescriptor {
+func filterNodesByTenant(nodes []fwnode.NodeDescriptor, tenantID string) []fwnode.NodeDescriptor {
 	if strings.TrimSpace(tenantID) == "" {
 		return nodes // already a fresh slice from the store; no copy needed
 	}
-	out := make([]core.NodeDescriptor, 0, len(nodes))
+	out := make([]fwnode.NodeDescriptor, 0, len(nodes))
 	for _, node := range nodes {
 		if strings.EqualFold(node.TenantID, tenantID) {
 			out = append(out, node)
 		}
+	}
+	return out
+}
+
+func coreNodeDescriptorFromNodeDescriptor(node fwnode.NodeDescriptor) core.NodeDescriptor {
+	out := core.NodeDescriptor{
+		ID:         node.ID,
+		TenantID:   node.TenantID,
+		Name:       node.Name,
+		Platform:   core.NodePlatform(node.Platform),
+		TrustClass: node.TrustClass,
+		PairedAt:   node.PairedAt.Unix(),
+		Owner:      node.Owner.ID,
+	}
+	if len(node.Tags) > 0 {
+		out.Tags = copyStringMap(node.Tags)
+	}
+	if len(node.ApprovedCapabilities) > 0 {
+		out.ApprovedCapabilities = append([]core.CapabilityDescriptor(nil), node.ApprovedCapabilities...)
+	}
+	return out
+}
+
+func coreNodeDescriptorsFromNodeDescriptors(nodes []fwnode.NodeDescriptor) []core.NodeDescriptor {
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]core.NodeDescriptor, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, coreNodeDescriptorFromNodeDescriptor(node))
+	}
+	return out
+}
+
+func nodeDescriptorFromCoreNodeDescriptor(node core.NodeDescriptor) fwnode.NodeDescriptor {
+	out := fwnode.NodeDescriptor{
+		ID:         node.ID,
+		TenantID:   node.TenantID,
+		Name:       node.Name,
+		Platform:   relurpnet.NodePlatform(node.Platform),
+		TrustClass: node.TrustClass,
+		PairedAt:   time.Unix(node.PairedAt, 0).UTC(),
+		Owner:      core.SubjectRef{TenantID: node.TenantID, Kind: core.SubjectKindNode, ID: node.Owner},
+	}
+	if len(node.Tags) > 0 {
+		out.Tags = copyStringMap(node.Tags)
+	}
+	if len(node.ApprovedCapabilities) > 0 {
+		out.ApprovedCapabilities = append([]core.CapabilityDescriptor(nil), node.ApprovedCapabilities...)
+	}
+	return out
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
 	}
 	return out
 }

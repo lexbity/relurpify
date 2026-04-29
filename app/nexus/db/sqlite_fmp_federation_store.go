@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -63,10 +63,10 @@ func (s *SQLiteFMPFederationStore) init() error {
 	return nil
 }
 
-func (s *SQLiteFMPFederationStore) GetTenantFederationPolicy(ctx context.Context, tenantID string) (*core.TenantFederationPolicy, error) {
+func (s *SQLiteFMPFederationStore) GetTenantFederationPolicy(ctx context.Context, tenantID string) (*fwfmp.TenantFederationPolicy, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, allowed_trust_domains_json, allowed_route_modes_json, allow_mediation, max_transfer_bytes, updated_at FROM tenant_fmp_federation_policies WHERE tenant_id = ?`, strings.TrimSpace(tenantID))
 	var (
-		policy                  core.TenantFederationPolicy
+		policy                  fwfmp.TenantFederationPolicy
 		allowedTrustDomainsJSON string
 		allowedRouteModesJSON   string
 		allowMediation          int
@@ -95,7 +95,7 @@ func (s *SQLiteFMPFederationStore) GetTenantFederationPolicy(ctx context.Context
 	return &policy, nil
 }
 
-func (s *SQLiteFMPFederationStore) SetTenantFederationPolicy(ctx context.Context, policy core.TenantFederationPolicy) error {
+func (s *SQLiteFMPFederationStore) SetTenantFederationPolicy(ctx context.Context, policy fwfmp.TenantFederationPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}

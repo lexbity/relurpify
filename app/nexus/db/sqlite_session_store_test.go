@@ -106,10 +106,10 @@ func TestSQLiteSessionStorePersistsTenantOwnerAndBinding(t *testing.T) {
 		Partition:      "local",
 		Scope:          core.SessionScopePerChannelPeer,
 		ActorID:        "legacy-actor",
-		Owner:          core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+		Owner:          core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(core.SubjectKindUser), ID: "user-1"},
 		ChannelID:      "discord",
 		PeerID:         "conv-1",
-		Binding:        &core.ExternalSessionBinding{Provider: core.ExternalProviderDiscord, AccountID: "guild-1", ChannelID: "channel-1", ConversationID: "conv-1", ThreadID: "thread-1", ExternalUserID: "discord-user-1"},
+		Binding:        &core.SessionBinding{Provider: "discord", ProviderID: "guild-1", AccountID: "guild-1", ChannelID: "channel-1", ConversationID: "conv-1", ThreadID: "thread-1", ExternalUserID: "discord-user-1"},
 		TrustClass:     core.TrustClassRemoteApproved,
 		CreatedAt:      now,
 		LastActivityAt: now,
@@ -120,7 +120,7 @@ func TestSQLiteSessionStorePersistsTenantOwnerAndBinding(t *testing.T) {
 	require.NotNil(t, got)
 	require.Equal(t, "bound", got.RoutingKey)
 	require.Equal(t, "tenant-1", got.TenantID)
-	require.Equal(t, core.SubjectKindUser, got.Owner.Kind)
+	require.Equal(t, string(core.SubjectKindUser), got.Owner.Kind)
 	require.Empty(t, got.ActorID)
 	require.NotNil(t, got.Binding)
 	require.Equal(t, "guild-1", got.Binding.AccountID)
@@ -179,9 +179,9 @@ func TestSQLiteSessionStorePersistsSessionDelegations(t *testing.T) {
 	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
 		TenantID:  "tenant-1",
 		SessionID: "sess_opaque_1",
-		Grantee: core.SubjectRef{
+		Grantee: core.DelegationSubjectRef{
 			TenantID: "tenant-1",
-			Kind:     core.SubjectKindServiceAccount,
+			Kind:     string(core.SubjectKindServiceAccount),
 			ID:       "operator-1",
 		},
 		Operations: []core.SessionOperation{core.SessionOperationSend, core.SessionOperationResume},
@@ -204,14 +204,14 @@ func TestSQLiteSessionStoreListDelegationsByTenantIDFiltersTenants(t *testing.T)
 	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
 		TenantID:   "tenant-1",
 		SessionID:  "sess-t1-a",
-		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "op-1"},
+		Grantee:    core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(core.SubjectKindServiceAccount), ID: "op-1"},
 		Operations: []core.SessionOperation{core.SessionOperationSend},
 		CreatedAt:  now,
 	}))
 	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
 		TenantID:   "tenant-2",
 		SessionID:  "sess-t2-b",
-		Grantee:    core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindServiceAccount, ID: "op-2"},
+		Grantee:    core.DelegationSubjectRef{TenantID: "tenant-2", Kind: string(core.SubjectKindServiceAccount), ID: "op-2"},
 		Operations: []core.SessionOperation{core.SessionOperationResume},
 		CreatedAt:  now,
 	}))

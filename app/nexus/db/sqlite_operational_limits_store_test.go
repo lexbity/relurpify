@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +45,7 @@ func TestSQLiteOperationalLimiterPersistsWindowAndSlots(t *testing.T) {
 	refusal, err = reopened.AcquireResume(context.Background(), "slot-2", 256, now)
 	require.NoError(t, err)
 	require.NotNil(t, refusal)
-	require.Equal(t, core.RefusalDestinationBusy, refusal.Code)
+	require.Equal(t, fwfmp.RefusalDestinationBusy, refusal.Code)
 }
 
 func TestSQLiteOperationalLimiterResetsExpiredWindow(t *testing.T) {

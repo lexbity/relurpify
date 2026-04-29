@@ -25,7 +25,7 @@ func TestGetSessionDeniesCrossTenantAccess(t *testing.T) {
 		Scope:      core.SessionScopePerChannelPeer,
 		ChannelID:  "webchat",
 		PeerID:     "conv-1",
-		Owner:      core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindServiceAccount, ID: "svc-b"},
+		Owner:      core.DelegationSubjectRef{TenantID: "tenant-b", Kind: string(core.SubjectKindServiceAccount), ID: "svc-b"},
 		TrustClass: core.TrustClassRemoteApproved,
 		CreatedAt:  time.Now().UTC(),
 	}))

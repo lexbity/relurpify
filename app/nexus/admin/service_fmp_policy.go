@@ -6,14 +6,15 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 type fmpTrustBundleLister interface {
-	ListTrustBundles(ctx context.Context) ([]core.TrustBundle, error)
+	ListTrustBundles(ctx context.Context) ([]fwfmp.TrustBundle, error)
 }
 
 type fmpBoundaryPolicyLister interface {
-	ListBoundaryPolicies(ctx context.Context) ([]core.BoundaryPolicy, error)
+	ListBoundaryPolicies(ctx context.Context) ([]fwfmp.BoundaryPolicy, error)
 }
 
 func (s *service) ListFMPTrustBundles(ctx context.Context, req ListFMPTrustBundlesRequest) (ListFMPTrustBundlesResult, error) {

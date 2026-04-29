@@ -63,7 +63,7 @@ func TestTenantExportStoreFeedsFMPRouteAndAcceptPolicy(t *testing.T) {
 	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
 	discovery := &fwfmp.InMemoryDiscoveryStore{}
 	ownership := &fwfmp.InMemoryOwnershipStore{}
-	lineage := core.LineageRecord{
+	lineage := fwfmp.LineageRecord{
 		LineageID:    "lineage-1",
 		TenantID:     "tenant-1",
 		TaskClass:    "agent.run",
@@ -71,11 +71,11 @@ func TestTenantExportStoreFeedsFMPRouteAndAcceptPolicy(t *testing.T) {
 		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
 	}
 	require.NoError(t, ownership.CreateLineage(context.Background(), lineage))
-	require.NoError(t, ownership.UpsertAttempt(context.Background(), core.AttemptRecord{
+	require.NoError(t, ownership.UpsertAttempt(context.Background(), fwfmp.AttemptRecord{
 		AttemptID: "attempt-a",
 		LineageID: lineage.LineageID,
 		RuntimeID: "rt-a",
-		State:     core.AttemptStateRunning,
+		State:     fwfmp.AttemptStateRunning,
 		StartTime: now,
 	}))
 
@@ -85,9 +85,9 @@ func TestTenantExportStoreFeedsFMPRouteAndAcceptPolicy(t *testing.T) {
 		Nexus:     fwfmp.NexusAdapter{Exports: exportStore},
 		Now:       func() time.Time { return now },
 	}
-	require.NoError(t, mesh.AdvertiseRuntime(context.Background(), core.RuntimeAdvertisement{
+	require.NoError(t, mesh.AdvertiseRuntime(context.Background(), fwfmp.RuntimeAdvertisement{
 		TrustDomain: "local.mesh",
-		Runtime: core.RuntimeDescriptor{
+		Runtime: fwfmp.RuntimeDescriptor{
 			RuntimeID:               "rt-local",
 			NodeID:                  "node-local",
 			RuntimeVersion:          "1.0.0",
@@ -100,14 +100,14 @@ func TestTenantExportStoreFeedsFMPRouteAndAcceptPolicy(t *testing.T) {
 		},
 		Signature: "sig-rt-local",
 	}))
-	require.NoError(t, mesh.AdvertiseExport(context.Background(), core.ExportAdvertisement{
+	require.NoError(t, mesh.AdvertiseExport(context.Background(), fwfmp.ExportAdvertisement{
 		TrustDomain: "local.mesh",
 		RuntimeID:   "rt-local",
 		NodeID:      "node-local",
-		Export: core.ExportDescriptor{
+		Export: fwfmp.ExportDescriptor{
 			ExportName:             "exp.run",
 			AcceptedContextClasses: []string{"workflow-runtime"},
-			RouteMode:              core.RouteModeGateway,
+			RouteMode:              fwfmp.RouteModeGateway,
 			AdmissionSummary:       core.AvailabilitySpec{Available: true},
 		},
 	}))

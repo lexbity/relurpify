@@ -28,7 +28,7 @@ func TestSQLiteAuditChainStoreRoundTripAndVerify(t *testing.T) {
 		Timestamp:   now,
 		AgentID:     "runtime-a",
 		Action:      "fmp",
-		Type:        core.FrameworkEventFMPHandoffOffered,
+		Type:        fwfmp.FrameworkEventFMPHandoffOffered,
 		Permission:  "mesh",
 		Result:      "ok",
 		Correlation: "offer-1",
@@ -41,7 +41,7 @@ func TestSQLiteAuditChainStoreRoundTripAndVerify(t *testing.T) {
 		Timestamp:   now.Add(time.Second),
 		AgentID:     "runtime-b",
 		Action:      "fmp",
-		Type:        core.FrameworkEventFMPResumeCommitted,
+		Type:        fwfmp.FrameworkEventFMPResumeCommitted,
 		Permission:  "mesh",
 		Result:      "ok",
 		Correlation: "offer-1",
@@ -80,7 +80,7 @@ func TestSQLiteAuditChainStoreDetectsTampering(t *testing.T) {
 	require.NoError(t, store.Log(context.Background(), core.AuditRecord{
 		AgentID:    "runtime-a",
 		Action:     "fmp",
-		Type:       core.FrameworkEventFMPHandoffOffered,
+		Type:       fwfmp.FrameworkEventFMPHandoffOffered,
 		Permission: "mesh",
 		Result:     "ok",
 		Metadata: map[string]any{
@@ -91,7 +91,7 @@ func TestSQLiteAuditChainStoreDetectsTampering(t *testing.T) {
 	require.NoError(t, store.Log(context.Background(), core.AuditRecord{
 		AgentID:    "runtime-a",
 		Action:     "fmp",
-		Type:       core.FrameworkEventFMPResumeCommitted,
+		Type:       fwfmp.FrameworkEventFMPResumeCommitted,
 		Permission: "mesh",
 		Result:     "ok",
 		Metadata: map[string]any{
@@ -122,7 +122,7 @@ func TestSQLiteAuditChainStoreNilVerifierAndInvalidPath(t *testing.T) {
 	require.NoError(t, store.Log(context.Background(), core.AuditRecord{
 		AgentID:    "runtime-a",
 		Action:     "fmp",
-		Type:       core.FrameworkEventFMPHandoffOffered,
+		Type:       fwfmp.FrameworkEventFMPHandoffOffered,
 		Permission: "mesh",
 		Result:     "ok",
 		Metadata: map[string]any{

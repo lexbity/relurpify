@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/relurpnet/session"
+	netsession "codeburg.org/lexbit/relurpify/relurpnet/session"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var _ session.Store = (*SQLiteSessionStore)(nil)
+var _ netsession.Store = (*SQLiteSessionStore)(nil)
 
 type SQLiteSessionStore struct {
 	db          *sql.DB
@@ -34,7 +34,7 @@ func NewSQLiteSessionStore(path string) (*SQLiteSessionStore, error) {
 	}
 	store := &SQLiteSessionStore{
 		db:          db,
-		BoundaryTTL: session.DefaultBoundaryIdleTTL,
+		BoundaryTTL: netsession.DefaultBoundaryIdleTTL,
 		now:         time.Now,
 	}
 	if err := store.init(); err != nil {
@@ -111,13 +111,13 @@ func (s *SQLiteSessionStore) init() error {
 	return err
 }
 
-func (s *SQLiteSessionStore) GetBoundary(ctx context.Context, key string) (*core.SessionBoundary, error) {
+func (s *SQLiteSessionStore) GetBoundary(ctx context.Context, key string) (*netsession.SessionBoundary, error) {
 	if err := s.deleteExpiredBoundaries(ctx); err != nil {
 		return nil, err
 	}
 	row := s.db.QueryRowContext(ctx, `SELECT session_id, routing_key, tenant_id, partition, scope, actor_id, owner_kind, owner_id, channel_id, peer_id, binding_provider, binding_account_id, binding_channel_id, binding_conversation_id, binding_thread_id, binding_external_user_id, trust_class, created_at, last_activity_at FROM session_boundaries WHERE key = ?`, key)
 	var (
-		boundary              core.SessionBoundary
+		boundary              netsession.SessionBoundary
 		scope                 string
 		ownerKind             string
 		trust                 string
@@ -140,15 +140,15 @@ func (s *SQLiteSessionStore) GetBoundary(ctx context.Context, key string) (*core
 	boundary.Scope = core.SessionScope(scope)
 	boundary.TrustClass = core.TrustClass(trust)
 	if boundary.Owner.ID != "" || ownerKind != "" {
-		boundary.Owner = core.SubjectRef{
+		boundary.Owner = core.DelegationSubjectRef{
 			TenantID: boundary.TenantID,
-			Kind:     core.SubjectKind(ownerKind),
+			Kind:     ownerKind,
 			ID:       boundary.Owner.ID,
 		}
 	}
 	if bindingProvider != "" || bindingConversationID != "" {
-		boundary.Binding = &core.ExternalSessionBinding{
-			Provider:       core.ExternalProvider(bindingProvider),
+		boundary.Binding = &core.SessionBinding{
+			Provider:       bindingProvider,
 			AccountID:      bindingAccountID,
 			ChannelID:      bindingChannelID,
 			ConversationID: bindingConversationID,
@@ -170,13 +170,13 @@ func (s *SQLiteSessionStore) GetBoundary(ctx context.Context, key string) (*core
 	return &boundary, nil
 }
 
-func (s *SQLiteSessionStore) GetBoundaryBySessionID(ctx context.Context, sessionID string) (*core.SessionBoundary, error) {
+func (s *SQLiteSessionStore) GetBoundaryBySessionID(ctx context.Context, sessionID string) (*netsession.SessionBoundary, error) {
 	if err := s.deleteExpiredBoundaries(ctx); err != nil {
 		return nil, err
 	}
 	row := s.db.QueryRowContext(ctx, `SELECT session_id, routing_key, tenant_id, partition, scope, actor_id, owner_kind, owner_id, channel_id, peer_id, binding_provider, binding_account_id, binding_channel_id, binding_conversation_id, binding_thread_id, binding_external_user_id, trust_class, created_at, last_activity_at FROM session_boundaries WHERE session_id = ?`, sessionID)
 	var (
-		boundary              core.SessionBoundary
+		boundary              netsession.SessionBoundary
 		scope                 string
 		ownerKind             string
 		trust                 string
@@ -199,15 +199,15 @@ func (s *SQLiteSessionStore) GetBoundaryBySessionID(ctx context.Context, session
 	boundary.Scope = core.SessionScope(scope)
 	boundary.TrustClass = core.TrustClass(trust)
 	if boundary.Owner.ID != "" || ownerKind != "" {
-		boundary.Owner = core.SubjectRef{
+		boundary.Owner = core.DelegationSubjectRef{
 			TenantID: boundary.TenantID,
-			Kind:     core.SubjectKind(ownerKind),
+			Kind:     ownerKind,
 			ID:       boundary.Owner.ID,
 		}
 	}
 	if bindingProvider != "" || bindingConversationID != "" {
-		boundary.Binding = &core.ExternalSessionBinding{
-			Provider:       core.ExternalProvider(bindingProvider),
+		boundary.Binding = &core.SessionBinding{
+			Provider:       bindingProvider,
 			AccountID:      bindingAccountID,
 			ChannelID:      bindingChannelID,
 			ConversationID: bindingConversationID,
@@ -229,7 +229,7 @@ func (s *SQLiteSessionStore) GetBoundaryBySessionID(ctx context.Context, session
 	return &boundary, nil
 }
 
-func (s *SQLiteSessionStore) UpsertBoundary(ctx context.Context, key string, boundary *core.SessionBoundary) error {
+func (s *SQLiteSessionStore) UpsertBoundary(ctx context.Context, key string, boundary *netsession.SessionBoundary) error {
 	if boundary == nil {
 		return errors.New("boundary required")
 	}
@@ -248,7 +248,7 @@ func (s *SQLiteSessionStore) UpsertBoundary(ctx context.Context, key string, bou
 	ownerKind := ""
 	ownerID := ""
 	if boundary.Owner.ID != "" {
-		ownerKind = string(boundary.Owner.Kind)
+		ownerKind = boundary.Owner.Kind
 		ownerID = boundary.Owner.ID
 	}
 	bindingProvider := ""
@@ -294,7 +294,7 @@ func (s *SQLiteSessionStore) UpsertBoundary(ctx context.Context, key string, bou
 	return err
 }
 
-func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition string) ([]core.SessionBoundary, error) {
+func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition string) ([]netsession.SessionBoundary, error) {
 	if err := s.deleteExpiredBoundaries(ctx); err != nil {
 		return nil, err
 	}
@@ -303,10 +303,10 @@ func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition strin
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.SessionBoundary
+	var out []netsession.SessionBoundary
 	for rows.Next() {
 		var (
-			boundary              core.SessionBoundary
+			boundary              netsession.SessionBoundary
 			scope                 string
 			ownerKind             string
 			trust                 string
@@ -325,15 +325,15 @@ func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition strin
 		boundary.Scope = core.SessionScope(scope)
 		boundary.TrustClass = core.TrustClass(trust)
 		if boundary.Owner.ID != "" || ownerKind != "" {
-			boundary.Owner = core.SubjectRef{
+			boundary.Owner = core.DelegationSubjectRef{
 				TenantID: boundary.TenantID,
-				Kind:     core.SubjectKind(ownerKind),
+				Kind:     ownerKind,
 				ID:       boundary.Owner.ID,
 			}
 		}
 		if bindingProvider != "" || bindingConversationID != "" {
-			boundary.Binding = &core.ExternalSessionBinding{
-				Provider:       core.ExternalProvider(bindingProvider),
+			boundary.Binding = &core.SessionBinding{
+				Provider:       bindingProvider,
 				AccountID:      bindingAccountID,
 				ChannelID:      bindingChannelID,
 				ConversationID: bindingConversationID,
@@ -393,9 +393,9 @@ func (s *SQLiteSessionStore) ListDelegationsBySessionID(ctx context.Context, ses
 		if err := rows.Scan(&record.SessionID, &record.TenantID, &granteeKind, &record.Grantee.ID, &operationsJSON, &createdAt, &expiresAt); err != nil {
 			return nil, err
 		}
-		record.Grantee = core.SubjectRef{
+		record.Grantee = core.DelegationSubjectRef{
 			TenantID: record.TenantID,
-			Kind:     core.SubjectKind(granteeKind),
+			Kind:     granteeKind,
 			ID:       record.Grantee.ID,
 		}
 		_ = json.Unmarshal([]byte(operationsJSON), &record.Operations)
@@ -430,9 +430,9 @@ func (s *SQLiteSessionStore) ListDelegationsByTenantID(ctx context.Context, tena
 		if err := rows.Scan(&record.SessionID, &record.TenantID, &granteeKind, &record.Grantee.ID, &operationsJSON, &createdAt, &expiresAt); err != nil {
 			return nil, err
 		}
-		record.Grantee = core.SubjectRef{
+		record.Grantee = core.DelegationSubjectRef{
 			TenantID: record.TenantID,
-			Kind:     core.SubjectKind(granteeKind),
+			Kind:     granteeKind,
 			ID:       record.Grantee.ID,
 		}
 		_ = json.Unmarshal([]byte(operationsJSON), &record.Operations)

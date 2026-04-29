@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/identity"
+	"codeburg.org/lexbit/relurpify/relurpnet"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
@@ -22,7 +23,7 @@ const NodeDisconnectTimeout = 5 * time.Second
 
 type rexRuntimeView interface {
 	RuntimeProjection() rexnexus.Projection
-	RuntimeDescriptor(context.Context) (core.RuntimeDescriptor, error)
+	RuntimeDescriptor(context.Context) (fwfmp.RuntimeDescriptor, error)
 }
 
 type websocketRPCConn struct {
@@ -59,7 +60,7 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 		Conn:          rpcConn,
 		Descriptor:    nodeDesc,
 		CapabilitySet: connectedNodeCapabilities(ctx, manager, nodeDesc.ID),
-		HealthState: core.NodeHealth{
+		HealthState: relurpnet.NodeHealth{
 			Online:     true,
 			Foreground: true,
 		},
@@ -99,7 +100,7 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			var req struct {
 				Type        string                 `json:"type"`
 				TrustDomain string                 `json:"trust_domain"`
-				Runtime     core.RuntimeDescriptor `json:"runtime"`
+				Runtime     fwfmp.RuntimeDescriptor `json:"runtime"`
 				ExpiresAt   time.Time              `json:"expires_at,omitempty"`
 				Signature   string                 `json:"signature,omitempty"`
 			}
@@ -140,7 +141,7 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 				Type        string                `json:"type"`
 				TrustDomain string                `json:"trust_domain"`
 				RuntimeID   string                `json:"runtime_id"`
-				Export      core.ExportDescriptor `json:"export"`
+				Export      fwfmp.ExportDescriptor `json:"export"`
 				ExpiresAt   time.Time             `json:"expires_at,omitempty"`
 				Signature   string                `json:"signature,omitempty"`
 			}
@@ -153,7 +154,7 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			if strings.TrimSpace(req.RuntimeID) == "" {
 				req.RuntimeID = fallbackNodeRuntimeID(conn.Descriptor, connectInfo)
 			}
-			exportAd := core.ExportAdvertisement{
+			exportAd := fwfmp.ExportAdvertisement{
 				TrustDomain: req.TrustDomain,
 				RuntimeID:   req.RuntimeID,
 				NodeID:      conn.Descriptor.ID,
@@ -179,8 +180,8 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			var req struct {
 				Type      string               `json:"type"`
 				LineageID string               `json:"lineage_id"`
-				Manifest  core.ContextManifest `json:"manifest"`
-				Sealed    core.SealedContext   `json:"sealed"`
+				Manifest  fwfmp.ContextManifest `json:"manifest"`
+				Sealed    fwfmp.SealedContext   `json:"sealed"`
 			}
 			if err := remarshalNodeFrame(frame, &req); err != nil {
 				return err
@@ -241,12 +242,12 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 		case "fmp.resume.execute":
 			var req struct {
 				Type        string                `json:"type"`
-				Actor       core.SubjectRef       `json:"actor"`
+				Actor       identity.SubjectRef   `json:"actor"`
 				RuntimeID   string                `json:"runtime_id,omitempty"`
-				Offer       core.HandoffOffer     `json:"offer"`
-				Destination core.ExportDescriptor `json:"destination"`
-				Manifest    core.ContextManifest  `json:"manifest"`
-				Sealed      core.SealedContext    `json:"sealed"`
+				Offer       fwfmp.HandoffOffer    `json:"offer"`
+				Destination fwfmp.ExportDescriptor `json:"destination"`
+				Manifest    fwfmp.ContextManifest  `json:"manifest"`
+				Sealed      fwfmp.SealedContext    `json:"sealed"`
 			}
 			if err := remarshalNodeFrame(frame, &req); err != nil {
 				return err
@@ -328,11 +329,11 @@ func NodeRPCConnForTransportForTest(principal fwgateway.ConnectionPrincipal, fra
 	return nodeRPCConnForTransport(principal, frame, base)
 }
 
-func AdvertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) error {
+func AdvertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo) error {
 	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, nil)
 }
 
-func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
+func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
 	if mesh == nil {
 		return nil
 	}
@@ -355,8 +356,8 @@ func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeD
 	})
 }
 
-func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) core.RuntimeDescriptor {
-	runtime := core.RuntimeDescriptor{
+func advertisedRuntimeDescriptor(nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) fwfmp.RuntimeDescriptor {
+	runtime := fwfmp.RuntimeDescriptor{
 		RuntimeID:               fallbackNodeRuntimeID(nodeDesc, frame),
 		NodeID:                  nodeDesc.ID,
 		TrustDomain:             strings.TrimSpace(frame.TrustDomain),
@@ -396,7 +397,7 @@ func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.N
 	return runtime
 }
 
-func fallbackNodeRuntimeID(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
+func fallbackNodeRuntimeID(nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
 	if strings.TrimSpace(frame.RuntimeID) != "" {
 		return strings.TrimSpace(frame.RuntimeID)
 	}
@@ -417,7 +418,7 @@ func fallbackCompatibilityClass(frame fwgateway.NodeConnectInfo) string {
 	return "default"
 }
 
-func runtimeRegistrationSignature(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
+func runtimeRegistrationSignature(nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
 	return runtimeRegistrationSignatureFromValues(nodeDesc.ID, strings.TrimSpace(frame.RuntimeID), strings.TrimSpace(frame.RuntimeVersion), strings.TrimSpace(frame.PeerKeyID), strings.TrimSpace(frame.TransportProfile))
 }
 
@@ -433,41 +434,41 @@ func runtimeRegistrationSignatureFromValues(nodeID, runtimeID, runtimeVersion, p
 	return strings.Join(parts, ":")
 }
 
-func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (core.NodeDescriptor, error) {
+func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
 	tenantID := NormalizeTenantID(principal.Actor.TenantID)
 	nodeID := frame.NodeID
 	if nodeID == "" {
 		nodeID = principal.Actor.ID
 	}
 	if nodeID == "" {
-		return core.NodeDescriptor{}, fmt.Errorf("node id required")
+		return fwnode.NodeDescriptor{}, fmt.Errorf("node id required")
 	}
 
-	var enrollment *core.NodeEnrollment
+	var enrollment *identity.NodeEnrollment
 	var err error
 	if identities != nil {
 		enrollment, err = identities.GetNodeEnrollment(ctx, tenantID, nodeID)
 		if err != nil {
-			return core.NodeDescriptor{}, err
+			return fwnode.NodeDescriptor{}, err
 		}
 	}
 	if enrollment == nil {
-		return core.NodeDescriptor{}, fmt.Errorf("node enrollment not found")
+		return fwnode.NodeDescriptor{}, fmt.Errorf("node enrollment not found")
 	}
 
-	nodeDesc := core.NodeDescriptor{
+	nodeDesc := fwnode.NodeDescriptor{
 		ID:         enrollment.NodeID,
 		TenantID:   enrollment.TenantID,
 		Name:       enrollment.NodeID,
-		Platform:   core.NodePlatformHeadless,
-		TrustClass: enrollment.TrustClass,
+		Platform:   relurpnet.NodePlatformHeadless,
+		TrustClass: core.TrustClass(enrollment.TrustClass),
 		PairedAt:   enrollment.PairedAt,
 		Owner:      enrollment.Owner,
 	}
 	if manager != nil && manager.Store != nil {
 		storedNode, err := manager.Store.GetNode(ctx, enrollment.NodeID)
 		if err != nil {
-			return core.NodeDescriptor{}, err
+			return fwnode.NodeDescriptor{}, err
 		}
 		if storedNode != nil {
 			if storedNode.Name != "" {
@@ -484,7 +485,7 @@ func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, ident
 	return nodeDesc, nil
 }
 
-func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (core.NodeDescriptor, error) {
+func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
 	return connectedNodeDescriptor(ctx, manager, identities, principal, frame)
 }
 
@@ -492,7 +493,7 @@ func ConnectedNodeCapabilitiesForTest(ctx context.Context, manager *fwnode.Manag
 	return connectedNodeCapabilities(ctx, manager, nodeID)
 }
 
-func AdvertiseConnectedNodeToFMPWithRuntimeForTest(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
+func AdvertiseConnectedNodeToFMPWithRuntimeForTest(ctx context.Context, mesh *fwfmp.Service, nodeDesc fwnode.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
 	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, rexRuntime)
 }
 

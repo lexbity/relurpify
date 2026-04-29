@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,7 +61,7 @@ func TestGetTenantFMPFederationPolicyDeniesCrossTenantAccess(t *testing.T) {
 	store, err := db.NewSQLiteFMPFederationStore(filepath.Join(t.TempDir(), "fmp_federation.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	require.NoError(t, store.SetTenantFederationPolicy(context.Background(), core.TenantFederationPolicy{
+	require.NoError(t, store.SetTenantFederationPolicy(context.Background(), fwfmp.TenantFederationPolicy{
 		TenantID:            "tenant-2",
 		AllowedTrustDomains: []string{"mesh.remote"},
 	}))

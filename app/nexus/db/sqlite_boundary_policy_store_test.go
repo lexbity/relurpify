@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,11 +17,11 @@ func TestSQLiteBoundaryPolicyStoreRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	require.NoError(t, store.UpsertBoundaryPolicy(context.Background(), core.BoundaryPolicy{
+	require.NoError(t, store.UpsertBoundaryPolicy(context.Background(), fwfmp.BoundaryPolicy{
 		TrustDomain:                  "mesh.remote",
 		AcceptedSourceDomains:        []string{"mesh.remote"},
 		AcceptedSourceIdentities:     []core.SubjectRef{{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}},
-		AllowedRouteModes:            []core.RouteMode{core.RouteModeGateway},
+		AllowedRouteModes:            []fwfmp.RouteMode{fwfmp.RouteModeGateway},
 		RequireGatewayAuthentication: true,
 		AllowMediation:               true,
 		MaxTransferBytes:             4096,

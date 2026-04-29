@@ -5,11 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/identity"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
-func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID string, kind core.SubjectKind, subjectID, displayName string, roles []string, createdAt time.Time) error {
+func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID string, kind identity.SubjectKind, subjectID, displayName string, roles []string, createdAt time.Time) error {
 	if store == nil {
 		return nil
 	}
@@ -21,14 +20,14 @@ func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID 
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	if err := store.UpsertTenant(ctx, core.TenantRecord{
+	if err := store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:          tenantID,
 		DisplayName: tenantID,
 		CreatedAt:   createdAt,
 	}); err != nil {
 		return err
 	}
-	return store.UpsertSubject(ctx, core.SubjectRecord{
+	return store.UpsertSubject(ctx, identity.SubjectRecord{
 		TenantID:    tenantID,
 		Kind:        kind,
 		ID:          subjectID,

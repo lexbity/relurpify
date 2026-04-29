@@ -18,7 +18,7 @@ func TestListFMPContinuationsFiltersToAuthorizedTenant(t *testing.T) {
 	ownership := &fwfmp.InMemoryOwnershipStore{}
 	mesh := &fwfmp.Service{Ownership: ownership}
 	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+	require.NoError(t, ownership.CreateLineage(context.Background(), fwfmp.LineageRecord{
 		LineageID:      "lineage-a",
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
@@ -27,7 +27,7 @@ func TestListFMPContinuationsFiltersToAuthorizedTenant(t *testing.T) {
 		UpdatedAt:      now,
 		LineageVersion: 1,
 	}))
-	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+	require.NoError(t, ownership.CreateLineage(context.Background(), fwfmp.LineageRecord{
 		LineageID:      "lineage-b",
 		TenantID:       "tenant-b",
 		TaskClass:      "agent.run",
@@ -65,7 +65,7 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 	ownership := &fwfmp.InMemoryOwnershipStore{}
 	mesh := &fwfmp.Service{Ownership: ownership}
 	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
-	lineage := core.LineageRecord{
+	lineage := fwfmp.LineageRecord{
 		LineageID:      "lineage-1",
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
@@ -79,15 +79,15 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 	_, err = eventLog.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Timestamp: now,
-			Type:      core.FrameworkEventFMPResumeCommitted,
-			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: core.SubjectKindServiceAccount},
+			Type:      fwfmp.FrameworkEventFMPResumeCommitted,
+			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(core.SubjectKindServiceAccount)},
 			Partition: "local",
 			Payload:   []byte(`{"lineage_id":"lineage-1","new_attempt":"attempt-b"}`),
 		},
 		{
 			Timestamp: now,
-			Type:      core.FrameworkEventFMPResumeCommitted,
-			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: core.SubjectKindServiceAccount},
+			Type:      fwfmp.FrameworkEventFMPResumeCommitted,
+			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(core.SubjectKindServiceAccount)},
 			Partition: "local",
 			Payload:   []byte(`{"lineage_id":"lineage-2","new_attempt":"attempt-c"}`),
 		},
@@ -118,7 +118,7 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 	require.NotNil(t, result.Lineage)
 	require.Equal(t, "lineage-1", result.Lineage.LineageID)
 	require.Len(t, result.Events, 1)
-	require.Equal(t, core.FrameworkEventFMPResumeCommitted, result.Events[0].Type)
+	require.Equal(t, fwfmp.FrameworkEventFMPResumeCommitted, result.Events[0].Type)
 }
 
 func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
@@ -135,7 +135,7 @@ func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
 
 	ownership := &fwfmp.InMemoryOwnershipStore{}
 	mesh := &fwfmp.Service{Ownership: ownership, Audit: auditStore}
-	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+	require.NoError(t, ownership.CreateLineage(context.Background(), fwfmp.LineageRecord{
 		LineageID:      "lineage-1",
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
@@ -147,7 +147,7 @@ func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
 	require.NoError(t, auditStore.Log(context.Background(), core.AuditRecord{
 		AgentID:    "runtime-a",
 		Action:     "fmp",
-		Type:       core.FrameworkEventFMPHandoffOffered,
+		Type:       fwfmp.FrameworkEventFMPHandoffOffered,
 		Permission: "mesh",
 		Result:     "ok",
 		Metadata: map[string]any{
@@ -189,7 +189,7 @@ func TestVerifyFMPAuditTrailReportsIntegrity(t *testing.T) {
 
 	ownership := &fwfmp.InMemoryOwnershipStore{}
 	mesh := &fwfmp.Service{Ownership: ownership, Audit: auditStore}
-	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+	require.NoError(t, ownership.CreateLineage(context.Background(), fwfmp.LineageRecord{
 		LineageID:      "lineage-1",
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
@@ -201,7 +201,7 @@ func TestVerifyFMPAuditTrailReportsIntegrity(t *testing.T) {
 	require.NoError(t, auditStore.Log(context.Background(), core.AuditRecord{
 		AgentID:    "runtime-a",
 		Action:     "fmp",
-		Type:       core.FrameworkEventFMPHandoffOffered,
+		Type:       fwfmp.FrameworkEventFMPHandoffOffered,
 		Permission: "mesh",
 		Result:     "ok",
 		Metadata:   map[string]any{"lineage_id": "lineage-1"},
@@ -230,7 +230,7 @@ func TestReadFMPContinuationAuditDeniesCrossTenantAccess(t *testing.T) {
 
 	ownership := &fwfmp.InMemoryOwnershipStore{}
 	mesh := &fwfmp.Service{Ownership: ownership}
-	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+	require.NoError(t, ownership.CreateLineage(context.Background(), fwfmp.LineageRecord{
 		LineageID:    "lineage-1",
 		TenantID:     "tenant-a",
 		TaskClass:    "agent.run",

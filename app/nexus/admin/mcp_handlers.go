@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
@@ -65,8 +67,8 @@ type listFMPTrustBundlesArgs struct {
 }
 
 type upsertFMPTrustBundleArgs struct {
-	APIVersion string           `json:"api_version,omitempty"`
-	Bundle     core.TrustBundle `json:"bundle"`
+	APIVersion string            `json:"api_version,omitempty"`
+	Bundle     fwfmp.TrustBundle `json:"bundle"`
 }
 
 type listFMPBoundaryPoliciesArgs struct {
@@ -76,8 +78,8 @@ type listFMPBoundaryPoliciesArgs struct {
 }
 
 type setFMPBoundaryPolicyArgs struct {
-	APIVersion string              `json:"api_version,omitempty"`
-	Policy     core.BoundaryPolicy `json:"policy"`
+	APIVersion string               `json:"api_version,omitempty"`
+	Policy     fwfmp.BoundaryPolicy `json:"policy"`
 }
 
 type listTenantFMPExportsArgs struct {
@@ -668,7 +670,7 @@ func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal
 		result, err := svc.BindExternalIdentity(ctx, BindExternalIdentityRequest{
 			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
 			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
-			Provider:        core.ExternalProvider(stringArg(args, "provider", "")),
+			Provider:        identity.ExternalProvider(stringArg(args, "provider", "")),
 			AccountID:       stringArg(args, "account_id", ""),
 			ExternalID:      stringArg(args, "external_id", ""),
 			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),

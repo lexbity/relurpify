@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/audit"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var _ core.AuditChainReader = (*SQLiteAuditChainStore)(nil)
+var _ audit.AuditChainReader = (*SQLiteAuditChainStore)(nil)
 
 type SQLiteAuditChainStore struct {
 	db       *sql.DB
@@ -83,7 +83,7 @@ func (s *SQLiteAuditChainStore) init() error {
 	return nil
 }
 
-func (s *SQLiteAuditChainStore) Log(ctx context.Context, record core.AuditRecord) error {
+func (s *SQLiteAuditChainStore) Log(ctx context.Context, record audit.AuditRecord) error {
 	record = normalizeAuditRecord(record)
 	metadataJSON, err := json.Marshal(record.Metadata)
 	if err != nil {
@@ -136,26 +136,26 @@ func (s *SQLiteAuditChainStore) Log(ctx context.Context, record core.AuditRecord
 	return tx.Commit()
 }
 
-func (s *SQLiteAuditChainStore) Query(ctx context.Context, filter core.AuditQuery) ([]core.AuditRecord, error) {
-	entries, err := s.ReadChain(ctx, core.AuditChainFilter{AuditQuery: filter})
+func (s *SQLiteAuditChainStore) Query(ctx context.Context, filter audit.AuditQuery) ([]audit.AuditRecord, error) {
+	entries, err := s.ReadChain(ctx, audit.AuditChainFilter{AuditQuery: filter})
 	if err != nil {
 		return nil, err
 	}
-	records := make([]core.AuditRecord, 0, len(entries))
+	records := make([]audit.AuditRecord, 0, len(entries))
 	for _, entry := range entries {
 		records = append(records, entry.Record)
 	}
 	return records, nil
 }
 
-func (s *SQLiteAuditChainStore) ReadChain(ctx context.Context, filter core.AuditChainFilter) ([]core.AuditChainEntry, error) {
+func (s *SQLiteAuditChainStore) ReadChain(ctx context.Context, filter audit.AuditChainFilter) ([]audit.AuditChainEntry, error) {
 	query, args := buildAuditChainQuery(filter)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	entries := make([]core.AuditChainEntry, 0)
+	entries := make([]audit.AuditChainEntry, 0)
 	for rows.Next() {
 		entry, err := scanAuditChainEntry(rows)
 		if err != nil {
@@ -169,12 +169,12 @@ func (s *SQLiteAuditChainStore) ReadChain(ctx context.Context, filter core.Audit
 	return entries, nil
 }
 
-func (s *SQLiteAuditChainStore) VerifyChain(ctx context.Context, filter core.AuditChainFilter) (core.AuditChainVerification, error) {
+func (s *SQLiteAuditChainStore) VerifyChain(ctx context.Context, filter audit.AuditChainFilter) (audit.AuditChainVerification, error) {
 	entries, err := s.ReadChain(ctx, filter)
 	if err != nil {
-		return core.AuditChainVerification{}, err
+		return audit.AuditChainVerification{}, err
 	}
-	result := core.AuditChainVerification{
+	result := audit.AuditChainVerification{
 		Verified:   true,
 		EntryCount: len(entries),
 	}
@@ -189,7 +189,7 @@ func (s *SQLiteAuditChainStore) VerifyChain(ctx context.Context, filter core.Aud
 		}
 		payload, err := canonicalAuditChainPayload(normalizeAuditRecord(entry.Record), entry.PreviousHash)
 		if err != nil {
-			return core.AuditChainVerification{}, err
+			return audit.AuditChainVerification{}, err
 		}
 		sum := sha256.Sum256(payload)
 		expectedHash := hex.EncodeToString(sum[:])
@@ -219,7 +219,7 @@ func (s *SQLiteAuditChainStore) lastHashTx(ctx context.Context, tx *sql.Tx) (str
 	return previousHash, err
 }
 
-func buildAuditChainQuery(filter core.AuditChainFilter) (string, []any) {
+func buildAuditChainQuery(filter audit.AuditChainFilter) (string, []any) {
 	where := make([]string, 0, 8)
 	args := make([]any, 0, 8)
 	if v := strings.TrimSpace(filter.AgentID); v != "" {
@@ -273,9 +273,9 @@ func buildAuditChainQuery(filter core.AuditChainFilter) (string, []any) {
 
 func scanAuditChainEntry(scanner interface {
 	Scan(dest ...any) error
-}) (core.AuditChainEntry, error) {
+}) (audit.AuditChainEntry, error) {
 	var (
-		entry        core.AuditChainEntry
+		entry        audit.AuditChainEntry
 		timestampRaw string
 		metadataJSON string
 	)
@@ -296,17 +296,17 @@ func scanAuditChainEntry(scanner interface {
 		&entry.Signature,
 	)
 	if err != nil {
-		return core.AuditChainEntry{}, err
+		return audit.AuditChainEntry{}, err
 	}
 	entry.Record.Timestamp, err = time.Parse(time.RFC3339Nano, timestampRaw)
 	if err != nil {
-		return core.AuditChainEntry{}, err
+		return audit.AuditChainEntry{}, err
 	}
 	if strings.TrimSpace(metadataJSON) == "" {
 		metadataJSON = "{}"
 	}
 	if err := json.Unmarshal([]byte(metadataJSON), &entry.Record.Metadata); err != nil {
-		return core.AuditChainEntry{}, err
+		return audit.AuditChainEntry{}, err
 	}
 	if entry.Record.Metadata == nil {
 		entry.Record.Metadata = map[string]any{}
@@ -314,7 +314,7 @@ func scanAuditChainEntry(scanner interface {
 	return entry, nil
 }
 
-func normalizeAuditRecord(record core.AuditRecord) core.AuditRecord {
+func normalizeAuditRecord(record audit.AuditRecord) audit.AuditRecord {
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
 	}
@@ -325,7 +325,7 @@ func normalizeAuditRecord(record core.AuditRecord) core.AuditRecord {
 	return record
 }
 
-func canonicalAuditChainPayload(record core.AuditRecord, previousHash string) ([]byte, error) {
+func canonicalAuditChainPayload(record audit.AuditRecord, previousHash string) ([]byte, error) {
 	normalized := normalizeAuditRecord(record)
 	return json.Marshal(struct {
 		Timestamp   string         `json:"timestamp"`

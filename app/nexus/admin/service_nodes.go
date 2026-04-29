@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
 func (s *service) ListNodes(ctx context.Context, req ListNodesRequest) (ListNodesResult, error) {
@@ -23,7 +25,7 @@ func (s *service) ListNodes(ctx context.Context, req ListNodesRequest) (ListNode
 	return ListNodesResult{
 		AdminResult: resultEnvelope(req.AdminRequest),
 		PageResult:  pageResult(len(nodes)),
-		Nodes:       nodes,
+		Nodes:       coreNodeDescriptorsFromNodeDescriptors(nodes),
 	}, nil
 }
 
@@ -45,7 +47,8 @@ func (s *service) GetNode(ctx context.Context, req GetNodeRequest) (GetNodeResul
 	if tenantID != "" && node.TenantID != "" && !strings.EqualFold(node.TenantID, tenantID) {
 		return GetNodeResult{}, notFound("node not found", map[string]any{"node_id": req.NodeID})
 	}
-	return GetNodeResult{AdminResult: resultEnvelope(req.AdminRequest), Node: node}, nil
+	nodeDesc := coreNodeDescriptorFromNodeDescriptor(*node)
+	return GetNodeResult{AdminResult: resultEnvelope(req.AdminRequest), Node: &nodeDesc}, nil
 }
 
 func (s *service) UpdateNodeCapabilities(ctx context.Context, req UpdateNodeCapabilitiesRequest) (UpdateNodeCapabilitiesResult, error) {
@@ -67,7 +70,8 @@ func (s *service) UpdateNodeCapabilities(ctx context.Context, req UpdateNodeCapa
 	if err := s.cfg.Nodes.UpsertNode(ctx, *node); err != nil {
 		return UpdateNodeCapabilitiesResult{}, internalError("update node capabilities failed", err, map[string]any{"node_id": req.NodeID})
 	}
-	return UpdateNodeCapabilitiesResult{AdminResult: resultEnvelope(req.AdminRequest), Node: node}, nil
+	nodeDesc := coreNodeDescriptorFromNodeDescriptor(*node)
+	return UpdateNodeCapabilitiesResult{AdminResult: resultEnvelope(req.AdminRequest), Node: &nodeDesc}, nil
 }
 
 func (s *service) RevokeNode(ctx context.Context, req RevokeNodeRequest) (RevokeNodeResult, error) {
@@ -185,10 +189,10 @@ func (s *service) ApprovePairing(ctx context.Context, req ApprovePairingRequest)
 			}
 		} else if s.cfg.Nodes != nil {
 			// Compatibility path for tests/bootstrap modes without an identity store.
-			if err := s.cfg.Nodes.UpsertNode(ctx, core.NodeDescriptor{
+			if err := s.cfg.Nodes.UpsertNode(ctx, fwnode.NodeDescriptor{
 				ID:         pairing.Cred.DeviceID,
 				Name:       pairing.Cred.DeviceID,
-				Platform:   core.NodePlatformHeadless,
+				Platform:   relurpnet.NodePlatformHeadless,
 				TrustClass: core.TrustClassRemoteApproved,
 				PairedAt:   pairing.Cred.IssuedAt,
 			}); err != nil {
@@ -295,7 +299,7 @@ func (s *service) ListNodeEnrollments(ctx context.Context, req ListNodeEnrollmen
 			TenantID:       e.TenantID,
 			NodeID:         e.NodeID,
 			Owner:          e.Owner,
-			TrustClass:     e.TrustClass,
+			TrustClass:     core.TrustClass(e.TrustClass),
 			KeyID:          e.KeyID,
 			PairedAt:       e.PairedAt,
 			LastVerifiedAt: e.LastVerifiedAt,

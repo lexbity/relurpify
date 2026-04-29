@@ -7,12 +7,12 @@ import (
 	nexusbootstrap "codeburg.org/lexbit/relurpify/app/nexus/bootstrap"
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
-func ResolveConfig(workspace, configPath string) (config.Paths, nexuscfg.Config, error) {
+func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
 	return nexusbootstrap.ResolveConfig(workspace, configPath)
 }
 
@@ -66,24 +66,24 @@ func RejectPairing(ctx context.Context, workspace, configPath, pairingCode strin
 	return manager.RejectPairing(ctx, pairingCode)
 }
 
-func nodeEnrollmentFromPairing(pairing fwnode.PendingPairing) core.NodeEnrollment {
+func nodeEnrollmentFromPairing(pairing fwnode.PendingPairing) identity.NodeEnrollment {
 	tenantID := pairing.Cred.TenantID
 	if tenantID == "" {
 		tenantID = "local"
 	}
-	return core.NodeEnrollment{
+	return identity.NodeEnrollment{
 		TenantID:   tenantID,
 		NodeID:     pairing.Cred.DeviceID,
-		TrustClass: core.TrustClassRemoteApproved,
-		Owner: core.SubjectRef{
+		TrustClass: identity.TrustClassRemoteApproved,
+		Owner: identity.SubjectRef{
 			TenantID: tenantID,
-			Kind:     core.SubjectKindNode,
+			Kind:     identity.SubjectKindNode,
 			ID:       pairing.Cred.DeviceID,
 		},
 		PublicKey:  append([]byte(nil), pairing.Cred.PublicKey...),
 		KeyID:      pairing.Cred.KeyID,
 		PairedAt:   pairing.Cred.IssuedAt,
-		AuthMethod: core.AuthMethodNodeChallenge,
+		AuthMethod: identity.AuthMethodNodeChallenge,
 	}
 }
 

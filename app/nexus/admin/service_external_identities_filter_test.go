@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestListExternalIdentitiesSubjectKindFilter(t *testing.T) {
 
 	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
 		TenantID:   "tenant-1",
-		Provider:   core.ExternalProviderDiscord,
+		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "discord-user-1",
 		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
@@ -32,7 +33,7 @@ func TestListExternalIdentitiesSubjectKindFilter(t *testing.T) {
 	}))
 	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
 		TenantID:   "tenant-1",
-		Provider:   core.ExternalProviderDiscord,
+		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "discord-bot-1",
 		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "bot-1"},
@@ -67,7 +68,7 @@ func TestListExternalIdentitiesSubjectIDFilter(t *testing.T) {
 
 	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
 		TenantID:   "tenant-1",
-		Provider:   core.ExternalProviderDiscord,
+		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "ext-a",
 		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-alice"},
@@ -76,7 +77,7 @@ func TestListExternalIdentitiesSubjectIDFilter(t *testing.T) {
 	}))
 	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
 		TenantID:   "tenant-1",
-		Provider:   core.ExternalProviderDiscord,
+		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "ext-b",
 		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-bob"},
@@ -111,7 +112,7 @@ func TestListExternalIdentitiesNoFilterReturnsAll(t *testing.T) {
 	for i, extID := range []string{"ext-1", "ext-2", "ext-3"} {
 		require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
 			TenantID:   "tenant-1",
-			Provider:   core.ExternalProviderDiscord,
+			Provider:   identity.ExternalProviderDiscord,
 			AccountID:  "guild-1",
 			ExternalID: extID,
 			Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: extID},

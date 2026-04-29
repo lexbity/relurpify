@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -70,13 +70,13 @@ const listTokensMaxDefault = 200
 
 // ListTokens returns up to listTokensMaxDefault tokens ordered by issued_at DESC.
 // Use ListTokensPaged for explicit pagination control.
-func (s *SQLiteAdminTokenStore) ListTokens(ctx context.Context) ([]core.AdminTokenRecord, error) {
+func (s *SQLiteAdminTokenStore) ListTokens(ctx context.Context) ([]identity.AdminTokenRecord, error) {
 	return s.ListTokensPaged(ctx, listTokensMaxDefault, 0)
 }
 
 // ListTokensPaged returns a page of admin token records. limit must be positive
 // and is capped at 1000; offset is the zero-based row offset.
-func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offset int) ([]core.AdminTokenRecord, error) {
+func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offset int) ([]identity.AdminTokenRecord, error) {
 	if limit <= 0 {
 		limit = listTokensMaxDefault
 	}
@@ -94,7 +94,7 @@ func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offs
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.AdminTokenRecord
+	var out []identity.AdminTokenRecord
 	for rows.Next() {
 		record, err := scanAdminToken(rows.Scan)
 		if err != nil {
@@ -105,7 +105,7 @@ func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offs
 	return out, rows.Err()
 }
 
-func (s *SQLiteAdminTokenStore) GetToken(ctx context.Context, id string) (*core.AdminTokenRecord, error) {
+func (s *SQLiteAdminTokenStore) GetToken(ctx context.Context, id string) (*identity.AdminTokenRecord, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE id = ?`, id)
 	record, err := scanAdminToken(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -117,7 +117,7 @@ func (s *SQLiteAdminTokenStore) GetToken(ctx context.Context, id string) (*core.
 	return &record, nil
 }
 
-func (s *SQLiteAdminTokenStore) GetTokenByHash(ctx context.Context, tokenHash string) (*core.AdminTokenRecord, error) {
+func (s *SQLiteAdminTokenStore) GetTokenByHash(ctx context.Context, tokenHash string) (*identity.AdminTokenRecord, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE token_hash = ?`, tokenHash)
 	record, err := scanAdminToken(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -129,7 +129,7 @@ func (s *SQLiteAdminTokenStore) GetTokenByHash(ctx context.Context, tokenHash st
 	return &record, nil
 }
 
-func (s *SQLiteAdminTokenStore) CreateToken(ctx context.Context, record core.AdminTokenRecord) error {
+func (s *SQLiteAdminTokenStore) CreateToken(ctx context.Context, record identity.AdminTokenRecord) error {
 	if strings.TrimSpace(record.ID) == "" {
 		return errors.New("token id required")
 	}
@@ -181,32 +181,32 @@ func (s *SQLiteAdminTokenStore) Close() error {
 	return s.db.Close()
 }
 
-func scanAdminToken(scan func(dest ...any) error) (core.AdminTokenRecord, error) {
+func scanAdminToken(scan func(dest ...any) error) (identity.AdminTokenRecord, error) {
 	var (
-		record                core.AdminTokenRecord
+		record                identity.AdminTokenRecord
 		subjectKind           string
 		scopesJSON            string
 		issuedAt, expiresAt   string
 		lastUsedAt, revokedAt string
 	)
 	if err := scan(&record.ID, &record.Name, &record.TenantID, &subjectKind, &record.SubjectID, &record.TokenHash, &scopesJSON, &issuedAt, &expiresAt, &lastUsedAt, &revokedAt); err != nil {
-		return core.AdminTokenRecord{}, err
+		return identity.AdminTokenRecord{}, err
 	}
-	record.SubjectKind = core.SubjectKind(subjectKind)
+	record.SubjectKind = identity.SubjectKind(subjectKind)
 	parsedIssuedAt, err := time.Parse(time.RFC3339Nano, issuedAt)
 	if err != nil {
-		return core.AdminTokenRecord{}, err
+		return identity.AdminTokenRecord{}, err
 	}
 	record.IssuedAt = parsedIssuedAt
 	record.Scopes = unmarshalStringSlice(scopesJSON)
 	if record.ExpiresAt, err = parseOptTime(expiresAt); err != nil {
-		return core.AdminTokenRecord{}, err
+		return identity.AdminTokenRecord{}, err
 	}
 	if record.LastUsedAt, err = parseOptTime(lastUsedAt); err != nil {
-		return core.AdminTokenRecord{}, err
+		return identity.AdminTokenRecord{}, err
 	}
 	if record.RevokedAt, err = parseOptTime(revokedAt); err != nil {
-		return core.AdminTokenRecord{}, err
+		return identity.AdminTokenRecord{}, err
 	}
 	return record, nil
 }

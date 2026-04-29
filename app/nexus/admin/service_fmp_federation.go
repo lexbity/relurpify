@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 func (s *service) GetTenantFMPFederationPolicy(ctx context.Context, req GetTenantFMPFederationPolicyRequest) (GetTenantFMPFederationPolicyResult, error) {
@@ -40,10 +40,10 @@ func (s *service) SetTenantFMPFederationPolicy(ctx context.Context, req SetTenan
 	if s.cfg.FMPFederation == nil {
 		return SetTenantFMPFederationPolicyResult{}, notImplemented("tenant fmp federation controls not implemented", nil)
 	}
-	policy := core.TenantFederationPolicy{
+	policy := fwfmp.TenantFederationPolicy{
 		TenantID:            tenantID,
 		AllowedTrustDomains: append([]string(nil), req.AllowedTrustDomains...),
-		AllowedRouteModes:   make([]core.RouteMode, 0, len(req.AllowedRouteModes)),
+		AllowedRouteModes:   make([]fwfmp.RouteMode, 0, len(req.AllowedRouteModes)),
 		AllowMediation:      req.AllowMediation,
 		MaxTransferBytes:    req.MaxTransferBytes,
 		UpdatedAt:           time.Now().UTC(),
@@ -52,7 +52,7 @@ func (s *service) SetTenantFMPFederationPolicy(ctx context.Context, req SetTenan
 		policy.AllowedTrustDomains[i] = strings.TrimSpace(policy.AllowedTrustDomains[i])
 	}
 	for _, mode := range req.AllowedRouteModes {
-		policy.AllowedRouteModes = append(policy.AllowedRouteModes, core.RouteMode(strings.TrimSpace(mode)))
+		policy.AllowedRouteModes = append(policy.AllowedRouteModes, fwfmp.RouteMode(strings.TrimSpace(mode)))
 	}
 	if err := policy.Validate(); err != nil {
 		return SetTenantFMPFederationPolicyResult{}, invalidArgument("tenant federation policy invalid", map[string]any{"cause": err.Error()})
@@ -66,7 +66,7 @@ func (s *service) SetTenantFMPFederationPolicy(ctx context.Context, req SetTenan
 	}, nil
 }
 
-func tenantFederationInfoFromPolicy(policy core.TenantFederationPolicy) TenantFMPFederationPolicyInfo {
+func tenantFederationInfoFromPolicy(policy fwfmp.TenantFederationPolicy) TenantFMPFederationPolicyInfo {
 	return TenantFMPFederationPolicyInfo{
 		TenantID:            policy.TenantID,
 		AllowedTrustDomains: append([]string(nil), policy.AllowedTrustDomains...),
@@ -77,7 +77,7 @@ func tenantFederationInfoFromPolicy(policy core.TenantFederationPolicy) TenantFM
 	}
 }
 
-func routeModeStrings(modes []core.RouteMode) []string {
+func routeModeStrings(modes []fwfmp.RouteMode) []string {
 	if len(modes) == 0 {
 		return nil
 	}
