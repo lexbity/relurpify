@@ -4,11 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	node := NewCapabilityExecutionNode("capability-exec1")
+	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	env.SetWorkingValue("euclo.route.capability_id", "debug", contextdata.MemoryClassTask)
@@ -22,12 +24,12 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 		t.Fatal("Expected result to be non-nil")
 	}
 
-	if result["execution_kind"] != "capability" {
-		t.Errorf("Expected execution_kind capability, got %v", result["execution_kind"])
+	if result.Data["capability_id"] != "debug" {
+		t.Errorf("Expected capability_id debug, got %v", result.Data["capability_id"])
 	}
 
-	if result["capability_id"] != "debug" {
-		t.Errorf("Expected capability_id debug, got %v", result["capability_id"])
+	if result.Data["stub"] != true {
+		t.Errorf("Expected stub execution result, got %v", result.Data["stub"])
 	}
 }
 
@@ -42,13 +44,14 @@ func TestCapabilityExecutionNodeID(t *testing.T) {
 func TestCapabilityExecutionNodeType(t *testing.T) {
 	node := NewCapabilityExecutionNode("capability-exec1")
 
-	if node.Type() != "capability_execution" {
-		t.Errorf("Expected Type capability_execution, got %s", node.Type())
+	if node.Type() != agentgraph.NodeTypeSystem {
+		t.Errorf("Expected Type system, got %s", node.Type())
 	}
 }
 
 func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 	node := NewCapabilityExecutionNode("capability-exec1")
+	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	env.SetWorkingValue("euclo.route.capability_id", "debug", contextdata.MemoryClassTask)
@@ -75,4 +78,5 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 	if completed != true {
 		t.Errorf("Expected execution.completed true, got %v", completed)
 	}
+
 }

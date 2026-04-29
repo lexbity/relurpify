@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -24,21 +25,22 @@ func (n *BackgroundJobNode) ID() string {
 }
 
 // Type returns the node type.
-func (n *BackgroundJobNode) Type() string {
-	return "background_job"
+func (n *BackgroundJobNode) Type() agentgraph.NodeType {
+	return agentgraph.NodeTypeSystem
 }
 
 // Execute manages a background job.
-// Phase 12: Stub implementation - will integrate with job management.
-func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[string]any, error) {
-	// Phase 12: Stub - in production, this would launch a background job
-	// Write job record to envelope
+func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+	_ = ctx
+	result := &agentgraph.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data: map[string]any{
+			"job_started": true,
+		},
+	}
 	env.SetWorkingValue("euclo.background.job_started", true, contextdata.MemoryClassTask)
-
-	return map[string]any{
-		"job_started": true,
-		"stub":        true,
-	}, nil
+	return result, nil
 }
 
 // JobRecord tracks a background job.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -43,7 +44,7 @@ func TestDispatcherID(t *testing.T) {
 func TestDispatcherType(t *testing.T) {
 	dispatcher := NewDispatcher("dispatcher1")
 
-	if dispatcher.Type() != "dispatcher" {
-		t.Errorf("Expected Type dispatcher, got %s", dispatcher.Type())
+	if dispatcher.Type() != agentgraph.NodeTypeSystem {
+		t.Errorf("Expected Type system, got %s", dispatcher.Type())
 	}
 }

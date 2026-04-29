@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -18,8 +19,8 @@ func TestForkNodeRecipeBranch(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["branch"] != "recipe_execution" {
-		t.Errorf("Expected branch recipe_execution, got %v", result["branch"])
+	if result.Data["branch"] != "recipe_execution" {
+		t.Errorf("Expected branch recipe_execution, got %v", result.Data["branch"])
 	}
 
 	branch, ok := env.GetWorkingValue("euclo.fork.branch")
@@ -43,8 +44,8 @@ func TestForkNodeCapabilityBranch(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["branch"] != "capability_execution" {
-		t.Errorf("Expected branch capability_execution, got %v", result["branch"])
+	if result.Data["branch"] != "capability_execution" {
+		t.Errorf("Expected branch capability_execution, got %v", result.Data["branch"])
 	}
 
 	branch, ok := env.GetWorkingValue("euclo.fork.branch")
@@ -67,8 +68,8 @@ func TestForkNodeDefaultBranch(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["branch"] != "capability_execution" {
-		t.Errorf("Expected branch capability_execution (default), got %v", result["branch"])
+	if result.Data["branch"] != "capability_execution" {
+		t.Errorf("Expected branch capability_execution (default), got %v", result.Data["branch"])
 	}
 }
 
@@ -83,7 +84,7 @@ func TestForkNodeID(t *testing.T) {
 func TestForkNodeType(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
-	if fork.Type() != "route_fork" {
-		t.Errorf("Expected Type route_fork, got %s", fork.Type())
+	if fork.Type() != agentgraph.NodeTypeConditional {
+		t.Errorf("Expected Type conditional, got %s", fork.Type())
 	}
 }

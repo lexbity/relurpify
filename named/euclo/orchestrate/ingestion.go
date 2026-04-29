@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 )
@@ -25,36 +26,46 @@ func (n *IngestionNode) ID() string {
 }
 
 // Type returns the node type.
-func (n *IngestionNode) Type() string {
-	return "ingestion"
+func (n *IngestionNode) Type() agentgraph.NodeType {
+	return agentgraph.NodeTypeTool
 }
 
 // Execute performs file ingestion.
-func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[string]any, error) {
-	// Get task envelope from working memory
+func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+	_ = ctx
+	result := &agentgraph.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data: map[string]any{
+			"user_files_ingested":   0,
+			"session_pins_ingested": 0,
+			"skipped":               true,
+		},
+	}
+
+	// Get task envelope from working memory.
 	taskEnvelopeVal, ok := env.GetWorkingValue("euclo.task.envelope")
 	if !ok {
-		return nil, nil // No task envelope, nothing to ingest
+		return result, nil
 	}
 
 	taskEnvelope, ok := taskEnvelopeVal.(*intake.TaskEnvelope)
 	if !ok {
-		return nil, nil // Invalid task envelope type
+		return result, nil
 	}
+	result.Data["skipped"] = false
 
 	// Ingest user files
 	userFiles := taskEnvelope.UserFiles
 	for _, filePath := range userFiles {
-		// Phase 9: stub ingestion - in production, this would call the framework ingestion service
-		ingestedContent := n.stubIngestFile(filePath)
+		ingestedContent := "stub_ingested_content_for_" + filePath
 		env.SetWorkingValue("euclo.ingested.file."+filePath, ingestedContent, contextdata.MemoryClassTask)
 	}
 
 	// Ingest session pins
 	sessionPins := taskEnvelope.SessionPins
 	for _, filePath := range sessionPins {
-		// Phase 9: stub ingestion - in production, this would call the framework ingestion service
-		ingestedContent := n.stubIngestFile(filePath)
+		ingestedContent := "stub_ingested_content_for_" + filePath
 		env.SetWorkingValue("euclo.ingested.pin."+filePath, ingestedContent, contextdata.MemoryClassTask)
 	}
 
@@ -62,14 +73,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	env.SetWorkingValue("euclo.ingestion.user_files_count", len(userFiles), contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.ingestion.session_pins_count", len(sessionPins), contextdata.MemoryClassTask)
 
-	return map[string]any{
-		"user_files_ingested": len(userFiles),
-		"session_pins_ingested": len(sessionPins),
-	}, nil
-}
-
-// stubIngestFile is a stub for file ingestion.
-// In production, this would call the framework ingestion service.
-func (n *IngestionNode) stubIngestFile(filePath string) string {
-	return "stub_ingested_content_for_" + filePath
+	result.Data["user_files_ingested"] = len(userFiles)
+	result.Data["session_pins_ingested"] = len(sessionPins)
+	return result, nil
 }

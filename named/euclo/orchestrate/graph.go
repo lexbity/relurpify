@@ -2,10 +2,13 @@ package orchestrate
 
 import (
 	"context"
-	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -13,9 +16,68 @@ type RootGraph struct {
 	graph *agentgraph.Graph
 }
 
+// RootGraphOptions configures dependency wiring for the root graph.
+type RootGraphOptions struct {
+	env                agentenv.WorkspaceEnvironment
+	streamTrigger      *contextstream.Trigger
+	capabilityRegistry *capability.CapabilityRegistry
+	recipeRegistry     *recipepkg.RecipeRegistry
+}
+
+// RootGraphOption mutates RootGraphOptions.
+type RootGraphOption func(*RootGraphOptions)
+
+// WithWorkspaceEnvironment wires the workspace environment into executor nodes.
+func WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) RootGraphOption {
+	return func(opts *RootGraphOptions) {
+		opts.env = env
+	}
+}
+
+// WithContextStreamTrigger wires the stream trigger into executor nodes.
+func WithContextStreamTrigger(trigger *contextstream.Trigger) RootGraphOption {
+	return func(opts *RootGraphOptions) {
+		opts.streamTrigger = trigger
+	}
+}
+
+// WithCapabilityRegistry wires the capability registry into the capability executor.
+func WithCapabilityRegistry(reg *capability.CapabilityRegistry) RootGraphOption {
+	return func(opts *RootGraphOptions) {
+		opts.capabilityRegistry = reg
+	}
+}
+
+// WithRecipeRegistry wires the recipe registry into the recipe executor.
+func WithRecipeRegistry(reg *recipepkg.RecipeRegistry) RootGraphOption {
+	return func(opts *RootGraphOptions) {
+		opts.recipeRegistry = reg
+	}
+}
+
 // NewRootGraph creates a new root graph with all components wired together.
-func NewRootGraph() *RootGraph {
+func NewRootGraph(opts ...RootGraphOption) *RootGraph {
+	cfg := RootGraphOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
 	g := agentgraph.NewGraph()
+
+	recipeExec := NewRecipeExecutorNode("euclo.execute_recipe").
+		WithWorkspaceEnvironment(cfg.env).
+		WithContextStreamTrigger(cfg.streamTrigger).
+		WithIngestionPipeline(nil)
+	if cfg.recipeRegistry != nil {
+		recipeExec.WithRecipeRegistry(cfg.recipeRegistry)
+	}
+	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability")
+	if cfg.capabilityRegistry != nil {
+		capabilityExec.WithCapabilityRegistry(cfg.capabilityRegistry)
+	}
+
 	nodes := []agentgraph.Node{
 		newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
 			if env != nil {
@@ -23,99 +85,20 @@ func NewRootGraph() *RootGraph {
 			}
 			return &agentgraph.Result{NodeID: "euclo.intake", Success: true}, nil
 		}),
+		NewDispatcher("euclo.dispatch"),
 		newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.policy.mutation_permitted", true, contextdata.MemoryClassTask)
 				env.SetWorkingValue("euclo.policy.hitl_required", false, contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.policy_gate", Success: true, Data: map[string]any{
-				"mutation_permitted": true,
-				"hitl_required":      false,
-			}}, nil
+			return &agentgraph.Result{NodeID: "euclo.policy_gate", Success: true}, nil
 		}),
-		newStageNode("euclo.dispatch", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
-			routeKind := "capability"
-			if env != nil {
-				if v, ok := env.GetWorkingValue("euclo.route_selection"); ok {
-					if rs, ok := v.(*RouteSelection); ok && rs != nil && rs.RouteKind != "" {
-						routeKind = rs.RouteKind
-					}
-				}
-				if v, ok := env.GetWorkingValue("euclo.route.kind"); ok {
-					if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-						routeKind = s
-					}
-				}
-				selection := &RouteSelection{RouteKind: routeKind}
-				if routeKind == "recipe" {
-					selection.RecipeID = "euclo.recipe.default"
-				} else {
-					selection.CapabilityID = "debug"
-				}
-				env.SetWorkingValue("euclo.route_selection", selection, contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.dispatch.route_kind", routeKind, contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.route.kind", routeKind, contextdata.MemoryClassTask)
-				if routeKind == "recipe" {
-					env.SetWorkingValue("euclo.route.recipe_id", selection.RecipeID, contextdata.MemoryClassTask)
-				} else {
-					env.SetWorkingValue("euclo.route.capability_id", selection.CapabilityID, contextdata.MemoryClassTask)
-				}
-			}
-			recipeID := ""
-			capabilityID := "debug"
-			if routeKind == "recipe" {
-				recipeID = "euclo.recipe.default"
-				capabilityID = ""
-			}
-			return &agentgraph.Result{NodeID: "euclo.dispatch", Success: true, Data: map[string]any{
-				"route_kind":    routeKind,
-				"recipe_id":     recipeID,
-				"capability_id": capabilityID,
-			}}, nil
-		}),
-		newStageNode("euclo.route_fork", agentgraph.NodeTypeConditional, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
-			routeKind := "capability"
-			if env != nil {
-				if v, ok := env.GetWorkingValue("euclo.dispatch.route_kind"); ok {
-					if s, ok := v.(string); ok && s != "" {
-						routeKind = s
-					}
-				}
-			}
-			next := "euclo.execute_capability"
-			branch := "capability_execution"
-			if routeKind == "recipe" {
-				next = "euclo.execute_recipe"
-				branch = "recipe_execution"
-			}
-			if env != nil {
-				env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)
-			}
-			return &agentgraph.Result{NodeID: "euclo.route_fork", Success: true, Data: map[string]any{
-				"next":       next,
-				"branch":     branch,
-				"route_kind": routeKind,
-			}}, nil
-		}),
-		newStageNode("euclo.execute_recipe", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
-			if env != nil {
-				env.SetWorkingValue("euclo.execution.kind", "recipe", contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.execution.recipe_id", "euclo.recipe.default", contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
-			}
-			return &agentgraph.Result{NodeID: "euclo.execute_recipe", Success: true, Data: map[string]any{"execution_kind": "recipe", "completed": true}}, nil
-		}),
-		newStageNode("euclo.execute_capability", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
-			if env != nil {
-				env.SetWorkingValue("euclo.execution.kind", "capability", contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.execution.capability_id", "debug", contextdata.MemoryClassTask)
-				env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
-			}
-			return &agentgraph.Result{NodeID: "euclo.execute_capability", Success: true, Data: map[string]any{"execution_kind": "capability", "completed": true}}, nil
-		}),
+		NewRouteForkNode("euclo.route_fork"),
+		recipeExec,
+		capabilityExec,
 		newStageNode("euclo.merge", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
 			if env != nil {
-				env.SetWorkingValue("euclo.outcome.category", "success", contextdata.MemoryClassTask)
+				env.SetWorkingValue("euclo.execution.merged", true, contextdata.MemoryClassTask)
 			}
 			return &agentgraph.Result{NodeID: "euclo.merge", Success: true}, nil
 		}),
@@ -124,33 +107,32 @@ func NewRootGraph() *RootGraph {
 				env.SetWorkingValue("euclo.outcome.category", "success", contextdata.MemoryClassTask)
 				env.SetWorkingValue("euclo.outcome.reason", "execution completed successfully", contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.report", Success: true, Data: map[string]any{"category": "success"}}, nil
+			return &agentgraph.Result{NodeID: "euclo.report", Success: true}, nil
 		}),
 		agentgraph.NewTerminalNode("euclo.done"),
 	}
+
 	for _, node := range nodes {
 		if err := g.AddNode(node); err != nil {
 			panic(err)
 		}
 	}
-	for _, edge := range [][2]string{
-		{"euclo.intake", "euclo.policy_gate"},
-		{"euclo.policy_gate", "euclo.dispatch"},
-		{"euclo.dispatch", "euclo.route_fork"},
-		{"euclo.execute_recipe", "euclo.merge"},
-		{"euclo.execute_capability", "euclo.merge"},
-		{"euclo.merge", "euclo.report"},
-		{"euclo.report", "euclo.done"},
-	} {
-		if err := g.AddEdge(edge[0], edge[1], nil, false); err != nil {
-			panic(err)
-		}
+
+	if err := g.AddEdge("euclo.intake", "euclo.dispatch", nil, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.dispatch", "euclo.policy_gate", nil, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.policy_gate", "euclo.route_fork", nil, false); err != nil {
+		panic(err)
 	}
 	if err := g.AddEdge("euclo.route_fork", "euclo.execute_recipe", func(result *agentgraph.Result, _ *contextdata.Envelope) bool {
 		if result == nil || result.Data == nil {
 			return false
 		}
-		return result.Data["next"] == "euclo.execute_recipe"
+		next, _ := result.Data["next"].(string)
+		return next == "euclo.execute_recipe"
 	}, false); err != nil {
 		panic(err)
 	}
@@ -158,14 +140,35 @@ func NewRootGraph() *RootGraph {
 		if result == nil || result.Data == nil {
 			return false
 		}
-		return result.Data["next"] == "euclo.execute_capability"
+		next, _ := result.Data["next"].(string)
+		return next == "euclo.execute_capability"
 	}, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.execute_recipe", "euclo.merge", nil, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.execute_capability", "euclo.merge", nil, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.merge", "euclo.report", nil, false); err != nil {
+		panic(err)
+	}
+	if err := g.AddEdge("euclo.report", "euclo.done", nil, false); err != nil {
 		panic(err)
 	}
 	if err := g.SetStart("euclo.intake"); err != nil {
 		panic(err)
 	}
 	return &RootGraph{graph: g}
+}
+
+// Graph returns the underlying agentgraph graph.
+func (g *RootGraph) Graph() *agentgraph.Graph {
+	if g == nil {
+		return nil
+	}
+	return g.graph
 }
 
 // Execute runs the root graph orchestration.

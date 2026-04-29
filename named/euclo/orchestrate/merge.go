@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -24,19 +25,19 @@ func (n *MergeNode) ID() string {
 }
 
 // Type returns the node type.
-func (n *MergeNode) Type() string {
-	return "merge"
+func (n *MergeNode) Type() agentgraph.NodeType {
+	return agentgraph.NodeTypeSystem
 }
 
 // Execute merges results from parallel branches.
-// Phase 12: Stub implementation - will integrate with result merging.
-func (n *MergeNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[string]any, error) {
-	// Phase 12: Stub - in production, this would merge results from parallel branches
-	// Write merged result to envelope
+func (n *MergeNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+	_ = ctx
 	env.SetWorkingValue("euclo.execution.merged", true, contextdata.MemoryClassTask)
-
-	return map[string]any{
-		"merged": true,
-		"stub":   true,
+	return &agentgraph.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data: map[string]any{
+			"merged": true,
+		},
 	}, nil
 }

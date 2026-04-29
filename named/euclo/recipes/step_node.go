@@ -150,13 +150,15 @@ func (n *RecipeStepNode) buildAgent(task *core.Task) (agentgraph.WorkflowExecuto
 		delegate := reactagent.New(&scopedEnv, n.streamOptions()...)
 		return reflectionagent.New(&scopedEnv, delegate), nil
 	case "blackboard":
-		return blackboardagent.New(&scopedEnv), nil
+		return blackboardagent.New(&scopedEnv, n.streamOptionsBlackboard()...), nil
 	case "chainer":
-		return chaineragent.New(&scopedEnv), nil
+		return chaineragent.New(&scopedEnv, n.streamOptionsChainer()...), nil
 	case "pipeline":
-		return pipelineagent.New(&scopedEnv), nil
+		return pipelineagent.New(&scopedEnv, n.streamOptionsPipeline()...), nil
 	case "rewoo":
-		return rewooagent.New(&scopedEnv), nil
+		agent := rewooagent.New(&scopedEnv)
+		agent.Options = n.rewooOptions()
+		return agent, nil
 	case "goalcon":
 		agent := goalconagent.New(&scopedEnv, goalconagent.DefaultOperatorRegistry(), n.streamOptionsGoalCon()...)
 		if agent != nil && agent.PlanExecutor == nil {
@@ -217,8 +219,61 @@ func (n *RecipeStepNode) streamOptionsHTN() []htnagent.Option {
 	return opts
 }
 
+func (n *RecipeStepNode) streamOptionsBlackboard() []blackboardagent.Option {
+	opts := make([]blackboardagent.Option, 0, 4)
+	if n.trigger != nil {
+		opts = append(opts, blackboardagent.WithContextStreamTrigger(n.trigger))
+	}
+	if n.step.Stream != nil {
+		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
+			opts = append(opts, blackboardagent.WithContextStreamMode(contextstream.Mode(mode)))
+		}
+		if query := strings.TrimSpace(n.step.Stream.QueryTemplate); query != "" {
+			opts = append(opts, blackboardagent.WithContextStreamQuery(query))
+		}
+		if n.step.Stream.MaxTokens > 0 {
+			opts = append(opts, blackboardagent.WithContextStreamMaxTokens(n.step.Stream.MaxTokens))
+		}
+	}
+	return opts
+}
+
 func (n *RecipeStepNode) streamOptionsChainer() []chaineragent.Option {
-	return nil
+	opts := make([]chaineragent.Option, 0, 4)
+	if n.trigger != nil {
+		opts = append(opts, chaineragent.WithContextStreamTrigger(n.trigger))
+	}
+	if n.step.Stream != nil {
+		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
+			opts = append(opts, chaineragent.WithContextStreamMode(contextstream.Mode(mode)))
+		}
+		if query := strings.TrimSpace(n.step.Stream.QueryTemplate); query != "" {
+			opts = append(opts, chaineragent.WithContextStreamQuery(query))
+		}
+		if n.step.Stream.MaxTokens > 0 {
+			opts = append(opts, chaineragent.WithContextStreamMaxTokens(n.step.Stream.MaxTokens))
+		}
+	}
+	return opts
+}
+
+func (n *RecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
+	opts := make([]pipelineagent.Option, 0, 4)
+	if n.trigger != nil {
+		opts = append(opts, pipelineagent.WithContextStreamTrigger(n.trigger))
+	}
+	if n.step.Stream != nil {
+		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
+			opts = append(opts, pipelineagent.WithContextStreamMode(contextstream.Mode(mode)))
+		}
+		if query := strings.TrimSpace(n.step.Stream.QueryTemplate); query != "" {
+			opts = append(opts, pipelineagent.WithContextStreamQuery(query))
+		}
+		if n.step.Stream.MaxTokens > 0 {
+			opts = append(opts, pipelineagent.WithContextStreamMaxTokens(n.step.Stream.MaxTokens))
+		}
+	}
+	return opts
 }
 
 func (n *RecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
@@ -235,6 +290,25 @@ func (n *RecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
 		}
 		if n.step.Stream.MaxTokens > 0 {
 			opts = append(opts, goalconagent.WithContextStreamMaxTokens(n.step.Stream.MaxTokens))
+		}
+	}
+	return opts
+}
+
+func (n *RecipeStepNode) rewooOptions() rewooagent.RewooOptions {
+	opts := rewooagent.RewooOptions{}
+	if n.trigger != nil {
+		opts.StreamTrigger = n.trigger
+	}
+	if n.step.Stream != nil {
+		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
+			opts.StreamMode = contextstream.Mode(mode)
+		}
+		if query := strings.TrimSpace(n.step.Stream.QueryTemplate); query != "" {
+			opts.StreamQuery = query
+		}
+		if n.step.Stream.MaxTokens > 0 {
+			opts.StreamMaxTokens = n.step.Stream.MaxTokens
 		}
 	}
 	return opts

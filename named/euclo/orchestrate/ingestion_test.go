@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 )
@@ -26,8 +27,8 @@ func TestIngestionNodeIngestsUserFiles(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["user_files_ingested"] != 2 {
-		t.Errorf("Expected user_files_ingested 2, got %v", result["user_files_ingested"])
+	if result.Data["user_files_ingested"] != 2 {
+		t.Errorf("Expected user_files_ingested 2, got %v", result.Data["user_files_ingested"])
 	}
 
 	// Check that files were ingested to envelope
@@ -60,8 +61,8 @@ func TestIngestionNodeIngestsSessionPins(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["session_pins_ingested"] != 2 {
-		t.Errorf("Expected session_pins_ingested 2, got %v", result["session_pins_ingested"])
+	if result.Data["session_pins_ingested"] != 2 {
+		t.Errorf("Expected session_pins_ingested 2, got %v", result.Data["session_pins_ingested"])
 	}
 
 	// Check that pins were ingested to envelope
@@ -95,12 +96,12 @@ func TestIngestionNodeHandlesEmptyLists(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result["user_files_ingested"] != 0 {
-		t.Errorf("Expected user_files_ingested 0, got %v", result["user_files_ingested"])
+	if result.Data["user_files_ingested"] != 0 {
+		t.Errorf("Expected user_files_ingested 0, got %v", result.Data["user_files_ingested"])
 	}
 
-	if result["session_pins_ingested"] != 0 {
-		t.Errorf("Expected session_pins_ingested 0, got %v", result["session_pins_ingested"])
+	if result.Data["session_pins_ingested"] != 0 {
+		t.Errorf("Expected session_pins_ingested 0, got %v", result.Data["session_pins_ingested"])
 	}
 }
 
@@ -164,8 +165,12 @@ func TestIngestionNodeNoTaskEnvelope(t *testing.T) {
 	}
 
 	// Should handle missing task envelope gracefully by returning nil
-	if result != nil {
-		t.Error("Expected nil result when no task envelope")
+	if result == nil {
+		t.Fatal("Expected non-nil result when no task envelope")
+	}
+
+	if result.Data["skipped"] != true {
+		t.Errorf("Expected skipped result when no task envelope, got %v", result.Data["skipped"])
 	}
 }
 
@@ -180,7 +185,7 @@ func TestIngestionNodeID(t *testing.T) {
 func TestIngestionNodeType(t *testing.T) {
 	node := NewIngestionNode("ingestion1")
 
-	if node.Type() != "ingestion" {
-		t.Errorf("Expected Type ingestion, got %s", node.Type())
+	if node.Type() != agentgraph.NodeTypeTool {
+		t.Errorf("Expected Type tool, got %s", node.Type())
 	}
 }

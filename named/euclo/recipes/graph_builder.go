@@ -16,11 +16,11 @@ import (
 
 // BuildRecipeGraph builds an agentgraph.Graph for a spec-shaped execution plan.
 //
-// The current implementation keeps the topology explicit and deterministic while
-// remaining lightweight enough for tests: each step expands into a small chain
-// of ingest -> stream -> gate -> step -> fallback nodes.
+// Each step expands into: ingest -> stream -> gate -> step -> fallback.
+// ingestionPipeline is accepted for future use; IngestionNode currently calls
+// frameworkingestion.AcquireFromFile per-file internally once fully implemented.
 func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, trigger *contextstream.Trigger, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
-	_ = ingestionPipeline
+	_ = ingestionPipeline // single-acquisition Pipeline cannot be reused across steps; see IngestionNode
 
 	if plan == nil {
 		return nil, fmt.Errorf("execution plan is nil")
