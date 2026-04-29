@@ -3,6 +3,7 @@ package agenttest
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -197,10 +198,10 @@ func TestExtractLLMFingerprints(t *testing.T) {
 }
 
 func TestCheckStateKeyStability(t *testing.T) {
-	snapshots := []*core.ContextSnapshot{
-		{State: map[string]any{"key1": "value1", "key2": "value2"}},
-		{State: map[string]any{"key1": "value1", "key2": "value2"}},
-		{State: map[string]any{"key1": "value1", "key2": "value2"}},
+	snapshots := []*contextdata.Envelope{
+		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
+		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
+		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
 	}
 
 	// All keys stable
@@ -210,7 +211,7 @@ func TestCheckStateKeyStability(t *testing.T) {
 	}
 
 	// Unstable key
-	snapshots[1].State["key2"] = "different"
+	snapshots[1].WorkingData["key2"] = "different"
 	failures = CheckStateKeyStability(snapshots, []string{"key1", "key2"})
 	if len(failures) != 1 {
 		t.Errorf("Expected 1 failure for unstable key2, got %d", len(failures))
@@ -219,20 +220,20 @@ func TestCheckStateKeyStability(t *testing.T) {
 
 func TestCheckStateKeyStability_EdgeCases(t *testing.T) {
 	// Empty snapshots
-	failures := CheckStateKeyStability([]*core.ContextSnapshot{}, []string{"key"})
+	failures := CheckStateKeyStability([]*contextdata.Envelope{}, []string{"key"})
 	if failures != nil {
 		t.Error("Expected nil for empty snapshots")
 	}
 
 	// Single snapshot
-	snapshots := []*core.ContextSnapshot{{State: map[string]any{"key": "value"}}}
+	snapshots := []*contextdata.Envelope{{WorkingData: map[string]any{"key": "value"}}}
 	failures = CheckStateKeyStability(snapshots, []string{"key"})
 	if len(failures) > 0 {
 		t.Error("Expected no failures for single snapshot")
 	}
 
 	// Empty keys
-	failures = CheckStateKeyStability([]*core.ContextSnapshot{{}}, []string{})
+	failures = CheckStateKeyStability([]*contextdata.Envelope{{}}, []string{})
 	if failures != nil {
 		t.Error("Expected nil for empty keys")
 	}

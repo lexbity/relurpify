@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -86,20 +87,20 @@ func countLLMCalls(events []core.Event) int {
 	return total
 }
 
-func contextSnapshotHasKey(snapshot *core.ContextSnapshot, key string) bool {
+func contextSnapshotHasKey(snapshot *contextdata.Envelope, key string) bool {
 	if snapshot == nil || strings.TrimSpace(key) == "" {
 		return false
 	}
-	if _, ok := snapshot.State[key]; ok {
+	if _, ok := snapshot.GetWorkingValue(key); ok {
 		return true
 	}
 	if strings.HasPrefix(key, "state.") {
 		key = strings.TrimPrefix(key, "state.")
-		if _, ok := snapshot.State[key]; ok {
+		if _, ok := snapshot.GetWorkingValue(key); ok {
 			return true
 		}
 	}
-	return nestedMapHasPath(snapshot.State, key)
+	return nestedMapHasPath(snapshot.WorkingData, key)
 }
 
 func nestedMapHasPath(root map[string]any, path string) bool {
@@ -121,7 +122,7 @@ func nestedMapHasPath(root map[string]any, path string) bool {
 	return true
 }
 
-func contextSnapshotKeyNotEmpty(snapshot *core.ContextSnapshot, key string) bool {
+func contextSnapshotKeyNotEmpty(snapshot *contextdata.Envelope, key string) bool {
 	if snapshot == nil || strings.TrimSpace(key) == "" {
 		return false
 	}
@@ -132,20 +133,20 @@ func contextSnapshotKeyNotEmpty(snapshot *core.ContextSnapshot, key string) bool
 	return valueNotEmpty(value)
 }
 
-func contextSnapshotValue(snapshot *core.ContextSnapshot, key string) (any, bool) {
+func contextSnapshotValue(snapshot *contextdata.Envelope, key string) (any, bool) {
 	if snapshot == nil || strings.TrimSpace(key) == "" {
 		return nil, false
 	}
-	if value, ok := snapshot.State[key]; ok {
+	if value, ok := snapshot.GetWorkingValue(key); ok {
 		return value, true
 	}
 	if strings.HasPrefix(key, "state.") {
 		key = strings.TrimPrefix(key, "state.")
-		if value, ok := snapshot.State[key]; ok {
+		if value, ok := snapshot.GetWorkingValue(key); ok {
 			return value, true
 		}
 	}
-	return nestedMapValue(snapshot.State, key)
+	return nestedMapValue(snapshot.WorkingData, key)
 }
 
 func nestedMapValue(root map[string]any, path string) (any, bool) {
@@ -232,11 +233,11 @@ func mapStringValue(record map[string]any, key string) string {
 	return strings.TrimSpace(toString(record[key]))
 }
 
-func eucloBehaviorTraceFromSnapshot(snapshot *core.ContextSnapshot) map[string]any {
+func eucloBehaviorTraceFromSnapshot(snapshot *contextdata.Envelope) map[string]any {
 	if snapshot == nil {
 		return nil
 	}
-	return toStringAnyMap(snapshot.State["euclo.relurpic_behavior_trace"])
+	return toStringAnyMap(func() any { v, _ := snapshot.GetWorkingValue("euclo.relurpic_behavior_trace"); return v }())
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -357,11 +358,11 @@ func stringSliceContainsNormalized(slice []string, target string) bool {
 	return false
 }
 
-func collectArtifactKinds(snapshot *core.ContextSnapshot) []string {
+func collectArtifactKinds(snapshot *contextdata.Envelope) []string {
 	if snapshot == nil {
 		return nil
 	}
-	raw, ok := snapshot.State["euclo.artifacts"]
+	raw, ok := snapshot.GetWorkingValue("euclo.artifacts")
 	if !ok {
 		return nil
 	}
@@ -561,11 +562,11 @@ func includeExpectedChangedFiles(filtered []string, before, after *WorkspaceSnap
 // Phase 4: Used by artifact_kind_produced expectation.
 // Uses toAnySlice/toStringAnyMap for JSON round-trip support so it handles both
 // []map[string]any and []euclotypes.Artifact stored in state.
-func eucloArtifactsFromSnapshot(snapshot *core.ContextSnapshot) []map[string]any {
+func eucloArtifactsFromSnapshot(snapshot *contextdata.Envelope) []map[string]any {
 	if snapshot == nil {
 		return nil
 	}
-	raw, ok := snapshot.State["euclo.artifacts"]
+	raw, ok := snapshot.GetWorkingValue("euclo.artifacts")
 	if !ok || raw == nil {
 		return nil
 	}
@@ -623,7 +624,7 @@ func artifactKindsFromArtifacts(artifacts []map[string]any) []string {
 // === OSB Model Functions (Phases 2-5) ===
 
 // evaluateOutcomeExpectations evaluates hard goal-achievement assertions.
-func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, changed []string, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, runner sandbox.CommandRunner) ([]AssertionResult, error) {
+func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, changed []string, snapshot *contextdata.Envelope, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, runner sandbox.CommandRunner) ([]AssertionResult, error) {
 	var results []AssertionResult
 	var failures []string
 
@@ -857,7 +858,7 @@ func evaluateSecurityExpectations(spec SecuritySpec, m *manifest.AgentManifest, 
 }
 
 // evaluateBenchmarkExpectations evaluates soft telemetry observations.
-func evaluateBenchmarkExpectations(spec BenchmarkSpec, transcript *ToolTranscriptArtifact, events []core.Event, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport) []BenchmarkObservation {
+func evaluateBenchmarkExpectations(spec BenchmarkSpec, transcript *ToolTranscriptArtifact, events []core.Event, snapshot *contextdata.Envelope, tokenUsage TokenUsageReport) []BenchmarkObservation {
 	var observations []BenchmarkObservation
 
 	for _, tool := range spec.ToolsExpected {

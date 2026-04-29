@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
@@ -210,7 +209,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if err != nil {
 		return nil, err
 	}
-	workspacePaths := config.New(targetWorkspace)
+	workspacePaths := manifest.New(targetWorkspace)
 	runID := time.Now().UTC().Format("20060102-150405.000")
 	outDir := opts.OutputDir
 	if outDir == "" {

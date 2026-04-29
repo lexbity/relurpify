@@ -185,7 +185,7 @@ func TestInjectionInterceptorInterface(t *testing.T) {
 	if interceptor.Category() != "test" {
 		t.Errorf("Expected category test, got %s", interceptor.Category())
 	}
-	if !interceptor.IsAvailable(context.Background(), nil) {
+	if !interceptor.IsAvailable(context.Background()) {
 		t.Error("Expected IsAvailable to return true")
 	}
 }
@@ -200,11 +200,10 @@ func TestInjectionInterceptorCallHistory(t *testing.T) {
 
 	// Execute multiple times
 	ctx := context.Background()
-	state := core.NewContext()
 	args := map[string]interface{}{}
 
 	for i := 0; i < 3; i++ {
-		interceptor.Execute(ctx, state, args)
+		interceptor.Execute(ctx, args)
 	}
 
 	if interceptor.GetCallCount() != 3 {

@@ -24,7 +24,7 @@ type VerifyStepResult struct {
 }
 
 func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]core.Tool {
-	tools := shell.CommandLineTools(workspace, runner)
+	tools := shell.CommandLineTools(workspace, commandRunnerAdapter{runner: runner})
 	index := make(map[string]core.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool
@@ -48,7 +48,7 @@ func runVerificationSteps(ctx context.Context, spec VerifySpec, workspace string
 			break
 		}
 
-		toolResult, err := tool.Execute(ctx, core.NewContext(), normalizeVerifyArgs(step.Args))
+		toolResult, err := tool.Execute(ctx, normalizeVerifyArgs(step.Args))
 		passed := err == nil && toolResult != nil && toolResult.Success
 		msg := extractVerifyMessage(toolResult, err)
 
@@ -83,8 +83,8 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 		Category: "verify",
 		Timeout:  120 * time.Second,
 	})
-	scriptTool.SetCommandRunner(runner)
-	result, err := scriptTool.Execute(ctx, core.NewContext(), map[string]interface{}{
+	scriptTool.SetCommandRunner(commandRunnerAdapter{runner: runner})
+	result, err := scriptTool.Execute(ctx, map[string]interface{}{
 		"args":              []interface{}{absScript},
 		"working_directory": workspace,
 	})

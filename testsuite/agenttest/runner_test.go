@@ -3,6 +3,7 @@ package agenttest
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,14 +13,15 @@ import (
 	"testing"
 	"time"
 
-	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
@@ -31,11 +33,18 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {
 			http.NotFound(w, r)
 		}
 	}))
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen ollama server: %v", err)
+	}
+	server.Listener = ln
+	server.Start()
+	return server
 }
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifest := config.New(workspace).ManifestFile()
+	manifest := manifest.New(workspace).ManifestFile()
 	if err := os.MkdirAll(filepath.Dir(manifest), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -378,18 +387,18 @@ func TestApplySetupGitInitCreatesCommittedBaseline(t *testing.T) {
 
 func TestShouldRestrictAllowedCapabilitiesForCase(t *testing.T) {
 	if !shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: string(core.TaskTypeAnalysis),
+		TaskType: "analysis",
 	}) {
 		t.Fatal("expected analysis case to restrict to explicit allowed capabilities")
 	}
 	if !shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: string(core.TaskTypeCodeModification),
+		TaskType: "code-modification",
 		Context:  map[string]any{"mode": "debug"},
 	}) {
 		t.Fatal("expected debug case to restrict to explicit allowed capabilities")
 	}
 	if shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: string(core.TaskTypeCodeModification),
+		TaskType: "code-modification",
 		Context:  map[string]any{"mode": "docs"},
 	}) {
 		t.Fatal("expected docs edit case to keep default capabilities merged")
@@ -397,7 +406,7 @@ func TestShouldRestrictAllowedCapabilitiesForCase(t *testing.T) {
 }
 
 func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
-	state := core.NewContext()
+	state := contextdata.NewEnvelope("task-1", "session-1")
 	task := &core.Task{
 		Instruction: "Summarize README.md",
 		Context: map[string]any{
@@ -422,7 +431,7 @@ func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 	if got := fmt.Sprint(task.Context["workflow_retrieval"]); !strings.Contains(got, "retrieval-backed") {
 		t.Fatalf("expected task workflow retrieval payload, got %q", got)
 	}
-	raw, ok := state.Get("planner.workflow_retrieval")
+	raw, ok := state.GetWorkingValue("planner.workflow_retrieval")
 	if !ok {
 		t.Fatal("expected planner.workflow_retrieval state")
 	}
@@ -432,7 +441,7 @@ func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 }
 
 func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge(t *testing.T) {
-	state := core.NewContext()
+	state := contextdata.NewEnvelope("task-2", "session-1")
 	task := &core.Task{
 		Instruction: "Execute the compiled plan",
 		Context: map[string]any{
@@ -455,7 +464,7 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 
 	seedWorkflowRetrievalStateForCase(state, task, c)
 
-	raw, ok := state.Get("pipeline.plan")
+	raw, ok := state.GetWorkingValue("pipeline.plan")
 	if !ok {
 		t.Fatal("expected pipeline.plan to be seeded")
 	}
@@ -471,7 +480,8 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 	if !ok || len(scope) != 1 || scope[0] != "testsuite/fixtures/rapid_arch_exec/slug.go" {
 		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0]["scope"])
 	}
-	if got := state.GetString("euclo.active_exploration_id"); !strings.Contains(got, "wf-compiled:seeded-exploration") {
+	got, _ := state.GetWorkingValue("euclo.active_exploration_id")
+	if gotStr, _ := got.(string); !strings.Contains(gotStr, "wf-compiled:seeded-exploration") {
 		t.Fatalf("expected seeded exploration id, got %q", got)
 	}
 }
@@ -718,7 +728,7 @@ func TestApplyCaseControlFlowOverrideNoopForEmptyFlow(t *testing.T) {
 }
 
 func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
-	workflowStateRel := filepath.ToSlash(filepath.Join(config.DirName, "sessions", "workflow_state.db"))
+	workflowStateRel := filepath.ToSlash(filepath.Join(manifest.DirName, "sessions", "workflow_state.db"))
 	before := &WorkspaceSnapshot{
 		Files: map[string]string{
 			workflowStateRel: "before",
@@ -841,7 +851,7 @@ spec:
 	}
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		<-opts.Context.Done()
 		return nil, opts.Context.Err()
 	}
@@ -930,7 +940,7 @@ spec:
 	}
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		time.Sleep(40 * time.Millisecond)
 		<-opts.Context.Done()
 		return nil, opts.Context.Err()

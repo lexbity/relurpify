@@ -8,24 +8,23 @@ import (
 	"strings"
 	"time"
 
-	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-var bootstrapAgentRuntime = appruntime.BootstrapAgentRuntime
+var bootstrapAgentRuntime = ayenitd.BootstrapAgentRuntime
 
-func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool) {
+func shouldSkipCase(req RequiresSpec, agent graph.WorkflowExecutor) (reason string, ok bool) {
 	for _, bin := range req.Executables {
 		bin = strings.TrimSpace(bin)
 		if bin == "" {
@@ -108,14 +107,14 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem memory.MemoryStore) (graph.Agent, *core.Context, fsandbox.CommandRunner, error) {
+func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem *memory.WorkingMemoryStore) (graph.WorkflowExecutor, *contextdata.Envelope, fsandbox.CommandRunner, error) {
 	executionAgentName := resolveExecutionAgentName(agentName, c)
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	if agentSpec == nil {
-		agentSpec = contractpkg.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
+		agentSpec = manifest.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
 		if agentSpec == nil {
 			agentSpec = &core.AgentRuntimeSpec{}
 		}
@@ -155,8 +154,8 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	if opts.Sandbox {
 		reg, err := fauthorization.RegisterAgent(context.Background(), fauthorization.RuntimeConfig{
 			ManifestPath: manifestPath,
-			Backend:      appruntime.DefaultConfig().SandboxBackend,
-			Sandbox:      appruntime.DefaultConfig().Sandbox,
+			Backend:      "",
+			Sandbox:      fsandbox.SandboxConfig{},
 			AuditLimit:   512,
 			BaseFS:       workspace,
 			HITLTimeout:  30 * time.Second,
@@ -164,7 +163,18 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		runner, err = fsandbox.NewCommandRunner(reg.Manifest, reg.Runtime, workspace)
+		// Build CommandRunnerConfig from manifest
+		var runnerConfig *contracts.CommandRunnerConfig
+		if reg.Manifest != nil {
+			runnerConfig = &contracts.CommandRunnerConfig{
+				Image:           reg.Manifest.Spec.Image,
+				RunAsUser:       reg.Manifest.Spec.Security.RunAsUser,
+				ReadOnlyRoot:    reg.Manifest.Spec.Security.ReadOnlyRoot,
+				NoNewPrivileges: reg.Manifest.Spec.Security.NoNewPrivileges,
+				Workspace:       workspace,
+			}
+		}
+		runner, err = fsandbox.NewCommandRunner(runnerConfig, reg.Runtime)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -178,18 +188,17 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("test store init: %w", err)
 	}
-	boot, err := bootstrapAgentRuntime(workspace, appruntime.AgentBootstrapOptions{
+	boot, err := bootstrapAgentRuntime(workspace, ayenitd.AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             agentManifest.Metadata.Name,
 		AgentName:           executionAgentName,
 		ConfigName:          executionAgentName,
-		AgentsDir:           config.New(workspace).AgentsDir(),
+		AgentsDir:           manifest.New(workspace).AgentsDir(),
 		AgentSpec:           bootstrapSpec,
 		Manifest:            agentManifest,
 		PermissionManager:   permMgr,
 		Runner:              runner,
 		Model:               model,
-		Memory:              mem,
 		Telemetry:           telemetry,
 		InferenceModel:      firstNonEmpty(opts.ModelOverride, agentSpec.Model.Name),
 		SkipASTIndex:        opts.SkipASTIndex,
@@ -197,34 +206,17 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		MaxIterations:       maxIterations,
 		DebugLLM:            opts.DebugLLM,
 		DebugAgent:          opts.DebugAgent,
-		PlanStore:           stores.PlanStore,
-		WorkflowStore:       stores.WorkflowStore,
+		AgentLifecycle:      stores.WorkflowStore,
 	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	registry := boot.Registry
-	paths := config.New(workspace)
+	paths := manifest.New(workspace)
 	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
 	indexManager := boot.IndexManager
 	searchEngine := boot.SearchEngine
-	compiledPolicy := boot.CompiledPolicy
-	if compiledPolicy == nil {
-		contract := boot.Contract
-		if contract == nil {
-			contract = &contractpkg.EffectiveAgentContract{
-				AgentID:   agentManifest.Metadata.Name,
-				AgentSpec: agentSpec,
-			}
-		} else if contract.AgentSpec == nil {
-			contract.AgentSpec = agentSpec
-		}
-		compiledPolicy, err = policybundle.BuildFromSpec(contract.AgentID, contract.AgentSpec, permMgr)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-	registry.SetPolicyEngine(compiledPolicy.Engine)
+	registry.SetPolicyEngine(boot.PolicyEngine)
 	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
 	pregrantAgentTestCapabilities(permMgr, agentManifest.Metadata.Name, executionAgentName, registry)
 
@@ -238,22 +230,19 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		registry.AddPrecheck(&disabledToolPrecheck{disabled: c.Requires.ToolsDisable})
 	}
 
-	mem = boot.Memory
+	mem = boot.Environment.WorkingMemory
 
 	env := boot.Environment
 	env.Model = model
 	env.Registry = registry
-	env.Memory = mem
+	env.WorkingMemory = mem
 	env.IndexManager = indexManager
 	env.SearchEngine = searchEngine
-	// Wire stores into environment (type assertion for PlanStore since it's any)
-	env.WorkflowStore = stores.WorkflowStore
-	env.PlanStore = stores.PlanStore
 	agent := instantiateAgentByName(workspace, executionAgentName, env)
 	if err := applyCaseControlFlowOverride(agent, c); err != nil {
 		return nil, nil, nil, err
 	}
-	return agent, core.NewContext(), runner, nil
+	return agent, contextdata.NewEnvelope("", ""), runner, nil
 }
 
 func resolveExecutionAgentName(agentName string, c CaseSpec) string {
@@ -325,7 +314,7 @@ func resolveBootstrapTimeout(opts RunOptions, c CaseSpec) time.Duration {
 	return timeout
 }
 
-func applyCaseControlFlowOverride(_ graph.Agent, c CaseSpec) error {
+func applyCaseControlFlowOverride(_ graph.WorkflowExecutor, c CaseSpec) error {
 	flow := strings.TrimSpace(c.Overrides.ControlFlow)
 	if flow == "" {
 		return nil
@@ -481,11 +470,11 @@ func (t *aliasTool) Category() string    { return t.target.Category() }
 func (t *aliasTool) Parameters() []core.ToolParameter {
 	return t.target.Parameters()
 }
-func (t *aliasTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	return t.target.Execute(ctx, state, args)
+func (t *aliasTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return t.target.Execute(ctx, args)
 }
-func (t *aliasTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.target.IsAvailable(ctx, state)
+func (t *aliasTool) IsAvailable(ctx context.Context) bool {
+	return t.target.IsAvailable(ctx)
 }
 func (t *aliasTool) Permissions() core.ToolPermissions {
 	return t.target.Permissions()
@@ -511,6 +500,6 @@ func (d *disabledToolPrecheck) Check(descriptor core.CapabilityDescriptor, args 
 	return nil
 }
 
-func instantiateAgentByName(workspace, name string, env agentenv.AgentEnvironment) graph.Agent {
+func instantiateAgentByName(workspace, name string, env agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 	return namedfactory.InstantiateByName(workspace, name, env)
 }

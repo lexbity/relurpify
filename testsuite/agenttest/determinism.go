@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -273,7 +274,7 @@ func BuildTranscriptFromTape(tape []map[string]any) *ToolTranscriptArtifact {
 }
 
 // CheckStateKeyStability checks if specified state keys are stable across runs
-func CheckStateKeyStability(snapshots []*core.ContextSnapshot, keys []string) []string {
+func CheckStateKeyStability(snapshots []*contextdata.Envelope, keys []string) []string {
 	var failures []string
 
 	if len(snapshots) < 2 || len(keys) == 0 {
@@ -288,7 +289,7 @@ func CheckStateKeyStability(snapshots []*core.ContextSnapshot, keys []string) []
 		for i, snapshot := range snapshots {
 			value := ""
 			if snapshot != nil {
-				if v, ok := snapshot.State[key]; ok {
+				if v, ok := snapshot.GetWorkingValue(key); ok {
 					value = fmt.Sprint(v)
 				}
 			}

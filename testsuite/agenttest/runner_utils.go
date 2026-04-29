@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string {
@@ -36,7 +36,7 @@ func fallbackManifestPath(manifestPath, workspace string) string {
 	if workspace == "" {
 		return manifestPath
 	}
-	paths := config.New(workspace)
+	paths := manifest.New(workspace)
 	candidates := []string{
 		paths.ManifestFile(),
 	}

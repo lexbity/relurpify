@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
 
@@ -118,7 +118,7 @@ func LoadPerformanceBaseline(path string) (*PerformanceBaseline, error) {
 	return &baseline, nil
 }
 
-func BuildPhaseMetrics(snapshot *core.ContextSnapshot, total TokenUsageReport) []PhaseMetric {
+func BuildPhaseMetrics(snapshot *contextdata.Envelope, total TokenUsageReport) []PhaseMetric {
 	phases := collectPerformancePhases(snapshot)
 	if len(phases) == 0 {
 		return nil
@@ -293,7 +293,7 @@ func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 	return summary
 }
 
-func collectPerformancePhases(snapshot *core.ContextSnapshot) []string {
+func collectPerformancePhases(snapshot *contextdata.Envelope) []string {
 	if snapshot == nil {
 		return nil
 	}
@@ -311,15 +311,15 @@ func collectPerformancePhases(snapshot *core.ContextSnapshot) []string {
 		phases = append(phases, phase)
 	}
 
-	interactionState := toStringAnyMap(snapshot.State["euclo.interaction_state"])
+	interactionState := toStringAnyMap(mustGetWorkingValue(snapshot, "euclo.interaction_state"))
 	for _, phase := range toStringSlice(interactionState["phases_executed"]) {
 		appendPhase(phase)
 	}
-	for _, raw := range toAnySlice(snapshot.State["euclo.profile_phase_records"]) {
+	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.profile_phase_records")) {
 		record := toStringAnyMap(raw)
 		appendPhase(toString(record["phase"]))
 	}
-	for _, raw := range toAnySlice(snapshot.State["euclo.interaction_records"]) {
+	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.interaction_records")) {
 		record := toStringAnyMap(raw)
 		appendPhase(toString(record["phase"]))
 	}
@@ -335,11 +335,11 @@ func shouldComparePerformanceBaseline(recordingMode string) bool {
 	}
 }
 
-func phaseDurationMS(snapshot *core.ContextSnapshot, phase string) int64 {
+func phaseDurationMS(snapshot *contextdata.Envelope, phase string) int64 {
 	if snapshot == nil || strings.TrimSpace(phase) == "" {
 		return 0
 	}
-	for _, raw := range toAnySlice(snapshot.State["euclo.interaction_records"]) {
+	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.interaction_records")) {
 		record := toStringAnyMap(raw)
 		if !strings.EqualFold(strings.TrimSpace(toString(record["phase"])), strings.TrimSpace(phase)) {
 			continue
@@ -407,4 +407,12 @@ func exceededThreshold64(actual, baseline int64, multiplier float64) bool {
 		return false
 	}
 	return float64(actual) > float64(baseline)*multiplier
+}
+
+func mustGetWorkingValue(env *contextdata.Envelope, key string) any {
+	if env == nil {
+		return nil
+	}
+	val, _ := env.GetWorkingValue(key)
+	return val
 }

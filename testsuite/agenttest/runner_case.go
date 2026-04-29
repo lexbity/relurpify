@@ -13,11 +13,12 @@ import (
 	"strings"
 	"time"
 
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -154,7 +155,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		defer wrapped.Close()
 		lm = wrapped
 	}
-	instrumented := llm.NewInstrumentedModel(lm, telemetryMux, executionOpts.DebugLLM)
+	instrumented := llm.NewInstrumentedModel(lm, llmTelemetryAdapter{inner: telemetryMux}, executionOpts.DebugLLM)
 
 	env := make([]string, 0, len(c.Overrides.ExtraEnv))
 	for k, v := range c.Overrides.ExtraEnv {
@@ -176,8 +177,8 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	var res *core.Result
 	var execErr error
-	var agent graph.Agent
-	var state *core.Context
+	var agent graph.WorkflowExecutor
+	var state *contextdata.Envelope
 	var task *core.Task
 	var before *WorkspaceSnapshot
 	var browserFixtures *browserFixtureServer
@@ -226,7 +227,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
 		taskCtx := core.WithTaskContext(runCtx, core.TaskContext{
 			ID:          task.ID,
-			Type:        task.Type,
+			Type:        core.TaskType(task.Type),
 			Instruction: task.Instruction,
 		})
 		// Phase 4: capability_direct_run bypasses full agent loop
@@ -302,7 +303,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if data, err := json.MarshalIndent(frameworkPerf, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "framework_perf.json"), data, 0o644)
 	}
-	phaseMetrics := BuildPhaseMetrics(snapshot, tokenUsage)
+	phaseMetrics := BuildPhaseMetrics(state, tokenUsage)
 	if data, err := json.MarshalIndent(phaseMetrics, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "phase_metrics.json"), data, 0o644)
 	}
@@ -355,7 +356,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	// Outcome block evaluation (Phase 2)
 	if c.Expect.Outcome != nil {
-		results, outcomeErr := evaluateOutcomeExpectations(*c.Expect.Outcome, workspace, output, changed, snapshot, tokenUsage, memoryOutcome, runner)
+		results, outcomeErr := evaluateOutcomeExpectations(*c.Expect.Outcome, workspace, output, changed, state, tokenUsage, memoryOutcome, runner)
 		assertionResults = append(assertionResults, results...)
 		if outcomeErr != nil {
 			success = false
@@ -393,7 +394,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	// Benchmark block evaluation (Phase 4) - never fails the test
 	var benchmarkObservations []BenchmarkObservation
 	if c.Expect.Benchmark != nil {
-		benchmarkObservations = evaluateBenchmarkExpectations(*c.Expect.Benchmark, toolTranscript, events, snapshot, tokenUsage)
+		benchmarkObservations = evaluateBenchmarkExpectations(*c.Expect.Benchmark, toolTranscript, events, state, tokenUsage)
 		// Write benchmark_observations.json artifact
 		if len(benchmarkObservations) > 0 {
 			if data, err := json.MarshalIndent(benchmarkObservations, "", "  "); err == nil {
@@ -539,11 +540,11 @@ func resolveCaseMaxRetries(opts RunOptions) int {
 	}
 }
 
-func writeInteractionTape(path string, snapshot *core.ContextSnapshot) error {
+func writeInteractionTape(path string, snapshot map[string]any) error {
 	if snapshot == nil {
 		return nil
 	}
-	raw, ok := snapshot.State["euclo.interaction_records"]
+	raw, ok := snapshot["euclo.interaction_records"]
 	if !ok || raw == nil {
 		return nil
 	}
@@ -587,8 +588,8 @@ type preparedCaseAttempt struct {
 	memoryBefore    MemoryOutcomeReport
 	before          *WorkspaceSnapshot
 	browserFixtures *browserFixtureServer
-	agent           graph.Agent
-	state           *core.Context
+	agent           graph.WorkflowExecutor
+	state           *contextdata.Envelope
 	task            *core.Task
 	skipReason      string
 	runner          fsandbox.CommandRunner
@@ -640,7 +641,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	}
 	attempt.browserFixtures = browserFixtures
 
-	baseSpec := contractpkg.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
+	baseSpec := manifest.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
 	if baseSpec == nil {
 		baseSpec = &core.AgentRuntimeSpec{}
 	}
@@ -654,7 +655,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	}
 	// Phase 4: Inject setup.state_keys into context before agent execution
 	for key, value := range c.Setup.StateKeys {
-		state.Set(key, value)
+		state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 	}
 	attempt.agent = agent
 	attempt.state = state
@@ -672,12 +673,21 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	if override := strings.TrimSpace(c.Metadata["task_id"]); override != "" {
 		taskID = override
 	}
-	task := &core.Task{
+		task := &core.Task{
 		ID:          taskID,
 		Instruction: c.Prompt,
-		Type:        taskType,
+		Type:        string(taskType),
 		Context:     cloneContextMap(c.Context),
-		Metadata:    cloneStringMap(c.Metadata),
+		Metadata: func() map[string]any {
+			if len(c.Metadata) == 0 {
+				return nil
+			}
+			out := make(map[string]any, len(c.Metadata))
+			for k, v := range c.Metadata {
+				out[k] = v
+			}
+			return out
+		}(),
 	}
 	if task.Context == nil {
 		task.Context = make(map[string]any)
@@ -690,9 +700,9 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	if browserFixtures != nil {
 		browserFixtures.InjectTask(task)
 	}
-	state.Set("task.id", task.ID)
-	state.Set("task.type", string(task.Type))
-	state.Set("task.instruction", task.Instruction)
+	state.SetWorkingValue("task.id", task.ID, contextdata.MemoryClassTask)
+	state.SetWorkingValue("task.type", string(task.Type), contextdata.MemoryClassTask)
+	state.SetWorkingValue("task.instruction", task.Instruction, contextdata.MemoryClassTask)
 	attempt.task = task
 
 	return attempt, nil
@@ -718,7 +728,7 @@ func interactionScriptContext(script []InteractionScriptStep) []map[string]any {
 	return steps
 }
 
-func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c CaseSpec) {
+func seedWorkflowRetrievalStateForCase(state *contextdata.Envelope, task *core.Task, c CaseSpec) {
 	if state == nil || task == nil || task.Context == nil {
 		return
 	}
@@ -757,16 +767,16 @@ func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c C
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprint(task.Context["mode"])))
 	switch mode {
 	case "architect":
-		state.Set("planner.workflow_retrieval", payload)
+		state.SetWorkingValue("planner.workflow_retrieval", payload, contextdata.MemoryClassTask)
 	default:
-		state.Set("pipeline.workflow_retrieval", payload)
+		state.SetWorkingValue("pipeline.workflow_retrieval", payload, contextdata.MemoryClassTask)
 	}
 	if seededPlan != nil {
-		state.Set("pipeline.plan", seededPlan)
-		state.Set("euclo.seeded_pipeline_plan", seededPlan)
+		state.SetWorkingValue("pipeline.plan", seededPlan, contextdata.MemoryClassTask)
+		state.SetWorkingValue("euclo.seeded_pipeline_plan", seededPlan, contextdata.MemoryClassTask)
 		explorationID := fmt.Sprintf("%s:seeded-exploration", strings.TrimSpace(fmt.Sprint(workflowID)))
-		state.Set("euclo.active_exploration_id", explorationID)
-		state.Set("euclo.active_exploration_snapshot_id", explorationID+":snapshot")
+		state.SetWorkingValue("euclo.active_exploration_id", explorationID, contextdata.MemoryClassTask)
+		state.SetWorkingValue("euclo.active_exploration_snapshot_id", explorationID+":snapshot", contextdata.MemoryClassTask)
 	}
 }
 
@@ -822,7 +832,7 @@ func shouldRestrictAllowedCapabilitiesForCase(c CaseSpec) bool {
 	case "ask", "debug", "architect":
 		return true
 	}
-	return core.TaskType(c.TaskType) == core.TaskTypeAnalysis
+	return strings.EqualFold(strings.TrimSpace(c.TaskType), "analysis")
 }
 
 func resolveTemplateProfile(suite *Suite, c CaseSpec) string {
@@ -926,7 +936,7 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 	return cleanup, nil
 }
 
-func extractOutput(state *core.Context, res *core.Result) string {
+func extractOutput(state *contextdata.Envelope, res *core.Result) string {
 	if res != nil && res.Data != nil {
 		if text := finalOutputText(res.Data["final_output"]); text != "" {
 			return text
@@ -943,7 +953,7 @@ func extractOutput(state *core.Context, res *core.Result) string {
 			"architect.summary",
 			"planner.summary",
 		} {
-			if val, ok := state.Get(key); ok {
+			if val, ok := state.GetWorkingValue(key); ok {
 				if text := finalOutputText(val); text != "" {
 					return text
 				}
@@ -958,7 +968,7 @@ func extractOutput(state *core.Context, res *core.Result) string {
 		}
 	}
 	if state != nil {
-		if text := singleAssistantMessage(state.History()); text != "" {
+		if text := singleAssistantMessage(state.GetInteractions()); text != "" {
 			return text
 		}
 	}
@@ -1024,16 +1034,18 @@ func finalOutputText(val any) string {
 	return ""
 }
 
-func singleAssistantMessage(history []core.Interaction) string {
+func singleAssistantMessage(history []map[string]any) string {
 	if len(history) == 0 {
 		return ""
 	}
 	found := ""
 	for _, item := range history {
-		if item.Role != "assistant" {
+		role, _ := item["actor"].(string)
+		if role != "assistant" {
 			continue
 		}
-		content := strings.TrimSpace(item.Content)
+		content, _ := item["content"].(string)
+		content = strings.TrimSpace(content)
 		if content == "" {
 			continue
 		}
@@ -1043,6 +1055,23 @@ func singleAssistantMessage(history []core.Interaction) string {
 		found = content
 	}
 	return found
+}
+
+type llmTelemetryAdapter struct {
+	inner core.Telemetry
+}
+
+func (a llmTelemetryAdapter) Emit(event contracts.Event) {
+	if a.inner == nil {
+		return
+	}
+	a.inner.Emit(core.Event{
+		Type:      core.EventType(event.Type),
+		TaskID:    event.TaskID,
+		Message:   event.Message,
+		Timestamp: event.Timestamp,
+		Metadata:  event.Metadata,
+	})
 }
 
 func shouldRetryCaseWithBackendReset(err error, patterns []string) bool {
@@ -1058,13 +1087,13 @@ func shouldRetryCaseWithBackendReset(err error, patterns []string) bool {
 // capabilityDirectRunner is the narrow interface the test harness requires to
 // invoke a capability directly, bypassing the full agent execution loop.
 type capabilityDirectRunner interface {
-	DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *core.Context) (*core.Result, error)
+		DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *contextdata.Envelope) (*core.Result, error)
 }
 
 // executeCapabilityDirectRun runs a capability directly through the agent's
 // dispatcher, bypassing the full agent loop. Used for testing supporting-only
 // capabilities in isolation.
-func executeCapabilityDirectRun(ctx context.Context, c CaseSpec, task *core.Task, state *core.Context, agent graph.Agent) (*core.Result, error) {
+func executeCapabilityDirectRun(ctx context.Context, c CaseSpec, task *core.Task, state *contextdata.Envelope, agent graph.WorkflowExecutor) (*core.Result, error) {
 	runner, ok := agent.(capabilityDirectRunner)
 	if !ok {
 		return nil, fmt.Errorf("agent does not support capability_direct_run (missing DirectCapabilityRun method)")

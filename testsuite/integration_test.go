@@ -12,8 +12,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
@@ -63,8 +64,8 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 	}
 	condNode := &stateConditionalNode{
 		name: "gate",
-		decide: func(state *core.Context) (string, error) {
-			status, _ := state.Get("use-tool.status")
+		decide: func(state *contextdata.Envelope) (string, error) {
+			status, _ := state.GetWorkingValue("use-tool.status")
 			if fmt.Sprint(status) == "ok" {
 				return "done", nil
 			}
@@ -87,15 +88,14 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 	if err := g.AddEdge(toolNode.ID(), condNode.ID(), nil, false); err != nil {
 		t.Fatalf("edge tool->gate: %v", err)
 	}
-	if err := g.AddEdge(condNode.ID(), terminal.ID(), func(result *core.Result, _ *core.Context) bool {
+	if err := g.AddEdge(condNode.ID(), terminal.ID(), func(result *core.Result, _ *contextdata.Envelope) bool {
 		next, _ := result.Data["next"].(string)
 		return next == "done"
 	}, false); err != nil {
 		t.Fatalf("edge gate->done: %v", err)
 	}
 
-	state := core.NewContext()
-	state.Set("task.id", "graph-tool")
+	state := contextdata.NewEnvelope("graph-tool", "integration")
 	result, err := g.Execute(context.Background(), state)
 	if err != nil {
 		t.Fatalf("graph execute: %v", err)
@@ -104,11 +104,11 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 
-	if val, _ := state.Get("use-tool.content"); val != content {
+	if val, _ := state.GetWorkingValue("use-tool.content"); val != content {
 		t.Fatalf("expected tool content stored, got %v", val)
 	}
-	if len(state.History()) < 2 {
-		t.Fatalf("expected llm and tool interactions recorded, got %d", len(state.History()))
+	if len(state.GetInteractions()) < 2 {
+		t.Fatalf("expected llm and tool interactions recorded, got %d", len(state.GetInteractions()))
 	}
 	if telemetry.count(core.EventGraphStart) != 1 || telemetry.count(core.EventGraphFinish) != 1 {
 		t.Fatalf("graph telemetry mismatch: %+v", telemetry.events)
@@ -165,7 +165,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 		t.Fatal("expected hybrid search results")
 	}
 
-	shared := core.NewSharedContext(core.NewContext(), core.NewArtifactBudget(4096), &core.SimpleSummarizer{})
+	shared := contextdata.NewEnvelope("integration", "integration")
 	seen := make(map[string]struct{})
 	for _, result := range results {
 		if result.File == "" {
@@ -178,37 +178,18 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", result.File, err)
 		}
-		lang := "text"
-		if strings.HasSuffix(result.File, ".go") {
-			lang = "go"
-		} else if strings.HasSuffix(strings.ToLower(result.File), ".md") {
-			lang = "markdown"
-		}
-		if _, err := shared.AddFile(result.File, string(data), lang, core.DetailFull); err != nil {
-			t.Fatalf("AddFile %s: %v", result.File, err)
-		}
+		shared.SetWorkingValue(result.File, string(data), contextdata.MemoryClassTask)
 		seen[result.File] = struct{}{}
 	}
 	if len(seen) < 2 {
 		t.Fatalf("expected files from both search backends, got %v", seen)
 	}
 
-	usage := shared.GetTokenUsage()
-	if usage.Total == 0 || usage.BySection["files"] == 0 {
-		t.Fatalf("token usage not recorded: %+v", usage)
-	}
-	if _, ok := shared.GetFile(goFile); !ok {
+	if _, ok := shared.GetWorkingValue(goFile); !ok {
 		t.Fatalf("code file missing from shared context")
 	}
-	if _, ok := shared.GetFile(mdFile); !ok {
+	if _, ok := shared.GetWorkingValue(mdFile); !ok {
 		t.Fatalf("notes file missing from shared context")
-	}
-
-	shared.OnBudgetWarning(0.95)
-	if fc, ok := shared.GetFile(goFile); ok {
-		if fc.Level != core.DetailSummary || fc.Content != "" {
-			t.Fatalf("expected go file downgraded to summary, got level=%v content len=%d", fc.Level, len(fc.Content))
-		}
 	}
 }
 
@@ -250,12 +231,11 @@ func (t *integrationFileTool) Parameters() []core.ToolParameter {
 	}
 }
 
-func (t *integrationFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
-	state.AddInteraction("tool:"+t.name, string(data), nil)
 	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
@@ -265,7 +245,7 @@ func (t *integrationFileTool) Execute(ctx context.Context, state *core.Context, 
 	}, nil
 }
 
-func (t *integrationFileTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t *integrationFileTool) IsAvailable(context.Context) bool { return true }
 
 func (t *integrationFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{
@@ -310,9 +290,9 @@ type llmPlanNode struct {
 
 func (n *llmPlanNode) ID() string { return n.name }
 
-func (n *llmPlanNode) Type() graph.NodeType { return graph.NodeTypeLLM }
+func (n *llmPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
-func (n *llmPlanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	if n.model == nil {
 		return nil, fmt.Errorf("llm model missing")
 	}
@@ -320,7 +300,7 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *core.Context) (*core.R
 	if err != nil {
 		return nil, err
 	}
-	state.AddInteraction("assistant", resp.Text, map[string]interface{}{"node": n.name})
+	state.AddInteraction(map[string]any{"actor": "assistant", "content": resp.Text, "node": n.name})
 	return &core.Result{
 		NodeID:  n.name,
 		Success: true,
@@ -340,14 +320,14 @@ func (n *toolExecNode) ID() string { return n.name }
 
 func (n *toolExecNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *toolExecNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	if n.tool == nil {
 		return nil, fmt.Errorf("tool missing")
 	}
-	if !n.tool.IsAvailable(ctx, state) {
+	if !n.tool.IsAvailable(ctx) {
 		return nil, fmt.Errorf("tool %s unavailable", n.tool.Name())
 	}
-	res, err := n.tool.Execute(ctx, state, n.args)
+	res, err := n.tool.Execute(ctx, n.args)
 	if err != nil {
 		return nil, err
 	}
@@ -365,24 +345,28 @@ func (n *toolExecNode) Execute(ctx context.Context, state *core.Context) (*core.
 	if res != nil && res.Error != "" {
 		execErr = fmt.Errorf("%s", res.Error)
 	}
+	if content, ok := data["content"].(string); ok {
+		state.SetWorkingValue("use-tool.content", content, contextdata.MemoryClassTask)
+	}
+	state.AddInteraction(map[string]any{"actor": "tool:" + n.name, "result": data})
 	return &core.Result{
 		NodeID:  n.name,
 		Success: success,
 		Data:    data,
-		Error:   execErr,
+		Error:   func() string { if execErr != nil { return execErr.Error() }; return "" }(),
 	}, nil
 }
 
 type stateConditionalNode struct {
 	name   string
-	decide func(*core.Context) (string, error)
+	decide func(*contextdata.Envelope) (string, error)
 }
 
 func (n *stateConditionalNode) ID() string { return n.name }
 
 func (n *stateConditionalNode) Type() graph.NodeType { return graph.NodeTypeConditional }
 
-func (n *stateConditionalNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *stateConditionalNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	if n.decide == nil {
 		return nil, fmt.Errorf("conditional missing decision function")
 	}

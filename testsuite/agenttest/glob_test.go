@@ -4,13 +4,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 func TestMatchGlob(t *testing.T) {
 	t.Helper()
-	testRunsGlob := filepath.ToSlash(filepath.Join(config.DirName, "test_runs", "**"))
-	testRunReport := filepath.ToSlash(filepath.Join(config.DirName, "test_runs", "x", "report.json"))
+	testRunsGlob := filepath.ToSlash(filepath.Join(manifest.DirName, "test_runs", "**"))
+	testRunReport := filepath.ToSlash(filepath.Join(manifest.DirName, "test_runs", "x", "report.json"))
 	cases := []struct {
 		pattern string
 		path    string

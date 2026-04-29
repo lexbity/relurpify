@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
-// mockCapabilityRegistryProvider implements graph.Agent for testing
+// mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
 type mockCapabilityRegistryProvider struct {
 	registry *capability.Registry
 }
@@ -18,27 +19,27 @@ func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *capability.Regist
 	return m.registry
 }
 
-// Execute implements graph.Agent
-func (m *mockCapabilityRegistryProvider) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+// Execute implements graph.WorkflowExecutor
+func (m *mockCapabilityRegistryProvider) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	return nil, nil
 }
 
-// Initialize implements graph.Agent
+// Initialize implements graph.WorkflowExecutor
 func (m *mockCapabilityRegistryProvider) Initialize(config *core.Config) error {
 	return nil
 }
 
-// Capabilities implements graph.Agent
-func (m *mockCapabilityRegistryProvider) Capabilities() []core.Capability {
+// Capabilities implements graph.WorkflowExecutor
+func (m *mockCapabilityRegistryProvider) Capabilities() []string {
 	return nil
 }
 
-// BuildGraph implements graph.Agent
+// BuildGraph implements graph.WorkflowExecutor
 func (m *mockCapabilityRegistryProvider) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 
-var _ graph.Agent = (*mockCapabilityRegistryProvider)(nil)
+var _ graph.WorkflowExecutor = (*mockCapabilityRegistryProvider)(nil)
 
 func TestExtractCapabilityRegistry(t *testing.T) {
 	reg := capability.NewRegistry()
@@ -291,10 +292,10 @@ func TestCoverageReport_Nil(t *testing.T) {
 	}
 }
 
-// mockNoRegistryAgent implements graph.Agent without capability registry
+// mockNoRegistryAgent implements graph.WorkflowExecutor without capability registry
 type mockNoRegistryAgent struct{}
 
-func (m *mockNoRegistryAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (m *mockNoRegistryAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	return nil, nil
 }
 
@@ -302,7 +303,7 @@ func (m *mockNoRegistryAgent) Initialize(config *core.Config) error {
 	return nil
 }
 
-func (m *mockNoRegistryAgent) Capabilities() []core.Capability {
+func (m *mockNoRegistryAgent) Capabilities() []string {
 	return nil
 }
 
@@ -310,7 +311,7 @@ func (m *mockNoRegistryAgent) BuildGraph(task *core.Task) (*graph.Graph, error) 
 	return nil, nil
 }
 
-var _ graph.Agent = (*mockNoRegistryAgent)(nil)
+var _ graph.WorkflowExecutor = (*mockNoRegistryAgent)(nil)
 
 // mockTool implements a minimal core.Tool for testing
 type mockTool struct {
@@ -321,10 +322,10 @@ func (m *mockTool) Name() string                     { return m.name }
 func (m *mockTool) Description() string              { return "Mock tool " + m.name }
 func (m *mockTool) Category() string                 { return "test" }
 func (m *mockTool) Parameters() []core.ToolParameter { return nil }
-func (m *mockTool) Execute(ctx context.Context, state *core.Context, args map[string]any) (*core.ToolResult, error) {
+func (m *mockTool) Execute(ctx context.Context, args map[string]any) (*core.ToolResult, error) {
 	return &core.ToolResult{Data: map[string]any{"result": "ok"}}, nil
 }
-func (m *mockTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
+func (m *mockTool) IsAvailable(ctx context.Context) bool { return true }
 func (m *mockTool) Permissions() core.ToolPermissions                         { return core.ToolPermissions{} }
 func (m *mockTool) Tags() []string                                            { return nil }
 

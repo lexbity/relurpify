@@ -103,7 +103,7 @@ func (s *browserFixtureServer) InjectTask(task *core.Task) {
 	}
 
 	if task.Metadata == nil {
-		task.Metadata = make(map[string]string)
+		task.Metadata = make(map[string]any)
 	}
 	task.Metadata["browser.fixture.base_url"] = baseURL
 	task.Metadata["browser.fixture.local_base_url"] = s.server.URL

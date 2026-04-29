@@ -71,12 +71,12 @@ func (i *InjectionInterceptor) Permissions() core.ToolPermissions {
 }
 
 // IsAvailable delegates to the wrapped tool
-func (i *InjectionInterceptor) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return i.base.IsAvailable(ctx, state)
+func (i *InjectionInterceptor) IsAvailable(ctx context.Context) bool {
+	return i.base.IsAvailable(ctx)
 }
 
 // Execute wraps the tool execution with injection logic
-func (i *InjectionInterceptor) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -112,7 +112,7 @@ func (i *InjectionInterceptor) Execute(ctx context.Context, state *core.Context,
 	}
 
 	// No override matched, execute base tool
-	return i.base.Execute(ctx, state, args)
+	return i.base.Execute(ctx, args)
 }
 
 // matchesOverride checks if this call matches the override criteria

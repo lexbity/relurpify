@@ -12,7 +12,7 @@ import (
 func TestInstantiateAgentByNameConfiguresWorkflowPaths(t *testing.T) {
 	workspace := t.TempDir()
 
-	agent := instantiateAgentByName(workspace, "coding", agentenv.AgentEnvironment{
+	agent := instantiateAgentByName(workspace, "coding", agentenv.WorkspaceEnvironment{
 		Registry: capability.NewRegistry(),
 		Config:   &core.Config{MaxIterations: 1},
 	})

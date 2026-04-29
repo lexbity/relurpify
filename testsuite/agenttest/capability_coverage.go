@@ -5,9 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/named/rex"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // CapabilityCoverage tracks which registered capabilities were exercised
@@ -20,7 +21,7 @@ type CapabilityCoverage struct {
 }
 
 // ExtractCapabilityRegistry introspects the agent to discover available tools
-func ExtractCapabilityRegistry(agent graph.Agent) (*CapabilityCoverage, error) {
+func ExtractCapabilityRegistry(agent graph.WorkflowExecutor) (*CapabilityCoverage, error) {
 	if agent == nil {
 		return nil, fmt.Errorf("agent is nil")
 	}
@@ -94,7 +95,7 @@ func ComputeCoverage(coverage *CapabilityCoverage, toolCounts map[string]int) er
 }
 
 // RegistryHasTool checks if a tool is registered in the capability registry
-func RegistryHasTool(agent graph.Agent, toolName string) bool {
+func RegistryHasTool(agent graph.WorkflowExecutor, toolName string) bool {
 	if agent == nil || toolName == "" {
 		return false
 	}
@@ -109,12 +110,15 @@ func RegistryHasTool(agent graph.Agent, toolName string) bool {
 }
 
 // extractCapabilityRegistry gets the capability registry from an agent
-func extractCapabilityRegistry(agent graph.Agent) *capability.Registry {
+func extractCapabilityRegistry(agent graph.WorkflowExecutor) *capability.Registry {
 	type capabilityRegistryProvider interface {
 		CapabilityRegistry() *capability.Registry
 	}
 	if provider, ok := agent.(capabilityRegistryProvider); ok {
 		return provider.CapabilityRegistry()
+	}
+	if rexAgent, ok := agent.(*rex.Agent); ok && rexAgent.Environment != nil {
+		return rexAgent.Environment.Registry
 	}
 	return nil
 }
@@ -180,7 +184,7 @@ func ValidateToolsRequired(coverage *CapabilityCoverage, requiredTools []string)
 }
 
 // BuildCoverageFromEvents creates a CapabilityCoverage from telemetry events
-func BuildCoverageFromEvents(agent graph.Agent, events []core.Event) (*CapabilityCoverage, error) {
+func BuildCoverageFromEvents(agent graph.WorkflowExecutor, events []core.Event) (*CapabilityCoverage, error) {
 	coverage, err := ExtractCapabilityRegistry(agent)
 	if err != nil {
 		return nil, err

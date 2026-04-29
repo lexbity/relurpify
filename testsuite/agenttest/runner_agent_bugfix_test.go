@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 )
@@ -34,11 +34,11 @@ func (t agenttestApprovalStubTool) Category() string { return "test" }
 
 func (t agenttestApprovalStubTool) Parameters() []core.ToolParameter { return nil }
 
-func (t agenttestApprovalStubTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t agenttestApprovalStubTool) Execute(context.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
 }
 
-func (t agenttestApprovalStubTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t agenttestApprovalStubTool) IsAvailable(context.Context) bool { return true }
 
 func (t agenttestApprovalStubTool) Permissions() core.ToolPermissions { return core.ToolPermissions{} }
 
@@ -50,13 +50,13 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 
 	agentName := "testfu"
 	var capturedCfg *core.Config
-	namedfactory.RegisterNamedAgent(agentName, func(_ string, env ayenitd.WorkspaceEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent(agentName, func(_ string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
 		capturedCfg = env.Config
 		return &stubNamedAgent{}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{
 			Name:              "bootstrapped",
@@ -64,14 +64,13 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 			MaxIterations:     17,
 			NativeToolCalling: true,
 		}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
+				WorkingMemory: nil,
 				Config:   cfg,
 			},
 		}, nil
@@ -114,8 +113,8 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 	manifestPath := writeCodingAgenttestManifest(t, workspace)
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
-		bundle, err := appruntime.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), appruntime.CapabilityRegistryOptions{
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+		bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
 			AgentID: "coding",
 			AgentSpec: &core.AgentRuntimeSpec{
 				Implementation: "coding",
@@ -126,19 +125,15 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		t.Cleanup(func() {
-			_ = bundle.Close()
-		})
 		registry := bundle.Registry
 		cfg := &core.Config{Name: "bootstrapped", MaxIterations: 3}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
+				WorkingMemory: nil,
 				Config:   cfg,
 			},
 		}, nil
@@ -171,7 +166,7 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 	if !ok {
 		t.Fatal("expected file_list tool")
 	}
-	_, err = tool.Execute(context.Background(), core.NewContext(), map[string]any{
+	_, err = tool.Execute(context.Background(), map[string]any{
 		"directory": "relurpify_cfg/model_profiles",
 		"pattern":   "*",
 	})
@@ -187,18 +182,17 @@ func TestBuildAgentPropagatesSkipASTIndexToBootstrap(t *testing.T) {
 
 	var capturedSkipASTIndex bool
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		capturedSkipASTIndex = opts.SkipASTIndex
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "bootstrapped", MaxIterations: 3}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
+				WorkingMemory: nil,
 				Config:   cfg,
 			},
 		}, nil
@@ -313,31 +307,31 @@ func TestPregrantAgentTestCapabilitiesMatchesRuntimeApprovalKey(t *testing.T) {
 
 func TestResolveExecutionAgentNameRoutesCodingArchitectAndWorkflowCases(t *testing.T) {
 	if got := resolveExecutionAgentName("coding", CaseSpec{
-		TaskType: string(core.TaskTypeAnalysis),
+		TaskType: "analysis",
 		Context:  map[string]any{"mode": "architect"},
 	}); got != "architect" {
 		t.Fatalf("expected architect routing, got %q", got)
 	}
 	if got := resolveExecutionAgentName("coding", CaseSpec{
-		TaskType: string(core.TaskTypeAnalysis),
+		TaskType: "analysis",
 		Context:  map[string]any{"mode": "architect", "workflow_id": "wf-1"},
 	}); got != "coding" {
 		t.Fatalf("expected coding routing for workflow-backed architect case, got %q", got)
 	}
 	if got := resolveExecutionAgentName("coding", CaseSpec{
-		TaskType: string(core.TaskTypeCodeModification),
+		TaskType: "code-modification",
 		Context:  map[string]any{"workflow_id": "wf-1"},
 	}); got != "coding" {
 		t.Fatalf("expected coding routing for workflow-backed case, got %q", got)
 	}
 	if got := resolveExecutionAgentName("coding", CaseSpec{
-		TaskType: string(core.TaskTypeCodeModification),
+		TaskType: "code-modification",
 		Context:  map[string]any{},
 	}); got != "coding" {
 		t.Fatalf("expected coding routing without workflow id, got %q", got)
 	}
 	if got := resolveExecutionAgentName("coding", CaseSpec{
-		TaskType: string(core.TaskTypeAnalysis),
+		TaskType: "analysis",
 		Context:  map[string]any{"mode": "ask"},
 	}); got != "coding" {
 		t.Fatalf("expected coding routing for ask mode, got %q", got)
@@ -346,7 +340,7 @@ func TestResolveExecutionAgentNameRoutesCodingArchitectAndWorkflowCases(t *testi
 
 func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 	workspace := t.TempDir()
-	bundle, err := appruntime.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), appruntime.CapabilityRegistryOptions{
+	bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
 		AgentID: "coding",
 		AgentSpec: &core.AgentRuntimeSpec{
 			Implementation: "coding",
@@ -357,12 +351,6 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildCapabilityRegistry: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := bundle.Close(); err != nil {
-			t.Fatalf("close capability bundle: %v", err)
-		}
-	})
-
 	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if _, ok := bundle.Registry.Get(required); !ok {
 			t.Fatalf("expected runtime registry to include %s before restriction", required)
@@ -476,7 +464,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 
 	agentName := "testfu"
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env ayenitd.WorkspaceEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &retryCheckAgent{
 			workspace: workspace,
 			shared:    shared,
@@ -484,17 +472,15 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
 				Config:   cfg,
 			},
 		}, nil
@@ -566,22 +552,20 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &nonInfraRetryAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
 				Config:   cfg,
 			},
 		}, nil
@@ -631,22 +615,20 @@ func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &alwaysRetryAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
 				Config:   cfg,
 			},
 		}, nil
@@ -703,23 +685,21 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &executionTimeoutShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &executionTimeoutAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		time.Sleep(30 * time.Millisecond)
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "timeout", MaxIterations: 3, NativeToolCalling: true}
-		return &appruntime.BootstrappedAgentRuntime{
+		return &ayenitd.BootstrappedAgentRuntime{
 			Registry:    registry,
-			Memory:      opts.Memory,
 			AgentConfig: cfg,
-			Environment: agentenv.AgentEnvironment{
+			Environment: agentenv.WorkspaceEnvironment{
 				Model:    opts.Model,
 				Registry: registry,
-				Memory:   opts.Memory,
 				Config:   cfg,
 			},
 		}, nil
@@ -764,12 +744,12 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 }
 
 func TestExtractOutputPrefersStructuredFinalOutput(t *testing.T) {
-	state := core.NewContext()
-	state.AddInteraction("assistant", "intermediate plan", nil)
-	state.AddInteraction("assistant", "another intermediate step", nil)
-	state.Set("pipeline.final_output", map[string]any{
+	state := contextdata.NewEnvelope("task", "session")
+	state.AddInteraction(map[string]any{"actor": "assistant", "content": "intermediate plan"})
+	state.AddInteraction(map[string]any{"actor": "assistant", "content": "another intermediate step"})
+	state.SetWorkingValue("pipeline.final_output", map[string]any{
 		"summary": "final pipeline answer",
-	})
+	}, contextdata.MemoryClassTask)
 
 	if got := extractOutput(state, nil); got != "final pipeline answer" {
 		t.Fatalf("expected structured final output, got %q", got)
@@ -777,9 +757,9 @@ func TestExtractOutputPrefersStructuredFinalOutput(t *testing.T) {
 }
 
 func TestExtractOutputDoesNotUseAmbiguousAssistantHistory(t *testing.T) {
-	state := core.NewContext()
-	state.AddInteraction("assistant", "first step", nil)
-	state.AddInteraction("assistant", "second step", nil)
+	state := contextdata.NewEnvelope("task", "session")
+	state.AddInteraction(map[string]any{"actor": "assistant", "content": "first step"})
+	state.AddInteraction(map[string]any{"actor": "assistant", "content": "second step"})
 
 	if got := extractOutput(state, nil); got != "" {
 		t.Fatalf("expected empty output for ambiguous assistant history, got %q", got)
@@ -789,10 +769,10 @@ func TestExtractOutputDoesNotUseAmbiguousAssistantHistory(t *testing.T) {
 type stubNamedAgent struct{}
 
 func (s *stubNamedAgent) Initialize(_ *core.Config) error { return nil }
-func (s *stubNamedAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+func (s *stubNamedAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
 	return &core.Result{Success: true}, nil
 }
-func (s *stubNamedAgent) Capabilities() []core.Capability { return nil }
+func (s *stubNamedAgent) Capabilities() []string { return nil }
 func (s *stubNamedAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
@@ -809,7 +789,7 @@ type retryCheckAgent struct {
 
 func (a *retryCheckAgent) Initialize(_ *core.Config) error { return nil }
 
-func (a *retryCheckAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+func (a *retryCheckAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
 	a.shared.attempt++
 	target := filepath.Join(a.workspace, "note.txt")
 	data, err := os.ReadFile(target)
@@ -834,7 +814,7 @@ func (a *retryCheckAgent) Execute(_ context.Context, _ *core.Task, _ *core.Conte
 	}, nil
 }
 
-func (a *retryCheckAgent) Capabilities() []core.Capability { return nil }
+func (a *retryCheckAgent) Capabilities() []string { return nil }
 func (a *retryCheckAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
@@ -844,11 +824,11 @@ type nonInfraRetryAgent struct {
 }
 
 func (a *nonInfraRetryAgent) Initialize(_ *core.Config) error { return nil }
-func (a *nonInfraRetryAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+func (a *nonInfraRetryAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
 	a.shared.attempt++
 	return nil, errors.New("reset requested")
 }
-func (a *nonInfraRetryAgent) Capabilities() []core.Capability { return nil }
+func (a *nonInfraRetryAgent) Capabilities() []string { return nil }
 func (a *nonInfraRetryAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
@@ -858,11 +838,11 @@ type alwaysRetryAgent struct {
 }
 
 func (a *alwaysRetryAgent) Initialize(_ *core.Config) error { return nil }
-func (a *alwaysRetryAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+func (a *alwaysRetryAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
 	a.shared.attempt++
 	return nil, errors.New("ollama error: reset requested")
 }
-func (a *alwaysRetryAgent) Capabilities() []core.Capability { return nil }
+func (a *alwaysRetryAgent) Capabilities() []string { return nil }
 func (a *alwaysRetryAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
@@ -876,13 +856,13 @@ type executionTimeoutAgent struct {
 }
 
 func (a *executionTimeoutAgent) Initialize(_ *core.Config) error { return nil }
-func (a *executionTimeoutAgent) Execute(ctx context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+func (a *executionTimeoutAgent) Execute(ctx context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
 	start := time.Now()
 	<-ctx.Done()
 	a.shared.elapsed = time.Since(start)
 	return nil, ctx.Err()
 }
-func (a *executionTimeoutAgent) Capabilities() []core.Capability { return nil }
+func (a *executionTimeoutAgent) Capabilities() []string { return nil }
 func (a *executionTimeoutAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }

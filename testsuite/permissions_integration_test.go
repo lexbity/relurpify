@@ -51,19 +51,18 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 	registry.UsePermissionManager("agent-int", manager)
 
 	tool, _ := registry.Get("workspace_reader")
-	state := core.NewContext()
-	if _, err := tool.Execute(context.Background(), state, nil); err != nil {
+	if _, err := tool.Execute(context.Background(), nil); err != nil {
 		t.Fatalf("expected allowed tool to run, got error: %v", err)
 	}
-	if value, _ := state.Get("tool:workspace_reader"); value != "ok" {
-		t.Fatalf("tool state not recorded: %v", value)
+	if !allowedTool.ran {
+		t.Fatal("tool execution was not recorded")
 	}
 	if len(runtime.policies) == 0 || len(runtime.policies[len(runtime.policies)-1].NetworkRules) == 0 {
 		t.Fatal("expected network policy to be enforced")
 	}
 
 	escape, _ := registry.Get("escape")
-	if _, err := escape.Execute(context.Background(), core.NewContext(), nil); err == nil {
+	if _, err := escape.Execute(context.Background(), nil); err == nil {
 		t.Fatal("expected permission error for escape tool")
 	}
 }
@@ -109,13 +108,13 @@ func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 	registry.UsePermissionManager("agent-net", manager)
 
 	tool, _ := registry.Get("net_call")
-	if _, err := tool.Execute(context.Background(), core.NewContext(), nil); err != nil {
+	if _, err := tool.Execute(context.Background(), nil); err != nil {
 		t.Fatalf("expected HITL-enabled tool to run, got error: %v", err)
 	}
 	if len(hitl.requests) != 1 {
 		t.Fatalf("expected exactly one HITL request, got %d", len(hitl.requests))
 	}
-	if _, err := tool.Execute(context.Background(), core.NewContext(), nil); err != nil {
+	if _, err := tool.Execute(context.Background(), nil); err != nil {
 		t.Fatalf("expected cached grant to allow subsequent run: %v", err)
 	}
 	if len(hitl.requests) != 1 {
@@ -162,6 +161,7 @@ type permissionedTool struct {
 	agent    string
 	path     string
 	host     string
+	ran      bool
 }
 
 func (t *permissionedTool) Name() string        { return t.toolName }
@@ -170,7 +170,7 @@ func (t *permissionedTool) Category() string    { return "integration" }
 func (t *permissionedTool) Parameters() []core.ToolParameter {
 	return nil
 }
-func (t *permissionedTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if t.manager != nil {
 		if t.path != "" {
 			if err := t.manager.CheckFileAccess(ctx, t.agent, core.FileSystemRead, t.path); err != nil {
@@ -183,10 +183,10 @@ func (t *permissionedTool) Execute(ctx context.Context, state *core.Context, arg
 			}
 		}
 	}
-	state.Set("tool:"+t.toolName, "ok")
+	t.ran = true
 	return &core.ToolResult{Success: true}, nil
 }
-func (t *permissionedTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t *permissionedTool) IsAvailable(context.Context) bool { return true }
 func (t *permissionedTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: t.perms}
 }
