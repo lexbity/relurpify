@@ -7,57 +7,57 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // TrustBundleStore is part of the Phase 1 frozen FMP surface.
 type TrustBundleStore interface {
-	UpsertTrustBundle(ctx context.Context, bundle core.TrustBundle) error
-	GetTrustBundle(ctx context.Context, trustDomain string) (*core.TrustBundle, error)
+	UpsertTrustBundle(ctx context.Context, bundle TrustBundle) error
+	GetTrustBundle(ctx context.Context, trustDomain string) (*TrustBundle, error)
 }
 
 // BoundaryPolicyStore is part of the Phase 1 frozen FMP surface.
 type BoundaryPolicyStore interface {
-	UpsertBoundaryPolicy(ctx context.Context, policy core.BoundaryPolicy) error
-	GetBoundaryPolicy(ctx context.Context, trustDomain string) (*core.BoundaryPolicy, error)
+	UpsertBoundaryPolicy(ctx context.Context, policy BoundaryPolicy) error
+	GetBoundaryPolicy(ctx context.Context, trustDomain string) (*BoundaryPolicy, error)
 }
 
 // GatewayForwarder is part of the Phase 1 frozen FMP surface.
 // Later phases should replace the current abstraction-only state with a real
 // Nexus and gateway-backed forwarding implementation.
 type GatewayForwarder interface {
-	ForwardSealedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, error)
+	ForwardSealedContext(ctx context.Context, req GatewayForwardRequest) (*GatewayForwardResult, error)
 }
 
 type InMemoryTrustBundleStore struct {
 	mu      sync.RWMutex
-	bundles map[string]core.TrustBundle
+	bundles map[string]TrustBundle
 }
 
-func (s *InMemoryTrustBundleStore) ListTrustBundles(_ context.Context) ([]core.TrustBundle, error) {
+func (s *InMemoryTrustBundleStore) ListTrustBundles(_ context.Context) ([]TrustBundle, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.TrustBundle, 0, len(s.bundles))
+	out := make([]TrustBundle, 0, len(s.bundles))
 	for _, bundle := range s.bundles {
 		out = append(out, bundle)
 	}
 	return out, nil
 }
 
-func (s *InMemoryTrustBundleStore) UpsertTrustBundle(_ context.Context, bundle core.TrustBundle) error {
+func (s *InMemoryTrustBundleStore) UpsertTrustBundle(_ context.Context, bundle TrustBundle) error {
 	if err := bundle.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.bundles == nil {
-		s.bundles = map[string]core.TrustBundle{}
+		s.bundles = map[string]TrustBundle{}
 	}
 	s.bundles[strings.ToLower(strings.TrimSpace(bundle.TrustDomain))] = bundle
 	return nil
 }
 
-func (s *InMemoryTrustBundleStore) GetTrustBundle(_ context.Context, trustDomain string) (*core.TrustBundle, error) {
+func (s *InMemoryTrustBundleStore) GetTrustBundle(_ context.Context, trustDomain string) (*TrustBundle, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	bundle, ok := s.bundles[strings.ToLower(strings.TrimSpace(trustDomain))]
@@ -70,33 +70,33 @@ func (s *InMemoryTrustBundleStore) GetTrustBundle(_ context.Context, trustDomain
 
 type InMemoryBoundaryPolicyStore struct {
 	mu       sync.RWMutex
-	policies map[string]core.BoundaryPolicy
+	policies map[string]BoundaryPolicy
 }
 
-func (s *InMemoryBoundaryPolicyStore) ListBoundaryPolicies(_ context.Context) ([]core.BoundaryPolicy, error) {
+func (s *InMemoryBoundaryPolicyStore) ListBoundaryPolicies(_ context.Context) ([]BoundaryPolicy, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.BoundaryPolicy, 0, len(s.policies))
+	out := make([]BoundaryPolicy, 0, len(s.policies))
 	for _, policy := range s.policies {
 		out = append(out, policy)
 	}
 	return out, nil
 }
 
-func (s *InMemoryBoundaryPolicyStore) UpsertBoundaryPolicy(_ context.Context, policy core.BoundaryPolicy) error {
+func (s *InMemoryBoundaryPolicyStore) UpsertBoundaryPolicy(_ context.Context, policy BoundaryPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.policies == nil {
-		s.policies = map[string]core.BoundaryPolicy{}
+		s.policies = map[string]BoundaryPolicy{}
 	}
 	s.policies[strings.ToLower(strings.TrimSpace(policy.TrustDomain))] = policy
 	return nil
 }
 
-func (s *InMemoryBoundaryPolicyStore) GetBoundaryPolicy(_ context.Context, trustDomain string) (*core.BoundaryPolicy, error) {
+func (s *InMemoryBoundaryPolicyStore) GetBoundaryPolicy(_ context.Context, trustDomain string) (*BoundaryPolicy, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	policy, ok := s.policies[strings.ToLower(strings.TrimSpace(trustDomain))]
@@ -107,7 +107,7 @@ func (s *InMemoryBoundaryPolicyStore) GetBoundaryPolicy(_ context.Context, trust
 	return &copy, nil
 }
 
-func (s *Service) RegisterTrustBundle(ctx context.Context, bundle core.TrustBundle) error {
+func (s *Service) RegisterTrustBundle(ctx context.Context, bundle TrustBundle) error {
 	if s.Trust == nil {
 		return fmt.Errorf("trust bundle store unavailable")
 	}
@@ -120,25 +120,25 @@ func (s *Service) RegisterTrustBundle(ctx context.Context, bundle core.TrustBund
 	if err := s.Trust.UpsertTrustBundle(ctx, bundle); err != nil {
 		return err
 	}
-	s.emit(ctx, core.FrameworkEventFMPTrustRegistered, core.SubjectRef{}, map[string]any{
+	s.emit(ctx, FrameworkEventFMPTrustRegistered, identity.SubjectRef{}, map[string]any{
 		"trust_domain": bundle.TrustDomain,
 		"bundle_id":    bundle.BundleID,
 	})
 	return nil
 }
 
-func (s *Service) SetBoundaryPolicy(ctx context.Context, policy core.BoundaryPolicy) error {
+func (s *Service) SetBoundaryPolicy(ctx context.Context, policy BoundaryPolicy) error {
 	if s.Boundaries == nil {
 		return fmt.Errorf("boundary policy store unavailable")
 	}
 	return s.Boundaries.UpsertBoundaryPolicy(ctx, policy)
 }
 
-func (s *Service) ImportFederatedNodeAdvertisement(ctx context.Context, gateway core.SubjectRef, ad core.NodeAdvertisement, sourceDomain string) error {
+func (s *Service) ImportFederatedNodeAdvertisement(ctx context.Context, gateway identity.SubjectRef, ad NodeAdvertisement, sourceDomain string) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
-	if err := s.authorizeFederatedAdvertisement(ctx, gateway, ad.TrustDomain, sourceDomain, core.RouteModeGateway, 0); err != nil {
+	if err := s.authorizeFederatedAdvertisement(ctx, gateway, ad.TrustDomain, sourceDomain, RouteModeGateway, 0); err != nil {
 		return err
 	}
 	if s.Discovery == nil {
@@ -150,14 +150,14 @@ func (s *Service) ImportFederatedNodeAdvertisement(ctx context.Context, gateway 
 	return s.Discovery.UpsertNodeAdvertisement(ctx, ad)
 }
 
-func (s *Service) ImportFederatedRuntimeAdvertisement(ctx context.Context, gateway core.SubjectRef, ad core.RuntimeAdvertisement, sourceDomain string) error {
+func (s *Service) ImportFederatedRuntimeAdvertisement(ctx context.Context, gateway identity.SubjectRef, ad RuntimeAdvertisement, sourceDomain string) error {
 	if err := validateAuthoritativeRuntime(ad); err != nil {
 		return err
 	}
 	if err := s.verifyFederatedRuntimeAdvertisement(ctx, ad); err != nil {
 		return err
 	}
-	if err := s.authorizeFederatedAdvertisement(ctx, gateway, ad.TrustDomain, sourceDomain, core.RouteModeGateway, ad.Runtime.MaxContextSize); err != nil {
+	if err := s.authorizeFederatedAdvertisement(ctx, gateway, ad.TrustDomain, sourceDomain, RouteModeGateway, ad.Runtime.MaxContextSize); err != nil {
 		return err
 	}
 	if s.Discovery == nil {
@@ -169,7 +169,7 @@ func (s *Service) ImportFederatedRuntimeAdvertisement(ctx context.Context, gatew
 	return s.Discovery.UpsertRuntimeAdvertisement(ctx, ad)
 }
 
-func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gateway core.SubjectRef, ad core.ExportAdvertisement, sourceDomain string) error {
+func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gateway identity.SubjectRef, ad ExportAdvertisement, sourceDomain string) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gatewa
 	if err := s.Discovery.UpsertExportAdvertisement(ctx, ad); err != nil {
 		return err
 	}
-	s.emit(ctx, core.FrameworkEventFMPFederationImport, gateway, map[string]any{
+	s.emit(ctx, FrameworkEventFMPFederationImport, gateway, map[string]any{
 		"trust_domain": ad.TrustDomain,
 		"export_name":  ad.Export.ExportName,
 		"runtime_id":   ad.RuntimeID,
@@ -211,7 +211,7 @@ func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gatewa
 	return nil
 }
 
-func (s *Service) verifyFederatedRuntimeAdvertisement(ctx context.Context, ad core.RuntimeAdvertisement) error {
+func (s *Service) verifyFederatedRuntimeAdvertisement(ctx context.Context, ad RuntimeAdvertisement) error {
 	if strings.TrimSpace(ad.Runtime.SignatureAlgorithm) == "" {
 		return nil
 	}
@@ -232,7 +232,7 @@ func (s *Service) verifyFederatedRuntimeAdvertisement(ctx context.Context, ad co
 	return VerifyRuntimeDescriptor(verifier, ad.Runtime)
 }
 
-func (s *Service) verifyFederatedExportAdvertisement(ctx context.Context, ad core.ExportAdvertisement) error {
+func (s *Service) verifyFederatedExportAdvertisement(ctx context.Context, ad ExportAdvertisement) error {
 	if strings.TrimSpace(ad.Export.SignatureAlgorithm) == "" {
 		return nil
 	}
@@ -253,7 +253,7 @@ func (s *Service) verifyFederatedExportAdvertisement(ctx context.Context, ad cor
 	return VerifyExportDescriptor(verifier, ad.Export)
 }
 
-func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, *core.TransferRefusal, error) {
+func (s *Service) ForwardFederatedContext(ctx context.Context, req GatewayForwardRequest) (*GatewayForwardResult, *TransferRefusal, error) {
 	if s.Forwarder == nil {
 		return nil, nil, fmt.Errorf("gateway forwarder unavailable")
 	}
@@ -268,8 +268,8 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	}
 	if s.CircuitBreakers != nil {
 		if state, err := s.CircuitBreakers.GetState(ctx, req.TrustDomain); err == nil && state == CircuitOpen {
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalAdmissionClosed,
+			return nil, &TransferRefusal{
+				Code:    RefusalAdmissionClosed,
 				Message: fmt.Sprintf("circuit breaker open for trust domain %s", req.TrustDomain),
 				RetryAt: s.nowUTC().Add(30 * time.Second),
 			}, nil
@@ -293,7 +293,7 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 		return nil, nil, err
 	}
 	if result == nil {
-		result = &core.GatewayForwardResult{
+		result = &GatewayForwardResult{
 			TrustDomain:       req.TrustDomain,
 			DestinationExport: req.DestinationExport,
 			RouteMode:         req.RouteMode,
@@ -316,7 +316,7 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	if s.CircuitBreakers != nil {
 		_ = s.CircuitBreakers.RecordSuccess(ctx, req.TrustDomain, s.nowUTC())
 	}
-	s.emit(ctx, core.FrameworkEventFMPGatewayForwarded, req.GatewayIdentity, map[string]any{
+	s.emit(ctx, FrameworkEventFMPGatewayForwarded, req.GatewayIdentity, map[string]any{
 		"trust_domain":       req.TrustDomain,
 		"destination_export": req.DestinationExport,
 		"route_mode":         req.RouteMode,
@@ -325,8 +325,8 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	return result, nil, nil
 }
 
-func (s *Service) authorizeFederatedAdvertisement(ctx context.Context, gateway core.SubjectRef, trustDomain, sourceDomain string, routeMode core.RouteMode, sizeBytes int64) error {
-	req := core.GatewayForwardRequest{
+func (s *Service) authorizeFederatedAdvertisement(ctx context.Context, gateway identity.SubjectRef, trustDomain, sourceDomain string, routeMode RouteMode, sizeBytes int64) error {
+	req := GatewayForwardRequest{
 		TrustDomain:        trustDomain,
 		SourceDomain:       sourceDomain,
 		GatewayIdentity:    gateway,
@@ -334,7 +334,7 @@ func (s *Service) authorizeFederatedAdvertisement(ctx context.Context, gateway c
 		RouteMode:          routeMode,
 		SizeBytes:          sizeBytes,
 		ContextManifestRef: "discovery",
-		SealedContext: core.SealedContext{
+		SealedContext: SealedContext{
 			EnvelopeVersion:    "v1",
 			ContextManifestRef: "discovery",
 			CipherSuite:        "metadata-only",
@@ -347,10 +347,10 @@ func (s *Service) authorizeFederatedAdvertisement(ctx context.Context, gateway c
 	return nil
 }
 
-func (s *Service) authorizeFederatedForward(ctx context.Context, req core.GatewayForwardRequest) *core.TransferRefusal {
+func (s *Service) authorizeFederatedForward(ctx context.Context, req GatewayForwardRequest) *TransferRefusal {
 	lineage, tenantID, refusal, err := s.resolveForwardFederationContext(ctx, req)
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: err.Error()}
 	}
 	if refusal != nil {
 		return refusal
@@ -359,53 +359,53 @@ func (s *Service) authorizeFederatedForward(ctx context.Context, req core.Gatewa
 		return refusal
 	}
 	if lineage != nil && len(lineage.AllowedFederationTargets) > 0 && !containsFoldString(lineage.AllowedFederationTargets, req.TrustDomain) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "trust domain not allowed by lineage federation policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "trust domain not allowed by lineage federation policy"}
 	}
 	bundle, refusal, err := s.resolveActiveTrustBundle(ctx, req.TrustDomain)
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalUntrustedPeer, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalUntrustedPeer, Message: err.Error()}
 	}
 	if refusal != nil {
 		return refusal
 	}
 	policy, refusal, err := s.resolveBoundaryPolicy(ctx, req.TrustDomain)
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: err.Error()}
 	}
 	if refusal != nil {
 		return refusal
 	}
 	if policy.RequireGatewayAuthentication {
 		if !subjectAllowed(req.GatewayIdentity, bundle.GatewayIdentities) {
-			return &core.TransferRefusal{Code: core.RefusalUntrustedPeer, Message: "gateway identity not trusted for bundle"}
+			return &TransferRefusal{Code: RefusalUntrustedPeer, Message: "gateway identity not trusted for bundle"}
 		}
 	}
 	if len(policy.AcceptedSourceDomains) > 0 && !containsFoldString(policy.AcceptedSourceDomains, req.SourceDomain) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "source domain not allowed by boundary policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "source domain not allowed by boundary policy"}
 	}
 	if len(policy.AcceptedSourceIdentities) > 0 && !subjectAllowed(req.GatewayIdentity, policy.AcceptedSourceIdentities) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "gateway identity not allowed by boundary policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "gateway identity not allowed by boundary policy"}
 	}
 	if len(policy.AllowedRouteModes) > 0 && !containsRouteMode(policy.AllowedRouteModes, req.RouteMode) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "route mode not allowed by boundary policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "route mode not allowed by boundary policy"}
 	}
 	if req.MediationRequested && !policy.AllowMediation {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "mediation mode not allowed by boundary policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "mediation mode not allowed by boundary policy"}
 	}
 	if policy.MaxTransferBytes > 0 && req.SizeBytes > policy.MaxTransferBytes {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "transfer exceeds boundary policy budget"}
+		return &TransferRefusal{Code: RefusalTransferBudget, Message: "transfer exceeds boundary policy budget"}
 	}
 	return nil
 }
 
-func (s *Service) resolveForwardFederationContext(ctx context.Context, req core.GatewayForwardRequest) (*core.LineageRecord, string, *core.TransferRefusal, error) {
+func (s *Service) resolveForwardFederationContext(ctx context.Context, req GatewayForwardRequest) (*LineageRecord, string, *TransferRefusal, error) {
 	tenantID := strings.TrimSpace(req.TenantID)
 	if strings.EqualFold(strings.TrimSpace(req.DestinationExport), "discovery.import") {
 		return nil, "", nil, nil
 	}
 	if strings.TrimSpace(req.LineageID) == "" {
 		if tenantID == "" {
-			return nil, "", &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "tenant id required for federated forward"}, nil
+			return nil, "", &TransferRefusal{Code: RefusalUnauthorized, Message: "tenant id required for federated forward"}, nil
 		}
 		return nil, tenantID, nil, nil
 	}
@@ -417,15 +417,15 @@ func (s *Service) resolveForwardFederationContext(ctx context.Context, req core.
 		return nil, "", nil, err
 	}
 	if !ok {
-		return nil, "", &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "lineage not found for federated forward"}, nil
+		return nil, "", &TransferRefusal{Code: RefusalUnauthorized, Message: "lineage not found for federated forward"}, nil
 	}
 	if tenantID != "" && !strings.EqualFold(tenantID, lineage.TenantID) {
-		return nil, "", &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "tenant id does not match lineage tenant"}, nil
+		return nil, "", &TransferRefusal{Code: RefusalUnauthorized, Message: "tenant id does not match lineage tenant"}, nil
 	}
 	return lineage, lineage.TenantID, nil, nil
 }
 
-func (s *Service) resolveActiveTrustBundle(ctx context.Context, trustDomain string) (*core.TrustBundle, *core.TransferRefusal, error) {
+func (s *Service) resolveActiveTrustBundle(ctx context.Context, trustDomain string) (*TrustBundle, *TransferRefusal, error) {
 	if s.Trust == nil {
 		return nil, nil, fmt.Errorf("trust bundle store unavailable")
 	}
@@ -434,29 +434,29 @@ func (s *Service) resolveActiveTrustBundle(ctx context.Context, trustDomain stri
 		return nil, nil, err
 	}
 	if bundle == nil {
-		return nil, &core.TransferRefusal{Code: core.RefusalUntrustedPeer, Message: "trust bundle not found"}, nil
+		return nil, &TransferRefusal{Code: RefusalUntrustedPeer, Message: "trust bundle not found"}, nil
 	}
 	if !bundle.ExpiresAt.IsZero() && s.nowUTC().After(bundle.ExpiresAt) {
-		return nil, &core.TransferRefusal{Code: core.RefusalUntrustedPeer, Message: "trust bundle expired"}, nil
+		return nil, &TransferRefusal{Code: RefusalUntrustedPeer, Message: "trust bundle expired"}, nil
 	}
 	return bundle, nil, nil
 }
 
-func (s *Service) resolveBoundaryPolicy(ctx context.Context, trustDomain string) (*core.BoundaryPolicy, *core.TransferRefusal, error) {
+func (s *Service) resolveBoundaryPolicy(ctx context.Context, trustDomain string) (*BoundaryPolicy, *TransferRefusal, error) {
 	if s.Boundaries == nil {
-		return &core.BoundaryPolicy{TrustDomain: trustDomain}, nil, nil
+		return &BoundaryPolicy{TrustDomain: trustDomain}, nil, nil
 	}
 	policy, err := s.Boundaries.GetBoundaryPolicy(ctx, trustDomain)
 	if err != nil {
 		return nil, nil, err
 	}
 	if policy == nil {
-		return &core.BoundaryPolicy{TrustDomain: trustDomain}, nil, nil
+		return &BoundaryPolicy{TrustDomain: trustDomain}, nil, nil
 	}
 	return policy, nil, nil
 }
 
-func containsRouteMode(values []core.RouteMode, want core.RouteMode) bool {
+func containsRouteMode(values []RouteMode, want RouteMode) bool {
 	for _, value := range values {
 		if strings.EqualFold(string(value), string(want)) {
 			return true
@@ -465,7 +465,7 @@ func containsRouteMode(values []core.RouteMode, want core.RouteMode) bool {
 	return false
 }
 
-func subjectAllowed(subject core.SubjectRef, allowed []core.SubjectRef) bool {
+func subjectAllowed(subject identity.SubjectRef, allowed []identity.SubjectRef) bool {
 	for _, candidate := range allowed {
 		if candidate == subject {
 			return true

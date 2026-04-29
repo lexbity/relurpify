@@ -3,12 +3,10 @@ package fmp
 import (
 	"context"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type PortableContextPackage struct {
-	Manifest             core.ContextManifest `json:"manifest" yaml:"manifest"`
+	Manifest             ContextManifest `json:"manifest" yaml:"manifest"`
 	ExecutionPayload     []byte               `json:"execution_payload,omitempty" yaml:"execution_payload,omitempty"`
 	DeclarativeMemory    []byte               `json:"declarative_memory,omitempty" yaml:"declarative_memory,omitempty"`
 	ProceduralMemory     []byte               `json:"procedural_memory,omitempty" yaml:"procedural_memory,omitempty"`
@@ -17,33 +15,33 @@ type PortableContextPackage struct {
 }
 
 type ImportResult struct {
-	Attempt core.AttemptRecord `json:"attempt" yaml:"attempt"`
-	Receipt core.ResumeReceipt `json:"receipt" yaml:"receipt"`
+	Attempt AttemptRecord `json:"attempt" yaml:"attempt"`
+	Receipt ResumeReceipt `json:"receipt" yaml:"receipt"`
 }
 
 // RuntimeEndpoint is part of the Phase 1 frozen FMP surface.
 // The current implementation only partially exercises it; later phases should
 // drive real runtime validation/import/receipt behavior through this interface.
 type RuntimeEndpoint interface {
-	Descriptor(ctx context.Context) (core.RuntimeDescriptor, error)
-	ExportContext(ctx context.Context, lineage core.LineageRecord, attempt core.AttemptRecord) (*PortableContextPackage, error)
-	ValidateContext(ctx context.Context, manifest core.ContextManifest, sealed core.SealedContext) error
-	ImportContext(ctx context.Context, lineage core.LineageRecord, manifest core.ContextManifest, sealed core.SealedContext) (*PortableContextPackage, error)
-	CreateAttempt(ctx context.Context, lineage core.LineageRecord, accept core.HandoffAccept, pkg *PortableContextPackage) (*core.AttemptRecord, error)
-	FenceAttempt(ctx context.Context, notice core.FenceNotice) error
-	IssueReceipt(ctx context.Context, lineage core.LineageRecord, attempt core.AttemptRecord, pkg *PortableContextPackage) (*core.ResumeReceipt, error)
+	Descriptor(ctx context.Context) (RuntimeDescriptor, error)
+	ExportContext(ctx context.Context, lineage LineageRecord, attempt AttemptRecord) (*PortableContextPackage, error)
+	ValidateContext(ctx context.Context, manifest ContextManifest, sealed SealedContext) error
+	ImportContext(ctx context.Context, lineage LineageRecord, manifest ContextManifest, sealed SealedContext) (*PortableContextPackage, error)
+	CreateAttempt(ctx context.Context, lineage LineageRecord, accept HandoffAccept, pkg *PortableContextPackage) (*AttemptRecord, error)
+	FenceAttempt(ctx context.Context, notice FenceNotice) error
+	IssueReceipt(ctx context.Context, lineage LineageRecord, attempt AttemptRecord, pkg *PortableContextPackage) (*ResumeReceipt, error)
 }
 
 // CapabilityProjector is the policy projection seam preserved across the
 // closure phases so stricter policy logic can replace the current narrowing
 // behavior without service churn.
 type CapabilityProjector interface {
-	Project(ctx context.Context, lineage core.LineageRecord, destination core.ExportDescriptor) (core.CapabilityEnvelope, error)
+	Project(ctx context.Context, lineage LineageRecord, destination ExportDescriptor) (CapabilityEnvelope, error)
 }
 
 type StrictCapabilityProjector struct{}
 
-func (StrictCapabilityProjector) Project(_ context.Context, lineage core.LineageRecord, destination core.ExportDescriptor) (core.CapabilityEnvelope, error) {
+func (StrictCapabilityProjector) Project(_ context.Context, lineage LineageRecord, destination ExportDescriptor) (CapabilityEnvelope, error) {
 	projected := lineage.CapabilityEnvelope
 	if len(destination.AllowedCapabilityIDs) > 0 {
 		projected.AllowedCapabilityIDs = intersectFold(projected.AllowedCapabilityIDs, destination.AllowedCapabilityIDs)
@@ -55,12 +53,12 @@ func (StrictCapabilityProjector) Project(_ context.Context, lineage core.Lineage
 		projected.AllowOnwardExport = projected.AllowOnwardExport && *destination.AllowOnwardTransfer
 	}
 	if err := projected.Validate(); err != nil {
-		return core.CapabilityEnvelope{}, err
+		return CapabilityEnvelope{}, err
 	}
 	return projected, nil
 }
 
-func capabilityEnvelopeSubset(requested, baseline core.CapabilityEnvelope) bool {
+func capabilityEnvelopeSubset(requested, baseline CapabilityEnvelope) bool {
 	if !subsetFold(requested.AllowedCapabilityIDs, baseline.AllowedCapabilityIDs) {
 		return false
 	}

@@ -5,24 +5,30 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
+
+type testRuntimeStore struct{}
+
+func (testRuntimeStore) QueryWorkflowRuntime(context.Context, string, string) (map[string]any, error) {
+	return map[string]any{"status": "ok"}, nil
+}
 
 func TestServiceOpenChunkTransferAndReadWithAck(t *testing.T) {
 	t.Parallel()
 
-	lineage := core.LineageRecord{
+	lineage := LineageRecord{
 		LineageID:    "lineage-1",
 		TenantID:     "tenant-1",
 		TaskClass:    "agent.run",
 		ContextClass: "workflow-runtime",
-		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		Owner:        identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "svc-1"},
 	}
-	attempt := core.AttemptRecord{
+	attempt := AttemptRecord{
 		AttemptID: "attempt-1",
 		LineageID: lineage.LineageID,
 		RuntimeID: "rt-1",
-		State:     core.AttemptStateRunning,
+		State:     AttemptStateRunning,
 		StartTime: time.Now().UTC(),
 	}
 	store := &InMemoryOwnershipStore{}
@@ -33,8 +39,8 @@ func TestServiceOpenChunkTransferAndReadWithAck(t *testing.T) {
 		t.Fatalf("UpsertAttempt() error = %v", err)
 	}
 	packager := JSONPackager{
-		RuntimeStore:    fakeWorkflowRuntimeStore{},
-		KeyResolver:     testRecipientKeys(),
+		RuntimeStore:    testRuntimeStore{},
+		KeyResolver:     StaticRecipientKeyResolver{"runtime://mesh-a/node-1/rt-1": []byte("0123456789abcdef")},
 		LocalRecipient:  "runtime://mesh-a/node-1/rt-1",
 		InlineThreshold: 8,
 		ChunkSize:       16,
@@ -97,18 +103,18 @@ func TestInMemoryChunkTransferManagerAppliesBackpressure(t *testing.T) {
 
 	manager := &InMemoryChunkTransferManager{DefaultWindow: 1}
 	now := time.Now().UTC()
-	manifest := core.ContextManifest{
+	manifest := ContextManifest{
 		ContextID:      "ctx-1",
 		LineageID:      "lineage-1",
 		AttemptID:      "attempt-1",
 		ContextClass:   "workflow-runtime",
 		SchemaVersion:  "fmp.context.v1",
 		ContentHash:    "abc123",
-		TransferMode:   core.TransferModeChunked,
-		EncryptionMode: core.EncryptionModeEndToEnd,
+		TransferMode:   TransferModeChunked,
+		EncryptionMode: EncryptionModeEndToEnd,
 		ChunkCount:     2,
 	}
-	sealed := core.SealedContext{
+	sealed := SealedContext{
 		EnvelopeVersion:    "fmp.sealed.v1",
 		ContextManifestRef: manifest.ContextID,
 		CipherSuite:        "aes-gcm-256",
@@ -141,30 +147,30 @@ func TestInMemoryChunkTransferManagerAppliesBackpressure(t *testing.T) {
 func TestServiceCancelChunkTransfer(t *testing.T) {
 	t.Parallel()
 
-	lineage := core.LineageRecord{
+	lineage := LineageRecord{
 		LineageID:    "lineage-1",
 		TenantID:     "tenant-1",
 		TaskClass:    "agent.run",
 		ContextClass: "workflow-runtime",
-		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		Owner:        identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "svc-1"},
 	}
 	store := &InMemoryOwnershipStore{}
 	if err := store.CreateLineage(context.Background(), lineage); err != nil {
 		t.Fatalf("CreateLineage() error = %v", err)
 	}
 	manager := &InMemoryChunkTransferManager{DefaultWindow: 1}
-	manifest := core.ContextManifest{
+	manifest := ContextManifest{
 		ContextID:      "ctx-1",
 		LineageID:      lineage.LineageID,
 		AttemptID:      "attempt-1",
 		ContextClass:   "workflow-runtime",
 		SchemaVersion:  "fmp.context.v1",
 		ContentHash:    "abc123",
-		TransferMode:   core.TransferModeChunked,
-		EncryptionMode: core.EncryptionModeEndToEnd,
+		TransferMode:   TransferModeChunked,
+		EncryptionMode: EncryptionModeEndToEnd,
 		ChunkCount:     1,
 	}
-	sealed := core.SealedContext{
+	sealed := SealedContext{
 		EnvelopeVersion:    "fmp.sealed.v1",
 		ContextManifestRef: manifest.ContextID,
 		CipherSuite:        "aes-gcm-256",

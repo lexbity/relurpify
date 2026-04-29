@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type Service struct {
@@ -44,9 +45,9 @@ type Service struct {
 }
 
 type ExecutedHandoff struct {
-	Accept  core.HandoffAccept      `json:"accept" yaml:"accept"`
-	Attempt core.AttemptRecord      `json:"attempt" yaml:"attempt"`
-	Receipt core.ResumeReceipt      `json:"receipt" yaml:"receipt"`
+	Accept  HandoffAccept           `json:"accept" yaml:"accept"`
+	Attempt AttemptRecord           `json:"attempt" yaml:"attempt"`
+	Receipt ResumeReceipt           `json:"receipt" yaml:"receipt"`
 	Package *PortableContextPackage `json:"package,omitempty" yaml:"package,omitempty"`
 }
 
@@ -65,7 +66,7 @@ type GCResult struct {
 	Errors         int `json:"errors"`
 }
 
-func (s *Service) OpenChunkTransfer(ctx context.Context, lineageID string, manifest core.ContextManifest, sealed core.SealedContext) (*ChunkTransferSession, error) {
+func (s *Service) OpenChunkTransfer(ctx context.Context, lineageID string, manifest ContextManifest, sealed SealedContext) (*ChunkTransferSession, error) {
 	if s.Transfers == nil {
 		return nil, fmt.Errorf("chunk transfer manager unavailable")
 	}
@@ -74,7 +75,7 @@ func (s *Service) OpenChunkTransfer(ctx context.Context, lineageID string, manif
 		return nil, err
 	}
 	if lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID); err == nil && ok {
-		s.emit(ctx, core.FrameworkEventFMPChunkOpened, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPChunkOpened, lineage.Owner, map[string]any{
 			"lineage_id":   lineageID,
 			"transfer_id":  session.TransferID,
 			"manifest_ref": session.ManifestRef,
@@ -100,7 +101,7 @@ func (s *Service) AckChunkTransfer(ctx context.Context, lineageID string, ack Ch
 		return nil, err
 	}
 	if lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID); err == nil && ok {
-		s.emit(ctx, core.FrameworkEventFMPChunkAcked, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPChunkAcked, lineage.Owner, map[string]any{
 			"lineage_id":  lineageID,
 			"transfer_id": ack.TransferID,
 			"acked_index": ack.AckedIndex,
@@ -119,7 +120,7 @@ func (s *Service) CancelChunkTransfer(ctx context.Context, lineageID, transferID
 		return err
 	}
 	if lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID); err == nil && ok {
-		s.emit(ctx, core.FrameworkEventFMPChunkCancelled, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPChunkCancelled, lineage.Owner, map[string]any{
 			"lineage_id":  lineageID,
 			"transfer_id": transferID,
 			"reason":      reason,
@@ -128,7 +129,7 @@ func (s *Service) CancelChunkTransfer(ctx context.Context, lineageID, transferID
 	return nil
 }
 
-func (s *Service) CreateLineage(ctx context.Context, lineage core.LineageRecord) error {
+func (s *Service) CreateLineage(ctx context.Context, lineage LineageRecord) error {
 	if s.Ownership == nil {
 		return fmt.Errorf("ownership store unavailable")
 	}
@@ -142,14 +143,14 @@ func (s *Service) CreateLineage(ctx context.Context, lineage core.LineageRecord)
 	if err := s.Ownership.CreateLineage(ctx, lineage); err != nil {
 		return err
 	}
-	s.emit(ctx, core.FrameworkEventFMPLineageCreated, lineage.Owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPLineageCreated, lineage.Owner, map[string]any{
 		"lineage_id": lineage.LineageID,
 		"task_class": lineage.TaskClass,
 	})
 	return nil
 }
 
-func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destinationExport, issuer string, query RuntimeQuery) (*core.HandoffOffer, *PortableContextPackage, *core.SealedContext, error) {
+func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destinationExport, issuer string, query RuntimeQuery) (*HandoffOffer, *PortableContextPackage, *SealedContext, error) {
 	if s.Ownership == nil || s.Packager == nil {
 		return nil, nil, nil, fmt.Errorf("fmp service not configured")
 	}
@@ -190,7 +191,7 @@ func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destin
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	offer := &core.HandoffOffer{
+	offer := &HandoffOffer{
 		OfferID:                       lease.LeaseID,
 		LineageID:                     lineageID,
 		SourceAttemptID:               attemptID,
@@ -211,25 +212,25 @@ func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destin
 	if err := offer.Validate(); err != nil {
 		return nil, nil, nil, err
 	}
-	attempt.State = core.AttemptStateHandoffOffered
+	attempt.State = AttemptStateHandoffOffered
 	attempt.LeaseID = lease.LeaseID
 	attempt.LeaseExpiry = lease.Expiry
 	attempt.LastProgressTime = s.nowUTC()
 	if err := s.Ownership.UpsertAttempt(ctx, *attempt); err != nil {
 		return nil, nil, nil, err
 	}
-	s.emit(ctx, core.FrameworkEventFMPLeaseIssued, lineage.Owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPLeaseIssued, lineage.Owner, map[string]any{
 		"lineage_id": lineageID,
 		"lease_id":   lease.LeaseID,
 	})
-	s.emit(ctx, core.FrameworkEventFMPHandoffOffered, lineage.Owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPHandoffOffered, lineage.Owner, map[string]any{
 		"lineage_id": lineageID,
 		"offer_id":   offer.OfferID,
 	})
 	return offer, pkg, sealed, nil
 }
 
-func (s *Service) AcceptHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string) (*core.HandoffAccept, error) {
+func (s *Service) AcceptHandoff(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID string) (*HandoffAccept, error) {
 	accept, refusal, err := s.TryAcceptHandoff(ctx, offer, destination, runtimeID)
 	if err != nil {
 		return nil, err
@@ -241,28 +242,28 @@ func (s *Service) AcceptHandoff(ctx context.Context, offer core.HandoffOffer, de
 	return accept, nil
 }
 
-func (s *Service) TryAcceptHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string) (*core.HandoffAccept, *core.TransferRefusal, error) {
+func (s *Service) TryAcceptHandoff(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID string) (*HandoffAccept, *TransferRefusal, error) {
 	return s.tryAcceptHandoff(ctx, offer, destination, runtimeID, nil)
 }
 
-func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string, actor *AuthorizedActor) (*core.HandoffAccept, *core.TransferRefusal, error) {
+func (s *Service) tryAcceptHandoff(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID string, actor *AuthorizedActor) (*HandoffAccept, *TransferRefusal, error) {
 	if err := offer.Validate(); err != nil {
 		return nil, nil, err
 	}
 	if err := VerifyLeaseToken(s.Verifier, offer.LeaseToken); err != nil {
-		return nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+		return nil, &TransferRefusal{Code: RefusalUnauthorized, Message: err.Error()}, nil
 	}
 	if err := VerifyHandoffOffer(s.Verifier, offer); err != nil {
-		return nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+		return nil, &TransferRefusal{Code: RefusalUnauthorized, Message: err.Error()}, nil
 	}
 	if err := s.Ownership.ValidateLease(ctx, offer.LeaseToken, s.nowUTC()); err != nil {
-		return nil, &core.TransferRefusal{Code: core.RefusalInvalidLease, Message: err.Error()}, nil
+		return nil, &TransferRefusal{Code: RefusalInvalidLease, Message: err.Error()}, nil
 	}
 	// Phase 6.2: Check for stale fencing epoch
 	if sourceAttempt, ok, err := s.Ownership.GetAttempt(ctx, offer.SourceAttemptID); err == nil && ok {
 		if offer.LeaseToken.FencingEpoch < sourceAttempt.FencingEpoch {
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalStaleEpoch,
+			return nil, &TransferRefusal{
+				Code:    RefusalStaleEpoch,
 				Message: fmt.Sprintf("offer epoch %d predates current fencing epoch %d", offer.LeaseToken.FencingEpoch, sourceAttempt.FencingEpoch),
 			}, nil
 		}
@@ -291,8 +292,8 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 			return nil, nil, err
 		}
 		if !created && !matchingOfferReservation(existing, reservation) {
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalDuplicateHandoff,
+			return nil, &TransferRefusal{
+				Code:    RefusalDuplicateHandoff,
 				Message: fmt.Sprintf("offer %s already reserved for runtime %s", offer.OfferID, existing.RuntimeID),
 			}, nil
 		}
@@ -309,8 +310,8 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 			if strings.EqualFold(strings.TrimSpace(attempt.AttemptID), strings.TrimSpace(provisionalAttemptID)) {
 				continue
 			}
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalDuplicateHandoff,
+			return nil, &TransferRefusal{
+				Code:    RefusalDuplicateHandoff,
 				Message: fmt.Sprintf("lineage %s already has an active handoff attempt %s", offer.LineageID, attempt.AttemptID),
 			}, nil
 		}
@@ -318,8 +319,8 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		if active, err := checker.HasActiveAttemptForLineage(ctx, offer.LineageID); err != nil {
 			return nil, nil, err
 		} else if active {
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalDuplicateHandoff,
+			return nil, &TransferRefusal{
+				Code:    RefusalDuplicateHandoff,
 				Message: fmt.Sprintf("lineage %s already has an active handoff attempt", offer.LineageID),
 			}, nil
 		}
@@ -339,7 +340,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		return nil, refusal, err
 	}
 	if refusal := s.validateRuntimeImportEligibility(runtimeDescriptor); refusal != nil {
-		s.emit(ctx, core.FrameworkEventFMPRolloutBlocked, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPRolloutBlocked, lineage.Owner, map[string]any{
 			"lineage_id": offer.LineageID,
 			"offer_id":   offer.OfferID,
 			"runtime_id": runtimeDescriptor.RuntimeID,
@@ -375,7 +376,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		}
 		if decision.Effect != "allow" {
 			refusal := policyDecisionRefusal(decision)
-			s.emit(ctx, core.FrameworkEventFMPPolicyDenied, lineage.Owner, map[string]any{
+			s.emit(ctx, FrameworkEventFMPPolicyDenied, lineage.Owner, map[string]any{
 				"lineage_id": offer.LineageID,
 				"offer_id":   offer.OfferID,
 				"reason":     decision.Reason,
@@ -395,7 +396,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 			return nil, nil, err
 		}
 	}
-	accept := &core.HandoffAccept{
+	accept := &HandoffAccept{
 		OfferID:                      offer.OfferID,
 		DestinationRuntimeID:         runtimeID,
 		AcceptedContextClass:         offer.ContextClass,
@@ -411,8 +412,8 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	}
 	// Phase 6.3: Check partition state before accepting new handoffs
 	if s.isPartitioned() {
-		return nil, &core.TransferRefusal{
-			Code:    core.RefusalAdmissionClosed,
+		return nil, &TransferRefusal{
+			Code:    RefusalAdmissionClosed,
 			Message: "ownership store partitioned: no new handoffs accepted",
 			RetryAt: s.nowUTC().Add(30 * time.Second),
 		}, nil
@@ -421,8 +422,8 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if s.CircuitBreakers != nil {
 		trustDomain := trustDomainForOffer(destination, offer)
 		if state, err := s.CircuitBreakers.GetState(ctx, trustDomain); err == nil && state == CircuitOpen {
-			return nil, &core.TransferRefusal{
-				Code:    core.RefusalAdmissionClosed,
+			return nil, &TransferRefusal{
+				Code:    RefusalAdmissionClosed,
 				Message: fmt.Sprintf("circuit breaker open for trust domain %s", trustDomain),
 				RetryAt: s.nowUTC().Add(30 * time.Second),
 			}, nil
@@ -431,7 +432,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if refusal := s.reserveResumeSlot(ctx, accept.ProvisionalAttemptID, offer.ContextSizeBytes); refusal != nil {
 		return nil, refusal, nil
 	}
-	s.emit(ctx, core.FrameworkEventFMPHandoffAccepted, lineage.Owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPHandoffAccepted, lineage.Owner, map[string]any{
 		"lineage_id": offer.LineageID,
 		"offer_id":   offer.OfferID,
 		"runtime_id": runtimeID,
@@ -439,7 +440,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	return accept, nil, nil
 }
 
-func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, accept core.HandoffAccept, receipt core.ResumeReceipt) (*core.ResumeCommit, error) {
+func (s *Service) CommitHandoff(ctx context.Context, offer HandoffOffer, accept HandoffAccept, receipt ResumeReceipt) (*ResumeCommit, error) {
 	if err := offer.Validate(); err != nil {
 		return nil, err
 	}
@@ -455,7 +456,7 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 	if err := VerifyResumeReceipt(s.Verifier, receipt); err != nil {
 		return nil, err
 	}
-	commit := &core.ResumeCommit{
+	commit := &ResumeCommit{
 		LineageID:            offer.LineageID,
 		OldAttemptID:         offer.SourceAttemptID,
 		NewAttemptID:         accept.ProvisionalAttemptID,
@@ -470,7 +471,7 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 		return nil, err
 	}
 	s.releaseResumeSlot(ctx, accept.ProvisionalAttemptID)
-	notice := core.FenceNotice{
+	notice := FenceNotice{
 		LineageID:    offer.LineageID,
 		AttemptID:    offer.SourceAttemptID,
 		FencingEpoch: offer.LeaseToken.FencingEpoch,
@@ -491,12 +492,12 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 	}
 	lineage, ok, err := s.Ownership.GetLineage(ctx, offer.LineageID)
 	if err == nil && ok {
-		s.emit(ctx, core.FrameworkEventFMPResumeCommitted, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPResumeCommitted, lineage.Owner, map[string]any{
 			"lineage_id":  offer.LineageID,
 			"old_attempt": offer.SourceAttemptID,
 			"new_attempt": accept.ProvisionalAttemptID,
 		})
-		s.emit(ctx, core.FrameworkEventFMPFenceIssued, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPFenceIssued, lineage.Owner, map[string]any{
 			"lineage_id": offer.LineageID,
 			"attempt_id": offer.SourceAttemptID,
 			"epoch":      notice.FencingEpoch,
@@ -541,7 +542,7 @@ func (s *Service) ReconcileExpiredLeases(ctx context.Context) (ReconcileLeaseRes
 
 		// Skip if already terminal
 		switch attempt.State {
-		case core.AttemptStateFenced, core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote:
+		case AttemptStateFenced, AttemptStateCompleted, AttemptStateFailed, AttemptStateOrphaned, AttemptStateCommittedRemote:
 			result.Skipped++
 			continue
 		}
@@ -556,7 +557,7 @@ func (s *Service) ReconcileExpiredLeases(ctx context.Context) (ReconcileLeaseRes
 		}
 
 		// No commit exists: fence the source attempt and mark as orphaned
-		notice := core.FenceNotice{
+		notice := FenceNotice{
 			LineageID:    token.LineageID,
 			AttemptID:    token.AttemptID,
 			FencingEpoch: token.FencingEpoch,
@@ -574,7 +575,7 @@ func (s *Service) ReconcileExpiredLeases(ctx context.Context) (ReconcileLeaseRes
 		}
 
 		// Upsert the attempt as ORPHANED
-		attempt.State = core.AttemptStateOrphaned
+		attempt.State = AttemptStateOrphaned
 		attempt.Fenced = true
 		attempt.FencingEpoch = notice.FencingEpoch
 		if err := s.Ownership.UpsertAttempt(ctx, *attempt); err != nil {
@@ -583,7 +584,7 @@ func (s *Service) ReconcileExpiredLeases(ctx context.Context) (ReconcileLeaseRes
 		}
 
 		// Emit event
-		s.emit(ctx, core.FrameworkEventFMPFenceIssued, core.SubjectRef{}, map[string]any{
+		s.emit(ctx, FrameworkEventFMPFenceIssued, identity.SubjectRef{}, map[string]any{
 			"lineage_id": token.LineageID,
 			"attempt_id": token.AttemptID,
 			"epoch":      notice.FencingEpoch,
@@ -624,7 +625,7 @@ func (s *Service) GCContextObjects(ctx context.Context) (GCResult, error) {
 
 // ReconcileAttemptFromOutcome updates FMP attempt state based on Rex reconciliation outcome.
 // This bridges reconciliation decisions back to FMP ownership tracking.
-func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID string, outcome *reconcile.Record) (*core.AttemptRecord, error) {
+func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID string, outcome *reconcile.Record) (*AttemptRecord, error) {
 	if outcome == nil {
 		return nil, nil
 	}
@@ -647,19 +648,19 @@ func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID str
 	}
 
 	// Map reconciliation status to attempt state
-	var newState core.AttemptState
+	var newState AttemptState
 	switch outcome.Status {
 	case reconcile.StatusTerminal:
-		newState = core.AttemptStateFailed
+		newState = AttemptStateFailed
 	case reconcile.StatusVerified:
-		newState = core.AttemptStateCompleted
+		newState = AttemptStateCompleted
 	case reconcile.StatusRepaired:
-		newState = core.AttemptStateCompleted
+		newState = AttemptStateCompleted
 	case reconcile.StatusOperatorReview:
 		// Keep the current state
 		newState = attempt.State
 	default:
-		newState = core.AttemptStateFailed
+		newState = AttemptStateFailed
 	}
 
 	// Update the attempt
@@ -671,7 +672,7 @@ func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID str
 	}
 
 	// Emit reconciliation outcome event
-	s.emit(ctx, core.FrameworkEventFMPReconciliationOutcome, lineage.Owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPReconciliationOutcome, lineage.Owner, map[string]any{
 		"lineage_id":       lineageID,
 		"attempt_id":       attemptID,
 		"outcome_status":   outcome.Status,
@@ -682,11 +683,11 @@ func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID str
 	return attempt, nil
 }
 
-func (s *Service) ResumeHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string, manifest core.ContextManifest, sealed core.SealedContext) (*ExecutedHandoff, *core.ResumeCommit, *core.TransferRefusal, error) {
+func (s *Service) ResumeHandoff(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID string, manifest ContextManifest, sealed SealedContext) (*ExecutedHandoff, *ResumeCommit, *TransferRefusal, error) {
 	return s.resumeHandoff(ctx, offer, destination, runtimeID, manifest, sealed, nil, "")
 }
 
-func (s *Service) ResumeHandoffForNode(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID, nodeID string, actor core.SubjectRef, manifest core.ContextManifest, sealed core.SealedContext) (*ExecutedHandoff, *core.ResumeCommit, *AuthorizedActor, *core.TransferRefusal, error) {
+func (s *Service) ResumeHandoffForNode(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID, nodeID string, actor identity.SubjectRef, manifest ContextManifest, sealed SealedContext) (*ExecutedHandoff, *ResumeCommit, *AuthorizedActor, *TransferRefusal, error) {
 	authorized, err := s.AuthorizeResumeActor(ctx, offer.LineageID, actor, core.SessionOperationResume)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -698,13 +699,13 @@ func (s *Service) ResumeHandoffForNode(ctx context.Context, offer core.HandoffOf
 	return executed, commit, authorized, nil, nil
 }
 
-func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string, manifest core.ContextManifest, sealed core.SealedContext, authorized *AuthorizedActor, nodeID string) (*ExecutedHandoff, *core.ResumeCommit, *core.TransferRefusal, error) {
+func (s *Service) resumeHandoff(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID string, manifest ContextManifest, sealed SealedContext, authorized *AuthorizedActor, nodeID string) (*ExecutedHandoff, *ResumeCommit, *TransferRefusal, error) {
 	if s.Runtime == nil {
 		return nil, nil, nil, fmt.Errorf("runtime endpoint unavailable")
 	}
 	var (
-		accept  *core.HandoffAccept
-		refusal *core.TransferRefusal
+		accept  *HandoffAccept
+		refusal *TransferRefusal
 		err     error
 	)
 	if authorized != nil {
@@ -725,7 +726,7 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 		return nil, nil, nil, err
 	}
 	if err := VerifyContextManifest(s.Verifier, manifest); err != nil {
-		return nil, nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+		return nil, nil, &TransferRefusal{Code: RefusalUnauthorized, Message: err.Error()}, nil
 	}
 	if err := sealed.Validate(); err != nil {
 		return nil, nil, nil, err
@@ -735,7 +736,7 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	}
 	if descriptor, err := s.Runtime.Descriptor(ctx); err == nil {
 		if compatErr := ValidateImportedContextCompatibility(descriptor, manifest, sealed); compatErr != nil {
-			return nil, nil, &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: compatErr.Error()}, nil
+			return nil, nil, &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: compatErr.Error()}, nil
 		}
 		// Phase 6.4: Check version skew against compatibility window
 		if s.CompatibilityWindows != nil {
@@ -787,7 +788,7 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 		attempt.RuntimeID = accept.DestinationRuntimeID
 	}
 	if attempt.State == "" {
-		attempt.State = core.AttemptStateResumePending
+		attempt.State = AttemptStateResumePending
 	}
 	if attempt.StartTime.IsZero() {
 		attempt.StartTime = s.nowUTC()
@@ -830,11 +831,11 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	if err := validateReceiptForCommit(offer, *accept, manifest, *receipt); err != nil {
 		return nil, nil, nil, err
 	}
-	if receipt.Status != core.ReceiptStatusRunning {
-		return nil, nil, &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: fmt.Sprintf("runtime receipt status %s does not allow commit", receipt.Status)}, nil
+	if receipt.Status != ReceiptStatusRunning {
+		return nil, nil, &TransferRefusal{Code: RefusalAdmissionClosed, Message: fmt.Sprintf("runtime receipt status %s does not allow commit", receipt.Status)}, nil
 	}
 	if authorized != nil {
-		s.emit(ctx, core.FrameworkEventFMPContinuationBound, lineage.Owner, map[string]any{
+		s.emit(ctx, FrameworkEventFMPContinuationBound, lineage.Owner, map[string]any{
 			"lineage_id":         lineage.LineageID,
 			"tenant_id":          lineage.TenantID,
 			"session_id":         lineage.SessionID,
@@ -874,7 +875,7 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	}, commit, nil, nil
 }
 
-func (s *Service) validateContinuationAuthority(ctx context.Context, lineage core.LineageRecord, authorized AuthorizedActor, nodeID, runtimeID string) error {
+func (s *Service) validateContinuationAuthority(ctx context.Context, lineage LineageRecord, authorized AuthorizedActor, nodeID, runtimeID string) error {
 	if err := s.ensureTenantAndOwner(ctx, lineage.TenantID, lineage.Owner); err != nil {
 		return err
 	}
@@ -889,7 +890,7 @@ func (s *Service) validateContinuationAuthority(ctx context.Context, lineage cor
 		if !strings.EqualFold(boundary.TenantID, lineage.TenantID) {
 			return fmt.Errorf("session %s tenant %s does not match lineage tenant %s", lineage.SessionID, boundary.TenantID, lineage.TenantID)
 		}
-		if boundary.Owner != lineage.Owner {
+		if !subjectRefsEqual(subjectRefFromDelegation(boundary.Owner), lineage.Owner) {
 			return fmt.Errorf("session %s owner changed for lineage %s", lineage.SessionID, lineage.LineageID)
 		}
 		if boundary.TrustClass != "" && lineage.TrustClass != "" && boundary.TrustClass != lineage.TrustClass {
@@ -904,7 +905,7 @@ func (s *Service) validateContinuationAuthority(ctx context.Context, lineage cor
 			eventActor := core.EventActor{
 				ID:          authorized.Subject.ID,
 				TenantID:    authorized.Subject.TenantID,
-				SubjectKind: authorized.Subject.Kind,
+				SubjectKind: string(authorized.Subject.Kind),
 			}
 			for _, delegation := range delegations {
 				if delegation.Allows(eventActor, core.SessionOperationResume, s.nowUTC()) {
@@ -946,7 +947,7 @@ func (s *Service) isPartitioned() bool {
 }
 
 // listLiveNodeAds returns node advertisements, filtering expired entries if LiveDiscoveryStore is available.
-func (s *Service) listLiveNodeAds(ctx context.Context) ([]core.NodeAdvertisement, error) {
+func (s *Service) listLiveNodeAds(ctx context.Context) ([]NodeAdvertisement, error) {
 	if s.Discovery == nil {
 		return nil, nil
 	}
@@ -957,7 +958,7 @@ func (s *Service) listLiveNodeAds(ctx context.Context) ([]core.NodeAdvertisement
 }
 
 // listLiveRuntimeAds returns runtime advertisements, filtering expired entries if LiveDiscoveryStore is available.
-func (s *Service) listLiveRuntimeAds(ctx context.Context) ([]core.RuntimeAdvertisement, error) {
+func (s *Service) listLiveRuntimeAds(ctx context.Context) ([]RuntimeAdvertisement, error) {
 	if s.Discovery == nil {
 		return nil, nil
 	}
@@ -968,7 +969,7 @@ func (s *Service) listLiveRuntimeAds(ctx context.Context) ([]core.RuntimeAdverti
 }
 
 // listLiveExportAds returns export advertisements, filtering expired entries if LiveDiscoveryStore is available.
-func (s *Service) listLiveExportAds(ctx context.Context) ([]core.ExportAdvertisement, error) {
+func (s *Service) listLiveExportAds(ctx context.Context) ([]ExportAdvertisement, error) {
 	if s.Discovery == nil {
 		return nil, nil
 	}
@@ -1004,7 +1005,7 @@ func matchingOfferReservation(existing *HandoffOfferReservation, current Handoff
 		existing.FencingEpoch == current.FencingEpoch
 }
 
-func (s *Service) emit(ctx context.Context, eventType string, owner core.SubjectRef, payload map[string]any) {
+func (s *Service) emit(ctx context.Context, eventType string, owner identity.SubjectRef, payload map[string]any) {
 	if s == nil {
 		return
 	}
@@ -1023,12 +1024,12 @@ func (s *Service) emit(ctx context.Context, eventType string, owner core.Subject
 			Kind:        string(owner.Kind),
 			ID:          owner.ID,
 			TenantID:    owner.TenantID,
-			SubjectKind: owner.Kind,
+			SubjectKind: string(owner.Kind),
 		},
 	}})
 }
 
-func (s *Service) AdvertiseNode(ctx context.Context, ad core.NodeAdvertisement) error {
+func (s *Service) AdvertiseNode(ctx context.Context, ad NodeAdvertisement) error {
 	if s.Discovery == nil {
 		return fmt.Errorf("discovery store unavailable")
 	}
@@ -1038,7 +1039,7 @@ func (s *Service) AdvertiseNode(ctx context.Context, ad core.NodeAdvertisement) 
 	return s.Discovery.UpsertNodeAdvertisement(ctx, ad)
 }
 
-func (s *Service) AdvertiseRuntime(ctx context.Context, ad core.RuntimeAdvertisement) error {
+func (s *Service) AdvertiseRuntime(ctx context.Context, ad RuntimeAdvertisement) error {
 	if s.Discovery == nil {
 		return fmt.Errorf("discovery store unavailable")
 	}
@@ -1057,7 +1058,7 @@ func (s *Service) AdvertiseRuntime(ctx context.Context, ad core.RuntimeAdvertise
 	return s.Discovery.UpsertRuntimeAdvertisement(ctx, ad)
 }
 
-func (s *Service) AdvertiseExport(ctx context.Context, ad core.ExportAdvertisement) error {
+func (s *Service) AdvertiseExport(ctx context.Context, ad ExportAdvertisement) error {
 	if s.Discovery == nil {
 		return fmt.Errorf("discovery store unavailable")
 	}
@@ -1098,7 +1099,7 @@ func (s *Service) ResolveRoutes(ctx context.Context, req RouteSelectionRequest) 
 	if err != nil {
 		return nil, err
 	}
-	runtimeByQualified := make(map[string]core.RuntimeAdvertisement, len(runtimes))
+	runtimeByQualified := make(map[string]RuntimeAdvertisement, len(runtimes))
 	for _, runtime := range runtimes {
 		runtimeByQualified[qualifiedRuntimeName(runtime.TrustDomain, runtime.Runtime.RuntimeID)] = runtime
 	}
@@ -1144,7 +1145,7 @@ func (s *Service) ResolveRoutes(ctx context.Context, req RouteSelectionRequest) 
 			continue
 		}
 		if refusal := s.validateRuntimeImportEligibility(runtimeAd.Runtime); refusal != nil {
-			s.emit(ctx, core.FrameworkEventFMPRolloutBlocked, core.SubjectRef{}, map[string]any{
+			s.emit(ctx, FrameworkEventFMPRolloutBlocked, identity.SubjectRef{}, map[string]any{
 				"runtime_id":   runtimeAd.Runtime.RuntimeID,
 				"node_id":      runtimeAd.Runtime.NodeID,
 				"trust_domain": ad.TrustDomain,
@@ -1180,7 +1181,7 @@ func (s *Service) ResolveRoutes(ctx context.Context, req RouteSelectionRequest) 
 	return candidates, nil
 }
 
-func (s *Service) resolveRouteSelectionLineage(ctx context.Context, req RouteSelectionRequest) (*core.LineageRecord, error) {
+func (s *Service) resolveRouteSelectionLineage(ctx context.Context, req RouteSelectionRequest) (*LineageRecord, error) {
 	if strings.TrimSpace(req.LineageID) == "" || s.Ownership == nil {
 		return nil, nil
 	}
@@ -1194,7 +1195,7 @@ func (s *Service) resolveRouteSelectionLineage(ctx context.Context, req RouteSel
 	return lineage, nil
 }
 
-func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSelectionRequest, lineage *core.LineageRecord, trustDomain string, imported bool, destination core.ExportDescriptor) (*core.TransferRefusal, error) {
+func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSelectionRequest, lineage *LineageRecord, trustDomain string, imported bool, destination ExportDescriptor) (*TransferRefusal, error) {
 	tenantID := strings.TrimSpace(req.TenantID)
 	if lineage != nil && strings.TrimSpace(lineage.TenantID) != "" {
 		tenantID = lineage.TenantID
@@ -1210,7 +1211,7 @@ func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSel
 	owner := routeSelectionOwner(req, lineage)
 	if len(destination.AcceptedIdentities) > 0 {
 		if subjectRefEmpty(owner) {
-			return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "route selection requires lineage owner for export identity policy"}, nil
+			return &TransferRefusal{Code: RefusalUnauthorized, Message: "route selection requires lineage owner for export identity policy"}, nil
 		}
 		allowed := false
 		for _, candidate := range destination.AcceptedIdentities {
@@ -1220,7 +1221,7 @@ func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSel
 			}
 		}
 		if !allowed {
-			return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "lineage owner not authorized for export"}, nil
+			return &TransferRefusal{Code: RefusalUnauthorized, Message: "lineage owner not authorized for export"}, nil
 		}
 	}
 	if s.Nexus.Policies == nil {
@@ -1240,7 +1241,7 @@ func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSel
 	return nil, nil
 }
 
-func trustDomainForOffer(destination core.ExportDescriptor, offer core.HandoffOffer) string {
+func trustDomainForOffer(destination ExportDescriptor, offer HandoffOffer) string {
 	if strings.TrimSpace(destination.TrustDomain) != "" {
 		return strings.TrimSpace(destination.TrustDomain)
 	}
@@ -1253,36 +1254,36 @@ func trustDomainForOffer(destination core.ExportDescriptor, offer core.HandoffOf
 	return ""
 }
 
-func (s *Service) emitRefusal(ctx context.Context, lineageID string, refusal *core.TransferRefusal) {
+func (s *Service) emitRefusal(ctx context.Context, lineageID string, refusal *TransferRefusal) {
 	if refusal == nil {
 		return
 	}
-	owner := core.SubjectRef{}
+	owner := identity.SubjectRef{}
 	if lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID); err == nil && ok {
 		owner = lineage.Owner
 	}
-	s.emit(ctx, core.FrameworkEventFMPPolicyDenied, owner, map[string]any{
+	s.emit(ctx, FrameworkEventFMPPolicyDenied, owner, map[string]any{
 		"lineage_id": lineageID,
 		"code":       refusal.Code,
 		"reason":     refusal.Message,
 	})
 }
 
-func (s *Service) resolveRuntimeDescriptor(ctx context.Context, runtimeID string) (core.RuntimeDescriptor, *core.TransferRefusal, error) {
+func (s *Service) resolveRuntimeDescriptor(ctx context.Context, runtimeID string) (RuntimeDescriptor, *TransferRefusal, error) {
 	if s.Runtime == nil {
-		return core.RuntimeDescriptor{}, nil, nil
+		return RuntimeDescriptor{}, nil, nil
 	}
 	descriptor, err := s.Runtime.Descriptor(ctx)
 	if err != nil {
-		return core.RuntimeDescriptor{}, nil, err
+		return RuntimeDescriptor{}, nil, err
 	}
 	if strings.TrimSpace(runtimeID) != "" && descriptor.RuntimeID != "" && !strings.EqualFold(descriptor.RuntimeID, runtimeID) {
-		return core.RuntimeDescriptor{}, nil, fmt.Errorf("runtime id %s does not match descriptor %s", runtimeID, descriptor.RuntimeID)
+		return RuntimeDescriptor{}, nil, fmt.Errorf("runtime id %s does not match descriptor %s", runtimeID, descriptor.RuntimeID)
 	}
 	return descriptor, nil, nil
 }
 
-func (s *Service) validateExportPolicy(ctx context.Context, lineage core.LineageRecord, offer core.HandoffOffer, destination core.ExportDescriptor) *core.TransferRefusal {
+func (s *Service) validateExportPolicy(ctx context.Context, lineage LineageRecord, offer HandoffOffer, destination ExportDescriptor) *TransferRefusal {
 	if refusal := s.validateTenantExportEnablement(ctx, lineage.TenantID, destination.ExportName); refusal != nil {
 		return refusal
 	}
@@ -1297,23 +1298,23 @@ func (s *Service) validateExportPolicy(ctx context.Context, lineage core.Lineage
 			return refusal
 		}
 		if len(lineage.AllowedFederationTargets) > 0 && !containsFoldString(lineage.AllowedFederationTargets, trustDomain) {
-			return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "trust domain not allowed by lineage federation policy"}
+			return &TransferRefusal{Code: RefusalUnauthorized, Message: "trust domain not allowed by lineage federation policy"}
 		}
 	}
 	if destination.ExportName != "" && !strings.EqualFold(destination.ExportName, offer.DestinationExport) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "destination export mismatch"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "destination export mismatch"}
 	}
 	if !exportAllowsRouteMode(destination, resolveRouteMode(destination)) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "route mode not allowed by export transport policy"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "route mode not allowed by export transport policy"}
 	}
 	if len(destination.AcceptedContextClasses) > 0 && !containsFoldString(destination.AcceptedContextClasses, offer.ContextClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnsupportedContext, Message: "destination does not accept context class"}
+		return &TransferRefusal{Code: RefusalUnsupportedContext, Message: "destination does not accept context class"}
 	}
 	if destination.MaxContextSize > 0 && offer.ContextSizeBytes > destination.MaxContextSize {
-		return &core.TransferRefusal{Code: core.RefusalContextTooLarge, Message: "context exceeds destination max size"}
+		return &TransferRefusal{Code: RefusalContextTooLarge, Message: "context exceeds destination max size"}
 	}
 	if destination.SensitivityLimit != "" && sensitivityRank(offer.SensitivityClass) > sensitivityRank(destination.SensitivityLimit) {
-		return &core.TransferRefusal{Code: core.RefusalSensitivityDenied, Message: "sensitivity exceeds destination limit"}
+		return &TransferRefusal{Code: RefusalSensitivityDenied, Message: "sensitivity exceeds destination limit"}
 	}
 	if len(destination.AcceptedIdentities) > 0 {
 		allowed := false
@@ -1324,38 +1325,38 @@ func (s *Service) validateExportPolicy(ctx context.Context, lineage core.Lineage
 			}
 		}
 		if !allowed {
-			return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "lineage owner not authorized for export"}
+			return &TransferRefusal{Code: RefusalUnauthorized, Message: "lineage owner not authorized for export"}
 		}
 	}
 	if len(destination.AllowedTaskClasses) > 0 && !containsFoldString(destination.AllowedTaskClasses, lineage.TaskClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "task class not allowed by export"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "task class not allowed by export"}
 	}
 	if !capabilityEnvelopeSubset(offer.RequestedCapabilityProjection, lineage.CapabilityEnvelope) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "requested capability projection broadens lineage authority"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "requested capability projection broadens lineage authority"}
 	}
 	return nil
 }
 
-func validateRuntimeAgainstOffer(runtime core.RuntimeDescriptor, offer core.HandoffOffer, destination core.ExportDescriptor) *core.TransferRefusal {
+func validateRuntimeAgainstOffer(runtime RuntimeDescriptor, offer HandoffOffer, destination ExportDescriptor) *TransferRefusal {
 	return ValidateOfferCompatibility(runtime, offer, destination, time.Now().UTC())
 }
 
-func policyDecisionRefusal(decision core.PolicyDecision) *core.TransferRefusal {
+func policyDecisionRefusal(decision core.PolicyDecision) *TransferRefusal {
 	switch decision.Effect {
 	case "deny":
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: fallbackMessage(decision.Reason, "denied by policy")}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: fallbackMessage(decision.Reason, "denied by policy")}
 	case "require_approval":
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: fallbackMessage(decision.Reason, "approval required")}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: fallbackMessage(decision.Reason, "approval required")}
 	default:
 		return nil
 	}
 }
 
-func resolveRouteMode(destination core.ExportDescriptor) core.RouteMode {
+func resolveRouteMode(destination ExportDescriptor) RouteMode {
 	if destination.RouteMode != "" {
 		return destination.RouteMode
 	}
-	return core.RouteModeGateway
+	return RouteModeGateway
 }
 
 func containsFoldString(values []string, want string) bool {
@@ -1367,15 +1368,15 @@ func containsFoldString(values []string, want string) bool {
 	return false
 }
 
-func sensitivityRank(value core.SensitivityClass) int {
+func sensitivityRank(value SensitivityClass) int {
 	switch value {
-	case core.SensitivityClassLow:
+	case SensitivityClassLow:
 		return 1
-	case core.SensitivityClassModerate:
+	case SensitivityClassModerate:
 		return 2
-	case core.SensitivityClassHigh:
+	case SensitivityClassHigh:
 		return 3
-	case core.SensitivityClassRestricted:
+	case SensitivityClassRestricted:
 		return 4
 	default:
 		return 0
@@ -1389,7 +1390,7 @@ func fallbackMessage(value, fallback string) string {
 	return fallback
 }
 
-func validateManifestForOffer(offer core.HandoffOffer, manifest core.ContextManifest, sealed core.SealedContext) error {
+func validateManifestForOffer(offer HandoffOffer, manifest ContextManifest, sealed SealedContext) error {
 	if !strings.EqualFold(strings.TrimSpace(manifest.ContextID), strings.TrimSpace(offer.ContextManifestRef)) {
 		return fmt.Errorf("manifest context id %s does not match offer %s", manifest.ContextID, offer.ContextManifestRef)
 	}
@@ -1408,7 +1409,7 @@ func validateManifestForOffer(offer core.HandoffOffer, manifest core.ContextMani
 	return nil
 }
 
-func validateReceiptForCommit(offer core.HandoffOffer, accept core.HandoffAccept, manifest core.ContextManifest, receipt core.ResumeReceipt) error {
+func validateReceiptForCommit(offer HandoffOffer, accept HandoffAccept, manifest ContextManifest, receipt ResumeReceipt) error {
 	if err := receipt.Validate(); err != nil {
 		return err
 	}
@@ -1427,7 +1428,7 @@ func validateReceiptForCommit(offer core.HandoffOffer, accept core.HandoffAccept
 	return nil
 }
 
-func validateImportedAttemptForContinuation(attempt core.AttemptRecord, lineage core.LineageRecord, runtimeID string) error {
+func validateImportedAttemptForContinuation(attempt AttemptRecord, lineage LineageRecord, runtimeID string) error {
 	if !strings.EqualFold(strings.TrimSpace(attempt.LineageID), strings.TrimSpace(lineage.LineageID)) {
 		return fmt.Errorf("attempt lineage id %s does not match lineage %s", attempt.LineageID, lineage.LineageID)
 	}
@@ -1437,36 +1438,36 @@ func validateImportedAttemptForContinuation(attempt core.AttemptRecord, lineage 
 	return nil
 }
 
-func validateRouteAdvertisement(ad core.ExportAdvertisement, req RouteSelectionRequest, now time.Time) *core.TransferRefusal {
+func validateRouteAdvertisement(ad ExportAdvertisement, req RouteSelectionRequest, now time.Time) *TransferRefusal {
 	if !ad.ExpiresAt.IsZero() && now.After(ad.ExpiresAt) {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "export advertisement expired"}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: "export advertisement expired"}
 	}
 	routeMode := resolveRouteMode(ad.Export)
 	if req.RequiredRouteMode != "" && !strings.EqualFold(string(routeMode), string(req.RequiredRouteMode)) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "export route mode does not match requested route mode"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "export route mode does not match requested route mode"}
 	}
 	if !exportAllowsRouteMode(ad.Export, routeMode) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "export route mode not allowed by transport paths"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "export route mode not allowed by transport paths"}
 	}
 	if !ad.Export.AdmissionSummary.Available {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: fallbackMessage(ad.Export.AdmissionSummary.Reason, "export unavailable")}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: fallbackMessage(ad.Export.AdmissionSummary.Reason, "export unavailable")}
 	}
 	if len(ad.Export.AcceptedContextClasses) > 0 && !containsFoldString(ad.Export.AcceptedContextClasses, req.ContextClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnsupportedContext, Message: "export does not accept context class"}
+		return &TransferRefusal{Code: RefusalUnsupportedContext, Message: "export does not accept context class"}
 	}
 	if ad.Export.MaxContextSize > 0 && req.ContextSizeBytes > ad.Export.MaxContextSize {
-		return &core.TransferRefusal{Code: core.RefusalContextTooLarge, Message: "context exceeds export max size"}
+		return &TransferRefusal{Code: RefusalContextTooLarge, Message: "context exceeds export max size"}
 	}
 	if ad.Export.SensitivityLimit != "" && sensitivityRank(req.SensitivityClass) > sensitivityRank(ad.Export.SensitivityLimit) {
-		return &core.TransferRefusal{Code: core.RefusalSensitivityDenied, Message: "sensitivity exceeds export limit"}
+		return &TransferRefusal{Code: RefusalSensitivityDenied, Message: "sensitivity exceeds export limit"}
 	}
 	if len(ad.Export.AllowedTaskClasses) > 0 && !containsFoldString(ad.Export.AllowedTaskClasses, req.TaskClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "export does not allow requested task class"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "export does not allow requested task class"}
 	}
 	return nil
 }
 
-func buildRouteResumePolicyRequest(req RouteSelectionRequest, lineage *core.LineageRecord, destination core.ExportDescriptor, owner core.SubjectRef) (ResumePolicyRequest, bool) {
+func buildRouteResumePolicyRequest(req RouteSelectionRequest, lineage *LineageRecord, destination ExportDescriptor, owner identity.SubjectRef) (ResumePolicyRequest, bool) {
 	actor := req.Actor
 	if subjectRefEmpty(actor) {
 		if lineage != nil && !subjectRefEmpty(lineage.Owner) {
@@ -1478,7 +1479,7 @@ func buildRouteResumePolicyRequest(req RouteSelectionRequest, lineage *core.Line
 	if subjectRefEmpty(actor) {
 		return ResumePolicyRequest{}, false
 	}
-	lineageRecord := core.LineageRecord{
+	lineageRecord := LineageRecord{
 		LineageID:        req.LineageID,
 		TenantID:         req.TenantID,
 		TaskClass:        req.TaskClass,
@@ -1497,7 +1498,7 @@ func buildRouteResumePolicyRequest(req RouteSelectionRequest, lineage *core.Line
 	isOwner := req.IsOwner || (!subjectRefEmpty(lineageRecord.Owner) && actor == lineageRecord.Owner)
 	return ResumePolicyRequest{
 		Lineage: lineageRecord,
-		Offer: core.HandoffOffer{
+		Offer: HandoffOffer{
 			LineageID:         lineageRecord.LineageID,
 			DestinationExport: destination.ExportName,
 			ContextClass:      req.ContextClass,
@@ -1512,76 +1513,76 @@ func buildRouteResumePolicyRequest(req RouteSelectionRequest, lineage *core.Line
 	}, true
 }
 
-func routeSelectionOwner(req RouteSelectionRequest, lineage *core.LineageRecord) core.SubjectRef {
+func routeSelectionOwner(req RouteSelectionRequest, lineage *LineageRecord) identity.SubjectRef {
 	if !subjectRefEmpty(req.Owner) {
 		return req.Owner
 	}
 	if lineage != nil {
 		return lineage.Owner
 	}
-	return core.SubjectRef{}
+	return identity.SubjectRef{}
 }
 
-func subjectRefEmpty(subject core.SubjectRef) bool {
+func subjectRefEmpty(subject identity.SubjectRef) bool {
 	return strings.TrimSpace(subject.TenantID) == "" && strings.TrimSpace(subject.ID) == "" && strings.TrimSpace(string(subject.Kind)) == ""
 }
 
-func (s *Service) validateTenantExportEnablement(ctx context.Context, tenantID, exportName string) *core.TransferRefusal {
+func (s *Service) validateTenantExportEnablement(ctx context.Context, tenantID, exportName string) *TransferRefusal {
 	if s.Nexus.Exports == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(exportName) == "" {
 		return nil
 	}
 	enabled, configured, err := s.Nexus.Exports.IsExportEnabled(ctx, tenantID, exportName)
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: err.Error()}
 	}
 	if configured && !enabled {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "export disabled for tenant"}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: "export disabled for tenant"}
 	}
 	return nil
 }
 
-func (s *Service) validateTenantFederationPolicy(ctx context.Context, tenantID, trustDomain string, routeMode core.RouteMode, sizeBytes int64) *core.TransferRefusal {
+func (s *Service) validateTenantFederationPolicy(ctx context.Context, tenantID, trustDomain string, routeMode RouteMode, sizeBytes int64) *TransferRefusal {
 	if s.Nexus.Federation == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(trustDomain) == "" {
 		return nil
 	}
 	policy, err := s.Nexus.Federation.GetTenantFederationPolicy(ctx, tenantID)
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: err.Error()}
 	}
 	if policy == nil {
 		return nil
 	}
 	if len(policy.AllowedTrustDomains) > 0 && !containsFoldString(policy.AllowedTrustDomains, trustDomain) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "trust domain not allowed for tenant"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "trust domain not allowed for tenant"}
 	}
 	if len(policy.AllowedRouteModes) > 0 && !containsRouteMode(policy.AllowedRouteModes, routeMode) {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "route mode not allowed for tenant"}
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "route mode not allowed for tenant"}
 	}
-	if routeMode == core.RouteModeMediated && !policy.AllowMediation {
-		return &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: "mediation mode not allowed for tenant"}
+	if routeMode == RouteModeMediated && !policy.AllowMediation {
+		return &TransferRefusal{Code: RefusalUnauthorized, Message: "mediation mode not allowed for tenant"}
 	}
 	if policy.MaxTransferBytes > 0 && sizeBytes > policy.MaxTransferBytes {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "transfer exceeds tenant federation budget"}
+		return &TransferRefusal{Code: RefusalTransferBudget, Message: "transfer exceeds tenant federation budget"}
 	}
 	return nil
 }
 
-func validateRuntimeForRoute(runtime core.RuntimeDescriptor, req RouteSelectionRequest, export core.ExportDescriptor, now time.Time) *core.TransferRefusal {
+func validateRuntimeForRoute(runtime RuntimeDescriptor, req RouteSelectionRequest, export ExportDescriptor, now time.Time) *TransferRefusal {
 	if runtime.MaxContextSize > 0 && req.ContextSizeBytes > runtime.MaxContextSize {
-		return &core.TransferRefusal{Code: core.RefusalContextTooLarge, Message: "context exceeds runtime max size"}
+		return &TransferRefusal{Code: RefusalContextTooLarge, Message: "context exceeds runtime max size"}
 	}
 	if len(runtime.SupportedContextClasses) > 0 && !containsFoldString(runtime.SupportedContextClasses, req.ContextClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnsupportedContext, Message: "runtime does not support context class"}
+		return &TransferRefusal{Code: RefusalUnsupportedContext, Message: "runtime does not support context class"}
 	}
 	requiredCompat := req.RequiredCompatibilityClass
 	if requiredCompat != "" && !strings.EqualFold(runtime.CompatibilityClass, requiredCompat) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime compatibility mismatch"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime compatibility mismatch"}
 	}
 	if len(export.RequiredCompatibilityClasses) > 0 && !containsFoldString(export.RequiredCompatibilityClasses, runtime.CompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime compatibility not accepted by export"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime compatibility not accepted by export"}
 	}
 	if !runtime.ExpiresAt.IsZero() && now.After(runtime.ExpiresAt) {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "runtime advertisement expired"}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: "runtime advertisement expired"}
 	}
 	return nil
 }
@@ -1593,12 +1594,12 @@ func compareRouteCandidates(left, right RouteCandidate) bool {
 		return leftLocal
 	}
 	if left.RouteMode != right.RouteMode {
-		return left.RouteMode == core.RouteModeDirect
+		return left.RouteMode == RouteModeDirect
 	}
 	return left.QualifiedExport < right.QualifiedExport
 }
 
-func exportAllowsRouteMode(export core.ExportDescriptor, mode core.RouteMode) bool {
+func exportAllowsRouteMode(export ExportDescriptor, mode RouteMode) bool {
 	if mode == "" {
 		return true
 	}

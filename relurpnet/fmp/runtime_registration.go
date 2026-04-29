@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	relurpnet "codeburg.org/lexbit/relurpify/relurpnet"
 )
 
 type RuntimeRegistrationRequest struct {
 	TrustDomain string                 `json:"trust_domain" yaml:"trust_domain"`
-	Node        core.NodeDescriptor    `json:"node" yaml:"node"`
-	Runtime     core.RuntimeDescriptor `json:"runtime" yaml:"runtime"`
+	Node        relurpnet.NodeDescriptor `json:"node" yaml:"node"`
+	Runtime     RuntimeDescriptor `json:"runtime" yaml:"runtime"`
 	ExpiresAt   time.Time              `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
 	Signature   string                 `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
@@ -52,10 +52,10 @@ func (s *Service) RegisterRuntime(ctx context.Context, req RuntimeRegistrationRe
 	if err := req.Validate(); err != nil {
 		return err
 	}
-	nodeAd := core.NodeAdvertisement{
+	nodeAd := NodeAdvertisement{
 		TrustDomain: req.TrustDomain,
 		Node:        req.Node,
-		Health: core.NodeHealth{
+		Health: relurpnet.NodeHealth{
 			Online:     true,
 			Foreground: true,
 			LastSeenAt: s.nowUTC(),
@@ -76,7 +76,7 @@ func (s *Service) RegisterRuntime(ctx context.Context, req RuntimeRegistrationRe
 	if runtime.ExpiresAt.IsZero() {
 		runtime.ExpiresAt = nodeAd.ExpiresAt
 	}
-	runtimeAd := core.RuntimeAdvertisement{
+	runtimeAd := RuntimeAdvertisement{
 		TrustDomain: req.TrustDomain,
 		Runtime:     runtime,
 		ExpiresAt:   runtime.ExpiresAt,

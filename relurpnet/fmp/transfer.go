@@ -6,11 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type ChunkTransferManager interface {
-	Open(ctx context.Context, manifest core.ContextManifest, sealed core.SealedContext, now time.Time) (*ChunkTransferSession, error)
+	Open(ctx context.Context, manifest ContextManifest, sealed SealedContext, now time.Time) (*ChunkTransferSession, error)
 	Read(ctx context.Context, transferID string, maxChunks int, now time.Time) ([]ChunkFrame, *ChunkFlowControl, error)
 	Ack(ctx context.Context, transferID string, ack ChunkAck, now time.Time) (*ChunkFlowControl, error)
 	Cancel(ctx context.Context, transferID string, reason string, now time.Time) error
@@ -19,7 +18,7 @@ type ChunkTransferManager interface {
 type ChunkTransferSession struct {
 	TransferID   string            `json:"transfer_id" yaml:"transfer_id"`
 	ManifestRef  string            `json:"manifest_ref" yaml:"manifest_ref"`
-	TransferMode core.TransferMode `json:"transfer_mode" yaml:"transfer_mode"`
+	TransferMode TransferMode `json:"transfer_mode" yaml:"transfer_mode"`
 	TotalChunks  int               `json:"total_chunks" yaml:"total_chunks"`
 	WindowSize   int               `json:"window_size,omitempty" yaml:"window_size,omitempty"`
 	ExpiresAt    time.Time         `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
@@ -64,14 +63,14 @@ type chunkTransferState struct {
 	cancelled bool
 }
 
-func (m *InMemoryChunkTransferManager) Open(_ context.Context, manifest core.ContextManifest, sealed core.SealedContext, now time.Time) (*ChunkTransferSession, error) {
+func (m *InMemoryChunkTransferManager) Open(_ context.Context, manifest ContextManifest, sealed SealedContext, now time.Time) (*ChunkTransferSession, error) {
 	if err := manifest.Validate(); err != nil {
 		return nil, err
 	}
 	if err := sealed.Validate(); err != nil {
 		return nil, err
 	}
-	if manifest.TransferMode != core.TransferModeChunked {
+	if manifest.TransferMode != TransferModeChunked {
 		return nil, fmt.Errorf("chunk transfer requires manifest transfer_mode=chunked")
 	}
 	if len(sealed.CiphertextChunks) == 0 {

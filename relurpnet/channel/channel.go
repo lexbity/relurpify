@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // Adapter normalizes inbound messages from an upstream service.
@@ -33,11 +34,35 @@ type InboundMessage struct {
 	RawMeta      json.RawMessage `json:"raw_meta,omitempty"`
 }
 
+// GetChannel implements identity.InboundMessage.
+func (m InboundMessage) GetChannel() string { return m.Channel }
+
+// GetAccount implements identity.InboundMessage.
+func (m InboundMessage) GetAccount() string { return m.Account }
+
+// GetSender implements identity.InboundMessage.
+func (m InboundMessage) GetSender() identity.InboundSender { return m.Sender }
+
+// GetConversation implements identity.InboundMessage.
+func (m InboundMessage) GetConversation() identity.InboundConversation { return m.Conversation }
+
+// Ensure InboundMessage implements the identity interface.
+var _ identity.InboundMessage = InboundMessage{}
+
 type Identity struct {
 	ChannelID   string `json:"channel_id"`
 	DisplayName string `json:"display_name,omitempty"`
 	ResolvedID  string `json:"resolved_id,omitempty"`
 }
+
+// GetResolvedID implements identity.InboundSender.
+func (i Identity) GetResolvedID() string { return i.ResolvedID }
+
+// GetChannelID implements identity.InboundSender.
+func (i Identity) GetChannelID() string { return i.ChannelID }
+
+// Ensure Identity implements the identity interface.
+var _ identity.InboundSender = Identity{}
 
 type Conversation struct {
 	Kind      string `json:"kind"`
@@ -45,6 +70,15 @@ type Conversation struct {
 	ThreadID  string `json:"thread_id,omitempty"`
 	Mentioned bool   `json:"mentioned"`
 }
+
+// GetID implements identity.InboundConversation.
+func (c Conversation) GetID() string { return c.ID }
+
+// GetThreadID implements identity.InboundConversation.
+func (c Conversation) GetThreadID() string { return c.ThreadID }
+
+// Ensure Conversation implements the identity interface.
+var _ identity.InboundConversation = Conversation{}
 
 type MessageContent struct {
 	Text       string          `json:"text,omitempty"`

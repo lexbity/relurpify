@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
 )
 
@@ -31,8 +30,8 @@ func (r StaticFederationEndpointResolver) ResolveFederationEndpoint(_ context.Co
 }
 
 type GatewayForwardTransportResponse struct {
-	Result  *core.GatewayForwardResult `json:"result,omitempty"`
-	Refusal *core.TransferRefusal      `json:"refusal,omitempty"`
+	Result  *GatewayForwardResult `json:"result,omitempty"`
+	Refusal *TransferRefusal      `json:"refusal,omitempty"`
 }
 
 type HTTPGatewayForwarder struct {
@@ -71,7 +70,7 @@ func (f *HTTPGatewayForwarder) RegisterExportHandler(trustDomain, exportName str
 	return nil
 }
 
-func (f *HTTPGatewayForwarder) ForwardSealedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, error) {
+func (f *HTTPGatewayForwarder) ForwardSealedContext(ctx context.Context, req GatewayForwardRequest) (*GatewayForwardResult, error) {
 	if handler, ok := f.resolveLocalHandler(req); ok {
 		return handler(ctx, req)
 	}
@@ -81,7 +80,7 @@ func (f *HTTPGatewayForwarder) ForwardSealedContext(ctx context.Context, req cor
 		if f != nil && f.now != nil {
 			now = f.now().UTC()
 		}
-		return &core.GatewayForwardResult{
+		return &GatewayForwardResult{
 			TrustDomain:       req.TrustDomain,
 			DestinationExport: req.DestinationExport,
 			RouteMode:         req.RouteMode,
@@ -145,7 +144,7 @@ func (f *HTTPGatewayForwarder) resolveEndpoint(ctx context.Context, trustDomain 
 	return f.Resolver.ResolveFederationEndpoint(ctx, trustDomain)
 }
 
-func (f *HTTPGatewayForwarder) resolveLocalHandler(req core.GatewayForwardRequest) (FederatedExportHandler, bool) {
+func (f *HTTPGatewayForwarder) resolveLocalHandler(req GatewayForwardRequest) (FederatedExportHandler, bool) {
 	if f == nil {
 		return nil, false
 	}
@@ -187,7 +186,7 @@ func joinFederationPath(base, path string) string {
 	return strings.TrimRight(strings.TrimSpace(base), "/") + "/" + strings.TrimLeft(strings.TrimSpace(path), "/")
 }
 
-func (f *HTTPGatewayForwarder) applyTransportHeaders(httpReq *http.Request, req core.GatewayForwardRequest, endpoint string) {
+func (f *HTTPGatewayForwarder) applyTransportHeaders(httpReq *http.Request, req GatewayForwardRequest, endpoint string) {
 	if f == nil || httpReq == nil || f.TransportPolicy == nil {
 		return
 	}

@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func (s *Service) PublishLocalTrustBundle(ctx context.Context, trustDomain, bundleID string, recipientKeys []core.RecipientKeyAdvertisement) error {
+func (s *Service) PublishLocalTrustBundle(ctx context.Context, trustDomain, bundleID string, recipientKeys []RecipientKeyAdvertisement) error {
 	if s == nil || s.Trust == nil {
 		return fmt.Errorf("trust bundle store unavailable")
 	}
@@ -24,7 +23,7 @@ func (s *Service) PublishLocalTrustBundle(ctx context.Context, trustDomain, bund
 	if err != nil {
 		return err
 	}
-	bundle := core.TrustBundle{
+	bundle := TrustBundle{
 		TrustDomain: trustDomain,
 		BundleID:    bundleID,
 		IssuedAt:    s.nowUTC(),
@@ -45,8 +44,8 @@ func (s *Service) PublishLocalTrustBundle(ctx context.Context, trustDomain, bund
 	return s.RegisterTrustBundle(ctx, bundle)
 }
 
-func mergeRecipientKeys(existing, added []core.RecipientKeyAdvertisement) []core.RecipientKeyAdvertisement {
-	out := make([]core.RecipientKeyAdvertisement, 0, len(existing)+len(added))
+func mergeRecipientKeys(existing, added []RecipientKeyAdvertisement) []RecipientKeyAdvertisement {
+	out := make([]RecipientKeyAdvertisement, 0, len(existing)+len(added))
 	index := map[string]int{}
 	for _, key := range existing {
 		normalized := normalizeRecipientKey(key)
@@ -72,7 +71,7 @@ func mergeRecipientKeys(existing, added []core.RecipientKeyAdvertisement) []core
 	return out
 }
 
-func normalizeRecipientKey(key core.RecipientKeyAdvertisement) core.RecipientKeyAdvertisement {
+func normalizeRecipientKey(key RecipientKeyAdvertisement) RecipientKeyAdvertisement {
 	key.Recipient = strings.TrimSpace(key.Recipient)
 	key.KeyID = strings.TrimSpace(key.KeyID)
 	key.Version = strings.TrimSpace(key.Version)
@@ -83,6 +82,6 @@ func normalizeRecipientKey(key core.RecipientKeyAdvertisement) core.RecipientKey
 	return key
 }
 
-func recipientKeyIndex(key core.RecipientKeyAdvertisement) string {
+func recipientKeyIndex(key RecipientKeyAdvertisement) string {
 	return strings.ToLower(strings.TrimSpace(key.Recipient)) + "::" + strings.ToLower(strings.TrimSpace(key.KeyID))
 }

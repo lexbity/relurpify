@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type RecipientKeyRecord struct {
@@ -79,7 +78,7 @@ func (r *TrustBundleRecipientKeyResolver) ResolveRecipientKeys(ctx context.Conte
 	return records, nil
 }
 
-func activeRecipientKeysFromBundle(bundle core.TrustBundle, recipient string, now time.Time) []RecipientKeyRecord {
+func activeRecipientKeysFromBundle(bundle TrustBundle, recipient string, now time.Time) []RecipientKeyRecord {
 	out := make([]RecipientKeyRecord, 0, len(bundle.RecipientKeys))
 	for _, key := range bundle.RecipientKeys {
 		if !strings.EqualFold(strings.TrimSpace(key.Recipient), recipient) {

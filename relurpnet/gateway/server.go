@@ -14,8 +14,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/gorilla/websocket"
 )
+
+// ConnectionPrincipal is an alias to the canonical identity package type.
+type ConnectionPrincipal = identity.ConnectionPrincipal
 
 const (
 	// broadcastQueueDepth is the number of frames that can be buffered per
@@ -152,14 +156,8 @@ type NodeConnectInfo struct {
 	Capabilities            []core.CapabilityDescriptor
 }
 
-type ConnectionPrincipal struct {
-	Role          string
-	Actor         core.EventActor
-	Authenticated bool
-	Principal     *core.AuthenticatedPrincipal
-	FeedScope     connectionFeedScope
-}
-
+// connectionFeedScope is the local gateway-specific scope type.
+// The canonical ConnectionPrincipal in identity package uses string for FeedScope.
 type connectionFeedScope string
 
 const (
@@ -528,14 +526,14 @@ func validateAndBindPrincipal(frame connectFrame, resolved ConnectionPrincipal) 
 			return ConnectionPrincipal{}, fmt.Errorf("authenticated principal missing actor id")
 		}
 	}
-	if role == "node" && principal.Actor.SubjectKind != "" && principal.Actor.SubjectKind != core.SubjectKindNode {
+	if role == "node" && principal.Actor.SubjectKind != "" && principal.Actor.SubjectKind != string(identity.SubjectKindNode) {
 		return ConnectionPrincipal{}, fmt.Errorf("node connections require node subject")
 	}
 	feedScope, err := requestedFeedScope(frame, principal)
 	if err != nil {
 		return ConnectionPrincipal{}, err
 	}
-	principal.FeedScope = feedScope
+	principal.FeedScope = string(feedScope)
 	return principal, nil
 }
 
@@ -573,7 +571,7 @@ func bindConnectionSessionID(principal ConnectionPrincipal) (ConnectionPrincipal
 		return ConnectionPrincipal{}, err
 	}
 	if principal.Principal == nil {
-		principal.Principal = &core.AuthenticatedPrincipal{}
+		principal.Principal = &identity.AuthenticatedPrincipal{}
 	} else {
 		principal.Principal = clonePrincipal(principal.Principal)
 	}
@@ -588,7 +586,7 @@ func connectionSessionID(principal ConnectionPrincipal) string {
 	return strings.TrimSpace(principal.Principal.SessionID)
 }
 
-func clonePrincipal(principal *core.AuthenticatedPrincipal) *core.AuthenticatedPrincipal {
+func clonePrincipal(principal *identity.AuthenticatedPrincipal) *identity.AuthenticatedPrincipal {
 	if principal == nil {
 		return nil
 	}
@@ -848,7 +846,7 @@ func hasGlobalAdminScope(principal ConnectionPrincipal) bool {
 
 func connectionFeed(principal ConnectionPrincipal) connectionFeedScope {
 	if principal.FeedScope != "" {
-		return principal.FeedScope
+		return connectionFeedScope(principal.FeedScope)
 	}
 	if hasGlobalAdminScope(principal) {
 		return feedScopeGlobalAdmin

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type SessionLineageRequest struct {
@@ -13,20 +14,20 @@ type SessionLineageRequest struct {
 	SessionID                string
 	TaskClass                string
 	ContextClass             string
-	CapabilityEnvelope       core.CapabilityEnvelope
-	SensitivityClass         core.SensitivityClass
+	CapabilityEnvelope       CapabilityEnvelope
+	SensitivityClass         SensitivityClass
 	AllowedFederationTargets []string
 }
 
 type AuthorizedActor struct {
-	Subject    core.SubjectRef
+	Subject    identity.SubjectRef
 	Delegated  bool
 	SessionID  string
 	TenantID   string
 	TrustClass core.TrustClass
 }
 
-func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLineageRequest) (*core.LineageRecord, error) {
+func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLineageRequest) (*LineageRecord, error) {
 	if s.Nexus.Sessions == nil {
 		return nil, fmt.Errorf("session lookup unavailable")
 	}
@@ -40,14 +41,14 @@ func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLinea
 	if !boundary.HasCanonicalOwner() {
 		return nil, fmt.Errorf("session %s has no canonical owner", req.SessionID)
 	}
-	if err := s.ensureTenantAndOwner(ctx, boundary.TenantID, boundary.Owner); err != nil {
+	if err := s.ensureTenantAndOwner(ctx, boundary.TenantID, subjectRefFromDelegation(boundary.Owner)); err != nil {
 		return nil, err
 	}
 	delegations, err := s.loadSessionDelegations(ctx, boundary.SessionID)
 	if err != nil {
 		return nil, err
 	}
-	lineage := &core.LineageRecord{
+	lineage := &LineageRecord{
 		LineageID:                strings.TrimSpace(req.LineageID),
 		TenantID:                 boundary.TenantID,
 		TaskClass:                strings.TrimSpace(req.TaskClass),
@@ -55,7 +56,7 @@ func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLinea
 		CapabilityEnvelope:       req.CapabilityEnvelope,
 		SensitivityClass:         req.SensitivityClass,
 		AllowedFederationTargets: append([]string(nil), req.AllowedFederationTargets...),
-		Owner:                    boundary.Owner,
+		Owner:                    subjectRefFromDelegation(boundary.Owner),
 		SessionID:                boundary.SessionID,
 		SessionBinding:           cloneSessionBinding(boundary.Binding),
 		Delegations:              delegations,
@@ -69,7 +70,7 @@ func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLinea
 	return lineage, nil
 }
 
-func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, actor core.SubjectRef, operation core.SessionOperation) (*AuthorizedActor, error) {
+func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, actor identity.SubjectRef, operation core.SessionOperation) (*AuthorizedActor, error) {
 	lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID)
 	if err != nil {
 		return nil, err
@@ -92,7 +93,7 @@ func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, ac
 			return nil, fmt.Errorf("subject %s/%s not found in tenant %s", actor.Kind, actor.ID, actor.TenantID)
 		}
 	}
-	if actor == lineage.Owner {
+	if subjectRefsEqual(actor, lineage.Owner) {
 		return &AuthorizedActor{
 			Subject:    actor,
 			Delegated:  false,
@@ -104,7 +105,7 @@ func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, ac
 	eventActor := core.EventActor{
 		ID:          actor.ID,
 		TenantID:    actor.TenantID,
-		SubjectKind: actor.Kind,
+		SubjectKind: string(actor.Kind),
 	}
 	for _, delegation := range lineage.Delegations {
 		if delegation.Allows(eventActor, operation, s.nowUTC()) {
@@ -120,7 +121,7 @@ func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, ac
 	return nil, fmt.Errorf("actor %s cannot resume lineage %s without explicit delegation", actor.ID, lineageID)
 }
 
-func (s *Service) AcceptHandoffForNode(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID, nodeID string, actor core.SubjectRef) (*core.HandoffAccept, *AuthorizedActor, error) {
+func (s *Service) AcceptHandoffForNode(ctx context.Context, offer HandoffOffer, destination ExportDescriptor, runtimeID, nodeID string, actor identity.SubjectRef) (*HandoffAccept, *AuthorizedActor, error) {
 	authorized, err := s.AuthorizeResumeActor(ctx, offer.LineageID, actor, core.SessionOperationResume)
 	if err != nil {
 		return nil, nil, err
@@ -138,7 +139,7 @@ func (s *Service) AcceptHandoffForNode(ctx context.Context, offer core.HandoffOf
 	return accept, authorized, nil
 }
 
-func (s *Service) ensureTenantAndOwner(ctx context.Context, tenantID string, owner core.SubjectRef) error {
+func (s *Service) ensureTenantAndOwner(ctx context.Context, tenantID string, owner identity.SubjectRef) error {
 	if strings.TrimSpace(tenantID) == "" {
 		return fmt.Errorf("tenant id required")
 	}
@@ -214,10 +215,16 @@ func (s *Service) validateDestinationNode(ctx context.Context, tenantID, nodeID 
 	return nil
 }
 
-func cloneSessionBinding(binding *core.ExternalSessionBinding) *core.ExternalSessionBinding {
+func cloneSessionBinding(binding *core.SessionBinding) *identity.ExternalSessionBinding {
 	if binding == nil {
 		return nil
 	}
-	copy := *binding
-	return &copy
+	return &identity.ExternalSessionBinding{
+		Provider:       identity.ExternalProvider(binding.Provider),
+		AccountID:      binding.AccountID,
+		ChannelID:      binding.ChannelID,
+		ConversationID: binding.ConversationID,
+		ThreadID:       binding.ThreadID,
+		ExternalUserID: binding.ExternalUserID,
+	}
 }

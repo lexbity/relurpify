@@ -7,10 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-type FederatedExportHandler func(context.Context, core.GatewayForwardRequest) (*core.GatewayForwardResult, error)
+type FederatedExportHandler func(context.Context, GatewayForwardRequest) (*GatewayForwardResult, error)
 
 type LocalGatewayForwarder struct {
 	mu       sync.RWMutex
@@ -40,7 +39,7 @@ func (f *LocalGatewayForwarder) RegisterExportHandler(trustDomain, exportName st
 	return nil
 }
 
-func (f *LocalGatewayForwarder) ForwardSealedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, error) {
+func (f *LocalGatewayForwarder) ForwardSealedContext(ctx context.Context, req GatewayForwardRequest) (*GatewayForwardResult, error) {
 	handler, ok := f.resolveHandler(req)
 	if ok {
 		return handler(ctx, req)
@@ -49,7 +48,7 @@ func (f *LocalGatewayForwarder) ForwardSealedContext(ctx context.Context, req co
 	if f != nil && f.now != nil {
 		now = f.now().UTC()
 	}
-	return &core.GatewayForwardResult{
+	return &GatewayForwardResult{
 		TrustDomain:       req.TrustDomain,
 		DestinationExport: req.DestinationExport,
 		RouteMode:         req.RouteMode,
@@ -58,7 +57,7 @@ func (f *LocalGatewayForwarder) ForwardSealedContext(ctx context.Context, req co
 	}, nil
 }
 
-func (f *LocalGatewayForwarder) resolveHandler(req core.GatewayForwardRequest) (FederatedExportHandler, bool) {
+func (f *LocalGatewayForwarder) resolveHandler(req GatewayForwardRequest) (FederatedExportHandler, bool) {
 	if f == nil {
 		return nil, false
 	}

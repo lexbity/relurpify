@@ -20,8 +20,8 @@ type rpcConn interface {
 type WSConnection struct {
 	Conn rpcConn
 
-	Descriptor    core.NodeDescriptor
-	HealthState   core.NodeHealth
+	Descriptor    NodeDescriptor
+	HealthState   NodeHealth
 	CapabilitySet []core.CapabilityDescriptor
 	FrameHandler  func(context.Context, *WSConnection, map[string]json.RawMessage) error
 
@@ -45,7 +45,7 @@ type invokeResponse struct {
 
 type healthFrame struct {
 	Type   string          `json:"type"`
-	Health core.NodeHealth `json:"health"`
+	Health NodeHealth `json:"health"`
 }
 
 const (
@@ -74,9 +74,9 @@ func NewFramedRPCConn(conn rpcConn, sessionID string) *FramedRPCConn {
 	return &FramedRPCConn{Conn: conn, SessionID: sessionID}
 }
 
-func (c *WSConnection) Node() core.NodeDescriptor { return c.Descriptor }
+func (c *WSConnection) Node() NodeDescriptor { return c.Descriptor }
 
-func (c *WSConnection) Health() core.NodeHealth {
+func (c *WSConnection) Health() NodeHealth {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.HealthState

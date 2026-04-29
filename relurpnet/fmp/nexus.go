@@ -7,18 +7,19 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type TenantLookup interface {
-	GetTenant(ctx context.Context, tenantID string) (*core.TenantRecord, error)
+	GetTenant(ctx context.Context, tenantID string) (*identity.TenantRecord, error)
 }
 
 type SubjectLookup interface {
-	GetSubject(ctx context.Context, tenantID string, kind core.SubjectKind, subjectID string) (*core.SubjectRecord, error)
+	GetSubject(ctx context.Context, tenantID string, kind identity.SubjectKind, subjectID string) (*identity.SubjectRecord, error)
 }
 
 type NodeEnrollmentLookup interface {
-	GetNodeEnrollment(ctx context.Context, tenantID, nodeID string) (*core.NodeEnrollment, error)
+	GetNodeEnrollment(ctx context.Context, tenantID, nodeID string) (*identity.NodeEnrollment, error)
 }
 
 type SessionBoundaryLookup interface {
@@ -31,7 +32,7 @@ type TenantExportLookup interface {
 }
 
 type TenantFederationPolicyLookup interface {
-	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*core.TenantFederationPolicy, error)
+	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*TenantFederationPolicy, error)
 }
 
 type PolicyResolver interface {
@@ -43,14 +44,14 @@ type PolicyRuleLookup interface {
 }
 
 type ResumePolicyRequest struct {
-	Lineage      core.LineageRecord
-	Offer        core.HandoffOffer
-	Destination  core.ExportDescriptor
+	Lineage      LineageRecord
+	Offer        HandoffOffer
+	Destination  ExportDescriptor
 	SourceDomain string
-	Actor        core.SubjectRef
+	Actor        identity.SubjectRef
 	IsOwner      bool
 	IsDelegated  bool
-	RouteMode    core.RouteMode
+	RouteMode    RouteMode
 }
 
 type AuthorizationPolicyResolver struct {
@@ -73,7 +74,7 @@ func (r *AuthorizationPolicyResolver) EvaluateResume(ctx context.Context, req Re
 		Kind:        string(req.Actor.Kind),
 		ID:          req.Actor.ID,
 		TenantID:    req.Actor.TenantID,
-		SubjectKind: req.Actor.Kind,
+		SubjectKind: string(req.Actor.Kind),
 	}
 	policyReq := core.PolicyRequest{
 		Target:           core.PolicyTargetResume,
@@ -86,8 +87,8 @@ func (r *AuthorizationPolicyResolver) EvaluateResume(ctx context.Context, req Re
 		ExportName:       req.Destination.ExportName,
 		SourceDomain:     req.SourceDomain,
 		ContextClass:     req.Offer.ContextClass,
-		SensitivityClass: req.Offer.SensitivityClass,
-		RouteMode:        req.RouteMode,
+		SensitivityClass: string(req.Offer.SensitivityClass),
+		RouteMode:        string(req.RouteMode),
 		TrustClass:       req.Lineage.TrustClass,
 		SessionID:        req.Lineage.SessionID,
 		SessionOperation: core.SessionOperationResume,
@@ -110,7 +111,7 @@ func (r *AuthorizationPolicyResolver) evaluateResumeRules(ctx context.Context, r
 			Kind:        string(req.Actor.Kind),
 			ID:          req.Actor.ID,
 			TenantID:    req.Actor.TenantID,
-			SubjectKind: req.Actor.Kind,
+			SubjectKind: string(req.Actor.Kind),
 		},
 		Authenticated:    true,
 		ActorTenantID:    req.Actor.TenantID,
@@ -120,8 +121,8 @@ func (r *AuthorizationPolicyResolver) evaluateResumeRules(ctx context.Context, r
 		ExportName:       req.Destination.ExportName,
 		SourceDomain:     req.SourceDomain,
 		ContextClass:     req.Offer.ContextClass,
-		SensitivityClass: req.Offer.SensitivityClass,
-		RouteMode:        req.RouteMode,
+		SensitivityClass: string(req.Offer.SensitivityClass),
+		RouteMode:        string(req.RouteMode),
 		TrustClass:       req.Lineage.TrustClass,
 		SessionID:        req.Lineage.SessionID,
 		SessionOperation: core.SessionOperationResume,

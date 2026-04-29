@@ -15,16 +15,15 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ContextPackager is part of the Phase 1 frozen FMP surface.
 // Later phases should replace the concrete packaging and crypto behavior behind
 // this interface before expanding the interface itself.
 type ContextPackager interface {
-	BuildPackage(ctx context.Context, lineage core.LineageRecord, attempt core.AttemptRecord, query RuntimeQuery) (*PortableContextPackage, error)
-	SealPackage(ctx context.Context, manifest core.ContextManifest, pkg *PortableContextPackage, recipients []string) (*core.SealedContext, error)
-	UnsealPackage(ctx context.Context, sealed core.SealedContext, pkg *PortableContextPackage) error
+	BuildPackage(ctx context.Context, lineage LineageRecord, attempt AttemptRecord, query RuntimeQuery) (*PortableContextPackage, error)
+	SealPackage(ctx context.Context, manifest ContextManifest, pkg *PortableContextPackage, recipients []string) (*SealedContext, error)
+	UnsealPackage(ctx context.Context, sealed SealedContext, pkg *PortableContextPackage) error
 }
 
 type RuntimeQuery struct {
@@ -103,7 +102,7 @@ type JSONPackager struct {
 	ExternalThreshold int
 }
 
-func (p JSONPackager) BuildPackage(ctx context.Context, lineage core.LineageRecord, attempt core.AttemptRecord, query RuntimeQuery) (*PortableContextPackage, error) {
+func (p JSONPackager) BuildPackage(ctx context.Context, lineage LineageRecord, attempt AttemptRecord, query RuntimeQuery) (*PortableContextPackage, error) {
 	if p.RuntimeStore == nil {
 		return nil, fmt.Errorf("workflow runtime store unavailable")
 	}
@@ -118,7 +117,7 @@ func (p JSONPackager) BuildPackage(ctx context.Context, lineage core.LineageReco
 	sum := sha256.Sum256(execution)
 	transferMode := p.transferModeForSize(len(execution))
 	chunkCount := chunkCountForSize(len(execution), p.chunkSize())
-	manifest := core.ContextManifest{
+	manifest := ContextManifest{
 		ContextID:        lineage.LineageID + ":" + attempt.AttemptID,
 		LineageID:        lineage.LineageID,
 		AttemptID:        attempt.AttemptID,
@@ -130,7 +129,7 @@ func (p JSONPackager) BuildPackage(ctx context.Context, lineage core.LineageReco
 		SensitivityClass: lineage.SensitivityClass,
 		TTL:              query.TTL,
 		TransferMode:     transferMode,
-		EncryptionMode:   core.EncryptionModeEndToEnd,
+		EncryptionMode:   EncryptionModeEndToEnd,
 		CreationTime:     time.Now().UTC(),
 	}
 	if err := SignContextManifest(p.Signer, &manifest); err != nil {
@@ -142,7 +141,7 @@ func (p JSONPackager) BuildPackage(ctx context.Context, lineage core.LineageReco
 	}, manifest.Validate()
 }
 
-func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextManifest, pkg *PortableContextPackage, recipients []string) (*core.SealedContext, error) {
+func (p JSONPackager) SealPackage(ctx context.Context, manifest ContextManifest, pkg *PortableContextPackage, recipients []string) (*SealedContext, error) {
 	if pkg == nil {
 		return nil, fmt.Errorf("portable package required")
 	}
@@ -175,13 +174,13 @@ func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextMani
 	ciphertextChunks := splitCiphertext(payloadCiphertext, p.chunkSize())
 	externalRefs := []string(nil)
 	switch manifest.TransferMode {
-	case core.TransferModeInline:
+	case TransferModeInline:
 		// keep inline ciphertext as-is
-	case core.TransferModeChunked:
+	case TransferModeChunked:
 		if len(ciphertextChunks) == 0 {
 			ciphertextChunks = [][]byte{payloadCiphertext}
 		}
-	case core.TransferModeExternal:
+	case TransferModeExternal:
 		if p.ObjectStore == nil {
 			return nil, fmt.Errorf("encrypted object store unavailable for external transfer")
 		}
@@ -222,7 +221,7 @@ func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextMani
 		wrappedKeys[recipient] = entries
 	}
 	sum := sha256.Sum256(payloadCiphertext)
-	sealed := &core.SealedContext{
+	sealed := &SealedContext{
 		EnvelopeVersion:    "fmp.sealed.v1",
 		ContextManifestRef: manifest.ContextID,
 		CipherSuite:        p.cipherSuite(),
@@ -247,7 +246,7 @@ func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextMani
 	return sealed, sealed.Validate()
 }
 
-func (p JSONPackager) UnsealPackage(ctx context.Context, sealed core.SealedContext, pkg *PortableContextPackage) error {
+func (p JSONPackager) UnsealPackage(ctx context.Context, sealed SealedContext, pkg *PortableContextPackage) error {
 	if err := sealed.Validate(); err != nil {
 		return err
 	}
@@ -423,7 +422,7 @@ func replayBytes(data map[string]any, key string) ([]byte, error) {
 	return base64.RawStdEncoding.DecodeString(text)
 }
 
-func (p JSONPackager) loadCiphertext(ctx context.Context, sealed core.SealedContext) ([]byte, error) {
+func (p JSONPackager) loadCiphertext(ctx context.Context, sealed SealedContext) ([]byte, error) {
 	switch {
 	case len(sealed.CiphertextChunks) > 0:
 		return joinCiphertext(sealed.CiphertextChunks), nil
@@ -445,13 +444,13 @@ func (p JSONPackager) loadCiphertext(ctx context.Context, sealed core.SealedCont
 	}
 }
 
-func payloadAAD(manifest core.ContextManifest, recipients []string) []byte {
+func payloadAAD(manifest ContextManifest, recipients []string) []byte {
 	sum := sha256.Sum256([]byte(manifest.ContextID + "|" + manifest.LineageID + "|" + manifest.AttemptID + "|" + strings.Join(recipients, ",")))
 	return sum[:]
 }
 
-func unsealManifestAAD(sealed core.SealedContext) core.ContextManifest {
-	manifest := core.ContextManifest{ContextID: sealed.ContextManifestRef}
+func unsealManifestAAD(sealed SealedContext) ContextManifest {
+	manifest := ContextManifest{ContextID: sealed.ContextManifestRef}
 	if lineageID, _ := sealed.ReplayProtectionData["lineage_id"].(string); lineageID != "" {
 		manifest.LineageID = lineageID
 	}
@@ -507,14 +506,14 @@ func (s *InMemoryEncryptedObjectStore) GetObject(_ context.Context, ref string) 
 	return append([]byte(nil), object.ciphertext...), nil
 }
 
-func (p JSONPackager) transferModeForSize(size int) core.TransferMode {
+func (p JSONPackager) transferModeForSize(size int) TransferMode {
 	switch {
 	case p.ExternalThreshold > 0 && size >= p.ExternalThreshold:
-		return core.TransferModeExternal
+		return TransferModeExternal
 	case size > p.inlineThreshold():
-		return core.TransferModeChunked
+		return TransferModeChunked
 	default:
-		return core.TransferModeInline
+		return TransferModeInline
 	}
 }
 
@@ -591,7 +590,7 @@ func externalObjectRefs(contextID string, count int) []string {
 	return refs
 }
 
-func manifestExpiry(manifest core.ContextManifest) time.Time {
+func manifestExpiry(manifest ContextManifest) time.Time {
 	if manifest.TTL <= 0 {
 		return manifest.CreationTime.UTC().Add(15 * time.Minute)
 	}

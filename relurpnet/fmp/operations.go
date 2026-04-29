@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type RolloutPolicy struct {
@@ -35,9 +36,9 @@ type OperationalLimits struct {
 }
 
 type OperationalLimiter interface {
-	AcquireResume(ctx context.Context, slotID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error)
+	AcquireResume(ctx context.Context, slotID string, sizeBytes int64, now time.Time) (*TransferRefusal, error)
 	ReleaseResume(ctx context.Context, slotID string) error
-	AllowForward(ctx context.Context, transferID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error)
+	AllowForward(ctx context.Context, transferID string, sizeBytes int64, now time.Time) (*TransferRefusal, error)
 	Snapshot(ctx context.Context, now time.Time) (OperationalSnapshot, error)
 }
 
@@ -60,9 +61,9 @@ type ManifestDebugView struct {
 	SchemaVersion    string                `json:"schema_version" yaml:"schema_version"`
 	SizeBytes        int64                 `json:"size_bytes,omitempty" yaml:"size_bytes,omitempty"`
 	ChunkCount       int                   `json:"chunk_count,omitempty" yaml:"chunk_count,omitempty"`
-	SensitivityClass core.SensitivityClass `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
-	TransferMode     core.TransferMode     `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
-	EncryptionMode   core.EncryptionMode   `json:"encryption_mode,omitempty" yaml:"encryption_mode,omitempty"`
+	SensitivityClass SensitivityClass `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
+	TransferMode     TransferMode     `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
+	EncryptionMode   EncryptionMode   `json:"encryption_mode,omitempty" yaml:"encryption_mode,omitempty"`
 	RecipientCount   int                   `json:"recipient_count,omitempty" yaml:"recipient_count,omitempty"`
 	ObjectRefCount   int                   `json:"object_ref_count,omitempty" yaml:"object_ref_count,omitempty"`
 	CreationTime     time.Time             `json:"creation_time,omitempty" yaml:"creation_time,omitempty"`
@@ -83,12 +84,12 @@ type TransferDebugView struct {
 	OfferID     string                 `json:"offer_id,omitempty" yaml:"offer_id,omitempty"`
 	LeaseID     string                 `json:"lease_id,omitempty" yaml:"lease_id,omitempty"`
 	RuntimeID   string                 `json:"runtime_id,omitempty" yaml:"runtime_id,omitempty"`
-	RouteMode   core.RouteMode         `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
+	RouteMode   RouteMode         `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
 	Manifest    ManifestDebugView      `json:"manifest" yaml:"manifest"`
 	Sealed      SealedContextDebugView `json:"sealed" yaml:"sealed"`
 }
 
-func (l *InMemoryOperationalLimiter) AcquireResume(_ context.Context, slotID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error) {
+func (l *InMemoryOperationalLimiter) AcquireResume(_ context.Context, slotID string, sizeBytes int64, now time.Time) (*TransferRefusal, error) {
 	if strings.TrimSpace(slotID) == "" {
 		return nil, fmt.Errorf("resume slot id required")
 	}
@@ -105,10 +106,10 @@ func (l *InMemoryOperationalLimiter) AcquireResume(_ context.Context, slotID str
 		return nil, nil
 	}
 	if l.Limits.MaxActiveResumeSlots > 0 && len(l.activeResumeSlots) >= l.Limits.MaxActiveResumeSlots {
-		return &core.TransferRefusal{Code: core.RefusalDestinationBusy, Message: "resume slot limit reached"}, nil
+		return &TransferRefusal{Code: RefusalDestinationBusy, Message: "resume slot limit reached"}, nil
 	}
 	if l.Limits.MaxResumeBytesWindow > 0 && l.resumeBytesWindow+sizeBytes > l.Limits.MaxResumeBytesWindow {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "resume bandwidth limit reached"}, nil
+		return &TransferRefusal{Code: RefusalTransferBudget, Message: "resume bandwidth limit reached"}, nil
 	}
 	l.activeResumeSlots[slotID] = sizeBytes
 	l.resumeBytesWindow += sizeBytes
@@ -125,7 +126,7 @@ func (l *InMemoryOperationalLimiter) ReleaseResume(_ context.Context, slotID str
 	return nil
 }
 
-func (l *InMemoryOperationalLimiter) AllowForward(_ context.Context, transferID string, sizeBytes int64, now time.Time) (*core.TransferRefusal, error) {
+func (l *InMemoryOperationalLimiter) AllowForward(_ context.Context, transferID string, sizeBytes int64, now time.Time) (*TransferRefusal, error) {
 	if strings.TrimSpace(transferID) == "" {
 		return nil, fmt.Errorf("transfer id required")
 	}
@@ -136,10 +137,10 @@ func (l *InMemoryOperationalLimiter) AllowForward(_ context.Context, transferID 
 	defer l.mu.Unlock()
 	l.resetWindowLocked(now)
 	if l.Limits.MaxForwardBytesWindow > 0 && l.forwardBytesWindow+sizeBytes > l.Limits.MaxForwardBytesWindow {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: "forward bandwidth limit reached"}, nil
+		return &TransferRefusal{Code: RefusalTransferBudget, Message: "forward bandwidth limit reached"}, nil
 	}
 	if l.Limits.MaxFederatedForwards > 0 && l.federatedForwards >= l.Limits.MaxFederatedForwards {
-		return &core.TransferRefusal{Code: core.RefusalDestinationBusy, Message: "federated forward limit reached"}, nil
+		return &TransferRefusal{Code: RefusalDestinationBusy, Message: "federated forward limit reached"}, nil
 	}
 	l.forwardBytesWindow += sizeBytes
 	l.federatedForwards++
@@ -180,7 +181,7 @@ func (l *InMemoryOperationalLimiter) resetWindowLocked(now time.Time) {
 	l.federatedForwards = 0
 }
 
-func RedactManifest(manifest core.ContextManifest) ManifestDebugView {
+func RedactManifest(manifest ContextManifest) ManifestDebugView {
 	return ManifestDebugView{
 		ContextID:        manifest.ContextID,
 		LineageID:        manifest.LineageID,
@@ -198,7 +199,7 @@ func RedactManifest(manifest core.ContextManifest) ManifestDebugView {
 	}
 }
 
-func RedactSealedContext(sealed core.SealedContext) SealedContextDebugView {
+func RedactSealedContext(sealed SealedContext) SealedContextDebugView {
 	return SealedContextDebugView{
 		EnvelopeVersion:    sealed.EnvelopeVersion,
 		ContextManifestRef: sealed.ContextManifestRef,
@@ -210,7 +211,7 @@ func RedactSealedContext(sealed core.SealedContext) SealedContextDebugView {
 	}
 }
 
-func BuildTransferDebugView(trustDomain string, offer core.HandoffOffer, runtimeID string, routeMode core.RouteMode, manifest core.ContextManifest, sealed core.SealedContext) TransferDebugView {
+func BuildTransferDebugView(trustDomain string, offer HandoffOffer, runtimeID string, routeMode RouteMode, manifest ContextManifest, sealed SealedContext) TransferDebugView {
 	return TransferDebugView{
 		TrustDomain: trustDomain,
 		OfferID:     offer.OfferID,
@@ -229,33 +230,33 @@ func (s *Service) OperationalSnapshot(ctx context.Context) (OperationalSnapshot,
 	return s.Limiter.Snapshot(ctx, s.nowUTC())
 }
 
-func (s *Service) validateRuntimeImportEligibility(runtime core.RuntimeDescriptor) *core.TransferRefusal {
+func (s *Service) validateRuntimeImportEligibility(runtime RuntimeDescriptor) *TransferRefusal {
 	policy := s.Rollout
 	if len(policy.AllowedImportCompatibilityClass) > 0 && !containsFoldString(policy.AllowedImportCompatibilityClass, runtime.CompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime compatibility class blocked by rollout policy"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime compatibility class blocked by rollout policy"}
 	}
 	if len(policy.AllowedImportRuntimeVersions) > 0 && !containsFoldString(policy.AllowedImportRuntimeVersions, runtime.RuntimeVersion) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime version not in rollout allowlist"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime version not in rollout allowlist"}
 	}
 	if len(policy.BlockedImportRuntimeVersions) > 0 && containsFoldString(policy.BlockedImportRuntimeVersions, runtime.RuntimeVersion) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime version blocked for import"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime version blocked for import"}
 	}
 	if strings.TrimSpace(policy.MinImportRuntimeVersion) != "" && compareVersion(runtime.RuntimeVersion, policy.MinImportRuntimeVersion) < 0 {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime version below rollout minimum"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime version below rollout minimum"}
 	}
 	return nil
 }
 
-func (s *Service) reserveResumeSlot(ctx context.Context, slotID string, sizeBytes int64) *core.TransferRefusal {
+func (s *Service) reserveResumeSlot(ctx context.Context, slotID string, sizeBytes int64) *TransferRefusal {
 	if s == nil || s.Limiter == nil {
 		return nil
 	}
 	refusal, err := s.Limiter.AcquireResume(ctx, slotID, sizeBytes, s.nowUTC())
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalDestinationBusy, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalDestinationBusy, Message: err.Error()}
 	}
 	if refusal != nil {
-		s.emit(ctx, core.FrameworkEventFMPRateLimited, core.SubjectRef{}, map[string]any{
+		s.emit(ctx, FrameworkEventFMPRateLimited, identity.SubjectRef{}, map[string]any{
 			"slot_id":    slotID,
 			"size_bytes": sizeBytes,
 			"reason":     refusal.Message,
@@ -271,16 +272,16 @@ func (s *Service) releaseResumeSlot(ctx context.Context, slotID string) {
 	_ = s.Limiter.ReleaseResume(ctx, slotID)
 }
 
-func (s *Service) allowForwardBudget(ctx context.Context, transferID string, sizeBytes int64) *core.TransferRefusal {
+func (s *Service) allowForwardBudget(ctx context.Context, transferID string, sizeBytes int64) *TransferRefusal {
 	if s == nil || s.Limiter == nil {
 		return nil
 	}
 	refusal, err := s.Limiter.AllowForward(ctx, transferID, sizeBytes, s.nowUTC())
 	if err != nil {
-		return &core.TransferRefusal{Code: core.RefusalTransferBudget, Message: err.Error()}
+		return &TransferRefusal{Code: RefusalTransferBudget, Message: err.Error()}
 	}
 	if refusal != nil {
-		s.emit(ctx, core.FrameworkEventFMPRateLimited, core.SubjectRef{}, map[string]any{
+		s.emit(ctx, FrameworkEventFMPRateLimited, identity.SubjectRef{}, map[string]any{
 			"transfer_id": transferID,
 			"size_bytes":  sizeBytes,
 			"reason":      refusal.Message,
@@ -289,7 +290,7 @@ func (s *Service) allowForwardBudget(ctx context.Context, transferID string, siz
 	return refusal
 }
 
-func (s *Service) emitObservability(ctx context.Context, eventType string, owner core.SubjectRef, payload map[string]any) {
+func (s *Service) emitObservability(ctx context.Context, eventType string, owner identity.SubjectRef, payload map[string]any) {
 	if s == nil {
 		return
 	}

@@ -13,16 +13,22 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/relurpnet"
 )
+
+// Type aliases for moved types
+type NodeDescriptor = relurpnet.NodeDescriptor
+type NodeCredential = relurpnet.NodeCredential
+type NodeHealth = relurpnet.NodeHealth
 
 // NodeStore persists paired nodes and credentials.
 type NodeStore interface {
-	GetNode(ctx context.Context, id string) (*core.NodeDescriptor, error)
-	ListNodes(ctx context.Context) ([]core.NodeDescriptor, error)
-	UpsertNode(ctx context.Context, node core.NodeDescriptor) error
+	GetNode(ctx context.Context, id string) (*NodeDescriptor, error)
+	ListNodes(ctx context.Context) ([]NodeDescriptor, error)
+	UpsertNode(ctx context.Context, node NodeDescriptor) error
 	RemoveNode(ctx context.Context, id string) error
-	GetCredential(ctx context.Context, deviceID string) (*core.NodeCredential, error)
-	SaveCredential(ctx context.Context, cred core.NodeCredential) error
+	GetCredential(ctx context.Context, deviceID string) (*NodeCredential, error)
+	SaveCredential(ctx context.Context, cred NodeCredential) error
 	SavePendingPairing(ctx context.Context, pairing PendingPairing) error
 	GetPendingPairing(ctx context.Context, code string) (*PendingPairing, error)
 	ListPendingPairings(ctx context.Context) ([]PendingPairing, error)
@@ -32,8 +38,8 @@ type NodeStore interface {
 
 // Connection is the framework view of an active node connection.
 type Connection interface {
-	Node() core.NodeDescriptor
-	Health() core.NodeHealth
+	Node() NodeDescriptor
+	Health() NodeHealth
 	Capabilities() []core.CapabilityDescriptor
 	Invoke(ctx context.Context, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error)
 	Close(ctx context.Context) error
@@ -53,7 +59,7 @@ type PairingConfig struct {
 }
 
 type pairingRequest struct {
-	cred      core.NodeCredential
+	cred      NodeCredential
 	expiresAt time.Time
 }
 
@@ -66,7 +72,7 @@ type pairingFailureBucket struct {
 
 type PendingPairing struct {
 	Code      string
-	Cred      core.NodeCredential
+	Cred      NodeCredential
 	ExpiresAt time.Time
 }
 
@@ -121,7 +127,7 @@ func (m *Manager) HandleDisconnect(ctx context.Context, nodeID string, reason st
 	return nil
 }
 
-func (m *Manager) RequestPairing(ctx context.Context, cred core.NodeCredential) (string, error) {
+func (m *Manager) RequestPairing(ctx context.Context, cred NodeCredential) (string, error) {
 	if err := cred.Validate(); err != nil {
 		return "", err
 	}

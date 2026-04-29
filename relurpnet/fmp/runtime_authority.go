@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func validateAuthoritativeRuntime(ad core.RuntimeAdvertisement) error {
+func validateAuthoritativeRuntime(ad RuntimeAdvertisement) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
@@ -24,7 +23,7 @@ func validateAuthoritativeRuntime(ad core.RuntimeAdvertisement) error {
 	return nil
 }
 
-func (s *Service) resolveRegisteredRuntimeAdvertisement(ctx context.Context, trustDomain, runtimeID string) (*core.RuntimeAdvertisement, error) {
+func (s *Service) resolveRegisteredRuntimeAdvertisement(ctx context.Context, trustDomain, runtimeID string) (*RuntimeAdvertisement, error) {
 	if s == nil || s.Discovery == nil {
 		return nil, fmt.Errorf("discovery store unavailable")
 	}

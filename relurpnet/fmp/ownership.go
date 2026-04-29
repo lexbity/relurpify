@@ -7,21 +7,20 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // OwnershipStore is part of the Phase 1 frozen FMP surface.
 // Later phases should swap the in-memory implementation for a durable
 // coordination-backed store behind this interface.
 type OwnershipStore interface {
-	CreateLineage(ctx context.Context, lineage core.LineageRecord) error
-	GetLineage(ctx context.Context, lineageID string) (*core.LineageRecord, bool, error)
-	UpsertAttempt(ctx context.Context, attempt core.AttemptRecord) error
-	GetAttempt(ctx context.Context, attemptID string) (*core.AttemptRecord, bool, error)
-	IssueLease(ctx context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*core.LeaseToken, error)
-	ValidateLease(ctx context.Context, lease core.LeaseToken, now time.Time) error
-	CommitHandoff(ctx context.Context, commit core.ResumeCommit) error
-	Fence(ctx context.Context, notice core.FenceNotice) error
+	CreateLineage(ctx context.Context, lineage LineageRecord) error
+	GetLineage(ctx context.Context, lineageID string) (*LineageRecord, bool, error)
+	UpsertAttempt(ctx context.Context, attempt AttemptRecord) error
+	GetAttempt(ctx context.Context, attemptID string) (*AttemptRecord, bool, error)
+	IssueLease(ctx context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*LeaseToken, error)
+	ValidateLease(ctx context.Context, lease LeaseToken, now time.Time) error
+	CommitHandoff(ctx context.Context, commit ResumeCommit) error
+	Fence(ctx context.Context, notice FenceNotice) error
 }
 
 type HandoffOfferReservation struct {
@@ -37,30 +36,30 @@ type HandoffOfferReservation struct {
 
 type InMemoryOwnershipStore struct {
 	mu             sync.RWMutex
-	lineages       map[string]core.LineageRecord
-	attempts       map[string]core.AttemptRecord
-	leaseByLineage map[string]core.LeaseToken
+	lineages       map[string]LineageRecord
+	attempts       map[string]AttemptRecord
+	leaseByLineage map[string]LeaseToken
 	offerByID      map[string]HandoffOfferReservation
 }
 
-func (s *InMemoryOwnershipStore) ListLineages(_ context.Context) ([]core.LineageRecord, error) {
+func (s *InMemoryOwnershipStore) ListLineages(_ context.Context) ([]LineageRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.LineageRecord, 0, len(s.lineages))
+	out := make([]LineageRecord, 0, len(s.lineages))
 	for _, lineage := range s.lineages {
 		out = append(out, lineage)
 	}
 	return out, nil
 }
 
-func (s *InMemoryOwnershipStore) CreateLineage(_ context.Context, lineage core.LineageRecord) error {
+func (s *InMemoryOwnershipStore) CreateLineage(_ context.Context, lineage LineageRecord) error {
 	if err := lineage.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.lineages == nil {
-		s.lineages = map[string]core.LineageRecord{}
+		s.lineages = map[string]LineageRecord{}
 	}
 	if _, ok := s.lineages[lineage.LineageID]; ok {
 		return fmt.Errorf("lineage %s already exists", lineage.LineageID)
@@ -69,7 +68,7 @@ func (s *InMemoryOwnershipStore) CreateLineage(_ context.Context, lineage core.L
 	return nil
 }
 
-func (s *InMemoryOwnershipStore) GetLineage(_ context.Context, lineageID string) (*core.LineageRecord, bool, error) {
+func (s *InMemoryOwnershipStore) GetLineage(_ context.Context, lineageID string) (*LineageRecord, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	lineage, ok := s.lineages[lineageID]
@@ -80,20 +79,20 @@ func (s *InMemoryOwnershipStore) GetLineage(_ context.Context, lineageID string)
 	return &copy, true, nil
 }
 
-func (s *InMemoryOwnershipStore) UpsertAttempt(_ context.Context, attempt core.AttemptRecord) error {
+func (s *InMemoryOwnershipStore) UpsertAttempt(_ context.Context, attempt AttemptRecord) error {
 	if err := attempt.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.attempts == nil {
-		s.attempts = map[string]core.AttemptRecord{}
+		s.attempts = map[string]AttemptRecord{}
 	}
 	s.attempts[attempt.AttemptID] = attempt
 	return nil
 }
 
-func (s *InMemoryOwnershipStore) GetAttempt(_ context.Context, attemptID string) (*core.AttemptRecord, bool, error) {
+func (s *InMemoryOwnershipStore) GetAttempt(_ context.Context, attemptID string) (*AttemptRecord, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	attempt, ok := s.attempts[attemptID]
@@ -104,12 +103,12 @@ func (s *InMemoryOwnershipStore) GetAttempt(_ context.Context, attemptID string)
 	return &copy, true, nil
 }
 
-func (s *InMemoryOwnershipStore) IssueLease(_ context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*core.LeaseToken, error) {
+func (s *InMemoryOwnershipStore) IssueLease(_ context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*LeaseToken, error) {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}
 	now := time.Now().UTC()
-	token := core.LeaseToken{
+	token := LeaseToken{
 		LeaseID:      lineageID + ":" + attemptID + ":" + now.Format(time.RFC3339Nano),
 		LineageID:    lineageID,
 		AttemptID:    attemptID,
@@ -121,7 +120,7 @@ func (s *InMemoryOwnershipStore) IssueLease(_ context.Context, lineageID, attemp
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.leaseByLineage == nil {
-		s.leaseByLineage = map[string]core.LeaseToken{}
+		s.leaseByLineage = map[string]LeaseToken{}
 	}
 	if existing, ok := s.leaseByLineage[lineageID]; ok && existing.FencingEpoch >= token.FencingEpoch {
 		token.FencingEpoch = existing.FencingEpoch + 1
@@ -130,7 +129,7 @@ func (s *InMemoryOwnershipStore) IssueLease(_ context.Context, lineageID, attemp
 	return &token, nil
 }
 
-func (s *InMemoryOwnershipStore) ValidateLease(_ context.Context, lease core.LeaseToken, now time.Time) error {
+func (s *InMemoryOwnershipStore) ValidateLease(_ context.Context, lease LeaseToken, now time.Time) error {
 	if err := lease.Validate(); err != nil {
 		return err
 	}
@@ -152,7 +151,7 @@ func (s *InMemoryOwnershipStore) ValidateLease(_ context.Context, lease core.Lea
 	return nil
 }
 
-func (s *InMemoryOwnershipStore) CommitHandoff(_ context.Context, commit core.ResumeCommit) error {
+func (s *InMemoryOwnershipStore) CommitHandoff(_ context.Context, commit ResumeCommit) error {
 	if err := commit.Validate(); err != nil {
 		return err
 	}
@@ -171,11 +170,11 @@ func (s *InMemoryOwnershipStore) CommitHandoff(_ context.Context, commit core.Re
 	lineage.UpdatedAt = commit.CommitTime.UTC()
 	lineage.LineageVersion++
 	s.lineages[commit.LineageID] = lineage
-	newAttempt.State = core.AttemptStateRunning
+	newAttempt.State = AttemptStateRunning
 	newAttempt.LastProgressTime = commit.CommitTime.UTC()
 	s.attempts[commit.NewAttemptID] = newAttempt
 	if oldAttempt, ok := s.attempts[commit.OldAttemptID]; ok {
-		oldAttempt.State = core.AttemptStateCommittedRemote
+		oldAttempt.State = AttemptStateCommittedRemote
 		oldAttempt.Fenced = true
 		if lease, ok := s.leaseByLineage[commit.LineageID]; ok && lease.AttemptID == commit.OldAttemptID {
 			oldAttempt.FencingEpoch = lease.FencingEpoch
@@ -186,7 +185,7 @@ func (s *InMemoryOwnershipStore) CommitHandoff(_ context.Context, commit core.Re
 	return nil
 }
 
-func (s *InMemoryOwnershipStore) Fence(_ context.Context, notice core.FenceNotice) error {
+func (s *InMemoryOwnershipStore) Fence(_ context.Context, notice FenceNotice) error {
 	if err := notice.Validate(); err != nil {
 		return err
 	}
@@ -198,8 +197,8 @@ func (s *InMemoryOwnershipStore) Fence(_ context.Context, notice core.FenceNotic
 	}
 	attempt.Fenced = true
 	attempt.FencingEpoch = notice.FencingEpoch
-	if attempt.State != core.AttemptStateCommittedRemote {
-		attempt.State = core.AttemptStateFenced
+	if attempt.State != AttemptStateCommittedRemote {
+		attempt.State = AttemptStateFenced
 	}
 	s.attempts[notice.AttemptID] = attempt
 	return nil
@@ -214,8 +213,8 @@ type DuplicateHandoffChecker interface {
 
 // AttemptLister is an optional extension to OwnershipStore for reconciliation queries.
 type AttemptLister interface {
-	ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]core.AttemptRecord, error)
-	ListExpiredLeases(ctx context.Context, now time.Time) ([]core.LeaseToken, error)
+	ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]AttemptRecord, error)
+	ListExpiredLeases(ctx context.Context, now time.Time) ([]LeaseToken, error)
 }
 
 // CommitChecker is an optional extension to OwnershipStore for checking commit existence.
@@ -238,7 +237,7 @@ func (s *InMemoryOwnershipStore) HasActiveAttemptForLineage(_ context.Context, l
 			continue
 		}
 		switch attempt.State {
-		case core.AttemptStateHandoffOffered, core.AttemptStateHandoffAccepted, core.AttemptStateResumePending:
+		case AttemptStateHandoffOffered, AttemptStateHandoffAccepted, AttemptStateResumePending:
 			return true, nil
 		}
 	}
@@ -246,16 +245,16 @@ func (s *InMemoryOwnershipStore) HasActiveAttemptForLineage(_ context.Context, l
 }
 
 // ListActiveAttemptsByLineage returns all attempts for the lineage that are not terminal or fenced.
-func (s *InMemoryOwnershipStore) ListActiveAttemptsByLineage(_ context.Context, lineageID string) ([]core.AttemptRecord, error) {
+func (s *InMemoryOwnershipStore) ListActiveAttemptsByLineage(_ context.Context, lineageID string) ([]AttemptRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []core.AttemptRecord
+	var out []AttemptRecord
 	for _, attempt := range s.attempts {
 		if attempt.LineageID != lineageID || attempt.Fenced {
 			continue
 		}
 		switch attempt.State {
-		case core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote, core.AttemptStateFenced:
+		case AttemptStateCompleted, AttemptStateFailed, AttemptStateOrphaned, AttemptStateCommittedRemote, AttemptStateFenced:
 			continue
 		default:
 			out = append(out, attempt)
@@ -265,10 +264,10 @@ func (s *InMemoryOwnershipStore) ListActiveAttemptsByLineage(_ context.Context, 
 }
 
 // ListExpiredLeases returns all leases that have expired.
-func (s *InMemoryOwnershipStore) ListExpiredLeases(_ context.Context, now time.Time) ([]core.LeaseToken, error) {
+func (s *InMemoryOwnershipStore) ListExpiredLeases(_ context.Context, now time.Time) ([]LeaseToken, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []core.LeaseToken
+	var out []LeaseToken
 	for _, token := range s.leaseByLineage {
 		if now.After(token.Expiry) {
 			out = append(out, token)

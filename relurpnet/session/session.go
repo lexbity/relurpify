@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // ErrSessionBoundaryViolation is returned when a caller crosses a session boundary.
@@ -33,8 +34,8 @@ type InboundMessage struct {
 	PeerID     string
 	ThreadID   string
 	ActorID    string
-	Owner      core.SubjectRef
-	Binding    *core.ExternalSessionBinding
+	Owner      identity.SubjectRef
+	Binding    *identity.ExternalSessionBinding
 	TrustClass core.TrustClass
 }
 
@@ -116,10 +117,10 @@ func (r *DefaultRouter) Route(ctx context.Context, msg InboundMessage) (*core.Se
 		Scope:          scope,
 		Partition:      partition,
 		ActorID:        routedActorID(msg),
-		Owner:          msg.Owner,
+		Owner:          core.DelegationSubjectRef{TenantID: msg.Owner.TenantID, Kind: string(msg.Owner.Kind), ID: msg.Owner.ID},
 		ChannelID:      msg.ChannelID,
 		PeerID:         msg.PeerID,
-		Binding:        msg.Binding,
+		Binding:        sessionBindingFromIdentity(msg.Binding),
 		TrustClass:     msg.TrustClass,
 		CreatedAt:      now,
 		LastActivityAt: now,
@@ -181,14 +182,14 @@ func (r *DefaultRouter) Authorize(ctx context.Context, req AuthorizationRequest)
 	hasExternalBinding := boundary.Binding != nil
 	resolvedExternal := hasExternalBinding && boundary.Owner.ID != ""
 	restrictedExternal := boundary.AllowsLegacyActorOwnership()
-	externalProvider := core.ExternalProvider("")
+	externalProvider := identity.ExternalProvider("")
 	externalAccountID := ""
 	externalChannelID := ""
 	externalConversationID := ""
 	externalThreadID := ""
 	externalUserID := ""
 	if boundary.Binding != nil {
-		externalProvider = boundary.Binding.Provider
+		externalProvider = identity.ExternalProvider(boundary.Binding.Provider)
 		externalAccountID = boundary.Binding.AccountID
 		externalChannelID = boundary.Binding.ChannelID
 		externalConversationID = boundary.Binding.ConversationID
@@ -211,7 +212,7 @@ func (r *DefaultRouter) Authorize(ctx context.Context, req AuthorizationRequest)
 			SessionOwnerID:         sessionOwnerID(boundary),
 			IsOwner:                isOwner,
 			IsDelegated:            isDelegated,
-			ExternalProvider:       externalProvider,
+			ExternalProvider:       string(externalProvider),
 			ExternalAccountID:      externalAccountID,
 			ExternalChannelID:      externalChannelID,
 			ExternalConversationID: externalConversationID,
@@ -288,4 +289,18 @@ func (r *DefaultRouter) isDelegated(ctx context.Context, boundary *core.SessionB
 		}
 	}
 	return false, nil
+}
+
+func sessionBindingFromIdentity(b *identity.ExternalSessionBinding) *core.SessionBinding {
+	if b == nil {
+		return nil
+	}
+	return &core.SessionBinding{
+		Provider:       string(b.Provider),
+		AccountID:      b.AccountID,
+		ChannelID:      b.ChannelID,
+		ConversationID: b.ConversationID,
+		ThreadID:       b.ThreadID,
+		ExternalUserID: b.ExternalUserID,
+	}
 }

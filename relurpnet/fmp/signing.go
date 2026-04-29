@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const SignatureAlgorithmEd25519 = "ed25519"
@@ -79,7 +78,7 @@ func (v *Ed25519Verifier) VerifyPayload(payload []byte, algorithm, signature str
 	return nil
 }
 
-func SignContextManifest(signer PayloadSigner, manifest *core.ContextManifest) error {
+func SignContextManifest(signer PayloadSigner, manifest *ContextManifest) error {
 	if signer == nil || manifest == nil {
 		return nil
 	}
@@ -88,11 +87,11 @@ func SignContextManifest(signer PayloadSigner, manifest *core.ContextManifest) e
 	}, func() string { return manifest.Signature }, func(v string) { manifest.Signature = v })
 }
 
-func VerifyContextManifest(verifier PayloadVerifier, manifest core.ContextManifest) error {
+func VerifyContextManifest(verifier PayloadVerifier, manifest ContextManifest) error {
 	return verifyPayloadObject(verifier, "context_manifest", manifest, manifest.SignatureAlgorithm, manifest.Signature)
 }
 
-func SignLeaseToken(signer PayloadSigner, token *core.LeaseToken) error {
+func SignLeaseToken(signer PayloadSigner, token *LeaseToken) error {
 	if signer == nil || token == nil {
 		return nil
 	}
@@ -101,11 +100,11 @@ func SignLeaseToken(signer PayloadSigner, token *core.LeaseToken) error {
 	}, func() string { return token.Signature }, func(v string) { token.Signature = v })
 }
 
-func VerifyLeaseToken(verifier PayloadVerifier, token core.LeaseToken) error {
+func VerifyLeaseToken(verifier PayloadVerifier, token LeaseToken) error {
 	return verifyPayloadObject(verifier, "lease_token", token, token.SignatureAlgorithm, token.Signature)
 }
 
-func SignHandoffOffer(signer PayloadSigner, offer *core.HandoffOffer) error {
+func SignHandoffOffer(signer PayloadSigner, offer *HandoffOffer) error {
 	if signer == nil || offer == nil {
 		return nil
 	}
@@ -114,11 +113,11 @@ func SignHandoffOffer(signer PayloadSigner, offer *core.HandoffOffer) error {
 	}, func() string { return offer.Signature }, func(v string) { offer.Signature = v })
 }
 
-func VerifyHandoffOffer(verifier PayloadVerifier, offer core.HandoffOffer) error {
+func VerifyHandoffOffer(verifier PayloadVerifier, offer HandoffOffer) error {
 	return verifyPayloadObject(verifier, "handoff_offer", offer, offer.SignatureAlgorithm, offer.Signature)
 }
 
-func SignHandoffAccept(signer PayloadSigner, accept *core.HandoffAccept) error {
+func SignHandoffAccept(signer PayloadSigner, accept *HandoffAccept) error {
 	if signer == nil || accept == nil {
 		return nil
 	}
@@ -127,11 +126,11 @@ func SignHandoffAccept(signer PayloadSigner, accept *core.HandoffAccept) error {
 	}, func() string { return accept.Signature }, func(v string) { accept.Signature = v })
 }
 
-func VerifyHandoffAccept(verifier PayloadVerifier, accept core.HandoffAccept) error {
+func VerifyHandoffAccept(verifier PayloadVerifier, accept HandoffAccept) error {
 	return verifyPayloadObject(verifier, "handoff_accept", accept, accept.SignatureAlgorithm, accept.Signature)
 }
 
-func SignResumeCommit(signer PayloadSigner, commit *core.ResumeCommit) error {
+func SignResumeCommit(signer PayloadSigner, commit *ResumeCommit) error {
 	if signer == nil || commit == nil {
 		return nil
 	}
@@ -140,11 +139,11 @@ func SignResumeCommit(signer PayloadSigner, commit *core.ResumeCommit) error {
 	}, func() string { return commit.Signature }, func(v string) { commit.Signature = v })
 }
 
-func VerifyResumeCommit(verifier PayloadVerifier, commit core.ResumeCommit) error {
+func VerifyResumeCommit(verifier PayloadVerifier, commit ResumeCommit) error {
 	return verifyPayloadObject(verifier, "resume_commit", commit, commit.SignatureAlgorithm, commit.Signature)
 }
 
-func SignFenceNotice(signer PayloadSigner, notice *core.FenceNotice) error {
+func SignFenceNotice(signer PayloadSigner, notice *FenceNotice) error {
 	if signer == nil || notice == nil {
 		return nil
 	}
@@ -153,11 +152,11 @@ func SignFenceNotice(signer PayloadSigner, notice *core.FenceNotice) error {
 	}, func() string { return notice.Signature }, func(v string) { notice.Signature = v })
 }
 
-func VerifyFenceNotice(verifier PayloadVerifier, notice core.FenceNotice) error {
+func VerifyFenceNotice(verifier PayloadVerifier, notice FenceNotice) error {
 	return verifyPayloadObject(verifier, "fence_notice", notice, notice.SignatureAlgorithm, notice.Signature)
 }
 
-func SignResumeReceipt(signer PayloadSigner, receipt *core.ResumeReceipt) error {
+func SignResumeReceipt(signer PayloadSigner, receipt *ResumeReceipt) error {
 	if signer == nil || receipt == nil {
 		return nil
 	}
@@ -166,11 +165,11 @@ func SignResumeReceipt(signer PayloadSigner, receipt *core.ResumeReceipt) error 
 	}, func() string { return receipt.Signature }, func(v string) { receipt.Signature = v })
 }
 
-func VerifyResumeReceipt(verifier PayloadVerifier, receipt core.ResumeReceipt) error {
+func VerifyResumeReceipt(verifier PayloadVerifier, receipt ResumeReceipt) error {
 	return verifyPayloadObject(verifier, "resume_receipt", receipt, receipt.SignatureAlgorithm, receipt.Signature)
 }
 
-func SignRuntimeDescriptor(signer PayloadSigner, descriptor *core.RuntimeDescriptor) error {
+func SignRuntimeDescriptor(signer PayloadSigner, descriptor *RuntimeDescriptor) error {
 	if signer == nil || descriptor == nil {
 		return nil
 	}
@@ -179,11 +178,11 @@ func SignRuntimeDescriptor(signer PayloadSigner, descriptor *core.RuntimeDescrip
 	}, func() string { return descriptor.Signature }, func(v string) { descriptor.Signature = v })
 }
 
-func VerifyRuntimeDescriptor(verifier PayloadVerifier, descriptor core.RuntimeDescriptor) error {
+func VerifyRuntimeDescriptor(verifier PayloadVerifier, descriptor RuntimeDescriptor) error {
 	return verifyPayloadObject(verifier, "runtime_descriptor", descriptor, descriptor.SignatureAlgorithm, descriptor.Signature)
 }
 
-func SignExportDescriptor(signer PayloadSigner, descriptor *core.ExportDescriptor) error {
+func SignExportDescriptor(signer PayloadSigner, descriptor *ExportDescriptor) error {
 	if signer == nil || descriptor == nil {
 		return nil
 	}
@@ -192,11 +191,11 @@ func SignExportDescriptor(signer PayloadSigner, descriptor *core.ExportDescripto
 	}, func() string { return descriptor.Signature }, func(v string) { descriptor.Signature = v })
 }
 
-func VerifyExportDescriptor(verifier PayloadVerifier, descriptor core.ExportDescriptor) error {
+func VerifyExportDescriptor(verifier PayloadVerifier, descriptor ExportDescriptor) error {
 	return verifyPayloadObject(verifier, "export_descriptor", descriptor, descriptor.SignatureAlgorithm, descriptor.Signature)
 }
 
-func SignTrustBundle(signer PayloadSigner, bundle *core.TrustBundle) error {
+func SignTrustBundle(signer PayloadSigner, bundle *TrustBundle) error {
 	if signer == nil || bundle == nil {
 		return nil
 	}
@@ -205,7 +204,7 @@ func SignTrustBundle(signer PayloadSigner, bundle *core.TrustBundle) error {
 	}, func() string { return bundle.Signature }, func(v string) { bundle.Signature = v })
 }
 
-func VerifyTrustBundle(verifier PayloadVerifier, bundle core.TrustBundle) error {
+func VerifyTrustBundle(verifier PayloadVerifier, bundle TrustBundle) error {
 	return verifyPayloadObject(verifier, "trust_bundle", bundle, bundle.SignatureAlgorithm, bundle.Signature)
 }
 

@@ -10,4 +10,4 @@
 //   - mcp: MCP transport, protocol, and server helpers.
 //   - node: node pairing and connection runtime helpers.
 //   - session: session routing and tenant-bound authorization.
-package middleware
+package relurpnet

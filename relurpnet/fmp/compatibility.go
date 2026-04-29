@@ -8,32 +8,31 @@ import (
 	"time"
 	"unicode"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func ValidateOfferCompatibility(runtime core.RuntimeDescriptor, offer core.HandoffOffer, destination core.ExportDescriptor, now time.Time) *core.TransferRefusal {
+func ValidateOfferCompatibility(runtime RuntimeDescriptor, offer HandoffOffer, destination ExportDescriptor, now time.Time) *TransferRefusal {
 	if strings.TrimSpace(runtime.RuntimeID) == "" {
 		return nil
 	}
 	if runtime.MaxContextSize > 0 && offer.ContextSizeBytes > runtime.MaxContextSize {
-		return &core.TransferRefusal{Code: core.RefusalContextTooLarge, Message: "context exceeds runtime max size"}
+		return &TransferRefusal{Code: RefusalContextTooLarge, Message: "context exceeds runtime max size"}
 	}
 	if len(runtime.SupportedContextClasses) > 0 && !containsFoldString(runtime.SupportedContextClasses, offer.ContextClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnsupportedContext, Message: "runtime does not support context class"}
+		return &TransferRefusal{Code: RefusalUnsupportedContext, Message: "runtime does not support context class"}
 	}
 	if len(destination.RequiredCompatibilityClasses) > 0 && !containsFoldString(destination.RequiredCompatibilityClasses, runtime.CompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime compatibility class not accepted"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "runtime compatibility class not accepted"}
 	}
 	if offer.SourceCompatibilityClass != "" && len(destination.RequiredCompatibilityClasses) > 0 && !containsFoldString(destination.RequiredCompatibilityClasses, offer.SourceCompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "source compatibility class not accepted by export"}
+		return &TransferRefusal{Code: RefusalIncompatibleRuntime, Message: "source compatibility class not accepted by export"}
 	}
 	if !runtime.ExpiresAt.IsZero() && now.After(runtime.ExpiresAt) {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "runtime advertisement expired"}
+		return &TransferRefusal{Code: RefusalAdmissionClosed, Message: "runtime advertisement expired"}
 	}
 	return nil
 }
 
-func ValidateImportedContextCompatibility(runtime core.RuntimeDescriptor, manifest core.ContextManifest, sealed core.SealedContext) error {
+func ValidateImportedContextCompatibility(runtime RuntimeDescriptor, manifest ContextManifest, sealed SealedContext) error {
 	if runtime.MaxContextSize > 0 && manifest.SizeBytes > runtime.MaxContextSize {
 		return fmt.Errorf("manifest size %d exceeds runtime max size %d", manifest.SizeBytes, runtime.MaxContextSize)
 	}
@@ -70,35 +69,35 @@ type CompatibilityWindowStore interface {
 
 // ValidateVersionSkew checks if schemaVersion and runtimeVersion fall within the configured window.
 // Uses lexicographic string comparison (safe for semver vX.Y.Z format).
-func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersion string) *core.TransferRefusal {
+func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersion string) *TransferRefusal {
 	if schemaVersion != "" && window.MinSchemaVersion != "" {
 		if compareNaturalVersion(schemaVersion, window.MinSchemaVersion) < 0 {
-			return &core.TransferRefusal{
-				Code:    core.RefusalIncompatibleRuntime,
+			return &TransferRefusal{
+				Code:    RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("schema version %s below minimum %s", schemaVersion, window.MinSchemaVersion),
 			}
 		}
 	}
 	if schemaVersion != "" && window.MaxSchemaVersion != "" {
 		if compareNaturalVersion(schemaVersion, window.MaxSchemaVersion) > 0 {
-			return &core.TransferRefusal{
-				Code:    core.RefusalIncompatibleRuntime,
+			return &TransferRefusal{
+				Code:    RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("schema version %s above maximum %s", schemaVersion, window.MaxSchemaVersion),
 			}
 		}
 	}
 	if runtimeVersion != "" && window.MinRuntimeVersion != "" {
 		if compareNaturalVersion(runtimeVersion, window.MinRuntimeVersion) < 0 {
-			return &core.TransferRefusal{
-				Code:    core.RefusalIncompatibleRuntime,
+			return &TransferRefusal{
+				Code:    RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("runtime version %s below minimum %s", runtimeVersion, window.MinRuntimeVersion),
 			}
 		}
 	}
 	if runtimeVersion != "" && window.MaxRuntimeVersion != "" {
 		if compareNaturalVersion(runtimeVersion, window.MaxRuntimeVersion) > 0 {
-			return &core.TransferRefusal{
-				Code:    core.RefusalIncompatibleRuntime,
+			return &TransferRefusal{
+				Code:    RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("runtime version %s above maximum %s", runtimeVersion, window.MaxRuntimeVersion),
 			}
 		}

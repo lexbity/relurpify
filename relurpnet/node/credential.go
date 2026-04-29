@@ -5,16 +5,14 @@ import (
 	"crypto/rand"
 	"errors"
 	"time"
-
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func GenerateCredential(deviceID string) (core.NodeCredential, ed25519.PrivateKey, error) {
+func GenerateCredential(deviceID string) (NodeCredential, ed25519.PrivateKey, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return core.NodeCredential{}, nil, err
+		return NodeCredential{}, nil, err
 	}
-	cred := core.NodeCredential{
+	cred := NodeCredential{
 		DeviceID:  deviceID,
 		PublicKey: append([]byte(nil), pub...),
 		IssuedAt:  time.Now().UTC(),
@@ -22,7 +20,7 @@ func GenerateCredential(deviceID string) (core.NodeCredential, ed25519.PrivateKe
 	return cred, priv, nil
 }
 
-func VerifyChallenge(cred core.NodeCredential, challenge []byte, sig []byte) error {
+func VerifyChallenge(cred NodeCredential, challenge []byte, sig []byte) error {
 	if err := cred.Validate(); err != nil {
 		return err
 	}

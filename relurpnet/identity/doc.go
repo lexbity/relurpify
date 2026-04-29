@@ -1,12 +1,9 @@
-// Package identity provides network-facing identity resolution helpers for the
-// middleware layer.
+// Package identity resolves agent and node identities to their assigned roles
+// and capability sets within the Relurpify trust model.
 //
-// This package is intentionally narrow. It owns bearer-token resolution,
-// explicit tenant and subject lookup contracts, and typed resolution errors
-// that network-facing servers can use to separate invalid credentials from
-// backend lookup failures.
-//
-// Nexus should use this package as the identity boundary for gateway and other
-// transport-facing authentication flows. Application-specific policy remains in
-// the app layer or the relevant middleware consumer.
+// IdentityResolver maps an identity (user, node, or agent) to the set of
+// policies and capabilities it is permitted to exercise. IdentityStore
+// provides durable persistence of tenant, subject, external identity, and
+// node enrollment records across restarts, supporting the Nexus gateway's
+// authentication and authorization flow.
 package identity

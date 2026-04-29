@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func verifierForTrustBundle(bundle core.TrustBundle, algorithm string) (PayloadVerifier, bool) {
+func verifierForTrustBundle(bundle TrustBundle, algorithm string) (PayloadVerifier, bool) {
 	if !strings.EqualFold(strings.TrimSpace(algorithm), SignatureAlgorithmEd25519) {
 		return nil, false
 	}

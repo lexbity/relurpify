@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	_ "github.com/mattn/go-sqlite3"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 var _ OwnershipStore = (*SQLiteOwnershipStore)(nil)
@@ -122,7 +123,7 @@ func (s *SQLiteOwnershipStore) init() error {
 	return nil
 }
 
-func (s *SQLiteOwnershipStore) CreateLineage(ctx context.Context, lineage core.LineageRecord) error {
+func (s *SQLiteOwnershipStore) CreateLineage(ctx context.Context, lineage LineageRecord) error {
 	if err := lineage.Validate(); err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ func (s *SQLiteOwnershipStore) CreateLineage(ctx context.Context, lineage core.L
 	return err
 }
 
-func (s *SQLiteOwnershipStore) GetLineage(ctx context.Context, lineageID string) (*core.LineageRecord, bool, error) {
+func (s *SQLiteOwnershipStore) GetLineage(ctx context.Context, lineageID string) (*LineageRecord, bool, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT
 		lineage_id, tenant_id, parent_lineage_id, task_class, context_class,
 		current_owner_attempt, current_owner_runtime, capability_envelope_json,
@@ -176,7 +177,7 @@ func (s *SQLiteOwnershipStore) GetLineage(ctx context.Context, lineageID string)
 	return lineage, true, nil
 }
 
-func (s *SQLiteOwnershipStore) ListLineages(ctx context.Context) ([]core.LineageRecord, error) {
+func (s *SQLiteOwnershipStore) ListLineages(ctx context.Context) ([]LineageRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT
 		lineage_id, tenant_id, parent_lineage_id, task_class, context_class,
 		current_owner_attempt, current_owner_runtime, capability_envelope_json,
@@ -189,7 +190,7 @@ func (s *SQLiteOwnershipStore) ListLineages(ctx context.Context) ([]core.Lineage
 		return nil, err
 	}
 	defer rows.Close()
-	out := make([]core.LineageRecord, 0)
+	out := make([]LineageRecord, 0)
 	for rows.Next() {
 		lineage, err := scanLineageRecord(rows)
 		if err != nil {
@@ -200,7 +201,7 @@ func (s *SQLiteOwnershipStore) ListLineages(ctx context.Context) ([]core.Lineage
 	return out, rows.Err()
 }
 
-func (s *SQLiteOwnershipStore) UpsertAttempt(ctx context.Context, attempt core.AttemptRecord) error {
+func (s *SQLiteOwnershipStore) UpsertAttempt(ctx context.Context, attempt AttemptRecord) error {
 	if err := attempt.Validate(); err != nil {
 		return err
 	}
@@ -234,7 +235,7 @@ func (s *SQLiteOwnershipStore) UpsertAttempt(ctx context.Context, attempt core.A
 	return err
 }
 
-func (s *SQLiteOwnershipStore) GetAttempt(ctx context.Context, attemptID string) (*core.AttemptRecord, bool, error) {
+func (s *SQLiteOwnershipStore) GetAttempt(ctx context.Context, attemptID string) (*AttemptRecord, bool, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT
 		attempt_id, lineage_id, runtime_id, state, lease_id, lease_expiry,
 		start_time, last_progress_time, fenced, fencing_epoch, previous_attempt_id
@@ -249,7 +250,7 @@ func (s *SQLiteOwnershipStore) GetAttempt(ctx context.Context, attemptID string)
 	return attempt, true, nil
 }
 
-func (s *SQLiteOwnershipStore) IssueLease(ctx context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*core.LeaseToken, error) {
+func (s *SQLiteOwnershipStore) IssueLease(ctx context.Context, lineageID, attemptID, issuer string, ttl time.Duration) (*LeaseToken, error) {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}
@@ -277,7 +278,7 @@ func (s *SQLiteOwnershipStore) IssueLease(ctx context.Context, lineageID, attemp
 		return nil, err
 	}
 
-	token := core.LeaseToken{
+	token := LeaseToken{
 		LeaseID:      fmt.Sprintf("%s:%s:%s", lineageID, attemptID, now.Format(time.RFC3339Nano)),
 		LineageID:    lineageID,
 		AttemptID:    attemptID,
@@ -325,7 +326,7 @@ func (s *SQLiteOwnershipStore) IssueLease(ctx context.Context, lineageID, attemp
 	return &token, nil
 }
 
-func (s *SQLiteOwnershipStore) ValidateLease(ctx context.Context, lease core.LeaseToken, now time.Time) error {
+func (s *SQLiteOwnershipStore) ValidateLease(ctx context.Context, lease LeaseToken, now time.Time) error {
 	if err := lease.Validate(); err != nil {
 		return err
 	}
@@ -335,7 +336,7 @@ func (s *SQLiteOwnershipStore) ValidateLease(ctx context.Context, lease core.Lea
 	row := s.db.QueryRowContext(ctx, `SELECT lease_id, attempt_id, issuer, issued_at, expiry, fencing_epoch, signature
 		FROM fmp_active_leases WHERE lineage_id = ?`, lease.LineageID)
 	var (
-		current         core.LeaseToken
+		current         LeaseToken
 		issuedAtRFC3339 string
 		expiryRFC3339   string
 	)
@@ -372,7 +373,7 @@ func (s *SQLiteOwnershipStore) ValidateLease(ctx context.Context, lease core.Lea
 	return nil
 }
 
-func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit core.ResumeCommit) error {
+func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit ResumeCommit) error {
 	if err := commit.Validate(); err != nil {
 		return err
 	}
@@ -462,7 +463,7 @@ func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit core.Re
 	if _, err := tx.ExecContext(ctx, `UPDATE fmp_attempts
 		SET state = ?, last_progress_time = ?
 		WHERE attempt_id = ?`,
-		string(core.AttemptStateRunning),
+		string(AttemptStateRunning),
 		formatRequiredTime(commit.CommitTime),
 		commit.NewAttemptID,
 	); err != nil {
@@ -475,7 +476,7 @@ func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit core.Re
 		if _, err := tx.ExecContext(ctx, `UPDATE fmp_attempts
 			SET state = ?, fenced = 1, fencing_epoch = CASE WHEN ? > fencing_epoch THEN ? ELSE fencing_epoch END
 			WHERE attempt_id = ?`,
-			string(core.AttemptStateCommittedRemote),
+			string(AttemptStateCommittedRemote),
 			fencingEpoch,
 			fencingEpoch,
 			commit.OldAttemptID,
@@ -488,13 +489,13 @@ func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit core.Re
 	); err != nil {
 		return err
 	}
-	newAttempt.State = core.AttemptStateRunning
+	newAttempt.State = AttemptStateRunning
 	newAttempt.LastProgressTime = commit.CommitTime.UTC()
 	_ = newAttempt
 	return tx.Commit()
 }
 
-func (s *SQLiteOwnershipStore) Fence(ctx context.Context, notice core.FenceNotice) error {
+func (s *SQLiteOwnershipStore) Fence(ctx context.Context, notice FenceNotice) error {
 	if err := notice.Validate(); err != nil {
 		return err
 	}
@@ -522,8 +523,8 @@ func (s *SQLiteOwnershipStore) Fence(ctx context.Context, notice core.FenceNotic
 		}
 		return err
 	}
-	nextState := string(core.AttemptStateFenced)
-	if currentState == string(core.AttemptStateCommittedRemote) {
+	nextState := string(AttemptStateFenced)
+	if currentState == string(AttemptStateCommittedRemote) {
 		nextState = currentState
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE fmp_attempts
@@ -548,9 +549,9 @@ func (s *SQLiteOwnershipStore) Fence(ctx context.Context, notice core.FenceNotic
 	return tx.Commit()
 }
 
-func scanLineageRecord(scanner interface{ Scan(...any) error }) (*core.LineageRecord, error) {
+func scanLineageRecord(scanner interface{ Scan(...any) error }) (*LineageRecord, error) {
 	var (
-		lineage                        core.LineageRecord
+		lineage                        LineageRecord
 		capabilityEnvelopeJSON         string
 		allowedFederationTargetsJSON   string
 		ownerJSON                      string
@@ -591,7 +592,7 @@ func scanLineageRecord(scanner interface{ Scan(...any) error }) (*core.LineageRe
 		return nil, err
 	}
 	if strings.TrimSpace(sessionBindingJSON) != "" {
-		var binding core.ExternalSessionBinding
+		var binding identity.ExternalSessionBinding
 		if err := json.Unmarshal([]byte(sessionBindingJSON), &binding); err != nil {
 			return nil, err
 		}
@@ -611,9 +612,9 @@ func scanLineageRecord(scanner interface{ Scan(...any) error }) (*core.LineageRe
 	return &lineage, nil
 }
 
-func scanAttemptRecord(scanner interface{ Scan(...any) error }) (*core.AttemptRecord, error) {
+func scanAttemptRecord(scanner interface{ Scan(...any) error }) (*AttemptRecord, error) {
 	var (
-		attempt                              core.AttemptRecord
+		attempt                              AttemptRecord
 		state                                string
 		leaseExpiryRFC3339, startTimeRFC3339 string
 		lastProgressTimeRFC3339              string
@@ -635,7 +636,7 @@ func scanAttemptRecord(scanner interface{ Scan(...any) error }) (*core.AttemptRe
 	if err != nil {
 		return nil, err
 	}
-	attempt.State = core.AttemptState(state)
+	attempt.State = AttemptState(state)
 	attempt.Fenced = fencedInt == 1
 	var parseErr error
 	attempt.LeaseExpiry, parseErr = parseOptionalTime(leaseExpiryRFC3339)
@@ -708,7 +709,7 @@ func (s *SQLiteOwnershipStore) HasActiveAttemptForLineage(ctx context.Context, l
 }
 
 // ListActiveAttemptsByLineage returns all non-terminal, non-fenced attempts for the lineage.
-func (s *SQLiteOwnershipStore) ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]core.AttemptRecord, error) {
+func (s *SQLiteOwnershipStore) ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]AttemptRecord, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT attempt_id, lineage_id, runtime_id, state, lease_id, lease_expiry,
 		        start_time, last_progress_time, fenced, fencing_epoch, previous_attempt_id
@@ -722,9 +723,9 @@ func (s *SQLiteOwnershipStore) ListActiveAttemptsByLineage(ctx context.Context, 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.AttemptRecord
+	var out []AttemptRecord
 	for rows.Next() {
-		var attempt core.AttemptRecord
+		var attempt AttemptRecord
 		var leaseIDStr, leaseExpiryStr, startTimeStr, lastProgressStr, prevAttemptStr string
 		if err := rows.Scan(&attempt.AttemptID, &attempt.LineageID, &attempt.RuntimeID, &attempt.State,
 			&leaseIDStr, &leaseExpiryStr, &startTimeStr, &lastProgressStr, &attempt.Fenced,
@@ -754,7 +755,7 @@ func (s *SQLiteOwnershipStore) ListActiveAttemptsByLineage(ctx context.Context, 
 }
 
 // ListExpiredLeases returns all leases that have expired.
-func (s *SQLiteOwnershipStore) ListExpiredLeases(ctx context.Context, now time.Time) ([]core.LeaseToken, error) {
+func (s *SQLiteOwnershipStore) ListExpiredLeases(ctx context.Context, now time.Time) ([]LeaseToken, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT lineage_id, lease_id, attempt_id, issuer, issued_at, expiry, fencing_epoch
 		 FROM fmp_active_leases
@@ -764,9 +765,9 @@ func (s *SQLiteOwnershipStore) ListExpiredLeases(ctx context.Context, now time.T
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.LeaseToken
+	var out []LeaseToken
 	for rows.Next() {
-		var token core.LeaseToken
+		var token LeaseToken
 		var issuedStr, expiryStr string
 		if err := rows.Scan(&token.LineageID, &token.LeaseID, &token.AttemptID, &token.Issuer,
 			&issuedStr, &expiryStr, &token.FencingEpoch); err != nil {

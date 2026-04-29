@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // DiscoveryStore is part of the Phase 1 frozen FMP surface.
 // The interface is stable even though the current implementation is still an
 // eventually consistent in-memory cache.
 type DiscoveryStore interface {
-	UpsertNodeAdvertisement(ctx context.Context, ad core.NodeAdvertisement) error
-	UpsertRuntimeAdvertisement(ctx context.Context, ad core.RuntimeAdvertisement) error
-	UpsertExportAdvertisement(ctx context.Context, ad core.ExportAdvertisement) error
-	ListNodeAdvertisements(ctx context.Context) ([]core.NodeAdvertisement, error)
-	ListRuntimeAdvertisements(ctx context.Context) ([]core.RuntimeAdvertisement, error)
-	ListExportAdvertisements(ctx context.Context) ([]core.ExportAdvertisement, error)
+	UpsertNodeAdvertisement(ctx context.Context, ad NodeAdvertisement) error
+	UpsertRuntimeAdvertisement(ctx context.Context, ad RuntimeAdvertisement) error
+	UpsertExportAdvertisement(ctx context.Context, ad ExportAdvertisement) error
+	ListNodeAdvertisements(ctx context.Context) ([]NodeAdvertisement, error)
+	ListRuntimeAdvertisements(ctx context.Context) ([]RuntimeAdvertisement, error)
+	ListExportAdvertisements(ctx context.Context) ([]ExportAdvertisement, error)
 	DeleteExpired(ctx context.Context, now time.Time) error
 }
 
@@ -28,8 +29,8 @@ type RouteSelectionRequest struct {
 	LineageID                  string
 	TenantID                   string
 	ExportName                 string
-	Owner                      core.SubjectRef
-	Actor                      core.SubjectRef
+	Owner                      identity.SubjectRef
+	Actor                      identity.SubjectRef
 	IsOwner                    bool
 	IsDelegated                bool
 	SessionID                  string
@@ -37,9 +38,9 @@ type RouteSelectionRequest struct {
 	TaskClass                  string
 	ContextClass               string
 	ContextSizeBytes           int64
-	SensitivityClass           core.SensitivityClass
+	SensitivityClass           SensitivityClass
 	RequiredCompatibilityClass string
-	RequiredRouteMode          core.RouteMode
+	RequiredRouteMode          RouteMode
 	AllowRemote                bool
 }
 
@@ -49,62 +50,62 @@ type RouteCandidate struct {
 	NodeID          string                  `json:"node_id,omitempty" yaml:"node_id,omitempty"`
 	RuntimeID       string                  `json:"runtime_id,omitempty" yaml:"runtime_id,omitempty"`
 	Imported        bool                    `json:"imported,omitempty" yaml:"imported,omitempty"`
-	RouteMode       core.RouteMode          `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
-	Export          core.ExportDescriptor   `json:"export" yaml:"export"`
-	Runtime         *core.RuntimeDescriptor `json:"runtime,omitempty" yaml:"runtime,omitempty"`
+	RouteMode       RouteMode          `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
+	Export          ExportDescriptor   `json:"export" yaml:"export"`
+	Runtime         *RuntimeDescriptor `json:"runtime,omitempty" yaml:"runtime,omitempty"`
 	Reason          string                  `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 type InMemoryDiscoveryStore struct {
 	mu       sync.RWMutex
-	nodes    map[string]core.NodeAdvertisement
-	runtimes map[string]core.RuntimeAdvertisement
-	exports  map[string]core.ExportAdvertisement
+	nodes    map[string]NodeAdvertisement
+	runtimes map[string]RuntimeAdvertisement
+	exports  map[string]ExportAdvertisement
 }
 
-func (s *InMemoryDiscoveryStore) UpsertNodeAdvertisement(_ context.Context, ad core.NodeAdvertisement) error {
+func (s *InMemoryDiscoveryStore) UpsertNodeAdvertisement(_ context.Context, ad NodeAdvertisement) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.nodes == nil {
-		s.nodes = map[string]core.NodeAdvertisement{}
+		s.nodes = map[string]NodeAdvertisement{}
 	}
 	s.nodes[qualifiedNodeName(ad.TrustDomain, ad.Node.ID)] = ad
 	return nil
 }
 
-func (s *InMemoryDiscoveryStore) UpsertRuntimeAdvertisement(_ context.Context, ad core.RuntimeAdvertisement) error {
+func (s *InMemoryDiscoveryStore) UpsertRuntimeAdvertisement(_ context.Context, ad RuntimeAdvertisement) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.runtimes == nil {
-		s.runtimes = map[string]core.RuntimeAdvertisement{}
+		s.runtimes = map[string]RuntimeAdvertisement{}
 	}
 	s.runtimes[qualifiedRuntimeName(ad.TrustDomain, ad.Runtime.RuntimeID)] = ad
 	return nil
 }
 
-func (s *InMemoryDiscoveryStore) UpsertExportAdvertisement(_ context.Context, ad core.ExportAdvertisement) error {
+func (s *InMemoryDiscoveryStore) UpsertExportAdvertisement(_ context.Context, ad ExportAdvertisement) error {
 	if err := ad.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.exports == nil {
-		s.exports = map[string]core.ExportAdvertisement{}
+		s.exports = map[string]ExportAdvertisement{}
 	}
 	s.exports[QualifiedExportName(ad.TrustDomain, ad.Export.ExportName)] = ad
 	return nil
 }
 
-func (s *InMemoryDiscoveryStore) ListNodeAdvertisements(_ context.Context) ([]core.NodeAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListNodeAdvertisements(_ context.Context) ([]NodeAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.NodeAdvertisement, 0, len(s.nodes))
+	out := make([]NodeAdvertisement, 0, len(s.nodes))
 	for _, ad := range s.nodes {
 		out = append(out, ad)
 	}
@@ -114,10 +115,10 @@ func (s *InMemoryDiscoveryStore) ListNodeAdvertisements(_ context.Context) ([]co
 	return out, nil
 }
 
-func (s *InMemoryDiscoveryStore) ListRuntimeAdvertisements(_ context.Context) ([]core.RuntimeAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListRuntimeAdvertisements(_ context.Context) ([]RuntimeAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.RuntimeAdvertisement, 0, len(s.runtimes))
+	out := make([]RuntimeAdvertisement, 0, len(s.runtimes))
 	for _, ad := range s.runtimes {
 		out = append(out, ad)
 	}
@@ -127,10 +128,10 @@ func (s *InMemoryDiscoveryStore) ListRuntimeAdvertisements(_ context.Context) ([
 	return out, nil
 }
 
-func (s *InMemoryDiscoveryStore) ListExportAdvertisements(_ context.Context) ([]core.ExportAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListExportAdvertisements(_ context.Context) ([]ExportAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]core.ExportAdvertisement, 0, len(s.exports))
+	out := make([]ExportAdvertisement, 0, len(s.exports))
 	for _, ad := range s.exports {
 		out = append(out, ad)
 	}
@@ -197,16 +198,16 @@ func ParseQualifiedExportName(value string) (trustDomain, exportName string, err
 
 // LiveDiscoveryStore is an optional extension that filters expired advertisements at query time.
 type LiveDiscoveryStore interface {
-	ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]core.NodeAdvertisement, error)
-	ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]core.RuntimeAdvertisement, error)
-	ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]core.ExportAdvertisement, error)
+	ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]NodeAdvertisement, error)
+	ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]RuntimeAdvertisement, error)
+	ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]ExportAdvertisement, error)
 }
 
 // ListLiveNodeAdvertisements returns only non-expired node advertisements.
-func (s *InMemoryDiscoveryStore) ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]core.NodeAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]NodeAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []core.NodeAdvertisement
+	var out []NodeAdvertisement
 	for _, ad := range s.nodes {
 		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
 			out = append(out, ad)
@@ -216,10 +217,10 @@ func (s *InMemoryDiscoveryStore) ListLiveNodeAdvertisements(ctx context.Context,
 }
 
 // ListLiveRuntimeAdvertisements returns only non-expired runtime advertisements.
-func (s *InMemoryDiscoveryStore) ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]core.RuntimeAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]RuntimeAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []core.RuntimeAdvertisement
+	var out []RuntimeAdvertisement
 	for _, ad := range s.runtimes {
 		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
 			out = append(out, ad)
@@ -229,10 +230,10 @@ func (s *InMemoryDiscoveryStore) ListLiveRuntimeAdvertisements(ctx context.Conte
 }
 
 // ListLiveExportAdvertisements returns only non-expired export advertisements.
-func (s *InMemoryDiscoveryStore) ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]core.ExportAdvertisement, error) {
+func (s *InMemoryDiscoveryStore) ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]ExportAdvertisement, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []core.ExportAdvertisement
+	var out []ExportAdvertisement
 	for _, ad := range s.exports {
 		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
 			out = append(out, ad)
