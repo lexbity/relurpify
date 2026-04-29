@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 // SessionMeta holds lightweight session metadata for listing.
@@ -37,7 +37,7 @@ type SessionStore struct {
 
 // NewSessionStore creates a store rooted at dir.
 func NewSessionStore(workspace string) *SessionStore {
-	root := config.New(workspace).SessionsDir()
+	root := manifest.New(workspace).SessionsDir()
 	return &SessionStore{root: root}
 }
 
