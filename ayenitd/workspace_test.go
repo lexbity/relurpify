@@ -52,14 +52,14 @@ func main() {}
 	if ws.Environment.Registry == nil {
 		t.Error("Environment.Registry is nil")
 	}
-	if ws.Environment.WorkflowStore == nil {
-		t.Error("Environment.WorkflowStore is nil")
+	if ws.Environment.AgentLifecycle == nil {
+		t.Error("Environment.AgentLifecycle is nil")
 	}
 	if ws.Environment.IndexManager == nil {
 		t.Error("Environment.IndexManager is nil")
 	}
-	if ws.Environment.Memory == nil {
-		t.Error("Environment.Memory is nil")
+	if ws.Environment.WorkingMemory == nil {
+		t.Error("Environment.WorkingMemory is nil")
 	}
 	if ws.Environment.Config == nil {
 		t.Error("Environment.Config is nil")

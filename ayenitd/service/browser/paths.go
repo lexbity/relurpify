@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -31,7 +31,7 @@ type browserSessionPaths struct {
 }
 
 func newBrowserPaths(workspaceRoot string) browserPaths {
-	base := filepath.Join(config.New(workspaceRoot).ConfigRoot(), "browser")
+	base := filepath.Join(manifest.New(workspaceRoot).ConfigRoot(), "browser")
 	return browserPaths{
 		serviceRoot:   base,
 		launchRoot:    filepath.Join(base, "launch"),

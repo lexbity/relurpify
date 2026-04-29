@@ -11,17 +11,14 @@ import (
 	"time"
 
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
-	archaeobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"gopkg.in/yaml.v3"
 )
@@ -31,13 +28,11 @@ var (
 	applyProfileFn              = llm.ApplyProfile
 	probeWorkspaceFn            = ProbeWorkspace
 	setupTelemetryFn            = setupTelemetry
-	openRuntimeStoresFn         = openRuntimeStores
+	openKnowledgeStoreFn        = openKnowledgeStore
 	loadAgentManifestSnapshotFn = manifest.LoadAgentManifestSnapshot
 	registerAgentFn             = fauthorization.RegisterAgent
 	newCommandRunnerFn          = fsandbox.NewCommandRunner
-	newHybridMemoryFn           = memory.NewHybridMemory
 	newProfileRegistryFn        = llm.NewProfileRegistry
-	newEmbedderFn               = retrieval.NewEmbedder
 	newInstrumentedModelFn      = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) core.LanguageModel {
 		return llm.NewInstrumentedModel(inner, telemetry, debug)
 	}
@@ -79,17 +74,12 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, err
 	}
 
-	// Phase D: Store Initialization
-	workflowStore, planStore, knowledgeStore, err := openRuntimeStoresFn(cfg.Workspace)
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("open runtime stores: %w", err)
-	}
+	// Phase D: KnowledgeStore initialization deferred until after BootstrapAgentRuntime
+	// where the graphdb.Engine is available from IndexManager.
 
 	// Phase E: Agent Registration + Authorization
 	manifestSnapshot, err := loadAgentManifestSnapshotFn(cfg.ManifestPath)
 	if err != nil {
-		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
 	}
@@ -104,7 +94,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		HITLTimeout:      cfg.HITLTimeout,
 	})
 	if err != nil {
-		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("sandbox registration failed: %w", err)
 	}
@@ -159,25 +148,24 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
-	runner, err := newCommandRunnerFn(registration.Manifest, registration.Runtime, cfg.Workspace)
+	// Build CommandRunnerConfig from manifest
+	var runnerConfig *contracts.CommandRunnerConfig
+	if registration.Manifest != nil {
+		runnerConfig = &contracts.CommandRunnerConfig{
+			Image:           registration.Manifest.Spec.Image,
+			RunAsUser:       registration.Manifest.Spec.Security.RunAsUser,
+			ReadOnlyRoot:    registration.Manifest.Spec.Security.ReadOnlyRoot,
+			NoNewPrivileges: registration.Manifest.Spec.Security.NoNewPrivileges,
+			Workspace:       cfg.Workspace,
+		}
+	}
+	runner, err := newCommandRunnerFn(runnerConfig, registration.Runtime)
 	if err != nil {
-		workflowStore.Close()
 		logFile.Close()
 		return nil, err
 	}
-	memStore, err := newHybridMemoryFn(cfg.MemoryPath)
-	if err != nil {
-		workflowStore.Close()
-		logFile.Close()
-		return nil, fmt.Errorf("memory init: %w", err)
-	}
-	if withVectorStore, ok := any(memStore).(interface {
-		WithVectorStore(memory.VectorStore) memory.MemoryStore
-	}); ok {
-		withVectorStore.WithVectorStore(memory.NewInMemoryVectorStore())
-	}
 
-	// Resolve model from manifest if not overridden in config.
+	// Resolve model from manifest if not overridden in manifest.
 	inferenceModel := cfg.InferenceModel
 	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
 		if specModel := registration.Manifest.Spec.Agent.Model.Name; specModel != "" && inferenceModel == "" {
@@ -185,9 +173,8 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 
-	profileRegistry, err := newProfileRegistryFn(config.New(cfg.Workspace).ModelProfilesDir())
+	profileRegistry, err := newProfileRegistryFn(manifest.New(cfg.Workspace).ModelProfilesDir())
 	if err != nil {
-		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
@@ -203,8 +190,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	backend.SetDebugLogging(logLLM)
 	model := newInstrumentedModelFn(backend.Model(), tel, logLLM)
 	_ = applyProfileFn(model, profileResolution.Profile)
-	guidanceBroker := guidance.NewGuidanceBroker(0)
-
 	// Wire permission event logger if event telemetry is available.
 	if et, ok := tel.(interface {
 		EmitPermissionEvent(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{})
@@ -231,21 +216,14 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		Model:               model,
 		Backend:             backend,
 		InferenceModel:      inferenceModel,
-		Memory:              memStore,
 		Telemetry:           tel,
 		MaxIterations:       cfg.MaxIterations,
 		SkipASTIndex:        cfg.SkipASTIndex,
 		AllowedCapabilities: cfg.AllowedCapabilities,
 		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
-		RetrievalDB:         workflowStore.DB(),
-		PlanStore:           planStore,
-		GuidanceBroker:      guidanceBroker,
-		WorkflowStore:       workflowStore,
-		KnowledgeStore:      knowledgeStore,
 	})
 	if err != nil {
-		workflowStore.Close()
 		logFile.Close()
 		return nil, err
 	}
@@ -257,15 +235,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase H: Embedder Initialization
-	embedder, err := newEmbedderFn(backend, embedderCfgFromConfig(cfg, inferenceModel))
-	if err != nil {
-		workflowStore.Close()
-		logFile.Close()
-		return nil, fmt.Errorf("build embedder: %w", err)
-	}
-	if embedder == nil && logger != nil {
-		logger.Printf("semantic indexing disabled: no embedder available")
-	}
 
 	// Phase I: ServiceManager Setup & Scheduler Registration
 	env := boot.Environment
@@ -278,7 +247,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 			EventBus:      bkcEvents,
 			WorkspaceRoot: cfg.Workspace,
 		})
-		if env.IndexManager.GraphDB != nil && workflowStore != nil {
+		if env.IndexManager.GraphDB != nil {
 			sm.Register("bkc.invalidation", &knowledge.InvalidationPass{
 				Store: &knowledge.ChunkStore{Graph: env.IndexManager.GraphDB},
 				Staleness: &knowledge.StalenessManager{
@@ -286,10 +255,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 					Propagate: true,
 					MaxDepth:  3,
 				},
-				Tensions: archaeobindings.Runtime{
-					WorkflowStore: workflowStore,
-					Now:           time.Now,
-				}.TensionService(),
 				Events:        bkcEvents,
 				WorkspaceRoot: cfg.Workspace,
 			})
@@ -304,9 +269,14 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Register additional services here if needed:
 	// sm.Register("custom-worker", &CustomWorker{})
 
-	env.Embedder = embedder
+	// Initialize KnowledgeStore now that GraphDB is available
+	knowledgeStore, err := openKnowledgeStoreFn(env.IndexManager.GraphDB)
+	if err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("open knowledge store: %w", err)
+	}
+
 	env.Scheduler = scheduler
-	env.GuidanceBroker = guidanceBroker
 	env.PermissionManager = registration.Permissions
 	env.CheckpointStore = nil // TODO: implement in framework
 	env.KnowledgeStore = knowledgeStore
@@ -425,7 +395,7 @@ func validateConfig(cfg WorkspaceConfig) error {
 func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
-		paths := config.New(cfg.Workspace)
+		paths := manifest.New(cfg.Workspace)
 		logPath = filepath.Join(paths.LogsDir(), "ayenitd.log")
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {

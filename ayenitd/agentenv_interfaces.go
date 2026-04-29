@@ -12,4 +12,5 @@ type (
 	CompatibilitySurfaceExtractor = agentenv.CompatibilitySurfaceExtractor
 	CompatibilitySurface          = agentenv.CompatibilitySurface
 	CompatibilitySurfaceRequest   = agentenv.CompatibilitySurfaceRequest
+	WorkspaceEnvironment          = agentenv.WorkspaceEnvironment
 )

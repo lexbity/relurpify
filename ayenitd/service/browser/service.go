@@ -64,7 +64,7 @@ type BrowserService struct {
 	startedAt      time.Time
 }
 
-// New creates a browser service from the supplied workspace config.
+// New creates a browser service from the supplied workspace manifest.
 func New(cfg BrowserServiceConfig) *BrowserService {
 	allowed := make(map[string]struct{}, len(cfg.AllowedBackends))
 	for _, backend := range cfg.AllowedBackends {

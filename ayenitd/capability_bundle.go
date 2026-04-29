@@ -11,13 +11,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
-	platformast "codeburg.org/lexbit/relurpify/platform/ast"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
@@ -40,7 +39,7 @@ var (
 	saveCodeIndexFn                 = func(ci *memory.CodeIndex) error { return ci.Save() }
 	startIndexingFn                 = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
 	newSearchEngineFn               = search.NewSearchEngine
-	attachASTSymbolProviderFn       = platformast.AttachASTSymbolProvider
+	attachASTSymbolProviderFn       = ast.AttachASTSymbolProvider
 	cleanupCapabilityBundleFn       = func(store *ast.SQLiteStore, manager *ast.IndexManager) {
 		if manager != nil {
 			_ = manager.Close()
@@ -140,7 +139,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	paths := config.New(workspace)
+	paths := manifest.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err
@@ -168,7 +167,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		})
 	}
 	attachASTSymbolProviderFn(manager, registry)
-	if err := register(platformast.NewASTTool(manager)); err != nil {
+	if err := register(ast.NewASTTool(manager)); err != nil {
 		return nil, err
 	}
 	codeIndex, err := newCodeIndexFn(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))

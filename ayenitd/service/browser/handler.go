@@ -10,6 +10,7 @@ import (
 	"time"
 
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
@@ -40,7 +41,7 @@ func (h *browserCapability) Parameters() []core.ToolParameter {
 	}
 }
 
-func (h *browserCapability) IsAvailable(context.Context, *core.Context) bool {
+func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) bool {
 	if h != nil && h.spec != nil && h.spec.Browser != nil {
 		return h.spec.Browser.Enabled
 	}
@@ -66,7 +67,7 @@ func (h *browserCapability) SetPermissionManager(manager *fauthorization.Permiss
 	}
 }
 
-func (h *browserCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	desc := core.CapabilityDescriptor{
 		ID:          "tool:browser",
 		Kind:        core.CapabilityKindTool,
@@ -81,7 +82,7 @@ func (h *browserCapability) Descriptor(context.Context, *core.Context) core.Capa
 		TrustClass:    core.TrustClassProviderLocalUntrusted,
 		RiskClasses:   []core.RiskClass{core.RiskClassNetwork, core.RiskClassSessioned, core.RiskClassExfiltration},
 		EffectClasses: []core.EffectClass{core.EffectClassNetworkEgress, core.EffectClassContextInsertion, core.EffectClassSessionCreation},
-		InputSchema:   core.ToolInputSchema(h),
+		InputSchema:   browserInputSchema(),
 		Availability: core.AvailabilitySpec{
 			Available: true,
 		},
@@ -92,47 +93,64 @@ func (h *browserCapability) Descriptor(context.Context, *core.Context) core.Capa
 	return core.NormalizeCapabilityDescriptor(desc)
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
-	return h.Execute(ctx, state, args)
+func browserInputSchema() *core.Schema {
+	return &core.Schema{
+		Type: "object",
+		Properties: map[string]*core.Schema{
+			"action":     {Type: "string"},
+			"session_id": {Type: "string"},
+			"backend":    {Type: "string", Default: defaultBrowserBackend},
+			"url":        {Type: "string"},
+			"selector":   {Type: "string"},
+			"text":       {Type: "string"},
+			"script":     {Type: "string"},
+			"timeout_ms": {Type: "number", Default: 10000},
+		},
+		Required: []string{"action"},
+	}
 }
 
-func (h *browserCapability) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+	return h.Execute(ctx, env, args)
+}
+
+func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
 	action := canonicalBrowserAction(fmt.Sprint(args["action"]))
-	if err := h.authorizeAction(ctx, action, state, args); err != nil {
+	if err := h.authorizeAction(ctx, action, env, args); err != nil {
 		return nil, err
 	}
 	switch action {
 	case browserActionOpen:
-		return h.service.open(ctx, state, args)
+		return h.service.open(ctx, env, args)
 	case browserActionNavigate:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
 		if err := session.Navigate(ctx, fmt.Sprint(args["url"])); err != nil {
 			return nil, err
 		}
-		return h.service.successWithSnapshot(ctx, state, session, sessionID, nil)
+		return h.service.successWithSnapshot(ctx, env, session, sessionID, nil)
 	case browserActionClick:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
 		if err := session.Click(ctx, fmt.Sprint(args["selector"])); err != nil {
 			return nil, err
 		}
-		return h.service.successWithSnapshot(ctx, state, session, sessionID, nil)
+		return h.service.successWithSnapshot(ctx, env, session, sessionID, nil)
 	case browserActionType:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
 		if err := session.Type(ctx, fmt.Sprint(args["selector"]), fmt.Sprint(args["text"])); err != nil {
 			return nil, err
 		}
-		return h.service.successWithSnapshot(ctx, state, session, sessionID, nil)
+		return h.service.successWithSnapshot(ctx, env, session, sessionID, nil)
 	case browserActionGetText:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +160,7 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		}
 		return success(withExtraction(sessionID, extraction, "text")), nil
 	case browserActionExtract:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -165,10 +183,10 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		result["structured_original_tokens"] = structuredExtraction.OriginalTokens
 		result["structured_final_tokens"] = structuredExtraction.FinalTokens
 		result["capabilities"] = session.Capabilities()
-		recordBrowserObservation(state, pageState)
+		recordBrowserObservation(env, pageState)
 		return success(result), nil
 	case browserActionGetHTML:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +196,7 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		}
 		return success(withExtraction(sessionID, extraction, "html")), nil
 	case browserActionGetAXTree:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +206,7 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		}
 		return success(withExtraction(sessionID, extraction, "accessibility_tree")), nil
 	case browserActionExecuteJS:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +216,7 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		}
 		return success(map[string]interface{}{"session_id": sessionID, "result": result}), nil
 	case browserActionScreenshot:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -212,16 +230,16 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 			"size_bytes": len(data),
 		}), nil
 	case browserActionWait:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
 		if err := session.WaitFor(ctx, waitConditionFromArgs(args), timeoutFromArgs(args)); err != nil {
 			return nil, err
 		}
-		return h.service.successWithSnapshot(ctx, state, session, sessionID, nil)
+		return h.service.successWithSnapshot(ctx, env, session, sessionID, nil)
 	case browserActionCurrentURL:
-		session, sessionID, err := h.service.lookupSession(state, args)
+		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
 			return nil, err
 		}
@@ -231,13 +249,13 @@ func (h *browserCapability) Execute(ctx context.Context, state *core.Context, ar
 		}
 		return success(map[string]interface{}{"session_id": sessionID, "url": currentURL}), nil
 	case browserActionClose:
-		return h.service.close(state, args)
+		return h.service.close(env, args)
 	default:
 		return nil, fmt.Errorf("unsupported browser action %q", action)
 	}
 }
 
-func (h *browserCapability) authorizeAction(ctx context.Context, action string, state *core.Context, args map[string]interface{}) error {
+func (h *browserCapability) authorizeAction(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}) error {
 	if action == "" {
 		return fmt.Errorf("browser action required")
 	}
@@ -284,7 +302,7 @@ func (h *browserCapability) authorizeAction(ctx context.Context, action string, 
 		if action == browserActionExecuteJS {
 			risk = fauthorization.RiskLevelHigh
 		}
-		return h.service.requireActionApproval(ctx, action, state, args, risk)
+		return h.service.requireActionApproval(ctx, action, env, args, risk)
 	default:
 		return fmt.Errorf("browser action %s has invalid policy %s", action, policy)
 	}
@@ -362,13 +380,13 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 	return nil
 }
 
-func (s *BrowserService) requireActionApproval(ctx context.Context, action string, state *core.Context, args map[string]interface{}, risk fauthorization.RiskLevel) error {
+func (s *BrowserService) requireActionApproval(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}, risk fauthorization.RiskLevel) error {
 	if s == nil || s.permissionManager == nil {
 		return fmt.Errorf("browser action %s requires approval but permission manager missing", action)
 	}
 	resource := s.agentID()
-	if state != nil {
-		if sessionID := defaultSessionID(state, args); sessionID != "" {
+	if env != nil {
+		if sessionID := defaultSessionID(env, args); sessionID != "" {
 			resource = sessionID
 		}
 	}

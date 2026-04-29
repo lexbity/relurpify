@@ -15,12 +15,14 @@ import (
 	"time"
 
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextmetric"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
 	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultBrowserTimeout = 15 * time.Second
@@ -63,7 +65,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       defaultBrowserBackend,
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewArtifactBudget(maxTokens),
+			Budget:            newBudgetManager(maxTokens),
 		})
 	case "webdriver":
 		backend, err := webdriver.New(ctx, webdriver.Config{
@@ -81,7 +83,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       "webdriver",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewArtifactBudget(8192),
+			Budget:            newBudgetManager(8192),
 		})
 	case "bidi":
 		backend, err := bidi.New(ctx, bidi.Config{
@@ -99,7 +101,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       "bidi",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewArtifactBudget(8192),
+			Budget:            newBudgetManager(8192),
 		})
 	default:
 		return nil, &platformbrowser.Error{
@@ -297,18 +299,18 @@ func allowBrowserCommand(ctx context.Context, cfg browserSessionConfig, binary s
 	if policy == nil {
 		return nil
 	}
-	return policy.AllowCommand(ctx, sandbox.CommandRequest{
+	return policy.AllowCommand(ctx, contracts.CommandRequest{
 		Args: append([]string{binary}, args...),
 	})
 }
 
-func browserLaunchPolicy(cfg browserSessionConfig) sandbox.CommandPolicy {
+func browserLaunchPolicy(cfg browserSessionConfig) contracts.CommandPolicy {
 	return browserCommandPolicyFromConfig(cfg)
 }
 
-func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPolicy {
+func browserCommandPolicyFromConfig(cfg browserSessionConfig) contracts.CommandPolicy {
 	if cfg.service != nil && cfg.service.commandPolicy != nil {
-		return cfg.service.commandPolicy
+		return commandPolicyAdapter{policy: cfg.service.commandPolicy}
 	}
 	if cfg.registration == nil || cfg.registration.Permissions == nil {
 		return nil
@@ -320,7 +322,121 @@ func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPol
 	if spec == nil && cfg.registration != nil && cfg.registration.Manifest != nil {
 		spec = cfg.registration.Manifest.Spec.Agent
 	}
-	return fauthorization.NewCommandAuthorizationPolicy(cfg.registration.Permissions, cfg.registration.ID, spec, "browser")
+	return commandPolicyAdapter{policy: fauthorization.NewCommandAuthorizationPolicy(cfg.registration.Permissions, cfg.registration.ID, spec, "browser")}
+}
+
+type commandPolicyAdapter struct {
+	policy sandbox.CommandPolicy
+}
+
+func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req contracts.CommandRequest) error {
+	if a.policy == nil {
+		return nil
+	}
+	return a.policy.AllowCommand(ctx, sandbox.CommandRequest{
+		Workdir: req.Workdir,
+		Args:    append([]string(nil), req.Args...),
+		Env:     append([]string(nil), req.Env...),
+		Input:   req.Input,
+		Timeout: req.Timeout,
+	})
+}
+
+type budgetManagerAdapter struct {
+	budget *contextmetric.ArtifactBudget
+}
+
+func newBudgetManager(maxTokens int) contracts.BudgetManager {
+	return budgetManagerAdapter{budget: contextmetric.NewArtifactBudget(maxTokens)}
+}
+
+func (b budgetManagerAdapter) Allocate(category string, tokens int, item contracts.BudgetItem) error {
+	if b.budget == nil {
+		return fmt.Errorf("budget unavailable")
+	}
+	var adapted contextmetric.BudgetItem
+	if item != nil {
+		adapted = budgetItemAdapter{item: item}
+	}
+	return b.budget.Allocate(category, tokens, adapted)
+}
+
+func (b budgetManagerAdapter) Free(category string, tokens int, itemID string) {
+	if b.budget == nil {
+		return
+	}
+	b.budget.Free(category, tokens, itemID)
+}
+
+func (b budgetManagerAdapter) GetRemainingBudget(category string) int {
+	if b.budget == nil {
+		return 0
+	}
+	return b.budget.GetRemainingBudget(category)
+}
+
+func (b budgetManagerAdapter) ShouldCompress() bool {
+	if b.budget == nil {
+		return false
+	}
+	return b.budget.ShouldCompress()
+}
+
+func (b budgetManagerAdapter) CanAddTokens(tokens int) bool {
+	if b.budget == nil {
+		return false
+	}
+	return b.budget.CanAddTokens(tokens)
+}
+
+type budgetItemAdapter struct {
+	item contracts.BudgetItem
+}
+
+func (b budgetItemAdapter) GetID() string {
+	if b.item == nil {
+		return ""
+	}
+	return b.item.GetID()
+}
+
+func (b budgetItemAdapter) GetTokenCount() int {
+	if b.item == nil {
+		return 0
+	}
+	return b.item.GetTokenCount()
+}
+
+func (b budgetItemAdapter) GetPriority() int {
+	if b.item == nil {
+		return 0
+	}
+	return b.item.GetPriority()
+}
+
+func (b budgetItemAdapter) CanCompress() bool {
+	if b.item == nil {
+		return false
+	}
+	return b.item.CanCompress()
+}
+
+func (b budgetItemAdapter) Compress() (contextmetric.BudgetItem, error) {
+	if b.item == nil {
+		return nil, nil
+	}
+	next, err := b.item.Compress()
+	if err != nil || next == nil {
+		return nil, err
+	}
+	return budgetItemAdapter{item: next}, nil
+}
+
+func (b budgetItemAdapter) CanEvict() bool {
+	if b.item == nil {
+		return false
+	}
+	return b.item.CanEvict()
 }
 
 func waitForCDPWebSocket(ctx context.Context, hostPort int) (string, error) {

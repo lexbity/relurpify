@@ -7,11 +7,11 @@ import (
 	"io"
 	"log"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capabilityplan"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
@@ -31,10 +31,10 @@ type Workspace struct {
 
 	// Derived fields for callers that need them
 	AgentSpec            *core.AgentRuntimeSpec
-	AgentDefinitions     map[string]*core.AgentDefinition
-	CompiledPolicy       *policybundle.CompiledPolicyBundle
-	EffectiveContract    *contractpkg.EffectiveAgentContract
-	CapabilityAdmissions []capabilityplan.AdmissionResult
+	AgentDefinitions     map[string]*agentspec.AgentDefinition
+	CompiledPolicy       *manifest.CompiledPolicyBundle
+	EffectiveContract    *manifest.EffectiveAgentContract
+	CapabilityAdmissions []capability.AdmissionResult
 	SkillResults         []frameworkskills.SkillResolution
 
 	// Observability
@@ -78,12 +78,6 @@ func (w *Workspace) Close() error {
 	if w.Backend != nil {
 		if err := w.Backend.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close backend: %w", err))
-		}
-	}
-
-	if c, ok := w.Environment.WorkflowStore.(io.Closer); ok {
-		if err := c.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close workflow store: %w", err))
 		}
 	}
 
@@ -133,11 +127,11 @@ func (w *Workspace) ListServices() []string {
 		return nil
 	}
 	sm := w.ServiceManager
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	sm.Mu.Lock()
+	defer sm.Mu.Unlock()
 
-	result := make([]string, 0, len(sm.registry))
-	for id := range sm.registry {
+	result := make([]string, 0, len(sm.Registry))
+	for id := range sm.Registry {
 		result = append(result, id)
 	}
 	return result

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
@@ -190,22 +191,26 @@ func (h *browserSessionHandle) serviceSnapshot() BrowserSessionSnapshot {
 	return snap
 }
 
-func recordBrowserObservation(state *core.Context, pageState *platformbrowser.PageState) {
-	if state == nil || pageState == nil {
+func recordBrowserObservation(env *contextdata.Envelope, pageState *platformbrowser.PageState) {
+	if env == nil || pageState == nil {
 		return
 	}
-	state.Set(browserLastPageStateKey, pageState)
+	env.SetWorkingValue(browserLastPageStateKey, pageState, contextdata.MemoryClassTask)
 	var snapshots []*platformbrowser.PageState
-	if existing, ok := state.Get(browserPageStateListKey); ok {
+	if existing, ok := env.GetWorkingValue(browserPageStateListKey); ok {
 		if typed, ok := existing.([]*platformbrowser.PageState); ok {
 			snapshots = append(snapshots, typed...)
 		}
 	}
 	snapshots = append(snapshots, pageState)
-	state.Set(browserPageStateListKey, snapshots)
-	state.AddInteraction("observation", formatBrowserObservation(pageState), map[string]interface{}{
-		"kind": "browser_page_state",
-		"url":  pageState.URL,
+	env.SetWorkingValue(browserPageStateListKey, snapshots, contextdata.MemoryClassTask)
+	env.AddInteraction(map[string]interface{}{
+		"role": "observation",
+		"text": formatBrowserObservation(pageState),
+		"metadata": map[string]interface{}{
+			"kind": "browser_page_state",
+			"url":  pageState.URL,
+		},
 	})
 }
 
@@ -268,23 +273,36 @@ func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, ag
 	})
 }
 
-func browserTaskScope(state *core.Context) string {
-	if state == nil {
+func browserTaskScope(env *contextdata.Envelope) string {
+	if env == nil {
 		return defaultBrowserScope
 	}
-	if taskID := strings.TrimSpace(state.GetString("task.id")); taskID != "" {
+	if taskID := strings.TrimSpace(env.TaskID); taskID != "" {
 		return taskID
+	}
+	if sessionID := strings.TrimSpace(env.SessionID); sessionID != "" {
+		return sessionID
 	}
 	return defaultBrowserScope
 }
 
-func defaultSessionID(state *core.Context, args map[string]interface{}) string {
+func browserWorkflowID(env *contextdata.Envelope) string {
+	if env == nil {
+		return ""
+	}
+	return strings.TrimSpace(env.SessionID)
+}
+
+func defaultSessionID(env *contextdata.Envelope, args map[string]interface{}) string {
 	sessionID := strings.TrimSpace(fmt.Sprint(args["session_id"]))
 	if sessionID != "" && sessionID != "<nil>" {
 		return sessionID
 	}
-	if state == nil {
+	if env == nil {
 		return ""
 	}
-	return strings.TrimSpace(state.GetString(browserDefaultSessionKey))
+	if current, ok := env.GetWorkingValue(browserDefaultSessionKey); ok {
+		return strings.TrimSpace(fmt.Sprint(current))
+	}
+	return ""
 }

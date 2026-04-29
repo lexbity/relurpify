@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
@@ -32,10 +33,7 @@ type browserSessionHandle struct {
 	service     *BrowserService
 }
 
-func (s *BrowserService) open(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	if state == nil || state.Registry() == nil {
-		return nil, fmt.Errorf("context registry unavailable")
-	}
+func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
 	backendName := s.resolveBackend(args)
 	cfg := browserSessionConfig{
 		backendName:  backendName,
@@ -55,21 +53,18 @@ func (s *BrowserService) open(ctx context.Context, state *core.Context, args map
 		cfg:         cfg,
 		factory:     factory,
 		telemetry:   s.telemetry,
-		taskID:      browserTaskScope(state),
-		workflowID:  strings.TrimSpace(state.GetString("workflow.id")),
+		taskID:      browserTaskScope(env),
+		workflowID:  browserWorkflowID(env),
 		agentID:     s.agentID(),
 		backendName: backendName,
 		createdAt:   time.Now().UTC(),
 		lastSeenAt:  time.Now().UTC(),
 		service:     s,
 	}
-	scope := browserTaskScope(state)
-	sessionID := state.Registry().RegisterScoped(scope, handle)
+	sessionID := s.nextSessionID()
 	handle.sessionID = sessionID
 	sessionPaths, err := s.ensureSessionPaths(sessionID)
 	if err != nil {
-		s.untrackSession(sessionID)
-		state.Registry().Remove(sessionID)
 		_ = handle.Close()
 		return nil, err
 	}
@@ -77,13 +72,15 @@ func (s *BrowserService) open(ctx context.Context, state *core.Context, args map
 	handle.cfg.paths = sessionPaths
 	s.trackSession(sessionID, handle)
 	if err := s.recordSessionActivity(sessionID, "open"); err != nil {
-		s.untrackSession(sessionID)
-		state.Registry().Remove(sessionID)
 		_ = handle.Close()
+		s.untrackSession(sessionID)
 		return nil, err
 	}
 	handle.noteActivity()
-	state.Set(browserDefaultSessionKey, sessionID)
+	if env != nil {
+		env.SetWorkingValue(browserDefaultSessionKey, sessionID, contextdata.MemoryClassTask)
+	}
+	scope := browserTaskScope(env)
 	emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), scope, "browser session opened", map[string]interface{}{
 		"browser_event":  "session_opened",
 		"browser_action": browserPermissionAction(browserActionOpen),
@@ -91,7 +88,7 @@ func (s *BrowserService) open(ctx context.Context, state *core.Context, args map
 		"backend":        backendName,
 	})
 	s.persistSessionMetadata(handle)
-	result, err := s.successWithSnapshot(ctx, state, handle, sessionID, map[string]interface{}{
+	result, err := s.successWithSnapshot(ctx, env, handle, sessionID, map[string]interface{}{
 		"backend":      backendName,
 		"capabilities": handle.Capabilities(),
 	})
@@ -101,21 +98,21 @@ func (s *BrowserService) open(ctx context.Context, state *core.Context, args map
 	return result, nil
 }
 
-func (s *BrowserService) close(state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	sessionID := defaultSessionID(state, args)
+func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
+	sessionID := defaultSessionID(env, args)
 	if sessionID == "" {
 		return nil, fmt.Errorf("browser session not found")
 	}
-	if state == nil || state.Registry() == nil {
-		return nil, fmt.Errorf("context registry unavailable")
-	}
 	handle := s.sessionHandle(sessionID)
-	state.Registry().Remove(sessionID)
 	s.untrackSession(sessionID)
-	if state.GetString(browserDefaultSessionKey) == sessionID {
-		state.Set(browserDefaultSessionKey, "")
+	if env != nil {
+		if current, ok := env.GetWorkingValue(browserDefaultSessionKey); ok {
+			if strings.TrimSpace(fmt.Sprint(current)) == sessionID {
+				env.SetWorkingValue(browserDefaultSessionKey, "", contextdata.MemoryClassTask)
+			}
+		}
 	}
-	emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(state), "browser session closed", map[string]interface{}{
+	emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(env), "browser session closed", map[string]interface{}{
 		"browser_event":  "session_closed",
 		"browser_action": browserPermissionAction(browserActionClose),
 		"session_id":     sessionID,
@@ -124,27 +121,20 @@ func (s *BrowserService) close(state *core.Context, args map[string]interface{})
 	return success(map[string]interface{}{"session_id": sessionID, "closed": true}), nil
 }
 
-func (s *BrowserService) lookupSession(state *core.Context, args map[string]interface{}) (*browserSessionHandle, string, error) {
-	sessionID := defaultSessionID(state, args)
+func (s *BrowserService) lookupSession(env *contextdata.Envelope, args map[string]interface{}) (*browserSessionHandle, string, error) {
+	sessionID := defaultSessionID(env, args)
 	if sessionID == "" {
 		return nil, "", fmt.Errorf("browser session not found")
 	}
-	if state == nil {
-		return nil, "", fmt.Errorf("context unavailable")
-	}
-	raw, ok := state.Registry().Lookup(sessionID)
-	if !ok {
+	raw := s.sessionHandle(sessionID)
+	if raw == nil {
 		return nil, "", fmt.Errorf("browser session %s not found", sessionID)
-	}
-	session, ok := raw.(*browserSessionHandle)
-	if !ok {
-		return nil, "", fmt.Errorf("browser session %s has invalid type", sessionID)
 	}
 	if err := s.recordSessionActivity(sessionID, strings.ToLower(strings.TrimSpace(fmt.Sprint(args["action"])))); err != nil {
 		return nil, "", err
 	}
-	session.noteActivity()
-	return session, sessionID, nil
+	raw.noteActivity()
+	return raw, sessionID, nil
 }
 
 func (s *BrowserService) sessionHandle(sessionID string) *browserSessionHandle {
@@ -212,6 +202,10 @@ func (s *BrowserService) trackSession(sessionID string, handle *browserSessionHa
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions[sessionID] = handle
+}
+
+func (s *BrowserService) nextSessionID() string {
+	return fmt.Sprintf("browser-%d", time.Now().UTC().UnixNano())
 }
 
 func (s *BrowserService) untrackSession(sessionID string) {
@@ -507,20 +501,20 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	return nil
 }
 
-func (s *BrowserService) successWithSnapshot(ctx context.Context, state *core.Context, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*core.ToolResult, error) {
+func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextdata.Envelope, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*core.ToolResult, error) {
 	if data == nil {
 		data = make(map[string]interface{})
 	}
 	data["session_id"] = sessionID
-	if state == nil || session == nil {
+	if env == nil || session == nil {
 		return success(data), nil
 	}
 	pageState, err := session.CapturePageState(ctx)
 	if err == nil && pageState != nil {
 		data["page_state"] = pageState
 		session.notePageState(pageState)
-		recordBrowserObservation(state, pageState)
-		emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(state), "browser page snapshot captured", map[string]interface{}{
+		recordBrowserObservation(env, pageState)
+		emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(env), "browser page snapshot captured", map[string]interface{}{
 			"browser_event": "page_snapshot",
 			"session_id":    sessionID,
 			"url":           pageState.URL,
