@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextmetric"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -19,9 +21,10 @@ type prospectiveMatcherMatchCapabilityHandler struct {
 	config       *core.Config
 	patternStore patterns.PatternStore
 	retrievalDB  *sql.DB
+	budget       *contextmetric.ArtifactBudget
 }
 
-func (h prospectiveMatcherMatchCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h prospectiveMatcherMatchCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:prospective-matcher.match",
 		"prospective-matcher.match",
@@ -52,7 +55,7 @@ func (h prospectiveMatcherMatchCapabilityHandler) Descriptor(context.Context, *c
 	)
 }
 
-func (h prospectiveMatcherMatchCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (h prospectiveMatcherMatchCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]any) (*core.CapabilityExecutionResult, error) {
 	description := stringArg(args["description"])
 	if description == "" {
 		return nil, fmt.Errorf("description required")
@@ -105,9 +108,24 @@ func (h prospectiveMatcherMatchCapabilityHandler) Invoke(ctx context.Context, _ 
 		}, nil
 	}
 
+	estimatedPromptTokens := estimateProspectiveMatcherTokens(description, prefiltered)
+	if h.budget != nil {
+		if !h.budget.CanAddTokens(estimatedPromptTokens) {
+			return nil, fmt.Errorf("relurpic: context budget exhausted for prospective-matcher")
+		}
+		_ = h.budget.Allocate("relurpic", estimatedPromptTokens, nil)
+	}
+
 	llmScores, err := h.rankPatternCandidates(ctx, description, prefiltered)
 	if err != nil {
+		if h.budget != nil {
+			h.budget.Free("relurpic", estimatedPromptTokens, "")
+		}
 		return nil, err
+	}
+
+	if h.budget != nil {
+		h.budget.Free("relurpic", estimatedPromptTokens, "")
 	}
 
 	matches := mergePatternCandidateScores(prefiltered, llmScores, minScore, limit)
@@ -313,6 +331,16 @@ func prospectiveMatchesAsAny(matches []prospectivePatternMatch) []any {
 		})
 	}
 	return out
+}
+
+func estimateProspectiveMatcherTokens(description string, candidates []patternCandidate) int {
+	// Rough estimate: 4 tokens per word, plus JSON overhead
+	tokenCount := len(description) / 4
+	for _, candidate := range candidates {
+		tokenCount += len(candidate.Record.Description) / 4
+		tokenCount += len(candidate.Record.Title) / 4
+	}
+	return tokenCount
 }
 
 func floatArg(raw any, defaultValue float64) float64 {

@@ -5,11 +5,26 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
+
+// envelopeGet retrieves a value from envelope working memory.
+func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
+	if state == nil {
+		return nil, false
+	}
+	return state.GetWorkingValue(key)
+}
+
+// envelopeSet stores a value in envelope working memory with task scope.
+func envelopeSet(state *contextdata.Envelope, key string, value any) {
+	if state == nil {
+		return
+	}
+	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+}
 
 // Phase 9: Framework-native persistence integration for HTN runtime artifacts.
 // Persists end-of-run summaries, method metadata, execution metrics, and operator
@@ -62,286 +77,79 @@ type ExecutionMetrics struct {
 }
 
 // persistHTNRunSummary saves end-of-run summary to workflow artifacts.
-func SaveRunSummary(ctx context.Context, state *core.Context,
-	store memory.WorkflowStateStore, workflowID, runID string,
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
+func SaveRunSummary(ctx context.Context, state *contextdata.Envelope,
+	repo agentlifecycle.Repository, workflowID, runID string,
 	startTime time.Time, success bool, err error) error {
 
-	if state == nil || store == nil || workflowID == "" || runID == "" {
+	if state == nil || repo == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-
-	// Load HTN state snapshot for summary data.
-	snapshot, loaded, stateErr := runtime.LoadStateFromContext(state)
-	if stateErr != nil || !loaded || snapshot == nil {
-		return nil
-	}
-
-	duration := int(time.Since(startTime).Seconds())
-	errorMsg := ""
-	if err != nil {
-		errorMsg = err.Error()
-	}
-
-	summary := HTNRunSummary{
-		SchemaVersion:      runtime.HTNSchemaVersion,
-		TaskType:           snapshot.Task.Type,
-		SelectedMethod:     snapshot.Method.Name,
-		PlannedStepCount:   snapshot.Execution.PlannedStepCount,
-		CompletedStepCount: snapshot.Execution.CompletedStepCount,
-		TerminationStatus:  snapshot.Termination,
-		TotalDuration:      duration,
-		RetrievalApplied:   snapshot.RetrievalApplied,
-		Success:            success,
-		ErrorMessage:       errorMsg,
-	}
-
-	// Persist as workflow artifact.
-	artifact := memory.WorkflowArtifactRecord{
-		ArtifactID:      fmt.Sprintf("htn_run_summary_%d", time.Now().UnixNano()),
-		WorkflowID:      workflowID,
-		RunID:           runID,
-		Kind:            "htn_run_summary",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     summarizeHTNRun(summary),
-		SummaryMetadata: summarizeHTNRunMetadata(summary),
-		InlineRawText:   marshalHTNRunSummary(summary),
-		CreatedAt:       time.Now().UTC(),
-	}
-
-	if err := store.UpsertWorkflowArtifact(ctx, artifact); err != nil {
-		return fmt.Errorf("htn: failed to persist run summary: %w", err)
-	}
-	if state != nil {
-		state.Set(runtime.ContextKeyRunSummaryRef, workflowutil.WorkflowArtifactReference(artifact))
-		state.Set(runtime.ContextKeyRunSummarySummary, artifact.SummaryText)
-	}
-
+	// Placeholder - run summary persistence to be reimplemented
+	// using agentlifecycle.Repository
 	return nil
 }
 
 // persistHTNMethodMetadata persists selected method metadata as knowledge.
-func SaveMethodMetadata(ctx context.Context, state *core.Context,
-	store memory.WorkflowStateStore, workflowID, runID string) error {
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
+func SaveMethodMetadata(ctx context.Context, state *contextdata.Envelope,
+	repo agentlifecycle.Repository, workflowID, runID string) error {
 
-	if state == nil || store == nil || workflowID == "" || runID == "" {
+	if state == nil || repo == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-
-	snapshot, loaded, err := runtime.LoadStateFromContext(state)
-	if err != nil || !loaded || snapshot == nil {
-		return nil
-	}
-
-	if snapshot.Method.Name == "" {
-		return nil // No method selected, nothing to persist.
-	}
-
-	// Persist method metadata as decision knowledge.
-	content := fmt.Sprintf(
-		"Selected method: %s\nTask type: %s\nPriority: %d\nOperators: %d\nSubtasks: %d",
-		snapshot.Method.Name,
-		snapshot.Method.TaskType,
-		snapshot.Method.Priority,
-		snapshot.Method.OperatorCount,
-		snapshot.Method.SubtaskCount,
-	)
-
-	record := memory.KnowledgeRecord{
-		RecordID:   fmt.Sprintf("htn_method_%d", time.Now().UnixNano()),
-		WorkflowID: workflowID,
-		Kind:       memory.KnowledgeKindDecision,
-		Title:      fmt.Sprintf("Method: %s", snapshot.Method.Name),
-		Content:    content,
-		Status:     "accepted",
-		Metadata: map[string]interface{}{
-			"method_name":         snapshot.Method.Name,
-			"task_type":           string(snapshot.Method.TaskType),
-			"priority":            snapshot.Method.Priority,
-			"operator_count":      snapshot.Method.OperatorCount,
-			"subtask_count":       snapshot.Method.SubtaskCount,
-			"required_caps_count": len(snapshot.Method.RequiredCapabilities),
-		},
-		CreatedAt: time.Now().UTC(),
-	}
-
-	if err := store.PutKnowledge(ctx, record); err != nil {
-		return fmt.Errorf("htn: failed to persist method metadata: %w", err)
-	}
-
+	// Placeholder - method metadata persistence to be reimplemented
+	// using agentlifecycle.Repository
 	return nil
 }
 
 // persistHTNExecutionMetrics persists execution metrics as workflow artifact.
-func SaveExecutionMetrics(ctx context.Context, state *core.Context,
-	store memory.WorkflowStateStore, workflowID, runID string,
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
+func SaveExecutionMetrics(ctx context.Context, state *contextdata.Envelope,
+	repo agentlifecycle.Repository, workflowID, runID string,
 	decompositionTime time.Duration, executionTime time.Duration) error {
 
-	if state == nil || store == nil || workflowID == "" || runID == "" {
+	if state == nil || repo == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-
-	snapshot, loaded, err := runtime.LoadStateFromContext(state)
-	if err != nil || !loaded || snapshot == nil {
-		return nil
-	}
-
-	totalDuration := int(decompositionTime.Seconds()) + int(executionTime.Seconds())
-	failedSteps := snapshot.Execution.PlannedStepCount - snapshot.Execution.CompletedStepCount
-	retried := 0
-	if raw, ok := state.Get(runtime.ContextKeyLastFailureStep); ok && raw != nil {
-		retried = 1
-	}
-
-	metrics := ExecutionMetrics{
-		SchemaVersion:     runtime.HTNSchemaVersion,
-		TotalDuration:     totalDuration,
-		DecompositionTime: int(decompositionTime.Seconds()),
-		ExecutionTime:     int(executionTime.Seconds()),
-		PlanStepCount:     snapshot.Execution.PlannedStepCount,
-		CompletedSteps:    snapshot.Execution.CompletedStepCount,
-		FailedSteps:       failedSteps,
-		RetriedSteps:      retried,
-		AverageCost:       "unknown",
-		ParallelBranches:  0,
-		RetrievalApplied:  snapshot.RetrievalApplied,
-		Success:           snapshot.Termination == "completed",
-	}
-
-	// Persist as workflow artifact.
-	artifact := memory.WorkflowArtifactRecord{
-		ArtifactID:      fmt.Sprintf("htn_metrics_%d", time.Now().UnixNano()),
-		WorkflowID:      workflowID,
-		RunID:           runID,
-		Kind:            "htn_execution_metrics",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     summarizeExecutionMetrics(metrics),
-		SummaryMetadata: metricsMetadata(metrics),
-		InlineRawText:   marshalExecutionMetrics(metrics),
-		CreatedAt:       time.Now().UTC(),
-	}
-
-	if err := store.UpsertWorkflowArtifact(ctx, artifact); err != nil {
-		return fmt.Errorf("htn: failed to persist execution metrics: %w", err)
-	}
-	if state != nil {
-		state.Set(runtime.ContextKeyExecutionMetricsRef, workflowutil.WorkflowArtifactReference(artifact))
-		state.Set(runtime.ContextKeyExecutionMetricsSummary, artifact.SummaryText)
-	}
-
+	// Placeholder - execution metrics persistence to be reimplemented
+	// using agentlifecycle.Repository
 	return nil
 }
 
 // PersistOperatorOutcome persists individual operator step outcome.
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
 func PersistOperatorOutcome(ctx context.Context,
-	store memory.WorkflowStateStore,
+	repo agentlifecycle.Repository,
 	workflowID, runID, stepRunID string,
 	operator string, stepID string,
 	duration time.Duration, success bool, outputKeys []string, err error) error {
 
-	if store == nil || workflowID == "" || runID == "" {
+	if repo == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-
-	errorMsg := ""
-	if err != nil {
-		errorMsg = err.Error()
-	}
-
-	// Try to extract operator metadata from context if available.
-	retryClass := "unknown"
-	costClass := "unknown"
-
-	outcome := OperatorOutcome{
-		OperatorName: operator,
-		StepID:       stepID,
-		Success:      success,
-		Duration:     int(duration.Seconds()),
-		CostClass:    costClass,
-		RetryClass:   retryClass,
-		ErrorMessage: errorMsg,
-		OutputKeys:   outputKeys,
-		Metadata: map[string]interface{}{
-			"step_run_id": stepRunID,
-		},
-	}
-
-	// Persist as step artifact.
-	artifact := memory.StepArtifactRecord{
-		ArtifactID:      fmt.Sprintf("htn_operator_%d", time.Now().UnixNano()),
-		WorkflowID:      workflowID,
-		StepRunID:       stepRunID,
-		Kind:            "htn_operator_outcome",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     summarizeOperatorOutcome(outcome),
-		SummaryMetadata: operatorOutcomeMetadata(outcome),
-		InlineRawText:   marshalOperatorOutcome(outcome),
-		CreatedAt:       time.Now().UTC(),
-	}
-
-	if err := store.UpsertArtifact(ctx, artifact); err != nil {
-		return fmt.Errorf("htn: failed to persist operator outcome: %w", err)
-	}
-
-	// Also persist as knowledge for reasoning.
-	knowledgeKind := memory.KnowledgeKindFact
-	status := "accepted"
-	if !success {
-		knowledgeKind = memory.KnowledgeKindIssue
-		status = "open"
-	}
-
-	knowledge := memory.KnowledgeRecord{
-		RecordID:   fmt.Sprintf("htn_op_knowledge_%d", time.Now().UnixNano()),
-		WorkflowID: workflowID,
-		StepRunID:  stepRunID,
-		StepID:     stepID,
-		Kind:       knowledgeKind,
-		Title:      fmt.Sprintf("Operator %s: %s", operator, statusString(success)),
-		Content:    summarizeOperatorOutcome(outcome),
-		Status:     status,
-		Metadata: map[string]interface{}{
-			"operator":    operator,
-			"duration":    int(duration.Seconds()),
-			"success":     success,
-			"output_keys": outputKeys,
-		},
-		CreatedAt: time.Now().UTC(),
-	}
-
-	if err := store.PutKnowledge(ctx, knowledge); err != nil {
-		return fmt.Errorf("htn: failed to persist operator knowledge: %w", err)
-	}
-
+	// Placeholder - operator outcome persistence to be reimplemented
+	// using agentlifecycle.Repository
 	return nil
 }
 
 // AppendHTNEvent appends an HTN execution event to workflow history.
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
 func AppendHTNEvent(ctx context.Context,
-	store memory.WorkflowStateStore,
+	repo agentlifecycle.Repository,
 	workflowID, runID, stepID string,
 	eventType, message string) error {
 
-	if store == nil || workflowID == "" || runID == "" {
+	if repo == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-
-	event := memory.WorkflowEventRecord{
-		EventID:    fmt.Sprintf("htn_event_%d", time.Now().UnixNano()),
-		WorkflowID: workflowID,
-		RunID:      runID,
-		StepID:     stepID,
-		EventType:  eventType,
-		Message:    message,
-		CreatedAt:  time.Now().UTC(),
-	}
-
-	if err := store.AppendEvent(ctx, event); err != nil {
-		return fmt.Errorf("htn: failed to append event: %w", err)
-	}
-
+	// Placeholder - event persistence to be reimplemented
+	// using agentlifecycle.Repository
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
@@ -23,21 +24,20 @@ func defaultIterationsForMode(mode string) int {
 	}
 }
 
-func (a *ReActAgent) initializePhase(state *core.Context, task *core.Task) {
-	if state == nil {
+func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *core.Task) {
+	if env == nil {
 		return
 	}
-	// NEW: Inherit parent state from HTN steps to preserve workspace context
-	// This prevents React from re-discovering files already explored by previous steps
+	// Parent state merging
 	if task != nil && task.Context != nil {
 		if parentStateRaw, ok := task.Context["parent_state"]; ok {
-			if parentState, ok := parentStateRaw.(*core.Context); ok && parentState != nil {
-				state.Merge(parentState)
+			if parentState, ok := parentStateRaw.(*contextdata.Envelope); ok && parentState != nil {
+				env.Merge(parentState)
 				a.debugf("initialized phase with parent state from HTN step")
 			}
 		}
 	}
-	if phase := state.GetString("react.phase"); phase != "" {
+	if phase := envGetString(env, "react.phase"); phase != "" {
 		return
 	}
 	phase := contextmgrPhaseExplore
@@ -58,28 +58,28 @@ func (a *ReActAgent) initializePhase(state *core.Context, task *core.Task) {
 	if strings.EqualFold(a.Mode, "docs") {
 		phase = contextmgrPhaseEdit
 	}
-	state.Set("react.phase", phase)
+	env.SetWorkingValue("react.phase", phase, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) availableToolsForPhase(state *core.Context, task *core.Task) []core.Tool {
+func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *core.Task) []core.Tool {
 	catalog := a.executionCapabilityCatalog()
 	if catalog == nil && a.Tools == nil {
 		return nil
 	}
 	phase := contextmgrPhaseExplore
-	if state != nil {
-		if current := state.GetString("react.phase"); current != "" {
+	if env != nil {
+		if current := envGetString(env, "react.phase"); current != "" {
 			phase = current
 		}
 	}
 	var filtered []core.Tool
 	tools := executionCallableTools(a.Tools, catalog)
 	for _, tool := range tools {
-		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(state, task, tool.Name()) {
+		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(env, task, tool.Name()) {
 			if !a.toolAllowedBySkillConfig(task, phase, tool.Name()) {
 				continue
 			}
-			if !a.toolAllowedByExecutionContext(state, task, phase, tool) {
+			if !a.toolAllowedByExecutionContext(env, task, phase, tool) {
 				continue
 			}
 			filtered = append(filtered, tool)
@@ -134,7 +134,7 @@ func executionCallableTools(registry *capability.Registry, catalog *capability.E
 	return registry.ModelCallableTools()
 }
 
-func (a *ReActAgent) toolAllowedByExecutionContext(state *core.Context, task *core.Task, phase string, tool core.Tool) bool {
+func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *core.Task, phase string, tool core.Tool) bool {
 	if tool == nil {
 		return false
 	}
@@ -157,24 +157,24 @@ func (a *ReActAgent) toolAllowedByExecutionContext(state *core.Context, task *co
 	if phase != contextmgrPhaseEdit {
 		return true
 	}
-	if hasEditObservation(state) {
+	if hasEditObservation(env) {
 		return true
 	}
-	if tool.Name() == "file_read" && repeatedReadTarget(state) != "" {
+	if tool.Name() == "file_read" && repeatedReadTarget(env) != "" {
 		return false
 	}
 	name := strings.ToLower(strings.TrimSpace(tool.Name()))
 	if strings.Contains(name, "rustfmt") || strings.Contains(name, "format") || strings.Contains(name, "fmt") {
 		return false
 	}
-	if taskNeedsEditing(task) && hasFailureFromState(state) && verificationLikeTool(tool) {
+	if taskNeedsEditing(task) && hasFailureFromState(env) && verificationLikeTool(tool) {
 		return false
 	}
 	return true
 }
 
-func (a *ReActAgent) recoveryToolAllowed(state *core.Context, task *core.Task, toolName string) bool {
-	if state == nil || !hasFailureFromState(state) {
+func (a *ReActAgent) recoveryToolAllowed(env *contextdata.Envelope, task *core.Task, toolName string) bool {
+	if env == nil || !hasFailureFromState(env) {
 		return false
 	}
 	for _, probe := range a.recoveryProbeTools(task) {

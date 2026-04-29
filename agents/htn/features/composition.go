@@ -8,7 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // Phase 12: HTN as reusable composition primitive.
@@ -33,8 +32,9 @@ type CompositionPrimitive struct {
 type MethodComposer struct {
 	// Library is the base method library.
 	Library *runtime.MethodLibrary
-	// Store provides access to historical performance data.
-	Store memory.WorkflowStateStore
+	// TODO: Replace with agentlifecycle.Repository
+	// per the agentlifecycle workflow-store removal plan
+	Store interface{}
 	// WorkflowID scopes artifact queries.
 	WorkflowID string
 }
@@ -89,7 +89,9 @@ type PerformanceMetrics struct {
 
 // MethodPerformanceTracker analyzes method effectiveness.
 type MethodPerformanceTracker struct {
-	Store      memory.WorkflowStateStore
+	// TODO: Replace with agentlifecycle.Repository
+	// per the agentlifecycle workflow-store removal plan
+	Store      interface{}
 	WorkflowID string
 }
 
@@ -155,8 +157,9 @@ func (m *PerformanceMetrics) ComputeRecommendationRating() float64 {
 type KnowledgeBasedMethodSelector struct {
 	// Library to select from.
 	Library *runtime.MethodLibrary
-	// Store for historical data.
-	Store memory.WorkflowStateStore
+	// TODO: Replace with agentlifecycle.Repository
+	// per the agentlifecycle workflow-store removal plan
+	Store interface{}
 	// WorkflowID for scoping.
 	WorkflowID string
 	// MinConfidenceThreshold (0.0-1.0) for recommendations.

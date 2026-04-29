@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -19,7 +20,7 @@ type commenterAnnotateCapabilityHandler struct {
 	retrievalDB  *sql.DB
 }
 
-func (h commenterAnnotateCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h commenterAnnotateCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:commenter.annotate",
 		"commenter.annotate",
@@ -51,7 +52,7 @@ func (h commenterAnnotateCapabilityHandler) Descriptor(context.Context, *core.Co
 	)
 }
 
-func (h commenterAnnotateCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (h commenterAnnotateCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]any) (*core.CapabilityExecutionResult, error) {
 	if h.commentStore == nil {
 		return nil, fmt.Errorf("comment store unavailable")
 	}

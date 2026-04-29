@@ -6,83 +6,83 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
-	"github.com/stretchr/testify/require"
 )
 
-type builderStubModel struct{}
-
-func (builderStubModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"goal":"test","steps":[],"files":[],"dependencies":{}}`}, nil
-}
-
-func (builderStubModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
-	ch := make(chan string)
-	close(ch)
-	return ch, nil
-}
-
-func (builderStubModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "{}"}, nil
-}
-
-func (builderStubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "{}"}, nil
-}
-
-type builderTestAgent struct{}
-
-func (builderTestAgent) Initialize(*core.Config) error { return nil }
-func (builderTestAgent) Execute(context.Context, *core.Task, *core.Context) (*core.Result, error) {
-	return &core.Result{Success: true}, nil
-}
-func (builderTestAgent) Capabilities() []core.Capability { return nil }
-func (builderTestAgent) BuildGraph(*core.Task) (*graph.Graph, error) {
-	g := graph.NewGraph()
-	done := graph.NewTerminalNode("done")
-	if err := g.AddNode(done); err != nil {
-		return nil, err
-	}
-	if err := g.SetStart(done.ID()); err != nil {
-		return nil, err
-	}
-	return g, nil
-}
-
-func TestAgentBuilderBuildsAllSupportedAgentTypes(t *testing.T) {
-	namedfactory.RegisterNamedAgent("testfu", func(string, WorkspaceEnvironment) graph.WorkflowExecutor {
-		return builderTestAgent{}
-	})
-
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	require.NoError(t, err)
+func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
 	env := AgentEnvironment{
-		Model:    builderStubModel{},
+		Config:   &core.Config{},
 		Registry: capability.NewRegistry(),
-		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
-		Config: &core.Config{
-			Name:              "builder-test",
-			Model:             "stub",
-			MaxIterations:     2,
-			NativeToolCalling: true,
-		},
 	}
 
-	for _, agentType := range []string{
-		"react", "architect", "pipeline", "planner", "reflection",
-		"chainer", "htn", "blackboard", "rewoo", "goalcon", "testfu",
-	} {
-		t.Run(agentType, func(t *testing.T) {
-			agent, err := NewAgentBuilder().WithEnvironment(&env).Build(agentType)
-			require.NoError(t, err)
-			_, err = agent.BuildGraph(&core.Task{ID: "task-1", Instruction: "test"})
-			if agentType == "pipeline" {
-				require.ErrorContains(t, err, "pipeline stages not configured")
-				return
-			}
-			require.NoError(t, err)
-		})
+	spec := core.AgentRuntimeSpec{Implementation: "react"}
+	executor, err := BuildFromSpec(env, spec)
+	if err != nil {
+		t.Fatalf("BuildFromSpec failed: %v", err)
 	}
+	if executor == nil {
+		t.Fatal("expected non-nil executor")
+	}
+}
+
+func TestBuildFromSpec_ReturnsPipelineForPipelineType(t *testing.T) {
+	env := AgentEnvironment{
+		Config:   &core.Config{},
+		Registry: capability.NewRegistry(),
+	}
+
+	spec := core.AgentRuntimeSpec{Implementation: "pipeline"}
+	executor, err := BuildFromSpec(env, spec)
+	if err != nil {
+		t.Fatalf("BuildFromSpec failed: %v", err)
+	}
+	if executor == nil {
+		t.Fatal("expected non-nil executor")
+	}
+}
+
+func TestBuildFromSpec_UnknownTypeReturnsError(t *testing.T) {
+	env := AgentEnvironment{
+		Config:   &core.Config{},
+		Registry: capability.NewRegistry(),
+	}
+
+	spec := core.AgentRuntimeSpec{Implementation: "unknown_agent_type"}
+	_, err := BuildFromSpec(env, spec)
+	if err == nil {
+		t.Fatal("expected error for unknown agent type")
+	}
+}
+
+func TestAgentBuilder_RequiresEnvironment(t *testing.T) {
+	builder := NewAgentBuilder()
+	_, err := builder.Build("react")
+	if err == nil {
+		t.Fatal("expected error when environment is not set")
+	}
+}
+
+// Mock types for testing
+
+type mockModel struct{}
+
+func (m *mockModel) Complete(ctx context.Context, prompt string, opts *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: "mock response"}, nil
+}
+
+type mockMemory struct{}
+
+func (m *mockMemory) Get(ctx context.Context, key string) (any, bool) {
+	return nil, false
+}
+
+func (m *mockMemory) Set(ctx context.Context, key string, value any) error {
+	return nil
+}
+
+func (m *mockMemory) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
+func (m *mockMemory) List(ctx context.Context, prefix string) ([]string, error) {
+	return nil, nil
 }

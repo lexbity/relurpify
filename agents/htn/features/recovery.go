@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // Note: VerificationHint and FileFocus need to be defined as structs with proper fields
@@ -65,7 +65,7 @@ type RecoveryStrategy interface {
 	// CanApply checks if strategy is applicable.
 	CanApply(stepID string, retryClass RetryClass, attemptCount int, maxAttempts int) bool
 	// Execute applies the recovery strategy.
-	Execute(ctx context.Context, state *core.Context, stepID string, lastError error) error
+	Execute(ctx context.Context, state *contextdata.Envelope, stepID string, lastError error) error
 }
 
 // IdempotentRecoveryStrategy - Direct retry without state modification.
@@ -80,7 +80,7 @@ func (s *IdempotentRecoveryStrategy) CanApply(stepID string, retryClass RetryCla
 	return retryClass == RetryClassIdempotent && attemptCount < maxAttempts
 }
 
-func (s *IdempotentRecoveryStrategy) Execute(ctx context.Context, state *core.Context, stepID string, lastError error) error {
+func (s *IdempotentRecoveryStrategy) Execute(ctx context.Context, state *contextdata.Envelope, stepID string, lastError error) error {
 	// No state modification needed - operator is idempotent
 	// Operator will be re-executed with same inputs
 	return nil
@@ -98,18 +98,18 @@ func (s *StatelessRecoveryStrategy) CanApply(stepID string, retryClass RetryClas
 	return retryClass == RetryClassStateless && attemptCount < maxAttempts
 }
 
-func (s *StatelessRecoveryStrategy) Execute(ctx context.Context, state *core.Context, stepID string, lastError error) error {
+func (s *StatelessRecoveryStrategy) Execute(ctx context.Context, state *contextdata.Envelope, stepID string, lastError error) error {
 	if state == nil {
 		return nil
 	}
 
 	// Clear operator-specific state by setting to nil
 	contextKey := fmt.Sprintf("operator_state.%s", stepID)
-	state.Set(contextKey, nil)
+	state.SetWorkingValue(contextKey, nil, contextdata.MemoryClassTask)
 
 	// Clear step history by setting to nil
 	historyKey := fmt.Sprintf("step_history.%s", stepID)
-	state.Set(historyKey, nil)
+	state.SetWorkingValue(historyKey, nil, contextdata.MemoryClassTask)
 
 	return nil
 }
@@ -118,7 +118,7 @@ func (s *StatelessRecoveryStrategy) Execute(ctx context.Context, state *core.Con
 // Used for operations where preconditions may have changed.
 type ProbedRecoveryStrategy struct {
 	// Prober is called to check if preconditions are met
-	Prober func(ctx context.Context, state *core.Context, stepID string) (bool, error)
+	Prober func(ctx context.Context, state *contextdata.Envelope, stepID string) (bool, error)
 }
 
 func (s *ProbedRecoveryStrategy) Name() string {
@@ -129,7 +129,7 @@ func (s *ProbedRecoveryStrategy) CanApply(stepID string, retryClass RetryClass, 
 	return retryClass == RetryClassProbed && attemptCount < maxAttempts
 }
 
-func (s *ProbedRecoveryStrategy) Execute(ctx context.Context, state *core.Context, stepID string, lastError error) error {
+func (s *ProbedRecoveryStrategy) Execute(ctx context.Context, state *contextdata.Envelope, stepID string, lastError error) error {
 	if s.Prober == nil {
 		return nil
 	}
@@ -228,7 +228,7 @@ type VerificationStrategy interface {
 	// Name returns strategy name.
 	Name() string
 	// Verify checks if step completed successfully.
-	Verify(ctx context.Context, state *core.Context, vctx *VerificationContext) (bool, []string)
+	Verify(ctx context.Context, state *contextdata.Envelope, vctx *VerificationContext) (bool, []string)
 }
 
 // HintBasedVerificationStrategy uses VerificationHint guidance.
@@ -238,7 +238,7 @@ func (s *HintBasedVerificationStrategy) Name() string {
 	return "hint_based"
 }
 
-func (s *HintBasedVerificationStrategy) Verify(ctx context.Context, state *core.Context, vctx *VerificationContext) (bool, []string) {
+func (s *HintBasedVerificationStrategy) Verify(ctx context.Context, state *contextdata.Envelope, vctx *VerificationContext) (bool, []string) {
 	if vctx.Hint == nil || len(vctx.Hint.Criteria) == 0 {
 		// No hint — defer to next strategy.
 		return false, nil
@@ -265,7 +265,7 @@ func (s *ResultBasedVerificationStrategy) Name() string {
 	return "result_based"
 }
 
-func (s *ResultBasedVerificationStrategy) Verify(ctx context.Context, state *core.Context, vctx *VerificationContext) (bool, []string) {
+func (s *ResultBasedVerificationStrategy) Verify(ctx context.Context, state *contextdata.Envelope, vctx *VerificationContext) (bool, []string) {
 	if vctx.ExecutionResult == nil {
 		return false, []string{"no execution result"}
 	}
@@ -322,7 +322,7 @@ func (e *RecoveryPolicyEngine) DetermineRecoveryAction(
 // ApplyRecoveryStrategy executes the determined recovery strategy.
 func (e *RecoveryPolicyEngine) ApplyRecoveryStrategy(
 	ctx context.Context,
-	state *core.Context,
+	state *contextdata.Envelope,
 	strategy RecoveryStrategy,
 	stepID string,
 	lastError error,
@@ -337,7 +337,7 @@ func (e *RecoveryPolicyEngine) ApplyRecoveryStrategy(
 // VerifyStepCompletion verifies that a step completed successfully.
 func (e *RecoveryPolicyEngine) VerifyStepCompletion(
 	ctx context.Context,
-	state *core.Context,
+	state *contextdata.Envelope,
 	vctx *VerificationContext,
 ) (bool, []string) {
 	if vctx == nil {
@@ -368,8 +368,9 @@ func (e *RecoveryPolicyEngine) VerifyStepCompletion(
 
 // RecoveryContextBuilder builds recovery context from available metadata and state.
 type RecoveryContextBuilder struct {
-	// Store provides access to historical artifacts.
-	Store memory.WorkflowStateStore
+	// TODO: Replace with agentlifecycle.Repository
+	// per the agentlifecycle workflow-store removal plan
+	Store interface{}
 	// WorkflowID scopes artifact queries.
 	WorkflowID string
 }

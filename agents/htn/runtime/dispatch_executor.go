@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/agents/plan"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 const (
@@ -24,28 +26,30 @@ type primitiveDispatcher struct {
 // and falls back to the provided workflow executor when no capability target
 // resolves. Use NewPrimitiveDispatcher when an executor-shaped wrapper is
 // required, such as plan execution with branch isolation.
-func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *core.Task, state *core.Context) (*core.Result, error) {
-	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, state)
+func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, env)
 }
 
-func NewPrimitiveDispatcher(tools *capability.Registry, fallback graph.WorkflowExecutor) graph.WorkflowExecutor {
+func NewPrimitiveDispatcher(tools *capability.Registry, fallback graph.WorkflowExecutor) plan.WorkflowExecutor {
 	return &primitiveDispatcher{
 		tools:    tools,
 		fallback: fallback,
 	}
 }
 
-func (d *primitiveDispatcher) BranchExecutor() (graph.WorkflowExecutor, error) {
+func (d *primitiveDispatcher) BranchExecutor() (plan.WorkflowExecutor, error) {
 	if d == nil {
 		return &primitiveDispatcher{}, nil
 	}
 	branch := &primitiveDispatcher{tools: d.tools}
-	if provider, ok := d.fallback.(graph.BranchExecutorProvider); ok {
+	if provider, ok := d.fallback.(plan.BranchExecutorProvider); ok {
 		exec, err := provider.BranchExecutor()
 		if err != nil {
 			return nil, err
 		}
-		branch.fallback = exec
+		if fallback, ok := exec.(graph.WorkflowExecutor); ok {
+			branch.fallback = fallback
+		}
 		return branch, nil
 	}
 	branch.fallback = d.fallback
@@ -81,16 +85,16 @@ func (d *primitiveDispatcher) BuildGraph(task *core.Task) (*graph.Graph, error) 
 	return d.fallback.BuildGraph(task)
 }
 
-func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	target, selectors, args := dispatchMetadata(task)
 	operator := operatorNameFromTask(task)
-	if result, decision, ok, err := d.invokeCapability(ctx, state, target, operator, selectors, args); err != nil {
-		persistDispatchMetadataToContext(state, decision)
-		recordDispatch(state, decision)
+	if result, decision, ok, err := d.invokeCapability(ctx, env, target, operator, selectors, args); err != nil {
+		persistDispatchMetadataToContext(env, decision)
+		recordDispatch(env, decision)
 		return nil, err
 	} else if ok {
-		persistDispatchMetadataToContext(state, decision)
-		recordDispatch(state, decision)
+		persistDispatchMetadataToContext(env, decision)
+		recordDispatch(env, decision)
 		return result, nil
 	}
 	fallbackDecision := dispatchDecision{
@@ -102,16 +106,16 @@ func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, stat
 		Selectors:       dedupeSelectors(selectors),
 	}
 	if d.fallback == nil {
-		persistDispatchMetadataToContext(state, fallbackDecision)
-		recordDispatch(state, fallbackDecision)
+		persistDispatchMetadataToContext(env, fallbackDecision)
+		recordDispatch(env, fallbackDecision)
 		return nil, fmt.Errorf("htn: no primitive dispatch target available for operator %q (requested %q)", operator, target)
 	}
-	persistDispatchMetadataToContext(state, fallbackDecision)
-	recordDispatch(state, fallbackDecision)
-	return d.fallback.Execute(ctx, task, state)
+	persistDispatchMetadataToContext(env, fallbackDecision)
+	recordDispatch(env, fallbackDecision)
+	return d.fallback.Execute(ctx, task, env)
 }
 
-func (d *primitiveDispatcher) invokeCapability(ctx context.Context, state *core.Context, target, operator string, selectors []core.CapabilitySelector, args map[string]any) (*core.Result, dispatchDecision, bool, error) {
+func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *contextdata.Envelope, target, operator string, selectors []core.CapabilitySelector, args map[string]any) (*core.Result, dispatchDecision, bool, error) {
 	decision := dispatchDecision{
 		RequestedTarget: target,
 		Operator:        operator,
@@ -127,7 +131,7 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, state *core.
 	if resolvedTarget == "" {
 		return nil, decision, false, nil
 	}
-	result, err := d.tools.InvokeCapability(ctx, state, resolvedTarget, args)
+	result, err := d.tools.InvokeCapability(ctx, env, resolvedTarget, args)
 	if err != nil {
 		decision.Mode = "capability"
 		return nil, decision, true, err
@@ -153,11 +157,11 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, state *core.
 	return coreResult, decision, true, nil
 }
 
-func recordDispatch(state *core.Context, decision dispatchDecision) {
-	if state == nil {
+func recordDispatch(env *contextdata.Envelope, decision dispatchDecision) {
+	if env == nil {
 		return
 	}
-	state.Set(contextKeyLastDispatch, map[string]any{
+	env.SetWorkingValue(contextKeyLastDispatch, map[string]any{
 		"target":           decision.RequestedTarget,
 		"requested_target": decision.RequestedTarget,
 		"resolved_target":  decision.ResolvedTarget,
@@ -166,13 +170,13 @@ func recordDispatch(state *core.Context, decision dispatchDecision) {
 		"operator":         decision.Operator,
 		"selectors":        decision.Selectors,
 		"timestamp":        time.Now().UTC().Unix(),
-	})
+	}, contextdata.MemoryClassTask)
 }
 
 // persistDispatchMetadataToContext saves the dispatch decision for phase 7 recovery.
-func persistDispatchMetadataToContext(state *core.Context, decision dispatchDecision) {
-	if state == nil {
+func persistDispatchMetadataToContext(env *contextdata.Envelope, decision dispatchDecision) {
+	if env == nil {
 		return
 	}
-	persistDispatchMetadata(state, decision.Mode, decision.ResolvedTarget, decision.Reason)
+	persistDispatchMetadata(env, decision.Mode, decision.ResolvedTarget, decision.Reason)
 }

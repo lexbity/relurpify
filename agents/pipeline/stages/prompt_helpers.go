@@ -6,12 +6,32 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
-func buildStagePrompt(stageName string, task *core.Task, state *core.Context, primaryLabel string, primaryValue any, toolNames []string, schema string) string {
+// StatePayload retrieves workflow retrieval payload from state.
+// This replaces the workflowutil.StatePayload stub.
+func StatePayload(state interface{}, key string) []byte {
+	if state == nil {
+		return nil
+	}
+	// Handle *contextdata.Envelope
+	if env, ok := state.(*contextdata.Envelope); ok {
+		if raw, ok := env.GetWorkingValue(key); ok && raw != nil {
+			if bytes, ok := raw.([]byte); ok {
+				return bytes
+			}
+			if data, err := json.Marshal(raw); err == nil {
+				return data
+			}
+		}
+	}
+	return nil
+}
+
+func buildStagePrompt(stageName string, task *core.Task, state *contextdata.Envelope, primaryLabel string, primaryValue any, toolNames []string, schema string) string {
 	var sections []string
 	sections = append(sections, fmt.Sprintf("You are the %s stage of a coding pipeline.", stageName))
 	if instruction := taskInstruction(task); instruction != "" {
@@ -50,7 +70,7 @@ func formatPromptValue(value any) string {
 	}
 }
 
-func recentPipelineOutputs(state *core.Context) string {
+func recentPipelineOutputs(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
@@ -63,7 +83,7 @@ func recentPipelineOutputs(state *core.Context) string {
 	}
 	var sections []string
 	for _, key := range keys {
-		raw, ok := state.Get(key)
+		raw, ok := state.GetWorkingValue(key)
 		if !ok || raw == nil {
 			continue
 		}
@@ -72,16 +92,19 @@ func recentPipelineOutputs(state *core.Context) string {
 	return strings.Join(sections, "\n\n")
 }
 
-func workflowRetrievalContext(state *core.Context) string {
+func workflowRetrievalContext(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	if payload := workflowutil.StatePayload(state, "pipeline.workflow_retrieval"); len(payload) > 0 {
-		if formatted := formatWorkflowRetrievalPromptValue(payload); formatted != "" {
-			return formatted
+	if payload := StatePayload(state, "pipeline.workflow_retrieval"); len(payload) > 0 {
+		var data map[string]any
+		if err := json.Unmarshal(payload, &data); err == nil {
+			if formatted := formatWorkflowRetrievalPromptValue(data); formatted != "" {
+				return formatted
+			}
 		}
 	}
-	raw, ok := state.Get("pipeline.workflow_retrieval")
+	raw, ok := state.GetWorkingValue("pipeline.workflow_retrieval")
 	if !ok || raw == nil {
 		return ""
 	}

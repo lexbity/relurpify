@@ -3,8 +3,8 @@ package rewoo
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // ReplanNode is a conditional node that decides whether to replan or proceed to synthesis.
@@ -40,9 +40,9 @@ func (n *ReplanNode) Type() graph.NodeType {
 }
 
 // Execute decides the next node based on execution results.
-func (n *ReplanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	// Get tool results from state
-	results, ok := state.Get("rewoo.tool_results")
+	results, ok := env.GetWorkingValue("rewoo.tool_results")
 	if !ok {
 		// No results yet (early in execution)
 		return &core.Result{
@@ -96,8 +96,8 @@ func (n *ReplanNode) Execute(ctx context.Context, state *core.Context) (*core.Re
 
 		// Build replan context from failures
 		replanContext := buildReplanContext(nil, stepResults, nil)
-		state.Set("rewoo.replan_context", replanContext)
-		state.Set("rewoo.attempt", n.CurrentAttempt+1)
+		env.SetWorkingValue("rewoo.replan_context", replanContext, contextdata.MemoryClassTask)
+		env.SetWorkingValue("rewoo.attempt", n.CurrentAttempt+1, contextdata.MemoryClassTask)
 
 		return &core.Result{
 			Success: true,

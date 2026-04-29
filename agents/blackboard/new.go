@@ -1,6 +1,9 @@
 package blackboard
 
-import "codeburg.org/lexbit/relurpify/framework/agentenv"
+import (
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
+)
 
 type Option func(*BlackboardAgent)
 
@@ -13,6 +16,34 @@ func WithSources(sources []KnowledgeSource) Option {
 func WithMaxCycles(maxCycles int) Option {
 	return func(agent *BlackboardAgent) {
 		agent.MaxCycles = maxCycles
+	}
+}
+
+// WithContextStreamTrigger wires an explicit streaming trigger into the blackboard agent.
+func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
+	return func(a *BlackboardAgent) {
+		a.StreamTrigger = trigger
+	}
+}
+
+// WithContextStreamMode sets whether blackboard streaming blocks or runs in the background.
+func WithContextStreamMode(mode contextstream.Mode) Option {
+	return func(a *BlackboardAgent) {
+		a.StreamMode = mode
+	}
+}
+
+// WithContextStreamQuery overrides the query sent to the streaming trigger.
+func WithContextStreamQuery(query string) Option {
+	return func(a *BlackboardAgent) {
+		a.StreamQuery = query
+	}
+}
+
+// WithContextStreamMaxTokens overrides the blackboard stream token budget.
+func WithContextStreamMaxTokens(maxTokens int) Option {
+	return func(a *BlackboardAgent) {
+		a.StreamMaxTokens = maxTokens
 	}
 }
 

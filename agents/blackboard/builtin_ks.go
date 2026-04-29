@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -27,7 +28,7 @@ func (k *ExplorerKS) Priority() int { return 100 }
 func (k *ExplorerKS) CanActivate(bb *Blackboard) bool {
 	return !bb.HasFact("exploration.status")
 }
-func (k *ExplorerKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, semctx core.AgentSemanticContext) error {
+func (k *ExplorerKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, semctx agentspec.AgentSemanticContext) error {
 	// 1. Goals as facts
 	for i, goal := range bb.Goals {
 		bb.AddFact(fmt.Sprintf("task.goal.%d", i), goal, k.Name())
@@ -88,7 +89,7 @@ func (k *AnalyzerKS) Priority() int { return 90 }
 func (k *AnalyzerKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasFact("exploration.status") && len(bb.Issues) == 0
 }
-func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
 		"instruction":         firstGoal(bb),
 		"artifact_summary":    factsSummary(bb),
@@ -118,7 +119,7 @@ func (k *PlannerKS) Priority() int { return 80 }
 func (k *PlannerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Issues) > 0 && len(bb.PendingActions) == 0 && len(bb.CompletedActions) == 0
 }
-func (k *PlannerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *PlannerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityPlannerPlan, map[string]any{
 		"instruction": plannerInstruction(bb),
 	}); err != nil {
@@ -153,7 +154,7 @@ func (k *ReviewKS) Priority() int { return 75 }
 func (k *ReviewKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Artifacts) > 0 && !bb.HasUnverifiedArtifacts() && len(bb.Issues) == 0
 }
-func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
 		"instruction":      firstGoal(bb),
 		"artifact_summary": artifactSummary(bb),
@@ -175,7 +176,7 @@ func (k *ExecutorKS) Priority() int { return 70 }
 func (k *ExecutorKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.PendingActions) > 0
 }
-func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	// Drain pending actions and produce artifacts.
 	pending := append([]ActionRequest(nil), bb.PendingActions...)
 	for _, req := range pending {
@@ -218,7 +219,7 @@ func (k *VerifierKS) Priority() int { return 60 }
 func (k *VerifierKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasUnverifiedArtifacts()
 }
-func (k *VerifierKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *VerifierKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityVerifierVerify, map[string]any{
 		"instruction":           firstGoal(bb),
 		"artifact_summary":      artifactSummary(bb),
@@ -260,7 +261,7 @@ func (k *FailureTriageKS) CanActivate(bb *Blackboard) bool {
 	}
 	return false
 }
-func (k *FailureTriageKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *FailureTriageKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	for _, result := range bb.CompletedActions {
 		if result.Success {
 			continue
@@ -300,7 +301,7 @@ func (k *SummarizerKS) CanActivate(bb *Blackboard) bool {
 	}
 	return !bb.HasArtifact("blackboard-summary")
 }
-func (k *SummarizerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *SummarizerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	summary := buildBlackboardCompletionSummary(bb)
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilitySummarizerSummarize, map[string]any{
 		"instruction":      firstGoal(bb),

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 // RecoveryScenario describes a failure scenario and recovery strategy.
@@ -30,7 +30,7 @@ type DiagnosisResult struct {
 
 // DiagnoseStepFailure analyzes step execution results and recommends recovery strategy.
 // Phase 8: Helper for recovery workflows.
-func DiagnoseStepFailure(ctx context.Context, state *core.Context, results []RewooStepResult, plan *RewooPlan) *DiagnosisResult {
+func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results []RewooStepResult, plan *RewooPlan) *DiagnosisResult {
 	diagnosis := &DiagnosisResult{
 		IsRecoverable: true,
 		Scenarios:     make([]RecoveryScenario, 0),
@@ -82,7 +82,7 @@ func DiagnoseStepFailure(ctx context.Context, state *core.Context, results []Rew
 	if failureRatio > 0.25 && failureRatio <= 0.75 {
 		// Check for checkpoint to resume from
 		checkpointID := ""
-		if cpID, ok := state.Get("rewoo.checkpoint_id"); ok {
+		if cpID, ok := env.GetWorkingValue("rewoo.checkpoint_id"); ok {
 			if id, ok := cpID.(string); ok {
 				checkpointID = id
 			}
@@ -134,7 +134,7 @@ func DiagnoseStepFailure(ctx context.Context, state *core.Context, results []Rew
 
 // RecoverStepFailure executes recovery based on diagnosis.
 // Phase 8: Helper for implementing recovery workflows.
-func RecoverStepFailure(ctx context.Context, state *core.Context, diagnosis *DiagnosisResult, store *RewooCheckpointStore) error {
+func RecoverStepFailure(ctx context.Context, env *contextdata.Envelope, diagnosis *DiagnosisResult, store *RewooCheckpointStore) error {
 	if !diagnosis.IsRecoverable || diagnosis.RecommendedID == "" {
 		return fmt.Errorf("recovery: scenario not recoverable")
 	}
@@ -156,21 +156,21 @@ func RecoverStepFailure(ctx context.Context, state *core.Context, diagnosis *Dia
 	switch recommendedScenario.SuggestedAction {
 	case "retry":
 		// Retry: mark failed steps for retry
-		state.Set("rewoo.retry_steps", recommendedScenario.FailedSteps)
-		state.Set("rewoo.recovery_action", "retry")
+		env.SetWorkingValue("rewoo.retry_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
+		env.SetWorkingValue("rewoo.recovery_action", "retry", contextdata.MemoryClassTask)
 		return nil
 
 	case "replan":
 		// Replan: signal replan is needed with context
-		state.Set("rewoo.replan_required", true)
-		state.Set("rewoo.failed_steps", recommendedScenario.FailedSteps)
-		state.Set("rewoo.recovery_action", "replan")
+		env.SetWorkingValue("rewoo.replan_required", true, contextdata.MemoryClassTask)
+		env.SetWorkingValue("rewoo.failed_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
+		env.SetWorkingValue("rewoo.recovery_action", "replan", contextdata.MemoryClassTask)
 		return nil
 
 	case "synthesize_from_results":
 		// Synthesize: continue with partial results
-		state.Set("rewoo.synthesis_partial", true)
-		state.Set("rewoo.recovery_action", "synthesize_from_results")
+		env.SetWorkingValue("rewoo.synthesis_partial", true, contextdata.MemoryClassTask)
+		env.SetWorkingValue("rewoo.recovery_action", "synthesize_from_results", contextdata.MemoryClassTask)
 		return nil
 
 	default:

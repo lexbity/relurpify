@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-// Decompose converts a Method into a core.Plan relative to the given task.
+// Decompose converts a Method into a agentgraph.Plan relative to the given task.
 // Each SubtaskSpec becomes a PlanStep with DependsOn wired into
 // Plan.Dependencies.
-func Decompose(task *core.Task, method *Method) (*core.Plan, error) {
+func Decompose(task *core.Task, method *Method) (*agentgraph.Plan, error) {
 	if method == nil {
 		return nil, fmt.Errorf("htn: no method provided for decomposition")
 	}
@@ -23,7 +24,7 @@ func Decompose(task *core.Task, method *Method) (*core.Plan, error) {
 		instruction = task.Instruction
 	}
 
-	plan := &core.Plan{
+	plan := &agentgraph.Plan{
 		Goal:         instruction,
 		Dependencies: make(map[string][]string),
 	}
@@ -31,7 +32,7 @@ func Decompose(task *core.Task, method *Method) (*core.Plan, error) {
 	for _, spec := range method.Subtasks {
 		stepID := fmt.Sprintf("%s.%s", method.Name, spec.Name)
 		desc := expandInstruction(spec.Instruction, instruction)
-		step := core.PlanStep{
+		step := agentgraph.PlanStep{
 			ID:          stepID,
 			Description: desc,
 			Expected:    fmt.Sprintf("Complete %s subtask", spec.Name),
@@ -50,9 +51,9 @@ func Decompose(task *core.Task, method *Method) (*core.Plan, error) {
 	return plan, nil
 }
 
-// DecomposeResolved converts a ResolvedMethod into a core.Plan relative to the given task.
+// DecomposeResolved converts a ResolvedMethod into a agentgraph.Plan relative to the given task.
 // Each OperatorSpec becomes a PlanStep with the Executor as the Tool.
-func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*core.Plan, error) {
+func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*agentgraph.Plan, error) {
 	if resolved == nil || resolved.Method == nil {
 		return nil, fmt.Errorf("htn: no resolved method provided for decomposition")
 	}
@@ -65,7 +66,7 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*core.Plan, e
 		instruction = task.Instruction
 	}
 
-	plan := &core.Plan{
+	plan := &agentgraph.Plan{
 		Goal:         instruction,
 		Dependencies: make(map[string][]string),
 	}
@@ -73,7 +74,7 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*core.Plan, e
 	for _, spec := range resolved.Operators {
 		stepID := spec.Name
 		desc := expandInstruction(spec.Instruction, instruction)
-		step := core.PlanStep{
+		step := agentgraph.PlanStep{
 			ID:          stepID,
 			Description: desc,
 			Tool:        spec.Executor,

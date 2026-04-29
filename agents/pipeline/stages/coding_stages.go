@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // ExploreStage identifies the most relevant files and next tools for a task.
@@ -47,7 +48,7 @@ func (s *ExploreStage) Contract() pipeline.ContractDescriptor {
 		},
 	}
 }
-func (s *ExploreStage) BuildPrompt(ctx *core.Context) (string, error) {
+func (s *ExploreStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	return buildStagePrompt("explore", s.Task, ctx, "Exploration focus", map[string]any{
 		"task_instruction": taskInstruction(s.Task),
 	}, s.AllowedToolNames(), `{
@@ -73,10 +74,10 @@ func (s *ExploreStage) Validate(output any) error {
 	}
 	return nil
 }
-func (s *ExploreStage) Apply(ctx *core.Context, output any) error {
+func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
 	selection := output.(FileSelection)
-	ctx.Set("pipeline.explore", selection)
-	ctx.Set("pipeline.explore.files", filePaths(selection))
+	ctx.SetWorkingValue("pipeline.explore", selection, contextdata.MemoryClassTask)
+	ctx.SetWorkingValue("pipeline.explore.files", filePaths(selection), contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -113,8 +114,8 @@ func (s *AnalyzeStage) Contract() pipeline.ContractDescriptor {
 		},
 	}
 }
-func (s *AnalyzeStage) BuildPrompt(ctx *core.Context) (string, error) {
-	raw, _ := ctx.Get("pipeline.explore")
+func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	raw, _ := ctx.GetWorkingValue("pipeline.explore")
 	return buildStagePrompt("analyze", s.Task, ctx, "Explore output", map[string]any{
 		"explore_output": raw,
 		"instructions":   "You MUST return a concrete issue summary for the failing task. If the bug is unclear, call file_read or diagnostics/search tools before returning JSON. Identify the real failing issue from the code and tests, not a hypothetical one.",
@@ -140,8 +141,8 @@ func (s *AnalyzeStage) Validate(output any) error {
 	}
 	return nil
 }
-func (s *AnalyzeStage) Apply(ctx *core.Context, output any) error {
-	ctx.Set("pipeline.analyze", output)
+func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValue("pipeline.analyze", output, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -162,8 +163,8 @@ func (s *PlanStage) Contract() pipeline.ContractDescriptor {
 		},
 	}
 }
-func (s *PlanStage) BuildPrompt(ctx *core.Context) (string, error) {
-	raw, _ := ctx.Get("pipeline.analyze")
+func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	raw, _ := ctx.GetWorkingValue("pipeline.analyze")
 	return buildStagePrompt("plan", s.Task, ctx, "Issue list", raw, nil, `{
   "strategy":"...",
   "steps":[{"id":"...","title":"...","description":"...","files":["..."]}],
@@ -190,8 +191,8 @@ func (s *PlanStage) Validate(output any) error {
 	}
 	return nil
 }
-func (s *PlanStage) Apply(ctx *core.Context, output any) error {
-	ctx.Set("pipeline.plan", output)
+func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValue("pipeline.plan", output, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -217,8 +218,8 @@ func (s *CodeStage) Contract() pipeline.ContractDescriptor {
 		},
 	}
 }
-func (s *CodeStage) BuildPrompt(ctx *core.Context) (string, error) {
-	raw, _ := ctx.Get("pipeline.plan")
+func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	raw, _ := ctx.GetWorkingValue("pipeline.plan")
 	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
 		"fix_plan":     raw,
 		"instructions": "Return requested edit intents only. Do not mutate files in this stage. For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
@@ -261,12 +262,12 @@ func (s *CodeStage) Validate(output any) error {
 	}
 	return nil
 }
-func (s *CodeStage) Apply(ctx *core.Context, output any) error {
+func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
 	plan := output.(EditPlan)
 	// Coding stages now persist requested edits as an artifact-like intent only.
 	// Mutation must happen through an admitted capability path outside stage Apply.
-	ctx.Set("pipeline.code", plan)
-	ctx.Set("pipeline.code.intent_only", true)
+	ctx.SetWorkingValue("pipeline.code", plan, contextdata.MemoryClassTask)
+	ctx.SetWorkingValue("pipeline.code.intent_only", true, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -298,7 +299,7 @@ func (s *VerifyStage) AllowedToolNames() []string {
 	}
 }
 
-func (s *VerifyStage) RequiresToolExecution(task *core.Task, state *core.Context, tools []core.Tool) bool {
+func (s *VerifyStage) RequiresToolExecution(task *core.Task, state *contextdata.Envelope, tools []core.Tool) bool {
 	if task == nil || len(tools) == 0 {
 		return false
 	}
@@ -330,10 +331,10 @@ func (s *VerifyStage) Contract() pipeline.ContractDescriptor {
 		},
 	}
 }
-func (s *VerifyStage) BuildPrompt(ctx *core.Context) (string, error) {
-	raw, _ := ctx.Get("pipeline.code")
+func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	raw, _ := ctx.GetWorkingValue("pipeline.code")
 	if raw == nil {
-		raw, _ = ctx.Get("pipeline.explore")
+		raw, _ = ctx.GetWorkingValue("pipeline.explore")
 	}
 	return buildStagePrompt("verify", s.Task, ctx, "Verification target", map[string]any{
 		"target":       raw,
@@ -367,7 +368,7 @@ func (s *VerifyStage) Validate(output any) error {
 	}
 	return nil
 }
-func (s *VerifyStage) Apply(ctx *core.Context, output any) error {
-	ctx.Set("pipeline.verify", output)
+func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValue("pipeline.verify", output, contextdata.MemoryClassTask)
 	return nil
 }

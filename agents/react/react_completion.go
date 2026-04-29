@@ -5,11 +5,12 @@ import (
 	"regexp"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
-func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -40,7 +41,7 @@ func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *c
 	return "", false
 }
 
-func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if taskNeedsEditing(task) || hasFailure(lastMap) || !taskRequiresVerification(task) {
 		return "", false
 	}
@@ -64,7 +65,7 @@ func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *
 	return "", false
 }
 
-func completionSummaryFromState(agent *ReActAgent, task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {
+func completionSummaryFromState(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if summary, ok := verificationSummaryFromSuccess(agent, task, state, lastMap); ok {
 		return summary, true
 	}
@@ -86,7 +87,7 @@ func completionSummaryFromState(agent *ReActAgent, task *core.Task, state *core.
 	return "", false
 }
 
-func directCompletionSummary(task *core.Task, state *core.Context) (string, bool) {
+func directCompletionSummary(task *core.Task, state *contextdata.Envelope) (string, bool) {
 	observations := getToolObservations(state)
 	if len(observations) == 0 || task == nil {
 		return "", false
@@ -111,7 +112,7 @@ func directCompletionSummary(task *core.Task, state *core.Context) (string, bool
 	return "", false
 }
 
-func repeatedReadCompletionSummary(task *core.Task, state *core.Context) (string, bool) {
+func repeatedReadCompletionSummary(task *core.Task, state *contextdata.Envelope) (string, bool) {
 	observations := getToolObservations(state)
 	if len(observations) < 3 {
 		return "", false
@@ -168,7 +169,7 @@ func latestReadOnlyFileSummary(observations []ToolObservation) (string, bool) {
 	return "", false
 }
 
-func editSummaryFromSuccess(task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {
+func editSummaryFromSuccess(task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -192,7 +193,7 @@ func editSummaryFromSuccess(task *core.Task, state *core.Context, lastMap map[st
 	return "", false
 }
 
-func readOnlySummaryFromState(task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {
+func readOnlySummaryFromState(task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if task == nil || taskNeedsEditing(task) || hasFailure(lastMap) {
 		return "", false
 	}
@@ -218,7 +219,7 @@ func readOnlySummaryFromState(task *core.Task, state *core.Context, lastMap map[
 	return "", false
 }
 
-func requestedReadOnlyToolsSatisfied(task *core.Task, state *core.Context) bool {
+func requestedReadOnlyToolsSatisfied(task *core.Task, state *contextdata.Envelope) bool {
 	requested := explicitlyRequestedToolNames(task)
 	if len(requested) == 0 {
 		return true

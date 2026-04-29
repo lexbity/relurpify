@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -49,8 +50,8 @@ const (
 	contextKnowledgeCounts               = "blackboard.counts"
 )
 
-// LoadFromContext hydrates a blackboard from namespaced core.Context keys.
-func LoadFromContext(state *core.Context, goal string) *Blackboard {
+// LoadFromContext hydrates a blackboard from namespaced envelope keys.
+func LoadFromContext(state *contextdata.Envelope, goal string) *Blackboard {
 	bb := NewBlackboard(goal)
 	if state == nil {
 		return bb
@@ -65,7 +66,7 @@ func LoadFromContext(state *core.Context, goal string) *Blackboard {
 }
 
 // PublishToContext writes the current blackboard into namespaced context keys.
-func PublishToContext(state *core.Context, bb *Blackboard, controller ControllerState) {
+func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller ControllerState) {
 	if state == nil || bb == nil {
 		return
 	}
@@ -111,88 +112,80 @@ func PublishToContext(state *core.Context, bb *Blackboard, controller Controller
 		issues = append(issues, issue)
 	}
 
-	state.Set(contextKeyGoals, append([]string(nil), snapshot.Goals...))
-	state.Set(contextKeyFacts, facts)
-	state.Set(contextKeyHypotheses, hypotheses)
-	state.Set(contextKeyIssues, issues)
-	state.Set(contextKeyPendingActions, append([]ActionRequest(nil), snapshot.PendingActions...))
-	state.Set(contextKeyCompletedActions, append([]ActionResult(nil), snapshot.CompletedActions...))
-	state.Set(contextKeyArtifacts, append([]Artifact(nil), snapshot.Artifacts...))
-	state.Set(contextKeyController, controller)
-	state.Set(contextKeyControllerExecutionMode, string(ExecutionModeSingleFireSerial))
-	state.Set(contextKeyControllerSelectionPolicy, "highest_priority_then_name")
-	state.Set(contextKeyControllerMergePolicy, string(BranchMergePolicyRejectConflicts))
-	state.Set(contextKeyMetrics, metrics)
-	state.Set(contextKeySummary, summaryText(snapshot, metrics))
-	state.Set(contextKeyTermination, controller.Termination)
-	state.Set(contextKeyExecutionSummary, executionSummary(snapshot, controller, metrics))
+	envelopeSet(state, contextKeyGoals, append([]string(nil), snapshot.Goals...))
+	envelopeSet(state, contextKeyFacts, facts)
+	envelopeSet(state, contextKeyHypotheses, hypotheses)
+	envelopeSet(state, contextKeyIssues, issues)
+	envelopeSet(state, contextKeyPendingActions, append([]ActionRequest(nil), snapshot.PendingActions...))
+	envelopeSet(state, contextKeyCompletedActions, append([]ActionResult(nil), snapshot.CompletedActions...))
+	envelopeSet(state, contextKeyArtifacts, append([]Artifact(nil), snapshot.Artifacts...))
+	envelopeSet(state, contextKeyController, controller)
+	envelopeSet(state, contextKeyControllerExecutionMode, string(ExecutionModeSingleFireSerial))
+	envelopeSet(state, contextKeyControllerSelectionPolicy, "highest_priority_then_name")
+	envelopeSet(state, contextKeyControllerMergePolicy, string(BranchMergePolicyRejectConflicts))
+	envelopeSet(state, contextKeyMetrics, metrics)
+	envelopeSet(state, contextKeySummary, summaryText(snapshot, metrics))
+	envelopeSet(state, contextKeyTermination, controller.Termination)
+	envelopeSet(state, contextKeyExecutionSummary, executionSummary(snapshot, controller, metrics))
 	publishPersistenceCandidates(state, snapshot, controller, metrics)
 
-	state.SetKnowledge(contextKnowledgeSummary, summaryText(snapshot, metrics))
-	state.SetKnowledge(contextKnowledgeTermination, controller.Termination)
-	state.SetKnowledge(contextKnowledgeLastSource, controller.LastSource)
-	state.SetKnowledge(contextKnowledgeGoalSatisfied, controller.GoalSatisfied)
-	state.SetKnowledge(contextKnowledgeCounts, map[string]any{
-		"goals":      metrics.GoalCount,
-		"facts":      metrics.FactCount,
-		"issues":     metrics.IssueCount,
-		"pending":    metrics.PendingCount,
-		"completed":  metrics.CompletedCount,
-		"artifacts":  metrics.ArtifactCount,
-		"verified":   metrics.VerifiedCount,
-		"hypothesis": metrics.HypothesisCount,
-	})
+	// TODO: SetKnowledge is not available in envelope paradigm - requires streaming context assembly
+	// state.SetKnowledge(contextKnowledgeSummary, summaryText(snapshot, metrics))
+	// state.SetKnowledge(contextKnowledgeTermination, controller.Termination)
+	// state.SetKnowledge(contextKnowledgeLastSource, controller.LastSource)
+	// state.SetKnowledge(contextKnowledgeGoalSatisfied, controller.GoalSatisfied)
+	// state.SetKnowledge(contextKnowledgeCounts, map[string]any{...})
 }
 
-func loadNamespacedBlackboard(state *core.Context) (*Blackboard, bool) {
+func loadNamespacedBlackboard(state *contextdata.Envelope) (*Blackboard, bool) {
 	if state == nil {
 		return nil, false
 	}
 	loaded := false
 	bb := &Blackboard{}
-	if goals, ok := state.Get(contextKeyGoals); ok {
+	if goals, ok := envelopeGet(state, contextKeyGoals); ok {
 		var typed []string
 		if decodeContextValue(goals, &typed) {
 			bb.Goals = append([]string(nil), typed...)
 			loaded = true
 		}
 	}
-	if facts, ok := state.Get(contextKeyFacts); ok {
+	if facts, ok := envelopeGet(state, contextKeyFacts); ok {
 		var typed []Fact
 		if decodeContextValue(facts, &typed) {
 			bb.Facts = append([]Fact(nil), typed...)
 			loaded = true
 		}
 	}
-	if hypotheses, ok := state.Get(contextKeyHypotheses); ok {
+	if hypotheses, ok := envelopeGet(state, contextKeyHypotheses); ok {
 		var typed []Hypothesis
 		if decodeContextValue(hypotheses, &typed) {
 			bb.Hypotheses = append([]Hypothesis(nil), typed...)
 			loaded = true
 		}
 	}
-	if issues, ok := state.Get(contextKeyIssues); ok {
+	if issues, ok := envelopeGet(state, contextKeyIssues); ok {
 		var typed []Issue
 		if decodeContextValue(issues, &typed) {
 			bb.Issues = append([]Issue(nil), typed...)
 			loaded = true
 		}
 	}
-	if pending, ok := state.Get(contextKeyPendingActions); ok {
+	if pending, ok := envelopeGet(state, contextKeyPendingActions); ok {
 		var typed []ActionRequest
 		if decodeContextValue(pending, &typed) {
 			bb.PendingActions = append([]ActionRequest(nil), typed...)
 			loaded = true
 		}
 	}
-	if completed, ok := state.Get(contextKeyCompletedActions); ok {
+	if completed, ok := envelopeGet(state, contextKeyCompletedActions); ok {
 		var typed []ActionResult
 		if decodeContextValue(completed, &typed) {
 			bb.CompletedActions = append([]ActionResult(nil), typed...)
 			loaded = true
 		}
 	}
-	if artifacts, ok := state.Get(contextKeyArtifacts); ok {
+	if artifacts, ok := envelopeGet(state, contextKeyArtifacts); ok {
 		var typed []Artifact
 		if decodeContextValue(artifacts, &typed) {
 			bb.Artifacts = append([]Artifact(nil), typed...)

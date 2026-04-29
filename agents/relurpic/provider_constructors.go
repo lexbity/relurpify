@@ -3,14 +3,14 @@ package relurpic
 import (
 	"database/sql"
 
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func NewPatternSurfacingProvider(model core.LanguageModel, cfg *core.Config, registry *capability.Registry, indexManager *ast.IndexManager, graphDB *graphdb.Engine, patternStore patterns.PatternStore, retrievalDB *sql.DB) PatternSurfacingProvider {
@@ -27,7 +27,7 @@ func NewPatternSurfacingProvider(model core.LanguageModel, cfg *core.Config, reg
 	return provider
 }
 
-func NewTensionAnalysisProvider(model core.LanguageModel, cfg *core.Config, registry *capability.Registry, indexManager *ast.IndexManager, graphDB *graphdb.Engine, retrievalDB *sql.DB, planStore frameworkplan.PlanStore, broker *guidance.GuidanceBroker, workflowStore memory.WorkflowStateStore) TensionAnalysisProvider {
+func NewTensionAnalysisProvider(model core.LanguageModel, cfg *core.Config, registry *capability.Registry, indexManager *ast.IndexManager, graphDB *graphdb.Engine, retrievalDB *sql.DB, planStore frameworkplan.PlanStore, broker *guidance.GuidanceBroker, lifecycleRepo agentlifecycle.Repository) TensionAnalysisProvider {
 	provider := TensionAnalysisProvider{
 		Model:         model,
 		Config:        cfg,
@@ -37,7 +37,7 @@ func NewTensionAnalysisProvider(model core.LanguageModel, cfg *core.Config, regi
 		RetrievalDB:   retrievalDB,
 		PlanStore:     planStore,
 		Guidance:      broker,
-		WorkflowStore: workflowStore,
+		LifecycleRepo: lifecycleRepo,
 	}
 	provider.Service = newTensionAnalysisService(provider)
 	return provider
@@ -54,10 +54,10 @@ func NewProspectiveAnalysisProvider(model core.LanguageModel, cfg *core.Config, 
 	return provider
 }
 
-func NewConvergenceReviewProvider(patternStore patterns.PatternStore, tensionStore memory.WorkflowStateStore) ConvergenceReviewProvider {
+func NewConvergenceReviewProvider(patternStore patterns.PatternStore, lifecycleRepo agentlifecycle.Repository) ConvergenceReviewProvider {
 	provider := ConvergenceReviewProvider{
-		PatternStore: patternStore,
-		TensionStore: tensionStore,
+		PatternStore:  patternStore,
+		LifecycleRepo: lifecycleRepo,
 	}
 	provider.Service = newConvergenceReviewService(provider)
 	return provider

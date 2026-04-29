@@ -1,36 +1,35 @@
 package relurpic
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
 
-type MemoryMode = core.MemoryMode
-type StateMode = core.StateMode
-type ToolScopePolicy = core.ToolScopePolicy
-type AgentInvocationPolicy = core.AgentInvocationPolicy
+type MemoryMode = agentspec.MemoryMode
+type StateMode = agentspec.StateMode
+type ToolScopePolicy = agentspec.ToolScopePolicy
+type AgentInvocationPolicy = agentspec.AgentInvocationPolicy
 
 const (
-	MemoryModeFresh  = core.MemoryModeFresh
-	MemoryModeShared = core.MemoryModeShared
-	MemoryModeCloned = core.MemoryModeCloned
+	MemoryModeFresh  = agentspec.MemoryModeFresh
+	MemoryModeShared = agentspec.MemoryModeShared
+	MemoryModeCloned = agentspec.MemoryModeCloned
 
-	StateModeFresh  = core.StateModeFresh
-	StateModeShared = core.StateModeShared
-	StateModeCloned = core.StateModeCloned
-	StateModeForked = core.StateModeForked
+	StateModeFresh  = agentspec.StateModeFresh
+	StateModeShared = agentspec.StateModeShared
+	StateModeCloned = agentspec.StateModeCloned
+	StateModeForked = agentspec.StateModeForked
 
-	ToolScopeInherits = core.ToolScopeInherits
-	ToolScopeScoped   = core.ToolScopeScoped
-	ToolScopeCustom   = core.ToolScopeCustom
+	ToolScopeInherits = agentspec.ToolScopeInherits
+	ToolScopeScoped   = agentspec.ToolScopeScoped
+	ToolScopeCustom   = agentspec.ToolScopeCustom
 )
 
-var DefaultInvocationPolicies = map[string]core.AgentInvocationPolicy{
-	"react":      {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeCloned, ToolScope: core.ToolScopeInherits},
-	"architect":  {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeCloned, ToolScope: core.ToolScopeInherits},
-	"planner":    {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeFresh, ToolScope: core.ToolScopeScoped},
-	"pipeline":   {MemoryMode: core.MemoryModeFresh, StateMode: core.StateModeFresh, ToolScope: core.ToolScopeInherits},
-	"reflection": {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeCloned, ToolScope: core.ToolScopeInherits},
-	"chainer":    {MemoryMode: core.MemoryModeFresh, StateMode: core.StateModeFresh, ToolScope: core.ToolScopeInherits},
-	"rewoo":      {MemoryMode: core.MemoryModeFresh, StateMode: core.StateModeFresh, ToolScope: core.ToolScopeInherits},
-	"htn":        {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeCloned, ToolScope: core.ToolScopeInherits},
-	"blackboard": {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeCloned, ToolScope: core.ToolScopeInherits},
-	"goalcon":    {MemoryMode: core.MemoryModeShared, StateMode: core.StateModeForked, ToolScope: core.ToolScopeInherits},
+var DefaultInvocationPolicies = map[string]agentspec.AgentInvocationPolicy{
+	"react":      {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeCloned, ToolScope: agentspec.ToolScopeInherits},
+	"planner":    {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeFresh, ToolScope: agentspec.ToolScopeScoped},
+	"pipeline":   {MemoryMode: agentspec.MemoryModeFresh, StateMode: agentspec.StateModeFresh, ToolScope: agentspec.ToolScopeInherits},
+	"reflection": {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeCloned, ToolScope: agentspec.ToolScopeInherits},
+	"chainer":    {MemoryMode: agentspec.MemoryModeFresh, StateMode: agentspec.StateModeFresh, ToolScope: agentspec.ToolScopeInherits},
+	"rewoo":      {MemoryMode: agentspec.MemoryModeFresh, StateMode: agentspec.StateModeFresh, ToolScope: agentspec.ToolScopeInherits},
+	"htn":        {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeCloned, ToolScope: agentspec.ToolScopeInherits},
+	"blackboard": {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeCloned, ToolScope: agentspec.ToolScopeInherits},
+	"goalcon":    {MemoryMode: agentspec.MemoryModeShared, StateMode: agentspec.StateModeForked, ToolScope: agentspec.ToolScopeInherits},
 }

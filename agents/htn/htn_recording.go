@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -23,7 +24,7 @@ type recordingPrimitiveAgent struct {
 	runID      string
 }
 
-func (a *recordingPrimitiveAgent) BranchExecutor() (graph.WorkflowExecutor, error) {
+func (a *recordingPrimitiveAgent) BranchExecutor() (plan.WorkflowExecutor, error) {
 	if a == nil {
 		return &recordingPrimitiveAgent{}, nil
 	}
@@ -32,7 +33,7 @@ func (a *recordingPrimitiveAgent) BranchExecutor() (graph.WorkflowExecutor, erro
 		workflowID: a.workflowID,
 		runID:      a.runID,
 	}
-	if provider, ok := a.delegate.(graph.BranchExecutorProvider); ok {
+	if provider, ok := a.delegate.(plan.BranchExecutorProvider); ok {
 		exec, err := provider.BranchExecutor()
 		if err != nil {
 			return nil, err
@@ -65,7 +66,7 @@ func (a *recordingPrimitiveAgent) BuildGraph(task *core.Task) (*graph.Graph, err
 	return a.delegate.BuildGraph(task)
 }
 
-func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	if a == nil || a.delegate == nil {
 		return &core.Result{Success: true}, nil
 	}

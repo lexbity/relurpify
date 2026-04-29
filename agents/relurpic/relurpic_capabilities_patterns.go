@@ -15,6 +15,8 @@ import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextmetric"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
@@ -29,9 +31,10 @@ type patternDetectorDetectCapabilityHandler struct {
 	graphDB      *graphdb.Engine
 	patternStore patterns.PatternStore
 	retrievalDB  *sql.DB
+	budget       *contextmetric.ArtifactBudget
 }
 
-func (h patternDetectorDetectCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h patternDetectorDetectCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:pattern-detector.detect",
 		"pattern-detector.detect",
@@ -62,7 +65,7 @@ func (h patternDetectorDetectCapabilityHandler) Descriptor(context.Context, *cor
 	)
 }
 
-func (h patternDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h patternDetectorDetectCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	symbolScope := stringArg(args["symbol_scope"])
 	if symbolScope == "" {
 		return nil, fmt.Errorf("symbol_scope required")
@@ -92,13 +95,28 @@ func (h patternDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *c
 	}
 
 	prompt := buildPatternDetectionPrompt(scope, corpusScope, kinds, knownTerms, maxProposals)
+	estimatedPromptTokens := estimatePatternDetectionTokens(prompt)
+	if h.budget != nil {
+		if !h.budget.CanAddTokens(estimatedPromptTokens) {
+			return nil, fmt.Errorf("relurpic: context budget exhausted for pattern-detector")
+		}
+		_ = h.budget.Allocate("relurpic", estimatedPromptTokens, nil)
+	}
+
 	resp, err := h.model.Generate(ctx, prompt, &core.LLMOptions{
 		Model:       modelName(h.config),
 		Temperature: 0.2,
 		MaxTokens:   1200,
 	})
 	if err != nil {
+		if h.budget != nil {
+			h.budget.Free("relurpic", estimatedPromptTokens, "")
+		}
 		return nil, err
+	}
+
+	if h.budget != nil {
+		h.budget.Free("relurpic", estimatedPromptTokens, "")
 	}
 
 	parsed, err := parsePatternDetectorResponse(resp.Text)
@@ -280,7 +298,8 @@ func readWorkspaceFile(ctx context.Context, registry *capability.Registry, path 
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required for file access")
 	}
-	result, err := registry.InvokeCapability(ctx, core.NewContext(), "file_read", map[string]any{"path": path})
+	env := contextdata.NewEnvelope("relurpic", "session")
+	result, err := registry.InvokeCapability(ctx, env, "file_read", map[string]any{"path": path})
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +359,11 @@ func (h patternDetectorDetectCapabilityHandler) lookupKnownTerms(ctx context.Con
 		return nil, nil
 	}
 	return retrieval.AnchorsForTerms(ctx, h.retrievalDB, terms, corpusScope)
+}
+
+func estimatePatternDetectionTokens(prompt string) int {
+	// Rough estimate: 4 tokens per word
+	return len(prompt) / 4
 }
 
 func normalizePatternKinds(raw any) []patterns.PatternKind {

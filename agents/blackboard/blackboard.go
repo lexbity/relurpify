@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -94,7 +95,7 @@ type Artifact struct {
 }
 
 // ControllerState captures controller-owned runtime metadata exposed through
-// core.Context alongside the shared blackboard lanes.
+// the shared envelope alongside the blackboard lanes.
 type ControllerState struct {
 	Cycle         int       `json:"cycle"`
 	MaxCycles     int       `json:"max_cycles"`
@@ -145,7 +146,7 @@ func NewBlackboard(goals ...string) *Blackboard {
 	}
 }
 
-// Clone returns a detached copy suitable for publishing into core.Context.
+// Clone returns a detached copy suitable for publishing into an envelope.
 func (bb *Blackboard) Clone() *Blackboard {
 	if bb == nil {
 		return nil
@@ -660,7 +661,7 @@ func sanitizeKey(key string) string {
 // SeedBlackboardFromSemanticContext seeds the blackboard with facts from
 // pre-resolved semantic context (AST symbols and BKC chunks). This is
 // exported so Euclo executors can use it directly.
-func SeedBlackboardFromSemanticContext(bb *Blackboard, semctx core.AgentSemanticContext) {
+func SeedBlackboardFromSemanticContext(bb *Blackboard, semctx agentspec.AgentSemanticContext) {
 	if bb == nil {
 		return
 	}

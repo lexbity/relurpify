@@ -2,7 +2,7 @@ package authoring
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 // Type aliases for convenience.
@@ -327,21 +327,21 @@ func RetryClassFromString(s string) RetryClass {
 }
 
 // PublishOperatorMetadata publishes operator metadata to the execution context.
-func PublishOperatorMetadata(state *core.Context, operator string, metadata OperatorMetadata) {
+func PublishOperatorMetadata(state *contextdata.Envelope, operator string, metadata OperatorMetadata) {
 	if state == nil {
 		return
 	}
 	key := "htn.operator_metadata." + operator
-	state.Set(key, metadata)
+	state.SetWorkingValue(key, metadata, contextdata.MemoryClassTask)
 }
 
 // GetPublishedOperatorMetadata retrieves operator metadata from context.
-func GetPublishedOperatorMetadata(state *core.Context, operator string) (OperatorMetadata, bool) {
+func GetPublishedOperatorMetadata(state *contextdata.Envelope, operator string) (OperatorMetadata, bool) {
 	if state == nil {
 		return OperatorMetadata{}, false
 	}
 	key := "htn.operator_metadata." + operator
-	if raw, ok := state.Get(key); ok {
+	if raw, ok := state.GetWorkingValue(key); ok {
 		if typed, ok := raw.(OperatorMetadata); ok {
 			return typed, true
 		}

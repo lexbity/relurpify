@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
@@ -33,7 +33,7 @@ func (a *ReflectionAgent) Initialize(cfg *core.Config) error {
 }
 
 // Execute runs the review workflow.
-func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	graph, err := a.BuildGraph(task)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,10 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, state *c
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
 		graph.SetTelemetry(cfg.Telemetry)
 	}
-	return graph.Execute(ctx, state)
+	if env == nil {
+		env = contextdata.NewEnvelope("reflection", "session")
+	}
+	return graph.Execute(ctx, env)
 }
 
 // Capabilities returns capabilities.
@@ -76,14 +79,14 @@ func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if err := g.AddEdge(review.ID(), decision.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(decision.ID(), run.ID(), func(res *core.Result, ctx *core.Context) bool {
-		revise, _ := ctx.Get("reflection.revise")
+	if err := g.AddEdge(decision.ID(), run.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
+		revise, _ := env.GetWorkingValue("reflection.revise")
 		return revise == true
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(decision.ID(), done.ID(), func(res *core.Result, ctx *core.Context) bool {
-		revise, _ := ctx.Get("reflection.revise")
+	if err := g.AddEdge(decision.ID(), done.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
+		revise, _ := env.GetWorkingValue("reflection.revise")
 		return revise != true
 	}, false); err != nil {
 		return nil, err
@@ -107,15 +110,15 @@ func (n *reflectionDelegateNode) Type() graph.NodeType {
 
 // Execute runs the delegate agent while isolating state mutations until the
 // child run succeeds.
-func (n *reflectionDelegateNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	state.SetExecutionPhase("executing")
-	child := state.Clone()
+func (n *reflectionDelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetExecutionPhase("executing")
+	child := env.Clone()
 	result, err := n.agent.Delegate.Execute(ctx, n.task, child)
 	if err != nil {
 		return nil, err
 	}
-	state.Merge(child)
-	state.SetHandleScoped("reflection.last_result", result, taskScope(n.task, state))
+	env.Merge(child)
+	env.SetHandleScoped("reflection.last_result", result, taskScope(n.task, env))
 	return result, nil
 }
 
@@ -135,8 +138,8 @@ func (n *reflectionReviewNode) Type() graph.NodeType {
 
 // Execute asks the reviewer model to evaluate the last result and captures the
 // structured feedback in the shared state.
-func (n *reflectionReviewNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	lastResult := resolveResultHandle(state, "reflection.last_result")
+func (n *reflectionReviewNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	lastResult := resolveResultHandle(env, "reflection.last_result")
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
 %s
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
@@ -153,7 +156,7 @@ Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), com
 	if err != nil {
 		return nil, err
 	}
-	state.Set("reflection.review", review)
+	env.SetWorkingValue("reflection.review", review, contextdata.MemoryClassTask)
 	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"review": review}}, nil
 }
 
@@ -172,18 +175,18 @@ func (n *reflectionDecisionNode) Type() graph.NodeType {
 
 // Execute inspects review feedback and decides if another delegate iteration
 // should run.
-func (n *reflectionDecisionNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	reviewVal, _ := state.Get("reflection.review")
+func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	reviewVal, _ := env.GetWorkingValue("reflection.review")
 	review, _ := reviewVal.(reviewPayload)
-	iterVal, _ := state.Get("reflection.iteration")
+	iterVal, _ := env.GetWorkingValue("reflection.iteration")
 	iter, _ := iterVal.(int)
 	iter++
-	state.Set("reflection.iteration", iter)
-	assessment := reflectionAssessmentForReview(n.agent, state, review)
-	state.Set("reflection.assessment", assessment)
+	env.SetWorkingValue("reflection.iteration", iter, contextdata.MemoryClassTask)
+	assessment := reflectionAssessmentForReview(n.agent, env, review)
+	env.SetWorkingValue("reflection.assessment", assessment, contextdata.MemoryClassTask)
 	approve := review.Approve && assessment.Allowed
 	revise := !approve && iter < n.agent.maxIterations
-	state.Set("reflection.revise", revise)
+	env.SetWorkingValue("reflection.revise", revise, contextdata.MemoryClassTask)
 	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
 		"revise":                 revise,
 		"issue_score":            assessment.IssueScore,
@@ -223,16 +226,16 @@ func parseReview(raw string) (reviewPayload, error) {
 	return payload, nil
 }
 
-func resolveResultHandle(state *core.Context, key string) *core.Result {
-	if state == nil {
+func resolveResultHandle(env *contextdata.Envelope, key string) *core.Result {
+	if env == nil {
 		return nil
 	}
-	if value, ok := state.GetHandle(key); ok {
+	if value, ok := env.GetHandle(key); ok {
 		if res, ok := value.(*core.Result); ok {
 			return res
 		}
 	}
-	if value, ok := state.Get(key); ok {
+	if value, ok := env.GetWorkingValue(key); ok {
 		if res, ok := value.(*core.Result); ok {
 			return res
 		}
@@ -240,12 +243,20 @@ func resolveResultHandle(state *core.Context, key string) *core.Result {
 	return nil
 }
 
-func taskScope(task *core.Task, state *core.Context) string {
+func taskScope(task *core.Task, env *contextdata.Envelope) string {
 	if task != nil && task.ID != "" {
 		return task.ID
 	}
-	if state != nil {
-		return state.GetString("task.id")
+	if env != nil {
+		return envGetString(env, "task.id")
+	}
+	return ""
+}
+
+func envGetString(env *contextdata.Envelope, key string) string {
+	val, _ := env.GetWorkingValue(key)
+	if s, ok := val.(string); ok {
+		return s
 	}
 	return ""
 }
@@ -262,14 +273,14 @@ func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
 	return frameworkskills.RenderReviewPolicy(effective.Policy)
 }
 
-func reflectionApprovalPasses(agent *ReflectionAgent, state *core.Context, review reviewPayload) bool {
+func reflectionApprovalPasses(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) bool {
 	if agent == nil || agent.Config == nil || agent.Config.AgentSpec == nil {
 		return review.Approve
 	}
-	return reflectionAssessmentForReview(agent, state, review).Allowed && review.Approve
+	return reflectionAssessmentForReview(agent, env, review).Allowed && review.Approve
 }
 
-func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, review reviewPayload) reflectionAssessment {
+func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
 	var fallback *core.AgentRuntimeSpec
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
@@ -300,7 +311,7 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, 
 			assessment.BlockingReasons = append(assessment.BlockingReasons, "unresolved high-severity review issue")
 		}
 	}
-	if policy.Review.ApprovalRules.RequireVerificationEvidence && !hasVerificationEvidence(state) {
+	if policy.Review.ApprovalRules.RequireVerificationEvidence && !hasVerificationEvidence(env) {
 		assessment.MissingVerification = true
 		assessment.BlockingReasons = append(assessment.BlockingReasons, "missing verification evidence")
 	}
@@ -450,11 +461,11 @@ func uniqueStrings(input []string) []string {
 	return out
 }
 
-func hasVerificationEvidence(state *core.Context) bool {
-	if state == nil {
+func hasVerificationEvidence(env *contextdata.Envelope) bool {
+	if env == nil {
 		return false
 	}
-	if raw, ok := state.Get("react.tool_observations"); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue("react.tool_observations"); ok && raw != nil {
 		if observations, ok := raw.([]reactpkg.ToolObservation); ok {
 			for _, obs := range observations {
 				if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
@@ -463,7 +474,7 @@ func hasVerificationEvidence(state *core.Context) bool {
 			}
 		}
 	}
-	if result := resolveResultHandle(state, "reflection.last_result"); result != nil && result.Success {
+	if result := resolveResultHandle(env, "reflection.last_result"); result != nil && result.Success {
 		if text := fmt.Sprint(result.Data); strings.Contains(strings.ToLower(text), "summary") || strings.Contains(strings.ToLower(text), "passed") {
 			return true
 		}

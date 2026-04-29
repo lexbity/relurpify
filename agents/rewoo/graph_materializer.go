@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ParallelGroup represents a set of steps that can execute concurrently.
@@ -113,7 +113,7 @@ func MaterializePlanGraph(
 	g *graph.Graph,
 	plan *RewooPlan,
 	registry *capability.Registry,
-	permissionManager interface{}, // *authorization.PermissionManager
+	permissionChecker contracts.CapabilityChecker,
 	options RewooOptions,
 	debugf func(string, ...interface{}),
 ) error {
@@ -136,8 +136,8 @@ func MaterializePlanGraph(
 		nodeID := fmt.Sprintf("rewoo_step_%s", step.ID)
 		stepNode := NewStepNode(nodeID, step, registry, options.OnFailure)
 		stepNode.OnPermissionDenied = StepOnFailureAbort
-		if permissionManager != nil {
-			stepNode.SetPermissionManager(permissionManager)
+		if permissionChecker != nil {
+			stepNode.SetPermissionChecker(permissionChecker)
 		}
 		stepNode.Debugf = debugf
 

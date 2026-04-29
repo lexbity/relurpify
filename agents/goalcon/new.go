@@ -3,6 +3,7 @@ package goalcon
 import (
 	"codeburg.org/lexbit/relurpify/agents/goalcon/operators"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 )
 
 type Option func(*GoalConAgent)
@@ -10,6 +11,34 @@ type Option func(*GoalConAgent)
 // DefaultOperatorRegistry returns a default operator registry.
 func DefaultOperatorRegistry() *OperatorRegistry {
 	return operators.DefaultOperatorRegistry()
+}
+
+// WithContextStreamTrigger wires an explicit streaming trigger into the goalcon agent.
+func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
+	return func(a *GoalConAgent) {
+		a.StreamTrigger = trigger
+	}
+}
+
+// WithContextStreamMode sets whether goalcon streaming blocks or runs in the background.
+func WithContextStreamMode(mode contextstream.Mode) Option {
+	return func(a *GoalConAgent) {
+		a.StreamMode = mode
+	}
+}
+
+// WithContextStreamQuery overrides the query sent to the streaming trigger.
+func WithContextStreamQuery(query string) Option {
+	return func(a *GoalConAgent) {
+		a.StreamQuery = query
+	}
+}
+
+// WithContextStreamMaxTokens overrides the goalcon stream token budget.
+func WithContextStreamMaxTokens(maxTokens int) Option {
+	return func(a *GoalConAgent) {
+		a.StreamMaxTokens = maxTokens
+	}
 }
 
 func New(env agentenv.AgentEnvironment, operators *OperatorRegistry, opts ...Option) *GoalConAgent {

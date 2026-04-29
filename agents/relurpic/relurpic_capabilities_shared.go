@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -137,7 +139,7 @@ func stringifyContextValue(value any) string {
 	}
 }
 
-func planStepsAsAny(steps []core.PlanStep) []any {
+func planStepsAsAny(steps []agentgraph.PlanStep) []any {
 	out := make([]any, 0, len(steps))
 	for _, step := range steps {
 		out = append(out, map[string]any{
@@ -147,7 +149,6 @@ func planStepsAsAny(steps []core.PlanStep) []any {
 			"params":       step.Params,
 			"expected":     step.Expected,
 			"verification": step.Verification,
-			"status":       step.Status,
 			"files":        append([]string{}, step.Files...),
 		})
 	}
@@ -171,14 +172,46 @@ func planDependenciesAsAny(dependencies map[string][]string) map[string]any {
 }
 
 func normalizePlanPayload(plan any) any {
-	typed, ok := plan.(core.Plan)
-	if !ok {
-		return plan
+	if typed, ok := plan.(agentgraph.Plan); ok {
+		return map[string]any{
+			"goal":         typed.Goal,
+			"steps":        planStepsAsAny(typed.Steps),
+			"files":        planFilesAsAny(typed.Files),
+			"dependencies": planDependenciesAsAny(typed.Dependencies),
+		}
 	}
-	return map[string]any{
-		"goal":         typed.Goal,
-		"steps":        planStepsAsAny(typed.Steps),
-		"files":        planFilesAsAny(typed.Files),
-		"dependencies": planDependenciesAsAny(typed.Dependencies),
+	return plan
+}
+
+func envGetString(env *contextdata.Envelope, key string) string {
+	if env == nil {
+		return ""
+	}
+	val, ok := env.GetWorkingValue(key)
+	if !ok {
+		return ""
+	}
+	return stringifyContextValue(val)
+}
+
+func envStringSliceFromContext(env *contextdata.Envelope, key string) []string {
+	if env == nil {
+		return nil
+	}
+	val, ok := env.GetWorkingValue(key)
+	if !ok {
+		return nil
+	}
+	switch typed := val.(type) {
+	case []string:
+		return typed
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			result = append(result, stringifyContextValue(item))
+		}
+		return result
+	default:
+		return nil
 	}
 }

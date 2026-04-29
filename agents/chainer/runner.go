@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -15,36 +16,40 @@ type chainRunner struct {
 }
 
 // FilterState returns only the requested state keys.
-func FilterState(state *core.Context, keys []string) map[string]any {
-	filtered := make(map[string]any, len(keys))
-	if state == nil {
-		return filtered
+func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
+	if env == nil {
+		return map[string]any{}
 	}
-	for _, key := range keys {
-		if value, ok := state.Get(key); ok {
-			filtered[key] = value
-		}
+	if len(keys) == 0 {
+		return map[string]any{}
 	}
-	return filtered
+	snapshot := env.HandoffSnapshot(contextdata.HandoffPolicy{
+		PreserveWorkingMemory: true,
+		WorkingKeys:           append([]string(nil), keys...),
+	})
+	if snapshot == nil {
+		return map[string]any{}
+	}
+	return snapshot.WorkingData
 }
 
 // RunChain executes a chain against state using isolated prompts.
-func RunChain(ctx context.Context, model core.LanguageModel, task *core.Task, chain *Chain, state *core.Context) error {
-	return (&chainRunner{Model: model}).Run(ctx, task, chain, state)
+func RunChain(ctx context.Context, model core.LanguageModel, task *core.Task, chain *Chain, env *contextdata.Envelope) error {
+	return (&chainRunner{Model: model}).Run(ctx, task, chain, env)
 }
 
-func (r *chainRunner) Run(ctx context.Context, task *core.Task, chain *Chain, state *core.Context) error {
+func (r *chainRunner) Run(ctx context.Context, task *core.Task, chain *Chain, env *contextdata.Envelope) error {
 	if r == nil || r.Model == nil {
 		return fmt.Errorf("chainer: model unavailable")
 	}
-	if state == nil {
-		state = core.NewContext()
+	if env == nil {
+		env = contextdata.NewEnvelope("chainer", "session")
 	}
 	if err := chain.Validate(); err != nil {
 		return err
 	}
 	for _, link := range chain.Links {
-		filtered := FilterState(state, link.InputKeys)
+		filtered := FilterState(env, link.InputKeys)
 		systemPrompt, err := renderLinkPrompt(link.SystemPrompt, taskInstruction(task), filtered)
 		if err != nil {
 			return fmt.Errorf("chainer: render link %s: %w", link.Name, err)
@@ -65,8 +70,12 @@ func (r *chainRunner) Run(ctx context.Context, task *core.Task, chain *Chain, st
 			}
 			parsed, parseErr := parseLinkResponse(link, resp.Text)
 			if parseErr == nil {
-				state.Set(link.OutputKey, parsed)
-				state.AddInteraction("assistant", resp.Text, map[string]any{"link": link.Name})
+				env.SetWorkingValue(link.OutputKey, parsed, contextdata.MemoryClassTask)
+				env.AddInteraction(map[string]interface{}{
+					"role":    "assistant",
+					"content": resp.Text,
+					"link":    link.Name,
+				})
 				break
 			}
 			if linkFailurePolicy(link) == FailurePolicyRetry && retries < maxRetries {

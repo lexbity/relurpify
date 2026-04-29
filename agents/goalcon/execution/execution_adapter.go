@@ -5,22 +5,23 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // PlanStepAgent adapts a step executor to the graph.WorkflowExecutor interface.
 // This allows plan steps to be executed as part of the goal-con execution flow.
 type PlanStepAgent struct {
 	stepExecutor *StepExecutor
-	plan         *core.Plan
+	plan         *agentgraph.Plan
 	currentIndex int
 	results      map[string]*StepExecutionResult
 }
 
 // NewPlanStepAgent creates an adapter for executing plan steps as an agent.
-func NewPlanStepAgent(registry *capability.Registry, plan *core.Plan) *PlanStepAgent {
+func NewPlanStepAgent(registry *capability.Registry, plan *agentgraph.Plan) *PlanStepAgent {
 	return &PlanStepAgent{
 		stepExecutor: NewStepExecutor(registry),
 		plan:         plan,
@@ -109,7 +110,7 @@ func (a *PlanStepAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 }
 
 // Execute runs the plan step execution.
-func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	if a.plan == nil || len(a.plan.Steps) == 0 {
 		return &core.Result{
 			Success: true,
@@ -174,7 +175,7 @@ func (n *stepExecutionNode) Type() graph.NodeType {
 }
 
 // Execute runs the step and returns the result.
-func (n *stepExecutionNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n.executor == nil || n.executor.plan == nil {
 		return &core.Result{
 			Success: false,
@@ -205,7 +206,7 @@ func (n *stepExecutionNode) Execute(ctx context.Context, state *core.Context) (*
 	// Execute the step
 	req := StepExecutionRequest{
 		Step:    *step,
-		Context: state,
+		Context: env,
 	}
 
 	result := n.executor.stepExecutor.Execute(ctx, req)
@@ -258,7 +259,7 @@ func (a *ExecutionAdapter) SetFailureMode(mode FailureMode) {
 func (a *ExecutionAdapter) ExecutePlan(
 	ctx context.Context,
 	plan *core.Plan,
-	state *core.Context,
+	env *contextdata.Envelope,
 ) *core.Result {
 	if a == nil || plan == nil {
 		return &core.Result{
@@ -284,7 +285,7 @@ func (a *ExecutionAdapter) ExecutePlan(
 	chain := NewExecutorChain(a.executor)
 	chain.SetFailureMode(a.failureMode)
 
-	results := chain.ExecuteSteps(ctx, plan.Steps, state, a.registry)
+	results := chain.ExecuteSteps(ctx, plan.Steps, env, a.registry)
 
 	// Prepare output
 	output := make(map[string]any)
@@ -322,7 +323,7 @@ func (a *ExecutionAdapter) ExecutePlan(
 func (a *ExecutionAdapter) ExecuteStep(
 	ctx context.Context,
 	step core.PlanStep,
-	state *core.Context,
+	env *contextdata.Envelope,
 ) *StepExecutionResult {
 	if a == nil {
 		return &StepExecutionResult{
@@ -333,7 +334,7 @@ func (a *ExecutionAdapter) ExecuteStep(
 
 	req := StepExecutionRequest{
 		Step:               step,
-		Context:            state,
+		Context:            env,
 		CapabilityRegistry: a.registry,
 		OnFailure:          a.failureMode,
 	}

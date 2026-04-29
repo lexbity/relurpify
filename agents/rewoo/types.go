@@ -1,5 +1,7 @@
 package rewoo
 
+import "codeburg.org/lexbit/relurpify/framework/contextstream"
+
 // StepOnFailure defines how executor failures are handled.
 type StepOnFailure string
 
@@ -90,4 +92,9 @@ type RewooOptions struct {
 	PermConfig RewooPermissionConfig
 	// GraphConfig controls graph-based execution
 	GraphConfig RewooGraphConfig
+	// Streaming trigger configuration
+	StreamTrigger   *contextstream.Trigger
+	StreamMode      contextstream.Mode
+	StreamQuery     string
+	StreamMaxTokens int
 }

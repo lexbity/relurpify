@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -20,42 +21,42 @@ type ToolObservation struct {
 	Timestamp time.Time              `json:"timestamp"`
 }
 
-func mirrorReactFinalOutputReference(state *core.Context) {
-	if state == nil {
+func mirrorReactFinalOutputReference(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("react.final_output"); !ok {
+	if _, ok := env.GetWorkingValue("react.final_output"); !ok {
 		return
 	}
-	if rawRef, ok := state.Get("graph.summary_ref"); ok {
+	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
 		if ref, ok := rawRef.(core.ArtifactReference); ok {
-			state.Set("react.final_output_ref", ref)
+			env.SetWorkingValue("react.final_output_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
-	if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
-		state.Set("react.final_output_summary", summary)
+	if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
+		env.SetWorkingValue("react.final_output_summary", summary, contextdata.MemoryClassTask)
 	}
 }
 
-func mirrorReactCheckpointReference(state *core.Context) {
-	if state == nil {
+func mirrorReactCheckpointReference(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if rawRef, ok := state.Get("graph.checkpoint_ref"); ok {
+	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
 		if ref, ok := rawRef.(core.ArtifactReference); ok {
-			state.Set("react.checkpoint_ref", ref)
+			env.SetWorkingValue("react.checkpoint_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 }
 
-func compactReactFinalOutputState(state *core.Context) {
-	if state == nil {
+func compactReactFinalOutputState(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("react.final_output_ref"); !ok {
+	if _, ok := env.GetWorkingValue("react.final_output_ref"); !ok {
 		return
 	}
-	raw, ok := state.Get("react.final_output")
+	raw, ok := env.GetWorkingValue("react.final_output")
 	if !ok {
 		return
 	}
@@ -67,19 +68,19 @@ func compactReactFinalOutputState(state *core.Context) {
 	if summary == "" || summary == "<nil>" {
 		return
 	}
-	state.Set("react.final_output", map[string]any{
+	env.SetWorkingValue("react.final_output", map[string]any{
 		"summary": summary,
-	})
+	}, contextdata.MemoryClassTask)
 }
 
-func compactReactToolObservationsState(state *core.Context) {
-	if state == nil {
+func compactReactToolObservationsState(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("react.final_output_ref"); !ok {
+	if _, ok := env.GetWorkingValue("react.final_output_ref"); !ok {
 		return
 	}
-	raw, ok := state.Get("react.tool_observations")
+	raw, ok := env.GetWorkingValue("react.tool_observations")
 	if !ok {
 		return
 	}
@@ -87,7 +88,7 @@ func compactReactToolObservationsState(state *core.Context) {
 	if !ok {
 		return
 	}
-	state.Set("react.tool_observations", compactReactToolObservations(observations))
+	env.SetWorkingValue("react.tool_observations", compactReactToolObservations(observations), contextdata.MemoryClassTask)
 }
 
 func compactReactToolObservations(observations []ToolObservation) map[string]any {
@@ -119,14 +120,14 @@ func compactReactToolObservations(observations []ToolObservation) map[string]any
 	return value
 }
 
-func compactReactLastToolResultState(state *core.Context) {
-	if state == nil {
+func compactReactLastToolResultState(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("react.final_output_ref"); !ok {
+	if _, ok := env.GetWorkingValue("react.final_output_ref"); !ok {
 		return
 	}
-	raw, ok := state.Get("react.last_tool_result")
+	raw, ok := env.GetWorkingValue("react.last_tool_result")
 	if !ok {
 		return
 	}
@@ -134,7 +135,7 @@ func compactReactLastToolResultState(state *core.Context) {
 	if !ok {
 		return
 	}
-	state.Set("react.last_tool_result", compactReactLastToolResult(payload))
+	env.SetWorkingValue("react.last_tool_result", compactReactLastToolResult(payload), contextdata.MemoryClassTask)
 }
 
 func compactReactLastToolResult(payload map[string]interface{}) map[string]any {
@@ -156,43 +157,43 @@ func compactReactLastToolResult(payload map[string]interface{}) map[string]any {
 	return value
 }
 
-func compactReactLoopState(state *core.Context) {
-	if state == nil {
+func compactReactLoopState(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("react.final_output_ref"); !ok {
+	if _, ok := env.GetWorkingValue("react.final_output_ref"); !ok {
 		return
 	}
-	if raw, ok := state.Get("react.decision"); ok && raw != nil {
-		state.Set("react.decision", map[string]any{"present": true})
+	if raw, ok := env.GetWorkingValue("react.decision"); ok && raw != nil {
+		env.SetWorkingValue("react.decision", map[string]any{"present": true}, contextdata.MemoryClassTask)
 	}
-	if raw, ok := state.Get("react.tool_calls"); ok {
+	if raw, ok := env.GetWorkingValue("react.tool_calls"); ok {
 		switch calls := raw.(type) {
 		case []core.ToolCall:
-			state.Set("react.tool_calls", map[string]any{"count": len(calls)})
+			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		case []any:
-			state.Set("react.tool_calls", map[string]any{"count": len(calls)})
+			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		}
 	}
-	if _, ok := state.Get("react.last_tool_result_envelope"); ok {
-		state.Set("react.last_tool_result_envelope", map[string]any{"present": true})
+	if _, ok := env.GetWorkingValue("react.last_tool_result_envelope"); ok {
+		env.SetWorkingValue("react.last_tool_result_envelope", map[string]any{"present": true}, contextdata.MemoryClassTask)
 	}
-	if raw, ok := state.Get("react.last_tool_result_envelopes"); ok {
+	if raw, ok := env.GetWorkingValue("react.last_tool_result_envelopes"); ok {
 		switch envelopes := raw.(type) {
 		case []*core.CapabilityResultEnvelope:
-			state.Set("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)})
+			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
 		case []any:
-			state.Set("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)})
+			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
 		}
 	}
 }
 
-func activeToolSet(state *core.Context) map[string]struct{} {
+func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
 	out := map[string]struct{}{}
-	if state == nil {
+	if env == nil {
 		return out
 	}
-	raw, ok := state.Get("react.active_tools")
+	raw, ok := env.GetWorkingValue("react.active_tools")
 	if !ok {
 		return out
 	}
@@ -209,25 +210,19 @@ func activeToolSet(state *core.Context) map[string]struct{} {
 	return out
 }
 
-func recordActiveToolNames(state *core.Context, tools []core.Tool) {
+func recordActiveToolNames(env *contextdata.Envelope, tools []core.Tool) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name())
 	}
-	state.Set("react.active_tools", names)
+	env.SetWorkingValue("react.active_tools", names, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) getLastResult(state *core.Context) *core.Result {
-	if state == nil {
+func (a *ReActAgent) getLastResult(env *contextdata.Envelope) *core.Result {
+	if env == nil {
 		return nil
 	}
-	if val, ok := state.GetHandle("react.last_result"); ok {
-		if res, ok := val.(*core.Result); ok {
-			return res
-		}
-	}
-	val, ok := state.Get("react.last_result")
-	if ok {
+	if val, ok := env.GetWorkingValue("react.last_result"); ok {
 		if res, ok := val.(*core.Result); ok {
 			return res
 		}
@@ -235,7 +230,7 @@ func (a *ReActAgent) getLastResult(state *core.Context) *core.Result {
 	return nil
 }
 
-func (a *ReActAgent) enforceBudget(state *core.Context) {
+func (a *ReActAgent) enforceBudget(env *contextdata.Envelope) {
 	if a.contextPolicy == nil {
 		return
 	}
@@ -245,20 +240,20 @@ func (a *ReActAgent) enforceBudget(state *core.Context) {
 	} else if a.Tools != nil {
 		tools = a.Tools.ModelCallableTools()
 	}
-	a.contextPolicy.EnforceBudget(state, a.sharedContext, a.Model, tools, a.debugf)
+	a.contextPolicy.EnforceBudget(env, a.sharedContext, a.Model, tools, a.debugf)
 }
 
-func (a *ReActAgent) recordLatestInteraction(state *core.Context) {
+func (a *ReActAgent) recordLatestInteraction(env *contextdata.Envelope) {
 	if a.contextPolicy == nil {
 		return
 	}
-	a.contextPolicy.RecordLatestInteraction(state, a.debugf)
+	a.contextPolicy.RecordLatestInteraction(env, a.debugf)
 }
 
-func (a *ReActAgent) manageContextSignals(state *core.Context) {
+func (a *ReActAgent) manageContextSignals(env *contextdata.Envelope) {
 	if a.contextPolicy == nil {
 		return
 	}
-	lastResult := a.getLastResult(state)
-	a.contextPolicy.HandleSignals(state, a.sharedContext, lastResult)
+	lastResult := a.getLastResult(env)
+	a.contextPolicy.HandleSignals(env, a.sharedContext, lastResult)
 }

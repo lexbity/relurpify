@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -89,15 +90,15 @@ func dedupeSelectors(selectors []core.CapabilitySelector) []core.CapabilitySelec
 	return result
 }
 
-// persistDispatchMetadata saves the dispatch decision to context for recovery.
+// persistDispatchMetadata saves the dispatch decision to envelope for recovery.
 // This wraps the dispatch decision into a metadata map stored at a recovery key.
-func persistDispatchMetadata(state *core.Context, dispatcher string, target string, reason string) {
-	if state == nil {
+func persistDispatchMetadata(env *contextdata.Envelope, dispatcher string, target string, reason string) {
+	if env == nil {
 		return
 	}
-	state.Set(contextKeyLastDispatch, map[string]any{
+	env.SetWorkingValue(contextKeyLastDispatch, map[string]any{
 		"dispatcher": dispatcher,
 		"target":     target,
 		"reason":     reason,
-	})
+	}, contextdata.MemoryClassTask)
 }

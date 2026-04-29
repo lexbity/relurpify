@@ -1,14 +1,35 @@
 package agents
 
 import (
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
-// WorkspaceEnvironment is the composition-root-supplied environment produced by
-// ayenitd.Open(). Use this in new code; it is the superset of AgentEnvironment.
-type WorkspaceEnvironment = ayenitd.WorkspaceEnvironment
+// AgentEnvironment is the shared agent dependency container.
+// It contains the common fields that all agent paradigms need.
+// This is a subset of WorkspaceEnvironment for use by generic agents.
+type AgentEnvironment struct {
+	Config       *core.Config
+	Model        core.LanguageModel
+	Registry     *capability.Registry
+	Memory       *memory.WorkingMemoryStore
+	IndexManager *ast.IndexManager
+	SearchEngine *search.SearchEngine
+}
 
-// AgentEnvironment re-exports the shared agent dependency container.
-// Deprecated: Use WorkspaceEnvironment in new code.
-type AgentEnvironment = agentenv.AgentEnvironment
+// ToWorkspace converts an AgentEnvironment to a WorkspaceEnvironment.
+// Fields not present in AgentEnvironment are left as zero/nil values.
+func ToWorkspace(env AgentEnvironment) agentenv.WorkspaceEnvironment {
+	return agentenv.WorkspaceEnvironment{
+		Config:        env.Config,
+		Model:         env.Model,
+		Registry:      env.Registry,
+		WorkingMemory: env.Memory,
+		IndexManager:  env.IndexManager,
+		SearchEngine:  env.SearchEngine,
+	}
+}

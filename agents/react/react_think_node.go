@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 type reactThinkNode struct {
@@ -21,23 +22,23 @@ type reactThinkNode struct {
 func (n *reactThinkNode) ID() string { return n.id }
 
 // Type marks the think step as an observation node.
-func (n *reactThinkNode) Type() graph.NodeType { return graph.NodeTypeObservation }
+func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeObservation }
 
 // Execute drives the "think" portion of the ReAct loop and either emits a tool
 // call or final answer instructions.
-func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	state.SetExecutionPhase("planning")
-	n.agent.enforceBudget(state)
-	n.agent.manageContextSignals(state)
-	if summary := strings.TrimSpace(state.GetString("react.verification_latched_summary")); summary != "" {
+func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetWorkingValue("react.execution_phase", "planning", contextdata.MemoryClassTask)
+	n.agent.enforceBudget(env)
+	n.agent.manageContextSignals(env)
+	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		decision := decisionPayload{
 			Thought:   "verification already succeeded",
 			Complete:  true,
 			Summary:   summary,
 			Timestamp: time.Now().UTC(),
 		}
-		state.Set("react.tool_calls", []core.ToolCall{})
-		state.Set("react.decision", decision)
+		env.SetWorkingValue("react.tool_calls", []core.ToolCall{}, contextdata.MemoryClassTask)
+		env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
 		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
@@ -48,8 +49,8 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	}
 	var resp *core.LLMResponse
 	var err error
-	tools := n.agent.availableToolsForPhase(state, n.task)
-	recordActiveToolNames(state, tools)
+	tools := n.agent.availableToolsForPhase(env, n.task)
+	recordActiveToolNames(env, tools)
 	configNativeTC := n.agent.Config != nil && n.agent.Config.NativeToolCalling
 	profileNativeTC := false
 	if !configNativeTC {
@@ -60,7 +61,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	useToolCalling := len(tools) > 0 && (configNativeTC || profileNativeTC)
 	streamCB := n.streamCallback()
 	if useToolCalling {
-		messages := n.ensureMessages(state, tools)
+		messages := n.ensureMessages(env, tools)
 		resp, err = n.agent.Model.ChatWithTools(ctx, messages, core.LLMToolSpecsFromTools(tools), &core.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
@@ -68,10 +69,10 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 			StreamCallback: streamCB,
 		})
 		if err == nil {
-			saveReactMessages(state, messages)
+			saveReactMessages(env, messages)
 		}
 	} else {
-		prompt := n.buildPrompt(state)
+		prompt := n.buildPrompt(env)
 		resp, err = n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
@@ -83,16 +84,20 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 		return nil, err
 	}
 	if useToolCalling {
-		appendAssistantMessage(state, resp)
+		appendAssistantMessage(env, resp)
 	}
-	state.AddInteraction("assistant", resp.Text, map[string]interface{}{"node": n.id})
-	n.agent.recordLatestInteraction(state)
-	decision, toolCalls, err := n.normalizeDecision(ctx, state, resp, useToolCalling, tools)
+	env.AddInteraction(map[string]interface{}{
+		"role":    "assistant",
+		"content": resp.Text,
+		"node":    n.id,
+	})
+	n.agent.recordLatestInteraction(env)
+	decision, toolCalls, err := n.normalizeDecision(ctx, env, resp, useToolCalling, tools)
 	if err != nil {
 		return nil, err
 	}
-	state.Set("react.tool_calls", toolCalls)
-	state.Set("react.decision", decision)
+	env.SetWorkingValue("react.tool_calls", toolCalls, contextdata.MemoryClassTask)
+	env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
 	n.agent.debugf("%s decision=%+v tool_calls=%d", n.id, decision, len(resp.ToolCalls))
 	return &core.Result{
 		NodeID:  n.id,
@@ -103,7 +108,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	}, nil
 }
 
-func (n *reactThinkNode) normalizeDecision(ctx context.Context, state *core.Context, resp *core.LLMResponse, useToolCalling bool, tools []core.Tool) (decisionPayload, []core.ToolCall, error) {
+func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata.Envelope, resp *core.LLMResponse, useToolCalling bool, tools []core.Tool) (decisionPayload, []core.ToolCall, error) {
 	if resp == nil {
 		return decisionPayload{}, nil, fmt.Errorf("empty llm response")
 	}
@@ -231,7 +236,7 @@ type contextFilePayload struct {
 	Path      string
 	Content   string
 	Summary   string
-	Reference *core.ContextReference
+	Reference *agentgraph.ContextReference
 	Truncated bool
 }
 
@@ -280,18 +285,6 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 		return nil
 	}
 	switch v := raw.(type) {
-	case []core.ContextFileContent:
-		out := make([]contextFilePayload, 0, len(v))
-		for _, file := range v {
-			out = append(out, contextFilePayload{
-				Path:      file.Path,
-				Content:   file.Content,
-				Summary:   file.Summary,
-				Reference: file.Reference,
-				Truncated: file.Truncated,
-			})
-		}
-		return out
 	case []interface{}:
 		out := make([]contextFilePayload, 0, len(v))
 		for _, item := range v {
@@ -303,10 +296,10 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 			content, _ := m["content"].(string)
 			summary, _ := m["summary"].(string)
 			truncated, _ := m["truncated"].(bool)
-			var reference *core.ContextReference
+			var reference *agentgraph.ContextReference
 			if rawRef, ok := m["reference"].(map[string]interface{}); ok {
-				reference = &core.ContextReference{
-					Kind:    core.ContextReferenceKind(strings.TrimSpace(fmt.Sprint(rawRef["kind"]))),
+				reference = &agentgraph.ContextReference{
+					Kind:    agentgraph.ContextReferenceKind(strings.TrimSpace(fmt.Sprint(rawRef["kind"]))),
 					ID:      strings.TrimSpace(fmt.Sprint(rawRef["id"])),
 					URI:     strings.TrimSpace(fmt.Sprint(rawRef["uri"])),
 					Version: strings.TrimSpace(fmt.Sprint(rawRef["version"])),
@@ -369,11 +362,11 @@ func (n *reactThinkNode) streamCallback() func(string) {
 
 // buildPrompt returns a textual prompt when tool-calling chat APIs are not
 // available.
-func (n *reactThinkNode) buildPrompt(state *core.Context) string {
-	tools := n.agent.availableToolsForPhase(state, n.task)
+func (n *reactThinkNode) buildPrompt(env *contextdata.Envelope) string {
+	tools := n.agent.availableToolsForPhase(env, n.task)
 	toolSection := frameworktools.RenderToolsToPrompt(tools)
 	assembler := newPromptContextAssembler(n.agent, n.task)
-	promptBody := assembler.buildPrompt(state, tools, true)
+	promptBody := assembler.buildPrompt(env, tools, true)
 	return fmt.Sprintf(`You are a ReAct agent optimized for a small-context local model.
 Work step-by-step. Prefer the smallest useful action. Do not restate the task.
 
@@ -389,11 +382,11 @@ Return ONLY JSON with fields:
 // ensureMessages seeds or extends the chat history so each tool-calling
 // iteration keeps prior assistant/tool turns while refreshing the current
 // prompt context.
-func (n *reactThinkNode) ensureMessages(state *core.Context, tools []core.Tool) []core.Message {
+func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []core.Tool) []core.Message {
 	assembler := newPromptContextAssembler(n.agent, n.task)
 	systemPrompt := n.buildSystemPrompt(tools)
-	userPrompt := assembler.buildPrompt(state, tools, true)
-	messages := getReactMessages(state)
+	userPrompt := assembler.buildPrompt(env, tools, true)
+	messages := getReactMessages(env)
 	if len(messages) == 0 {
 		messages = []core.Message{
 			{Role: "system", Content: systemPrompt},
@@ -407,7 +400,7 @@ func (n *reactThinkNode) ensureMessages(state *core.Context, tools []core.Tool) 
 		}
 		messages = append(messages, core.Message{Role: "user", Content: userPrompt})
 	}
-	saveReactMessages(state, messages)
+	saveReactMessages(env, messages)
 	return messages
 }
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // AggregateNode collects all step results into a single tool_results array.
@@ -35,10 +35,10 @@ func (n *AggregateNode) Type() graph.NodeType {
 }
 
 // Execute aggregates all step results from state.
-func (n *AggregateNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	plan := n.Plan
 	if plan == nil {
-		if v, ok := state.Get("rewoo.plan"); ok {
+		if v, ok := env.GetWorkingValue("rewoo.plan"); ok {
 			plan, _ = v.(*RewooPlan)
 		}
 	}
@@ -51,7 +51,7 @@ func (n *AggregateNode) Execute(ctx context.Context, state *core.Context) (*core
 	results := make([]RewooStepResult, 0, len(n.Plan.Steps))
 	for _, step := range n.Plan.Steps {
 		key := fmt.Sprintf("rewoo.step.%s", step.ID)
-		val, ok := state.Get(key)
+		val, ok := env.GetWorkingValue(key)
 		if !ok {
 			// Step not executed (e.g., skipped due to dependency failure)
 			results = append(results, RewooStepResult{
@@ -71,7 +71,7 @@ func (n *AggregateNode) Execute(ctx context.Context, state *core.Context) (*core
 	}
 
 	// Store aggregated results in state
-	state.Set("rewoo.tool_results", results)
+	env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
 
 	// Compute summary stats
 	stepsOK := 0

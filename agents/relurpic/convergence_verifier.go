@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 )
 
 // TensionDetector reports currently active tension IDs. It is optional; when nil,

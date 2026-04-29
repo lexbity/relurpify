@@ -4,12 +4,13 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const maxBlackboardAuditEntries = 32
 
-func emitBlackboardEvent(telemetry core.Telemetry, state *core.Context, eventType core.EventType, nodeID, taskID, message string, metadata map[string]any) {
+func emitBlackboardEvent(telemetry core.Telemetry, state *contextdata.Envelope, eventType core.EventType, nodeID, taskID, message string, metadata map[string]any) {
 	if state != nil {
 		appendBlackboardAudit(state, strings.TrimSpace(message), metadata)
 	}
@@ -26,7 +27,7 @@ func emitBlackboardEvent(telemetry core.Telemetry, state *core.Context, eventTyp
 	})
 }
 
-func appendBlackboardAudit(state *core.Context, message string, metadata map[string]any) {
+func appendBlackboardAudit(state *contextdata.Envelope, message string, metadata map[string]any) {
 	if state == nil {
 		return
 	}
@@ -35,13 +36,13 @@ func appendBlackboardAudit(state *core.Context, message string, metadata map[str
 		"timestamp": time.Now().UTC(),
 		"metadata":  cloneTelemetryMetadata(metadata),
 	}
-	raw, _ := state.Get(contextKeyAuditTrail)
+	raw, _ := envelopeGet(state, contextKeyAuditTrail)
 	existing, _ := raw.([]map[string]any)
 	next := append(append([]map[string]any(nil), existing...), entry)
 	if len(next) > maxBlackboardAuditEntries {
 		next = next[len(next)-maxBlackboardAuditEntries:]
 	}
-	state.Set(contextKeyAuditTrail, next)
+	envelopeSet(state, contextKeyAuditTrail, next)
 }
 
 func cloneTelemetryMetadata(src map[string]any) map[string]any {

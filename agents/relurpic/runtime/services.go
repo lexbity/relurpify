@@ -6,7 +6,7 @@ import (
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 	"codeburg.org/lexbit/relurpify/archaeo/providers"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 )
 
 type PatternSurfacingService interface {

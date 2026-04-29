@@ -7,10 +7,11 @@ import (
 	"regexp"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func recoveryProbeArgs(agent *ReActAgent, toolName string, state *core.Context, task *core.Task, lastMap map[string]interface{}) map[string]interface{} {
+func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Envelope, task *core.Task, lastMap map[string]interface{}) map[string]interface{} {
 	if agent == nil || agent.Tools == nil {
 		return nil
 	}
@@ -20,7 +21,7 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, state *core.Context, 
 	}
 	switch toolName {
 	case "file_read":
-		if path := primaryFailurePath(state, lastMap); path != "" {
+		if path := primaryFailurePath(env, lastMap); path != "" {
 			return map[string]interface{}{"path": path}
 		}
 		return nil
@@ -30,7 +31,7 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, state *core.Context, 
 			return nil
 		}
 		return map[string]interface{}{
-			"directory": primaryFailureDirectory(state, lastMap),
+			"directory": primaryFailureDirectory(env, lastMap),
 			"pattern":   pattern,
 		}
 	case "query_ast":
@@ -51,17 +52,17 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, state *core.Context, 
 		required[name] = param.Required
 		switch name {
 		case "working_directory":
-			args[name] = primaryFailureDirectory(state, lastMap)
+			args[name] = primaryFailureDirectory(env, lastMap)
 		case "path":
-			path := primaryFailurePath(state, lastMap)
+			path := primaryFailurePath(env, lastMap)
 			if path == "" {
 				path = "."
 			}
 			args[name] = path
 		case "database_path":
-			if db := inferredPathFromObservations(state, "database_path"); db != "" {
+			if db := inferredPathFromObservations(env, "database_path"); db != "" {
 				args[name] = db
-			} else if path := primaryFailurePath(state, lastMap); isSQLiteFailurePath(path) {
+			} else if path := primaryFailurePath(env, lastMap); isSQLiteFailurePath(path) {
 				args[name] = path
 			}
 		case "query":
@@ -90,12 +91,12 @@ func failureSignature(lastMap map[string]interface{}) string {
 	return strings.TrimSpace(fmt.Sprint(lastMap))
 }
 
-func recoveryProbesForSignature(state *core.Context, signature string) map[string]bool {
+func recoveryProbesForSignature(env *contextdata.Envelope, signature string) map[string]bool {
 	out := map[string]bool{}
-	if state == nil || signature == "" {
+	if env == nil || signature == "" {
 		return out
 	}
-	raw, ok := state.Get("react.recovery_probes")
+	raw, ok := env.GetWorkingValue("react.recovery_probes")
 	if !ok || raw == nil {
 		return out
 	}
@@ -109,12 +110,12 @@ func recoveryProbesForSignature(state *core.Context, signature string) map[strin
 	return out
 }
 
-func recordRecoveryProbeUsage(state *core.Context, signature, toolName string) {
-	if state == nil || signature == "" || toolName == "" {
+func recordRecoveryProbeUsage(env *contextdata.Envelope, signature, toolName string) {
+	if env == nil || signature == "" || toolName == "" {
 		return
 	}
 	store := map[string][]string{}
-	if raw, ok := state.Get("react.recovery_probes"); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue("react.recovery_probes"); ok && raw != nil {
 		if current, ok := raw.(map[string][]string); ok {
 			for k, v := range current {
 				store[k] = append([]string{}, v...)
@@ -122,14 +123,14 @@ func recordRecoveryProbeUsage(state *core.Context, signature, toolName string) {
 		}
 	}
 	store[signature] = append(store[signature], toolName)
-	state.Set("react.recovery_probes", store)
+	env.SetWorkingValue("react.recovery_probes", store, contextdata.MemoryClassTask)
 }
 
-func primaryFailureDirectory(state *core.Context, lastMap map[string]interface{}) string {
-	if task := state.GetString("react.failure_workdir"); task != "" {
+func primaryFailureDirectory(env *contextdata.Envelope, lastMap map[string]interface{}) string {
+	if task := envGetString(env, "react.failure_workdir"); task != "" {
 		return task
 	}
-	if path := primaryFailurePath(state, lastMap); path != "" {
+	if path := primaryFailurePath(env, lastMap); path != "" {
 		info, err := os.Stat(path)
 		if err == nil && info.IsDir() {
 			return path
@@ -139,13 +140,13 @@ func primaryFailureDirectory(state *core.Context, lastMap map[string]interface{}
 	return "."
 }
 
-func primaryFailurePath(state *core.Context, lastMap map[string]interface{}) string {
-	if state != nil {
-		if path := strings.TrimSpace(state.GetString("react.failure_path")); path != "" {
+func primaryFailurePath(env *contextdata.Envelope, lastMap map[string]interface{}) string {
+	if env != nil {
+		if path := strings.TrimSpace(envGetString(env, "react.failure_path")); path != "" {
 			return path
 		}
 	}
-	if path := inferredPathFromObservations(state, "database_path", "manifest_path", "module_path", "workspace_path", "go_mod"); path != "" {
+	if path := inferredPathFromObservations(env, "database_path", "manifest_path", "module_path", "workspace_path", "go_mod"); path != "" {
 		return path
 	}
 	_ = lastMap
@@ -183,8 +184,8 @@ type manifestInferenceRule struct {
 	pathSuffix []string
 }
 
-func inferredManifestFromObservations(state *core.Context, rule manifestInferenceRule) string {
-	observations := getToolObservations(state)
+func inferredManifestFromObservations(env *contextdata.Envelope, rule manifestInferenceRule) string {
+	observations := getToolObservations(env)
 	for i := len(observations) - 1; i >= 0; i-- {
 		obs := observations[i]
 		if len(rule.tools) > 0 {
@@ -219,7 +220,7 @@ func inferredManifestFromObservations(state *core.Context, rule manifestInferenc
 	return ""
 }
 
-func inferredPathFromObservations(state *core.Context, keys ...string) string {
+func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) string {
 	observations := getToolObservations(state)
 	for i := len(observations) - 1; i >= 0; i-- {
 		obs := observations[i]
@@ -249,15 +250,15 @@ func inferredPathFromObservations(state *core.Context, keys ...string) string {
 	return ""
 }
 
-func inferredCargoManifest(state *core.Context) string {
-	return inferredManifestFromObservations(state, manifestInferenceRule{
+func inferredCargoManifest(env *contextdata.Envelope) string {
+	return inferredManifestFromObservations(env, manifestInferenceRule{
 		tools:      []string{"rust_workspace_detect"},
 		dataKeys:   []string{"manifest_path"},
 		pathSuffix: []string{"Cargo.toml"},
 	})
 }
 
-func inferredPythonManifest(state *core.Context) string {
+func inferredPythonManifest(env *contextdata.Envelope) string {
 	return inferredManifestFromObservations(state, manifestInferenceRule{
 		tools:      []string{"python_workspace_detect", "python_project_metadata"},
 		dataKeys:   []string{"manifest_path"},
@@ -265,24 +266,24 @@ func inferredPythonManifest(state *core.Context) string {
 	})
 }
 
-func inferredNodeManifest(state *core.Context) string {
-	return inferredManifestFromObservations(state, manifestInferenceRule{
+func inferredNodeManifest(env *contextdata.Envelope) string {
+	return inferredManifestFromObservations(env, manifestInferenceRule{
 		tools:      []string{"node_workspace_detect", "node_project_metadata"},
 		dataKeys:   []string{"manifest_path"},
-		pathSuffix: []string{"package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsconfig.json"},
+		pathSuffix: []string{"package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsmanifest.json"},
 	})
 }
 
-func inferredGoManifest(state *core.Context) string {
-	return inferredManifestFromObservations(state, manifestInferenceRule{
+func inferredGoManifest(env *contextdata.Envelope) string {
+	return inferredManifestFromObservations(env, manifestInferenceRule{
 		tools:      []string{"go_workspace_detect", "go_module_metadata"},
 		dataKeys:   []string{"module_path", "workspace_path", "go_mod"},
 		pathSuffix: []string{"go.mod", "go.work"},
 	})
 }
 
-func inferredSQLiteDatabase(state *core.Context) string {
-	observations := getToolObservations(state)
+func inferredSQLiteDatabase(env *contextdata.Envelope) string {
+	observations := getToolObservations(env)
 	for i := len(observations) - 1; i >= 0; i-- {
 		obs := observations[i]
 		switch obs.Tool {

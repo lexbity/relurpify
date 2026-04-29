@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // StepNode is a graph node that executes a single plan step.
@@ -15,7 +15,7 @@ type StepNode struct {
 	id                 string
 	Step               RewooStep
 	Registry           *capability.Registry
-	PermissionManager  interface{} // *authorization.PermissionManager (avoid import)
+	PermissionChecker  contracts.CapabilityChecker
 	OnFailure          StepOnFailure
 	OnPermissionDenied StepOnFailure
 	Debugf             func(string, ...interface{})
@@ -48,7 +48,7 @@ func (n *StepNode) Type() graph.NodeType {
 }
 
 // Execute runs the step via the executor.
-func (n *StepNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n.Registry == nil {
 		return nil, fmt.Errorf("step_node: registry unavailable")
 	}
@@ -56,16 +56,16 @@ func (n *StepNode) Execute(ctx context.Context, state *core.Context) (*core.Resu
 	// Build executor and run step
 	executor := &rewooExecutor{
 		Registry:           n.Registry,
-		PermissionManager:  n.PermissionManager.(*authorization.PermissionManager), // Cast for execution
+		PermissionChecker:  n.PermissionChecker,
 		OnFailure:          n.OnFailure,
 		MaxSteps:           1,
 		OnPermissionDenied: n.OnPermissionDenied,
 	}
 
-	result, err := executor.executeStep(ctx, state, n.Step)
+	result, err := executor.executeStep(ctx, env, n.Step)
 
 	// Store result in state with step-specific key
-	state.Set(fmt.Sprintf("rewoo.step.%s", n.Step.ID), result)
+	env.SetWorkingValue(fmt.Sprintf("rewoo.step.%s", n.Step.ID), result, contextdata.MemoryClassTask)
 
 	// Return result to graph
 	return &core.Result{
@@ -76,7 +76,7 @@ func (n *StepNode) Execute(ctx context.Context, state *core.Context) (*core.Resu
 	}, err
 }
 
-// SetPermissionManager injects the permission manager (avoids circular import).
-func (n *StepNode) SetPermissionManager(pm interface{}) {
-	n.PermissionManager = pm
+// SetPermissionChecker injects the permission checker.
+func (n *StepNode) SetPermissionChecker(pc contracts.CapabilityChecker) {
+	n.PermissionChecker = pc
 }

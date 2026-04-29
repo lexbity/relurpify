@@ -7,10 +7,10 @@ import (
 
 	relurpicruntime "codeburg.org/lexbit/relurpify/agents/relurpic/runtime"
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	"codeburg.org/lexbit/relurpify/archaeo/providers"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func newPatternSurfacingService(p PatternSurfacingProvider) relurpicruntime.PatternSurfacingService {
@@ -63,7 +63,7 @@ func newTensionAnalysisService(p TensionAnalysisProvider) relurpicruntime.Tensio
 			retrievalDB:   p.RetrievalDB,
 			planStore:     p.PlanStore,
 			guidance:      p.Guidance,
-			workflowStore: p.WorkflowStore,
+			lifecycleRepo: p.LifecycleRepo,
 		}
 		args := map[string]any{
 			"file_path":               filePath,
@@ -113,8 +113,8 @@ func newConvergenceReviewService(p ConvergenceReviewProvider) relurpicruntime.Co
 			return nil, nil
 		}
 		var detector TensionDetector
-		if p.TensionStore != nil {
-			detector = archaeotensions.Service{Store: p.TensionStore}
+		if p.LifecycleRepo != nil {
+			detector = archaeotensions.Service{Store: p.LifecycleRepo}
 		}
 		return (&PatternCoherenceVerifier{
 			PatternStore:    p.PatternStore,

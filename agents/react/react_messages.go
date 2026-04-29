@@ -6,14 +6,135 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const reactMessagesKey = "react.messages"
 
+// envelopeGet retrieves a value from envelope, checking working memory first, then streamed context.
+func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
+	if state == nil {
+		return nil, false
+	}
+	// Check working memory first
+	if val, ok := state.GetWorkingValue(key); ok {
+		return val, true
+	}
+	// TODO: Check streamed context references if needed
+	return nil, false
+}
+
+// envelopeSet stores a value in envelope working memory with task scope.
+func envelopeSet(state *contextdata.Envelope, key string, value any) {
+	if state == nil {
+		return
+	}
+	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+}
+
+// envelopeGetString retrieves a value and converts it to string.
+func envelopeGetString(state *contextdata.Envelope, key string) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := envelopeGet(state, key)
+	if !ok || raw == nil {
+		return ""
+	}
+	return fmt.Sprint(raw)
+}
+
+// getWorkingValueAsString retrieves a working value and converts it to string.
+func getWorkingValueAsString(state *contextdata.Envelope, key string) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := state.GetWorkingValue(key)
+	if !ok || raw == nil {
+		return ""
+	}
+	return fmt.Sprint(raw)
+}
+
+// envelopeGetContextForLLM retrieves LLM-formatted context from envelope.
+// Assembles streamed context references into a formatted string for LLM consumption.
+// Note: ChunkReference contains IDs only; content resolution happens at assembly time.
+func envelopeGetContextForLLM(state *contextdata.Envelope) string {
+	if state == nil {
+		return ""
+	}
+
+	var sections []string
+
+	// Add retrieval context if available (QueryText contains the actual query)
+	for _, ref := range state.References.Retrieval {
+		if ref.QueryText != "" {
+			sections = append(sections, fmt.Sprintf("Retrieved: %s", ref.QueryText))
+		}
+	}
+
+	// Note: StreamedContext ChunkReferences are resolved by the compiler
+	// during envelope assembly. The references indicate which chunks were
+	// included, but the actual content was already written to working memory
+	// or is accessed via the streaming trigger results.
+
+	if len(sections) == 0 {
+		return ""
+	}
+
+	return strings.Join(sections, "\n\n")
+}
+
+// envelopeGetFullHistory retrieves full chat history from envelope working memory.
+// Returns compressed summary interactions and full interactions from the envelope.
+func envelopeGetFullHistory(state *contextdata.Envelope) ([]CompressedInteraction, []Interaction) {
+	if state == nil {
+		return nil, nil
+	}
+
+	// Retrieve interactions from working memory
+	var interactions []Interaction
+	if raw, ok := state.GetWorkingValue("_interactions"); ok {
+		if arr, ok := raw.([]map[string]any); ok {
+			for _, item := range arr {
+				role, _ := item["role"].(string)
+				content, _ := item["content"].(string)
+				if role != "" && content != "" {
+					interactions = append(interactions, Interaction{
+						Role:    role,
+						Content: content,
+					})
+				}
+			}
+		}
+	}
+
+	// Retrieve compressed history if available
+	var compressed []CompressedInteraction
+	if raw, ok := state.GetWorkingValue("react.history_compressed"); ok {
+		if arr, ok := raw.([]CompressedInteraction); ok {
+			compressed = arr
+		}
+	}
+
+	return compressed, interactions
+}
+
+// CompressedInteraction represents a compressed chat interaction.
+type CompressedInteraction struct {
+	Summary string
+}
+
+// Interaction represents a chat interaction.
+type Interaction struct {
+	Role    string
+	Content string
+}
+
 // getReactMessages reads a copy of the stored chat transcript.
-func getReactMessages(state *core.Context) []core.Message {
-	raw, ok := state.Get(reactMessagesKey)
+func getReactMessages(state *contextdata.Envelope) []core.Message {
+	raw, ok := state.GetWorkingValue(reactMessagesKey)
 	if !ok {
 		return nil
 	}
@@ -27,17 +148,17 @@ func getReactMessages(state *core.Context) []core.Message {
 }
 
 // saveReactMessages overwrites the stored transcript with a defensive copy.
-func saveReactMessages(state *core.Context, messages []core.Message) {
+func saveReactMessages(state *contextdata.Envelope, messages []core.Message) {
 	if len(messages) == 0 {
-		state.Set(reactMessagesKey, []core.Message{})
+		state.SetWorkingValue(reactMessagesKey, []core.Message{}, contextdata.MemoryClassTask)
 		return
 	}
 	copyMessages := make([]core.Message, len(messages))
 	copy(copyMessages, messages)
-	state.Set(reactMessagesKey, copyMessages)
+	state.SetWorkingValue(reactMessagesKey, copyMessages, contextdata.MemoryClassTask)
 }
 
-func appendAssistantMessage(state *core.Context, resp *core.LLMResponse) {
+func appendAssistantMessage(state *contextdata.Envelope, resp *core.LLMResponse) {
 	if state == nil || resp == nil {
 		return
 	}
@@ -55,7 +176,7 @@ func appendAssistantMessage(state *core.Context, resp *core.LLMResponse) {
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(agent *ReActAgent, task *core.Task, state *core.Context, call core.ToolCall, res *core.ToolResult, envelope *core.CapabilityResultEnvelope) {
+func appendToolMessage(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, call core.ToolCall, res *core.ToolResult, envelope *core.CapabilityResultEnvelope) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
@@ -73,11 +194,11 @@ func appendToolMessage(agent *ReActAgent, task *core.Task, state *core.Context, 
 	saveReactMessages(state, messages)
 }
 
-func getToolObservations(state *core.Context) []ToolObservation {
+func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("react.tool_observations")
+	raw, ok := state.GetWorkingValue("react.tool_observations")
 	if !ok || raw == nil {
 		return nil
 	}
@@ -102,10 +223,10 @@ func getToolObservations(state *core.Context) []ToolObservation {
 	}
 }
 
-func summarizeToolResult(state *core.Context, call core.ToolCall, res *core.ToolResult) ToolObservation {
+func summarizeToolResult(state *contextdata.Envelope, call core.ToolCall, res *core.ToolResult) ToolObservation {
 	phase := ""
 	if state != nil {
-		phase = state.GetString("react.phase")
+		phase = getWorkingValueAsString(state, "react.phase")
 	}
 	observation := ToolObservation{
 		Tool:      call.Name,
@@ -191,9 +312,9 @@ func finalOutputSummary(value interface{}) string {
 	}
 }
 
-func reactTaskScope(state *core.Context) string {
+func reactTaskScope(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	return state.GetString("task.id")
+	return getWorkingValueAsString(state, "task.id")
 }

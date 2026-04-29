@@ -19,7 +19,7 @@ func WithChainBuilder(builder func(*core.Task) (*Chain, error)) Option {
 	}
 }
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *ChainerAgent {
+func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *ChainerAgent {
 	agent := &ChainerAgent{
 		Chain: &Chain{Links: []Link{NewSummarizeLink("default", nil, "chainer.output")}},
 	}
@@ -32,10 +32,9 @@ func New(env agentenv.AgentEnvironment, opts ...Option) *ChainerAgent {
 	return agent
 }
 
-func (a *ChainerAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *ChainerAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Tools = env.Registry
-	a.Memory = env.Memory
 	a.Config = env.Config
 	return a.Initialize(env.Config)
 }

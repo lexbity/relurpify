@@ -3,13 +3,15 @@ package runtime
 import (
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
-// publishTaskState records the active task in context under htn.* namespace.
-func publishTaskState(state *core.Context, task *core.Task) {
-	if state == nil || task == nil {
+// publishTaskState records the active task in envelope working memory under htn.* namespace.
+func publishTaskState(env *contextdata.Envelope, task *core.Task) {
+	if env == nil || task == nil {
 		return
 	}
 	summary := TaskState{
@@ -20,15 +22,15 @@ func publishTaskState(state *core.Context, task *core.Task) {
 	if len(task.Metadata) > 0 {
 		summary.Metadata = mapsClone(task.Metadata)
 	}
-	state.Set(contextKeyTask, summary)
-	state.Set(contextKeyTaskType, task.Type)
-	state.SetKnowledge(contextKnowledgeTaskType, task.Type)
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeyTask, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKeyTaskType, task.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKnowledgeTaskType, task.Type, contextdata.MemoryClassTask)
+	mustPublishHTNState(env)
 }
 
-// publishMethodState records the selected method in context.
-func publishMethodState(state *core.Context, method *Method) {
-	if state == nil {
+// publishMethodState records the selected method in envelope working memory.
+func publishMethodState(env *contextdata.Envelope, method *Method) {
+	if env == nil {
 		return
 	}
 	summary := MethodState{}
@@ -36,32 +38,32 @@ func publishMethodState(state *core.Context, method *Method) {
 		resolved := ResolveMethod(*method)
 		summary = methodStateFromResolved(resolved)
 	}
-	state.Set(contextKeySelectedMethod, summary)
-	state.SetKnowledge(contextKnowledgeMethod, summary.Name)
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
+	mustPublishHTNState(env)
 }
 
-// publishResolvedMethodState records a resolved method in context.
-func publishResolvedMethodState(state *core.Context, method *ResolvedMethod) {
-	if state == nil {
+// publishResolvedMethodState records a resolved method in envelope working memory.
+func publishResolvedMethodState(env *contextdata.Envelope, method *ResolvedMethod) {
+	if env == nil {
 		return
 	}
 	summary := MethodState{}
 	if method != nil {
 		summary = methodStateFromResolved(*method)
 	}
-	state.Set(contextKeySelectedMethod, summary)
-	state.SetKnowledge(contextKnowledgeMethod, summary.Name)
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
+	mustPublishHTNState(env)
 }
 
-// publishPlanState records the decomposed plan in context.
-func publishPlanState(state *core.Context, plan *core.Plan) {
-	if state == nil || plan == nil {
+// publishPlanState records the decomposed plan in envelope working memory.
+func publishPlanState(env *contextdata.Envelope, plan *agentgraph.Plan) {
+	if env == nil || plan == nil {
 		return
 	}
 	cloned := *plan
-	cloned.Steps = append([]core.PlanStep(nil), plan.Steps...)
+	cloned.Steps = append([]agentgraph.PlanStep(nil), plan.Steps...)
 	if plan.Dependencies != nil {
 		cloned.Dependencies = make(map[string][]string, len(plan.Dependencies))
 		for key, deps := range plan.Dependencies {
@@ -69,51 +71,51 @@ func publishPlanState(state *core.Context, plan *core.Plan) {
 		}
 	}
 	cloned.Files = append([]string(nil), plan.Files...)
-	state.Set(contextKeyPlan, &cloned)
-	execution := loadExecutionState(state)
+	env.SetWorkingValue(contextKeyPlan, &cloned, contextdata.MemoryClassTask)
+	execution := loadExecutionState(env)
 	execution.PlannedStepCount = len(cloned.Steps)
-	publishExecutionState(state, execution)
+	publishExecutionState(env, execution)
 }
 
-// publishWorkflowRetrieval records workflow retrieval results in context.
-func publishWorkflowRetrieval(state *core.Context, payload any, applied bool) {
-	if state == nil {
+// publishWorkflowRetrieval records workflow retrieval results in envelope working memory.
+func publishWorkflowRetrieval(env *contextdata.Envelope, payload any, applied bool) {
+	if env == nil {
 		return
 	}
 	if payload != nil {
-		state.Set(contextKeyWorkflowRetrieval, payload)
-		state.Set(contextKeyWorkflowRetrievalPayload, payload)
+		env.SetWorkingValue(contextKeyWorkflowRetrieval, payload, contextdata.MemoryClassTask)
+		env.SetWorkingValue(contextKeyWorkflowRetrievalPayload, payload, contextdata.MemoryClassTask)
 	}
-	state.Set(contextKeyRetrievalApplied, applied)
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeyRetrievalApplied, applied, contextdata.MemoryClassTask)
+	mustPublishHTNState(env)
 }
 
-// publishPreflightState records graph preflight results in context.
-func publishPreflightState(state *core.Context, report *graph.PreflightReport, err error) {
-	if state == nil {
+// publishPreflightState records graph preflight results in envelope working memory.
+func publishPreflightState(env *contextdata.Envelope, report *graph.PreflightReport, err error) {
+	if env == nil {
 		return
 	}
 	if report != nil {
-		state.Set(contextKeyPreflightReport, report)
+		env.SetWorkingValue(contextKeyPreflightReport, report, contextdata.MemoryClassTask)
 	} else {
-		state.Set(contextKeyPreflightReport, nil)
+		env.SetWorkingValue(contextKeyPreflightReport, nil, contextdata.MemoryClassTask)
 	}
 	if err != nil {
-		state.Set(contextKeyPreflightError, err.Error())
+		env.SetWorkingValue(contextKeyPreflightError, err.Error(), contextdata.MemoryClassTask)
 	} else {
-		state.Set(contextKeyPreflightError, "")
+		env.SetWorkingValue(contextKeyPreflightError, "", contextdata.MemoryClassTask)
 	}
-	mustPublishHTNState(state)
+	mustPublishHTNState(env)
 }
 
-// publishCheckpointState records a checkpoint snapshot in context.
-func publishCheckpointState(state *core.Context, checkpointID, stageName string, stageIndex int, workflowID, runID string) {
-	if state == nil {
+// publishCheckpointState records a checkpoint snapshot in envelope working memory.
+func publishCheckpointState(env *contextdata.Envelope, checkpointID, stageName string, stageIndex int, workflowID, runID string) {
+	if env == nil {
 		return
 	}
-	snapshot, _, err := LoadStateFromContext(state)
+	snapshot, _, err := LoadStateFromEnvelope(env)
 	if err != nil {
-		state.Set(contextKeyStateError, err.Error())
+		env.SetWorkingValue(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
 		return
 	}
 	checkpoint := CheckpointState{
@@ -123,57 +125,64 @@ func publishCheckpointState(state *core.Context, checkpointID, stageName string,
 		StageIndex:     stageIndex,
 		WorkflowID:     workflowID,
 		RunID:          runID,
-		CompletedSteps: append([]string(nil), completedStepsFromContext(state)...),
+		CompletedSteps: append([]string(nil), completedStepsFromEnvelope(env)...),
 		Snapshot:       snapshot,
 	}
-	state.Set(contextKeyCheckpoint, checkpoint)
+	env.SetWorkingValue(contextKeyCheckpoint, checkpoint, contextdata.MemoryClassTask)
 }
 
-// publishResumeState records checkpoint resume information in context.
-func publishResumeState(state *core.Context, checkpointID string) {
-	if state == nil || checkpointID == "" {
+// publishResumeState records checkpoint resume information in envelope working memory.
+func publishResumeState(env *contextdata.Envelope, checkpointID string) {
+	if env == nil || checkpointID == "" {
 		return
 	}
-	execution := loadExecutionState(state)
+	execution := loadExecutionState(env)
 	execution.Resumed = true
 	execution.ResumeCheckpointID = checkpointID
-	publishExecutionState(state, execution)
-	state.Set(contextKeyResumeCheckpointID, checkpointID)
+	publishExecutionState(env, execution)
+	env.SetWorkingValue(contextKeyResumeCheckpointID, checkpointID, contextdata.MemoryClassTask)
 }
 
-// completedStepsFromContext extracts the list of completed step IDs from context.
-func completedStepsFromContext(state *core.Context) []string {
-	if state == nil {
+// completedStepsFromEnvelope extracts the list of completed step IDs from envelope working memory.
+func completedStepsFromEnvelope(env *contextdata.Envelope) []string {
+	if env == nil {
 		return nil
 	}
-	if raw, ok := state.Get(contextKeyCompletedSteps); ok {
+	if raw, ok := env.GetWorkingValue(contextKeyCompletedSteps); ok {
 		var typed []string
 		if decodeContextValue(raw, &typed) {
 			return append([]string(nil), typed...)
 		}
 	}
-	return core.StringSliceFromContext(state, legacyPlanCompletedStepsKey)
+	// Legacy fallback - try working memory with legacy key
+	if raw, ok := env.GetWorkingValue(legacyPlanCompletedStepsKey); ok {
+		var typed []string
+		if decodeContextValue(raw, &typed) {
+			return append([]string(nil), typed...)
+		}
+	}
+	return nil
 }
 
-// appendCompletedStep adds a step ID to the completed steps list.
-func appendCompletedStep(state *core.Context, stepID string) {
-	if state == nil || stepID == "" {
+// appendCompletedStep adds a step ID to the completed steps list in envelope.
+func appendCompletedStep(env *contextdata.Envelope, stepID string) {
+	if env == nil || stepID == "" {
 		return
 	}
-	completed := completedStepsFromContext(state)
+	completed := completedStepsFromEnvelope(env)
 	completed = append(completed, stepID)
-	state.Set(legacyPlanCompletedStepsKey, completed)
-	state.Set(contextKeyCompletedSteps, completed)
-	execution := loadExecutionState(state)
+	env.SetWorkingValue(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
+	execution := loadExecutionState(env)
 	execution.CompletedSteps = append([]string(nil), completed...)
 	execution.CompletedStepCount = len(completed)
 	execution.LastCompletedStep = stepID
-	publishExecutionState(state, execution)
+	publishExecutionState(env, execution)
 }
 
-// publishExecutionState records execution progress in context.
-func publishExecutionState(state *core.Context, execution ExecutionState) {
-	if state == nil {
+// publishExecutionState records execution progress in envelope working memory.
+func publishExecutionState(env *contextdata.Envelope, execution ExecutionState) {
+	if env == nil {
 		return
 	}
 	execution.CompletedSteps = append([]string(nil), execution.CompletedSteps...)
@@ -181,78 +190,88 @@ func publishExecutionState(state *core.Context, execution ExecutionState) {
 	if execution.CompletedStepCount > 0 && execution.LastCompletedStep == "" {
 		execution.LastCompletedStep = execution.CompletedSteps[execution.CompletedStepCount-1]
 	}
-	state.Set(contextKeyExecution, execution)
-	state.Set(contextKeyCompletedSteps, append([]string(nil), execution.CompletedSteps...))
-	state.Set(legacyPlanCompletedStepsKey, append([]string(nil), execution.CompletedSteps...))
-	publishMetricsAndSummary(state, execution, state.GetString(contextKeyTermination))
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeyExecution, execution, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKeyCompletedSteps, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
+	env.SetWorkingValue(legacyPlanCompletedStepsKey, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
+	termination := ""
+	if raw, ok := env.GetWorkingValue(contextKeyTermination); ok {
+		if s, ok := raw.(string); ok {
+			termination = s
+		}
+	}
+	publishMetricsAndSummary(env, execution, termination)
+	mustPublishHTNState(env)
 }
 
-// publishTerminationState records the execution termination reason in context.
-func publishTerminationState(state *core.Context, termination string) {
-	if state == nil {
+// publishTerminationState records the execution termination reason in envelope working memory.
+func publishTerminationState(env *contextdata.Envelope, termination string) {
+	if env == nil {
 		return
 	}
-	state.Set(contextKeyTermination, termination)
-	state.SetKnowledge(contextKnowledgeTermination, termination)
-	execution := loadExecutionState(state)
-	publishMetricsAndSummary(state, execution, termination)
-	mustPublishHTNState(state)
+	env.SetWorkingValue(contextKeyTermination, termination, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKnowledgeTermination, termination, contextdata.MemoryClassTask)
+	execution := loadExecutionState(env)
+	publishMetricsAndSummary(env, execution, termination)
+	mustPublishHTNState(env)
 }
 
-// publishMetricsAndSummary records metrics and knowledge summary in context.
-func publishMetricsAndSummary(state *core.Context, execution ExecutionState, termination string) {
-	if state == nil {
+// publishMetricsAndSummary records metrics and knowledge summary in envelope.
+func publishMetricsAndSummary(env *contextdata.Envelope, execution ExecutionState, termination string) {
+	if env == nil {
 		return
 	}
 	metrics := Metrics{
 		PlannedStepCount:   execution.PlannedStepCount,
 		CompletedStepCount: execution.CompletedStepCount,
 	}
-	state.Set(contextKeyMetrics, metrics)
-	taskType := fmt.Sprint(executionTaskType(state))
+	env.SetWorkingValue(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
+	taskType := fmt.Sprint(executionTaskType(env))
 	methodName := ""
-	if raw, ok := state.Get(contextKeySelectedMethod); ok {
+	if raw, ok := env.GetWorkingValue(contextKeySelectedMethod); ok {
 		var method MethodState
 		if decodeContextValue(raw, &method) {
 			methodName = method.Name
 		}
 	}
-	state.SetKnowledge(contextKnowledgeSummary, fmt.Sprintf(
+	env.SetWorkingValue(contextKnowledgeSummary, fmt.Sprintf(
 		"task_type=%s method=%s planned=%d completed=%d termination=%s",
 		taskType,
 		methodName,
 		metrics.PlannedStepCount,
 		metrics.CompletedStepCount,
 		termination,
-	))
-	state.Set(contextKeyMetrics, metrics)
+	), contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
 }
 
-// loadExecutionState extracts ExecutionState from context.
-func loadExecutionState(state *core.Context) ExecutionState {
-	if state == nil {
+// loadExecutionState extracts ExecutionState from envelope working memory.
+func loadExecutionState(env *contextdata.Envelope) ExecutionState {
+	if env == nil {
 		return ExecutionState{}
 	}
 	var execution ExecutionState
-	if raw, ok := state.Get(contextKeyExecution); ok && decodeContextValue(raw, &execution) {
-		execution.CompletedSteps = completedStepsFromContext(state)
+	if raw, ok := env.GetWorkingValue(contextKeyExecution); ok && decodeContextValue(raw, &execution) {
+		execution.CompletedSteps = completedStepsFromEnvelope(env)
 		execution.CompletedStepCount = len(execution.CompletedSteps)
 		return execution
 	}
-	execution.CompletedSteps = completedStepsFromContext(state)
+	execution.CompletedSteps = completedStepsFromEnvelope(env)
 	execution.CompletedStepCount = len(execution.CompletedSteps)
-	execution.ResumeCheckpointID = state.GetString(contextKeyResumeCheckpointID)
+	if raw, ok := env.GetWorkingValue(contextKeyResumeCheckpointID); ok {
+		if checkpointID, ok := raw.(string); ok {
+			execution.ResumeCheckpointID = checkpointID
+		}
+	}
 	execution.Resumed = execution.ResumeCheckpointID != ""
 	return execution
 }
 
-// loadCheckpointState extracts CheckpointState from context.
-func loadCheckpointState(state *core.Context) (*CheckpointState, bool) {
-	if state == nil {
+// loadCheckpointState extracts CheckpointState from envelope working memory.
+func loadCheckpointState(env *contextdata.Envelope) (*CheckpointState, bool) {
+	if env == nil {
 		return nil, false
 	}
-	raw, ok := state.Get(contextKeyCheckpoint)
+	raw, ok := env.GetWorkingValue(contextKeyCheckpoint)
 	if !ok || raw == nil {
 		return nil, false
 	}
@@ -270,12 +289,12 @@ func loadCheckpointState(state *core.Context) (*CheckpointState, bool) {
 	return &checkpoint, true
 }
 
-// executionTaskType extracts the current task type from context.
-func executionTaskType(state *core.Context) core.TaskType {
-	if state == nil {
+// executionTaskType extracts the current task type from envelope working memory.
+func executionTaskType(env *contextdata.Envelope) core.TaskType {
+	if env == nil {
 		return ""
 	}
-	if raw, ok := state.Get(contextKeyTaskType); ok {
+	if raw, ok := env.GetWorkingValue(contextKeyTaskType); ok {
 		var taskType core.TaskType
 		if decodeContextValue(raw, &taskType) {
 			return taskType

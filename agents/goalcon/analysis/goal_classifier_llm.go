@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -41,33 +42,33 @@ func ClassifyGoalWithLLM(
 	}
 
 	// Check cache first
-	if config.Cache != nil {
-		if cached := config.Cache.Get(taskInstruction); cached != nil {
+	if manifest.Cache != nil {
+		if cached := manifest.Cache.Get(taskInstruction); cached != nil {
 			return *cached
 		}
 	}
 
 	// Try LLM classification if enabled
-	if config.Enabled && model != nil {
+	if manifest.Enabled && model != nil {
 		goal := classifyViaLLM(taskInstruction, model, operators, config)
 		if goal != nil {
 			// Cache successful classification
-			if config.Cache != nil {
-				config.Cache.Set(taskInstruction, goal)
+			if manifest.Cache != nil {
+				manifest.Cache.Set(taskInstruction, goal)
 			}
 			return *goal
 		}
 
 		// If LLM fails but fallback is disabled, return empty
-		if !config.FallbackOnFail {
+		if !manifest.FallbackOnFail {
 			return types.GoalCondition{Description: taskInstruction}
 		}
 	}
 
 	// Fallback to keyword-based classification
 	goal := ClassifyGoal(taskInstruction, operators)
-	if config.Cache != nil {
-		config.Cache.Set(taskInstruction, &goal)
+	if manifest.Cache != nil {
+		manifest.Cache.Set(taskInstruction, &goal)
 	}
 	return goal
 }
@@ -83,7 +84,7 @@ func classifyViaLLM(
 	availablePredicates := PredicatesFromRegistry(operators)
 
 	// Set up timeout
-	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), manifest.Timeout)
 	defer cancel()
 
 	// Create a channel for the result to support timeout
@@ -109,7 +110,7 @@ func classifyViaLLM(
 		}
 
 		// Check confidence threshold
-		if res.resp.Confidence < config.MinConfidence {
+		if res.resp.Confidence < manifest.MinConfidence {
 			// Log: low confidence, will fall back
 			return nil
 		}
@@ -133,7 +134,7 @@ func classifyViaLLM(
 
 // ClassifyGoalWithContext is a context-aware wrapper for ClassifyGoalWithLLM.
 func ClassifyGoalWithContext(
-	coreCtx *core.Context,
+	coreCtx *contextdata.Envelope,
 	instruction string,
 	model core.LanguageModel,
 	operators *types.OperatorRegistry,
@@ -142,7 +143,7 @@ func ClassifyGoalWithContext(
 
 	// Use cached classifier config if available in context
 	if coreCtx != nil {
-		if raw, ok := coreCtx.Get("goalcon.classifier_config"); ok {
+		if raw, ok := coreCtx.GetWorkingValue("goalcon.classifier_config"); ok {
 			if cachedConfig, ok := raw.(ClassifierConfig); ok {
 				config = cachedConfig
 			}

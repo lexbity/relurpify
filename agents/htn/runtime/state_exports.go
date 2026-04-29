@@ -1,21 +1,22 @@
 package runtime
 
 import (
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // Public wrapper functions for persistence package integration.
 
 // LoadExecutionState is the exported version of loadExecutionState.
-func LoadExecutionState(state *core.Context) ExecutionState {
-	return loadExecutionState(state)
+func LoadExecutionState(env *contextdata.Envelope) ExecutionState {
+	return loadExecutionState(env)
 }
 
 // PublishExecutionState is the exported version of publishExecutionState.
-func PublishExecutionState(state *core.Context, execution ExecutionState) {
-	publishExecutionState(state, execution)
+func PublishExecutionState(env *contextdata.Envelope, execution ExecutionState) {
+	publishExecutionState(env, execution)
 }
 
 // NormalizeHTNState is the exported version of normalizeHTNState.
@@ -38,48 +39,48 @@ func MethodStateFromResolved(resolved ResolvedMethod) MethodState {
 	return methodStateFromResolved(resolved)
 }
 
-// CompletedStepsFromContext is the exported version of completedStepsFromContext.
-func CompletedStepsFromContext(state *core.Context) []string {
-	return completedStepsFromContext(state)
+// CompletedStepsFromEnvelope is the exported version of completedStepsFromEnvelope.
+func CompletedStepsFromEnvelope(env *contextdata.Envelope) []string {
+	return completedStepsFromEnvelope(env)
 }
 
 // PublishTaskState is the exported version of publishTaskState.
-func PublishTaskState(state *core.Context, task *core.Task) {
-	publishTaskState(state, task)
+func PublishTaskState(env *contextdata.Envelope, task *core.Task) {
+	publishTaskState(env, task)
 }
 
 // PublishResolvedMethodState is the exported version of publishResolvedMethodState.
-func PublishResolvedMethodState(state *core.Context, method *ResolvedMethod) {
-	publishResolvedMethodState(state, method)
+func PublishResolvedMethodState(env *contextdata.Envelope, method *ResolvedMethod) {
+	publishResolvedMethodState(env, method)
 }
 
 // PublishPreflightState is the exported version of publishPreflightState.
-func PublishPreflightState(state *core.Context, report *graph.PreflightReport, err error) {
-	publishPreflightState(state, report, err)
+func PublishPreflightState(env *contextdata.Envelope, report *graph.PreflightReport, err error) {
+	publishPreflightState(env, report, err)
 }
 
 // PublishResumeState is the exported version of publishResumeState.
-func PublishResumeState(state *core.Context, checkpointID string) {
-	publishResumeState(state, checkpointID)
+func PublishResumeState(env *contextdata.Envelope, checkpointID string) {
+	publishResumeState(env, checkpointID)
 }
 
 // PublishWorkflowRetrieval is the exported version of publishWorkflowRetrieval.
-func PublishWorkflowRetrieval(state *core.Context, payload any, applied bool) {
-	publishWorkflowRetrieval(state, payload, applied)
+func PublishWorkflowRetrieval(env *contextdata.Envelope, payload any, applied bool) {
+	publishWorkflowRetrieval(env, payload, applied)
 }
 
 // PublishPlanState is the exported version of publishPlanState.
-func PublishPlanState(state *core.Context, plan *core.Plan) {
-	publishPlanState(state, plan)
+func PublishPlanState(env *contextdata.Envelope, plan *graph.Plan) {
+	publishPlanState(env, plan)
 }
 
 // PublishTerminationState is the exported version of publishTerminationState.
-func PublishTerminationState(state *core.Context, termination string) {
-	publishTerminationState(state, termination)
+func PublishTerminationState(env *contextdata.Envelope, termination string) {
+	publishTerminationState(env, termination)
 }
 
 // PlanPreflight checks plan step required capabilities against the registry.
-func PlanPreflight(plan *core.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+func PlanPreflight(plan *graph.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
 	return planPreflight(plan, registry)
 }
 

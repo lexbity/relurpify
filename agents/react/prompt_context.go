@@ -7,11 +7,31 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
+
+// TaskPayload retrieves workflow retrieval payload from task context.
+// This replaces the workflowutil.TaskPayload stub.
+func TaskPayload(task *core.Task, key string) []byte {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	raw, ok := task.Context[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	if bytes, ok := raw.([]byte); ok {
+		return bytes
+	}
+	// Try to marshal if it's not already bytes
+	if data, err := json.Marshal(raw); err == nil {
+		return data
+	}
+	return nil
+}
 
 type promptContextAssembler struct {
 	agent *ReActAgent
@@ -22,7 +42,7 @@ func newPromptContextAssembler(agent *ReActAgent, task *core.Task) *promptContex
 	return &promptContextAssembler{agent: agent, task: task}
 }
 
-func (a *promptContextAssembler) buildPrompt(state *core.Context, tools []core.Tool, compactHistory bool) string {
+func (a *promptContextAssembler) buildPrompt(state *contextdata.Envelope, tools []core.Tool, compactHistory bool) string {
 	if a == nil || a.task == nil {
 		return ""
 	}
@@ -45,6 +65,9 @@ func (a *promptContextAssembler) buildPrompt(state *core.Context, tools []core.T
 	}
 	if workflow := a.workflowRetrieval(); workflow != "" {
 		sections = append(sections, "Workflow Retrieval:\n"+workflow)
+	}
+	if streamed := a.streamedContext(state); streamed != "" {
+		sections = append(sections, "Streamed Context:\n"+streamed)
 	}
 	if phase := a.currentPhase(state); phase != "" {
 		sections = append(sections, "Execution Phase:\n"+phase)
@@ -80,18 +103,18 @@ func (a *promptContextAssembler) skillHints() string {
 	return frameworkskills.RenderExecutionPolicy(&effective.Policy, spec.SkillConfig.Verification.StopOnSuccess)
 }
 
-func (a *promptContextAssembler) planGoal(state *core.Context) string {
+func (a *promptContextAssembler) planGoal(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := state.Get("architect.plan")
+	raw, ok := envelopeGet(state, "architect.plan")
 	if !ok {
-		raw, ok = state.Get("planner.plan")
+		raw, ok = envelopeGet(state, "planner.plan")
 	}
 	if !ok || raw == nil {
 		return ""
 	}
-	plan, ok := raw.(core.Plan)
+	plan, ok := raw.(agentgraph.Plan)
 	if !ok {
 		return ""
 	}
@@ -112,7 +135,7 @@ func (a *promptContextAssembler) currentStep() string {
 	if !ok || raw == nil {
 		return ""
 	}
-	if step, ok := raw.(core.PlanStep); ok {
+	if step, ok := raw.(agentgraph.PlanStep); ok {
 		encoded, err := json.MarshalIndent(step, "", "  ")
 		if err == nil {
 			return string(encoded)
@@ -126,11 +149,11 @@ func (a *promptContextAssembler) currentStep() string {
 	return string(encoded)
 }
 
-func (a *promptContextAssembler) previousStepSummary(state *core.Context) string {
+func (a *promptContextAssembler) previousStepSummary(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	return strings.TrimSpace(state.GetString("architect.last_step_summary"))
+	return strings.TrimSpace(envelopeGetString(state, "architect.last_step_summary"))
 }
 
 func (a *promptContextAssembler) externalStateSlice() string {
@@ -153,25 +176,25 @@ func (a *promptContextAssembler) externalStateSlice() string {
 	}
 }
 
-func (a *promptContextAssembler) declarativeMemory(state *core.Context) string {
+func (a *promptContextAssembler) declarativeMemory(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	if raw, ok := state.Get("graph.declarative_memory_payload"); ok && raw != nil {
+	if raw, ok := envelopeGet(state, "graph.declarative_memory_payload"); ok && raw != nil {
 		if payload, ok := raw.(map[string]any); ok {
 			if formatted := formatMemoryRetrievalPayload(payload); formatted != "" {
 				return formatted
 			}
 		}
 	}
-	if raw, ok := state.Get("graph.declarative_memory_refs"); ok && raw != nil {
-		if refs, ok := raw.([]core.ContextReference); ok {
+	if raw, ok := envelopeGet(state, "graph.declarative_memory_refs"); ok && raw != nil {
+		if refs, ok := raw.([]agentgraph.ContextReference); ok {
 			if formatted := formatMemoryReferenceList(refs); formatted != "" {
 				return formatted
 			}
 		}
 	}
-	raw, ok := state.Get("graph.declarative_memory")
+	raw, ok := envelopeGet(state, "graph.declarative_memory")
 	if !ok || raw == nil {
 		return ""
 	}
@@ -223,7 +246,7 @@ func formatMemoryRetrievalPayload(payload map[string]any) string {
 	return strings.Join(parts, "\n")
 }
 
-func formatMemoryReferenceList(refs []core.ContextReference) string {
+func formatMemoryReferenceList(refs []agentgraph.ContextReference) string {
 	if len(refs) == 0 {
 		return ""
 	}
@@ -251,13 +274,44 @@ func formatMemoryReferenceList(refs []core.ContextReference) string {
 	return strings.Join(lines, "\n")
 }
 
+func (a *promptContextAssembler) streamedContext(state *contextdata.Envelope) string {
+	if state == nil || len(state.References.StreamedContext) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(state.References.StreamedContext))
+	for _, ref := range state.References.StreamedContext {
+		chunkID := strings.TrimSpace(string(ref.ChunkID))
+		if chunkID == "" {
+			continue
+		}
+		line := "- " + chunkID
+		if ref.Source != "" {
+			line += " [" + strings.TrimSpace(ref.Source) + "]"
+		}
+		if ref.Rank > 0 {
+			line += fmt.Sprintf(" rank=%d", ref.Rank)
+		}
+		if ref.IsSummary {
+			line += " summary"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (a *promptContextAssembler) workflowRetrieval() string {
 	if a == nil || a.task == nil || a.task.Context == nil {
 		return ""
 	}
-	if payload := workflowutil.TaskPayload(a.task, "workflow_retrieval"); len(payload) > 0 {
-		if formatted := formatWorkflowRetrievalPayload(payload); formatted != "" {
-			return formatted
+	if payload := TaskPayload(a.task, "workflow_retrieval"); len(payload) > 0 {
+		var data map[string]any
+		if err := json.Unmarshal(payload, &data); err == nil {
+			if formatted := formatWorkflowRetrievalPayload(data); formatted != "" {
+				return formatted
+			}
 		}
 	}
 	raw, ok := a.task.Context["workflow_retrieval"]
@@ -302,18 +356,9 @@ func formatWorkflowRetrievalPayload(payload map[string]any) string {
 		if ref := workflowRetrievalReference(result); ref != "" {
 			line += "\n   Reference: " + ref
 		}
-		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
-			sources := make([]string, 0, len(citations))
-			for _, citation := range citations {
-				source := firstWorkflowSource(citation.CanonicalURI, citation.ChunkID, citation.DocID)
-				if source == "" {
-					continue
-				}
-				sources = append(sources, source)
-			}
-			if len(sources) > 0 {
-				line += "\n   Sources: " + strings.Join(sources, ", ")
-			}
+		// Citations temporarily disabled - retrieval package being rebuilt
+		if citations, ok := result["citations"].([]any); ok && len(citations) > 0 {
+			_ = citations
 		}
 		// Add anchor notices for drifted or superseded anchors
 		if anchors, ok := result["anchors"].([]any); ok {
@@ -367,11 +412,11 @@ func firstWorkflowSource(values ...string) string {
 	return ""
 }
 
-func (a *promptContextAssembler) currentPhase(state *core.Context) string {
+func (a *promptContextAssembler) currentPhase(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	return strings.TrimSpace(state.GetString("react.phase"))
+	return strings.TrimSpace(envelopeGetString(state, "react.phase"))
 }
 
 func (a *promptContextAssembler) capabilityCatalog() string {
@@ -407,15 +452,15 @@ func (a *promptContextAssembler) capabilityCatalog() string {
 	return strings.Join(lines, "\n")
 }
 
-func (a *promptContextAssembler) compactHistory(state *core.Context, compact bool) string {
+func (a *promptContextAssembler) compactHistory(state *contextdata.Envelope, compact bool) string {
 	if state == nil {
 		return ""
 	}
 	if !compact {
-		return strings.TrimSpace(state.GetContextForLLM())
+		return envelopeGetContextForLLM(state)
 	}
 	var sections []string
-	compressed, history := state.GetFullHistory()
+	compressed, history := envelopeGetFullHistory(state)
 	if len(compressed) > 0 {
 		latest := compressed[len(compressed)-1]
 		if latest.Summary != "" {
@@ -436,7 +481,7 @@ func (a *promptContextAssembler) compactHistory(state *core.Context, compact boo
 	return strings.Join(sections, "\n")
 }
 
-func (a *promptContextAssembler) contextFiles(state *core.Context) string {
+func (a *promptContextAssembler) contextFiles(state *contextdata.Envelope) string {
 	if a == nil || a.agent == nil || a.agent.contextPolicy == nil || a.agent.contextPolicy.ContextManager == nil {
 		return renderContextFiles(a.task, 3000)
 	}
@@ -497,11 +542,11 @@ func (a *promptContextAssembler) contextFiles(state *core.Context) string {
 	return strings.Join(blocks, "\n\n")
 }
 
-func (a *promptContextAssembler) recentToolObservations(state *core.Context) string {
+func (a *promptContextAssembler) recentToolObservations(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := state.Get("react.tool_observations")
+	raw, ok := envelopeGet(state, "react.tool_observations")
 	if !ok || raw == nil {
 		return ""
 	}

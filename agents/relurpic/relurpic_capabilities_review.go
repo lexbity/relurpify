@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -13,7 +14,7 @@ type reviewerReviewCapabilityHandler struct {
 	config *core.Config
 }
 
-func (h reviewerReviewCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h reviewerReviewCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:reviewer.review",
 		"reviewer.review",
@@ -48,7 +49,7 @@ func (h reviewerReviewCapabilityHandler) Descriptor(context.Context, *core.Conte
 	)
 }
 
-func (h reviewerReviewCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h reviewerReviewCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	instruction := strings.TrimSpace(fmt.Sprint(args["instruction"]))
 	if instruction == "" {
 		return nil, fmt.Errorf("instruction required")
@@ -62,7 +63,12 @@ Return valid JSON: {"summary":string,"approve":bool,"findings":[{"severity":"hig
 		strings.TrimSpace(fmt.Sprint(args["artifact_summary"])),
 		stringifyContextValue(args["acceptance_criteria"]),
 	)
-	return invokeStructuredReasoner(ctx, h.model, modelName(h.config), prompt)
+	result, err := invokeStructuredReasoner(ctx, h.model, modelName(h.config), prompt)
+	if err != nil {
+		return nil, err
+	}
+	env.SetWorkingValue("review_result", result.Data, contextdata.MemoryClassTask)
+	return result, nil
 }
 
 type verifierVerifyCapabilityHandler struct {
@@ -70,7 +76,7 @@ type verifierVerifyCapabilityHandler struct {
 	config *core.Config
 }
 
-func (h verifierVerifyCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h verifierVerifyCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:verifier.verify",
 		"verifier.verify",
@@ -95,7 +101,7 @@ func (h verifierVerifyCapabilityHandler) Descriptor(context.Context, *core.Conte
 	)
 }
 
-func (h verifierVerifyCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h verifierVerifyCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	instruction := strings.TrimSpace(fmt.Sprint(args["instruction"]))
 	if instruction == "" {
 		return nil, fmt.Errorf("instruction required")
@@ -109,5 +115,10 @@ Return valid JSON: {"summary":string,"verified":bool,"evidence":[string],"missin
 		strings.TrimSpace(fmt.Sprint(args["artifact_summary"])),
 		stringifyContextValue(args["verification_criteria"]),
 	)
-	return invokeStructuredReasoner(ctx, h.model, modelName(h.config), prompt)
+	result, err := invokeStructuredReasoner(ctx, h.model, modelName(h.config), prompt)
+	if err != nil {
+		return nil, err
+	}
+	env.SetWorkingValue("verification_result", result.Data, contextdata.MemoryClassTask)
+	return result, nil
 }

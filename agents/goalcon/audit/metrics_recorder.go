@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
@@ -307,7 +308,7 @@ func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 interface{}) bool 
 
 // RecordPlanExecution records metrics for a complete plan execution.
 // Called after solving and executing a plan.
-func (r *MetricsRecorder) RecordPlanExecution(plan *core.Plan, result *core.Result, duration time.Duration) error {
+func (r *MetricsRecorder) RecordPlanExecution(plan *agentgraph.Plan, result *core.Result, duration time.Duration) error {
 	if r == nil || plan == nil || result == nil {
 		return nil
 	}

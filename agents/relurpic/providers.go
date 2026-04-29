@@ -7,15 +7,15 @@ import (
 
 	relurpicruntime "codeburg.org/lexbit/relurpify/agents/relurpic/runtime"
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type PatternSurfacingProvider struct {
@@ -46,7 +46,7 @@ type TensionAnalysisProvider struct {
 	RetrievalDB   *sql.DB
 	PlanStore     frameworkplan.PlanStore
 	Guidance      *guidance.GuidanceBroker
-	WorkflowStore memory.WorkflowStateStore
+	LifecycleRepo agentlifecycle.Repository
 	Service       relurpicruntime.TensionAnalysisService
 }
 
@@ -75,9 +75,9 @@ func (p ProspectiveAnalysisProvider) AnalyzeProspective(ctx context.Context, req
 }
 
 type ConvergenceReviewProvider struct {
-	PatternStore patterns.PatternStore
-	TensionStore memory.WorkflowStateStore
-	Service      relurpicruntime.ConvergenceReviewService
+	PatternStore  patterns.PatternStore
+	LifecycleRepo agentlifecycle.Repository
+	Service       relurpicruntime.ConvergenceReviewService
 }
 
 func (p ConvergenceReviewProvider) ReviewConvergence(ctx context.Context, req providers.ConvergenceReviewRequest) (*frameworkplan.ConvergenceFailure, error) {

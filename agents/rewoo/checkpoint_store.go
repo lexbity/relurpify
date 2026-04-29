@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
 )
 
 // CheckpointKey represents a unique identifier for a checkpoint.
@@ -31,7 +32,7 @@ type CheckpointMetadata struct {
 // It implements checkpoint persistence for workflow pause/resume and error recovery.
 // Phase 7: Currently stores checkpoints in-memory; future phases can wire to persistent storage.
 type RewooCheckpointStore struct {
-	workflowStore memory.WorkflowStateStore
+	lifecycleRepo agentlifecycle.Repository
 	checkpoints   map[string]*CheckpointMetadata // In-memory checkpoint storage
 	mu            sync.RWMutex
 	debugf        func(string, ...interface{})
@@ -39,12 +40,12 @@ type RewooCheckpointStore struct {
 
 // NewRewooCheckpointStore creates a new checkpoint store.
 // Phase 7: Currently in-memory; can be extended to persistent storage in future phases.
-func NewRewooCheckpointStore(workflowStore memory.WorkflowStateStore, debugf func(string, ...interface{})) *RewooCheckpointStore {
+func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf func(string, ...interface{})) *RewooCheckpointStore {
 	if debugf == nil {
 		debugf = func(string, ...interface{}) {}
 	}
 	return &RewooCheckpointStore{
-		workflowStore: workflowStore,
+		lifecycleRepo: lifecycleRepo,
 		checkpoints:   make(map[string]*CheckpointMetadata),
 		debugf:        debugf,
 	}
@@ -53,8 +54,8 @@ func NewRewooCheckpointStore(workflowStore memory.WorkflowStateStore, debugf fun
 // SaveCheckpoint persists execution state at a checkpoint.
 // The checkpoint key is typically "rewoo.<phase>.<attempt>".
 // Phase 7: Currently stores in-memory; can be persisted to workflow store in future phases.
-func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID string, phase string, attempt int, state *core.Context) error {
-	s.ensureCheckpointArtifactRefs(ctx, checkpointID, state)
+func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID string, phase string, attempt int, env *contextdata.Envelope) error {
+	s.ensureCheckpointArtifactRefs(ctx, checkpointID, env)
 
 	// Extract relevant state keys for checkpoint
 	stateKeys := []string{
@@ -65,25 +66,25 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 		"rewoo.synthesis_ref",
 		"rewoo.attempt",
 	}
-	if _, ok := state.Get("rewoo.plan_ref"); !ok {
+	if _, ok := env.GetWorkingValue("rewoo.plan_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.plan")
 	}
-	if _, ok := state.Get("rewoo.tool_results_ref"); !ok {
+	if _, ok := env.GetWorkingValue("rewoo.tool_results_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.tool_results")
 	}
-	if _, ok := state.Get("rewoo.synthesis_ref"); !ok {
+	if _, ok := env.GetWorkingValue("rewoo.synthesis_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.synthesis")
 	}
 
 	stateSnapshot := make(map[string]interface{})
 	for _, key := range stateKeys {
-		if val, ok := state.Get(key); ok {
+		if val, ok := env.GetWorkingValue(key); ok {
 			stateSnapshot[key] = val
 		}
 	}
 
 	// Extract executed steps
-	stepsExecuted := extractExecutedSteps(state)
+	stepsExecuted := extractExecutedSteps(env)
 
 	// Create checkpoint metadata
 	metadata := &CheckpointMetadata{
@@ -103,8 +104,21 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 	s.checkpoints[checkpointID] = metadata
 	s.mu.Unlock()
 
-	// Phase 7 Note: Persistence to workflow store can be added in future phases
-	// For now, checkpoints live in-memory during execution
+	if ref, err := frameworkpersistence.SaveCheckpointArtifact(ctx, env, s.lifecycleRepo, frameworkpersistence.CheckpointSnapshot{
+		CheckpointID: checkpointID,
+		WorkflowID:   workflowID,
+		RunID:        runID,
+		Kind:         "rewoo_checkpoint",
+		Summary:      fmt.Sprintf("%s phase %s attempt %d", checkpointID, phase, attempt),
+		Metadata: map[string]any{
+			"phase":          phase,
+			"attempt":        attempt,
+			"state_snapshot": stateSnapshot,
+		},
+		InlineRaw: string(mustJSON(metadata)),
+	}); err == nil && ref != nil {
+		env.SetWorkingValue("rewoo.checkpoint_ref", *ref, contextdata.MemoryClassTask)
+	}
 
 	s.debugf("saved checkpoint %s at phase %s attempt %d", checkpointID, phase, attempt)
 	return nil
@@ -126,7 +140,7 @@ func (s *RewooCheckpointStore) LoadCheckpoint(ctx context.Context, checkpointID 
 }
 
 // RestoreStateFromCheckpoint applies a checkpoint's state to the execution context.
-func (s *RewooCheckpointStore) RestoreStateFromCheckpoint(ctx context.Context, state *core.Context, checkpoint *CheckpointMetadata) error {
+func (s *RewooCheckpointStore) RestoreStateFromCheckpoint(ctx context.Context, env *contextdata.Envelope, checkpoint *CheckpointMetadata) error {
 	if checkpoint == nil || checkpoint.Metadata == nil {
 		return fmt.Errorf("checkpoint_restore: invalid checkpoint")
 	}
@@ -139,15 +153,15 @@ func (s *RewooCheckpointStore) RestoreStateFromCheckpoint(ctx context.Context, s
 
 	// Apply snapshot to execution state
 	for key, val := range stateSnapshot {
-		state.Set(key, val)
+		env.SetWorkingValue(key, val, contextdata.MemoryClassTask)
 	}
-	if err := s.restoreArtifactBackedState(ctx, state); err != nil {
+	if err := s.restoreArtifactBackedState(ctx, env); err != nil {
 		return err
 	}
 
-	state.Set("rewoo.checkpoint_loaded", checkpoint.CheckpointID)
-	state.Set("rewoo.checkpoint_phase", checkpoint.Phase)
-	state.Set("rewoo.checkpoint_attempt", checkpoint.Attempt)
+	env.SetWorkingValue("rewoo.checkpoint_loaded", checkpoint.CheckpointID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("rewoo.checkpoint_phase", checkpoint.Phase, contextdata.MemoryClassTask)
+	env.SetWorkingValue("rewoo.checkpoint_attempt", checkpoint.Attempt, contextdata.MemoryClassTask)
 
 	s.debugf("restored state from checkpoint %s", checkpoint.CheckpointID)
 	return nil
@@ -177,11 +191,11 @@ func (s *RewooCheckpointStore) DeleteCheckpoint(ctx context.Context, checkpointI
 }
 
 // extractExecutedSteps returns the list of steps that have been executed.
-func extractExecutedSteps(state *core.Context) []string {
+func extractExecutedSteps(env *contextdata.Envelope) []string {
 	var executed []string
 
 	// Extract step IDs from aggregated results
-	if resultsVal, ok := state.Get("rewoo.tool_results"); ok {
+	if resultsVal, ok := env.GetWorkingValue("rewoo.tool_results"); ok {
 		if results, ok := resultsVal.([]RewooStepResult); ok {
 			for _, result := range results {
 				executed = append(executed, result.StepID)
@@ -192,36 +206,36 @@ func extractExecutedSteps(state *core.Context) []string {
 	return executed
 }
 
-func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, state *core.Context) error {
-	if state == nil || s == nil || s.workflowStore == nil {
+func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, env *contextdata.Envelope) error {
+	if env == nil || s == nil || s.lifecycleRepo == nil {
 		return nil
 	}
-	if _, ok := state.Get("rewoo.tool_results"); !ok {
-		if rawRef, ok := state.Get("rewoo.tool_results_ref"); ok {
+	if _, ok := env.GetWorkingValue("rewoo.tool_results"); !ok {
+		if rawRef, ok := env.GetWorkingValue("rewoo.tool_results_ref"); ok {
 			ref, ok := rawRef.(core.ArtifactReference)
 			if ok {
 				var results []RewooStepResult
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &results); err != nil {
 					return err
 				}
-				state.Set("rewoo.tool_results", results)
+				env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
 			}
 		}
 	}
-	if _, ok := state.Get("rewoo.plan"); !ok {
-		if rawRef, ok := state.Get("rewoo.plan_ref"); ok {
+	if _, ok := env.GetWorkingValue("rewoo.plan"); !ok {
+		if rawRef, ok := env.GetWorkingValue("rewoo.plan_ref"); ok {
 			ref, ok := rawRef.(core.ArtifactReference)
 			if ok {
 				var plan RewooPlan
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &plan); err != nil {
 					return err
 				}
-				state.Set("rewoo.plan", &plan)
+				env.SetWorkingValue("rewoo.plan", &plan, contextdata.MemoryClassTask)
 			}
 		}
 	}
-	if _, ok := state.Get("rewoo.synthesis"); !ok {
-		if rawRef, ok := state.Get("rewoo.synthesis_ref"); ok {
+	if _, ok := env.GetWorkingValue("rewoo.synthesis"); !ok {
+		if rawRef, ok := env.GetWorkingValue("rewoo.synthesis_ref"); ok {
 			ref, ok := rawRef.(core.ArtifactReference)
 			if ok {
 				var payload struct {
@@ -231,9 +245,9 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, s
 					return err
 				}
 				if payload.Synthesis != "" {
-					state.Set("rewoo.synthesis", payload.Synthesis)
+					env.SetWorkingValue("rewoo.synthesis", payload.Synthesis, contextdata.MemoryClassTask)
 				} else if ref.Summary != "" {
-					state.Set("rewoo.synthesis", ref.Summary)
+					env.SetWorkingValue("rewoo.synthesis", ref.Summary, contextdata.MemoryClassTask)
 				}
 			}
 		}
@@ -241,46 +255,54 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, s
 	return nil
 }
 
-func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context, checkpointID string, state *core.Context) {
-	if state == nil || s == nil || s.workflowStore == nil {
+func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context, checkpointID string, env *contextdata.Envelope) {
+	if env == nil || s == nil || s.lifecycleRepo == nil {
 		return
 	}
-	workflowID := strings.TrimSpace(state.GetString("rewoo.workflow_id"))
-	runID := strings.TrimSpace(state.GetString("rewoo.run_id"))
+	workflowID := envGetString(env, "rewoo.workflow_id")
+	runID := envGetString(env, "rewoo.run_id")
 	if workflowID == "" || runID == "" {
 		return
 	}
-	if _, ok := state.Get("rewoo.plan_ref"); !ok {
-		if rawPlan, ok := state.Get("rewoo.plan"); ok && rawPlan != nil {
+	if _, ok := env.GetWorkingValue("rewoo.plan_ref"); !ok {
+		if rawPlan, ok := env.GetWorkingValue("rewoo.plan"); ok && rawPlan != nil {
 			if ref := s.persistPlanArtifact(ctx, checkpointID, workflowID, runID, rawPlan); ref != nil {
-				state.Set("rewoo.plan_ref", *ref)
+				env.SetWorkingValue("rewoo.plan_ref", *ref, contextdata.MemoryClassTask)
 			}
 		}
 	}
-	if _, ok := state.Get("rewoo.tool_results_ref"); !ok {
-		if rawResults, ok := state.Get("rewoo.tool_results"); ok && rawResults != nil {
+	if _, ok := env.GetWorkingValue("rewoo.tool_results_ref"); !ok {
+		if rawResults, ok := env.GetWorkingValue("rewoo.tool_results"); ok && rawResults != nil {
 			if results, ok := rawResults.([]RewooStepResult); ok && len(results) > 0 {
 				if ref := s.persistToolResultsArtifact(ctx, checkpointID, workflowID, runID, results); ref != nil {
-					state.Set("rewoo.tool_results_ref", *ref)
-					state.Set("rewoo.tool_results_summary", summarizeRewooStepResults(results))
+					env.SetWorkingValue("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
+					env.SetWorkingValue("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
 				}
 			}
 		}
 	}
-	if _, ok := state.Get("rewoo.synthesis_ref"); !ok {
-		if rawSynthesis, ok := state.Get("rewoo.synthesis"); ok && rawSynthesis != nil {
+	if _, ok := env.GetWorkingValue("rewoo.synthesis_ref"); !ok {
+		if rawSynthesis, ok := env.GetWorkingValue("rewoo.synthesis"); ok && rawSynthesis != nil {
 			synthesis := strings.TrimSpace(fmt.Sprint(rawSynthesis))
 			if synthesis != "" && synthesis != "<nil>" {
 				var results []RewooStepResult
-				if rawResults, ok := state.Get("rewoo.tool_results"); ok {
+				if rawResults, ok := env.GetWorkingValue("rewoo.tool_results"); ok {
 					results, _ = rawResults.([]RewooStepResult)
 				}
 				if ref := s.persistSynthesisArtifact(ctx, checkpointID, workflowID, runID, synthesis, results); ref != nil {
-					state.Set("rewoo.synthesis_ref", *ref)
+					env.SetWorkingValue("rewoo.synthesis_ref", *ref, contextdata.MemoryClassTask)
 				}
 			}
 		}
 	}
+}
+
+func envGetString(env *contextdata.Envelope, key string) string {
+	val, _ := env.GetWorkingValue(key)
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpointID, workflowID, runID string, rawPlan any) *core.ArtifactReference {
@@ -292,13 +314,13 @@ func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpoi
 	if err != nil {
 		return nil
 	}
-	record := memory.WorkflowArtifactRecord{
+	record := agentlifecycle.WorkflowArtifactRecord{
 		ArtifactID:        checkpointID + ".plan",
 		WorkflowID:        workflowID,
 		RunID:             runID,
 		Kind:              "rewoo_plan",
 		ContentType:       "application/json",
-		StorageKind:       memory.ArtifactStorageInline,
+		StorageKind:       agentlifecycle.ArtifactStorageInline,
 		SummaryText:       strings.TrimSpace(plan.Goal),
 		SummaryMetadata:   map[string]any{"checkpoint_id": checkpointID, "agent": "rewoo"},
 		InlineRawText:     string(payload),
@@ -306,11 +328,12 @@ func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpoi
 		CompressionMethod: "none",
 		CreatedAt:         time.Now().UTC(),
 	}
-	if err := s.workflowStore.UpsertWorkflowArtifact(ctx, record); err != nil {
+	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	ref := workflowutil.WorkflowArtifactReference(record)
-	return &ref
+	// Phase 1 stub: return nil instead of artifact reference
+	// TODO: Restore in Phase 8 when workflowutil is rewritten
+	return nil
 }
 
 func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, checkpointID, workflowID, runID string, results []RewooStepResult) *core.ArtifactReference {
@@ -318,13 +341,13 @@ func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, c
 	if err != nil {
 		return nil
 	}
-	record := memory.WorkflowArtifactRecord{
+	record := agentlifecycle.WorkflowArtifactRecord{
 		ArtifactID:        checkpointID + ".tool_results",
 		WorkflowID:        workflowID,
 		RunID:             runID,
 		Kind:              "rewoo_tool_results",
 		ContentType:       "application/json",
-		StorageKind:       memory.ArtifactStorageInline,
+		StorageKind:       agentlifecycle.ArtifactStorageInline,
 		SummaryText:       summarizeRewooStepResults(results),
 		SummaryMetadata:   map[string]any{"checkpoint_id": checkpointID, "agent": "rewoo", "result_count": len(results)},
 		InlineRawText:     string(payload),
@@ -332,11 +355,12 @@ func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, c
 		CompressionMethod: "none",
 		CreatedAt:         time.Now().UTC(),
 	}
-	if err := s.workflowStore.UpsertWorkflowArtifact(ctx, record); err != nil {
+	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	ref := workflowutil.WorkflowArtifactReference(record)
-	return &ref
+	// Phase 1 stub: return nil instead of artifact reference
+	// TODO: Restore in Phase 8 when workflowutil is rewritten
+	return nil
 }
 
 func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, checkpointID, workflowID, runID, synthesis string, results []RewooStepResult) *core.ArtifactReference {
@@ -347,13 +371,13 @@ func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, che
 	if err != nil {
 		return nil
 	}
-	record := memory.WorkflowArtifactRecord{
+	record := agentlifecycle.WorkflowArtifactRecord{
 		ArtifactID:        checkpointID + ".synthesis",
 		WorkflowID:        workflowID,
 		RunID:             runID,
 		Kind:              "rewoo_synthesis",
 		ContentType:       "application/json",
-		StorageKind:       memory.ArtifactStorageInline,
+		StorageKind:       agentlifecycle.ArtifactStorageInline,
 		SummaryText:       synthesis,
 		SummaryMetadata:   map[string]any{"checkpoint_id": checkpointID, "agent": "rewoo"},
 		InlineRawText:     string(payload),
@@ -361,18 +385,24 @@ func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, che
 		CompressionMethod: "none",
 		CreatedAt:         time.Now().UTC(),
 	}
-	if err := s.workflowStore.UpsertWorkflowArtifact(ctx, record); err != nil {
+	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	ref := workflowutil.WorkflowArtifactReference(record)
-	return &ref
+	// Phase 1 stub: return nil instead of artifact reference
+	// TODO: Restore in Phase 8 when workflowutil is rewritten
+	return nil
+}
+
+func mustJSON(v any) []byte {
+	data, _ := json.Marshal(v)
+	return data
 }
 
 func (s *RewooCheckpointStore) loadWorkflowArtifactJSON(ctx context.Context, ref core.ArtifactReference, target any) error {
-	if s == nil || s.workflowStore == nil {
-		return fmt.Errorf("checkpoint_restore: workflow store unavailable for artifact hydration")
+	if s == nil || s.lifecycleRepo == nil {
+		return fmt.Errorf("checkpoint_restore: lifecycle repository unavailable for artifact hydration")
 	}
-	artifacts, err := s.workflowStore.ListWorkflowArtifacts(ctx, ref.WorkflowID, ref.RunID)
+	artifacts, err := s.lifecycleRepo.ListArtifactsByRun(ctx, ref.RunID)
 	if err != nil {
 		return fmt.Errorf("checkpoint_restore: load workflow artifacts: %w", err)
 	}

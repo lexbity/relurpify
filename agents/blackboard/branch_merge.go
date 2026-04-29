@@ -3,7 +3,7 @@ package blackboard
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 type ExecutionMode string
@@ -23,17 +23,17 @@ const (
 // these semantics define how concurrent KS branches would be merged safely.
 type BlackboardBranchResult struct {
 	SourceName string
-	State      *core.Context
-	Delta      core.BranchContextDelta
+	State      *contextdata.Envelope
 }
 
-// MergeBlackboardBranches merges isolated branch deltas into the parent
-// context, rejecting conflicting writes or non-state mutations.
-func MergeBlackboardBranches(parent *core.Context, branches []BlackboardBranchResult) error {
+// MergeBlackboardBranches merges isolated branch states into the parent
+// context using envelope-native merge semantics. Conflicting writes are rejected.
+func MergeBlackboardBranches(parent *contextdata.Envelope, branches []BlackboardBranchResult) error {
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	set := core.NewBranchDeltaSet(len(branches))
+	// Track keys written by each branch to detect conflicts
+	writtenKeys := make(map[string]string) // key -> branch name
 	for _, branch := range branches {
 		if branch.State == nil {
 			return fmt.Errorf("blackboard branch merge requires isolated state")
@@ -42,13 +42,17 @@ func MergeBlackboardBranches(parent *core.Context, branches []BlackboardBranchRe
 		if label == "" {
 			label = "unknown"
 		}
-		set.Add(label, branch.Delta)
+		// Merge working data from branch into parent
+		for key, value := range branch.State.WorkingData {
+			if existingBranch, exists := writtenKeys[key]; exists {
+				return fmt.Errorf("blackboard branch merge conflict: key %q written by both %q and %q", key, existingBranch, label)
+			}
+			parent.WorkingData[key] = value
+			writtenKeys[key] = label
+		}
 	}
-	if err := set.ApplyTo(parent); err != nil {
-		return fmt.Errorf("blackboard branch merge conflict: %w", err)
-	}
-	if bb := LoadFromContext(parent, parent.GetString("task.instruction")); bb != nil {
-		parent.Set(contextKeyRuntimeActive, bb)
+	if bb := LoadFromContext(parent, envelopeGetString(parent, "task.instruction")); bb != nil {
+		envelopeSet(parent, contextKeyRuntimeActive, bb)
 	}
 	return nil
 }

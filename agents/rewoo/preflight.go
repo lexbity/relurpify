@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PreflightIssue describes a problem found during plan validation.
@@ -19,14 +19,14 @@ type PreflightIssue struct {
 // PreflightCheck validates a plan before execution.
 // It checks:
 // - All referenced tools exist in the registry
-// - All tools have necessary permissions (if permission manager is available)
+// - All tools have necessary permissions (if permission checker is available)
 // - Plan structure is valid (steps, dependencies, etc.)
 // Returns []PreflightIssue if problems found (empty if all OK).
 func PreflightCheck(
 	ctx context.Context,
 	registry *capability.Registry,
 	plan *RewooPlan,
-	pm *authorization.PermissionManager,
+	pc contracts.CapabilityChecker,
 ) []PreflightIssue {
 	var issues []PreflightIssue
 
@@ -79,8 +79,8 @@ func PreflightCheck(
 		}
 
 		// Check tool permissions
-		if pm != nil {
-			if err := pm.CheckCapability(ctx, "rewoo", step.Tool); err != nil {
+		if pc != nil {
+			if err := pc.CheckCapability(ctx, "rewoo", step.Tool); err != nil {
 				issues = append(issues, PreflightIssue{
 					Severity: "error",
 					StepID:   step.ID,
@@ -122,9 +122,9 @@ func IsValidPlan(
 	ctx context.Context,
 	registry *capability.Registry,
 	plan *RewooPlan,
-	pm *authorization.PermissionManager,
+	pc contracts.CapabilityChecker,
 ) bool {
-	issues := PreflightCheck(ctx, registry, plan, pm)
+	issues := PreflightCheck(ctx, registry, plan, pc)
 	for _, issue := range issues {
 		if issue.Severity == "error" {
 			return false

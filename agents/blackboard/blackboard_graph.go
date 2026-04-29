@@ -4,10 +4,39 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
+
+// envelopeGet retrieves a value from envelope working memory.
+func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
+	if state == nil {
+		return nil, false
+	}
+	return state.GetWorkingValue(key)
+}
+
+// envelopeSet stores a value in envelope working memory with task scope.
+func envelopeSet(state *contextdata.Envelope, key string, value any) {
+	if state == nil {
+		return
+	}
+	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+}
+
+// envelopeGetString retrieves a value and converts it to string.
+func envelopeGetString(state *contextdata.Envelope, key string) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := envelopeGet(state, key)
+	if !ok || raw == nil {
+		return ""
+	}
+	return fmt.Sprint(raw)
+}
 
 type blackboardLoadNode struct {
 	id        string
@@ -27,17 +56,17 @@ func (n *blackboardLoadNode) Contract() graph.NodeContract {
 	return contract
 }
 
-func (n *blackboardLoadNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+func (n *blackboardLoadNode) Execute(_ context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	bb := LoadFromContext(state, n.goal)
 	bb.Normalize()
 	memoryCount := hydrateBlackboardFromMemory(state, bb)
-	state.Set(contextKeyRuntimeActive, bb)
+	envelopeSet(state, contextKeyRuntimeActive, bb)
 	PublishToContext(state, bb, ControllerState{
 		Cycle:       0,
 		MaxCycles:   n.maxCycles,
 		Termination: "running",
 	})
-	emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, state.GetString("task.id"), "blackboard load complete", map[string]any{
+	emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, envelopeGetString(state, "task.id"), "blackboard load complete", map[string]any{
 		"goal_count":   len(bb.Goals),
 		"memory_count": memoryCount,
 	})
@@ -67,7 +96,7 @@ func (n *blackboardEvaluateNode) Contract() graph.NodeContract {
 	return contract
 }
 
-func (n *blackboardEvaluateNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	bb, err := activeBlackboard(state)
 	if err != nil {
 		return nil, err
@@ -78,18 +107,18 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *core.Context)
 		maxCycles = defaultMaxCycles
 	}
 	if bb.IsGoalSatisfied() {
-		state.Set(contextKeyControllerNext, "bb_done")
+		envelopeSet(state, contextKeyControllerNext, "bb_done")
 		PublishToContext(state, bb, n.controller.Snapshot(bb, cycle, "goal_satisfied", ""))
-		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, state.GetString("task.id"), "blackboard goal satisfied", map[string]any{
+		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, envelopeGetString(state, "task.id"), "blackboard goal satisfied", map[string]any{
 			"cycle":       cycle,
 			"termination": "goal_satisfied",
 		})
 		return &core.Result{Success: true, Data: map[string]any{"next": "bb_done"}}, nil
 	}
 	if cycle >= maxCycles {
-		state.Set(contextKeyControllerNext, "bb_done")
+		envelopeSet(state, contextKeyControllerNext, "bb_done")
 		PublishToContext(state, bb, n.controller.Snapshot(bb, cycle, "cycle_limit", ""))
-		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, state.GetString("task.id"), "blackboard cycle limit reached", map[string]any{
+		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, envelopeGetString(state, "task.id"), "blackboard cycle limit reached", map[string]any{
 			"cycle":       cycle,
 			"max_cycles":  maxCycles,
 			"termination": "cycle_limit",
@@ -104,15 +133,15 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *core.Context)
 		names = append(names, resolved.Spec.Name)
 		contenders = append(contenders, resolved.Spec)
 	}
-	state.Set(contextKeyControllerEligible, names)
-	state.Set(contextKeyControllerContenders, contenders)
-	state.Set(contextKeyControllerExecutionMode, string(n.controller.ExecutionMode()))
-	state.Set(contextKeyControllerSelectionPolicy, n.controller.SelectionPolicy())
-	state.Set(contextKeyControllerMergePolicy, string(n.controller.MergePolicy()))
+	envelopeSet(state, contextKeyControllerEligible, names)
+	envelopeSet(state, contextKeyControllerContenders, contenders)
+	envelopeSet(state, contextKeyControllerExecutionMode, string(n.controller.ExecutionMode()))
+	envelopeSet(state, contextKeyControllerSelectionPolicy, n.controller.SelectionPolicy())
+	envelopeSet(state, contextKeyControllerMergePolicy, string(n.controller.MergePolicy()))
 	if len(eligible) == 0 {
-		state.Set(contextKeyControllerNext, "bb_done")
+		envelopeSet(state, contextKeyControllerNext, "bb_done")
 		PublishToContext(state, bb, n.controller.Snapshot(bb, cycle, "stuck", ""))
-		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, state.GetString("task.id"), "blackboard controller stuck", map[string]any{
+		emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, envelopeGetString(state, "task.id"), "blackboard controller stuck", map[string]any{
 			"cycle":       cycle,
 			"termination": "stuck",
 			"eligible":    names,
@@ -121,14 +150,14 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *core.Context)
 	}
 	selected := eligible[0]
 	resolved := ResolveKnowledgeSource(selected)
-	state.Set(contextKeyControllerCycle, cycle+1)
-	state.Set(contextKeyControllerNext, "bb_dispatch")
-	state.Set(contextKnowledgeLastSource, resolved.Spec.Name)
-	state.Set(contextKnowledgeLastSourcePriority, resolved.Spec.Priority)
-	state.Set(contextKeyControllerSelectedSpec, resolved.Spec)
-	state.Set(contextKeyControllerSelectedContract, resolved.Contract)
+	envelopeSet(state, contextKeyControllerCycle, cycle+1)
+	envelopeSet(state, contextKeyControllerNext, "bb_dispatch")
+	envelopeSet(state, contextKnowledgeLastSource, resolved.Spec.Name)
+	envelopeSet(state, contextKnowledgeLastSourcePriority, resolved.Spec.Priority)
+	envelopeSet(state, contextKeyControllerSelectedSpec, resolved.Spec)
+	envelopeSet(state, contextKeyControllerSelectedContract, resolved.Contract)
 	PublishToContext(state, bb, n.controller.Snapshot(bb, cycle+1, "running", resolved.Spec.Name))
-	emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, state.GetString("task.id"), "blackboard knowledge source selected", map[string]any{
+	emitBlackboardEvent(n.telemetry, state, core.EventStateChange, n.id, envelopeGetString(state, "task.id"), "blackboard knowledge source selected", map[string]any{
 		"cycle":           cycle + 1,
 		"eligible":        names,
 		"selected_source": resolved.Spec.Name,
@@ -149,7 +178,7 @@ type blackboardDispatchNode struct {
 	controller *Controller
 	tools      *capability.Registry
 	model      core.LanguageModel
-	semctx     core.AgentSemanticContext
+	semctx     agentspec.AgentSemanticContext
 	telemetry  core.Telemetry
 }
 
@@ -167,12 +196,12 @@ func (n *blackboardDispatchNode) Contract() graph.NodeContract {
 	return contract
 }
 
-func (n *blackboardDispatchNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+func (n *blackboardDispatchNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	bb, err := activeBlackboard(state)
 	if err != nil {
 		return nil, err
 	}
-	sourceName := state.GetString(contextKnowledgeLastSource)
+	sourceName := envelopeGetString(state, contextKnowledgeLastSource)
 	if sourceName == "" {
 		return nil, fmt.Errorf("blackboard: dispatch source missing")
 	}
@@ -181,17 +210,17 @@ func (n *blackboardDispatchNode) Execute(ctx context.Context, state *core.Contex
 		return nil, err
 	}
 	resolved := ResolveKnowledgeSource(source)
-	state.Set(contextKeyControllerSelectedSpec, resolved.Spec)
-	state.Set(contextKeyControllerSelectedContract, resolved.Contract)
-	emitBlackboardEvent(n.telemetry, state, core.EventCapabilityCall, n.id, state.GetString("task.id"), "blackboard dispatch start", map[string]any{
+	envelopeSet(state, contextKeyControllerSelectedSpec, resolved.Spec)
+	envelopeSet(state, contextKeyControllerSelectedContract, resolved.Contract)
+	emitBlackboardEvent(n.telemetry, state, core.EventCapabilityCall, n.id, envelopeGetString(state, "task.id"), "blackboard dispatch start", map[string]any{
 		"cycle":    currentCycle(state),
 		"source":   resolved.Spec.Name,
 		"priority": resolved.Spec.Priority,
 	})
 	if err := resolved.Source.Execute(ctx, bb, n.tools, n.model, n.semctx); err != nil {
-		state.Set(contextKeyControllerLastError, err.Error())
+		envelopeSet(state, contextKeyControllerLastError, err.Error())
 		PublishToContext(state, bb, n.controller.Snapshot(bb, currentCycle(state), "dispatch_error", resolved.Spec.Name))
-		emitBlackboardEvent(n.telemetry, state, core.EventNodeError, n.id, state.GetString("task.id"), "blackboard dispatch failed", map[string]any{
+		emitBlackboardEvent(n.telemetry, state, core.EventNodeError, n.id, envelopeGetString(state, "task.id"), "blackboard dispatch failed", map[string]any{
 			"cycle":    currentCycle(state),
 			"source":   resolved.Spec.Name,
 			"error":    err.Error(),
@@ -199,9 +228,9 @@ func (n *blackboardDispatchNode) Execute(ctx context.Context, state *core.Contex
 		})
 		return nil, err
 	}
-	state.Set(contextKeyRuntimeActive, bb)
+	envelopeSet(state, contextKeyRuntimeActive, bb)
 	PublishToContext(state, bb, n.controller.Snapshot(bb, currentCycle(state), "running", resolved.Spec.Name))
-	emitBlackboardEvent(n.telemetry, state, core.EventCapabilityResult, n.id, state.GetString("task.id"), "blackboard dispatch complete", map[string]any{
+	emitBlackboardEvent(n.telemetry, state, core.EventCapabilityResult, n.id, envelopeGetString(state, "task.id"), "blackboard dispatch complete", map[string]any{
 		"cycle":           currentCycle(state),
 		"source":          resolved.Spec.Name,
 		"priority":        resolved.Spec.Priority,
@@ -218,31 +247,31 @@ func (n *blackboardDispatchNode) Execute(ctx context.Context, state *core.Contex
 	}, nil
 }
 
-func activeBlackboard(state *core.Context) (*Blackboard, error) {
+func activeBlackboard(state *contextdata.Envelope) (*Blackboard, error) {
 	if state == nil {
 		return nil, fmt.Errorf("blackboard: state required")
 	}
-	raw, ok := state.Get(contextKeyRuntimeActive)
+	raw, ok := envelopeGet(state, contextKeyRuntimeActive)
 	if ok {
 		if bb, ok := raw.(*Blackboard); ok && bb != nil {
 			bb.Normalize()
 			return bb, nil
 		}
 	}
-	bb := LoadFromContext(state, state.GetString("task.instruction"))
+	bb := LoadFromContext(state, envelopeGetString(state, "task.instruction"))
 	if bb == nil {
 		return nil, fmt.Errorf("blackboard: active runtime state missing")
 	}
-	state.Set(contextKeyRuntimeActive, bb)
+	envelopeSet(state, contextKeyRuntimeActive, bb)
 	bb.Normalize()
 	return bb, nil
 }
 
-func currentCycle(state *core.Context) int {
+func currentCycle(state *contextdata.Envelope) int {
 	if state == nil {
 		return 0
 	}
-	raw, ok := state.Get(contextKeyControllerCycle)
+	raw, ok := envelopeGet(state, contextKeyControllerCycle)
 	if !ok {
 		return 0
 	}

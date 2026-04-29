@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -16,7 +18,7 @@ type plannerPlanCapabilityHandler struct {
 	config   *core.Config
 }
 
-func (h plannerPlanCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h plannerPlanCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:planner.plan",
 		"planner.plan",
@@ -36,12 +38,11 @@ func (h plannerPlanCapabilityHandler) Descriptor(context.Context, *core.Context)
 	)
 }
 
-func (h plannerPlanCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h plannerPlanCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	instruction := strings.TrimSpace(fmt.Sprint(args["instruction"]))
 	if instruction == "" {
 		return nil, fmt.Errorf("instruction required")
 	}
-	state := core.NewContext()
 	result, err := (&AgentCapabilityHandler{
 		env: agentenv.AgentEnvironment{
 			Model:    h.model,
@@ -54,13 +55,17 @@ func (h plannerPlanCapabilityHandler) Invoke(ctx context.Context, _ *core.Contex
 			StateMode:  core.StateModeShared,
 			ToolScope:  DefaultInvocationPolicies["planner"].ToolScope,
 		},
-	}).Invoke(ctx, state, args)
+	}).Invoke(ctx, env, args)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, _ := state.Get("planner.plan")
-	summary := state.GetString("planner.summary")
+	plan, _ := env.GetWorkingValue("planner.plan")
+	summaryRaw, _ := env.GetWorkingValue("planner.summary")
+	summary := ""
+	if s, ok := summaryRaw.(string); ok {
+		summary = s
+	}
 	data := map[string]interface{}{
 		"goal":         "",
 		"steps":        []any{},
@@ -68,7 +73,7 @@ func (h plannerPlanCapabilityHandler) Invoke(ctx context.Context, _ *core.Contex
 		"dependencies": map[string]any{},
 		"summary":      summary,
 	}
-	if typed, ok := plan.(core.Plan); ok {
+	if typed, ok := plan.(agentgraph.Plan); ok {
 		data["goal"] = typed.Goal
 		data["steps"] = planStepsAsAny(typed.Steps)
 		data["files"] = planFilesAsAny(typed.Files)
@@ -77,6 +82,7 @@ func (h plannerPlanCapabilityHandler) Invoke(ctx context.Context, _ *core.Contex
 	if result != nil && len(result.Data) > 0 {
 		data["result"] = result.Data
 	}
+	env.SetWorkingValue("active_plan", result.Data["plan"], contextdata.MemoryClassTask)
 	return &core.CapabilityExecutionResult{Success: true, Data: data}, nil
 }
 
@@ -86,7 +92,7 @@ func (h plannerPlanCapabilityHandler) plannerConfig() *core.Config {
 	}
 	cfg := *h.config
 	cfg.Name = "planner.plan"
-	cfg.AgentSpec = core.MergeAgentSpecs(h.config.AgentSpec)
+	cfg.AgentSpec = core.MergeAgentSpecs(h.manifest.AgentSpec)
 	return &cfg
 }
 
@@ -96,7 +102,7 @@ type architectExecuteCapabilityHandler struct {
 	config   *core.Config
 }
 
-func (h architectExecuteCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h architectExecuteCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:architect.execute",
 		"architect.execute",
@@ -128,7 +134,7 @@ func (h architectExecuteCapabilityHandler) Descriptor(context.Context, *core.Con
 	)
 }
 
-func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	instruction := strings.TrimSpace(fmt.Sprint(args["instruction"]))
 	if instruction == "" {
 		return nil, fmt.Errorf("instruction required")
@@ -151,8 +157,6 @@ func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.C
 	if requestedWorkflowID != "" {
 		task.Context["workflow_id"] = requestedWorkflowID
 	}
-
-	state := core.NewContext()
 	result, err := (&AgentCapabilityHandler{
 		env: agentenv.AgentEnvironment{
 			Model:    h.model,
@@ -161,7 +165,7 @@ func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.C
 		},
 		agentType: "architect",
 		policy:    DefaultInvocationPolicies["architect"],
-	}).Invoke(ctx, state, map[string]interface{}{
+	}).Invoke(ctx, env, map[string]interface{}{
 		"instruction":     task.Instruction,
 		"task_id":         task.ID,
 		"workflow_id":     requestedWorkflowID,
@@ -172,13 +176,13 @@ func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.C
 	}
 
 	data := map[string]any{
-		"summary":       state.GetString("architect.summary"),
-		"workflow_id":   state.GetString("architect.workflow_id"),
-		"run_id":        state.GetString("architect.run_id"),
-		"completed":     planFilesAsAny(core.StringSliceFromContext(state, "architect.completed_steps")),
+		"summary":       envGetString(env, "architect.summary"),
+		"workflow_id":   envGetString(env, "architect.workflow_id"),
+		"run_id":        envGetString(env, "architect.run_id"),
+		"completed":     planFilesAsAny(envStringSliceFromContext(env, "architect.completed_steps")),
 		"workflow_mode": "architect",
 	}
-	if plan, ok := state.Get("architect.plan"); ok {
+	if plan, ok := env.GetWorkingValue("architect.plan"); ok {
 		data["plan"] = normalizePlanPayload(plan)
 	}
 	if result != nil {
@@ -196,6 +200,7 @@ func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.C
 	if strings.TrimSpace(fmt.Sprint(data["workflow_id"])) == "" && requestedWorkflowID != "" {
 		data["workflow_id"] = requestedWorkflowID
 	}
+	env.SetWorkingValue("architect_result", result.Data, contextdata.MemoryClassTask)
 	return &core.CapabilityExecutionResult{Success: true, Data: data}, nil
 }
 
@@ -211,7 +216,7 @@ func (h architectExecuteCapabilityHandler) architectConfig() *core.Config {
 	if !cfg.NativeToolCalling {
 		cfg.NativeToolCalling = true
 	}
-	cfg.AgentSpec = core.MergeAgentSpecs(h.config.AgentSpec)
+	cfg.AgentSpec = core.MergeAgentSpecs(h.manifest.AgentSpec)
 	return &cfg
 }
 
@@ -219,7 +224,7 @@ type executorInvokeCapabilityHandler struct {
 	registry *capability.Registry
 }
 
-func (h executorInvokeCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h executorInvokeCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:executor.invoke",
 		"executor.invoke",
@@ -248,7 +253,7 @@ func (h executorInvokeCapabilityHandler) Descriptor(context.Context, *core.Conte
 	)
 }
 
-func (h executorInvokeCapabilityHandler) Invoke(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h executorInvokeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	if h.registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}
@@ -272,15 +277,12 @@ func (h executorInvokeCapabilityHandler) Invoke(ctx context.Context, state *core
 	if callArgs == nil {
 		callArgs = map[string]any{}
 	}
-	if state == nil {
-		state = core.NewContext()
-	}
 
-	result, err := h.registry.InvokeCapability(ctx, state, target.ID, callArgs)
+	result, err := h.registry.InvokeCapability(ctx, env, target.ID, callArgs)
 	if err != nil {
 		return nil, err
 	}
-	return &core.CapabilityExecutionResult{
+	execResult := &core.CapabilityExecutionResult{
 		Success: result.Success,
 		Data: map[string]any{
 			"summary":       fmt.Sprintf("Executed delegated capability %s.", target.Name),
@@ -289,5 +291,7 @@ func (h executorInvokeCapabilityHandler) Invoke(ctx context.Context, state *core
 			"result":        result.Data,
 		},
 		Error: result.Error,
-	}, nil
+	}
+	env.SetWorkingValue("executor_result", execResult.Data, contextdata.MemoryClassTask)
+	return execResult, nil
 }

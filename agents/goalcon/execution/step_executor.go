@@ -7,13 +7,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // StepExecutionRequest encapsulates parameters for executing a single plan step.
 type StepExecutionRequest struct {
 	Step               core.PlanStep
-	Context            *core.Context
+	Context            *contextdata.Envelope
 	CapabilityRegistry *capability.Registry
 	Timeout            time.Duration
 	OnFailure          FailureMode // How to handle step failure
@@ -110,7 +111,7 @@ func (e *StepExecutor) Execute(ctx context.Context, req StepExecutionRequest) *S
 
 	// Create execution context
 	if req.Context == nil {
-		req.Context = core.NewContext()
+		req.Context = contextdata.NewEnvelope("goalcon", "session")
 	}
 
 	// Execute step with timeout
@@ -177,7 +178,7 @@ func (e *StepExecutor) lookupCapability(toolName string) *core.CapabilityDescrip
 func (e *StepExecutor) executeToolStep(
 	ctx context.Context,
 	step core.PlanStep,
-	state *core.Context,
+	state *contextdata.Envelope,
 	cap *core.CapabilityDescriptor,
 ) (*core.Result, error) {
 	if cap == nil {
@@ -200,18 +201,18 @@ func (e *StepExecutor) executeToolStep(
 }
 
 // updateWorldState marks predicates as satisfied based on step success.
-func (e *StepExecutor) updateWorldState(ctx *core.Context, step core.PlanStep) {
+func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step core.PlanStep) {
 	if ctx == nil {
 		return
 	}
 
 	// Store execution result in context
 	executionKey := fmt.Sprintf("goalcon.step_result.%s", step.ID)
-	ctx.Set(executionKey, map[string]any{
+	ctx.SetWorkingValue(executionKey, map[string]any{
 		"tool":     step.Tool,
 		"params":   step.Params,
 		"executed": true,
-	})
+	}, contextdata.MemoryClassTask)
 }
 
 // recordAudit records the capability invocation to the audit trail (Phase 5).
@@ -289,7 +290,7 @@ func (ec *ExecutorChain) SetFailureMode(mode FailureMode) {
 func (ec *ExecutorChain) ExecuteSteps(
 	ctx context.Context,
 	steps []core.PlanStep,
-	planContext *core.Context,
+	planContext *contextdata.Envelope,
 	registry *capability.Registry,
 ) []*StepExecutionResult {
 	if ec == nil || ec.executor == nil {

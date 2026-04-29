@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
@@ -18,8 +20,9 @@ import (
 
 // MetricsAggregator collects and analyzes historical execution metrics.
 type MetricsAggregator struct {
-	// Store is the workflow state store for artifact retrieval.
-	Store memory.WorkflowStateStore
+	// TODO: Replace with agentlifecycle.Repository
+	// per the agentlifecycle workflow-store removal plan
+	Store interface{}
 	// WorkflowID is the current workflow ID for scoping artifact queries.
 	WorkflowID string
 }
@@ -105,7 +108,7 @@ func ValidateOutputAgainstSchema(output map[string]any, schema *OutputValidation
 
 // OptimizeStepOrdering generates scheduling hints for a plan based on cost classes and dependencies.
 // Returns steps ordered for optimal execution considering cost and parallelization safety.
-func OptimizeStepOrdering(plan *core.Plan, metadata map[string]OperatorMetadata) []SchedulingHint {
+func OptimizeStepOrdering(plan *agentgraph.Plan, metadata map[string]OperatorMetadata) []SchedulingHint {
 	if plan == nil || len(plan.Steps) == 0 {
 		return nil
 	}
@@ -113,9 +116,9 @@ func OptimizeStepOrdering(plan *core.Plan, metadata map[string]OperatorMetadata)
 	hints := make([]SchedulingHint, 0, len(plan.Steps))
 
 	// Group steps by cost class
-	fastSteps := make([]core.PlanStep, 0)
-	mediumSteps := make([]core.PlanStep, 0)
-	slowSteps := make([]core.PlanStep, 0)
+	fastSteps := make([]agentgraph.PlanStep, 0)
+	mediumSteps := make([]agentgraph.PlanStep, 0)
+	slowSteps := make([]agentgraph.PlanStep, 0)
 
 	for _, step := range plan.Steps {
 		operatorName := step.Tool
@@ -185,13 +188,13 @@ func OptimizeStepOrdering(plan *core.Plan, metadata map[string]OperatorMetadata)
 
 // SortStepsByOptimization reorders plan steps based on cost class optimization strategy.
 // Returns reordered slice of steps without modifying the original plan.
-func SortStepsByOptimization(steps []core.PlanStep, metadata map[string]OperatorMetadata, strategy string) []core.PlanStep {
+func SortStepsByOptimization(steps []agentgraph.PlanStep, metadata map[string]OperatorMetadata, strategy string) []agentgraph.PlanStep {
 	if len(steps) == 0 {
 		return steps
 	}
 
 	// Create a copy to avoid modifying original
-	sorted := make([]core.PlanStep, len(steps))
+	sorted := make([]agentgraph.PlanStep, len(steps))
 	copy(sorted, steps)
 
 	// Sort based on strategy
@@ -219,7 +222,7 @@ func SortStepsByOptimization(steps []core.PlanStep, metadata map[string]Operator
 }
 
 // Helper to get cost class for a step
-func getCostClassForStep(step core.PlanStep, metadata map[string]OperatorMetadata) authoring.CostClass {
+func getCostClassForStep(step agentgraph.PlanStep, metadata map[string]OperatorMetadata) authoring.CostClass {
 	operatorName := step.Tool
 	if operatorName == "" {
 		operatorName = step.ID
@@ -247,33 +250,14 @@ func costToValue(cost authoring.CostClass) int {
 
 // EnrichExecutionContextWithHistoricalData augments execution context with historical metrics.
 // This enables informed decisions about timeouts, retries, and resource allocation.
-func EnrichExecutionContextWithHistoricalData(ctx context.Context, state *core.Context, operatorName string, store memory.WorkflowStateStore) {
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
+func EnrichExecutionContextWithHistoricalData(ctx context.Context, state *contextdata.Envelope, operatorName string, store interface{}) {
 	if state == nil || store == nil {
 		return
 	}
-
-	aggregator := &MetricsAggregator{
-		Store:      store,
-		WorkflowID: "", // Would be set from state if needed
-	}
-
-	metrics, err := aggregator.AggregateHistoricalMetrics(ctx, operatorName)
-	if err != nil || metrics == nil {
-		return
-	}
-
-	// Publish historical metrics to context for operator use
-	contextKey := fmt.Sprintf("htn.operator_history.%s", operatorName)
-	state.Set(contextKey, map[string]any{
-		"total_runs":          metrics.TotalRuns,
-		"successful_runs":     metrics.SuccessfulRuns,
-		"failed_runs":         metrics.FailedRuns,
-		"average_duration":    metrics.AverageDuration,
-		"success_rate":        metrics.SuccessRate,
-		"most_common_cost":    string(metrics.MostCommonCost),
-		"most_common_retry":   string(metrics.MostCommonRetry),
-		"last_observed_error": metrics.LastObservedError,
-	})
+	// Placeholder - historical metrics enrichment to be reimplemented
+	// using agentlifecycle.Repository or WorkingMemory
 }
 
 // ExtractOutputValidationSchema creates a schema validator from Phase 8 metadata.
@@ -317,7 +301,7 @@ func ExtractOutputValidationSchema(expectedOutput map[string]any) *OutputValidat
 }
 
 // ComputeEstimatedExecutionTime calculates expected duration for a plan based on historical data.
-func ComputeEstimatedExecutionTime(plan *core.Plan, metadata map[string]OperatorMetadata) int {
+func ComputeEstimatedExecutionTime(plan *agentgraph.Plan, metadata map[string]OperatorMetadata) int {
 	totalTime := 0
 
 	for _, step := range plan.Steps {
@@ -390,12 +374,13 @@ type KnowledgeQuery struct {
 
 // RetrieveRelevantKnowledge queries the knowledge base for relevant past executions.
 // This enables learning from similar previous runs.
-func RetrieveRelevantKnowledge(ctx context.Context, store memory.WorkflowStateStore, query *KnowledgeQuery) []memory.KnowledgeRecord {
+// TODO: Reimplement without WorkflowStateStore dependency
+// per the agentlifecycle workflow-store removal plan
+func RetrieveRelevantKnowledge(ctx context.Context, store interface{}, query *KnowledgeQuery) []memory.KnowledgeRecord {
 	if store == nil || query == nil {
 		return nil
 	}
-
-	// In a real implementation, this would query the KnowledgeStore for matching records.
-	// For now, return empty slice as placeholder.
+	// Placeholder - knowledge retrieval to be reimplemented
+	// using agentlifecycle.Repository or WorkingMemory
 	return []memory.KnowledgeRecord{}
 }

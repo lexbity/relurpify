@@ -3,7 +3,7 @@ package reflection
 import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 )
 
 type Option func(*ReflectionAgent)

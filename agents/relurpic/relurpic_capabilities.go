@@ -3,14 +3,14 @@ package relurpic
 import (
 	"database/sql"
 
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type relurpicOptions struct {
@@ -22,7 +22,7 @@ type relurpicOptions struct {
 	RetrievalDB   *sql.DB
 	PlanStore     frameworkplan.PlanStore
 	Guidance      *guidance.GuidanceBroker
-	WorkflowStore memory.WorkflowStateStore
+	LifecycleRepo agentlifecycle.Repository
 }
 
 type RelurpicOption func(*relurpicOptions)
@@ -69,9 +69,9 @@ func WithGuidanceBroker(broker *guidance.GuidanceBroker) RelurpicOption {
 	}
 }
 
-func WithWorkflowStore(store memory.WorkflowStateStore) RelurpicOption {
+func WithLifecycleRepo(repo agentlifecycle.Repository) RelurpicOption {
 	return func(opts *relurpicOptions) {
-		opts.WorkflowStore = store
+		opts.LifecycleRepo = repo
 	}
 }
 
@@ -119,7 +119,7 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 			retrievalDB:   resolved.RetrievalDB,
 			planStore:     resolved.PlanStore,
 			guidance:      resolved.Guidance,
-			workflowStore: resolved.WorkflowStore,
+			lifecycleRepo: resolved.LifecycleRepo,
 		},
 		prospectiveMatcherMatchCapabilityHandler{
 			model:        model,

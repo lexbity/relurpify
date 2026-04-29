@@ -18,10 +18,10 @@
 // decomposes the task into primitive work, and executes those primitive steps
 // through framework-owned runtime surfaces.
 //
-// Current execution uses `graph.PlanExecutor`, workflow retrieval, workflow
-// checkpointing, and shared `core.Context` state rather than a hidden package-
-// private loop. The HTN runtime note in docs/dev/htn-runtime.md defines the
-// execution contract and follow-on extension areas.
+// Current execution uses graph-native plan execution, workflow retrieval,
+// workflow checkpointing, and shared `contextdata.Envelope` state rather than
+// a hidden package-private loop. The HTN runtime note in docs/dev/htn-runtime.md
+// defines the execution contract and follow-on extension areas.
 //
 // Default built-in methods cover code generation, modification, review, and
 // analysis workflows. Additional methods can be registered at construction time

@@ -10,15 +10,17 @@ import (
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextmetric"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
@@ -31,10 +33,11 @@ type gapDetectorDetectCapabilityHandler struct {
 	retrievalDB   *sql.DB
 	planStore     frameworkplan.PlanStore
 	guidance      *guidance.GuidanceBroker
-	workflowStore memory.WorkflowStateStore
+	lifecycleRepo agentlifecycle.Repository
+	budget        *contextmetric.ArtifactBudget
 }
 
-func (h gapDetectorDetectCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (h gapDetectorDetectCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return coordinatedRelurpicDescriptor(
 		"relurpic:gap-detector.detect",
 		"gap-detector.detect",
@@ -69,7 +72,7 @@ func (h gapDetectorDetectCapabilityHandler) Descriptor(context.Context, *core.Co
 	)
 }
 
-func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	filePath := stringArg(args["file_path"])
 	if filePath == "" {
 		return nil, fmt.Errorf("file_path required")
@@ -149,7 +152,7 @@ func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.
 	chain = chain.Derive("load_scope", "relurpic.gap-detector", 0.0, filePath)
 	chain = chain.Derive("anchor_lookup", "relurpic.gap-detector", 0.02, corpusScope)
 	chain = chain.Derive("llm_analysis", "relurpic.gap-detector", llmLossMagnitude(gaps), fmt.Sprintf("%d gaps", len(gaps)))
-	desc := h.Descriptor(ctx, nil)
+	desc := h.Descriptor(ctx, env)
 	envelope := core.NewCapabilityResultEnvelope(desc, result, core.ContentDispositionRaw, nil, nil)
 	envelope.Provenance.Derivation = &chain
 	result.Metadata["capability_result_envelope"] = envelope
@@ -192,14 +195,30 @@ func (h gapDetectorDetectCapabilityHandler) detectGaps(ctx context.Context, scop
 			end = len(anchors)
 		}
 		batch := anchors[start:end]
+		estimatedPromptTokens := estimateGapDetectionTokens(batch, excerpts)
+		if h.budget != nil {
+			if !h.budget.CanAddTokens(estimatedPromptTokens) {
+				return nil, fmt.Errorf("relurpic: context budget exhausted for gap-detector")
+			}
+			_ = h.budget.Allocate("relurpic", estimatedPromptTokens, nil)
+		}
+
 		resp, err := h.model.Generate(ctx, buildGapDetectionPrompt(batch, excerpts), &core.LLMOptions{
 			Model:       modelName(h.config),
 			Temperature: 0.1,
 			MaxTokens:   1400,
 		})
 		if err != nil {
+			if h.budget != nil {
+				h.budget.Free("relurpic", estimatedPromptTokens, "")
+			}
 			return nil, err
 		}
+
+		if h.budget != nil {
+			h.budget.Free("relurpic", estimatedPromptTokens, "")
+		}
+
 		analyses, err := parseGapDetectorResponse(resp.Text)
 		if err != nil {
 			return nil, err
@@ -327,6 +346,19 @@ func parseGapDetectorResponse(text string) ([]*gapAnalysis, error) {
 		return nil, err
 	}
 	return direct, nil
+}
+
+func estimateGapDetectionTokens(anchors []retrieval.AnchorRecord, excerpts []resolvedExcerpt) int {
+	// Rough estimate: 4 tokens per word, plus JSON overhead
+	tokenCount := 0
+	for _, excerpt := range excerpts {
+		tokenCount += len(excerpt.Content) / 4
+	}
+	for _, anchor := range anchors {
+		tokenCount += len(anchor.Definition) / 4
+		tokenCount += len(anchor.Term) / 4
+	}
+	return tokenCount
 }
 
 func buildGapDetectionPrompt(anchors []retrieval.AnchorRecord, excerpts []resolvedExcerpt) string {
@@ -461,10 +493,10 @@ func stringSliceArg(raw any) []string {
 }
 
 func (h gapDetectorDetectCapabilityHandler) persistTension(ctx context.Context, workflowID, explorationID, snapshotID, basedOnRevision string, gap patterns.IntentGap, relatedStepIDs []string) error {
-	if h.workflowStore == nil || strings.TrimSpace(workflowID) == "" {
+	if h.lifecycleRepo == nil || strings.TrimSpace(workflowID) == "" {
 		return nil
 	}
-	service := archaeotensions.Service{Store: h.workflowStore}
+	service := archaeotensions.Service{Store: h.lifecycleRepo}
 	status := archaeodomain.TensionInferred
 	if gap.Severity == patterns.GapSeverityCritical || gap.Severity == patterns.GapSeveritySignificant {
 		status = archaeodomain.TensionUnresolved

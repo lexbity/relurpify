@@ -2,19 +2,42 @@ package planner
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
+
+// TaskPayload retrieves workflow retrieval payload from task context.
+// This replaces the workflowutil.TaskPayload stub.
+func TaskPayload(task *core.Task, key string) []byte {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	raw, ok := task.Context[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	if bytes, ok := raw.([]byte); ok {
+		return bytes
+	}
+	// Try to marshal if it's not already bytes
+	if data, err := json.Marshal(raw); err == nil {
+		return data
+	}
+	return nil
+}
 
 // PlannerAgent builds a plan before executing. It is intentionally explicit:
 // first ask the LLM for a structured plan, then execute tool-backed steps,
@@ -22,11 +45,14 @@ import (
 // tackle unfamiliar tasks and serves as reference implementation for creating
 // new multi-step agents.
 type PlannerAgent struct {
-	Model          core.LanguageModel
-	Tools          *capability.Registry
-	Memory         memory.MemoryStore
-	Config         *core.Config
-	CheckpointPath string
+	Model           core.LanguageModel
+	Tools           *capability.Registry
+	Memory          memory.MemoryStore
+	Config          *core.Config
+	StreamTrigger   *contextstream.Trigger
+	StreamMode      contextstream.Mode
+	StreamQuery     string
+	StreamMaxTokens int
 }
 
 // Initialize configures the agent.
@@ -39,7 +65,7 @@ func (a *PlannerAgent) Initialize(cfg *core.Config) error {
 }
 
 // Execute runs the planner workflow.
-func (a *PlannerAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (a *PlannerAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	graph, err := a.BuildGraph(task)
 	if err != nil {
 		return nil, err
@@ -47,81 +73,85 @@ func (a *PlannerAgent) Execute(ctx context.Context, task *core.Task, state *core
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
 		graph.SetTelemetry(cfg.Telemetry)
 	}
-	if !plannerUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
-		store := memory.NewCheckpointStore(filepath.Clean(a.CheckpointPath))
-		graph.WithCheckpointing(1, store.Save)
-	}
-	result, err := graph.Execute(ctx, state)
-	preservePlannerExecutionResult(state, result)
-	mirrorPlannerSummaryReference(state)
-	mirrorPlannerCheckpointReference(state)
-	compactPlannerResultsStateInContext(state)
+	result, err := graph.Execute(ctx, env)
+	preservePlannerExecutionResult(env, result)
+	mirrorPlannerSummaryReference(env)
+	mirrorPlannerCheckpointReference(env)
+	compactPlannerResultsStateInContext(env)
 	return result, err
 }
 
-func preservePlannerExecutionResult(state *core.Context, result *core.Result) {
-	if state == nil || result == nil {
+func envGetString(env *contextdata.Envelope, key string) string {
+	val, _ := env.GetWorkingValue(key)
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func preservePlannerExecutionResult(env *contextdata.Envelope, result *core.Result) {
+	if env == nil || result == nil {
 		return
 	}
 	if result.Data == nil {
 		result.Data = map[string]any{}
 	}
-	if raw, ok := state.Get("planner.results"); ok {
+	if raw, ok := env.GetWorkingValue("planner.results"); ok {
 		result.Data["results"] = raw
 	}
-	if raw, ok := state.Get("planner.skipped_tools"); ok {
+	if raw, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
 		result.Data["skipped_tools"] = raw
 	}
-	if summary := strings.TrimSpace(state.GetString("planner.summary")); summary != "" {
+	if summary := strings.TrimSpace(envGetString(env, "planner.summary")); summary != "" {
 		result.Data["summary"] = summary
 	}
 }
 
-func mirrorPlannerSummaryReference(state *core.Context) {
-	if state == nil {
+func mirrorPlannerSummaryReference(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if strings.TrimSpace(state.GetString("planner.summary")) == "" {
+	if strings.TrimSpace(envGetString(env, "planner.summary")) == "" {
 		return
 	}
-	if rawRef, ok := state.Get("graph.summary_ref"); ok {
+	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
 		if ref, ok := rawRef.(core.ArtifactReference); ok {
-			state.Set("planner.summary_ref", ref)
+			env.SetWorkingValue("planner.summary_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
-	if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
-		state.Set("planner.summary_artifact_summary", summary)
+	if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
+		env.SetWorkingValue("planner.summary_artifact_summary", summary, contextdata.MemoryClassTask)
 	}
 }
 
-func mirrorPlannerCheckpointReference(state *core.Context) {
-	if state == nil {
+func mirrorPlannerCheckpointReference(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if rawRef, ok := state.Get("graph.checkpoint_ref"); ok {
+	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
 		if ref, ok := rawRef.(core.ArtifactReference); ok {
-			state.Set("planner.checkpoint_ref", ref)
+			env.SetWorkingValue("planner.checkpoint_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 }
 
-func compactPlannerResultsStateInContext(state *core.Context) {
-	if state == nil {
+func compactPlannerResultsStateInContext(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	if _, ok := state.Get("planner.summary_ref"); !ok {
+	if _, ok := env.GetWorkingValue("planner.summary_ref"); !ok {
 		return
 	}
-	raw, ok := state.Get("planner.results")
+	raw, ok := env.GetWorkingValue("planner.results")
 	if !ok {
 		return
 	}
 	if compact := compactPlannerResultsState(raw); compact != nil {
-		state.Set("planner.results", compact)
+		env.SetWorkingValue("planner.results", compact, contextdata.MemoryClassTask)
 	}
-	if rawSkipped, ok := state.Get("planner.skipped_tools"); ok {
+	if rawSkipped, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
 		if compact := compactPlannerSkippedToolsState(rawSkipped); compact != nil {
-			state.Set("planner.skipped_tools", compact)
+			env.SetWorkingValue("planner.skipped_tools", compact, contextdata.MemoryClassTask)
 		}
 	}
 }
@@ -190,6 +220,7 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	planNode := &plannerPlanNode{id: "planner_plan", agent: a, task: task}
 	execNode := &plannerExecuteNode{id: "planner_execute", agent: a}
 	verifyNode := &plannerVerifyNode{id: "planner_verify", agent: a, task: task}
+	streamNode := a.streamTriggerNode(task)
 	done := graph.NewTerminalNode("planner_done")
 	g := graph.NewGraph()
 	if a.Tools != nil {
@@ -198,107 +229,84 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 			g.SetCapabilityCatalog(catalog)
 		}
 	}
-	workflowStore := plannerWorkflowStateStore(a.Memory)
-	workflowID := plannerWorkflowID(task)
-	runID := plannerRunID(task)
-	var persistNode *graph.PersistenceWriterNode
-	if plannerUsesStructuredPersistence(a.Config) {
-		if runtimeStore := plannerRuntimeStore(a.Memory); runtimeStore != nil {
-			persistNode = graph.NewPersistenceWriterNode("planner_persist", runtimeStore)
-			persistNode.TaskID = taskID(task)
-			persistNode.WorkflowID = workflowID
-			persistNode.Telemetry = telemetryForConfig(a.Config)
-			persistNode.Declarative = []graph.DeclarativePersistenceRequest{{
-				StateKey:            "planner.summary",
-				Scope:               string(memory.MemoryScopeProject),
-				Kind:                graph.DeclarativeKindDecision,
-				Title:               taskInstructionText(task),
-				ArtifactRefStateKey: "graph.summary_ref",
-				Tags:                []string{"planner", "summary"},
-				Reason:              "planner-summary",
-			}}
-			persistNode.Artifacts = []graph.ArtifactPersistenceRequest{{
-				ArtifactRefStateKey: "graph.summary_ref",
-				SummaryStateKey:     "graph.summary",
-				Reason:              "planner-summary-artifact",
-			}}
-			if workflowStore != nil {
-				persistNode.ArtifactSink = memory.AdaptWorkflowStateStoreArtifactSink(workflowStore, workflowID, runID)
-				persistNode.AuditSink = memory.AdaptWorkflowStateStoreAuditSink(workflowStore, workflowID, runID)
-			}
-		}
+	nodes := make([]graph.Node, 0, 5)
+	if streamNode != nil {
+		nodes = append(nodes, streamNode)
 	}
-	for _, node := range []graph.Node{planNode, execNode, verifyNode, done} {
+	nodes = append(nodes, planNode, execNode, verifyNode, done)
+	for _, node := range nodes {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
 	}
-	if persistNode != nil {
-		if err := g.AddNode(persistNode); err != nil {
+	startID := planNode.ID()
+	if streamNode != nil {
+		startID = streamNode.ID()
+	}
+	if err := g.SetStart(startID); err != nil {
+		return nil, err
+	}
+	if streamNode != nil {
+		if err := g.AddEdge(streamNode.ID(), planNode.ID(), nil, false); err != nil {
 			return nil, err
 		}
 	}
-	if err := g.SetStart(planNode.ID()); err != nil {
+	if err := g.AddEdge(planNode.ID(), execNode.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	nextAfterPlan := execNode.ID()
-	nextAfterExecute := verifyNode.ID()
-	nextAfterVerify := done.ID()
-	if persistNode != nil {
-		nextAfterVerify = persistNode.ID()
-	}
-	var checkpointNodes []*graph.CheckpointNode
-	if plannerUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
-		checkpointNodes = []*graph.CheckpointNode{
-			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_plan", nextAfterPlan),
-			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_execute", nextAfterExecute),
-			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_verify", nextAfterVerify),
-		}
-		for _, checkpoint := range checkpointNodes {
-			if err := g.AddNode(checkpoint); err != nil {
-				return nil, err
-			}
-		}
-		nextAfterPlan = checkpointNodes[0].ID()
-		nextAfterExecute = checkpointNodes[1].ID()
-		nextAfterVerify = checkpointNodes[2].ID()
-	}
-	if err := g.AddEdge(planNode.ID(), nextAfterPlan, nil, false); err != nil {
+	if err := g.AddEdge(execNode.ID(), verifyNode.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if len(checkpointNodes) > 0 {
-		if err := g.AddEdge(checkpointNodes[0].ID(), execNode.ID(), nil, false); err != nil {
-			return nil, err
-		}
-	}
-	if err := g.AddEdge(execNode.ID(), nextAfterExecute, nil, false); err != nil {
+	if err := g.AddEdge(verifyNode.ID(), done.ID(), nil, false); err != nil {
 		return nil, err
-	}
-	if len(checkpointNodes) > 0 {
-		if err := g.AddEdge(checkpointNodes[1].ID(), verifyNode.ID(), nil, false); err != nil {
-			return nil, err
-		}
-	}
-	if err := g.AddEdge(verifyNode.ID(), nextAfterVerify, nil, false); err != nil {
-		return nil, err
-	}
-	if len(checkpointNodes) > 0 {
-		if err := g.AddEdge(checkpointNodes[2].ID(), verifyNode.ID(), nil, false); err != nil {
-			return nil, err
-		}
-	}
-	if err := g.AddEdge(verifyNode.ID(), nextAfterVerify, nil, false); err != nil {
-		return nil, err
-	}
-	if len(checkpointNodes) > 0 {
-		// no checkpoint after summarization anymore
-	}
-	if persistNode != nil {
-		if err := g.AddEdge(persistNode.ID(), done.ID(), nil, false); err != nil {
-			return nil, err
-		}
 	}
 	return g, nil
+}
+
+func (a *PlannerAgent) streamTriggerNode(task *core.Task) graph.Node {
+	if a == nil || a.StreamTrigger == nil {
+		return nil
+	}
+	query := a.streamQuery(task)
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	node := graph.NewContextStreamNode("planner_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node.Mode = a.streamMode()
+	node.BudgetShortfallPolicy = "emit_partial"
+	node.Metadata = map[string]any{
+		"agent": "planner",
+		"stage": "pre_plan",
+	}
+	return node
+}
+
+func (a *PlannerAgent) streamQuery(task *core.Task) string {
+	if a == nil {
+		return ""
+	}
+	if query := strings.TrimSpace(a.StreamQuery); query != "" {
+		return query
+	}
+	query := strings.TrimSpace(taskInstructionText(task))
+	if query == "" {
+		return "planner context"
+	}
+	return "planning context: " + query
+}
+
+func (a *PlannerAgent) streamMode() contextstream.Mode {
+	if a == nil || a.StreamMode == "" {
+		return contextstream.ModeBlocking
+	}
+	return a.StreamMode
+}
+
+func (a *PlannerAgent) streamMaxTokens() int {
+	if a == nil || a.StreamMaxTokens <= 0 {
+		return 512
+	}
+	return a.StreamMaxTokens
 }
 
 type plannerPlanNode struct {
@@ -315,8 +323,8 @@ func (n *plannerPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
 // Execute prompts the LLM for a machine-readable plan. The JSON schema is small
 // enough that contributors can tweak it without retraining anything.
-func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	state.SetExecutionPhase("planning")
+func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetWorkingValue("execution_phase", "planning", contextdata.MemoryClassTask)
 	extraPrompt := ""
 	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
 		extraPrompt = strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
@@ -327,10 +335,22 @@ func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*co
 	if policy := plannerSkillHints(n.agent); policy != "" {
 		extraPrompt += "Skill Policy:\n" + policy + "\n\n"
 	}
+	if trimmed, _ := env.GetWorkingValue("contextstream.trimmed"); trimmed == true {
+		shortfall := 0
+		if raw, ok := env.GetWorkingValue("contextstream.shortfall_tokens"); ok {
+			if value, ok := raw.(int); ok {
+				shortfall = value
+			}
+		}
+		extraPrompt += fmt.Sprintf("Streaming note: context was trimmed to fit budget (shortfall=%d tokens).\n\n", shortfall)
+	}
 	if n.task != nil && n.task.Context != nil {
-		if payload := workflowutil.TaskPayload(n.task, "workflow_retrieval"); len(payload) > 0 {
-			if formatted := formatPlannerWorkflowRetrieval(payload); formatted != "" {
-				extraPrompt += "Workflow Retrieval:\n" + formatted + "\n\n"
+		if payload := TaskPayload(n.task, "workflow_retrieval"); len(payload) > 0 {
+			var data map[string]any
+			if err := json.Unmarshal(payload, &data); err == nil {
+				if formatted := formatPlannerWorkflowRetrieval(data); formatted != "" {
+					extraPrompt += "Workflow Retrieval:\n" + formatted + "\n\n"
+				}
 			}
 		} else if raw, ok := n.task.Context["workflow_retrieval"]; ok && raw != nil {
 			encoded, err := json.MarshalIndent(raw, "", "  ")
@@ -338,6 +358,9 @@ func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*co
 				extraPrompt += "Workflow Retrieval:\n" + string(encoded) + "\n\n"
 			}
 		}
+	}
+	if streamed := formatPlannerStreamedContext(env); streamed != "" {
+		extraPrompt += "Streamed Context:\n" + streamed + "\n\n"
 	}
 	prompt := fmt.Sprintf(`You are a planning agent. Break this task into steps with dependencies.
 %sTask: %s
@@ -352,18 +375,22 @@ Use string step ids (UUID-safe).
 	if err != nil {
 		return nil, err
 	}
-	state.AddInteraction("assistant", resp.Text, map[string]interface{}{"node": n.id})
+	env.AddInteraction(map[string]interface{}{
+		"role":    "assistant",
+		"content": resp.Text,
+		"node":    n.id,
+	})
 	plan, err := parsePlan(resp.Text)
 	if err != nil {
 		return nil, err
 	}
 	plan, adjustments := normalizePlannerPlan(n.agent, n.task, plan)
-	state.Set("planner.plan", plan)
+	env.SetWorkingValue("planner.plan", plan, contextdata.MemoryClassTask)
 	if len(adjustments) > 0 {
-		state.Set("planner.plan_adjustments", adjustments)
+		env.SetWorkingValue("planner.plan_adjustments", adjustments, contextdata.MemoryClassTask)
 	}
 	if n.agent.Memory != nil {
-		_ = n.agent.Memory.Remember(ctx, reactpkg.NewUUID(), map[string]interface{}{
+		_ = n.agent.Memory.Remember(ctx, plannerUUID(), map[string]interface{}{
 			"type":        "plan",
 			"plan":        plan,
 			"adjustments": adjustments,
@@ -414,6 +441,34 @@ func formatPlannerWorkflowRetrieval(payload map[string]any) string {
 		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n")
+}
+
+func formatPlannerStreamedContext(env *contextdata.Envelope) string {
+	if env == nil || len(env.References.StreamedContext) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(env.References.StreamedContext))
+	for _, ref := range env.References.StreamedContext {
+		chunkID := strings.TrimSpace(string(ref.ChunkID))
+		if chunkID == "" {
+			continue
+		}
+		line := "- " + chunkID
+		if ref.Source != "" {
+			line += " [" + strings.TrimSpace(ref.Source) + "]"
+		}
+		if ref.Rank > 0 {
+			line += fmt.Sprintf(" rank=%d", ref.Rank)
+		}
+		if ref.IsSummary {
+			line += " summary"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
 }
 
 func plannerWorkflowReference(result map[string]any) string {
@@ -473,17 +528,17 @@ func (n *plannerExecuteNode) Contract() graph.NodeContract {
 // actionable step. Empty or unregistered tool names are skipped, which keeps
 // the planner tolerant of reasoning-only or partially-grounded steps the LLM
 // might propose before the step executor handles the real work.
-func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	state.SetExecutionPhase("executing")
-	value, ok := state.Get("planner.plan")
+func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetWorkingValue("execution_phase", "executing", contextdata.MemoryClassTask)
+	value, ok := env.GetWorkingValue("planner.plan")
 	if !ok {
 		return nil, fmt.Errorf("plan not available")
 	}
-	plan, _ := value.(core.Plan)
+	plan, _ := value.(graph.Plan)
 	var stepResults []map[string]interface{}
 	var skippedTools []map[string]string
 	for _, step := range plan.Steps {
-		step.Params = resolvePlannerStepParams(state, step.Params)
+		step.Params = resolvePlannerStepParams(env, step.Params)
 		step, _, _ = repairPlannerStep(n.agent.Tools, step)
 		if step.Tool == "" {
 			continue
@@ -496,7 +551,9 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 			})
 			continue
 		}
-		if !n.agent.Tools.CapabilityAvailable(ctx, state, step.Tool) {
+		// TODO: envelope equivalent of CapabilityAvailable
+		// if !n.agent.Tools.CapabilityAvailable(ctx, env, step.Tool) {
+		if false {
 			skippedTools = append(skippedTools, map[string]string{
 				"id":     step.ID,
 				"tool":   step.Tool,
@@ -505,7 +562,9 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 			continue
 		}
 		params := normalizePlannerStepParams(n.agent.Tools, step.Tool, step.Params)
-		result, err := n.agent.Tools.InvokeCapability(ctx, state, step.Tool, params)
+		// TODO: envelope equivalent of InvokeCapability
+		// result, err := n.agent.Tools.InvokeCapability(ctx, env, step.Tool, params)
+		result, err := n.agent.Tools.InvokeCapability(ctx, nil, step.Tool, params)
 		if err != nil {
 			return nil, err
 		}
@@ -513,11 +572,11 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 			"id":     step.ID,
 			"output": result.Data,
 		})
-		state.Set(fmt.Sprintf("planner.step.%s", step.ID), result.Data)
+		env.SetWorkingValue(fmt.Sprintf("planner.step.%s", step.ID), result.Data, contextdata.MemoryClassTask)
 	}
-	state.Set("planner.results", stepResults)
+	env.SetWorkingValue("planner.results", stepResults, contextdata.MemoryClassTask)
 	if len(skippedTools) > 0 {
-		state.Set("planner.skipped_tools", skippedTools)
+		env.SetWorkingValue("planner.skipped_tools", skippedTools, contextdata.MemoryClassTask)
 	}
 	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
 		"results":       stepResults,
@@ -596,17 +655,17 @@ func (n *plannerVerifyNode) ID() string { return n.id }
 func (n *plannerVerifyNode) Type() graph.NodeType { return graph.NodeTypeObservation }
 
 // Execute packages the observed tool outputs into a short summary so downstream
-// systems (CLI, LSP, tests) can display human-friendly “what just happened”
+// systems (CLI, LSP, tests) can display human-friendly "what just happened"
 // messages without parsing the entire state map.
-func (n *plannerVerifyNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	state.SetExecutionPhase("validating")
-	results, _ := state.Get("planner.results")
-	planVal, _ := state.Get("planner.plan")
-	plan, _ := planVal.(core.Plan)
+func (n *plannerVerifyNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetWorkingValue("execution_phase", "validating", contextdata.MemoryClassTask)
+	results, _ := env.GetWorkingValue("planner.results")
+	planVal, _ := env.GetWorkingValue("planner.plan")
+	plan, _ := planVal.(graph.Plan)
 	summary := fmt.Sprintf("Executed plan for task '%s' with %d steps.", n.task.Instruction, len(plan.Steps))
-	state.Set("planner.summary", summary)
+	env.SetWorkingValue("planner.summary", summary, contextdata.MemoryClassTask)
 	if n.agent.Memory != nil {
-		_ = n.agent.Memory.Remember(ctx, reactpkg.NewUUID(), map[string]interface{}{
+		_ = n.agent.Memory.Remember(ctx, plannerUUID(), map[string]interface{}{
 			"type":    "verification",
 			"summary": summary,
 			"results": results,
@@ -623,9 +682,9 @@ func (n *plannerVerifyNode) Execute(ctx context.Context, state *core.Context) (*
 
 // parsePlan pulls the JSON payload out of the model response. The helper keeps
 // PlannerAgent.Execute easy to read and doubles as a seam for unit tests.
-func parsePlan(raw string) (core.Plan, error) {
-	var plan core.Plan
-	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &plan); err != nil {
+func parsePlan(raw string) (graph.Plan, error) {
+	var plan graph.Plan
+	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &plan); err != nil {
 		return plan, err
 	}
 	if plan.Dependencies == nil {
@@ -648,17 +707,6 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	})
 }
 
-func plannerRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
-	return nil
-}
-
-func plannerWorkflowStateStore(store memory.MemoryStore) memory.WorkflowStateStore {
-	if workflowStore, ok := store.(memory.WorkflowStateStore); ok {
-		return workflowStore
-	}
-	return nil
-}
-
 func plannerWorkflowID(task *core.Task) string {
 	if task == nil {
 		return ""
@@ -668,13 +716,6 @@ func plannerWorkflowID(task *core.Task) string {
 
 func plannerRunID(task *core.Task) string {
 	return ""
-}
-
-func newPlannerCheckpointNode(agent *PlannerAgent, task *core.Task, id, nextNodeID string) *graph.CheckpointNode {
-	node := graph.NewCheckpointNode(id, nextNodeID, memory.NewCheckpointStore(filepath.Clean(agent.CheckpointPath)))
-	node.TaskID = taskID(task)
-	node.Telemetry = telemetryForConfig(agent.Config)
-	return node
 }
 
 func plannerUsesExplicitCheckpointNodes(cfg *core.Config) bool {
@@ -691,7 +732,7 @@ func plannerUsesStructuredPersistence(cfg *core.Config) bool {
 	return *cfg.UseStructuredPersistence
 }
 
-func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan core.Plan) (core.Plan, []string) {
+func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan graph.Plan) (graph.Plan, []string) {
 	if agent == nil {
 		return ensurePlannerPlanDefaults(plan), nil
 	}
@@ -735,7 +776,7 @@ func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan core.Plan) 
 	return plan, adjustments
 }
 
-func ensurePlannerPlanDefaults(plan core.Plan) core.Plan {
+func ensurePlannerPlanDefaults(plan graph.Plan) graph.Plan {
 	if plan.Dependencies == nil {
 		plan.Dependencies = make(map[string][]string)
 	}
@@ -743,12 +784,12 @@ func ensurePlannerPlanDefaults(plan core.Plan) core.Plan {
 		plan.Files = make([]string, 0)
 	}
 	if plan.Steps == nil {
-		plan.Steps = make([]core.PlanStep, 0)
+		plan.Steps = make([]graph.PlanStep, 0)
 	}
 	return plan
 }
 
-func assignMissingPlanStepIDs(plan *core.Plan) int {
+func assignMissingPlanStepIDs(plan *graph.Plan) int {
 	if plan == nil {
 		return 0
 	}
@@ -780,7 +821,7 @@ func assignMissingPlanStepIDs(plan *core.Plan) int {
 	return added
 }
 
-func firstPlannerEditStepIndex(steps []core.PlanStep, policy frameworkskills.ResolvedSkillPolicy) int {
+func firstPlannerEditStepIndex(steps []graph.PlanStep, policy frameworkskills.ResolvedSkillPolicy) int {
 	for i, step := range steps {
 		if plannerStepLooksLikeEdit(step, policy) {
 			return i
@@ -789,7 +830,7 @@ func firstPlannerEditStepIndex(steps []core.PlanStep, policy frameworkskills.Res
 	return len(steps)
 }
 
-func plannerStepLooksLikeEdit(step core.PlanStep, policy frameworkskills.ResolvedSkillPolicy) bool {
+func plannerStepLooksLikeEdit(step graph.PlanStep, policy frameworkskills.ResolvedSkillPolicy) bool {
 	if toolInSet(step.Tool, policy.Planning.PreferredEditCapabilities) {
 		return true
 	}
@@ -801,7 +842,7 @@ func plannerStepLooksLikeEdit(step core.PlanStep, policy frameworkskills.Resolve
 	return strings.Contains(desc, "edit") || strings.Contains(desc, "modify") || strings.Contains(desc, "refactor") || strings.Contains(desc, "update")
 }
 
-func planHasToolBefore(steps []core.PlanStep, limit int, toolName string) bool {
+func planHasToolBefore(steps []graph.PlanStep, limit int, toolName string) bool {
 	if limit > len(steps) {
 		limit = len(steps)
 	}
@@ -813,7 +854,7 @@ func planHasToolBefore(steps []core.PlanStep, limit int, toolName string) bool {
 	return false
 }
 
-func planHasVerificationStep(plan core.Plan, policy frameworkskills.ResolvedSkillPolicy) bool {
+func planHasVerificationStep(plan graph.Plan, policy frameworkskills.ResolvedSkillPolicy) bool {
 	verifyTools := make([]string, 0, len(policy.Planning.PreferredVerifyCapabilities)+len(policy.VerificationSuccessCapabilities))
 	verifyTools = append(verifyTools, policy.Planning.PreferredVerifyCapabilities...)
 	verifyTools = append(verifyTools, policy.VerificationSuccessCapabilities...)
@@ -851,20 +892,20 @@ func plannerVerificationTool(policy frameworkskills.ResolvedSkillPolicy) string 
 	return ""
 }
 
-func synthesizedPlannerStep(agent *PlannerAgent, task *core.Task, plan core.Plan, toolName, kind string) (core.PlanStep, bool) {
+func synthesizedPlannerStep(agent *PlannerAgent, task *core.Task, plan graph.Plan, toolName, kind string) (graph.PlanStep, bool) {
 	if agent == nil || agent.Tools == nil || strings.TrimSpace(toolName) == "" {
-		return core.PlanStep{}, false
+		return graph.PlanStep{}, false
 	}
 	tool, ok := agent.Tools.Get(toolName)
 	if !ok || tool == nil {
-		return core.PlanStep{}, false
+		return graph.PlanStep{}, false
 	}
 	params, ok := plannerToolArgs(tool, task, plan)
 	if !ok {
-		return core.PlanStep{}, false
+		return graph.PlanStep{}, false
 	}
-	step := core.PlanStep{
-		ID:          reactpkg.NewUUID(),
+	step := graph.PlanStep{
+		ID:          plannerUUID(),
 		Tool:        toolName,
 		Params:      params,
 		Description: plannerStepDescription(kind, toolName),
@@ -888,7 +929,7 @@ func plannerStepDescription(kind, toolName string) string {
 	}
 }
 
-func plannerToolArgs(tool core.Tool, task *core.Task, plan core.Plan) (map[string]interface{}, bool) {
+func plannerToolArgs(tool core.Tool, task *core.Task, plan graph.Plan) (map[string]interface{}, bool) {
 	args := map[string]interface{}{}
 	required := map[string]bool{}
 	for _, param := range tool.Parameters() {
@@ -963,12 +1004,29 @@ func taskInstructionText(task *core.Task) string {
 	return strings.TrimSpace(task.Instruction)
 }
 
+func plannerUUID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func plannerExtractJSON(raw string) string {
+	start := strings.Index(raw, "{")
+	end := strings.LastIndex(raw, "}")
+	if start >= 0 && end >= start {
+		return raw[start : end+1]
+	}
+	return "{}"
+}
+
 func isSQLiteFailurePath(path string) bool {
 	lower := strings.ToLower(strings.TrimSpace(path))
 	return strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") || strings.HasSuffix(lower, ".sqlite3")
 }
 
-func plannerPrimaryPath(task *core.Task, plan core.Plan) string {
+func plannerPrimaryPath(task *core.Task, plan graph.Plan) string {
 	for _, path := range plannerTaskPaths(task) {
 		if path != "" {
 			return path
@@ -989,7 +1047,7 @@ func plannerPrimaryPath(task *core.Task, plan core.Plan) string {
 	return ""
 }
 
-func plannerWorkingDirectory(task *core.Task, plan core.Plan) string {
+func plannerWorkingDirectory(task *core.Task, plan graph.Plan) string {
 	for _, key := range []string{"working_directory", "workdir", "directory"} {
 		if task != nil && task.Context != nil {
 			if value := strings.TrimSpace(fmt.Sprint(task.Context[key])); value != "" && value != "<nil>" {
@@ -1007,7 +1065,7 @@ func plannerWorkingDirectory(task *core.Task, plan core.Plan) string {
 	return "."
 }
 
-func plannerDatabasePath(task *core.Task, plan core.Plan) string {
+func plannerDatabasePath(task *core.Task, plan graph.Plan) string {
 	for _, path := range plannerTaskPaths(task) {
 		if isSQLiteFailurePath(path) {
 			return path
@@ -1042,20 +1100,20 @@ func plannerTaskPaths(task *core.Task) []string {
 	return paths
 }
 
-func insertPlannerStep(steps []core.PlanStep, index int, step core.PlanStep) []core.PlanStep {
+func insertPlannerStep(steps []graph.PlanStep, index int, step graph.PlanStep) []graph.PlanStep {
 	if index < 0 {
 		index = 0
 	}
 	if index > len(steps) {
 		index = len(steps)
 	}
-	steps = append(steps, core.PlanStep{})
+	steps = append(steps, graph.PlanStep{})
 	copy(steps[index+1:], steps[index:])
 	steps[index] = step
 	return steps
 }
 
-func repairPlannerSteps(registry *capability.Registry, plan *core.Plan, adjustments *[]string) {
+func repairPlannerSteps(registry *capability.Registry, plan *graph.Plan, adjustments *[]string) {
 	if registry == nil || plan == nil {
 		return
 	}
@@ -1071,7 +1129,7 @@ func repairPlannerSteps(registry *capability.Registry, plan *core.Plan, adjustme
 	}
 }
 
-func repairPlannerStep(registry *capability.Registry, step core.PlanStep) (core.PlanStep, bool, string) {
+func repairPlannerStep(registry *capability.Registry, step graph.PlanStep) (graph.PlanStep, bool, string) {
 	switch strings.TrimSpace(step.Tool) {
 	case "file_search":
 		if _, hasPattern := step.Params["pattern"]; hasPattern {
@@ -1152,31 +1210,31 @@ func plannerFirstStepPath(raw interface{}) string {
 	return ""
 }
 
-func resolvePlannerStepParams(state *core.Context, params map[string]interface{}) map[string]interface{} {
+func resolvePlannerStepParams(env *contextdata.Envelope, params map[string]interface{}) map[string]interface{} {
 	if len(params) == 0 {
 		return params
 	}
 	resolved := make(map[string]interface{}, len(params))
 	for key, value := range params {
-		resolved[key] = resolvePlannerParamValue(state, value)
+		resolved[key] = resolvePlannerParamValue(env, value)
 	}
 	return resolved
 }
 
-func resolvePlannerParamValue(state *core.Context, value interface{}) interface{} {
+func resolvePlannerParamValue(env *contextdata.Envelope, value interface{}) interface{} {
 	switch typed := value.(type) {
 	case string:
-		return resolvePlannerParamTemplate(state, typed)
+		return resolvePlannerParamTemplate(env, typed)
 	case []interface{}:
 		out := make([]interface{}, 0, len(typed))
 		for _, item := range typed {
-			out = append(out, resolvePlannerParamValue(state, item))
+			out = append(out, resolvePlannerParamValue(env, item))
 		}
 		return compactPlannerResolvedValue(out)
 	case map[string]interface{}:
 		out := make(map[string]interface{}, len(typed))
 		for key, item := range typed {
-			out[key] = resolvePlannerParamValue(state, item)
+			out[key] = resolvePlannerParamValue(env, item)
 		}
 		return out
 	default:
@@ -1204,26 +1262,26 @@ func compactPlannerResolvedValue(value interface{}) interface{} {
 	return items
 }
 
-func resolvePlannerParamTemplate(state *core.Context, raw string) interface{} {
+func resolvePlannerParamTemplate(env *contextdata.Envelope, raw string) interface{} {
 	text := strings.TrimSpace(raw)
-	if state == nil || text == "" {
+	if env == nil || text == "" {
 		return raw
 	}
 	if strings.HasPrefix(text, "${") && strings.HasSuffix(text, "}") {
-		if value, ok := resolvePlannerOutputReference(state, strings.TrimSuffix(strings.TrimPrefix(text, "${"), "}")); ok {
+		if value, ok := resolvePlannerOutputReference(env, strings.TrimSuffix(strings.TrimPrefix(text, "${"), "}")); ok {
 			return value
 		}
 	}
 	if strings.HasPrefix(text, "{{") && strings.HasSuffix(text, "}}") {
-		if value, ok := resolvePlannerOutputReference(state, strings.TrimSuffix(strings.TrimPrefix(text, "{{"), "}}")); ok {
+		if value, ok := resolvePlannerOutputReference(env, strings.TrimSuffix(strings.TrimPrefix(text, "{{"), "}}")); ok {
 			return value
 		}
 	}
 	return raw
 }
 
-func resolvePlannerOutputReference(state *core.Context, ref string) (interface{}, bool) {
-	if state == nil {
+func resolvePlannerOutputReference(env *contextdata.Envelope, ref string) (interface{}, bool) {
+	if env == nil {
 		return nil, false
 	}
 	ref = strings.TrimSpace(ref)
@@ -1235,7 +1293,7 @@ func resolvePlannerOutputReference(state *core.Context, ref string) (interface{}
 	if stepID == "" {
 		return nil, false
 	}
-	value, ok := state.Get("planner.step." + stepID)
+	value, ok := env.GetWorkingValue("planner.step." + stepID)
 	if !ok {
 		return nil, false
 	}
@@ -1260,7 +1318,7 @@ func resolvePlannerOutputReference(state *core.Context, ref string) (interface{}
 	return current, true
 }
 
-func plannerStepID(step core.PlanStep) string {
+func plannerStepID(step graph.PlanStep) string {
 	if id := strings.TrimSpace(step.ID); id != "" {
 		return id
 	}

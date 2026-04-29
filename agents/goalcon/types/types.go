@@ -1,7 +1,5 @@
 package types
 
-import "codeburg.org/lexbit/relurpify/framework/core"
-
 // Predicate is a satisfied or unsatisfied world-state fact.
 type Predicate string
 

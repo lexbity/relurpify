@@ -168,7 +168,7 @@ func resolveNamedSymbolScope(ctx context.Context, scope string, index *ast.Index
 			continue
 		}
 		symbolSet[node.ID] = struct{}{}
-		excerpt, err := excerptForLines(ctx, registry, fileMeta.Path, node.StartLine, node.EndLine)
+		excerpt, err := excerptForFile(ctx, registry, fileMeta.Path)
 		if err != nil {
 			continue
 		}

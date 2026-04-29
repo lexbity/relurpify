@@ -2,20 +2,48 @@ package pipeline
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 )
 
 type Option func(*PipelineAgent)
 
-func WithStages(stages []frameworkpipeline.Stage) Option {
+func WithStages(stages []Stage) Option {
 	return func(agent *PipelineAgent) {
-		agent.Stages = append([]frameworkpipeline.Stage{}, stages...)
+		agent.Stages = append([]Stage{}, stages...)
 	}
 }
 
 func WithStageFactory(factory PipelineStageFactory) Option {
 	return func(agent *PipelineAgent) {
 		agent.StageFactory = factory
+	}
+}
+
+// WithContextStreamTrigger wires an explicit streaming trigger into the pipeline agent.
+func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
+	return func(a *PipelineAgent) {
+		a.StreamTrigger = trigger
+	}
+}
+
+// WithContextStreamMode sets whether pipeline streaming blocks or runs in the background.
+func WithContextStreamMode(mode contextstream.Mode) Option {
+	return func(a *PipelineAgent) {
+		a.StreamMode = mode
+	}
+}
+
+// WithContextStreamQuery overrides the query sent to the streaming trigger.
+func WithContextStreamQuery(query string) Option {
+	return func(a *PipelineAgent) {
+		a.StreamQuery = query
+	}
+}
+
+// WithContextStreamMaxTokens overrides the pipeline stream token budget.
+func WithContextStreamMaxTokens(maxTokens int) Option {
+	return func(a *PipelineAgent) {
+		a.StreamMaxTokens = maxTokens
 	}
 }
 

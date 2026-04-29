@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type blackboardScopedMemoryRetriever struct {
@@ -18,8 +17,10 @@ type blackboardScopedMemoryRetriever struct {
 	memoryClass core.MemoryClass
 }
 
+// RetrievalServiceProvider is a placeholder interface for retrieval services.
+// This interface is temporarily stubbed out as the retrieval package is being rebuilt.
 type blackboardRetrievalServiceProvider interface {
-	RetrievalService() retrieval.RetrieverService
+	// RetrievalService() retrieval.RetrieverService
 }
 
 func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error) {
@@ -31,26 +32,12 @@ func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query str
 }
 
 func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context, query string, limit int) (*graph.MemoryRetrievalPublication, error) {
+	_ = ctx // may be used by implementations
 	if r.store == nil {
 		return graph.BuildMemoryRetrievalPublication(strings.TrimSpace(query), nil, r.memoryClass), nil
 	}
 	switch r.memoryClass {
 	case core.MemoryClassDeclarative:
-		var blocks []core.ContentBlock
-		if provider, ok := r.store.(blackboardRetrievalServiceProvider); ok {
-			if service := provider.RetrievalService(); service != nil {
-				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
-					Text:      query,
-					Scope:     string(r.scope),
-					MaxTokens: 400,
-					Limit:     limit,
-				})
-				if err != nil {
-					return nil, err
-				}
-				blocks = retrieved
-			}
-		}
 		if store, ok := r.store.(memory.DeclarativeMemoryStore); ok {
 			records, err := store.SearchDeclarative(ctx, memory.DeclarativeMemoryQuery{
 				Query: query,
@@ -69,14 +56,7 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 					return nil, err
 				}
 			}
-			// Start with retrieval results (if available) - retrieval is preferred
-			out := make([]core.MemoryRecordEnvelope, 0)
-			if len(blocks) > 0 {
-				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
-					out = append(out, retrievalEnvelopes...)
-				}
-			}
-			// Then add memory store results
+			out := make([]core.MemoryRecordEnvelope, 0, len(records))
 			for _, record := range records {
 				out = append(out, core.MemoryRecordEnvelope{
 					Key:         record.RecordID,
@@ -93,25 +73,7 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 			}
 			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
 		}
-		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
-			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
-		}
 	case core.MemoryClassProcedural:
-		var blocks []core.ContentBlock
-		if provider, ok := r.store.(blackboardRetrievalServiceProvider); ok {
-			if service := provider.RetrievalService(); service != nil {
-				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
-					Text:      query,
-					Scope:     string(r.scope),
-					MaxTokens: 400,
-					Limit:     limit,
-				})
-				if err != nil {
-					return nil, err
-				}
-				blocks = retrieved
-			}
-		}
 		if store, ok := r.store.(memory.ProceduralMemoryStore); ok {
 			records, err := store.SearchProcedural(ctx, memory.ProceduralMemoryQuery{
 				Query: query,
@@ -130,14 +92,7 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 					return nil, err
 				}
 			}
-			// Start with retrieval results (if available) - retrieval is preferred
-			out := make([]core.MemoryRecordEnvelope, 0)
-			if len(blocks) > 0 {
-				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
-					out = append(out, retrievalEnvelopes...)
-				}
-			}
-			// Then add memory store results
+			out := make([]core.MemoryRecordEnvelope, 0, len(records))
 			for _, record := range records {
 				out = append(out, core.MemoryRecordEnvelope{
 					Key:         record.RoutineID,
@@ -153,9 +108,6 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 				return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
 			}
 			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
-		}
-		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
-			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
 		}
 	}
 	records, err := r.store.Search(ctx, query, r.scope)
@@ -181,16 +133,12 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 	return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
 }
 
-func blackboardRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
-	return nil
-}
-
-func hydrateBlackboardFromMemory(state *core.Context, bb *Blackboard) int {
+func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) int {
 	if state == nil || bb == nil {
 		return 0
 	}
 	added := 0
-	if raw, ok := state.Get("graph.declarative_memory_payload"); ok {
+	if raw, ok := envelopeGet(state, "graph.declarative_memory_payload"); ok {
 		if payload, ok := raw.(map[string]any); ok {
 			if results, ok := payload["results"].([]map[string]any); ok {
 				for _, record := range results {
@@ -324,7 +272,7 @@ func hydrateBlackboardFromMemory(state *core.Context, bb *Blackboard) int {
 	return added
 }
 
-func publishPersistenceCandidates(state *core.Context, bb *Blackboard, controller ControllerState, metrics Metrics) {
+func publishPersistenceCandidates(state *contextdata.Envelope, bb *Blackboard, controller ControllerState, metrics Metrics) {
 	if state == nil || bb == nil {
 		return
 	}
@@ -332,7 +280,7 @@ func publishPersistenceCandidates(state *core.Context, bb *Blackboard, controlle
 	if len(bb.Goals) > 0 {
 		goal = strings.TrimSpace(bb.Goals[0])
 	}
-	state.Set(contextKeyPersistenceSummary, map[string]any{
+	envelopeSet(state, contextKeyPersistenceSummary, map[string]any{
 		"summary": summaryText(bb, metrics),
 		"result": map[string]any{
 			"goal":           goal,

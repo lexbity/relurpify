@@ -4,51 +4,65 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
-// LoadStateFromContext reconstructs the canonical HTN state snapshot from
-// namespaced context keys and validates it.
-func LoadStateFromContext(state *core.Context) (*HTNState, bool, error) {
-	if state == nil {
+// LoadStateFromEnvelope reconstructs the canonical HTN state snapshot from
+// namespaced envelope working memory keys and validates it.
+func LoadStateFromEnvelope(env *contextdata.Envelope) (*HTNState, bool, error) {
+	if env == nil {
 		return nil, false, nil
 	}
 	snapshot := HTNState{SchemaVersion: htnSchemaVersion}
 	loaded := false
-	if raw, ok := state.Get(contextKeyTask); ok {
+	if raw, ok := env.GetWorkingValue(contextKeyTask); ok {
 		if decodeContextValue(raw, &snapshot.Task) {
 			loaded = true
 		}
 	}
-	if raw, ok := state.Get(contextKeySelectedMethod); ok {
+	if raw, ok := env.GetWorkingValue(contextKeySelectedMethod); ok {
 		if decodeContextValue(raw, &snapshot.Method) {
 			loaded = true
 		}
 	}
-	if raw, ok := state.Get(contextKeyPlan); ok {
+	if raw, ok := env.GetWorkingValue(contextKeyPlan); ok {
 		var plan core.Plan
 		if decodeContextValue(raw, &plan) {
 			snapshot.Plan = clonePlan(&plan)
 			loaded = true
 		}
 	}
-	snapshot.Execution = loadExecutionState(state)
-	if raw, ok := state.Get(contextKeyMetrics); ok {
+	snapshot.Execution = loadExecutionState(env)
+	if raw, ok := env.GetWorkingValue(contextKeyMetrics); ok {
 		_ = decodeContextValue(raw, &snapshot.Metrics)
 	}
-	if raw, ok := state.Get(contextKeyPreflightReport); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue(contextKeyPreflightReport); ok && raw != nil {
 		var report graph.PreflightReport
 		if decodeContextValue(raw, &report) {
 			snapshot.Preflight.Report = &report
 		}
 	}
-	snapshot.Preflight.Error = state.GetString(contextKeyPreflightError)
-	if raw, ok := state.Get(contextKeyRetrievalApplied); ok {
+	if raw, ok := env.GetWorkingValue(contextKeyPreflightError); ok {
+		if s, ok := raw.(string); ok {
+			snapshot.Preflight.Error = s
+		}
+	}
+	if raw, ok := env.GetWorkingValue(contextKeyRetrievalApplied); ok {
 		_ = decodeContextValue(raw, &snapshot.RetrievalApplied)
 	}
-	snapshot.ResumeCheckpointID = state.GetString(contextKeyResumeCheckpointID)
-	snapshot.Termination = state.GetString(contextKeyTermination)
+	if raw, ok := env.GetWorkingValue(contextKeyResumeCheckpointID); ok {
+		if s, ok := raw.(string); ok {
+			snapshot.ResumeCheckpointID = s
+		}
+	}
+	if raw, ok := env.GetWorkingValue(contextKeyTermination); ok {
+		if s, ok := raw.(string); ok {
+			snapshot.Termination = s
+		}
+	}
 	if !loaded && len(snapshot.Execution.CompletedSteps) == 0 && snapshot.Termination == "" && !snapshot.RetrievalApplied {
 		return nil, false, nil
 	}
@@ -125,21 +139,21 @@ func (s *HTNState) Validate() error {
 	return nil
 }
 
-// mustPublishHTNState publishes the current HTN state snapshot to context.
-func mustPublishHTNState(state *core.Context) {
-	if state == nil {
+// mustPublishHTNState publishes the current HTN state snapshot to envelope working memory.
+func mustPublishHTNState(env *contextdata.Envelope) {
+	if env == nil {
 		return
 	}
-	snapshot, loaded, err := LoadStateFromContext(state)
+	snapshot, loaded, err := LoadStateFromEnvelope(env)
 	if err != nil {
-		state.Set(contextKeyStateError, err.Error())
+		env.SetWorkingValue(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
 		return
 	}
 	if !loaded || snapshot == nil {
 		return
 	}
-	state.Set(contextKeyState, *snapshot)
-	state.Set(contextKeyStateError, "")
+	env.SetWorkingValue(contextKeyState, *snapshot, contextdata.MemoryClassTask)
+	env.SetWorkingValue(contextKeyStateError, "", contextdata.MemoryClassTask)
 }
 
 // normalizeHTNState ensures all HTN state fields are consistent and complete.
@@ -172,7 +186,7 @@ func normalizeHTNState(snapshot *HTNState) {
 }
 
 // validatePlanShape checks that plan steps and dependencies are consistent.
-func validatePlanShape(plan *core.Plan) error {
+func validatePlanShape(plan *agentgraph.Plan) error {
 	if plan == nil {
 		return nil
 	}
@@ -200,12 +214,12 @@ func validatePlanShape(plan *core.Plan) error {
 }
 
 // clonePlan creates a deep copy of a plan.
-func clonePlan(plan *core.Plan) *core.Plan {
+func clonePlan(plan *agentgraph.Plan) *agentgraph.Plan {
 	if plan == nil {
 		return nil
 	}
 	cloned := *plan
-	cloned.Steps = append([]core.PlanStep(nil), plan.Steps...)
+	cloned.Steps = append([]agentgraph.PlanStep(nil), plan.Steps...)
 	if plan.Dependencies != nil {
 		cloned.Dependencies = make(map[string][]string, len(plan.Dependencies))
 		for key, deps := range plan.Dependencies {

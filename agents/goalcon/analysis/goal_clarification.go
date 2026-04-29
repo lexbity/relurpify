@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
@@ -77,7 +78,7 @@ func (gc *GoalClarifier) ClarifyGoalIfNeeded(
 	ctx context.Context,
 	goal types.GoalCondition,
 	response *ClassificationResponse,
-	planningContext *core.Context,
+	planningContext *contextdata.Envelope,
 ) (types.GoalCondition, *ClarificationSession, error) {
 	if gc == nil || gc.analyzer == nil {
 		return goal, nil, nil
@@ -169,7 +170,7 @@ func (gc *GoalClarifier) riskLevelForScore(score float32) authorization.RiskLeve
 func (session *ClarificationSession) StoreClues(
 	goal types.GoalCondition,
 	suggestions []string,
-	planningContext *core.Context,
+	planningContext *contextdata.Envelope,
 ) {
 	if session == nil || planningContext == nil {
 		return
@@ -178,10 +179,10 @@ func (session *ClarificationSession) StoreClues(
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	// Store in planning context for downstream steps using Set method
-	planningContext.Set("clarification_session_id", session.ID)
-	planningContext.Set("goal_ambiguities", session.AmbiguityScore.Indicators)
-	planningContext.Set("clarification_suggestions", suggestions)
+	// Store in planning context for downstream steps using SetWorkingValue method
+	planningContext.SetWorkingValue("clarification_session_id", session.ID, contextdata.MemoryClassTask)
+	planningContext.SetWorkingValue("goal_ambiguities", session.AmbiguityScore.Indicators, contextdata.MemoryClassTask)
+	planningContext.SetWorkingValue("clarification_suggestions", suggestions, contextdata.MemoryClassTask)
 }
 
 // RecordChoice records a user's clarification decision.
