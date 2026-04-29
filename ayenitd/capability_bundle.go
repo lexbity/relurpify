@@ -14,9 +14,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
@@ -28,15 +28,12 @@ var (
 	platformFileOperationsFn = platformfs.FileOperations
 	newSimilarityToolFn      = func(workspace string) core.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
 	newSemanticSearchToolFn  = func(workspace string) core.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
-	newGitCommandToolFn      = func(workspace, command string, runner fsandbox.CommandRunner) core.Tool {
+	newGitCommandToolFn      = func(workspace, command string, runner contracts.CommandRunner) core.Tool {
 		return &platformgit.GitCommandTool{RepoPath: workspace, Command: command, Runner: runner}
 	}
 	platformShellCommandLineToolsFn = platformshell.CommandLineTools
 	newASTSQLiteStoreFn             = ast.NewSQLiteStore
 	newGraphDBFn                    = graphdb.Open
-	newCodeIndexFn                  = memory.NewCodeIndex
-	buildCodeIndexFn                = func(ci *memory.CodeIndex, ctx context.Context) error { return ci.BuildIndex(ctx) }
-	saveCodeIndexFn                 = func(ci *memory.CodeIndex) error { return ci.Save() }
 	startIndexingFn                 = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
 	newSearchEngineFn               = search.NewSearchEngine
 	attachASTSymbolProviderFn       = ast.AttachASTSymbolProvider
@@ -124,17 +121,17 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		}
 	}
 	for _, tool := range []core.Tool{
-		newGitCommandToolFn(workspace, "diff", runner),
-		newGitCommandToolFn(workspace, "history", runner),
-		newGitCommandToolFn(workspace, "branch", runner),
-		newGitCommandToolFn(workspace, "commit", runner),
-		newGitCommandToolFn(workspace, "blame", runner),
+		newGitCommandToolFn(workspace, "diff", commandRunnerAdapter{runner: runner}),
+		newGitCommandToolFn(workspace, "history", commandRunnerAdapter{runner: runner}),
+		newGitCommandToolFn(workspace, "branch", commandRunnerAdapter{runner: runner}),
+		newGitCommandToolFn(workspace, "commit", commandRunnerAdapter{runner: runner}),
+		newGitCommandToolFn(workspace, "blame", commandRunnerAdapter{runner: runner}),
 	} {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
 	}
-	for _, tool := range platformShellCommandLineToolsFn(workspace, runner) {
+	for _, tool := range platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}) {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
@@ -170,44 +167,14 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if err := register(ast.NewASTTool(manager)); err != nil {
 		return nil, err
 	}
-	codeIndex, err := newCodeIndexFn(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
-	if err != nil {
-		return nil, err
-	}
-	if cfg.SkipASTIndex {
-		searchEngine := newSearchEngineFn(nil, codeIndex)
-		if searchEngine == nil {
-			return nil, fmt.Errorf("search engine initialization failed")
-		}
-		return &CapabilityBundle{
-			Registry:     registry,
-			IndexManager: manager,
-			SearchEngine: searchEngine,
-		}, nil
-	}
-	if cfg.PermissionManager != nil {
-		codeIndex.SetPathFilter(func(path string, isDir bool) bool {
-			action := core.FileSystemRead
-			if isDir {
-				action = core.FileSystemList
-			}
-			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
-		})
-	}
-	if err := buildCodeIndexFn(codeIndex, buildCtx); err != nil {
+	if err := startIndexingFn(manager, buildCtx); err != nil {
 		if !shouldIgnoreBootstrapIndexError(err) {
 			return nil, err
 		}
-		log.Printf("runtime bootstrap warning: code index build incomplete: %v", err)
-	}
-	if err := saveCodeIndexFn(codeIndex); err != nil {
-		return nil, err
-	}
-	if err := startIndexingFn(manager, buildCtx); err != nil {
-		return nil, err
+		log.Printf("runtime bootstrap warning: AST index build incomplete: %v", err)
 	}
 	// TODO: semantic store and embedder (omitted for brevity)
-	searchEngine := newSearchEngineFn(nil, codeIndex)
+	searchEngine := newSearchEngineFn(nil, nil)
 	if searchEngine == nil {
 		return nil, fmt.Errorf("search engine initialization failed")
 	}
@@ -216,6 +183,23 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		IndexManager: manager,
 		SearchEngine: searchEngine,
 	}, nil
+}
+
+type commandRunnerAdapter struct {
+	runner fsandbox.CommandRunner
+}
+
+func (a commandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
+	if a.runner == nil {
+		return "", "", fmt.Errorf("command runner missing")
+	}
+	return a.runner.Run(ctx, fsandbox.CommandRequest{
+		Workdir: req.Workdir,
+		Args:    append([]string(nil), req.Args...),
+		Env:     append([]string(nil), req.Env...),
+		Input:   req.Input,
+		Timeout: req.Timeout,
+	})
 }
 
 func shouldIgnoreBootstrapIndexError(err error) bool {

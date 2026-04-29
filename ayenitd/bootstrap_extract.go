@@ -56,10 +56,10 @@ type BootstrappedAgentRuntime struct {
 	Backend              llm.ManagedBackend
 	Environment          agentenv.WorkspaceEnvironment
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	SkillResults         []frameworkskills.SkillResolution
+	SkillResults         []manifest.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *manifest.EffectiveAgentContract
-	CompiledPolicy       *manifest.CompiledPolicyBundle
+	PolicyEngine         fauthorization.PolicyEngine
 }
 
 // BootstrapAgentRuntime is extracted from app/relurpish/runtime/bootstrap.go.
@@ -95,13 +95,12 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	resolveOpts := manifest.ResolveOptions{
 		AgentOverlays: selectedAgentDefinitionOverlays(opts.AgentName, agentDefs),
 	}
-	effectiveContract, err := manifest.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts)
+	effectiveContract, err := manifest.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts, nil)
 	if err != nil {
 		return nil, err
 	}
 	agentSpec := effectiveContract.AgentSpec
-	skillResults := append([]frameworkskills.SkillResolution{}, effectiveContract.SkillResults...)
-	resolvedSkills := append([]frameworkskills.ResolvedSkill{}, effectiveContract.ResolvedSkills...)
+	skillResults := append([]manifest.SkillResolution{}, effectiveContract.SkillResults...)
 
 	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
@@ -133,11 +132,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.PermissionManager != nil {
 		registry.UsePermissionManager(opts.AgentID, opts.PermissionManager)
 	}
-	compiledPolicy, err := manifest.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, opts.PermissionManager)
+	policyEngine, err := fauthorization.FromAgentSpecWithConfig(effectiveContract.AgentSpec, effectiveContract.AgentID, opts.PermissionManager)
 	if err != nil {
 		return nil, fmt.Errorf("compile effective policy: %w", err)
 	}
-	registry.SetPolicyEngine(compiledPolicy.Engine)
+	registry.SetPolicyEngine(policyEngine)
 
 	maxIterations := opts.MaxIterations
 	if maxIterations <= 0 {
@@ -160,7 +159,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
 	admissionResults, err := capability.AdmitCandidates(
 		registry,
-		toCapabilityPlanCandidates(frameworkskills.EnumerateSkillCapabilities(resolvedSkills)),
+		nil,
 		core.EffectiveAllowedCapabilitySelectors(agentSpec),
 	)
 	if err != nil {
@@ -205,7 +204,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		SkillResults:         skillResults,
 		CapabilityAdmissions: admissionResults,
 		Contract:             effectiveContract,
-		CompiledPolicy:       compiledPolicy,
+		PolicyEngine:         policyEngine,
 	}, nil
 }
 
@@ -239,7 +238,7 @@ func loadAgentDefinitions(dir string) (map[string]*agentspec.AgentDefinition, er
 	return defs, nil
 }
 
-func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []core.AgentSpecOverlay {
+func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []agentspec.AgentSpecOverlay {
 	if defs == nil {
 		return nil
 	}
@@ -247,7 +246,7 @@ func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspe
 	if !ok || def == nil {
 		return nil
 	}
-	return []core.AgentSpecOverlay{core.AgentSpecOverlayFromSpec(&def.Spec)}
+	return []agentspec.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
 }
 
 func toCapabilityPlanCandidates(input []frameworkskills.SkillCapabilityCandidate) []capability.Candidate {

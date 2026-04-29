@@ -12,7 +12,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -32,10 +31,10 @@ type Workspace struct {
 	// Derived fields for callers that need them
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	CompiledPolicy       *manifest.CompiledPolicyBundle
 	EffectiveContract    *manifest.EffectiveAgentContract
+	PolicyEngine         fauthorization.PolicyEngine
 	CapabilityAdmissions []capability.AdmissionResult
-	SkillResults         []frameworkskills.SkillResolution
+	SkillResults         []manifest.SkillResolution
 
 	// Observability
 	Telemetry core.Telemetry

@@ -15,7 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -33,7 +32,7 @@ var (
 	registerAgentFn             = fauthorization.RegisterAgent
 	newCommandRunnerFn          = fsandbox.NewCommandRunner
 	newProfileRegistryFn        = llm.NewProfileRegistry
-	newInstrumentedModelFn      = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) core.LanguageModel {
+	newInstrumentedModelFn      = func(inner core.LanguageModel, telemetry contracts.Telemetry, debug bool) core.LanguageModel {
 		return llm.NewInstrumentedModel(inner, telemetry, debug)
 	}
 	bootstrapAgentRuntimeFn           = BootstrapAgentRuntime
@@ -188,7 +187,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 	backend.SetDebugLogging(logLLM)
-	model := newInstrumentedModelFn(backend.Model(), tel, logLLM)
+	model := newInstrumentedModelFn(backend.Model(), llmTelemetryAdapter{inner: tel}, logLLM)
 	_ = applyProfileFn(model, profileResolution.Profile)
 	// Wire permission event logger if event telemetry is available.
 	if et, ok := tel.(interface {
@@ -228,10 +227,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, err
 	}
 
-	// Apply compiled policy engine.
-	if boot.CompiledPolicy != nil {
-		registration.Policy = boot.CompiledPolicy.Engine
-		boot.Environment.Registry.SetPolicyEngine(boot.CompiledPolicy.Engine)
+	// Apply policy engine.
+	if boot.PolicyEngine != nil {
+		registration.Policy = boot.PolicyEngine
+		boot.Environment.Registry.SetPolicyEngine(boot.PolicyEngine)
 	}
 
 	// Phase H: Embedder Initialization
@@ -278,12 +277,11 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 
 	env.Scheduler = scheduler
 	env.PermissionManager = registration.Permissions
-	env.CheckpointStore = nil // TODO: implement in framework
 	env.KnowledgeStore = knowledgeStore
+	env.KnowledgeEvents = bkcEvents
 
 	// Attach ServiceManager to environment (for direct access)
 	env.ServiceManager = sm
-	env.BKCEvents = bkcEvents
 
 	ws := &Workspace{
 		Environment:          env,
@@ -294,8 +292,8 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		eventLog:             eventLog,
 		AgentSpec:            boot.AgentSpec,
 		AgentDefinitions:     boot.AgentDefinitions,
-		CompiledPolicy:       boot.CompiledPolicy,
 		EffectiveContract:    boot.Contract,
+		PolicyEngine:         boot.PolicyEngine,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		SkillResults:         boot.SkillResults,
 		Telemetry:            tel,
@@ -312,7 +310,13 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	return ws, nil
 }
 
-func embedderCfgFromConfig(cfg WorkspaceConfig, model string) retrieval.EmbedderConfig {
+type embedderConfig struct {
+	Provider string
+	Endpoint string
+	Model    string
+}
+
+func embedderCfgFromConfig(cfg WorkspaceConfig, model string) embedderConfig {
 	provider := strings.TrimSpace(cfg.InferenceProvider)
 	endpoint := strings.TrimSpace(cfg.InferenceEndpoint)
 	selectedModel := strings.TrimSpace(cfg.InferenceModel)
@@ -323,11 +327,28 @@ func embedderCfgFromConfig(cfg WorkspaceConfig, model string) retrieval.Embedder
 	if selectedModel == "" {
 		selectedModel = strings.TrimSpace(model)
 	}
-	return retrieval.EmbedderConfig{
+	return embedderConfig{
 		Provider: provider,
 		Endpoint: endpoint,
 		Model:    selectedModel,
 	}
+}
+
+type llmTelemetryAdapter struct {
+	inner core.Telemetry
+}
+
+func (a llmTelemetryAdapter) Emit(event contracts.Event) {
+	if a.inner == nil {
+		return
+	}
+	a.inner.Emit(core.Event{
+		Type:      core.EventType(event.Type),
+		TaskID:    event.TaskID,
+		Message:   event.Message,
+		Timestamp: event.Timestamp,
+		Metadata:  event.Metadata,
+	})
 }
 
 // resolveWorkspaceConfig loads the workspace YAML (if ConfigPath is
