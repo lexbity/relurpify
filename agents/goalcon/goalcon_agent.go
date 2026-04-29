@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
@@ -284,7 +285,7 @@ func (a *GoalConAgent) streamTriggerNode(task *core.Task) graph.Node {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("goalcon_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("goalcon_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

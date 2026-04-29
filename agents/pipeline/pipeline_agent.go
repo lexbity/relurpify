@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // PipelineStageFactory resolves pipeline stages for a task.
@@ -400,7 +401,7 @@ func (a *PipelineAgent) streamTriggerNode(task *core.Task) graph.Node {
 		return nil
 	}
 	query := a.streamQuery(task)
-	node := graph.NewContextStreamNode("pipeline_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("pipeline_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	return node
 }

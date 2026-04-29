@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
@@ -106,7 +107,7 @@ func (a *ReActAgent) streamTriggerNode(task *core.Task) graph.Node {
 		return nil
 	}
 	query := a.streamQuery(task)
-	node := graph.NewContextStreamNode("react_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("react_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	return node
 }

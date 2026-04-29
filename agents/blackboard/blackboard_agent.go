@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // BlackboardAgent implements graph.WorkflowExecutor using the Blackboard architecture.
@@ -391,7 +392,7 @@ func (a *BlackboardAgent) streamTriggerNode(task *core.Task) graph.Node {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("blackboard_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("blackboard_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

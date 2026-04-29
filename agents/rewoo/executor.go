@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -208,7 +209,7 @@ func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.StreamTriggerN
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("rewoo_stream", e.StreamTrigger, query, e.streamMaxTokens())
+	node := graph.NewContextStreamNode("rewoo_stream", e.StreamTrigger, retrieval.RetrievalQuery{Text: query}, e.streamMaxTokens())
 	node.Mode = e.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

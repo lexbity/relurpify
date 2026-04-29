@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
@@ -269,7 +270,7 @@ func (a *PlannerAgent) streamTriggerNode(task *core.Task) graph.Node {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("planner_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("planner_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // RuntimeSurfaces holds runtime surface references for workflow operations.
@@ -526,7 +527,7 @@ func (a *HTNAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := agentgraph.NewContextStreamNode("htn_stream", a.StreamTrigger, query, a.streamMaxTokens())
+	node := agentgraph.NewContextStreamNode("htn_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{
