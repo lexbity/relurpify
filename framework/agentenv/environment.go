@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
@@ -59,6 +60,12 @@ type WorkspaceEnvironment struct {
 	Config        *core.Config
 	Model         core.LanguageModel
 	CommandPolicy sandbox.CommandPolicy
+	// CommandRunner is the sandbox-enforced runner built by ayenitd from the
+	// manifest-declared command allowlist. Named agents and their capability
+	// handlers use this to execute shell, git, and test commands without
+	// importing ayenitd. Nil when no sandbox runtime is configured (tests may
+	// substitute a local runner or a test double).
+	CommandRunner sandbox.CommandRunner
 	Backend       string
 
 	// Capability + permission
@@ -105,6 +112,11 @@ type WorkspaceEnvironment struct {
 	// Scheduling + services
 	Scheduler      *ServiceScheduler
 	ServiceManager *ServiceManager
+	// JobSubmitter allows capability handlers and agents to enqueue long-running
+	// work into the framework job queue without holding a full JobStore reference.
+	// Nil when the workspace is not backed by a persistent job store (e.g., in
+	// unit tests). Capabilities must check for nil before calling Submit.
+	JobSubmitter jobs.Submitter
 
 	// Optional agents (interfaces)
 	VerificationPlanner           VerificationPlanner
@@ -121,6 +133,20 @@ func (e WorkspaceEnvironment) WithRegistry(r *capability.Registry) WorkspaceEnvi
 // WithMemory returns a shallow copy with WorkingMemory replaced.
 func (e WorkspaceEnvironment) WithMemory(m *memory.WorkingMemoryStore) WorkspaceEnvironment {
 	e.WorkingMemory = m
+	return e
+}
+
+// WithCommandRunner returns a shallow copy with CommandRunner replaced.
+// Use this in tests to inject a recording or no-op runner without building a
+// full sandbox runtime.
+func (e WorkspaceEnvironment) WithCommandRunner(r sandbox.CommandRunner) WorkspaceEnvironment {
+	e.CommandRunner = r
+	return e
+}
+
+// WithJobSubmitter returns a shallow copy with JobSubmitter replaced.
+func (e WorkspaceEnvironment) WithJobSubmitter(s jobs.Submitter) WorkspaceEnvironment {
+	e.JobSubmitter = s
 	return e
 }
 

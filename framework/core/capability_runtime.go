@@ -60,3 +60,28 @@ type AvailabilityAwareCapabilityHandler interface {
 	CapabilityHandler
 	Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec
 }
+
+// BackgroundInvocationHandle is returned by BackgroundCapabilityHandler.InvokeBackground.
+// It carries enough routing identity for the caller to poll or track the job.
+type BackgroundInvocationHandle struct {
+	JobID       string `json:"job_id"`
+	Queue       string `json:"queue"`
+	Kind        string `json:"kind"`
+	SubmittedAt string `json:"submitted_at"` // RFC3339
+}
+
+// BackgroundCapabilityHandler is implemented by capabilities whose execution
+// is long-running and must not block the synchronous Invoke path. The handler
+// builds a jobs.JobSpec and submits it via the Submitter it received at
+// construction time (from WorkspaceEnvironment.JobSubmitter). The registry
+// routes calls to InvokeCapabilityBackground to this interface; callers that
+// want synchronous execution still use InvokeCapability → Invoke.
+//
+// A handler may implement both InvocableCapabilityHandler (for synchronous
+// short-circuit use in tests) and BackgroundCapabilityHandler (for production
+// execution). The registry prefers the background path when
+// InvokeCapabilityBackground is called.
+type BackgroundCapabilityHandler interface {
+	CapabilityHandler
+	InvokeBackground(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*BackgroundInvocationHandle, error)
+}

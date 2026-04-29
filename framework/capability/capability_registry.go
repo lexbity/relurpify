@@ -910,6 +910,42 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 	return result, err
 }
 
+// InvokeCapabilityBackground submits a long-running capability invocation to
+// the framework job queue and returns a handle the caller can use to track the
+// job. The capability handler must implement core.BackgroundCapabilityHandler;
+// if it does not, this method returns an error — callers that want synchronous
+// execution should use InvokeCapability instead.
+//
+// The handler is responsible for building the jobs.JobSpec and calling
+// env.JobSubmitter.Submit from inside InvokeBackground. The registry provides
+// only lookup, admission, and postchecks — it does not own the JobSpec shape.
+func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.BackgroundInvocationHandle, error) {
+	if r == nil {
+		return nil, fmt.Errorf("registry unavailable")
+	}
+	if r.delegate != nil {
+		if r.toolIDAllowlist != nil {
+			desc, ok := r.delegate.GetCapability(idOrName)
+			if !ok {
+				return nil, fmt.Errorf("capability %s not found", idOrName)
+			}
+			if !r.isAllowlisted(desc.ID) {
+				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
+			}
+		}
+		return r.delegate.InvokeCapabilityBackground(ctx, state, idOrName, args)
+	}
+	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
+	if err != nil {
+		return nil, err
+	}
+	bgHandler, ok := entry.handler.(core.BackgroundCapabilityHandler)
+	if !ok {
+		return nil, fmt.Errorf("capability %s does not support background invocation", entry.descriptor.ID)
+	}
+	return bgHandler.InvokeBackground(ctx, state, args)
+}
+
 // RenderPrompt executes a runtime-backed prompt capability by capability ID or public name.
 func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.PromptRenderResult, error) {
 	if r == nil {
