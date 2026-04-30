@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 type nexusGatewayRuntimeProvider struct {
@@ -77,7 +78,7 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 		}
 	}
 	if len(invocableItems) > 0 {
-		if err := rt.Tools.RegisterBatch(invocableItems); err != nil && !isAlreadyRegistered(err) {
+		if err := rt.Tools.RegisterBatch(invocableItems); err != nil && !alreadyRegisteredError(err) {
 			return err
 		}
 	}
@@ -85,12 +86,12 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 		if batchRegistrar, ok := registrar.(interface {
 			RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
 		}); ok {
-			if err := batchRegistrar.RegisterCapabilitiesBatch(nonTools); err != nil && !isAlreadyRegistered(err) {
+			if err := batchRegistrar.RegisterCapabilitiesBatch(nonTools); err != nil && !alreadyRegisteredError(err) {
 				return err
 			}
 		} else {
 			for _, normalized := range nonTools {
-				if err := registrar.RegisterCapability(normalized); err != nil && !isAlreadyRegistered(err) {
+				if err := registrar.RegisterCapability(normalized); err != nil && !alreadyRegisteredError(err) {
 					return err
 				}
 			}
@@ -147,11 +148,11 @@ type nexusRemoteInvocableCapability struct {
 	desc   core.CapabilityDescriptor
 }
 
-func (c nexusRemoteInvocableCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (c nexusRemoteInvocableCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return c.desc
 }
 
-func (c nexusRemoteInvocableCapability) Invoke(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (c nexusRemoteInvocableCapability) Invoke(ctx context.Context, state *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("nexus client unavailable")
 	}
@@ -160,6 +161,13 @@ func (c nexusRemoteInvocableCapability) Invoke(ctx context.Context, state *core.
 		request[key] = value
 	}
 	return c.client.InvokeCapability(ctx, activeNexusSessionKey(state), c.desc.ID, request)
+}
+
+func alreadyRegisteredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "already registered")
 }
 
 func decodeNexusInstruction(event core.FrameworkEvent) (instruction string, sessionKey string, metadata map[string]any, ok bool) {
@@ -195,8 +203,8 @@ func formatNexusResult(result *core.Result) string {
 	if result == nil {
 		return ""
 	}
-	if result.Error != nil {
-		return result.Error.Error()
+	if strings.TrimSpace(result.Error) != "" {
+		return result.Error
 	}
 	for _, key := range []string{"response", "summary", "message", "result"} {
 		if value, ok := result.Data[key]; ok {
@@ -217,13 +225,15 @@ func formatNexusResult(result *core.Result) string {
 	return "failed"
 }
 
-func activeNexusSessionKey(state *core.Context) string {
+func activeNexusSessionKey(state *contextdata.Envelope) string {
 	if state == nil {
 		return ""
 	}
 	for _, key := range []string{"session_key", "nexus.session_key"} {
-		if value := strings.TrimSpace(state.GetString(key)); value != "" {
-			return value
+		if value, ok := state.GetWorkingValue(key); ok {
+			if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+				return text
+			}
 		}
 	}
 	return ""

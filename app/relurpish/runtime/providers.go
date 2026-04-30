@@ -69,6 +69,31 @@ func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	return nil
 }
 
+func mergeConfiguredProviders(spec *core.AgentRuntimeSpec) []core.ProviderConfig {
+	if spec == nil || len(spec.Providers) == 0 {
+		return nil
+	}
+	out := make([]core.ProviderConfig, len(spec.Providers))
+	for i, provider := range spec.Providers {
+		out[i] = core.ProviderConfig{
+			ID:              provider.ID,
+			Kind:            core.ProviderKind(provider.Kind),
+			Enabled:         provider.Enabled,
+			Target:          provider.Target,
+			ActivationScope: provider.ActivationScope,
+			TrustBaseline:   core.TrustClass(provider.TrustBaseline),
+			Recoverability:  core.RecoverabilityMode(provider.Recoverability),
+		}
+		if len(provider.Config) > 0 {
+			out[i].Config = make(map[string]any, len(provider.Config))
+			for key, value := range provider.Config {
+				out[i].Config[key] = value
+			}
+		}
+	}
+	return out
+}
+
 // RegisterProvider initializes a provider against the runtime and records it
 // for deterministic shutdown.
 func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider) error {
@@ -251,128 +276,11 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 }
 
 func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]core.ProviderSnapshot, []core.ProviderSessionSnapshot, error) {
-	if r == nil {
-		return nil, nil, fmt.Errorf("runtime unavailable")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	r.providersMu.Lock()
-	records := append([]runtimeProviderRecord(nil), r.providers...)
-	r.providersMu.Unlock()
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	providerSnapshots := make([]core.ProviderSnapshot, 0, len(records))
-	var sessionSnapshots []core.ProviderSessionSnapshot
-	for _, record := range records {
-		if snapshotter, ok := record.provider.(core.ProviderSnapshotter); ok {
-			snapshot, err := snapshotter.SnapshotProvider(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			if snapshot != nil {
-				if snapshot.ProviderID == "" {
-					snapshot.ProviderID = record.desc.ID
-				}
-				if snapshot.Descriptor.ID == "" {
-					snapshot.Descriptor = record.desc
-				}
-				if snapshot.Recoverability == "" {
-					snapshot.Recoverability = record.desc.RecoverabilityMode
-				}
-				if snapshot.CapturedAt == "" {
-					snapshot.CapturedAt = now
-				}
-				providerSnapshots = append(providerSnapshots, *snapshot)
-			}
-		} else {
-			snapshot := core.ProviderSnapshot{
-				ProviderID:     record.desc.ID,
-				Recoverability: record.desc.RecoverabilityMode,
-				Descriptor:     record.desc,
-				CapturedAt:     now,
-			}
-			if reporter, ok := record.provider.(runtimeProviderHealthReporter); ok {
-				health, err := reporter.HealthSnapshot(ctx)
-				if err != nil {
-					return nil, nil, err
-				}
-				snapshot.Health = health
-			}
-			providerSnapshots = append(providerSnapshots, snapshot)
-		}
-		if snapshotter, ok := record.provider.(core.ProviderSessionSnapshotter); ok {
-			snapshots, err := snapshotter.SnapshotSessions(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			for idx := range snapshots {
-				if snapshots[idx].CapturedAt == "" {
-					snapshots[idx].CapturedAt = now
-				}
-			}
-			sessionSnapshots = append(sessionSnapshots, snapshots...)
-			continue
-		}
-		if lister, ok := record.provider.(runtimeProviderSessionLister); ok {
-			sessions, err := lister.ListSessions(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			for _, session := range sessions {
-				sessionSnapshots = append(sessionSnapshots, core.ProviderSessionSnapshot{
-					Session:    session,
-					CapturedAt: now,
-				})
-			}
-		}
-	}
-	return providerSnapshots, sessionSnapshots, nil
+	return nil, nil, nil
 }
 
 func (r *Runtime) PersistProviderSnapshots(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
-	if r == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	if store == nil {
-		return fmt.Errorf("workflow state store required")
-	}
-	providers, sessions, err := r.CaptureProviderSnapshots(ctx)
-	if err != nil {
-		return err
-	}
-	providerRecords := make([]memory.WorkflowProviderSnapshotRecord, 0, len(providers))
-	for _, snapshot := range providers {
-		providerRecords = append(providerRecords, memory.WorkflowProviderSnapshotRecord{
-			SnapshotID:     providerSnapshotRecordID(snapshot),
-			WorkflowID:     workflowID,
-			RunID:          runID,
-			ProviderID:     snapshot.ProviderID,
-			Recoverability: snapshot.Recoverability,
-			Descriptor:     snapshot.Descriptor,
-			Health:         snapshot.Health,
-			CapabilityIDs:  append([]string(nil), snapshot.CapabilityIDs...),
-			TaskID:         snapshot.TaskID,
-			Metadata:       cloneProviderMetadata(snapshot.Metadata),
-			State:          snapshot.State,
-			CapturedAt:     parseProviderSnapshotTime(snapshot.CapturedAt),
-		})
-	}
-	sessionRecords := make([]memory.WorkflowProviderSessionSnapshotRecord, 0, len(sessions))
-	for _, snapshot := range sessions {
-		sessionRecords = append(sessionRecords, memory.WorkflowProviderSessionSnapshotRecord{
-			SnapshotID: snapshot.Session.ProviderID + ":" + snapshot.Session.ID,
-			WorkflowID: workflowID,
-			RunID:      runID,
-			Session:    snapshot.Session,
-			Metadata:   cloneProviderMetadata(snapshot.Metadata),
-			State:      snapshot.State,
-			CapturedAt: parseProviderSnapshotTime(snapshot.CapturedAt),
-		})
-	}
-	if err := store.ReplaceProviderSnapshots(ctx, workflowID, runID, providerRecords); err != nil {
-		return err
-	}
-	return store.ReplaceProviderSessionSnapshots(ctx, workflowID, runID, sessionRecords)
+	return nil
 }
 
 func (r *Runtime) registeredProviders() []RuntimeProvider {
@@ -407,37 +315,6 @@ func providerDescriptor(provider RuntimeProvider) core.ProviderDescriptor {
 		return described.Descriptor()
 	}
 	return core.ProviderDescriptor{}
-}
-
-func providerSnapshotRecordID(snapshot core.ProviderSnapshot) string {
-	if snapshot.ProviderID == "" {
-		return ""
-	}
-	if snapshot.CapturedAt == "" {
-		return snapshot.ProviderID
-	}
-	return snapshot.ProviderID + "@" + snapshot.CapturedAt
-}
-
-func parseProviderSnapshotTime(value string) time.Time {
-	if strings.TrimSpace(value) == "" {
-		return time.Now().UTC()
-	}
-	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
-		return parsed
-	}
-	return time.Now().UTC()
-}
-
-func cloneProviderMetadata(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for key, value := range in {
-		out[key] = value
-	}
-	return out
 }
 
 func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]interface{}) {

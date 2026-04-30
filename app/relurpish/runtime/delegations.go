@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -24,7 +25,7 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 	}
 	opts.Registry = r.Tools
 	opts.AgentSpec = r.AgentSpec
-	opts.State = firstDelegationContext(opts.State, r.Context)
+	opts.State = firstDelegationContext(opts.State)
 	if shouldUseBackgroundDelegation(request) {
 		runner, err := r.ensureBackgroundDelegationProvider(ctx)
 		if err != nil {
@@ -75,7 +76,7 @@ func (r *Runtime) PersistDelegations(ctx context.Context, repo agentlifecycle.Re
 	return r.Delegations.PersistDelegations(ctx, repo, workflowID, runID)
 }
 
-func firstDelegationContext(values ...*core.Context) *core.Context {
+func firstDelegationContext(values ...*contextdata.Envelope) *contextdata.Envelope {
 	for _, value := range values {
 		if value != nil {
 			return value

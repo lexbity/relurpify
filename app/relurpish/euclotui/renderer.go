@@ -30,7 +30,7 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 		msg.Content.Text = renderComparison(frame)
 	case interaction.FrameDraft:
 		msg.Content.Text = renderDraft(frame)
-	case interaction.FrameResult:
+	case interaction.FrameResultType:
 		msg.Content.Text = renderFrameResult(frame)
 	case interaction.FrameStatus:
 		msg.Content.Text = renderStatus(frame)

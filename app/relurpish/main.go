@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
@@ -170,9 +169,6 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 	}
 	plugin := &tui.EucloPlugin{
 		SetupTabs: euclotui.RegisterEucloTabs,
-		NewEmitter: func(p *tea.Program) tui.EucloEmitter {
-			return euclotui.NewTUIFrameEmitter(p)
-		},
 	}
 	return tui.RunWithEuclo(ctx, rt, plugin)
 }

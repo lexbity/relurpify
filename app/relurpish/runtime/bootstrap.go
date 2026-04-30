@@ -2,12 +2,9 @@ package runtime
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents"
-	"codeburg.org/lexbit/relurpify/archaeo/guidance"
-	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
@@ -19,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -36,16 +32,12 @@ type AgentBootstrapOptions struct {
 	Model               core.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
-	Memory              memory.MemoryStore
 	Telemetry           core.Telemetry
 	SkipASTIndex        bool
 	MaxIterations       int
 	AllowedCapabilities []core.CapabilitySelector
 	DebugLLM            bool
 	DebugAgent          bool
-	RetrievalDB         *sql.DB
-	PlanStore           frameworkplan.PlanStore
-	GuidanceBroker      *guidance.GuidanceBroker
 	AgentLifecycle      agentlifecycle.Repository
 }
 
@@ -53,14 +45,14 @@ type BootstrappedAgentRuntime struct {
 	Registry             *capability.Registry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
-	Memory               memory.MemoryStore
+	Memory               *memory.WorkingMemoryStore
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentConfig          *core.Config
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
 	AgentDefinitions     map[string]*core.AgentDefinition
-	SkillResults         []frameworkskills.SkillResolution
-	CapabilityAdmissions []capabilityplan.AdmissionResult
+	SkillResults         []manifest.SkillResolution
+	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *manifest.EffectiveAgentContract
 	CompiledPolicy       *manifest.CompiledPolicyBundle
 }
@@ -84,16 +76,12 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Model:               opts.Model,
 		Backend:             opts.Backend,
 		InferenceModel:      opts.InferenceModel,
-		Memory:              opts.Memory,
 		Telemetry:           opts.Telemetry,
 		SkipASTIndex:        opts.SkipASTIndex,
 		MaxIterations:       opts.MaxIterations,
 		AllowedCapabilities: opts.AllowedCapabilities,
 		DebugLLM:            opts.DebugLLM,
 		DebugAgent:          opts.DebugAgent,
-		RetrievalDB:         opts.RetrievalDB,
-		PlanStore:           opts.PlanStore,
-		GuidanceBroker:      opts.GuidanceBroker,
 		AgentLifecycle:      opts.AgentLifecycle,
 	})
 	if err != nil {
@@ -122,24 +110,21 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		boot.AgentConfig,
 		agents.WithIndexManager(boot.IndexManager),
 		agents.WithGraphDB(graphDBFromIndexManager(boot.IndexManager)),
-		agents.WithRetrievalDB(opts.RetrievalDB),
-		agents.WithPlanStore(opts.PlanStore),
-		agents.WithGuidanceBroker(opts.GuidanceBroker),
+		agents.WithRetrievalDB(nil),
+		agents.WithPlanStore(nil),
+		agents.WithGuidanceBroker(nil),
 		agents.WithWorkflowStore(opts.AgentLifecycle),
 	); err != nil {
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}
 
 	env := agents.AgentEnvironment{
-		Config:        boot.Environment.Config,
-		Model:         boot.Environment.Model,
-		CommandPolicy: boot.Environment.CommandPolicy,
-		Registry:      boot.Environment.Registry,
-		IndexManager:  boot.Environment.IndexManager,
-		SearchEngine:  boot.Environment.SearchEngine,
-		Memory:        boot.Environment.Memory,
-		// New: thread stores from workspace environment
-		PlanStore: boot.Environment.PlanStore,
+		Config:       boot.Environment.Config,
+		Model:        boot.Environment.Model,
+		Registry:     boot.Environment.Registry,
+		IndexManager: boot.Environment.IndexManager,
+		SearchEngine: boot.Environment.SearchEngine,
+		Memory:       boot.Environment.WorkingMemory,
 	}
 	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)
@@ -149,7 +134,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Registry:             boot.Registry,
 		IndexManager:         boot.IndexManager,
 		SearchEngine:         boot.SearchEngine,
-		Memory:               boot.Memory,
+		Memory:               boot.Environment.WorkingMemory,
 		AgentSpec:            boot.AgentSpec,
 		AgentConfig:          boot.AgentConfig,
 		Backend:              boot.Backend,

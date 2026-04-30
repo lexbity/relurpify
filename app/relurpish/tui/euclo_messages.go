@@ -8,11 +8,6 @@ type EucloFrameMsg struct {
 	Frame interaction.InteractionFrame
 }
 
-// EucloResponseMsg is sent when the user responds to an interaction notification.
-type EucloResponseMsg struct {
-	Response interaction.UserResponse
-}
-
 // EucloPhaseProgressMsg updates the phase progress indicator.
 type EucloPhaseProgressMsg struct {
 	Mode       string

@@ -79,7 +79,7 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) Message {
 		msg.Content.Text = renderComparison(frame)
 	case interaction.FrameDraft:
 		msg.Content.Text = renderDraft(frame)
-	case interaction.FrameResult:
+	case interaction.FrameResultType:
 		msg.Content.Text = renderFrameResult(frame)
 	case interaction.FrameStatus:
 		msg.Content.Text = renderStatus(frame)
@@ -445,29 +445,4 @@ func renderContextProposal(content interaction.ContextProposalContent) string {
 	}
 
 	return eucloFrameStyle.Render(b.String())
-}
-
-// RenderActionSlots formats action slots for the notification bar hint.
-func RenderActionSlots(actions []interaction.ActionSlot) string {
-	if len(actions) == 0 {
-		return ""
-	}
-	var parts []string
-	for i, a := range actions {
-		key := a.Shortcut
-		if key == "" {
-			// Use number key for first 9 actions, fallback to action ID.
-			if i < 9 {
-				key = fmt.Sprintf("%d", i+1)
-			} else {
-				key = a.ID
-			}
-		}
-		label := a.Label
-		if a.Default {
-			label += "*"
-		}
-		parts = append(parts, fmt.Sprintf("[%s] %s", key, label))
-	}
-	return dimStyle.Render("  " + strings.Join(parts, "  "))
 }

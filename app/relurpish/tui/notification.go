@@ -132,29 +132,17 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 	if !isKey {
 		return nb, nil
 	}
-	// Handle interaction notifications with dynamic action slots.
-	if current.Kind == NotifKindInteraction || current.Kind == NotifKindGuidance {
-		key := kMsg.String()
-		if key == "d" || key == "esc" {
+	// Interaction notifications are display-only. Guidance still handles its
+	// own freetext flow in model.go.
+	if current.Kind == NotifKindInteraction {
+		switch kMsg.String() {
+		case "d", "esc":
 			id := current.ID
 			nb.queue.Resolve(id)
 			return nb, func() tea.Msg { return NotifDismissMsg{ID: id} }
+		default:
+			return nb, nil
 		}
-		resp, ok := ResolveInteractionKey(current, key)
-		if ok {
-			id := current.ID
-			nb.queue.Resolve(id)
-			if current.Kind == NotifKindGuidance {
-				return nb, func() tea.Msg {
-					return NotifGuidanceResolveMsg{
-						RequestID: current.Extra["guidance_request_id"],
-						ChoiceID:  resp.ActionID,
-					}
-				}
-			}
-			return nb, func() tea.Msg { return EucloResponseMsg{Response: resp} }
-		}
-		return nb, nil
 	}
 	switch kMsg.String() {
 	case "y", "Y":

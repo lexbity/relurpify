@@ -7,6 +7,7 @@ import (
 	"time"
 
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -181,7 +182,7 @@ func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context,
 	defer close(session.results)
 	state := opts.State
 	if state == nil {
-		state = core.NewContext()
+		state = contextdata.NewEnvelope(request.ID, sessionID)
 	}
 	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.ID, args)
 	status := "completed"

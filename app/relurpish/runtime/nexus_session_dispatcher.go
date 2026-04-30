@@ -136,7 +136,7 @@ func (d *sessionDispatcher) process(ctx context.Context, item nexusWorkItem) err
 	if d.rt == nil || d.client == nil {
 		return nil
 	}
-	result, err := d.rt.ExecuteInstructionStream(ctx, item.instruction, core.TaskTypeCodeModification, item.metadata, func(string) {})
+	result, err := d.rt.ExecuteInstructionStream(ctx, item.instruction, core.TaskTypeCodeGeneration, item.metadata, func(string) {})
 	if err != nil {
 		return d.client.SendResponse(ctx, item.sessionKey, err.Error())
 	}

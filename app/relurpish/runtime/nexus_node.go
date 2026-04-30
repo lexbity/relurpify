@@ -44,16 +44,13 @@ func NewLocalNexusNodeProvider(registry *capability.Registry, cfg NodeRegistrati
 		Name:       name,
 		Platform:   platform,
 		TrustClass: core.TrustClassWorkspaceTrusted,
-		PairedAt:   time.Now().UTC(),
+		PairedAt:   time.Now().UTC().Unix(),
 		Tags:       cloneTags(cfg.Tags),
-	}
-	if err := descriptor.Validate(); err != nil {
-		return nil, err
 	}
 	cred := core.NodeCredential{
 		DeviceID:  nodeID,
 		PublicKey: []byte("local-only"),
-		IssuedAt:  time.Now().UTC(),
+		IssuedAt:  time.Now().UTC().Unix(),
 	}
 	provider := core.ProviderDescriptor{
 		ID:                 "node:" + nodeID,
@@ -76,7 +73,7 @@ func NewLocalNexusNodeProvider(registry *capability.Registry, cfg NodeRegistrati
 		health: core.NodeHealth{
 			Online:     true,
 			Foreground: true,
-			LastSeenAt: time.Now().UTC(),
+			LastSeenAt: time.Now().UTC().Unix(),
 		},
 		healthWatch: make(chan core.NodeHealth, 1),
 	}, nil
@@ -120,7 +117,7 @@ func (p *LocalNexusNodeProvider) HealthSnapshot(context.Context) (core.ProviderH
 		Status:  "online",
 		Message: "local nexus node active",
 		Metadata: map[string]interface{}{
-			"last_seen_at": p.health.LastSeenAt.Format(time.RFC3339Nano),
+			"last_seen_at": p.health.LastSeenAt,
 			"platform":     string(p.descriptor.Platform),
 		},
 	}, nil

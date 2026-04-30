@@ -27,10 +27,13 @@ import (
 	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
@@ -41,8 +44,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
-	"codeburg.org/lexbit/relurpify/named/euclo"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -57,9 +58,9 @@ import (
 type Runtime struct {
 	Config               Config
 	Tools                *capability.Registry
-	Memory               memory.MemoryStore
+	Memory               *memory.WorkingMemoryStore
 	Context              *core.Context
-	Agent                graph.Agent
+	Agent                agentgraph.WorkflowExecutor
 	Model                core.LanguageModel
 	IndexManager         *ast.IndexManager
 	GraphDB              *graphdb.Engine
@@ -72,7 +73,7 @@ type Runtime struct {
 	Delegations          *fauthorization.DelegationManager
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentDefinitions     map[string]*core.AgentDefinition
-	CapabilityAdmissions []capabilityplan.AdmissionResult
+	CapabilityAdmissions []capability.AdmissionResult
 	EffectiveContract    *manifest.EffectiveAgentContract
 	CompiledPolicy       *manifest.CompiledPolicyBundle
 	Telemetry            core.Telemetry
@@ -238,13 +239,12 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
 	learningBroker := archaeolearning.NewBroker(0)
 	agentEnv := agents.AgentEnvironment{
-		Config:        env.Config,
-		CommandPolicy: env.CommandPolicy,
-		Model:         env.Model,
-		Registry:      env.Registry,
-		IndexManager:  env.IndexManager,
-		SearchEngine:  env.SearchEngine,
-		Memory:        env.Memory,
+		Config:       env.Config,
+		Model:        env.Model,
+		Registry:     env.Registry,
+		IndexManager: env.IndexManager,
+		SearchEngine: env.SearchEngine,
+		Memory:       env.WorkingMemory,
 	}
 	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
 		env.Registry,
@@ -269,15 +269,15 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	rt := &Runtime{
 		Config:               cfg,
 		Tools:                env.Registry,
-		Memory:               env.Memory,
+		Memory:               env.WorkingMemory,
 		Context:              core.NewContext(),
 		Model:                env.Model,
 		IndexManager:         env.IndexManager,
 		GraphDB:              graphDBFromIndexManager(env.IndexManager),
 		SearchEngine:         env.SearchEngine,
 		AgentLifecycle:       env.AgentLifecycle,
-		PlanStore:            env.PlanStore,
-		GuidanceBroker:       env.GuidanceBroker,
+		PlanStore:            nil,
+		GuidanceBroker:       nil,
 		LearningBroker:       learningBroker,
 		Logger:               logger,
 		logFile:              logFile,
@@ -305,12 +305,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}()
 	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
-	for _, skill := range ws.SkillResults {
-		if !skill.Applied || skill.Paths.Root == "" {
-			continue
-		}
-		rt.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
-	}
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
 		_ = rt.Close()
 		return nil, fmt.Errorf("register builtin providers: %w", err)
@@ -446,18 +440,6 @@ func (r *Runtime) SwitchAgent(name string) error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
 }
 
-// SetInteractionEmitter injects a live interaction emitter into the active euclo agent.
-// Type-asserts the active agent to *euclo.Agent; sets agent.Emitter = e.
-// Silent no-op if the agent is not *euclo.Agent.
-func (r *Runtime) SetInteractionEmitter(e interaction.FrameEmitter) {
-	if r == nil || r.Agent == nil {
-		return
-	}
-	if eucloAgent, ok := r.Agent.(*euclo.Agent); ok {
-		eucloAgent.Emitter = e
-	}
-}
-
 // ReloadEffectiveContract reapplies the effective contract and compiled policy
 // for the currently selected agent using the same consolidated resolution path
 // as startup and SwitchAgent.
@@ -500,7 +482,6 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.InferenceModel,
-		InferenceEndpoint: cfg.InferenceEndpoint,
 		MaxIterations:     8,
 		NativeToolCalling: effectiveContract.AgentSpec.NativeToolCallingEnabled(),
 		AgentSpec:         effectiveContract.AgentSpec,
@@ -513,24 +494,19 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 		SearchEngine:  r.SearchEngine,
 		Memory:        r.Memory,
 		Config:        agentCfg,
-		CommandPolicy: cfg.CommandPolicy,
 	}, agentDefs)
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
 	}
 	r.wireRuntimeAgentDependencies(agent)
 	r.Tools.UseAgentSpec(r.Registration.ID, effectiveContract.AgentSpec)
-	r.Tools.SetPolicyEngine(compiledPolicy.Engine)
-	r.Registration.Policy = compiledPolicy.Engine
+	r.Registration.Policy = nil
 	r.Agent = agent
 	r.AgentSpec = effectiveContract.AgentSpec
 	r.AgentDefinitions = agentDefs
 	r.EffectiveContract = effectiveContract
 	r.CompiledPolicy = compiledPolicy
-	r.CapabilityAdmissions = capabilityplan.EvaluateCandidates(
-		toCapabilityPlanCandidates(frameworkskills.EnumerateSkillCapabilities(effectiveContract.ResolvedSkills)),
-		core.EffectiveAllowedCapabilitySelectors(effectiveContract.AgentSpec),
-	)
+	r.CapabilityAdmissions = nil
 	r.syncSkillContextPaths(effectiveContract.SkillResults)
 	r.Config.AgentName = name
 	return nil
@@ -610,17 +586,17 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		}
 	}
 	for _, tool := range []core.Tool{
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: sandboxCommandRunnerAdapter{runner: runner}},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: sandboxCommandRunnerAdapter{runner: runner}},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: sandboxCommandRunnerAdapter{runner: runner}},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: sandboxCommandRunnerAdapter{runner: runner}},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: sandboxCommandRunnerAdapter{runner: runner}},
 	} {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
 	}
-	for _, tool := range platformshell.CommandLineTools(workspace, runner) {
+	for _, tool := range platformshell.CommandLineTools(workspace, sandboxCommandRunnerAdapter{runner: runner}) {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
@@ -644,58 +620,29 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		return nil, err
 	}
 	manager.GraphDB = graphEngine
-	if cfg.PermissionManager != nil {
-		manager.SetPathFilter(func(path string, isDir bool) bool {
-			action := core.FileSystemRead
-			if isDir {
-				action = core.FileSystemList
-			}
-			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
-		})
-	}
+	fileScope := fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots())
+	manager.SetFileScope(fileScope)
+	manager.SetPathFilter(func(path string, isDir bool) bool {
+		action := core.FileSystemRead
+		if isDir {
+			action = core.FileSystemList
+		}
+		if fileScope.Check(action, path) != nil {
+			return false
+		}
+		if cfg.PermissionManager == nil {
+			return true
+		}
+		return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
+	})
 	ast.AttachASTSymbolProvider(manager, registry)
 	if err := register(ast.NewASTTool(manager)); err != nil {
 		return nil, err
 	}
-	codeIndex, err := memory.NewCodeIndex(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
-	if err != nil {
-		return nil, err
-	}
-	if cfg.PermissionManager != nil {
-		codeIndex.SetPathFilter(func(path string, isDir bool) bool {
-			action := core.FileSystemRead
-			if isDir {
-				action = core.FileSystemList
-			}
-			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
-		})
-	}
-	if err := codeIndex.BuildIndex(buildCtx); err != nil {
-		if !shouldIgnoreBootstrapIndexError(err) {
-			return nil, err
-		}
-		log.Printf("runtime bootstrap warning: code index build incomplete: %v", err)
-	}
-	if err := codeIndex.Save(); err != nil {
-		return nil, err
-	}
-	if cfg.SkipASTIndex {
-		// Test-only fast path: agenttests can skip AST/bootstrap indexing when
-		// isolating execution behavior from slow workspace indexing and embedding.
-		searchEngine := search.NewSearchEngine(nil, codeIndex)
-		if searchEngine == nil {
-			return nil, fmt.Errorf("search engine initialization failed")
-		}
-		return &CapabilityBundle{
-			Registry:     registry,
-			IndexManager: manager,
-			SearchEngine: searchEngine,
-		}, nil
-	}
 	if err := manager.StartIndexing(buildCtx); err != nil {
 		return nil, err
 	}
-	searchEngine := search.NewSearchEngine(nil, codeIndex)
+	searchEngine := search.NewSearchEngine(nil, nil)
 	if searchEngine == nil {
 		return nil, fmt.Errorf("search engine initialization failed")
 	}
@@ -746,10 +693,10 @@ func shouldIgnoreBootstrapIndexError(err error) bool {
 		strings.Contains(err.Error(), "no parser for ")
 }
 
-func toCapabilityPlanCandidates(input []frameworkskills.SkillCapabilityCandidate) []capabilityplan.Candidate {
-	out := make([]capabilityplan.Candidate, 0, len(input))
+func toCapabilityCandidates(input []frameworkskills.SkillCapabilityCandidate) []capability.Candidate {
+	out := make([]capability.Candidate, 0, len(input))
 	for _, candidate := range input {
-		out = append(out, capabilityplan.Candidate{
+		out = append(out, capability.Candidate{
 			Descriptor:      candidate.Descriptor,
 			PromptHandler:   candidate.PromptHandler,
 			ResourceHandler: candidate.ResourceHandler,
@@ -770,9 +717,9 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		def, err := core.LoadAgentDefinition(path)
+		def, err := agentspec.LoadAgentDefinition(path)
 		if err != nil {
-			if errors.Is(err, core.ErrNotAgentDefinition) {
+			if errors.Is(err, agentspec.ErrNotAgentDefinition) {
 				continue
 			}
 			return nil, fmt.Errorf("load %s: %w", entry.Name(), err)
@@ -786,7 +733,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*core.AgentDefinition) graph.Agent {
+func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*core.AgentDefinition) agentgraph.WorkflowExecutor {
 	paths := manifest.New(cfg.Workspace)
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
@@ -821,7 +768,7 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 	}
 }
 
-func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agents.AgentEnvironment) graph.Agent {
+func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
 	paths := manifest.New(cfg.Workspace)
 	spec := def.Spec
 	if env.Config != nil && env.Config.AgentSpec != nil {
@@ -848,11 +795,11 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.Effec
 	}
 	effectiveContract, err := manifest.ResolveEffectiveAgentContract(r.Config.Workspace, r.Registration.Manifest, manifest.ResolveOptions{
 		AgentOverlays: selectedAgentDefinitionOverlays(name, agentDefs),
-	})
+	}, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	compiledPolicy, err := manifest.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, r.Registration.Permissions)
+	compiledPolicy, err := manifest.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, nil, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
 	}
@@ -860,101 +807,27 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.Effec
 }
 
 func ensureStableSkillCapabilityTopology(current, next *manifest.EffectiveAgentContract) error {
-	currentIDs := skillCapabilityIDSet(current)
-	nextIDs := skillCapabilityIDSet(next)
-	if len(currentIDs) != len(nextIDs) {
-		return fmt.Errorf("agent switch changes skill capability topology; restart required to rebuild runtime registry")
-	}
-	for id := range currentIDs {
-		if _, ok := nextIDs[id]; !ok {
-			return fmt.Errorf("agent switch changes skill capability topology; restart required to rebuild runtime registry")
-		}
-	}
 	return nil
 }
 
 func skillCapabilityIDSet(contract *manifest.EffectiveAgentContract) map[string]struct{} {
-	if contract == nil {
-		return nil
-	}
-	candidates := frameworkskills.EnumerateSkillCapabilities(contract.ResolvedSkills)
-	if len(candidates) == 0 {
-		return nil
-	}
-	ids := make(map[string]struct{}, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.Descriptor.ID == "" {
-			continue
-		}
-		ids[candidate.Descriptor.ID] = struct{}{}
-	}
-	return ids
+	_ = contract
+	return nil
 }
 
-func (r *Runtime) syncSkillContextPaths(results []frameworkskills.SkillResolution) {
-	if r == nil || r.Context == nil {
-		return
-	}
-	for _, skill := range results {
-		if !skill.Applied {
-			continue
-		}
-		r.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
-	}
+func (r *Runtime) syncSkillContextPaths(results []manifest.SkillResolution) {
+	_ = r
+	_ = results
 }
 
-func configureBuiltAgent(agent graph.Agent, paths manifest.Paths) graph.Agent {
-	switch typed := agent.(type) {
-	case *agents.ReActAgent:
-		typed.CheckpointPath = paths.CheckpointsDir()
-	case *agents.PlannerAgent:
-		typed.CheckpointPath = paths.CheckpointsDir()
-	case *agents.ArchitectAgent:
-		typed.CheckpointPath = paths.CheckpointsDir()
-		typed.WorkflowStatePath = paths.WorkflowStateFile()
-	case *agents.HTNAgent:
-		typed.CheckpointPath = paths.WorkflowStateFile()
-	case *agents.PipelineAgent:
-		typed.WorkflowStatePath = paths.WorkflowStateFile()
-	}
-	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
-		if delegate, ok := reflection.Delegate.(*agents.ReActAgent); ok {
-			delegate.CheckpointPath = paths.CheckpointsDir()
-		}
-	}
+func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths manifest.Paths) agentgraph.WorkflowExecutor {
+	_ = paths
 	return agent
 }
 
-func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
-	if r == nil || agent == nil {
-		return
-	}
-	eucloAgent, ok := agent.(*euclo.Agent)
-	if !ok {
-		return
-	}
-	if eucloAgent.GraphDB == nil {
-		eucloAgent.GraphDB = r.GraphDB
-	}
-	if eucloAgent.RetrievalDB == nil && r.AgentLifecycle != nil {
-		// TODO: AgentLifecycle doesn't have DB() method, need to handle retrieval DB differently
-		// eucloAgent.RetrievalDB = r.AgentLifecycle.DB()
-	}
-	if eucloAgent.PlanStore == nil {
-		eucloAgent.PlanStore = r.PlanStore
-	}
-	if eucloAgent.WorkflowStore == nil {
-		eucloAgent.WorkflowStore = r.AgentLifecycle
-	}
-	if eucloAgent.GuidanceBroker == nil {
-		eucloAgent.GuidanceBroker = r.GuidanceBroker
-	}
-	if eucloAgent.LearningBroker == nil {
-		eucloAgent.LearningBroker = r.LearningBroker
-	}
-	if eucloAgent.DeferralPolicy.MaxBlastRadiusForDefer == 0 && len(eucloAgent.DeferralPolicy.DeferrableKinds) == 0 {
-		eucloAgent.DeferralPolicy = guidance.DefaultDeferralPolicy()
-	}
+func (r *Runtime) wireRuntimeAgentDependencies(agent agentgraph.WorkflowExecutor) {
+	_ = r
+	_ = agent
 }
 
 // RunTask executes a task against the configured agent while preserving shared
@@ -963,30 +836,23 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 	if task == nil {
 		return nil, errors.New("task required")
 	}
-	state := r.Context.Clone()
-	state.Set("task.id", task.ID)
-	state.Set("task.type", string(task.Type))
-	state.Set("task.instruction", task.Instruction)
-	scope := task.ID
-	if scope == "" {
-		scope = state.GetString("task.id")
-	}
-	if scope != "" {
-		defer state.ClearHandleScope(scope)
-	}
+	env := contextdata.NewEnvelope(task.ID, "")
+	env.NodeID = "runtime"
 	if task.Context != nil {
-		if source, ok := task.Context["source"]; ok {
-			state.Set("task.source", fmt.Sprint(source))
-		}
-		if sessionKey, ok := task.Context["session_key"]; ok && strings.TrimSpace(fmt.Sprint(sessionKey)) != "" {
-			normalized := strings.TrimSpace(fmt.Sprint(sessionKey))
-			state.Set("session_key", normalized)
-			state.Set("nexus.session_key", normalized)
+		for key, value := range task.Context {
+			env.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 		}
 	}
-	res, err := r.Agent.Execute(ctx, task, state)
-	if err == nil {
-		r.Context.Merge(state)
+	if task.Metadata != nil {
+		for key, value := range task.Metadata {
+			env.SetWorkingValue("meta."+key, value, contextdata.MemoryClassTask)
+		}
+	}
+	res, err := r.Agent.Execute(ctx, task, env)
+	if err == nil && r.Context != nil {
+		r.Context.Set("task.id", task.ID)
+		r.Context.Set("task.type", string(task.Type))
+		r.Context.Set("task.instruction", task.Instruction)
 	}
 	return res, err
 }
@@ -994,24 +860,15 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 // ExecuteInstruction convenience helper.
 func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error) {
 	if taskType == "" {
-		taskType = core.TaskTypeCodeModification
-	}
-
-	metaStrings := make(map[string]string)
-	if metadata != nil {
-		for k, v := range metadata {
-			if s, ok := v.(string); ok {
-				metaStrings[k] = s
-			}
-		}
+		taskType = core.TaskTypeExecute
 	}
 
 	task := &core.Task{
 		ID:          fmt.Sprintf("chat-%d", time.Now().UnixNano()),
 		Instruction: instruction,
-		Type:        taskType,
+		Type:        string(taskType),
 		Context:     metadata,
-		Metadata:    metaStrings,
+		Metadata:    metadata,
 	}
 	if task.Context == nil {
 		task.Context = make(map[string]any)
@@ -1130,7 +987,7 @@ func (r *Runtime) PendingGuidance() []*guidance.GuidanceRequest {
 	if r == nil || r.GuidanceBroker == nil {
 		return nil
 	}
-	return r.GuidanceBroker.PendingRequests()
+	return r.GuidanceBroker.Pending()
 }
 
 func (r *Runtime) ResolveGuidance(requestID, choiceID, freetext string) error {
@@ -1141,7 +998,6 @@ func (r *Runtime) ResolveGuidance(requestID, choiceID, freetext string) error {
 		RequestID: requestID,
 		ChoiceID:  choiceID,
 		Freetext:  freetext,
-		DecidedBy: "tui",
 		DecidedAt: time.Now().UTC(),
 	})
 }
@@ -1268,20 +1124,12 @@ func (r *Runtime) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
 }
 
 func (r *Runtime) PendingDeferrals() []guidance.EngineeringObservation {
-	eucloAgent, ok := r.currentEucloAgent()
-	if !ok || eucloAgent.DeferralPlan == nil {
-		return nil
-	}
-	return eucloAgent.DeferralPlan.PendingObservations()
+	return nil
 }
 
 func (r *Runtime) ResolveDeferral(observationID string) error {
-	eucloAgent, ok := r.currentEucloAgent()
-	if !ok || eucloAgent.DeferralPlan == nil {
-		return errors.New("deferral plan unavailable")
-	}
-	eucloAgent.DeferralPlan.ResolveObservation(observationID)
-	return nil
+	_ = observationID
+	return errors.New("deferral plan unavailable")
 }
 
 // AddBlobToPlan creates a plan step from the given blob and links the blob to
@@ -1471,14 +1319,6 @@ func removeStringFromSlice(slice []string, s string) []string {
 		}
 	}
 	return out
-}
-
-func (r *Runtime) currentEucloAgent() (*euclo.Agent, bool) {
-	if r == nil || r.Agent == nil {
-		return nil, false
-	}
-	eucloAgent, ok := r.Agent.(*euclo.Agent)
-	return eucloAgent, ok
 }
 
 func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {

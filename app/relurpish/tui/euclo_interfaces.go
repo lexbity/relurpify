@@ -103,15 +103,6 @@ type ArchaeoPaner interface {
 	PromoteAll()
 }
 
-// EucloEmitter is the interface for an object that can resolve interaction
-// responses — implemented by TUIFrameEmitter in the euclotui package.
-// It embeds interaction.FrameEmitter so it can be passed directly to
-// RuntimeAdapter.SetInteractionEmitter.
-type EucloEmitter interface {
-	interaction.FrameEmitter
-	Resolve(response interaction.UserResponse)
-}
-
 // EucloPlugin provides factory functions for creating euclo-specific panes and
 // registering euclo tabs. It is passed to RunWithEuclo so that main.go can wire
 // the euclo agent without creating a circular import.
@@ -120,5 +111,4 @@ type EucloPlugin struct {
 	NewPlanner func() PlannerPaner
 	NewDebug   func() DebugPaner
 	SetupTabs  func(reg *TabRegistry)
-	NewEmitter func(program *tea.Program) EucloEmitter
 }
