@@ -129,61 +129,6 @@ func TestSuiteValidateRejectsIncompleteWorkflowCheckpointSeed(t *testing.T) {
 	}
 }
 
-func TestLoadCanonicalHTNAndRewooSuites(t *testing.T) {
-	for _, path := range []string{
-		"/home/lex/Public/relurpify/testsuite/agenttests/htn.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/rewoo.testsuite.yaml",
-	} {
-		if _, err := LoadSuite(path); err != nil {
-			t.Fatalf("LoadSuite(%q): %v", path, err)
-		}
-	}
-}
-
-func TestLoadCanonicalRexSuite(t *testing.T) {
-	path := "/home/lex/Public/relurpify/testsuite/agenttests/rex.testsuite.yaml"
-	if _, err := LoadSuite(path); err != nil {
-		t.Fatalf("LoadSuite(%q): %v", path, err)
-	}
-}
-
-func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
-	for _, path := range []string{
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.code.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.debug.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.tdd.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.review.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.planning.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.transitions.testsuite.yaml",
-	} {
-		if _, err := LoadSuite(path); err != nil {
-			t.Fatalf("LoadSuite(%q): %v", path, err)
-		}
-	}
-}
-
-func TestLoadCanonicalEucloBaselineBKCSuite(t *testing.T) {
-	for _, path := range []string{
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.baseline.bkc.testsuite.yaml",
-	} {
-		if _, err := LoadSuite(path); err != nil {
-			t.Fatalf("LoadSuite(%q): %v", path, err)
-		}
-	}
-}
-
-func TestLoadCanonicalPerformanceBaselineSuites(t *testing.T) {
-	for _, path := range []string{
-		"/home/lex/Public/relurpify/testsuite/agenttests/coding.performance_retrieval.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/react.performance_memory.testsuite.yaml",
-		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.performance_context.testsuite.yaml",
-	} {
-		if _, err := LoadSuite(path); err != nil {
-			t.Fatalf("LoadSuite(%q): %v", path, err)
-		}
-	}
-}
-
 func TestSuiteValidateRejectsUnsupportedTier(t *testing.T) {
 	suite := &Suite{
 		APIVersion: "relurpify/v1alpha1",
@@ -372,29 +317,6 @@ func TestSuiteValidateRejectsUnsupportedRecordingStrategy(t *testing.T) {
 
 	if err := suite.Validate(); err == nil {
 		t.Fatal("expected unsupported recording strategy to fail validation")
-	}
-}
-
-func TestSuiteValidateRejectsUnsupportedControlFlowOverride(t *testing.T) {
-	suite := &Suite{
-		APIVersion: "relurpify/v1alpha1",
-		Kind:       "AgentTestSuite",
-		Metadata:   SuiteMeta{Name: "coding"},
-		Spec: SuiteSpec{
-			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
-			Cases: []CaseSpec{{
-				Name:   "smoke",
-				Prompt: "summarize",
-				Overrides: CaseOverrideSpec{
-					ControlFlow: "pipeline",
-				},
-			}},
-		},
-	}
-
-	if err := suite.Validate(); err == nil {
-		t.Fatal("expected unsupported control_flow override to fail validation")
 	}
 }
 

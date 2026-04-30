@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.recovery
-  description: Euclo recovery-path tests captured from live runs and replayed via
-    golden tapes.
+  description: Euclo recovery-path tests captured from live runs and replayed via golden tapes.
   owner: agent-platform
   tier: live-flaky
   classification: journey
@@ -29,8 +28,7 @@ spec:
     strategy: replay-if-golden
   cases:
   - name: recovery_paradigm_switch_iteration_cap
-    description: Low iteration cap should force ReAct non-convergence and record paradigm-switch
-      recovery.
+    description: Low iteration cap should force ReAct non-convergence and record paradigm-switch recovery.
     task_type: code_modification
     timeout: 180s
     tags:
@@ -39,41 +37,38 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/recovery_pipeline.go
-        content: "package pipeline\n\nimport \"strings\"\n\ntype Step struct {\n \
-          \ Name string\n  Run  func(string) string\n}\n\ntype Pipeline struct {\n\
-          \  Steps []Step\n}\n\nfunc (p Pipeline) Process(input string) string {\n\
-          \  value := strings.TrimSpace(input)\n  for _, step := range p.Steps {\n\
-          \    if step.Run != nil {\n      value = step.Run(value)\n    }\n  }\n \
-          \ return value\n}\n\nfunc DefaultPipeline() Pipeline {\n  return Pipeline{\n\
-          \    Steps: []Step{\n      {\n        Name: \"normalize\",\n        Run:\
-          \ func(input string) string {\n          return strings.ToLower(strings.TrimSpace(input))\n\
-          \        },\n      },\n      {\n        Name: \"dedupe-spaces\",\n     \
-          \   Run: func(input string) string {\n          return strings.Join(strings.Fields(input),\
-          \ \" \")\n        },\n      },\n    },\n  }\n}\n"
+        content: "package pipeline\n\nimport \"strings\"\n\ntype Step struct {\n  Name string\n  Run  func(string) string\n\
+          }\n\ntype Pipeline struct {\n  Steps []Step\n}\n\nfunc (p Pipeline) Process(input string) string {\n  value := strings.TrimSpace(input)\n\
+          \  for _, step := range p.Steps {\n    if step.Run != nil {\n      value = step.Run(value)\n    }\n  }\n  return\
+          \ value\n}\n\nfunc DefaultPipeline() Pipeline {\n  return Pipeline{\n    Steps: []Step{\n      {\n        Name:\
+          \ \"normalize\",\n        Run: func(input string) string {\n          return strings.ToLower(strings.TrimSpace(input))\n\
+          \        },\n      },\n      {\n        Name: \"dedupe-spaces\",\n        Run: func(input string) string {\n   \
+          \       return strings.Join(strings.Fields(input), \" \")\n        },\n      },\n    },\n  }\n}\n"
       - path: testsuite/fixtures/recovery_pipeline_test.go
-        content: "package pipeline\n\nimport \"testing\"\n\nfunc TestDefaultPipeline(t\
-          \ *testing.T) {\n  got := DefaultPipeline().Process(\"  HELLO   STREAM \
-          \ \")\n  if got != \"hello stream\" {\n    t.Fatalf(\"got %q\", got)\n \
-          \ }\n}\n"
-    prompt: Refactor the pipeline in testsuite/fixtures/recovery_pipeline.go to support
-      streaming-style processing with a clearer step model. Keep the current behavior
-      intact.
+        content: "package pipeline\n\nimport \"testing\"\n\nfunc TestDefaultPipeline(t *testing.T) {\n  got := DefaultPipeline().Process(\"\
+          \  HELLO   STREAM  \")\n  if got != \"hello stream\" {\n    t.Fatalf(\"got %q\", got)\n  }\n}\n"
+    prompt: Refactor the pipeline in testsuite/fixtures/recovery_pipeline.go to support streaming-style processing with a
+      clearer step model. Keep the current behavior intact.
     context:
-      euclo.mode: code
-      euclo.force_recovery: paradigm_switch
+      extensions:
+        euclo:
+          mode: code
+          force_recovery: paradigm_switch
     overrides:
       max_iterations: 3
     expect:
       outcome:
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
-        euclo:
-          recovery_attempted: true
-          recovery_strategies:
-          - paradigm_switch
+        extensions:
+          euclo:
+            recovery_attempted: true
+            recovery_strategies:
+            - paradigm_switch
   - name: recovery_capability_fallback
-    description: Regression investigation should capture capability fallback when
-      the first localization path is weak.
+    description: Regression investigation should capture capability fallback when the first localization path is weak.
     task_type: analysis
     timeout: 180s
     tags:
@@ -82,19 +77,22 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/recovery_regression.go
-        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
-          }\n"
-    prompt: This used to work before recent changes. Investigate the regression in
-      Multiply, and if the first investigation path is inconclusive, fall back to
-      the stronger debug capability.
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n}\n"
+    prompt: This used to work before recent changes. Investigate the regression in Multiply, and if the first investigation
+      path is inconclusive, fall back to the stronger debug capability.
     context:
-      euclo.mode: debug
-      euclo.force_recovery: capability_fallback
+      extensions:
+        euclo:
+          mode: debug
+          force_recovery: capability_fallback
     expect:
       outcome:
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       benchmark:
-        euclo:
-          recovery_attempted: true
-          recovery_strategies:
-          - capability_fallback
+        extensions:
+          euclo:
+            recovery_attempted: true
+            recovery_strategies:
+            - capability_fallback

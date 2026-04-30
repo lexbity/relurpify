@@ -55,9 +55,10 @@ spec:
           tools_expected:
             - file_read
             - file_write
-          euclo:
-            mode: review
-            primary_relurpic_capability: code-review-v1
+          extensions:
+            euclo:
+              mode: review
+              primary_relurpic_capability: code-review-v1
 ```
 
 ## Key Components
@@ -83,7 +84,7 @@ Defines the YAML schema types:
 - `Suite`: Top-level test suite container
 - `CaseSpec`: Individual test case definition
 - `ExpectSpec`: Contains OutcomeSpec, SecuritySpec, BenchmarkSpec
-- `EucloBenchmarkSpec`: Euclo-specific telemetry
+- `Extensions`: Optional subject-specific payloads under `outcome`, `benchmark`, and `context`
 
 ### Performance Tracking (`performance.go`)
 
@@ -154,26 +155,27 @@ testsuite/agenttest/
 └── *_test.go            # Unit and integration tests
 ```
 
-## Migration Notes (Phase 8)
+## Migration Notes
 
-All 57 YAML test suite files have been migrated from legacy flat `expect:` fields to the OSB model:
+Committed suites now use the OSB model with explicit subject extension blocks:
 
 | Legacy Field | OSB Replacement |
 |--------------|-----------------|
 | `must_succeed` | `outcome.must_succeed` |
 | `tool_calls_must_include` | `benchmark.tools_expected` |
 | `tool_calls_must_exclude` | `security.tools_must_not_call` or `benchmark.tools_not_expected` |
-| `euclo.mode` | `outcome.euclo_mode` |
-| `euclo.*` (other) | `benchmark.euclo.*` |
+| `context.extensions.euclo.*` | subject-specific task context |
+| `outcome.extensions.euclo.*` | subject-specific hard assertions |
+| `benchmark.extensions.euclo.*` | subject-specific soft telemetry |
 | `llm_calls` | `benchmark.llm_calls_expected` |
 | `max_*_tokens` | `benchmark.token_budget.*` |
 
-Legacy fields have been removed from `ExpectSpec` and the migration tool has been deleted.
+Legacy translation layers have been removed from shared code.
 
 ## Exit Criteria
 
-Phase 8 cleanup is complete when:
-- All 57 YAML files parse without legacy fields
+Cutover cleanup is complete when:
+- All committed YAML files parse without legacy fields
 - `go test ./testsuite/agenttest/...` passes
 - `cleanup_test.go` validation tests pass
 - No references to legacy evaluator functions remain

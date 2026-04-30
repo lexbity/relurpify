@@ -24,32 +24,41 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: show_design_alternatives
     description: Alternatives request should keep Euclo in planning mode.
     task_type: analysis
     prompt: Show alternatives for implementing request coalescing in the cache layer.
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          profile: plan_stage_execute
-          frame_kinds_emitted:
-          - proposal
+        extensions:
+          euclo:
+            profile: plan_stage_execute
+            frame_kinds_emitted:
+            - proposal
   - name: explicit_profile_selection
     description: Explicit approach questions should trigger profile selection behavior.
     task_type: analysis
     prompt: Which execution profile should we use to refactor this safely?
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
         output_regex:
         - (?i)(profile|approach|refactor)
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning

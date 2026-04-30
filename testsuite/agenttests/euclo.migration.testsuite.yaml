@@ -24,31 +24,35 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: simple_import_migration
-    description: Migration request should use plan-stage-execute with ordered migration
-      steps.
+    description: Migration request should use plan-stage-execute with ordered migration steps.
     task_type: code_modification
     setup:
       files:
       - path: testsuite/fixtures/migrate_import.go
-        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run()\
-          \ string {\n  return oldsdk.Version()\n}\n"
+        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run() string {\n  return oldsdk.Version()\n\
+          }\n"
     prompt: Execute the dependency migration from example.com/oldsdk to example.com/newsdk.
     context:
-      euclo.mode: planning
       context_file_contents:
       - path: testsuite/fixtures/migrate_import.go
-        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run()\
-          \ string {\n  return oldsdk.Version()\n}\n"
+        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run() string {\n  return oldsdk.Version()\n\
+          }\n"
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          profile: plan_stage_execute
+        extensions:
+          euclo:
+            profile: plan_stage_execute
   - name: migration_postcheck_failure
     description: Migration failures should surface rollback-oriented output.
     task_type: code_modification
@@ -63,7 +67,6 @@ spec:
           '
     prompt: Execute the schema migration and verify rollback if postcheck fails.
     context:
-      euclo.mode: planning
       context_file_contents:
       - path: testsuite/fixtures/migrate_fail.go
         content: 'package main
@@ -72,6 +75,9 @@ spec:
           func Run() {}
 
           '
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true

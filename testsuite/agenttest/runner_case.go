@@ -18,11 +18,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	ollama "codeburg.org/lexbit/relurpify/platform/llm/ollama"
+	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {
@@ -284,7 +285,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if data, err := json.MarshalIndent(snapshot, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "context.snapshot.json"), data, 0o644)
 	}
-	if err := writeInteractionTape(layout.InteractionTapePath, snapshot); err != nil {
+	if err := euclosubject.WriteInteractionTape(layout.InteractionTapePath, snapshot); err != nil {
 		logger.Printf("case=%s model=%s interaction_tape_error=%v", c.Name, execution.Model, err)
 	}
 	events, _ := ReadTelemetryJSONL(layout.TelemetryPath)
@@ -410,10 +411,6 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	// Legacy MustSucceed check (backward compat)
-	if c.Expect.MustSucceed && !success && caseErr == "" {
-		caseErr = "case marked must_succeed but failed"
-	}
 	if c.Expect.Outcome != nil && c.Expect.Outcome.MustSucceed && !success && caseErr == "" {
 		caseErr = "case marked must_succeed but failed"
 	}
@@ -540,48 +537,6 @@ func resolveCaseMaxRetries(opts RunOptions) int {
 	}
 }
 
-func writeInteractionTape(path string, snapshot map[string]any) error {
-	if snapshot == nil {
-		return nil
-	}
-	raw, ok := snapshot["euclo.interaction_records"]
-	if !ok || raw == nil {
-		return nil
-	}
-	lines, err := marshalInteractionRecords(raw)
-	if err != nil {
-		return err
-	}
-	if len(lines) == 0 {
-		return nil
-	}
-	return os.WriteFile(path, lines, 0o644)
-}
-
-func marshalInteractionRecords(raw any) ([]byte, error) {
-	records, ok := raw.([]any)
-	if !ok {
-		if typed, ok := raw.([]map[string]any); ok {
-			records = make([]any, 0, len(typed))
-			for _, item := range typed {
-				records = append(records, item)
-			}
-		} else {
-			return nil, nil
-		}
-	}
-	var out []byte
-	for _, record := range records {
-		line, err := json.Marshal(record)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, line...)
-		out = append(out, '\n')
-	}
-	return out, nil
-}
-
 type preparedCaseAttempt struct {
 	cleanup         func()
 	memStore        *preparedMemoryStore
@@ -673,7 +628,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	if override := strings.TrimSpace(c.Metadata["task_id"]); override != "" {
 		taskID = override
 	}
-		task := &core.Task{
+	task := &core.Task{
 		ID:          taskID,
 		Instruction: c.Prompt,
 		Type:        string(taskType),
@@ -773,10 +728,6 @@ func seedWorkflowRetrievalStateForCase(state *contextdata.Envelope, task *core.T
 	}
 	if seededPlan != nil {
 		state.SetWorkingValue("pipeline.plan", seededPlan, contextdata.MemoryClassTask)
-		state.SetWorkingValue("euclo.seeded_pipeline_plan", seededPlan, contextdata.MemoryClassTask)
-		explorationID := fmt.Sprintf("%s:seeded-exploration", strings.TrimSpace(fmt.Sprint(workflowID)))
-		state.SetWorkingValue("euclo.active_exploration_id", explorationID, contextdata.MemoryClassTask)
-		state.SetWorkingValue("euclo.active_exploration_snapshot_id", explorationID+":snapshot", contextdata.MemoryClassTask)
 	}
 }
 
@@ -1087,7 +1038,7 @@ func shouldRetryCaseWithBackendReset(err error, patterns []string) bool {
 // capabilityDirectRunner is the narrow interface the test harness requires to
 // invoke a capability directly, bypassing the full agent execution loop.
 type capabilityDirectRunner interface {
-		DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *contextdata.Envelope) (*core.Result, error)
+	DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *contextdata.Envelope) (*core.Result, error)
 }
 
 // executeCapabilityDirectRun runs a capability directly through the agent's

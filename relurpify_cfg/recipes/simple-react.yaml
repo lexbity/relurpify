@@ -1,19 +1,24 @@
-apiVersion: v1
+apiVersion: relurpify/v1alpha1
 kind: ThoughtRecipe
 metadata:
-  id: simple-react
   name: Simple React Agent
   version: "1.0.0"
-triggers:
-  keywords: ["react", "simple", "quick"]
-  priority: 50
-execution:
-  sharing_mode: carry_forward
-  steps:
-    - id: analyze
-      prompt: "Analyze the task: {{task.instruction}}"
-      agent:
-        paradigm: react
-        capabilities:
-          - cap:file_read
-          - cap:file_write
+description: Basic single-step recipe using the React paradigm.
+global:
+  prompt: |
+    You are executing a simple React workflow.
+  configuration:
+    families: [implementation, review]
+    intent_keywords: [react, simple, quick]
+    trigger_priority: 50
+  context:
+    sharing: carry_forward
+sequence:
+  - id: analyze
+    mutation: none
+    hitl: never
+    parent:
+      paradigm: react
+      prompt: "Analyze the task: {{.Instruction}}"
+      context:
+        capture: [analysis]

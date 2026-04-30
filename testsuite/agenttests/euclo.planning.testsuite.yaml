@@ -25,7 +25,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: plan_with_alternatives
     description: Planning mode generates a plan with alternatives.
@@ -35,74 +35,82 @@ spec:
     - planning
     - plan_stage_execute
     - level:2
-    prompt: How should we redesign the authentication system to support OAuth2 in
-      addition to password login?
+    prompt: How should we redesign the authentication system to support OAuth2 in addition to password login?
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
         output_regex:
         - (?i)(plan|approach|step|phase)
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          profile: plan_stage_execute
-          frame_kinds_emitted:
-          - proposal
+        extensions:
+          euclo:
+            profile: plan_stage_execute
+            frame_kinds_emitted:
+            - proposal
   - name: plan_auto_classified
     description: Planning mode auto-classified from instruction structure.
     tags:
     - level:2
     task_type: analysis
-    prompt: How should we migrate the database from PostgreSQL to CockroachDB while
-      maintaining zero downtime?
+    prompt: How should we migrate the database from PostgreSQL to CockroachDB while maintaining zero downtime?
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
   - name: plan_cross_cutting
     description: Planning mode for cross-cutting changes across multiple packages.
     tags:
     - level:4
     task_type: analysis
-    prompt: Plan the approach for adding structured logging across all HTTP handlers
-      and database operations.
+    prompt: Plan the approach for adding structured logging across all HTTP handlers and database operations.
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          profile: plan_stage_execute
+        extensions:
+          euclo:
+            profile: plan_stage_execute
   - name: planning_from_partial_adr
-    description: '4.3 artifact-mediated: incomplete ADR with TODOs — euclo plan must
-      respect implied constraints.'
+    description: "4.3 artifact-mediated: incomplete ADR with TODOs \u2014 euclo plan must respect implied constraints."
     task_type: analysis
     tags:
     - stable
     - planning
     - artifact-mediated
     - level:3
-    prompt: "Partial ADR (Architecture Decision Record) — Status: Draft:\n\nTitle:\
-      \ Replace in-memory cache with Redis\n\nContext:\n  The current in-memory LRU\
-      \ cache does not survive process restarts.\n  Multiple replicas cannot share\
-      \ cache state.\n  TODO: decide on eviction policy\n  TODO: decide on maximum\
-      \ key TTL\n\nDecision:\n  Use Redis as the shared cache backend.\n  TODO: specify\
-      \ connection pooling approach\n  TODO: define fallback behavior when Redis is\
-      \ unavailable\n\nConsequences:\n  Positive: shared cache state across replicas.\n\
-      \  Negative: operational dependency on Redis.\n  TODO: list migration steps\
-      \ from in-memory to Redis\n\nCreate a planning document that fills in the TODOs\
-      \ and produces a structured\nmigration plan respecting the constraints implied\
-      \ by this ADR.\n"
+    prompt: "Partial ADR (Architecture Decision Record) \u2014 Status: Draft:\n\nTitle: Replace in-memory cache with Redis\n\
+      \nContext:\n  The current in-memory LRU cache does not survive process restarts.\n  Multiple replicas cannot share cache\
+      \ state.\n  TODO: decide on eviction policy\n  TODO: decide on maximum key TTL\n\nDecision:\n  Use Redis as the shared\
+      \ cache backend.\n  TODO: specify connection pooling approach\n  TODO: define fallback behavior when Redis is unavailable\n\
+      \nConsequences:\n  Positive: shared cache state across replicas.\n  Negative: operational dependency on Redis.\n  TODO:\
+      \ list migration steps from in-memory to Redis\n\nCreate a planning document that fills in the TODOs and produces a\
+      \ structured\nmigration plan respecting the constraints implied by this ADR.\n"
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
         output_regex:
         - (?i)(redis|eviction|ttl|fallback|migration|pool)
         no_file_changes: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning

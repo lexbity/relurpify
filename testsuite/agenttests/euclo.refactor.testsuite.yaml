@@ -24,29 +24,29 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: internal_extract_function
-    description: Internal extract/rename refactor should succeed under API-compatible
-      constraints.
+    description: Internal extract/rename refactor should succeed under API-compatible constraints.
     task_type: code_modification
     setup:
       files:
       - path: testsuite/fixtures/refactor_internal.go
-        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\n\
-          func helper() int {\n  return 1\n}\n"
-    prompt: Refactor by extracting a helper and renaming helper to worker while keeping
-      the public API stable.
+        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\nfunc helper() int {\n  return 1\n}\n"
+    prompt: Refactor by extracting a helper and renaming helper to worker while keeping the public API stable.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/refactor_internal.go
-        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\n\
-          func helper() int {\n  return 1\n}\n"
+        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\nfunc helper() int {\n  return 1\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
   - name: exported_rename_blocked
     description: Renaming an exported symbol should be blocked by compatibility constraints.
     task_type: code_modification
@@ -54,13 +54,14 @@ spec:
       files:
       - path: testsuite/fixtures/refactor_exported.go
         content: "package main\n\nfunc Exported() int {\n  return 1\n}\n"
-    prompt: Refactor by renaming Exported to BetterExported while keeping the public
-      API stable.
+    prompt: Refactor by renaming Exported to BetterExported while keeping the public API stable.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/refactor_exported.go
         content: "package main\n\nfunc Exported() int {\n  return 1\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true

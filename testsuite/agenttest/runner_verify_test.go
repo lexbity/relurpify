@@ -169,8 +169,8 @@ func TestOutcomeSpecWithVerifyLoadsCorrectly(t *testing.T) {
 
 	suitePath := filepath.Join(workspace, "suite.yaml")
 	suiteYAML := strings.TrimSpace(`
-apiVersion: relurpify/v1
-kind: Suite
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
 metadata:
   name: verify-suite
 spec:
@@ -183,7 +183,6 @@ spec:
       prompt: verify this
       expect:
         outcome:
-          must_succeed: true
           verify:
             steps:
               - tool: go_test

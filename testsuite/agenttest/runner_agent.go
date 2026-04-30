@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -239,9 +239,6 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	env.IndexManager = indexManager
 	env.SearchEngine = searchEngine
 	agent := instantiateAgentByName(workspace, executionAgentName, env)
-	if err := applyCaseControlFlowOverride(agent, c); err != nil {
-		return nil, nil, nil, err
-	}
 	return agent, contextdata.NewEnvelope("", ""), runner, nil
 }
 
@@ -314,17 +311,6 @@ func resolveBootstrapTimeout(opts RunOptions, c CaseSpec) time.Duration {
 	return timeout
 }
 
-func applyCaseControlFlowOverride(_ graph.WorkflowExecutor, c CaseSpec) error {
-	flow := strings.TrimSpace(c.Overrides.ControlFlow)
-	if flow == "" {
-		return nil
-	}
-	// Control flow overrides are no longer supported via CodingAgent modes.
-	// Named agents define their own control scheme. Return an error so test
-	// authors are aware the override field has no effect.
-	return fmt.Errorf("control_flow override %q not supported: named agents manage their own control scheme", flow)
-}
-
 func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
 	return []core.CapabilitySelector{
 		{ID: "agent:architect", Kind: core.CapabilityKindTool},
@@ -378,8 +364,7 @@ func applyAgentTestCapabilityDefaults(registry *capability.Registry, allowedCapa
 	if registry == nil {
 		return
 	}
-	_ = registerCapabilityAlias(registry, "read_file", "file_read")
-	_ = registerCapabilityAlias(registry, "write_file", "file_write")
+
 	registry.RestrictToCapabilities(uniqueCapabilitySelectors(allowedCapabilities))
 }
 
@@ -441,45 +426,6 @@ func uniqueCapabilitySelectors(input []core.CapabilitySelector) []core.Capabilit
 	}
 	return out
 }
-
-func registerCapabilityAlias(registry *capability.Registry, alias, target string) error {
-	if registry == nil || alias == "" || target == "" {
-		return nil
-	}
-	if _, ok := registry.Get(alias); ok {
-		return nil
-	}
-	targetTool, ok := registry.Get(target)
-	if !ok {
-		return nil
-	}
-	return registry.Register(&aliasTool{
-		alias:  alias,
-		target: targetTool,
-	})
-}
-
-type aliasTool struct {
-	alias  string
-	target core.Tool
-}
-
-func (t *aliasTool) Name() string        { return t.alias }
-func (t *aliasTool) Description() string { return "Alias for " + t.target.Name() }
-func (t *aliasTool) Category() string    { return t.target.Category() }
-func (t *aliasTool) Parameters() []core.ToolParameter {
-	return t.target.Parameters()
-}
-func (t *aliasTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	return t.target.Execute(ctx, args)
-}
-func (t *aliasTool) IsAvailable(ctx context.Context) bool {
-	return t.target.IsAvailable(ctx)
-}
-func (t *aliasTool) Permissions() core.ToolPermissions {
-	return t.target.Permissions()
-}
-func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
 // disabledToolPrecheck blocks invocation of disabled tools
 type disabledToolPrecheck struct {

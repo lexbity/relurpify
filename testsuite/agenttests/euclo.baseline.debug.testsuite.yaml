@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.debug
-  description: Capability-baseline Euclo debug coverage for investigate and verification-repair
-    paths.
+  description: Capability-baseline Euclo debug coverage for investigate and verification-repair paths.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -29,7 +28,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: debug_investigate_baseline
     description: Debug investigate should localize the failure without changing files.
@@ -43,22 +42,25 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n\
-          \  var users map[string]string\n  return users[id]\n}\n"
-    prompt: "panic: runtime error: index out of range\ngoroutine 1 [running]:\neuclobaselinedebug.GetUser(...)\n\
-      \  testsuite/fixtures/euclo_baseline_debug/server.go:4\nIdentify the likely\
-      \ root cause and where it is localized. Do not modify files.\n"
+        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
+          \ users[id]\n}\n"
+    prompt: "panic: runtime error: index out of range\ngoroutine 1 [running]:\neuclobaselinedebug.GetUser(...)\n  testsuite/fixtures/euclo_baseline_debug/server.go:4\n\
+      Identify the likely root cause and where it is localized. Do not modify files.\n"
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n\
-          \  var users map[string]string\n  return users[id]\n}\n"
+        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
+          \ users[id]\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       security:
         tools_must_not_call:
         - file_write
@@ -68,14 +70,15 @@ spec:
         tools_expected:
         - file_read
         - file_search
-        euclo:
-          behavior_family: stale_assumption_detection
-          primary_relurpic_capability: euclo:debug.investigate-repair
-          supporting_relurpic_capabilities:
-          - euclo:debug.root-cause
-          - euclo:debug.localization
-          recipe_ids:
-          - debug.investigate-repair.reproduce
+        extensions:
+          euclo:
+            behavior_family: stale_assumption_detection
+            primary_relurpic_capability: euclo:debug.investigate-repair
+            supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+            recipe_ids:
+            - debug.investigate-repair.reproduce
   - name: debug_simple_repair_baseline
     description: Baseline validation of euclo:debug.repair.simple in isolation.
     task_type: code_modification
@@ -88,16 +91,15 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/counter.go
-        content: "package euclobaselinedebug\n\nfunc Increment(n int) int {\n  return\
-          \ n - 1\n}\n"
+        content: "package euclobaselinedebug\n\nfunc Increment(n int) int {\n  return n - 1\n}\n"
       - path: testsuite/fixtures/euclo_baseline_debug/counter_test.go
-        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestIncrement(t\
-          \ *testing.T) {\n  if Increment(3) != 4 {\n    t.Fatalf(\"got %d, want 4\"\
-          , Increment(3))\n  }\n}\n"
-    prompt: Fix Increment in testsuite/fixtures/euclo_baseline_debug/counter.go —
-      it subtracts instead of adding.
+        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestIncrement(t *testing.T) {\n  if Increment(3)\
+          \ != 4 {\n    t.Fatalf(\"got %d, want 4\", Increment(3))\n  }\n}\n"
+    prompt: "Fix Increment in testsuite/fixtures/euclo_baseline_debug/counter.go \u2014 it subtracts instead of adding."
     context:
-      euclo.mode: debug
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
@@ -107,21 +109,23 @@ spec:
         - path: testsuite/fixtures/euclo_baseline_debug/counter.go
           contains:
           - return n + 1
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       benchmark:
         tools_expected:
         - file_read
         - file_write
         - go_test
-        euclo:
-          behavior_family: stale_assumption_detection
-          primary_relurpic_capability: euclo:debug.repair.simple
-          recipe_ids:
-          - debug.repair-simple.read
-          - debug.repair-simple.edit
+        extensions:
+          euclo:
+            behavior_family: stale_assumption_detection
+            primary_relurpic_capability: euclo:debug.repair.simple
+            recipe_ids:
+            - debug.repair-simple.read
+            - debug.repair-simple.edit
   - name: debug_investigate_flaw_surface_baseline
-    description: Baseline validation that euclo:debug.investigate-repair surfaces
-      flaw-surface findings for anti-patterns.
+    description: Baseline validation that euclo:debug.investigate-repair surfaces flaw-surface findings for anti-patterns.
     task_type: analysis
     tags:
     - baseline
@@ -133,27 +137,30 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n\
-          \  var users map[string]string\n  return users[id]\n}\n"
-    prompt: 'The GetUser function has a nil map write issue - the users map is not
-      initialized before use.
+        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
+          \ users[id]\n}\n"
+    prompt: 'The GetUser function has a nil map write issue - the users map is not initialized before use.
 
       Investigate and identify the flaw. Do not modify files.
 
       '
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n\
-          \  var users map[string]string\n  return users[id]\n}\n"
+        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
+          \ users[id]\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       state_key_not_empty:
       - euclo.review_findings
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       security:
         tools_must_not_call:
         - file_write
@@ -163,14 +170,15 @@ spec:
         tools_expected:
         - file_read
         - file_search
-        euclo:
-          behavior_family: stale_assumption_detection
-          primary_relurpic_capability: euclo:debug.investigate-repair
-          supporting_relurpic_capabilities:
-          - euclo:debug.root-cause
-          - euclo:debug.flaw-surface
-          recipe_ids:
-          - debug.investigate-repair.reproduce
+        extensions:
+          euclo:
+            behavior_family: stale_assumption_detection
+            primary_relurpic_capability: euclo:debug.investigate-repair
+            supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.flaw-surface
+            recipe_ids:
+            - debug.investigate-repair.reproduce
   - name: debug_verification_repair_baseline
     description: Debug repair should fix the implementation and verify the result.
     task_type: code_modification
@@ -183,24 +191,21 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/abs.go
-        content: "package euclobaselinedebug\n\nfunc Abs(v int) int {\n  if v < 0\
-          \ {\n    return v\n  }\n  return v\n}\n"
+        content: "package euclobaselinedebug\n\nfunc Abs(v int) int {\n  if v < 0 {\n    return v\n  }\n  return v\n}\n"
       - path: testsuite/fixtures/euclo_baseline_debug/abs_test.go
-        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestAbs(t\
-          \ *testing.T) {\n  if Abs(-3) != 3 {\n    t.Fatalf(\"got %d, want 3\", Abs(-3))\n\
-          \  }\n}\n"
-    prompt: Fix testsuite/fixtures/euclo_baseline_debug/abs.go so Abs returns a positive
-      value for negative inputs.
+        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestAbs(t *testing.T) {\n  if Abs(-3) != 3 {\n\
+          \    t.Fatalf(\"got %d, want 3\", Abs(-3))\n  }\n}\n"
+    prompt: Fix testsuite/fixtures/euclo_baseline_debug/abs.go so Abs returns a positive value for negative inputs.
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/fixtures/euclo_baseline_debug/abs.go
-        content: "package euclobaselinedebug\n\nfunc Abs(v int) int {\n  if v < 0\
-          \ {\n    return v\n  }\n  return v\n}\n"
+        content: "package euclobaselinedebug\n\nfunc Abs(v int) int {\n  if v < 0 {\n    return v\n  }\n  return v\n}\n"
       - path: testsuite/fixtures/euclo_baseline_debug/abs_test.go
-        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestAbs(t\
-          \ *testing.T) {\n  if Abs(-3) != 3 {\n    t.Fatalf(\"got %d, want 3\", Abs(-3))\n\
-          \  }\n}\n"
+        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestAbs(t *testing.T) {\n  if Abs(-3) != 3 {\n\
+          \    t.Fatalf(\"got %d, want 3\", Abs(-3))\n  }\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
@@ -210,17 +215,20 @@ spec:
         - path: testsuite/fixtures/euclo_baseline_debug/abs.go
           contains:
           - return -v
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       benchmark:
         tools_expected:
         - file_read
         - file_write
         - go_test
-        euclo:
-          behavior_family: stale_assumption_detection
-          primary_relurpic_capability: euclo:debug.investigate-repair
-          supporting_relurpic_capabilities:
-          - euclo:debug.root-cause
-          - euclo:debug.verification-repair
-          recipe_ids:
-          - debug.investigate-repair.reproduce
+        extensions:
+          euclo:
+            behavior_family: stale_assumption_detection
+            primary_relurpic_capability: euclo:debug.investigate-repair
+            supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.verification-repair
+            recipe_ids:
+            - debug.investigate-repair.reproduce

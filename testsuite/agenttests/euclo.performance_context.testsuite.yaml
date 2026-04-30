@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.performance_context
-  description: Performance-oriented Euclo coverage for long-running context and resume
-    behavior.
+  description: Performance-oriented Euclo coverage for long-running context and resume behavior.
   owner: agent-platform
   tier: stable
   classification: benchmark
@@ -35,11 +34,10 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: code_mode_large_context_walk
-    description: Exercise multi-phase execution with a larger code context to establish
-      a performance baseline.
+    description: Exercise multi-phase execution with a larger code context to establish a performance baseline.
     tags:
     - performance-baseline
     - long-running
@@ -56,48 +54,47 @@ spec:
           import "fmt"
 
 
-          func A(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("A:%s", input), nil }
+          func A(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("A:%s", input), nil
+          }
 
-          func B(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("B:%s", input), nil }
+          func B(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("B:%s", input), nil
+          }
 
-          func C(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("C:%s", input), nil }
+          func C(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("C:%s", input), nil
+          }
 
-          func D(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("D:%s", input), nil }
+          func D(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("D:%s", input), nil
+          }
 
-          func E(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("E:%s", input), nil }
+          func E(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("E:%s", input), nil
+          }
 
-          func F(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("F:%s", input), nil }
+          func F(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("F:%s", input), nil
+          }
 
-          func G(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("G:%s", input), nil }
+          func G(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("G:%s", input), nil
+          }
 
-          func H(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("H:%s", input), nil }
+          func H(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("H:%s", input), nil
+          }
 
-          func I(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("I:%s", input), nil }
+          func I(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("I:%s", input), nil
+          }
 
-          func J(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("J:%s", input), nil }
+          func J(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("J:%s", input), nil
+          }
 
-          func K(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("K:%s", input), nil }
+          func K(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("K:%s", input), nil
+          }
 
-          func L(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("L:%s", input), nil }
+          func L(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("L:%s", input), nil
+          }
 
           '
     overrides:
       max_iterations: 6
-    prompt: Inspect handler.go and explain, in 6 bullets, where context pressure or
-      repeated analysis work could appear if an agent had to refactor all functions
-      consistently. Do not modify any files.
+    prompt: Inspect handler.go and explain, in 6 bullets, where context pressure or repeated analysis work could appear if
+      an agent had to refactor all functions consistently. Do not modify any files.
     expect:
       outcome:
         must_succeed: true
@@ -105,11 +102,11 @@ spec:
       benchmark:
         token_budget:
           max_prompt: 8000
-        euclo:
-          min_frames_emitted: 1
+        extensions:
+          euclo:
+            min_frames_emitted: 1
   - name: resume_from_saved_phase_with_context_pressure
-    description: Exercise session resume and continued phase execution for a performance
-      baseline.
+    description: Exercise session resume and continued phase execution for a performance baseline.
     tags:
     - performance-baseline
     - long-running
@@ -119,34 +116,39 @@ spec:
     timeout: 180s
     prompt: Plan and explain a bounded retrieval strategy for large workflows.
     context:
-      euclo.mode: planning
-      euclo.interaction_state:
-        mode: planning
-        current_phase: generate
-        phases_executed:
-        - scope
-        - clarify
-        phase_states:
-          scope.done: true
-          clarify.done: true
-      euclo.interaction_script:
-      - kind: session_resume
-        action: resume
+      extensions:
+        euclo:
+          mode: planning
+          interaction_state:
+            mode: planning
+            current_phase: generate
+            phases_executed:
+            - scope
+            - clarify
+            phase_states:
+              scope.done: true
+              clarify.done: true
+          interaction_script:
+          - kind: session_resume
+            action: resume
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          phases_executed:
-          - generate
-          - commit
-          frame_kinds_emitted:
-          - session_resume
+        extensions:
+          euclo:
+            phases_executed:
+            - generate
+            - commit
+            frame_kinds_emitted:
+            - session_resume
   - name: performance_large_file_navigation
-    description: '5.3 performance: navigate a multi-function file, patch one target
-      function — baseline: ≤2 context rescans.'
+    description: "5.3 performance: navigate a multi-function file, patch one target function \u2014 baseline: \u22642 context\
+      \ rescans."
     task_type: code_modification
     tags:
     - performance-baseline
@@ -202,12 +204,11 @@ spec:
           '
     overrides:
       max_iterations: 6
-    prompt: 'In testsuite/fixtures/nav_pkg/routes.go, update RouteVersion to return
-      "v1.0.0" instead of "v0.0.0". Only modify that function.
+    prompt: 'In testsuite/fixtures/nav_pkg/routes.go, update RouteVersion to return "v1.0.0" instead of "v0.0.0". Only modify
+      that function.
 
       '
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/nav_pkg/routes.go
         content: 'package navpkg
@@ -254,6 +255,9 @@ spec:
           func RouteSearch() string { return "/search" }
 
           '
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -263,10 +267,12 @@ spec:
         - path: testsuite/fixtures/nav_pkg/routes.go
           contains:
           - v1.0.0
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
   - name: performance_multi_file_coordination
-    description: '5.3 performance: consistent change across 5 files — baseline: single
-      exploration pass, ≤5 progressive file reads.'
+    description: "5.3 performance: consistent change across 5 files \u2014 baseline: single exploration pass, \u22645 progressive\
+      \ file reads."
     task_type: code_modification
     tags:
     - performance-baseline
@@ -327,13 +333,14 @@ spec:
           '
     overrides:
       max_iterations: 10
-    prompt: 'All five service files in testsuite/fixtures/multi_coord/ share a Version
-      constant currently set to "0.9.0". Update every ServiceXVersion constant to
-      "1.0.0". Apply the change consistently across all five files.
+    prompt: 'All five service files in testsuite/fixtures/multi_coord/ share a Version constant currently set to "0.9.0".
+      Update every ServiceXVersion constant to "1.0.0". Apply the change consistently across all five files.
 
       '
     context:
-      euclo.mode: code
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -343,4 +350,6 @@ spec:
         - testsuite/fixtures/multi_coord/svc_c.go
         - testsuite/fixtures/multi_coord/svc_d.go
         - testsuite/fixtures/multi_coord/svc_e.go
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code

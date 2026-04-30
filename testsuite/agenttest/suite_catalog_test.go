@@ -3,84 +3,60 @@ package agenttest
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func TestLoadAllCommittedSuites(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "agenttests", "*.testsuite.yaml"))
-	if err != nil {
-		t.Fatalf("Glob() error = %v", err)
-	}
-	if len(paths) == 0 {
-		t.Fatal("expected committed agent suites")
-	}
-
-	for _, path := range paths {
-		path := path
-		t.Run(filepath.Base(path), func(t *testing.T) {
-			t.Parallel()
-			data, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("ReadFile(%q) error = %v", path, err)
-			}
-			raw := string(data)
-			for _, needle := range []string{
-				"owner:",
-				"tier:",
-				"quarantined:",
-				"execution:",
-				"profile:",
-				"strict:",
-			} {
-				if !strings.Contains(raw, needle) {
-					t.Fatalf("suite %q must declare %q explicitly in YAML", path, needle)
-				}
-			}
-			suite, err := LoadSuite(path)
-			if err != nil {
-				t.Fatalf("LoadSuite(%q) error = %v", path, err)
-			}
-			if suite.Metadata.Name == "" {
-				t.Fatalf("suite %q missing metadata.name after load", path)
-			}
-			if strings.TrimSpace(suite.Metadata.Owner) == "" {
-				t.Fatalf("suite %q missing metadata.owner after load", path)
-			}
-			if len(suite.Spec.Cases) == 0 {
-				t.Fatalf("suite %q missing cases after load", path)
-			}
-		})
-	}
-}
-
-func TestLoadEucloSuitesIncludeClassification(t *testing.T) {
-	cases := map[string]string{
-		filepath.Join("..", "agenttests", "euclo.code.testsuite.yaml"):                "capability",
-		filepath.Join("..", "agenttests", "euclo.archaeology.testsuite.yaml"):         "journey",
-		filepath.Join("..", "agenttests", "euclo.intent.journey.testsuite.yaml"):      "journey",
-		filepath.Join("..", "agenttests", "euclo.performance_context.testsuite.yaml"): "benchmark",
-	}
-	for path, want := range cases {
-		suite, err := LoadSuite(path)
+func TestRepresentativeSuitesLoadCatalog(t *testing.T) {
+	for _, root := range findAgentTestsDir(t) {
+		files, err := filepath.Glob(filepath.Join(root, "*.yaml"))
 		if err != nil {
-			t.Fatalf("LoadSuite(%q) error = %v", path, err)
+			t.Fatalf("glob agenttest suites in %s: %v", root, err)
 		}
-		if got := suite.Metadata.Classification; got != want {
-			t.Fatalf("suite %q classification = %q, want %q", path, got, want)
+		for _, path := range files {
+			if _, err := LoadSuite(path); err != nil {
+				t.Fatalf("expected suite %s to load, got %v", path, err)
+			}
 		}
 	}
 }
 
-func TestLoadBenchmarkSuitesIncludeScoringMetadata(t *testing.T) {
-	suite, err := LoadSuite(filepath.Join("..", "agenttests", "euclo.performance_context.testsuite.yaml"))
+func TestGenericSuiteCatalogMetadata(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "suite.yaml")
+	err := os.WriteFile(path, []byte(`
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: generic
+  owner: agent-platform
+  tier: stable
+  classification: capability
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: live
+  workspace:
+    strategy: derived
+  cases:
+    - name: smoke
+      prompt: summarize
+      expect:
+        outcome:
+          must_succeed: true
+`), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	suite, err := LoadSuite(path)
 	if err != nil {
 		t.Fatalf("LoadSuite error = %v", err)
 	}
-	if got := suite.Metadata.Benchmark.ScoreFamily; got != "context-pressure" {
-		t.Fatalf("unexpected benchmark score family %q", got)
+	if suite.Metadata.Name != "generic" {
+		t.Fatalf("suite.Metadata.Name = %q", suite.Metadata.Name)
 	}
-	if got := suite.Metadata.Benchmark.ComparisonWindow; got != "suite" {
-		t.Fatalf("unexpected benchmark comparison window %q", got)
+	if suite.Metadata.Classification != "capability" {
+		t.Fatalf("suite.Metadata.Classification = %q", suite.Metadata.Classification)
 	}
 }

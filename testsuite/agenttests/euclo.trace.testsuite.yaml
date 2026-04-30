@@ -24,7 +24,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: explicit_trace_request
     description: Trace-oriented debug prompt should stay on trace/analyze path.
@@ -35,20 +35,26 @@ spec:
         content: "package main\n\nfunc Handle() error {\n  return nil\n}\n"
     prompt: Trace this function and analyze where the failure originates.
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/fixtures/trace_target.go
         content: "package main\n\nfunc Handle() error {\n  return nil\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
   - name: trace_to_candidate_root_cause
     description: Trace analysis should produce anomaly/root-cause oriented output.
     task_type: analysis
     prompt: Analyze the trace and identify the most likely root cause candidate.
     context:
-      euclo.mode: debug
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true

@@ -31,20 +31,18 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/pysuite/calc.py
-        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n\n\ndef mul(a:\
-          \ int, b: int) -> int:\n    return a * b\n"
+        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n\n\ndef mul(a: int, b: int) -> int:\n    return a\
+          \ * b\n"
       - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
-          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
-          \ 4)\n\n    def test_mul(self) -> None:\n        self.assertEqual(calc.mul(3,\
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self) -> None:\n\
+          \        self.assertEqual(calc.add(2, 2), 4)\n\n    def test_mul(self) -> None:\n        self.assertEqual(calc.mul(3,\
           \ 4), 12)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: Fix the failing tests in testsuite/agenttest_fixtures/pysuite (do not
-      change test_calc.py), then run cli_python args ["test_calc.py"] with working_directory
-      "testsuite/agenttest_fixtures/pysuite".
+    prompt: Fix the failing tests in testsuite/agenttest_fixtures/pysuite (do not change test_calc.py), then run cli_python
+      args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".
     expect:
       outcome:
         must_succeed: true
@@ -63,22 +61,18 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/pysuite/calc.py
-        content: "def add(a: int, b: int) -> int:\n    return a + b\n\n\ndef mul(a:\
-          \ int, b: int) -> int:\n    return a * b\n"
+        content: "def add(a: int, b: int) -> int:\n    return a + b\n\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n"
       - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
-          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
-          \ 4)\n\n    def test_mul(self) -> None:\n        self.assertEqual(calc.mul(3,\
-          \ 4), 12)\n\n    def test_div(self) -> None:\n        self.assertEqual(calc.div(10,\
-          \ 2), 5)\n        with self.assertRaises(ZeroDivisionError):\n         \
-          \   calc.div(1, 0)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self) -> None:\n\
+          \        self.assertEqual(calc.add(2, 2), 4)\n\n    def test_mul(self) -> None:\n        self.assertEqual(calc.mul(3,\
+          \ 4), 12)\n\n    def test_div(self) -> None:\n        self.assertEqual(calc.div(10, 2), 5)\n        with self.assertRaises(ZeroDivisionError):\n\
+          \            calc.div(1, 0)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: 'Implement div(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/calc.py
-      (raise ZeroDivisionError on division by zero; do not change tests), then run
-      cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".'
+    prompt: 'Implement div(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/calc.py (raise ZeroDivisionError
+      on division by zero; do not change tests), then run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".'
     expect:
       outcome:
         must_succeed: true
@@ -97,19 +91,16 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/pysuite/calc.py
-        content: "def add(a: int, b: int) -> int:\n    return a + b\n\n\ndef mul(a:\
-          \ int, b: int) -> int:\n    return a * b\n"
+        content: "def add(a: int, b: int) -> int:\n    return a + b\n\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n"
       - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
-          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
-          \ 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main(\n"
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self) -> None:\n\
+          \        self.assertEqual(calc.add(2, 2), 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main(\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: Fix the syntax error in testsuite/agenttest_fixtures/pysuite/test_calc.py
-      without changing the test intent, then run cli_python args ["test_calc.py"]
-      with working_directory "testsuite/agenttest_fixtures/pysuite".
+    prompt: Fix the syntax error in testsuite/agenttest_fixtures/pysuite/test_calc.py without changing the test intent, then
+      run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".
     expect:
       outcome:
         must_succeed: true
@@ -130,15 +121,14 @@ spec:
       - path: testsuite/agenttest_fixtures/pysuite/calc.py
         content: "def add(a: int, b: int) -> int:\n    return a + b\n"
       - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
-          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
-          \ 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self) -> None:\n\
+          \        self.assertEqual(calc.add(2, 2), 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: Run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite"
-      and confirm whether the module is already correct. Do not modify any files.
+    prompt: Run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite" and confirm
+      whether the module is already correct. Do not modify any files.
     expect:
       outcome:
         must_succeed: true
@@ -158,22 +148,19 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/pysuite/calc.py
-        content: "from helpers import add\n\n\ndef mul(a: int, b: int) -> int:\n \
-          \   return a * b\n"
+        content: "from helpers import add\n\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n"
       - path: testsuite/agenttest_fixtures/pysuite/helpers.py
         content: "def add(a: int, b: int) -> int:\n    return a + b\n"
       - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
-          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
-          \ 4)\n\n    def test_sub(self) -> None:\n        self.assertEqual(calc.sub(5,\
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self) -> None:\n\
+          \        self.assertEqual(calc.add(2, 2), 4)\n\n    def test_sub(self) -> None:\n        self.assertEqual(calc.sub(5,\
           \ 3), 2)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: 'Implement sub(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/helpers.py
-      and export it from testsuite/agenttest_fixtures/pysuite/calc.py without changing
-      tests, then run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".'
+    prompt: 'Implement sub(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/helpers.py and export it from testsuite/agenttest_fixtures/pysuite/calc.py
+      without changing tests, then run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".'
     expect:
       outcome:
         must_succeed: true
@@ -193,15 +180,14 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/pysuite/calc/calc.py
-        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n\n\ndef mul(a:\
-          \ int, b: int) -> int:\n    return a * b\n"
+        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n\n\ndef mul(a: int, b: int) -> int:\n    return a\
+          \ * b\n"
     overrides:
       allowed_capabilities:
       - name: cli_python
         kind: tool
-    prompt: Fix testsuite/agenttest_fixtures/pysuite/calc/calc.py so the permanent pytest
-      oracle in testsuite/agenttest_fixtures/pysuite/calc/test_calc.py passes, then
-      run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite/calc".
+    prompt: Fix testsuite/agenttest_fixtures/pysuite/calc/calc.py so the permanent pytest oracle in testsuite/agenttest_fixtures/pysuite/calc/test_calc.py
+      passes, then run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite/calc".
     expect:
       outcome:
         must_succeed: true
@@ -213,7 +199,9 @@ spec:
             args:
               working_directory: testsuite/agenttest_fixtures/pysuite/calc
               test_path: test_calc.py
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
         tools_expected:
         - cli_python

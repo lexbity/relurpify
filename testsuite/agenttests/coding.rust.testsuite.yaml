@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.rust
-  description: Rust-focused prompts for the coding agent across common development
-    workflows.
+  description: Rust-focused prompts for the coding agent across common development workflows.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -32,16 +31,14 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b + 1\n}\n\n#[cfg(test)]\n\
-          mod tests {\n    use super::*;\n\n    #[test]\n    fn test_add() {\n   \
-          \     assert_eq!(add(2, 2), 4);\n    }\n}\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b + 1\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n\
+          \    #[test]\n    fn test_add() {\n        assert_eq!(add(2, 2), 4);\n    }\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: Fix the failing tests in testsuite/agenttest_fixtures/rustsuite (do not
-      change test expectations), then run cli_cargo args ["test"] with working_directory
-      "testsuite/agenttest_fixtures/rustsuite".
+    prompt: Fix the failing tests in testsuite/agenttest_fixtures/rustsuite (do not change test expectations), then run cli_cargo
+      args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".
     expect:
       outcome:
         must_succeed: true
@@ -60,17 +57,15 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\n\
-          mod tests {\n    use super::*;\n\n    #[test]\n    fn test_add() {\n   \
-          \     assert_eq!(add(2, 2), 4);\n    }\n\n    #[test]\n    fn test_mul()\
-          \ {\n        assert_eq!(mul(3, 4), 12);\n    }\n}\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n  \
+          \  #[test]\n    fn test_add() {\n        assert_eq!(add(2, 2), 4);\n    }\n\n    #[test]\n    fn test_mul() {\n\
+          \        assert_eq!(mul(3, 4), 12);\n    }\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: 'Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-      (do not change tests), then run cli_cargo args ["test"] with working_directory
-      "testsuite/agenttest_fixtures/rustsuite".'
+    prompt: 'Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/lib.rs (do not change tests),
+      then run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".'
     expect:
       outcome:
         must_succeed: true
@@ -89,20 +84,17 @@ spec:
     context:
       context_file_contents:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    format!(\"{}\", a + b)\n\
-          }\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    format!(\"{}\", a + b)\n}\n"
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    format!(\"{}\", a + b)\n\
-          }\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    format!(\"{}\", a + b)\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: Fix the compile error in testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-      while keeping add(a, b) -> i32, then run cli_cargo args ["check"] with working_directory
-      "testsuite/agenttest_fixtures/rustsuite".
+    prompt: Fix the compile error in testsuite/agenttest_fixtures/rustsuite/src/lib.rs while keeping add(a, b) -> i32, then
+      run cli_cargo args ["check"] with working_directory "testsuite/agenttest_fixtures/rustsuite".
     expect:
       outcome:
         must_succeed: true
@@ -121,29 +113,26 @@ spec:
     context:
       context_file_contents:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "mod math;\n\npub use math::add;\n\n#[cfg(test)]\nmod tests {\n \
-          \   use super::*;\n\n    #[test]\n    fn test_add() {\n        assert_eq!(add(2,\
-          \ 2), 4);\n    }\n\n    #[test]\n    fn test_mul() {\n        assert_eq!(mul(3,\
-          \ 4), 12);\n    }\n}\n"
+        content: "mod math;\n\npub use math::add;\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn test_add()\
+          \ {\n        assert_eq!(add(2, 2), 4);\n    }\n\n    #[test]\n    fn test_mul() {\n        assert_eq!(mul(3, 4),\
+          \ 12);\n    }\n}\n"
       - path: testsuite/agenttest_fixtures/rustsuite/src/math.rs
         content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n"
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "mod math;\n\npub use math::add;\n\n#[cfg(test)]\nmod tests {\n \
-          \   use super::*;\n\n    #[test]\n    fn test_add() {\n        assert_eq!(add(2,\
-          \ 2), 4);\n    }\n\n    #[test]\n    fn test_mul() {\n        assert_eq!(mul(3,\
-          \ 4), 12);\n    }\n}\n"
+        content: "mod math;\n\npub use math::add;\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn test_add()\
+          \ {\n        assert_eq!(add(2, 2), 4);\n    }\n\n    #[test]\n    fn test_mul() {\n        assert_eq!(mul(3, 4),\
+          \ 12);\n    }\n}\n"
       - path: testsuite/agenttest_fixtures/rustsuite/src/math.rs
         content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: 'Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/math.rs,
-      preserve the existing add implementation/export, and export mul from testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-      without changing tests. Then run cli_cargo args ["test"] with working_directory
-      "testsuite/agenttest_fixtures/rustsuite".'
+    prompt: 'Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/math.rs, preserve the existing
+      add implementation/export, and export mul from testsuite/agenttest_fixtures/rustsuite/src/lib.rs without changing tests.
+      Then run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".'
     expect:
       outcome:
         must_succeed: true
@@ -163,15 +152,14 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\n\
-          mod tests {\n    use super::*;\n\n    #[test]\n    fn test_add() {\n   \
-          \     assert_eq!(add(2, 2), 4);\n    }\n}\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n  \
+          \  #[test]\n    fn test_add() {\n        assert_eq!(add(2, 2), 4);\n    }\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: Run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite"
-      and confirm whether the crate is already correct. Do not modify any files.
+    prompt: Run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite" and confirm whether
+      the crate is already correct. Do not modify any files.
     expect:
       outcome:
         must_succeed: true
@@ -193,15 +181,14 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
-        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b + 1\n}\n\n#[cfg(test)]\n\
-          mod tests {\n    use super::*;\n\n    #[test]\n    fn test_add() {\n   \
-          \     assert_eq!(add(2, 2), 4);\n    }\n}\n"
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b + 1\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n\
+          \    #[test]\n    fn test_add() {\n        assert_eq!(add(2, 2), 4);\n    }\n}\n"
     overrides:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: Run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite"
-      and explain the failure. Do not modify any files.
+    prompt: Run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite" and explain the failure.
+      Do not modify any files.
     expect:
       outcome:
         must_succeed: true
@@ -226,8 +213,8 @@ spec:
       allowed_capabilities:
       - name: cli_cargo
         kind: tool
-    prompt: Fix testsuite/agenttest_fixtures/rustsuite/src/lib.rs so the permanent cargo
-      test oracle passes, then run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".
+    prompt: Fix testsuite/agenttest_fixtures/rustsuite/src/lib.rs so the permanent cargo test oracle passes, then run cli_cargo
+      args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".
     expect:
       outcome:
         must_succeed: true
@@ -238,7 +225,9 @@ spec:
           - tool: rust_cargo_test
             args:
               working_directory: testsuite/agenttest_fixtures/rustsuite
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
         tools_expected:
         - cli_cargo

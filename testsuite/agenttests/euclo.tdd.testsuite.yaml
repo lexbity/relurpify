@@ -24,7 +24,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: new_function_tdd
     description: 'TDD: write tests first, then implement.'
@@ -39,55 +39,60 @@ spec:
         content: 'package main
 
           '
-    prompt: Write tests first for a Reverse(s string) string function in testsuite/fixtures/strings_test.go,
-      then implement Reverse in testsuite/fixtures/strings.go using TDD.
+    prompt: Write tests first for a Reverse(s string) string function in testsuite/fixtures/strings_test.go, then implement
+      Reverse in testsuite/fixtures/strings.go using TDD.
     context:
-      euclo.mode: tdd
       context_file_contents:
       - path: testsuite/fixtures/strings.go
         content: 'package main
 
           '
+      extensions:
+        euclo:
+          mode: tdd
     expect:
       outcome:
         must_succeed: true
         files_changed:
         - testsuite/fixtures/strings_test.go
         - testsuite/fixtures/strings.go
-        euclo_mode: tdd
+        extensions:
+          euclo:
+            mode: tdd
       benchmark:
-        euclo:
-          profile: test_driven_generation
+        extensions:
+          euclo:
+            profile: test_driven_generation
   - name: add_test_cases
     description: 'TDD mode: add test cases to existing function.'
     task_type: code_modification
     setup:
       files:
       - path: testsuite/fixtures/math.go
-        content: "package main\n\nfunc Max(a, b int) int {\n  if a > b {\n    return\
-          \ a\n  }\n  return b\n}\n"
+        content: "package main\n\nfunc Max(a, b int) int {\n  if a > b {\n    return a\n  }\n  return b\n}\n"
       - path: testsuite/fixtures/math_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestMax_BasicPositive(t\
-          \ *testing.T) {\n  if Max(3, 5) != 5 {\n    t.Error(\"expected 5\")\n  }\n\
-          }\n"
-    prompt: Add tests for Max with negative numbers, equal values, and zero using
-      TDD approach in testsuite/fixtures/math_test.go.
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMax_BasicPositive(t *testing.T) {\n  if Max(3, 5) != 5 {\n\
+          \    t.Error(\"expected 5\")\n  }\n}\n"
+    prompt: Add tests for Max with negative numbers, equal values, and zero using TDD approach in testsuite/fixtures/math_test.go.
     context:
-      euclo.mode: tdd
       context_file_contents:
       - path: testsuite/fixtures/math.go
-        content: "package main\n\nfunc Max(a, b int) int {\n  if a > b {\n    return\
-          \ a\n  }\n  return b\n}\n"
+        content: "package main\n\nfunc Max(a, b int) int {\n  if a > b {\n    return a\n  }\n  return b\n}\n"
       - path: testsuite/fixtures/math_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestMax_BasicPositive(t\
-          \ *testing.T) {\n  if Max(3, 5) != 5 {\n    t.Error(\"expected 5\")\n  }\n\
-          }\n"
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMax_BasicPositive(t *testing.T) {\n  if Max(3, 5) != 5 {\n\
+          \    t.Error(\"expected 5\")\n  }\n}\n"
+      extensions:
+        euclo:
+          mode: tdd
     expect:
       outcome:
         must_succeed: true
         files_changed:
         - testsuite/fixtures/math_test.go
-        euclo_mode: tdd
+        extensions:
+          euclo:
+            mode: tdd
       benchmark:
-        euclo:
-          profile: test_driven_generation
+        extensions:
+          euclo:
+            profile: test_driven_generation

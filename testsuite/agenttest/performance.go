@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
 const (
@@ -119,7 +120,7 @@ func LoadPerformanceBaseline(path string) (*PerformanceBaseline, error) {
 }
 
 func BuildPhaseMetrics(snapshot *contextdata.Envelope, total TokenUsageReport) []PhaseMetric {
-	phases := collectPerformancePhases(snapshot)
+	phases := euclosubject.CollectPerformancePhases(snapshot)
 	if len(phases) == 0 {
 		return nil
 	}
@@ -128,7 +129,7 @@ func BuildPhaseMetrics(snapshot *contextdata.Envelope, total TokenUsageReport) [
 	durationWeights := make([]int64, 0, len(phases))
 	var totalDuration int64
 	for _, phase := range phases {
-		durationMS := phaseDurationMS(snapshot, phase)
+		durationMS := euclosubject.PhaseDurationMS(snapshot, phase)
 		metrics = append(metrics, PhaseMetric{
 			Phase:      phase,
 			DurationMS: durationMS,
@@ -293,39 +294,6 @@ func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 	return summary
 }
 
-func collectPerformancePhases(snapshot *contextdata.Envelope) []string {
-	if snapshot == nil {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	var phases []string
-	appendPhase := func(phase string) {
-		phase = strings.TrimSpace(phase)
-		if phase == "" {
-			return
-		}
-		if _, ok := seen[phase]; ok {
-			return
-		}
-		seen[phase] = struct{}{}
-		phases = append(phases, phase)
-	}
-
-	interactionState := toStringAnyMap(mustGetWorkingValue(snapshot, "euclo.interaction_state"))
-	for _, phase := range toStringSlice(interactionState["phases_executed"]) {
-		appendPhase(phase)
-	}
-	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.profile_phase_records")) {
-		record := toStringAnyMap(raw)
-		appendPhase(toString(record["phase"]))
-	}
-	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.interaction_records")) {
-		record := toStringAnyMap(raw)
-		appendPhase(toString(record["phase"]))
-	}
-	return phases
-}
-
 func shouldComparePerformanceBaseline(recordingMode string) bool {
 	switch strings.ToLower(strings.TrimSpace(recordingMode)) {
 	case "replay", "replay-only":
@@ -333,26 +301,6 @@ func shouldComparePerformanceBaseline(recordingMode string) bool {
 	default:
 		return true
 	}
-}
-
-func phaseDurationMS(snapshot *contextdata.Envelope, phase string) int64 {
-	if snapshot == nil || strings.TrimSpace(phase) == "" {
-		return 0
-	}
-	for _, raw := range toAnySlice(mustGetWorkingValue(snapshot, "euclo.interaction_records")) {
-		record := toStringAnyMap(raw)
-		if !strings.EqualFold(strings.TrimSpace(toString(record["phase"])), strings.TrimSpace(phase)) {
-			continue
-		}
-		duration := strings.TrimSpace(toString(record["duration"]))
-		if duration == "" {
-			return 0
-		}
-		if parsed, err := time.ParseDuration(duration); err == nil {
-			return parsed.Milliseconds()
-		}
-	}
-	return 0
 }
 
 func allocateIntAcrossPhases(weights []int64, total int) []int {
@@ -407,12 +355,4 @@ func exceededThreshold64(actual, baseline int64, multiplier float64) bool {
 		return false
 	}
 	return float64(actual) > float64(baseline)*multiplier
-}
-
-func mustGetWorkingValue(env *contextdata.Envelope, key string) any {
-	if env == nil {
-		return nil
-	}
-	val, _ := env.GetWorkingValue(key)
-	return val
 }

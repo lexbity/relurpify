@@ -289,13 +289,15 @@ cases:
       The instruction given to the agent. Supports multi-line YAML.
 
     context:                      # optional — becomes task.Context map
-      euclo.mode: code            # force euclo mode (code|debug|review|planning|chat|archaeology)
-      euclo.interaction_state:    # seed prior phase state for resume cases
-        mode: archaeology
-        current_phase: compile-plan
-        phases_executed: [explore]
-        phase_states:
-          explore.done: true
+      extensions:
+        euclo:
+          mode: code            # subject-specific mode hint
+          interaction_state:    # subject-specific resume state
+            mode: archaeology
+            current_phase: compile-plan
+            phases_executed: [explore]
+            phase_states:
+              explore.done: true
       workflow_id: wf-123         # passed to agent as context
       context_file_contents:      # inline file content for agent context (no disk read needed)
         - path: path/to/file.go
@@ -370,7 +372,7 @@ setup:
           stage_name: explore
           stage_index: 0
           context_state:
-            euclo.interaction_state:
+            context.extensions.euclo.interaction_state:
               mode: archaeology
               phases_executed: [explore]
           result_data:
@@ -432,16 +434,17 @@ expect:
 
   # ── State and memory ──────────────────────────────────────────────────────
   state_keys_must_exist:       # these keys must be set in task context after execution
-    - euclo.interaction_state
-    - euclo.artifacts
+    - context.extensions.euclo.interaction_state
+    - context.extensions.euclo.artifacts
     - testfu.report
 
   memory_records_created: 1    # at least this many memory records written
   workflow_state_updated: true # workflow state must be modified
 
-  # ── Euclo-specific ────────────────────────────────────────────────────────
-  euclo:
-    # (see Euclo Assertions section below)
+  # ── Subject extensions ────────────────────────────────────────────────────
+  extensions:
+    euclo:
+      # (see subject-specific extension blocks below)
 ```
 
 ### Euclo Assertions
@@ -479,7 +482,7 @@ euclo:
   recovery_strategies:                  # these strategy IDs must appear in recovery trace
     - fallback_path
 
-  # Interaction frames (euclo.interaction_recording)
+  # Interaction frames (context.extensions.euclo.interaction_recording)
   min_frames_emitted: 1
   max_frames_emitted: 10
   frame_kinds_emitted:                  # these frame kinds must appear
@@ -549,7 +552,7 @@ overrides:
 2. Append a new entry to `spec.cases`.
 3. Required fields: `name`, `prompt`, `expect`.
 4. If the case modifies files, provide `setup.files` with the fixture content inline.
-5. Use `context: euclo.mode: <mode>` to force a specific euclo mode rather than relying on auto-classification.
+5. Use `context.extensions.euclo.mode: <mode>` to provide a subject-specific mode hint rather than relying on auto-classification.
 
 **Minimal code-modification case:**
 ```yaml
@@ -566,7 +569,9 @@ overrides:
           func Broken() int { return 0 }
   prompt: "Fix Broken() in testsuite/fixtures/my_fixture.go to return 42."
   context:
-    euclo.mode: code
+    extensions:
+      euclo:
+        mode: code
     context_file_contents:
       - path: testsuite/fixtures/my_fixture.go
         content: |
@@ -591,14 +596,18 @@ overrides:
   tags: [stable, level:1]
   prompt: "What does the Stringer interface do in Go?"
   context:
-    euclo.mode: chat
+    extensions:
+      euclo:
+        extensions:
+          euclo:
+            mode: chat
   expect:
     must_succeed: true
     no_file_changes: true
     output_regex:
       - (?i)(string|format|method)
     state_keys_must_exist:
-      - euclo.interaction_state
+      - context.extensions.euclo.interaction_state
 ```
 
 ### Creating a new suite
@@ -720,8 +729,8 @@ keys before execution:
 
 | Context key | Effect |
 |---|---|
-| `euclo.mode` | Forces a specific interaction mode (bypasses auto-classification) |
-| `euclo.interaction_state` | Seeds prior phase checkpoint (for resume cases) |
+| `context.extensions.euclo.mode` | Subject-specific mode hint (bypasses auto-classification) |
+| `context.extensions.euclo.interaction_state` | Seeds prior phase checkpoint (for resume cases) |
 | `euclo.interaction_script` | Provides scripted interaction steps |
 | `workflow_id` | Wires the run to a pre-seeded workflow record |
 | `context_file_contents` | Injects file content into agent context budget |
@@ -899,7 +908,7 @@ If the agent writes to a path that matches a `workspace.ignore_changes` pattern 
 `workspace.exclude` pattern, it won't appear in `ChangedFiles`. Check those patterns.
 
 ### Euclo mode assertion fails ("expected mode: X, got: Y")
-Mode is auto-classified from the prompt. Use `context: euclo.mode: X` to force it.
+Mode is auto-classified from the prompt. Use `context.extensions.euclo.mode: X` to provide a subject-specific hint when needed.
 
 ### State key assertion fails
 The state key may be written under a different path. Check `context.snapshot.json` in the
@@ -918,7 +927,7 @@ run artifacts to see what keys were actually set.
 | `level:3` | Conflicting/incomplete signals — agent must infer correct intent |
 | `level:4` | Cross-cutting patterns — agent must follow architectural conventions |
 
-### Euclo modes
+### Euclo subject hints
 
 | Mode | When used |
 |---|---|
@@ -933,12 +942,12 @@ run artifacts to see what keys were actually set.
 
 | Key | Written by | Contains |
 |---|---|---|
-| `euclo.interaction_state` | orchestrator | `mode`, `phases_executed`, `current_phase` |
-| `euclo.artifacts` | orchestrator | array of `{kind, summary, payload}` |
-| `euclo.interaction_recording` | recording | `{frames: [], transitions: []}` |
-| `euclo.mode_resolution` | classifier | `{mode_id: "code"}` |
-| `euclo.execution_profile_selection` | classifier | `{profile_id: "edit_verify_repair"}` |
-| `euclo.recovery_trace` | recovery | `{attempts: [{strategy, level}]}` |
+| `context.extensions.euclo.interaction_state` | orchestrator | `mode`, `phases_executed`, `current_phase` |
+| `context.extensions.euclo.artifacts` | orchestrator | array of `{kind, summary, payload}` |
+| `context.extensions.euclo.interaction_recording` | recording | `{frames: [], transitions: []}` |
+| `context.extensions.euclo.mode_resolution` | classifier | `{mode_id: "code"}` |
+| `context.extensions.euclo.execution_profile_selection` | classifier | `{profile_id: "edit_verify_repair"}` |
+| `context.extensions.euclo.recovery_trace` | recovery | `{attempts: [{strategy, level}]}` |
 
 ### Name sanitization (for tape/baseline paths)
 

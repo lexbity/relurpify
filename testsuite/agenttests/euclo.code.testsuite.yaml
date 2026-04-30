@@ -25,7 +25,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: basic_edit_task
     description: Full code mode interaction flow for a simple edit.
@@ -39,13 +39,15 @@ spec:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
         content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
-    prompt: Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello
-      world' instead of 'hello'.
+    prompt: Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead
+      of 'hello'.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
         content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -56,16 +58,18 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/hello
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
-        euclo:
-          profile: edit_verify_repair
-          phases_executed:
-          - understand
-          - propose
+        extensions:
+          euclo:
+            profile: edit_verify_repair
+            phases_executed:
+            - understand
+            - propose
   - name: code_evidence_first_upgrade
-    description: Code mode should upgrade into the evidence-first profile when failing-test
-      evidence is present.
+    description: Code mode should upgrade into the evidence-first profile when failing-test evidence is present.
     task_type: code_modification
     tags:
     - coverage-matrix
@@ -79,10 +83,12 @@ spec:
     prompt: The API is returning wrong results. Fix the calculation in testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
       so TestAdd passes.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
         content: "package calculator\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -96,10 +102,13 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/calculator
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
-        euclo:
-          profile: reproduce_localize_patch
+        extensions:
+          euclo:
+            profile: reproduce_localize_patch
   - name: edit_with_verification
     description: Code mode with verification step.
     tags:
@@ -111,10 +120,12 @@ spec:
         content: "package mathutil\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
     prompt: Fix the Add function in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go so that the test passes.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
         content: "package mathutil\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -125,11 +136,14 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/mathutil
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
-        euclo:
-          frame_kinds_emitted:
-          - proposal
+        extensions:
+          euclo:
+            frame_kinds_emitted:
+            - proposal
   - name: code_no_mode_hint
     description: Code mode auto-classified from instruction keywords.
     tags:
@@ -138,15 +152,13 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/greet/greet.go
-        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\
-          \n}\n"
-    prompt: Implement the Greet function in testsuite/agenttest_fixtures/gosuite/greet/greet.go to return 'Hi, <name>' where <name> is the
-      argument.
+        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\n}\n"
+    prompt: Implement the Greet function in testsuite/agenttest_fixtures/gosuite/greet/greet.go to return 'Hi, <name>' where
+      <name> is the argument.
     context:
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/greet/greet.go
-        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\
-          \n}\n"
+        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\n}\n"
     expect:
       outcome:
         must_succeed: true
@@ -157,10 +169,12 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/greet
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
   - name: code_from_messy_context
-    description: '4.3 artifact-mediated: conflicting bug report + partial spec + buggy
-      code — euclo must recover correct intent.'
+    description: "4.3 artifact-mediated: conflicting bug report + partial spec + buggy code \u2014 euclo must recover correct\
+      \ intent."
     task_type: code_modification
     tags:
     - stable
@@ -170,20 +184,21 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/messy_calc/messy_calc.go
-        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
-          \ b float64) float64 {\n  return a * b\n}\n"
-    prompt: 'Context: Bug report #42 says "Divide returns wrong results". The spec
-      says "Divide should return a/b and handle b=0 by returning 0". The code comment
-      says "Divides a by b" but the body multiplies. Fix the implementation so it
-      correctly divides and returns 0 when b is zero.
+        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a, b float64) float64 {\n  return\
+          \ a * b\n}\n"
+    prompt: 'Context: Bug report #42 says "Divide returns wrong results". The spec says "Divide should return a/b and handle
+      b=0 by returning 0". The code comment says "Divides a by b" but the body multiplies. Fix the implementation so it correctly
+      divides and returns 0 when b is zero.
 
       '
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/messy_calc/messy_calc.go
-        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
-          \ b float64) float64 {\n  return a * b\n}\n"
+        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a, b float64) float64 {\n  return\
+          \ a * b\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -194,4 +209,6 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/messy_calc
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code

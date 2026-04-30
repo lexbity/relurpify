@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,14 +13,53 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
-func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {
+type loadedOllamaServer struct {
+	URL    string
+	server *http.Server
+	ln     net.Listener
+}
+
+func (s *loadedOllamaServer) Close() error {
+	if s == nil {
+		return nil
+	}
+	if s.server != nil {
+		_ = s.server.Close()
+	}
+	if s.ln != nil {
+		return s.ln.Close()
+	}
+	return nil
+}
+
+func newTestHTTPServer(t *testing.T, handler http.Handler) *loadedOllamaServer {
 	t.Helper()
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("listen test server: %v", err)
+		return nil
+	}
+	srv := &http.Server{Handler: handler}
+	server := &loadedOllamaServer{
+		URL:    "http://" + ln.Addr().String(),
+		server: srv,
+		ln:     ln,
+	}
+	go func() {
+		_ = srv.Serve(ln)
+	}()
+	return server
+}
+
+func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
+	t.Helper()
+	return newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
@@ -33,13 +71,6 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {
 			http.NotFound(w, r)
 		}
 	}))
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen ollama server: %v", err)
-	}
-	server.Listener = ln
-	server.Start()
-	return server
 }
 
 func TestFallbackManifestPath(t *testing.T) {
@@ -480,9 +511,12 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 	if !ok || len(scope) != 1 || scope[0] != "testsuite/fixtures/rapid_arch_exec/slug.go" {
 		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0]["scope"])
 	}
-	got, _ := state.GetWorkingValue("euclo.active_exploration_id")
-	if gotStr, _ := got.(string); !strings.Contains(gotStr, "wf-compiled:seeded-exploration") {
-		t.Fatalf("expected seeded exploration id, got %q", got)
+	got, ok := state.GetWorkingValue("pipeline.workflow_retrieval")
+	if !ok {
+		t.Fatal("expected pipeline.workflow_retrieval to be seeded")
+	}
+	if gotStr := fmt.Sprint(got); !strings.Contains(gotStr, "compiled plan") {
+		t.Fatalf("expected workflow retrieval payload to mention compiled plan, got %q", gotStr)
 	}
 }
 
@@ -516,7 +550,7 @@ spec:
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
@@ -579,7 +613,7 @@ spec:
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
@@ -653,7 +687,7 @@ func TestCountTokenUsage(t *testing.T) {
 }
 
 func TestLookupBackendModelProvenance(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
@@ -709,24 +743,6 @@ type assertionErr string
 
 func (e assertionErr) Error() string { return string(e) }
 
-func TestApplyCaseControlFlowOverrideReturnsErrorForNonEmptyFlow(t *testing.T) {
-	err := applyCaseControlFlowOverride(nil, CaseSpec{
-		Overrides: CaseOverrideSpec{
-			ControlFlow: "pipeline",
-		},
-	})
-	if err == nil {
-		t.Fatal("expected error for control_flow override, got nil")
-	}
-}
-
-func TestApplyCaseControlFlowOverrideNoopForEmptyFlow(t *testing.T) {
-	err := applyCaseControlFlowOverride(nil, CaseSpec{})
-	if err != nil {
-		t.Fatalf("expected no error for empty control_flow, got %v", err)
-	}
-}
-
 func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
 	workflowStateRel := filepath.ToSlash(filepath.Join(manifest.DirName, "sessions", "workflow_state.db"))
 	before := &WorkspaceSnapshot{
@@ -776,10 +792,16 @@ func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 }
 
 func TestMarshalInteractionRecords(t *testing.T) {
-	data, err := marshalInteractionRecords([]any{
-		map[string]any{"kind": "proposal", "phase": "scope"},
-		map[string]any{"kind": "question", "phase": "clarify"},
-	})
+	path := filepath.Join(t.TempDir(), "interaction.tape.jsonl")
+	if err := euclosubject.WriteInteractionTape(path, map[string]any{
+		"euclo.interaction_records": []any{
+			map[string]any{"kind": "proposal", "phase": "scope"},
+			map[string]any{"kind": "question", "phase": "clarify"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,12 +1,12 @@
 package agenttest
 
 import (
-	"reflect"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex"
 )
 
 func TestInstantiateAgentByNameConfiguresWorkflowPaths(t *testing.T) {
@@ -16,15 +16,11 @@ func TestInstantiateAgentByNameConfiguresWorkflowPaths(t *testing.T) {
 		Registry: capability.NewRegistry(),
 		Config:   &core.Config{MaxIterations: 1},
 	})
-	value := reflect.ValueOf(agent)
-	if value.Kind() == reflect.Pointer {
-		value = value.Elem()
+	rexAgent, ok := agent.(*rex.Agent)
+	if !ok {
+		t.Fatalf("expected rex.Agent, got %T", agent)
 	}
-	field := value.FieldByName("CheckpointPath")
-	if !field.IsValid() || field.Kind() != reflect.String {
-		t.Fatalf("expected agent checkpoint field, got %T", agent)
-	}
-	if field.String() == "" {
-		t.Fatal("expected checkpoint path to be configured")
+	if rexAgent.Workspace == "" {
+		t.Fatal("expected rex workspace path to be configured")
 	}
 }

@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
+	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
-func suitePassed(report *runnerpkg.SuiteReport) bool {
+func suitePassed(report *agenttestpkg.SuiteReport) bool {
 	if report == nil {
 		return false
 	}
@@ -24,7 +24,7 @@ func suitePassed(report *runnerpkg.SuiteReport) bool {
 
 func failedCaseNames(report map[string]any) []string {
 	// Multi-suite result from actionRunAgent.
-	if suites, ok := report["suites"].(map[string]*runnerpkg.SuiteReport); ok {
+	if suites, ok := report["suites"].(map[string]*agenttestpkg.SuiteReport); ok {
 		var out []string
 		for _, sr := range suites {
 			for _, c := range sr.Cases {
@@ -37,7 +37,7 @@ func failedCaseNames(report map[string]any) []string {
 		return out
 	}
 	switch typed := report["suite"].(type) {
-	case *runnerpkg.SuiteReport:
+	case *agenttestpkg.SuiteReport:
 		out := make([]string, 0)
 		for _, c := range typed.Cases {
 			if !c.Success && !c.Skipped {
@@ -45,7 +45,7 @@ func failedCaseNames(report map[string]any) []string {
 			}
 		}
 		return out
-	case *runnerpkg.CaseReport:
+	case *agenttestpkg.CaseReport:
 		if typed.Success || typed.Skipped {
 			return nil
 		}

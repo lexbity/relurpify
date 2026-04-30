@@ -139,6 +139,9 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 		}, nil
 	}
 	defer func() { bootstrapAgentRuntime = origBootstrap }()
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(workspace, "relurpify_cfg", "memory"))
+	})
 
 	agent, _, _, err := buildAgent(
 		context.Background(),
@@ -510,8 +513,10 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 					}},
 				},
 				Expect: ExpectSpec{
-					MustSucceed:    true,
-					OutputContains: []string{"retry ok"},
+					Outcome: &OutcomeSpec{
+						MustSucceed:    true,
+						OutputContains: []string{"retry ok"},
+					},
 				},
 			}},
 		},

@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.context
-  description: Capability-baseline Euclo context-management coverage for resume and
-    context-pressure flows.
+  description: Capability-baseline Euclo context-management coverage for resume and context-pressure flows.
   owner: agent-platform
   tier: stable
   classification: benchmark
@@ -38,7 +37,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: context_pressure_baseline
     description: Long context pressure should preserve interaction state and artifacts.
@@ -59,52 +58,56 @@ spec:
           import "fmt"
 
 
-          func A(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("A:%s", input), nil }
+          func A(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("A:%s", input), nil
+          }
 
-          func B(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("B:%s", input), nil }
+          func B(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("B:%s", input), nil
+          }
 
-          func C(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("C:%s", input), nil }
+          func C(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("C:%s", input), nil
+          }
 
-          func D(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("D:%s", input), nil }
+          func D(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("D:%s", input), nil
+          }
 
-          func E(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("E:%s", input), nil }
+          func E(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("E:%s", input), nil
+          }
 
-          func F(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("F:%s", input), nil }
+          func F(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("F:%s", input), nil
+          }
 
-          func G(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("G:%s", input), nil }
+          func G(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("G:%s", input), nil
+          }
 
-          func H(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("H:%s", input), nil }
+          func H(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("H:%s", input), nil
+          }
 
-          func I(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("I:%s", input), nil }
+          func I(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("I:%s", input), nil
+          }
 
-          func J(input string) (string, error) { if input == "" { return "", nil };
-          return fmt.Sprintf("J:%s", input), nil }
+          func J(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("J:%s", input), nil
+          }
 
           '
-    prompt: Inspect testsuite/fixtures/euclo_context_baseline/handler.go and describe
-      where repeated analysis or context pressure could appear. Do not modify files.
+    prompt: Inspect testsuite/fixtures/euclo_context_baseline/handler.go and describe where repeated analysis or context pressure
+      could appear. Do not modify files.
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          min_frames_emitted: 1
+        extensions:
+          euclo:
+            min_frames_emitted: 1
   - name: session_resume_baseline
-    description: Session resume should continue from the saved phase and emit a resume
-      frame.
+    description: Session resume should continue from the saved phase and emit a resume frame.
     task_type: analysis
     tags:
     - baseline
@@ -115,28 +118,33 @@ spec:
     timeout: 180s
     prompt: Plan a bounded retrieval strategy for large workflows.
     context:
-      euclo.mode: planning
-      euclo.interaction_state:
-        mode: planning
-        current_phase: generate
-        phases_executed:
-        - scope
-        - clarify
-        phase_states:
-          scope.done: true
-          clarify.done: true
-      euclo.interaction_script:
-      - kind: session_resume
-        action: resume
+      extensions:
+        euclo:
+          mode: planning
+          interaction_state:
+            mode: planning
+            current_phase: generate
+            phases_executed:
+            - scope
+            - clarify
+            phase_states:
+              scope.done: true
+              clarify.done: true
+          interaction_script:
+          - kind: session_resume
+            action: resume
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          phases_executed:
-          - generate
-          - commit
-          frame_kinds_emitted:
-          - session_resume
+        extensions:
+          euclo:
+            phases_executed:
+            - generate
+            - commit
+            frame_kinds_emitted:
+            - session_resume

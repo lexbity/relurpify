@@ -1,26 +1,27 @@
-apiVersion: v1
+apiVersion: relurpify/v1alpha1
 kind: ThoughtRecipe
 metadata:
-  id: with-fallback
   name: Recipe with Fallback Agent
   version: "1.0.0"
-triggers:
-  keywords: ["fallback", "safe", "robust"]
-  priority: 55
-execution:
-  sharing_mode: isolated
-  steps:
-    - id: primary
-      prompt: "Attempt to solve: {{task.instruction}}"
-      agent:
-        paradigm: goalcon
-        capabilities:
-          - cap:file_read
-          - cap:file_write
-      child:
-        paradigm: react
-      fallback:
-        paradigm: planner
-        capabilities:
-          - cap:file_read
-        capture: [fallback_result]
+description: Recipe demonstrating a fallback step.
+global:
+  prompt: |
+    Attempt the primary plan first, then fall back if needed.
+  configuration:
+    families: [repair, implementation]
+    intent_keywords: [fallback, safe, robust]
+    trigger_priority: 55
+  context:
+    sharing: isolated
+sequence:
+  - id: primary
+    mutation: required
+    hitl: ask
+    parent:
+      paradigm: goalcon
+      prompt: "Attempt to solve: {{.Instruction}}"
+      context:
+        capture: [primary_result]
+    fallback:
+      paradigm: planner
+      prompt: "Primary execution failed. Produce a diagnostic fallback plan."

@@ -25,10 +25,10 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: failing_test_investigation
-    description: Debug mode for a failing test — investigate then fix.
+    description: "Debug mode for a failing test \u2014 investigate then fix."
     task_type: code_modification
     tags:
     - coverage-matrix
@@ -38,15 +38,15 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/debug_divide/divide.go
-        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n\
-          }\n"
+        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n}\n"
     prompt: Debug why TestDivide is failing and fix the issue.
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/debug_divide/divide.go
-        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n\
-          }\n"
+        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
@@ -57,10 +57,13 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/debug_divide
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       benchmark:
-        euclo:
-          profile: reproduce_localize_patch
+        extensions:
+          euclo:
+            profile: reproduce_localize_patch
   - name: error_with_stacktrace
     description: Debug auto-classified from error text in instruction.
     tags:
@@ -69,15 +72,15 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/debug_server/server.go
-        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
-          \  return users[id]\n}\n"
-    prompt: "panic: assignment to entry in nil map\ngoroutine 1 [running]:\nmain.GetUser(0x0)\n\
-      \  testsuite/agenttest_fixtures/gosuite/debug_server/server.go:4\nFix the nil map access in GetUser.\n"
+        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return users[id]\n\
+          }\n"
+    prompt: "panic: assignment to entry in nil map\ngoroutine 1 [running]:\nmain.GetUser(0x0)\n  testsuite/agenttest_fixtures/gosuite/debug_server/server.go:4\n\
+      Fix the nil map access in GetUser.\n"
     context:
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/debug_server/server.go
-        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
-          \  return users[id]\n}\n"
+        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return users[id]\n\
+          }\n"
     expect:
       outcome:
         must_succeed: true
@@ -88,14 +91,16 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/debug_server
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
       benchmark:
-        euclo:
-          frame_kinds_emitted:
-          - result
+        extensions:
+          euclo:
+            frame_kinds_emitted:
+            - result
   - name: debug_from_incident_log
-    description: '4.3 artifact-mediated: simulate log output + stack trace inline
-      — no clean repro steps.'
+    description: "4.3 artifact-mediated: simulate log output + stack trace inline \u2014 no clean repro steps."
     task_type: code_modification
     tags:
     - stable
@@ -105,20 +110,18 @@ spec:
     setup:
       files:
       - path: testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go
-        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return\
-          \ items[0]\n}\n"
-    prompt: "Incident log from production (2026-03-31 02:14:07 UTC):\ngoroutine 1\
-      \ [running]:\npanic: runtime error: index out of range [0] with length 0\ngithub.com/example/app.ProcessItems(...)\n\
-      \  testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go:4\nCustomers reported intermittent \"\
-      500 Internal Server Error\" responses.\nThe function is called with the result\
-      \ of a database query that can return an empty slice.\nFix the root cause in\
-      \ testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go.\n"
+        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return items[0]\n}\n"
+    prompt: "Incident log from production (2026-03-31 02:14:07 UTC):\ngoroutine 1 [running]:\npanic: runtime error: index\
+      \ out of range [0] with length 0\ngithub.com/example/app.ProcessItems(...)\n  testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go:4\n\
+      Customers reported intermittent \"500 Internal Server Error\" responses.\nThe function is called with the result of\
+      \ a database query that can return an empty slice.\nFix the root cause in testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go.\n"
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go
-        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return\
-          \ items[0]\n}\n"
+        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return items[0]\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
@@ -129,4 +132,6 @@ spec:
           - tool: go_test
             args:
               package: ./testsuite/agenttest_fixtures/gosuite/debug_panic_handler
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug

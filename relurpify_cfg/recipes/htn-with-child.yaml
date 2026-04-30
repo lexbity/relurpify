@@ -1,25 +1,27 @@
-apiVersion: v1
+apiVersion: relurpify/v1alpha1
 kind: ThoughtRecipe
 metadata:
-  id: htn-planning
   name: HTN Planning with React Child
   version: "1.0.0"
-triggers:
-  keywords: ["plan", "htn", "hierarchical"]
-  priority: 70
-execution:
-  sharing_mode: explicit
-  steps:
-    - id: plan
+description: HTN-style planning with a react fallback step.
+global:
+  prompt: |
+    Produce a structured plan before execution.
+  configuration:
+    families: [planning, implementation]
+    intent_keywords: [plan, htn, hierarchical]
+    trigger_priority: 70
+  context:
+    sharing: explicit
+sequence:
+  - id: plan
+    mutation: none
+    hitl: never
+    parent:
+      paradigm: htn
       prompt: |
-        Create a plan for: {{task.instruction}}
-        Context: {{context.workspace}}
-      agent:
-        paradigm: htn
-        capabilities:
-          - cap:file_read
-      child:
-        paradigm: react
-        capabilities:
-          - cap:file_write
-          - cap:shell_exec
+        Create a plan for: {{.Instruction}}
+        Context: {{.Instruction}}
+    fallback:
+      paradigm: react
+      prompt: "Refine the plan into executable steps."

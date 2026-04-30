@@ -193,24 +193,24 @@ func evaluateArtifactChainExpectations(specs []ArtifactChainSpec, interactionRec
 	}
 	records := collectInteractionPhaseRecords(interactionRecords)
 	if len(records) == 0 {
-		return []string{"euclo.artifact_chain: no interaction records available"}
+		return []string{"artifact_chain: no interaction records available"}
 	}
 
 	var failures []string
 	for _, spec := range specs {
 		targetKind := normalizeArtifactKind(spec.Kind)
 		if targetKind == "" {
-			failures = append(failures, fmt.Sprintf("euclo.artifact_chain: invalid artifact kind %q", spec.Kind))
+			failures = append(failures, fmt.Sprintf("artifact_chain: invalid artifact kind %q", spec.Kind))
 			continue
 		}
 		if spec.ProducedByPhase != "" {
 			record, ok := findInteractionPhaseRecordForProduced(records, strings.TrimSpace(spec.ProducedByPhase), targetKind)
 			if !ok {
-				failures = append(failures, fmt.Sprintf("euclo.artifact_chain: phase %q did not produce %q", spec.ProducedByPhase, targetKind))
+				failures = append(failures, fmt.Sprintf("artifact_chain: phase %q did not produce %q", spec.ProducedByPhase, targetKind))
 			} else {
 				for _, needle := range spec.ContentContains {
 					if !recordContainsArtifactContent(record.ProducedArtifacts, targetKind, needle) {
-						failures = append(failures, fmt.Sprintf("euclo.artifact_chain: produced artifact %q in phase %q missing %q", targetKind, spec.ProducedByPhase, needle))
+						failures = append(failures, fmt.Sprintf("artifact_chain: produced artifact %q in phase %q missing %q", targetKind, spec.ProducedByPhase, needle))
 					}
 				}
 			}
@@ -218,7 +218,7 @@ func evaluateArtifactChainExpectations(specs []ArtifactChainSpec, interactionRec
 		if spec.ConsumedByPhase != "" {
 			record, ok := findInteractionPhaseRecordForConsumed(records, strings.TrimSpace(spec.ConsumedByPhase), targetKind)
 			if !ok {
-				failures = append(failures, fmt.Sprintf("euclo.artifact_chain: phase %q did not consume %q", spec.ConsumedByPhase, targetKind))
+				failures = append(failures, fmt.Sprintf("artifact_chain: phase %q did not consume %q", spec.ConsumedByPhase, targetKind))
 			}
 			_ = record
 		}
@@ -231,13 +231,6 @@ func mapStringValue(record map[string]any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(toString(record[key]))
-}
-
-func eucloBehaviorTraceFromSnapshot(snapshot *contextdata.Envelope) map[string]any {
-	if snapshot == nil {
-		return nil
-	}
-	return toStringAnyMap(func() any { v, _ := snapshot.GetWorkingValue("euclo.relurpic_behavior_trace"); return v }())
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -326,27 +319,7 @@ func recordContainsArtifactContent(artifacts []map[string]any, kind, needle stri
 }
 
 func normalizeArtifactKind(kind string) string {
-	kind = strings.TrimSpace(strings.ToLower(kind))
-	switch kind {
-	case "":
-		return ""
-	case "exploration":
-		return "euclo.explore"
-	case "analysis":
-		return "euclo.analyze"
-	case "plan_candidates":
-		return "euclo.plan_candidates"
-	case "plan":
-		return "euclo.plan"
-	case "edit_intent":
-		return "euclo.edit_intent"
-	case "verification":
-		return "euclo.verification"
-	}
-	if strings.HasPrefix(kind, "euclo.") {
-		return kind
-	}
-	return "euclo." + kind
+	return strings.TrimSpace(strings.ToLower(kind))
 }
 
 func stringSliceContainsNormalized(slice []string, target string) bool {
@@ -356,32 +329,6 @@ func stringSliceContainsNormalized(slice []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func collectArtifactKinds(snapshot *contextdata.Envelope) []string {
-	if snapshot == nil {
-		return nil
-	}
-	raw, ok := snapshot.GetWorkingValue("euclo.artifacts")
-	if !ok {
-		return nil
-	}
-	artifacts := toAnySlice(raw)
-	var kinds []string
-	for _, a := range artifacts {
-		m := toStringAnyMap(a)
-		if m == nil {
-			continue
-		}
-		if kind, ok := m["kind"].(string); ok {
-			kinds = append(kinds, kind)
-			continue
-		}
-		if kind, ok := m["Kind"].(string); ok {
-			kinds = append(kinds, kind)
-		}
-	}
-	return kinds
 }
 
 func collectFrameKinds(frames []any) []string {
@@ -558,69 +505,6 @@ func includeExpectedChangedFiles(filtered []string, before, after *WorkspaceSnap
 	return filtered
 }
 
-// eucloArtifactsFromSnapshot extracts Euclo artifacts from a context snapshot.
-// Phase 4: Used by artifact_kind_produced expectation.
-// Uses toAnySlice/toStringAnyMap for JSON round-trip support so it handles both
-// []map[string]any and []euclotypes.Artifact stored in state.
-func eucloArtifactsFromSnapshot(snapshot *contextdata.Envelope) []map[string]any {
-	if snapshot == nil {
-		return nil
-	}
-	raw, ok := snapshot.GetWorkingValue("euclo.artifacts")
-	if !ok || raw == nil {
-		return nil
-	}
-	items := toAnySlice(raw)
-	if len(items) == 0 {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		if m := toStringAnyMap(item); m != nil {
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
-// artifactKindsFromArtifacts extracts artifact kind strings from artifact records.
-// Phase 4: Used by artifact_kind_produced expectation.
-// Checks both "kind" (JSON-serialized lowercase) and "Kind" (Go struct field name) keys.
-// Each kind is stored both with and without the "euclo." namespace prefix so YAML
-// writers can use either "euclo.analyze" or the short "analyze" form.
-func artifactKindsFromArtifacts(artifacts []map[string]any) []string {
-	if len(artifacts) == 0 {
-		return nil
-	}
-	const prefix = "euclo."
-	seen := make(map[string]bool)
-	var kinds []string
-	add := func(k string) {
-		k = strings.TrimSpace(k)
-		if k == "" {
-			return
-		}
-		if !seen[k] {
-			kinds = append(kinds, k)
-			seen[k] = true
-		}
-		// Also store the short form (without "euclo." prefix) so either style matches.
-		short := strings.TrimPrefix(k, prefix)
-		if short != k && !seen[short] {
-			kinds = append(kinds, short)
-			seen[short] = true
-		}
-	}
-	for _, a := range artifacts {
-		kind, _ := a["kind"].(string)
-		if kind == "" {
-			kind, _ = a["Kind"].(string)
-		}
-		add(kind)
-	}
-	return kinds
-}
-
 // === OSB Model Functions (Phases 2-5) ===
 
 // evaluateOutcomeExpectations evaluates hard goal-achievement assertions.
@@ -690,25 +574,6 @@ func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, cha
 			Tier:        "outcome",
 			Passed:      found,
 			Message:     fmt.Sprintf("file %s changed", pat),
-		})
-	}
-
-	if spec.EucloMode != "" {
-		actualMode := ""
-		if snapshot != nil {
-			if val, ok := contextSnapshotValue(snapshot, "euclo.mode"); ok {
-				actualMode = toString(val)
-			}
-		}
-		passed := actualMode == spec.EucloMode
-		if !passed {
-			failures = append(failures, fmt.Sprintf("euclo mode mismatch: expected %q, got %q", spec.EucloMode, actualMode))
-		}
-		results = append(results, AssertionResult{
-			AssertionID: "outcome.euclo_mode",
-			Tier:        "outcome",
-			Passed:      passed,
-			Message:     fmt.Sprintf("euclo mode expected %q, got %q", spec.EucloMode, actualMode),
 		})
 	}
 

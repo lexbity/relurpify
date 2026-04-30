@@ -157,8 +157,6 @@ type SetupFileSpec struct {
 }
 
 type ExpectSpec struct {
-	MustSucceed bool `yaml:"must_succeed,omitempty"`
-
 	OutputContains []string                 `yaml:"output_contains,omitempty"`
 	OutputRegex    []string                 `yaml:"output_regex,omitempty"`
 	FilesContain   []FileContentExpectation `yaml:"files_contain,omitempty"`
@@ -203,7 +201,7 @@ type OutcomeSpec struct {
 	StateKeysMustExist   []string                 `yaml:"state_keys_must_exist,omitempty"`
 	MemoryRecordsCreated int                      `yaml:"memory_records_created,omitempty"`
 	WorkflowStateUpdated bool                     `yaml:"workflow_state_updated,omitempty"`
-	EucloMode            string                   `yaml:"euclo_mode,omitempty"`
+	Extensions           map[string]any           `yaml:"extensions,omitempty"`
 	Verify               *VerifySpec              `yaml:"verify,omitempty"`
 }
 
@@ -286,9 +284,7 @@ type BenchmarkSpec struct {
 
 	// Token budget hints
 	TokenBudget *TokenBudgetHint `yaml:"token_budget,omitempty"`
-
-	// Euclo implementation telemetry
-	Euclo *EucloBenchmarkSpec `yaml:"euclo,omitempty"`
+	Extensions  map[string]any   `yaml:"extensions,omitempty"`
 }
 
 // TokenBudgetHint captures advisory token usage expectations.
@@ -296,36 +292,6 @@ type TokenBudgetHint struct {
 	MaxPrompt     int `yaml:"max_prompt,omitempty"`
 	MaxCompletion int `yaml:"max_completion,omitempty"`
 	MaxTotal      int `yaml:"max_total,omitempty"`
-}
-
-// EucloBenchmarkSpec captures euclo-specific routing observations.
-// All fields are soft telemetry.
-type EucloBenchmarkSpec struct {
-	BehaviorFamily                 string              `yaml:"behavior_family,omitempty"`
-	Profile                        string              `yaml:"profile,omitempty"`
-	PrimaryRelurpicCapability      string              `yaml:"primary_relurpic_capability,omitempty"`
-	SupportingRelurpicCapabilities []string            `yaml:"supporting_relurpic_capabilities,omitempty"`
-	SpecializedCapabilityIDs       []string            `yaml:"specialized_capability_ids,omitempty"`
-	RecipeIDs                      []string            `yaml:"recipe_ids,omitempty"`
-	ArtifactsProduced              []string            `yaml:"artifacts_produced,omitempty"`
-	PhasesExecuted                 []string            `yaml:"phases_executed,omitempty"`
-	PhasesSkipped                  []string            `yaml:"phases_skipped,omitempty"`
-	ResultClass                    string              `yaml:"result_class,omitempty"`
-	AssuranceClass                 string              `yaml:"assurance_class,omitempty"`
-	RecoveryStatus                 string              `yaml:"recovery_status,omitempty"`
-	RecoveryAttempted              bool                `yaml:"recovery_attempted,omitempty"`
-	DegradationMode                string              `yaml:"degradation_mode,omitempty"`
-	SuccessGateReason              string              `yaml:"success_gate_reason,omitempty"`
-	MinTransitionsProposed         int                 `yaml:"min_transitions_proposed,omitempty"`
-	MaxTransitionsProposed         int                 `yaml:"max_transitions_proposed,omitempty"`
-	MinFramesEmitted               int                 `yaml:"min_frames_emitted,omitempty"`
-	MaxFramesEmitted               int                 `yaml:"max_frames_emitted,omitempty"`
-	FrameKindsEmitted              []string            `yaml:"frame_kinds_emitted,omitempty"`
-	FrameKindsNotExpected          []string            `yaml:"frame_kinds_not_expected,omitempty"`
-	FrameKindsMustExclude          []string            `yaml:"frame_kinds_must_exclude,omitempty"`
-	ArtifactChain                  []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
-	ArtifactKindProduced           []string            `yaml:"artifact_kind_produced,omitempty"`
-	RecoveryStrategies             []string            `yaml:"recovery_strategies,omitempty"`
 }
 
 type CaseOverrideSpec struct {
@@ -338,7 +304,6 @@ type CaseOverrideSpec struct {
 	ExtraEnv             map[string]string         `yaml:"extra_env,omitempty"`
 	AllowedCapabilities  []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
 	RestrictCapabilities bool                      `yaml:"restrict_capabilities,omitempty"`
-	ControlFlow          string                    `yaml:"control_flow,omitempty"`
 }
 
 type MemorySpec struct {
@@ -539,9 +504,6 @@ func (s *Suite) Validate() error {
 		}
 		if _, err := parseCaseTimeout(c.Overrides.BootstrapTimeout); err != nil {
 			return fmt.Errorf("suite case[%s] overrides.bootstrap_timeout invalid: %w", c.Name, err)
-		}
-		if strings.TrimSpace(c.Overrides.ControlFlow) != "" {
-			return fmt.Errorf("suite case[%s] overrides.control_flow %q unsupported", c.Name, c.Overrides.ControlFlow)
 		}
 		if c.Overrides.Recording != nil {
 			if err := validateRecordingSpec(*c.Overrides.Recording, fmt.Sprintf("suite case[%s] overrides.recording", c.Name)); err != nil {

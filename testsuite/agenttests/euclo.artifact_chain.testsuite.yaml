@@ -24,49 +24,51 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: planning_plan_artifact_flows_into_execution
-    description: A committed plan should be recorded as produced in planning and consumed
-      once execution begins.
+    description: A committed plan should be recorded as produced in planning and consumed once execution begins.
     task_type: code_modification
     timeout: 150s
     setup:
       files:
       - path: testsuite/fixtures/rate_limit_handler.go
-        content: "package main\n\nfunc HandleRequest() string {\n  return \"ok\"\n\
-          }\n"
+        content: "package main\n\nfunc HandleRequest() string {\n  return \"ok\"\n}\n"
     prompt: Plan and implement adding rate limiting to HandleRequest in testsuite/fixtures/rate_limit_handler.go.
     context:
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     expect:
       outcome:
         must_succeed: true
       benchmark:
-        euclo:
-          artifact_chain:
-          - kind: plan
-            produced_by_phase: commit
-            consumed_by_phase: plan
+        extensions:
+          euclo:
+            artifact_chain:
+            - kind: plan
+              produced_by_phase: commit
+              consumed_by_phase: plan
   - name: code_edit_intent_flows_into_verification
-    description: Code execution should record edit intent production before verification
-      consumes it.
+    description: Code execution should record edit intent production before verification consumes it.
     task_type: code_modification
     timeout: 120s
     setup:
       files:
       - path: testsuite/fixtures/create_user.go
-        content: "package main\n\nfunc CreateUser(name string) error {\n  return nil\n\
-          }\n"
+        content: "package main\n\nfunc CreateUser(name string) error {\n  return nil\n}\n"
     prompt: Add input validation to CreateUser in testsuite/fixtures/create_user.go.
     context:
-      euclo.mode: code
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
       benchmark:
-        euclo:
-          artifact_chain:
-          - kind: edit_intent
-            produced_by_phase: edit
-            consumed_by_phase: verify
+        extensions:
+          euclo:
+            artifact_chain:
+            - kind: edit_intent
+              produced_by_phase: edit
+              consumed_by_phase: verify

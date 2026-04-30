@@ -2,6 +2,16 @@
 
 This directory contains example thought recipe YAML files demonstrating the Euclo Thought Recipes feature.
 
+The examples use the spec-shaped schema:
+- `apiVersion: relurpify/v1alpha1`
+- `metadata.name`
+- `global.configuration`
+- `global.context`
+- `sequence[*].mutation`
+- `sequence[*].hitl`
+- `sequence[*].parent.paradigm`
+- `sequence[*].parent.prompt`
+
 ## Files
 
 ### `simple-react.yaml`
@@ -82,8 +92,8 @@ The recipe will be triggered when:
 
 1. Copy an example as a template
 2. Modify `metadata.id` to be unique
-3. Adjust `triggers.keywords` for your use case
-4. Configure `execution.steps` with your workflow
+3. Adjust `global.configuration.intent_keywords` for your use case
+4. Configure `sequence` with your workflow
 5. Save to the recipes directory
 
-See `docs/plans/euclo-thought-recipes-phase10.md` for full documentation.
+See `docs/plans/euclo-reimplementation-spec.md` for full documentation.

@@ -24,7 +24,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: summarize_diff_after_edit
     description: A change request should be able to yield diff-oriented summary output.
@@ -40,7 +40,6 @@ spec:
           '
     prompt: Change Value to return 2 and summarize the diff.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/transform_diff.go
         content: 'package main
@@ -49,6 +48,9 @@ spec:
           func Value() int { return 1 }
 
           '
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
@@ -59,7 +61,9 @@ spec:
     task_type: analysis
     prompt: Summarize the verification results and tell me whether to accept or investigate.
     context:
-      euclo.mode: code
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true

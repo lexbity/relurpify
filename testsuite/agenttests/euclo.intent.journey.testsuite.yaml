@@ -2,8 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.intent.journey
-  description: Intent-oriented Euclo journeys across explore->plan->implement, chat->code,
-    and resume/restore flows.
+  description: Intent-oriented Euclo journeys across explore->plan->implement, chat->code, and resume/restore flows.
   owner: agent-platform
   tier: stable
   classification: journey
@@ -30,11 +29,10 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: explore_plan_implement_journey
-    description: Journey through exploration, plan compilation, and bounded implementation
-      for one small package.
+    description: Journey through exploration, plan compilation, and bounded implementation for one small package.
     task_type: code_modification
     tags:
     - journey
@@ -46,12 +44,14 @@ spec:
     timeout: 180s
     context:
       workflow_id: wf-euclo-journey-explore-plan-implement
-      euclo.mode: planning
+      extensions:
+        euclo:
+          mode: planning
     setup:
       files:
       - path: testsuite/fixtures/euclo_intent_journey/handler.go
-        content: "package euclointentjourney\n\nfunc NormalizeName(name string) string\
-          \ {\n  if name == \"\" {\n    return \"\"\n  }\n  return name\n}\n"
+        content: "package euclointentjourney\n\nfunc NormalizeName(name string) string {\n  if name == \"\" {\n    return\
+          \ \"\"\n  }\n  return name\n}\n"
       workflows:
       - workflow:
           workflow_id: wf-euclo-journey-explore-plan-implement
@@ -65,21 +65,17 @@ spec:
         - record_id: euclo-journey-explore-plan-implement-explore
           kind: fact
           title: Exploration result
-          content: 'handler.go contains a single function NormalizeName(name string)
-            string. The function currently returns the input unchanged except for
-            an empty-string guard. The intended change is to trim whitespace before
-            validation.
+          content: 'handler.go contains a single function NormalizeName(name string) string. The function currently returns
+            the input unchanged except for an empty-string guard. The intended change is to trim whitespace before validation.
 
             '
           status: accepted
-    prompt: 'Explore the package, compile the minimal implementation plan, and apply
-      the bounded change to testsuite/fixtures/euclo_intent_journey/handler.go.
+    prompt: 'Explore the package, compile the minimal implementation plan, and apply the bounded change to testsuite/fixtures/euclo_intent_journey/handler.go.
 
       '
     expect:
       state_key_not_empty:
-      - euclo.active_exploration_id
-      - euclo.active_exploration_snapshot_id
+      - pipeline.plan
       outcome:
         must_succeed: true
         files_changed:
@@ -89,17 +85,19 @@ spec:
           contains:
           - import "strings"
           - strings.TrimSpace(name)
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          behavior_family: gap_analysis
-          primary_relurpic_capability: euclo:archaeology.implement-plan
-          supporting_relurpic_capabilities:
-          - euclo:archaeology.explore
-          - euclo:archaeology.compile-plan
+        extensions:
+          euclo:
+            behavior_family: gap_analysis
+            primary_relurpic_capability: euclo:archaeology.implement-plan
+            supporting_relurpic_capabilities:
+            - euclo:archaeology.explore
+            - euclo:archaeology.compile-plan
   - name: chat_to_code_transition_journey
-    description: Journey from a chat-style prompt into code-mode implementation through
-      an explicit transition.
+    description: Journey from a chat-style prompt into code-mode implementation through an explicit transition.
     task_type: code_modification
     tags:
     - journey
@@ -110,29 +108,26 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_intent_journey/math.go
-        content: "package euclointentjourney\n\nfunc Add(a, b int) int {\n  return\
-          \ a - b\n}\n"
+        content: "package euclointentjourney\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
       - path: testsuite/fixtures/euclo_intent_journey/math_test.go
-        content: "package euclointentjourney\n\nimport \"testing\"\n\nfunc TestAdd(t\
-          \ *testing.T) {\n  if Add(2, 3) != 5 {\n    t.Fatalf(\"got %d, want 5\"\
-          , Add(2, 3))\n  }\n}\n"
+        content: "package euclointentjourney\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n  if Add(2, 3) != 5 {\n\
+          \    t.Fatalf(\"got %d, want 5\", Add(2, 3))\n  }\n}\n"
     interaction_script:
     - phase: understand
       action: plan_first
     - kind: transition
       action: accept
-    prompt: Can you fix testsuite/fixtures/euclo_intent_journey/math.go so Add returns
-      the correct sum and the test passes?
+    prompt: Can you fix testsuite/fixtures/euclo_intent_journey/math.go so Add returns the correct sum and the test passes?
     context:
-      euclo.mode: chat
       context_file_contents:
       - path: testsuite/fixtures/euclo_intent_journey/math.go
-        content: "package euclointentjourney\n\nfunc Add(a, b int) int {\n  return\
-          \ a - b\n}\n"
+        content: "package euclointentjourney\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
       - path: testsuite/fixtures/euclo_intent_journey/math_test.go
-        content: "package euclointentjourney\n\nimport \"testing\"\n\nfunc TestAdd(t\
-          \ *testing.T) {\n  if Add(2, 3) != 5 {\n    t.Fatalf(\"got %d, want 5\"\
-          , Add(2, 3))\n  }\n}\n"
+        content: "package euclointentjourney\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n  if Add(2, 3) != 5 {\n\
+          \    t.Fatalf(\"got %d, want 5\", Add(2, 3))\n  }\n}\n"
+      extensions:
+        euclo:
+          mode: chat
     expect:
       outcome:
         must_succeed: true
@@ -142,16 +137,18 @@ spec:
         - path: testsuite/fixtures/euclo_intent_journey/math.go
           contains:
           - a + b
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code
       benchmark:
-        euclo:
-          min_transitions_proposed: 1
-          frame_kinds_emitted:
-          - proposal
-          - transition
+        extensions:
+          euclo:
+            min_transitions_proposed: 1
+            frame_kinds_emitted:
+            - proposal
+            - transition
   - name: session_resume_restore_journey
-    description: Journey that resumes a saved phase and preserves context state across
-      the restore boundary.
+    description: Journey that resumes a saved phase and preserves context state across the restore boundary.
     task_type: analysis
     tags:
     - journey
@@ -161,28 +158,33 @@ spec:
     timeout: 180s
     prompt: Plan a bounded retrieval strategy for large workflows.
     context:
-      euclo.mode: planning
-      euclo.interaction_state:
-        mode: planning
-        current_phase: generate
-        phases_executed:
-        - scope
-        - clarify
-        phase_states:
-          scope.done: true
-          clarify.done: true
-      euclo.interaction_script:
-      - kind: session_resume
-        action: resume
+      extensions:
+        euclo:
+          mode: planning
+          interaction_state:
+            mode: planning
+            current_phase: generate
+            phases_executed:
+            - scope
+            - clarify
+            phase_states:
+              scope.done: true
+              clarify.done: true
+          interaction_script:
+          - kind: session_resume
+            action: resume
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-        euclo_mode: planning
+        extensions:
+          euclo:
+            mode: planning
       benchmark:
-        euclo:
-          phases_executed:
-          - generate
-          - commit
-          frame_kinds_emitted:
-          - session_resume
+        extensions:
+          euclo:
+            phases_executed:
+            - generate
+            - commit
+            frame_kinds_emitted:
+            - session_resume

@@ -128,7 +128,7 @@ type SecurityObservation struct {
 // BenchmarkObservation records one soft telemetry mismatch or measurement.
 type BenchmarkObservation struct {
 	Category string `json:"category"` // "tool_usage", "euclo_routing", "token_usage", "performance"
-	Field    string `json:"field"`    // dotted field name, e.g. "euclo.behavior_family"
+	Field    string `json:"field"`    // dotted field name, e.g. "subject.route_family"
 	Expected string `json:"expected"` // expected value (stringified)
 	Actual   string `json:"actual"`   // actual value observed
 	Matched  bool   `json:"matched"`  // true if expected == actual

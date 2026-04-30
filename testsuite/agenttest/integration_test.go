@@ -482,7 +482,6 @@ func TestOSBPipeline_AllThreeTiers(t *testing.T) {
 		Name: "full_osb_case",
 		Expect: ExpectSpec{
 			Outcome: &OutcomeSpec{
-				MustSucceed:    true,
 				OutputContains: []string{"success"},
 			},
 			Security: &SecuritySpec{
@@ -504,11 +503,6 @@ func TestOSBPipeline_AllThreeTiers(t *testing.T) {
 	if c.Expect.Benchmark == nil {
 		t.Error("Expected Benchmark block")
 	}
-
-	// Verify Outcome fields
-	if !c.Expect.Outcome.MustSucceed {
-		t.Error("Expected MustSucceed=true")
-	}
 	if len(c.Expect.Outcome.OutputContains) != 1 {
 		t.Error("Expected OutputContains to have 1 item")
 	}
@@ -524,35 +518,12 @@ func TestOSBPipeline_AllThreeTiers(t *testing.T) {
 	}
 }
 
-// TestOSBPipeline_LegacyFallback verifies legacy path works when no new blocks present
-func TestOSBPipeline_LegacyFallback(t *testing.T) {
-	c := CaseSpec{
-		Name: "legacy_case",
-		Expect: ExpectSpec{
-			MustSucceed:    true,
-			OutputContains: []string{"done"},
-			// No Outcome, Security, or Benchmark blocks
-		},
-	}
-
-	// Verify legacy path detection
-	if c.Expect.Outcome != nil || c.Expect.Security != nil || c.Expect.Benchmark != nil {
-		t.Error("Expected no OSB blocks for legacy case")
-	}
-
-	// Verify legacy fields still work
-	if !c.Expect.MustSucceed {
-		t.Error("Expected legacy MustSucceed to be true")
-	}
-}
-
 // TestOSBPipeline_OutcomeOnly verifies case with only outcome block
 func TestOSBPipeline_OutcomeOnly(t *testing.T) {
 	c := CaseSpec{
 		Name: "outcome_only",
 		Expect: ExpectSpec{
 			Outcome: &OutcomeSpec{
-				MustSucceed:    true,
 				OutputContains: []string{"completed"},
 			},
 			// No Security or Benchmark blocks

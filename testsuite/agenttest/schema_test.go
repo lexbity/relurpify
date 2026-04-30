@@ -1,6 +1,8 @@
 package agenttest
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -8,10 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestOutcomeSpecRoundTrip verifies marshal/unmarshal preserves all fields
+// TestOutcomeSpecRoundTrip verifies marshal/unmarshal preserves the generic fields.
 func TestOutcomeSpecRoundTrip(t *testing.T) {
 	original := &OutcomeSpec{
-		MustSucceed:          true,
 		NoFileChanges:        false,
 		FilesChanged:         []string{"file1.go", "file2.go"},
 		FilesContain:         []FileContentExpectation{{Path: "test.go", Contains: []string{"func"}, NotContains: []string{"panic"}}},
@@ -21,7 +22,6 @@ func TestOutcomeSpecRoundTrip(t *testing.T) {
 		StateKeysMustExist:   []string{"key2"},
 		MemoryRecordsCreated: 5,
 		WorkflowStateUpdated: true,
-		EucloMode:            "debug",
 		Verify: &VerifySpec{
 			Steps: []VerifyStepSpec{
 				{Tool: "go_test", Args: map[string]any{"package": "./...", "working_directory": "."}},
@@ -40,9 +40,6 @@ func TestOutcomeSpecRoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if roundtripped.MustSucceed != original.MustSucceed {
-		t.Errorf("MustSucceed: got %v, want %v", roundtripped.MustSucceed, original.MustSucceed)
-	}
 	if roundtripped.NoFileChanges != original.NoFileChanges {
 		t.Errorf("NoFileChanges: got %v, want %v", roundtripped.NoFileChanges, original.NoFileChanges)
 	}
@@ -56,9 +53,6 @@ func TestOutcomeSpecRoundTrip(t *testing.T) {
 		if len(roundtripped.FilesContain[0].NotContains) != len(original.FilesContain[0].NotContains) {
 			t.Errorf("NotContains length: got %d, want %d", len(roundtripped.FilesContain[0].NotContains), len(original.FilesContain[0].NotContains))
 		}
-	}
-	if roundtripped.EucloMode != original.EucloMode {
-		t.Errorf("EucloMode: got %q, want %q", roundtripped.EucloMode, original.EucloMode)
 	}
 	if roundtripped.Verify == nil {
 		t.Fatal("Verify should not be nil")
@@ -112,7 +106,7 @@ func TestSecuritySpecRoundTrip(t *testing.T) {
 	}
 }
 
-// TestBenchmarkSpecRoundTrip verifies marshal/unmarshal preserves all fields
+// TestBenchmarkSpecRoundTrip verifies marshal/unmarshal preserves the generic fields.
 func TestBenchmarkSpecRoundTrip(t *testing.T) {
 	original := &BenchmarkSpec{
 		ToolsExpected:          []string{"file_read", "file_search"},
@@ -127,20 +121,6 @@ func TestBenchmarkSpecRoundTrip(t *testing.T) {
 			MaxPrompt:     50000,
 			MaxCompletion: 8000,
 			MaxTotal:      58000,
-		},
-		Euclo: &EucloBenchmarkSpec{
-			BehaviorFamily:                 "stale_assumption_detection",
-			Profile:                        "trace_execute_analyze",
-			PrimaryRelurpicCapability:      "euclo:debug.investigate-repair",
-			SupportingRelurpicCapabilities: []string{"euclo:debug.root-cause"},
-			RecipeIDs:                      []string{"debug.investigate-repair.reproduce"},
-			ArtifactsProduced:              []string{"euclo.explore"},
-			PhasesExecuted:                 []string{"analyze", "trace"},
-			ResultClass:                    "localization_complete",
-			AssuranceClass:                 "medium",
-			MinTransitionsProposed:         0,
-			MaxTransitionsProposed:         2,
-			FrameKindsEmitted:              []string{"artifact", "transition"},
 		},
 	}
 
@@ -165,51 +145,64 @@ func TestBenchmarkSpecRoundTrip(t *testing.T) {
 	} else if roundtripped.TokenBudget.MaxPrompt != original.TokenBudget.MaxPrompt {
 		t.Errorf("TokenBudget.MaxPrompt: got %d, want %d", roundtripped.TokenBudget.MaxPrompt, original.TokenBudget.MaxPrompt)
 	}
-	if roundtripped.Euclo == nil {
-		t.Error("Euclo is nil, expected value")
-	} else if roundtripped.Euclo.BehaviorFamily != original.Euclo.BehaviorFamily {
-		t.Errorf("Euclo.BehaviorFamily: got %q, want %q", roundtripped.Euclo.BehaviorFamily, original.Euclo.BehaviorFamily)
+}
+
+// TestLoadSuiteRejectsLegacyExpectFields verifies legacy schema fields fail strict loading.
+func TestLoadSuiteRejectsLegacyExpectFields(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "suite.yaml")
+	err := os.WriteFile(path, []byte(`
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: sample
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agent.manifest.yaml
+  cases:
+    - name: smoke
+      prompt: summarize
+      expect:
+        must_succeed: true
+`), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadSuite(path); err == nil {
+		t.Fatal("expected legacy expect.must_succeed to fail load")
 	}
 }
 
-// TestExpectSpecBackwardCompat verifies existing YAML parses with nil new blocks
-func TestExpectSpecBackwardCompat(t *testing.T) {
-	// Legacy YAML without the new blocks
-	legacyYAML := `
-must_succeed: true
-no_file_changes: false
-output_contains:
-  - "success"
-files_changed:
-  - "test.go"
-memory_records_created: 3
-`
-
-	var expect ExpectSpec
-	if err := yaml.Unmarshal([]byte(legacyYAML), &expect); err != nil {
-		t.Fatalf("unmarshal of legacy YAML failed: %v", err)
+func TestLoadSuiteRejectsLegacyEucloAndControlFlowFields(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "suite.yaml")
+	err := os.WriteFile(path, []byte(`
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: sample
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  cases:
+    - name: smoke
+      prompt: summarize
+      expect:
+        outcome:
+          euclo_mode: debug
+        benchmark:
+          euclo:
+            profile: trace_execute_analyze
+      overrides:
+        control_flow: pipeline
+`), 0o644)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// Verify legacy fields parsed correctly
-	if !expect.MustSucceed {
-		t.Error("MustSucceed should be true")
-	}
-	if expect.NoFileChanges {
-		t.Error("NoFileChanges should be false")
-	}
-	if len(expect.OutputContains) != 1 || expect.OutputContains[0] != "success" {
-		t.Error("OutputContains not parsed correctly")
-	}
-
-	// Verify new blocks are nil
-	if expect.Outcome != nil {
-		t.Error("Outcome should be nil for legacy YAML")
-	}
-	if expect.Security != nil {
-		t.Error("Security should be nil for legacy YAML")
-	}
-	if expect.Benchmark != nil {
-		t.Error("Benchmark should be nil for legacy YAML")
+	if _, err := LoadSuite(path); err == nil {
+		t.Fatal("expected legacy euclo/control_flow fields to fail load")
 	}
 }
 

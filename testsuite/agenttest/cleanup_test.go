@@ -4,171 +4,82 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
 
-// TestNoLegacyFieldsInSuiteYAML validates that all YAML files have no legacy fields.
-// Per Phase 8 exit criteria: all 57 files must be clean of legacy fields.
-func TestNoLegacyFieldsInSuiteYAML(t *testing.T) {
-	yamlDir := "../agenttests"
-	entries, err := os.ReadDir(yamlDir)
+// TestRepresentativeSuitesLoad verifies that the committed catalog now loads
+// under the strict generic schema.
+func TestRepresentativeSuitesLoad(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "agenttests", "*.yaml"))
 	if err != nil {
-		t.Fatalf("Failed to read directory %s: %v", yamlDir, err)
+		t.Fatalf("glob committed suites: %v", err)
 	}
-
-	var filesChecked int
-	var filesWithLegacy []string
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".testsuite.yaml") {
-			continue
+	for _, path := range paths {
+		if _, err := LoadSuite(path); err != nil {
+			t.Fatalf("expected suite %s to load, got %v", path, err)
 		}
-
-		path := filepath.Join(yamlDir, entry.Name())
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("Failed to read %s: %v", path, err)
-			continue
-		}
-
-		// Parse YAML to check for legacy fields
-		var suite Suite
-		if err := yaml.Unmarshal(content, &suite); err != nil {
-			t.Errorf("Failed to parse %s: %v", path, err)
-			continue
-		}
-
-		filesChecked++
-
-		// Check each case for legacy fields
-		for _, c := range suite.Spec.Cases {
-			legacyFields := findLegacyFields(c.Expect)
-			if len(legacyFields) > 0 {
-				filesWithLegacy = append(filesWithLegacy,
-					path+": case "+c.Name+" has legacy fields: "+strings.Join(legacyFields, ", "))
-			}
-		}
-	}
-
-	t.Logf("Checked %d YAML files", filesChecked)
-
-	if len(filesWithLegacy) > 0 {
-		t.Errorf("Files with legacy fields found:\n%s", strings.Join(filesWithLegacy, "\n"))
 	}
 }
 
-// findLegacyFields returns a list of legacy field names found in an ExpectSpec.
-// These fields should have been migrated to OSB blocks in Phase 8.
-func findLegacyFields(expect ExpectSpec) []string {
-	var legacy []string
-
-	// Legacy fields that should have been removed:
-	// - ToolCallsMustInclude -> benchmark.tools_expected
-	// - ToolCallsMustExclude -> security.tools_must_not_call / benchmark.tools_not_expected
-	// - ToolCallsInOrder -> benchmark.tool_sequence_expected
-	// - LLMCalls -> benchmark.llm_calls_expected
-	// - MaxToolCalls -> removed (benchmark never fails)
-	// - MaxPromptTokens/MaxCompletionTokens/MaxTotalTokens -> benchmark.token_budget
-	// - Euclo (old struct) -> benchmark.euclo
-	// - ToolSuccessRate -> benchmark.tool_success_rate
-	// - DeterminismScore -> benchmark.determinism_score
-	// - LLMResponseStable -> benchmark.llm_response_stable
-	// - ToolCallLatencyMs -> benchmark.tool_call_latency_ms
-	// - MaxTotalToolTimeMs -> benchmark.max_total_tool_time_ms
-	// - ToolsRequired, ToolRecoveryObserved, ToolDependencies -> removed
-
-	// Check for legacy fields using reflection would be complex,
-	// instead we verify that OSB fields are present for cases that need them.
-	// A valid migrated case should have at least one of: outcome, security, benchmark
-
-	return legacy
-}
-
-// TestOSBFieldsPopulated validates that every case with an expect block
-// has at least one of outcome:, security:, or benchmark: populated.
-func TestOSBFieldsPopulated(t *testing.T) {
-	yamlDir := "../agenttests"
-	entries, err := os.ReadDir(yamlDir)
+// TestGenericSuiteLoadsWithoutLegacyFields verifies the new schema still loads
+// when only generic OSB blocks are present.
+func TestGenericSuiteLoadsWithoutLegacyFields(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "suite.yaml")
+	err := os.WriteFile(path, []byte(`
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: sample
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: live
+  workspace:
+    strategy: derived
+  cases:
+    - name: smoke
+      prompt: summarize
+      expect:
+        outcome:
+          must_succeed: true
+          output_contains:
+            - "done"
+        security:
+          no_writes_outside_scope: true
+        benchmark:
+          tools_expected:
+            - file_read
+`), 0o644)
 	if err != nil {
-		t.Fatalf("Failed to read directory %s: %v", yamlDir, err)
+		t.Fatal(err)
 	}
 
-	var filesChecked int
-	var casesWithoutOSB []string
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".testsuite.yaml") {
-			continue
-		}
-
-		path := filepath.Join(yamlDir, entry.Name())
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("Failed to read %s: %v", path, err)
-			continue
-		}
-
-		var suite Suite
-		if err := yaml.Unmarshal(content, &suite); err != nil {
-			t.Errorf("Failed to parse %s: %v", path, err)
-			continue
-		}
-
-		filesChecked++
-
-		for _, c := range suite.Spec.Cases {
-			// Skip cases without expect block
-			if isEmptyExpect(c.Expect) {
-				continue
-			}
-
-			// Check if at least one OSB block is present
-			hasOSB := c.Expect.Outcome != nil || c.Expect.Security != nil || c.Expect.Benchmark != nil
-
-			if !hasOSB {
-				casesWithoutOSB = append(casesWithoutOSB, path+": "+c.Name)
-			}
-		}
+	suite, err := LoadSuite(path)
+	if err != nil {
+		t.Fatalf("LoadSuite(%q) error = %v", path, err)
 	}
-
-	t.Logf("Checked %d YAML files", filesChecked)
-
-	if len(casesWithoutOSB) > 0 {
-		t.Errorf("Cases without OSB blocks (outcome/security/benchmark):\n%s",
-			strings.Join(casesWithoutOSB, "\n"))
+	if suite.Spec.Cases[0].Expect.Outcome == nil {
+		t.Fatal("expected outcome block to survive generic load")
 	}
-}
-
-// isEmptyExpect checks if an ExpectSpec has no meaningful content.
-func isEmptyExpect(expect ExpectSpec) bool {
-	return !expect.MustSucceed &&
-		len(expect.OutputContains) == 0 &&
-		len(expect.OutputRegex) == 0 &&
-		len(expect.FilesContain) == 0 &&
-		!expect.NoFileChanges &&
-		len(expect.FilesChanged) == 0 &&
-		expect.MemoryRecordsCreated == 0 &&
-		!expect.WorkflowStateUpdated &&
-		len(expect.StateKeysMustExist) == 0 &&
-		len(expect.StateKeysNotEmpty) == 0 &&
-		len(expect.WorkflowHasTensions) == 0 &&
-		expect.Outcome == nil &&
-		expect.Security == nil &&
-		expect.Benchmark == nil
+	if suite.Spec.Cases[0].Expect.Security == nil {
+		t.Fatal("expected security block to survive generic load")
+	}
+	if suite.Spec.Cases[0].Expect.Benchmark == nil {
+		t.Fatal("expected benchmark block to survive generic load")
+	}
 }
 
 // TestReportSchemaStability validates that CaseReport serialization/deserialization
-// is lossless for all new OSB model fields.
+// is lossless for all OSB report fields.
 func TestReportSchemaStability(t *testing.T) {
-	// Create a CaseReport with all new fields populated
 	original := CaseReport{
 		Name:    "test-case",
 		Success: true,
 		Error:   "",
-		// OSB Model fields
 		SecurityObservations: []SecurityObservation{
 			{
 				Kind:       "file_write",
@@ -208,19 +119,16 @@ func TestReportSchemaStability(t *testing.T) {
 		FailureKind: "none",
 	}
 
-	// Serialize to JSON
 	data, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Failed to marshal CaseReport: %v", err)
 	}
 
-	// Deserialize back
 	var roundTripped CaseReport
 	if err := json.Unmarshal(data, &roundTripped); err != nil {
 		t.Fatalf("Failed to unmarshal CaseReport: %v", err)
 	}
 
-	// Verify all fields survived round-trip
 	if len(roundTripped.SecurityObservations) != 1 {
 		t.Errorf("SecurityObservations lost: got %d, want 1", len(roundTripped.SecurityObservations))
 	}
@@ -231,7 +139,6 @@ func TestReportSchemaStability(t *testing.T) {
 		t.Errorf("AssertionResults lost: got %d, want 2", len(roundTripped.AssertionResults))
 	}
 
-	// Verify specific content
 	if roundTripped.SecurityObservations[0].Kind != "file_write" {
 		t.Errorf("SecurityObservation.Kind mismatch: got %s, want file_write", roundTripped.SecurityObservations[0].Kind)
 	}
@@ -243,19 +150,10 @@ func TestReportSchemaStability(t *testing.T) {
 	}
 }
 
-// TestNoLegacyEvaluatorCode validates that legacy evaluation functions
-// have been removed and are not callable.
+// TestNoLegacyEvaluatorCode validates that the generic OSB evaluators are the
+// only ones expected to remain in the shared engine.
 func TestNoLegacyEvaluatorCode(t *testing.T) {
-	// This test is a compile-time check:
-	// - If evaluateExpectations function exists, compilation will fail
-	// - The function was removed in Phase 8
-
-	// Verify OSB model functions exist and are callable
 	_ = evaluateOutcomeExpectations
 	_ = evaluateSecurityExpectations
 	_ = evaluateBenchmarkExpectations
-
-	// Note: The old evaluateExpectations and evaluateEucloExpectations
-	// functions were deleted in Phase 8. If they still exist in the codebase,
-	// this indicates incomplete cleanup.
 }

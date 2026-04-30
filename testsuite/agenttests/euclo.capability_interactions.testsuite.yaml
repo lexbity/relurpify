@@ -25,7 +25,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: regression_to_fix_flow
     description: Regression investigation should compose with follow-on fix behavior.
@@ -35,19 +35,21 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/interaction_regression.go
-        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
-          }\n"
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n}\n"
     prompt: Investigate the regression in Multiply after recent changes and fix it.
     context:
-      euclo.mode: debug
       context_file_contents:
       - path: testsuite/fixtures/interaction_regression.go
-        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
-          }\n"
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n}\n"
+      extensions:
+        euclo:
+          mode: debug
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: debug
+        extensions:
+          euclo:
+            mode: debug
   - name: review_then_safe_implement
     description: Review findings should flow into implement-if-safe behavior.
     tags:
@@ -66,7 +68,6 @@ spec:
           '
     prompt: Review this file and implement fixes if safe.
     context:
-      euclo.mode: review
       context_file_contents:
       - path: testsuite/fixtures/interaction_review.go
         content: 'package main
@@ -77,13 +78,17 @@ spec:
           func Run() {}
 
           '
+      extensions:
+        euclo:
+          mode: review
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: review
+        extensions:
+          euclo:
+            mode: review
   - name: contract_pre_execution_guard_fires
-    description: '4.5: write capability not in admitted set — pre-execution contract
-      guard blocks execution, not crash.'
+    description: "4.5: write capability not in admitted set \u2014 pre-execution contract guard blocks execution, not crash."
     tags:
     - stable
     - capability-contract
@@ -100,7 +105,6 @@ spec:
           '
     prompt: Add a Shutdown function to testsuite/fixtures/contract_target.go.
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/contract_target.go
         content: 'package main
@@ -109,6 +113,9 @@ spec:
           func Noop() {}
 
           '
+      extensions:
+        euclo:
+          mode: code
     overrides:
       allowed_capabilities:
       - name: file_read
@@ -117,8 +124,7 @@ spec:
       outcome:
         no_file_changes: true
   - name: contract_lazy_semantic_acquisition
-    description: '4.5: capability acquired lazily mid-execution — state key records
-      LazySemanticAcquisitionTriggered.'
+    description: "4.5: capability acquired lazily mid-execution \u2014 state key records LazySemanticAcquisitionTriggered."
     task_type: code_modification
     tags:
     - stable
@@ -128,19 +134,22 @@ spec:
       files:
       - path: testsuite/fixtures/contract_lazy.go
         content: "package main\n\nfunc Load() string {\n  return \"loaded\"\n}\n"
-    prompt: 'Inspect testsuite/fixtures/contract_lazy.go to understand its structure,
-      then add an Unload function that returns "unloaded". Use file_read first to
-      explore, then file_write to apply the change.
+    prompt: 'Inspect testsuite/fixtures/contract_lazy.go to understand its structure, then add an Unload function that returns
+      "unloaded". Use file_read first to explore, then file_write to apply the change.
 
       '
     context:
-      euclo.mode: code
       context_file_contents:
       - path: testsuite/fixtures/contract_lazy.go
         content: "package main\n\nfunc Load() string {\n  return \"loaded\"\n}\n"
+      extensions:
+        euclo:
+          mode: code
     expect:
       outcome:
         must_succeed: true
         files_changed:
         - testsuite/fixtures/contract_lazy.go
-        euclo_mode: code
+        extensions:
+          euclo:
+            mode: code

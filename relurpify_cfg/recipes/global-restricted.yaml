@@ -1,25 +1,30 @@
-apiVersion: v1
+apiVersion: relurpify/v1alpha1
 kind: ThoughtRecipe
 metadata:
-  id: global-restricted
   name: Globally Restricted Capabilities
   version: "1.0.0"
-triggers:
-  keywords: ["safe", "read-only", "analyze"]
-  priority: 40
-execution:
-  sharing_mode: explicit
-  global_capabilities:
-    - cap:file_read
-    - cap:search
-    - cap:index_query
-  global_enrichment: [ast, archaeology]
-  steps:
-    - id: analyze
+description: Read-only recipe for analysis tasks.
+global:
+  prompt: |
+    Analyze the codebase without mutating files.
+  configuration:
+    families: [review, investigation, architecture]
+    intent_keywords: [safe, read-only, analyze]
+    trigger_priority: 40
+  context:
+    sharing: explicit
+    ingest:
+      mode: files_only
+      include_globs: ["**/*.go", "**/*.md"]
+      exclude_globs: ["vendor/**"]
+sequence:
+  - id: analyze
+    mutation: none
+    hitl: never
+    parent:
+      paradigm: blackboard
       prompt: |
-        Analyze the codebase for: {{task.instruction}}
+        Analyze the codebase for: {{.Instruction}}
         You have read-only access.
-      agent:
-        paradigm: blackboard
-        enrichment: [ast]
-      capture: [analysis]
+      context:
+        capture: [analysis]

@@ -25,7 +25,7 @@ spec:
   - name: qwen2.5-coder:14b
     endpoint: http://localhost:11434
   recording:
-    mode: "off"
+    mode: 'off'
   cases:
   - name: review_with_findings
     description: Review mode finds issues and suggests fixes.
@@ -38,32 +38,33 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/handler.go
-        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\
-          \n)\n\nfunc UserHandler(w http.ResponseWriter, r *http.Request) {\n  id\
-          \ := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\"\
-          )\n  row := db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"\
-          '\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w, \"Hello %s\"\
-          , name)\n}\n"
+        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\n)\n\nfunc UserHandler(w http.ResponseWriter,\
+          \ r *http.Request) {\n  id := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\")\n  row :=\
+          \ db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"'\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w,\
+          \ \"Hello %s\", name)\n}\n"
     prompt: Review testsuite/fixtures/handler.go for security issues and code quality.
     context:
-      euclo.mode: review
       context_file_contents:
       - path: testsuite/fixtures/handler.go
-        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\
-          \n)\n\nfunc UserHandler(w http.ResponseWriter, r *http.Request) {\n  id\
-          \ := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\"\
-          )\n  row := db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"\
-          '\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w, \"Hello %s\"\
-          , name)\n}\n"
+        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\n)\n\nfunc UserHandler(w http.ResponseWriter,\
+          \ r *http.Request) {\n  id := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\")\n  row :=\
+          \ db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"'\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w,\
+          \ \"Hello %s\", name)\n}\n"
+      extensions:
+        euclo:
+          mode: review
     expect:
       outcome:
         must_succeed: true
         output_regex:
         - (?i)(sql.injection|inject|security|sanitiz)
-        euclo_mode: review
+        extensions:
+          euclo:
+            mode: review
       benchmark:
-        euclo:
-          profile: review_suggest_implement
+        extensions:
+          euclo:
+            profile: review_suggest_implement
   - name: review_clean_code
     description: Review mode with no major issues found.
     tags:
@@ -72,24 +73,27 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/clean.go
-        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses\
-          \ an age value.\nfunc ParseAge(v int) (int, error) {\n  if v < 0 || v >\
-          \ 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v,\
-          \ nil\n}\n"
+        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses an age value.\nfunc ParseAge(v int)\
+          \ (int, error) {\n  if v < 0 || v > 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v, nil\n\
+          }\n"
     prompt: Review testsuite/fixtures/clean.go for issues.
     context:
-      euclo.mode: review
       context_file_contents:
       - path: testsuite/fixtures/clean.go
-        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses\
-          \ an age value.\nfunc ParseAge(v int) (int, error) {\n  if v < 0 || v >\
-          \ 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v,\
-          \ nil\n}\n"
+        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses an age value.\nfunc ParseAge(v int)\
+          \ (int, error) {\n  if v < 0 || v > 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v, nil\n\
+          }\n"
+      extensions:
+        euclo:
+          mode: review
     expect:
       outcome:
         must_succeed: true
-        euclo_mode: review
+        extensions:
+          euclo:
+            mode: review
       benchmark:
-        euclo:
-          frame_kinds_must_exclude:
-          - transition
+        extensions:
+          euclo:
+            frame_kinds_must_exclude:
+            - transition
