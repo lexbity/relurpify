@@ -47,7 +47,7 @@ func stubWorkspaceSession(t *testing.T, serviceIDs ...string) (*countingService,
 		}
 		return &ayenitd.Workspace{
 			Environment: ayenitd.WorkspaceEnvironment{
-				Config: &core.Config{Name: cfg.AgentName, Model: cfg.InferenceModel, InferenceEndpoint: cfg.InferenceEndpoint},
+				Config: &core.Config{Name: cfg.AgentName, Model: cfg.InferenceModel},
 			},
 			ServiceManager: sm,
 		}, nil

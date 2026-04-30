@@ -12,9 +12,8 @@ import (
 
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"gopkg.in/yaml.v3"
 )
 
@@ -132,15 +131,15 @@ func newWorkspaceInitCmd() *cobra.Command {
 			if strings.TrimSpace(agentName) == "" {
 				agentName = "coding"
 			}
-			path := filepath.Join(frameworkconfig.New(ws).ConfigRoot(), "relurpify.yaml")
+			path := filepath.Join(frameworkmanifest.New(ws).ConfigRoot(), "relurpify.yaml")
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "Workspace config already exists at %s\n", path)
 				return nil
 			}
 			cfg := workspaceInitConfig{
 				Version:      "1.0.0",
-				DefaultModel: frameworkconfig.ModelRef{Name: modelName, Provider: "ollama"},
-				AgentPaths:   frameworkconfig.DefaultAgentPaths(ws),
+				DefaultModel: frameworkmanifest.ModelRef{Name: modelName, Provider: "ollama"},
+				AgentPaths:   frameworkmanifest.DefaultAgentPaths(ws),
 				Model:        modelName,
 				Agent:        agentName,
 				Agents:       []string{agentName},
@@ -170,13 +169,13 @@ func newWorkspaceInitCmd() *cobra.Command {
 }
 
 type workspaceInitConfig struct {
-	Version      string                   `yaml:"version"`
-	DefaultModel frameworkconfig.ModelRef `yaml:"default_model"`
-	AgentPaths   []string                 `yaml:"agent_paths"`
-	Model        string                   `yaml:"model,omitempty"`
-	Agent        string                   `yaml:"agent,omitempty"`
-	Agents       []string                 `yaml:"agents,omitempty"`
-	Permissions  map[string]string        `yaml:"permissions,omitempty"`
+	Version      string                     `yaml:"version"`
+	DefaultModel frameworkmanifest.ModelRef `yaml:"default_model"`
+	AgentPaths   []string                   `yaml:"agent_paths"`
+	Model        string                     `yaml:"model,omitempty"`
+	Agent        string                     `yaml:"agent,omitempty"`
+	Agents       []string                   `yaml:"agents,omitempty"`
+	Permissions  map[string]string          `yaml:"permissions,omitempty"`
 }
 
 func buildProbeWorkspaceConfig(ws string) ayenitd.WorkspaceConfig {
@@ -208,8 +207,8 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 	if spec == nil {
 		return nil, fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 	}
-	spec = contractpkg.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
-	spec = contractpkg.ResolveAgentSpec(globalCfg, spec)
+	spec = frameworkmanifest.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
+	spec = frameworkmanifest.ResolveAgentSpec(globalCfg, spec)
 	runtimeCfg := appruntime.DefaultConfig()
 	runtimeCfg.Workspace = ws
 	runtimeCfg.ManifestPath = manifest.SourcePath
@@ -231,7 +230,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		AgentsDir:         runtimeCfg.AgentsDir,
 		AgentName:         agentName,
 		SandboxBackend:    sandboxBackend,
-		LogPath:           frameworkconfig.New(ws).LogFile("ayenitd.log"),
+		LogPath:           frameworkmanifest.New(ws).LogFile("ayenitd.log"),
 		MemoryPath:        runtimeCfg.MemoryPath,
 		SkipASTIndex:      true,
 		HITLTimeout:       runtimeCfg.HITLTimeout,

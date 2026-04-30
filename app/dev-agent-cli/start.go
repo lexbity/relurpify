@@ -13,13 +13,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -65,17 +64,16 @@ func newStartCmd() *cobra.Command {
 			if agentName == "" {
 				agentName = selectDefaultAgent(reg)
 			}
-			manifest, ok := reg.Get(agentName)
+			agentManifest, ok := reg.Get(agentName)
 			if !ok {
 				return fmt.Errorf("agent %s not found", agentName)
 			}
-			spec := manifest.Spec.Agent
+			spec := agentManifest.Spec.Agent
 			if spec == nil {
-				return fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
+				return fmt.Errorf("agent %s missing spec.agent section", agentManifest.Metadata.Name)
 			}
-			spec = contractpkg.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
-			spec = contractpkg.ResolveAgentSpec(globalCfg, spec)
-			modeFlagChanged := cmd.Flags().Changed("mode")
+			spec = frameworkmanifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, spec, agentManifest.Spec.Defaults)
+			spec = frameworkmanifest.ResolveAgentSpec(globalCfg, spec)
 			logLLM := false
 			logAgent := false
 			if globalCfg != nil {
@@ -90,21 +88,7 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			eucloOutput := isEucloAgent(agentName, spec)
-			if eucloOutput {
-				requestedMode := strings.TrimSpace(mode)
-				if !modeFlagChanged {
-					fmt.Fprint(cmd.OutOrStdout(), eucloReadyHint(agentName))
-					return nil
-				}
-				mode = requestedMode
-				if mode == "" || strings.EqualFold(mode, "default") {
-					return fmt.Errorf("unknown euclo mode %q; valid modes: %s", requestedMode, strings.Join(eucloModeNames(eucloModeRegistry()), ", "))
-				}
-				if err := validateEucloMode(mode); err != nil {
-					return err
-				}
-			} else if mode == "" {
+			if mode == "" {
 				if spec.Mode != "" {
 					mode = string(spec.Mode)
 				} else {
@@ -125,7 +109,7 @@ func newStartCmd() *cobra.Command {
 			}
 			runtimeCfg := appruntime.DefaultConfig()
 			runtimeCfg.Workspace = ws
-			runtimeCfg.ManifestPath = manifest.SourcePath
+			runtimeCfg.ManifestPath = agentManifest.SourcePath
 			runtimeCfg.AgentName = agentName
 			if err := runtimeCfg.Normalize(); err != nil {
 				return err
@@ -157,7 +141,7 @@ func newStartCmd() *cobra.Command {
 				DebugAgent:        logAgent,
 			}
 			if wsCfg.LogPath == "" {
-				wsCfg.LogPath = config.New(wsCfg.Workspace).LogFile("ayenitd.log")
+				wsCfg.LogPath = frameworkmanifest.New(wsCfg.Workspace).LogFile("ayenitd.log")
 			}
 			openedWS, err := openWorkspaceFn(runCtx, wsCfg)
 			if err != nil {
@@ -174,6 +158,9 @@ func newStartCmd() *cobra.Command {
 			registration := openedWS.Registration
 			if registration == nil {
 				return fmt.Errorf("workspace registration missing")
+			}
+			if openedWS.CompiledPolicy == nil {
+				return fmt.Errorf("compiled policy missing from workspace")
 			}
 			if autoApprove {
 				registration.Permissions.SetDefaultPolicy(core.AgentPermissionAllow)
@@ -206,12 +193,6 @@ func newStartCmd() *cobra.Command {
 					}
 				}()
 			}
-			paths := config.New(wsCfg.Workspace)
-			if openedWS.CompiledPolicy == nil {
-				return fmt.Errorf("compiled policy missing from workspace")
-			}
-			registration.Policy = openedWS.CompiledPolicy.Engine
-			openedWS.Environment.Registry.SetPolicyEngine(openedWS.CompiledPolicy.Engine)
 			if openedWS.Environment.Config != nil && openedWS.Environment.Config.AgentSpec != nil {
 				openedWS.Environment.Registry.UseAgentSpec(registration.ID, openedWS.Environment.Config.AgentSpec)
 			}
@@ -227,28 +208,20 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			learningBroker := archaeolearning.NewBroker(0)
-			relurpicOpts := []agents.RelurpicOption{
-				agents.WithIndexManager(openedWS.Environment.IndexManager),
-				agents.WithGraphDB(graphDBFromEnv(openedWS.Environment)),
-				agents.WithRetrievalDB(retrievalDBFromEnv(openedWS.Environment)),
-				agents.WithPlanStore(openedWS.Environment.PlanStore),
-				agents.WithGuidanceBroker(openedWS.Environment.GuidanceBroker),
-				agents.WithWorkflowStore(openedWS.Environment.WorkflowStore),
-			}
 			if err := registerBuiltinRelurpicCapabilitiesFn(
-				openedWS.Environment.Registry, openedWS.Environment.Model, openedWS.Environment.Config, relurpicOpts...,
+				openedWS.Environment.Registry, openedWS.Environment.Model, openedWS.Environment.Config,
+				agents.WithIndexManager(openedWS.Environment.IndexManager),
+				agents.WithWorkflowStore(openedWS.Environment.AgentLifecycle),
 			); err != nil {
 				return fmt.Errorf("register relurpic capabilities: %w", err)
 			}
 			agentEnv := agents.AgentEnvironment{
-				Config:        openedWS.Environment.Config,
-				CommandPolicy: openedWS.Environment.CommandPolicy,
-				Model:         openedWS.Environment.Model,
-				Registry:      openedWS.Environment.Registry,
-				IndexManager:  openedWS.Environment.IndexManager,
-				SearchEngine:  openedWS.Environment.SearchEngine,
-				Memory:        openedWS.Environment.Memory,
+				Config:       openedWS.Environment.Config,
+				Model:        openedWS.Environment.Model,
+				Registry:     openedWS.Environment.Registry,
+				IndexManager: openedWS.Environment.IndexManager,
+				SearchEngine: openedWS.Environment.SearchEngine,
+				Memory:       openedWS.Environment.WorkingMemory,
 			}
 			if err := registerAgentCapabilitiesFn(openedWS.Environment.Registry, agentEnv); err != nil {
 				return fmt.Errorf("register agent capabilities: %w", err)
@@ -256,7 +229,6 @@ func newStartCmd() *cobra.Command {
 			cfg := &core.Config{
 				Name:              agentName,
 				Model:             modelName,
-				InferenceEndpoint: defaultEndpoint(),
 				MaxIterations:     8,
 				NativeToolCalling: spec.NativeToolCallingEnabled(),
 				AgentSpec:         spec,
@@ -271,30 +243,21 @@ func newStartCmd() *cobra.Command {
 				Model:        openedWS.Environment.Model,
 				IndexManager: openedWS.Environment.IndexManager,
 				SearchEngine: openedWS.Environment.SearchEngine,
-				Memory:       openedWS.Environment.Memory,
+				Memory:       openedWS.Environment.WorkingMemory,
 			}
 			if err := registerBuiltinProvidersFn(runCtx, providerRuntime); err != nil {
 				return err
 			}
+			openedWS.Environment.Config = cfg
 			agentEnv.Config = cfg
 			var agent graph.WorkflowExecutor
-			if eucloOutput {
-				agent = buildAndWireEucloAgentFn(openedWS, learningBroker)
-				if agent == nil {
-					return fmt.Errorf("euclo agent builder returned nil")
-				}
-			} else {
-				var buildErr error
-				agent, buildErr = buildFromSpecFn(agentEnv, *spec)
-				if buildErr != nil {
-					agent, buildErr = buildFromSpecFn(agentEnv, core.AgentRuntimeSpec{Implementation: "react"})
-				}
-				if buildErr != nil {
-					return buildErr
-				}
+			var buildErr error
+			agent, buildErr = buildFromSpecFn(&openedWS.Environment, *spec)
+			if buildErr != nil {
+				agent, buildErr = buildFromSpecFn(&openedWS.Environment, core.AgentRuntimeSpec{Implementation: "react"})
 			}
-			if react, ok := agent.(*agents.ReActAgent); ok {
-				react.CheckpointPath = paths.CheckpointsDir()
+			if buildErr != nil {
+				return buildErr
 			}
 			execCtx, stopSignals := signal.NotifyContext(runCtx, os.Interrupt, syscall.SIGTERM)
 			defer stopSignals()
@@ -304,7 +267,7 @@ func newStartCmd() *cobra.Command {
 			task := &core.Task{
 				ID:          fmt.Sprintf("cli-%d", time.Now().UnixNano()),
 				Instruction: instruction,
-				Type:        core.TaskTypeCodeGeneration,
+				Type:        string(core.TaskTypeCodeGeneration),
 				Context: map[string]any{
 					"mode":      mode,
 					"workspace": ws,
@@ -319,35 +282,23 @@ func newStartCmd() *cobra.Command {
 			if rerunFromStepID != "" {
 				task.Context["rerun_from_step_id"] = rerunFromStepID
 			}
-			state := core.NewContext()
-			state.Set("task.id", task.ID)
-			state.Set("task.type", string(task.Type))
-			state.Set("task.instruction", task.Instruction)
-			for _, skill := range openedWS.SkillResults {
-				if !skill.Applied || skill.Paths.Root == "" {
-					continue
-				}
-				state.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
-			}
-			if task.ID != "" {
-				defer state.ClearHandleScope(task.ID)
-			}
-			result, err := agent.Execute(ctx, task, state)
+			env := contextdata.NewEnvelope(task.ID, "")
+			env.WorkingData["task.id"] = task.ID
+			env.WorkingData["task.type"] = string(task.Type)
+			env.WorkingData["task.instruction"] = task.Instruction
+			result, err := agent.Execute(ctx, task, env)
 			if err != nil {
 				return err
 			}
-			summary := buildExecutionSummary(task.ID, mode, result, state, openedWS.SkillResults, time.Since(startedAt), eucloOutput)
 			if jsonOutput {
 				encoder := json.NewEncoder(cmd.OutOrStdout())
-				return encoder.Encode(summary)
-			}
-			if eucloOutput {
-				fmt.Fprintf(
-					cmd.OutOrStdout(),
-					"Euclo complete (node=%s, mode=%s, artifact_kinds=%v, artifact_paths=%v, recorded=%v)\n",
-					summary.ResultNode, summary.Mode, summary.ArtifactKinds, summary.ArtifactPaths, summary.Recorded,
-				)
-				return nil
+				return encoder.Encode(map[string]any{
+					"task_id":   task.ID,
+					"mode":      mode,
+					"node_id":   result.NodeID,
+					"duration":  time.Since(startedAt).String(),
+					"workspace": ws,
+				})
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Agent complete (node=%s): %+v\n", result.NodeID, result.Data)
 			return nil
@@ -372,7 +323,7 @@ func newStartCmd() *cobra.Command {
 
 // selectDefaultAgent picks the first registry entry so users can run commands
 // without specifying --agent.
-func selectDefaultAgent(reg *agents.Registry) string {
+func selectDefaultAgent(reg *agentRegistry) string {
 	if _, ok := reg.Get("testfu"); ok {
 		return "testfu"
 	}

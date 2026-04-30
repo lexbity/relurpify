@@ -12,13 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
-	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/templates"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
@@ -185,39 +179,11 @@ func newSkillDoctorCmd() *cobra.Command {
 				manifestPath = entry.SourcePath
 			}
 
-			var (
-				permissions       *fauthorization.PermissionManager
-				effectiveContract *contractpkg.EffectiveAgentContract
-			)
 			if agentManifest != nil {
-				effectiveContract, err = contractpkg.ResolveEffectiveAgentContract(ws, agentManifest, contractpkg.ResolveOptions{})
-				if err != nil {
-					return err
-				}
-				agentManifest.Spec.Permissions = effectiveContract.Permissions
-				permissions, err = fauthorization.NewPermissionManager(ws, &agentManifest.Spec.Permissions, nil, nil)
-				if err != nil {
-					return err
-				}
+				resolvedSpec := manifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
+				resolvedSpec = manifest.ResolveAgentSpec(globalCfg, resolvedSpec)
+				_ = resolvedSpec
 			}
-			runner := fsandbox.NewLocalCommandRunner(ws, nil)
-			capabilities, err := appruntime.BuildBuiltinCapabilityBundle(ws, runner, appruntime.CapabilityRegistryOptions{
-				AgentID:           "skill-doctor",
-				PermissionManager: permissions,
-				AgentSpec:         effectiveAgentSpec(agentManifest, effectiveContract),
-			})
-			if err != nil {
-				return err
-			}
-			registry := capabilities.Registry
-			if effectiveContract != nil {
-				compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, permissions)
-				if err != nil {
-					return err
-				}
-				registry.SetPolicyEngine(compiledPolicy.Engine)
-			}
-			_ = registry // registry available for future checks
 			for _, bin := range skill.Spec.Requires.Bins {
 				bin = strings.TrimSpace(bin)
 				if bin == "" {
@@ -371,16 +337,6 @@ func writeSkillTestSuite(root, name, agentName string, force bool) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
-}
-
-func effectiveAgentSpec(m *manifest.AgentManifest, contract *contractpkg.EffectiveAgentContract) *core.AgentRuntimeSpec {
-	if contract != nil {
-		return contract.AgentSpec
-	}
-	if m == nil {
-		return nil
-	}
-	return m.Spec.Agent
 }
 
 func containsSkill(skills []string, name string) bool {

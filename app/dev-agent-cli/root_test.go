@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,10 +36,10 @@ func TestNewRootCmdPersistentPreRunLoadsDefaultConfig(t *testing.T) {
 
 	root := NewRootCmd()
 	require.NoError(t, root.PersistentPreRunE(root, nil))
-	require.Equal(t, frameworkconfig.DefaultConfigPath(workspace), cfgFile)
+	require.Equal(t, frameworkmanifest.DefaultConfigPath(workspace), cfgFile)
 	require.NotNil(t, globalCfg)
 	require.Equal(t, "1.0.0", globalCfg.Version)
-	require.Equal(t, frameworkconfig.DefaultAgentPaths(workspace), globalCfg.AgentPaths)
+	require.Equal(t, frameworkmanifest.DefaultAgentPaths(workspace), globalCfg.AgentPaths)
 }
 
 func TestNewRootCmdPersistentPreRunLoadsExplicitConfig(t *testing.T) {
@@ -53,8 +53,8 @@ func TestNewRootCmdPersistentPreRunLoadsExplicitConfig(t *testing.T) {
 	})
 
 	workspace = t.TempDir()
-	explicitPath := filepath.Join(workspace, "custom-config.yaml")
-	if err := frameworkconfig.SaveGlobalConfig(explicitPath, &frameworkconfig.GlobalConfig{
+	explicitPath := filepath.Join(workspace, "custom-manifest.yaml")
+	if err := frameworkmanifest.SaveGlobalConfig(explicitPath, &frameworkmanifest.GlobalConfig{
 		Version:    "2.0.0",
 		AgentPaths: []string{"./custom-agents"},
 	}); err != nil {

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -73,7 +73,7 @@ func newAgentsCreateCmd() *cobra.Command {
 			if model == "" {
 				model = defaultModelName()
 			}
-			path := filepath.Join(frameworkconfig.New(ws).ConfigRoot(), "agents")
+			path := filepath.Join(frameworkmanifest.New(ws).ConfigRoot(), "agents")
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				return err
 			}
@@ -83,18 +83,18 @@ func newAgentsCreateCmd() *cobra.Command {
 			}
 			wsGlob := filepath.ToSlash(filepath.Join(ws, "**"))
 			defaultToolCalling := true
-			manifest := manifest.AgentManifest{
+			manifest := frameworkmanifest.AgentManifest{
 				APIVersion: "relurpify/v1alpha1",
 				Kind:       "AgentManifest",
-				Metadata: manifest.ManifestMetadata{
+				Metadata: frameworkmanifest.ManifestMetadata{
 					Name:        name,
 					Version:     "1.0.0",
 					Description: description,
 				},
-				Spec: manifest.ManifestSpec{
+				Spec: frameworkmanifest.ManifestSpec{
 					Image:   "ghcr.io/relurpify/runtime:latest",
 					Runtime: "gvisor",
-					Defaults: &manifest.ManifestDefaults{
+					Defaults: &frameworkmanifest.ManifestDefaults{
 						Permissions: &core.PermissionSet{
 							FileSystem: []core.FileSystemPermission{
 								{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
@@ -110,20 +110,20 @@ func newAgentsCreateCmd() *cobra.Command {
 								{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
 							},
 						},
-						Resources: &manifest.ResourceSpec{
-							Limits: manifest.ResourceLimit{
+						Resources: &frameworkmanifest.ResourceSpec{
+							Limits: frameworkmanifest.ResourceLimit{
 								CPU:    "2",
 								Memory: "4Gi",
 								DiskIO: "500MBps",
 							},
 						},
 					},
-					Security: manifest.SecuritySpec{
+					Security: frameworkmanifest.SecuritySpec{
 						RunAsUser:       1000,
 						ReadOnlyRoot:    false,
 						NoNewPrivileges: true,
 					},
-					Audit: manifest.AuditSpec{
+					Audit: frameworkmanifest.AuditSpec{
 						Level:         "verbose",
 						RetentionDays: 7,
 					},
@@ -154,20 +154,20 @@ func newAgentsCreateCmd() *cobra.Command {
 							AllowPatterns: []string{"git diff*", "git status"},
 							DenyPatterns:  []string{"rm -rf*", "sudo*"},
 						},
-						Files: core.AgentFileMatrix{
-							Write: core.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: core.AgentPermissionAsk},
-							Edit:  core.AgentFilePermissionSet{Default: core.AgentPermissionAsk, RequireApproval: true},
+						Files: agentspec.AgentFileMatrix{
+							Write: agentspec.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: core.AgentPermissionAsk},
+							Edit:  agentspec.AgentFilePermissionSet{Default: core.AgentPermissionAsk, RequireApproval: true},
 						},
-						Invocation: core.AgentInvocationSpec{
+						Invocation: agentspec.AgentInvocationSpec{
 							CanInvokeSubagents: true,
 							MaxDepth:           2,
 						},
-						Context: core.AgentContextSpec{
+						ArtifactWindow: agentspec.AgentArtifactWindowSpec{
 							MaxFiles:            20,
 							MaxTokens:           20000,
 							IncludeDependencies: true,
 						},
-						Metadata: core.AgentMetadata{
+						Metadata: agentspec.AgentMetadata{
 							Author:   os.Getenv("USER"),
 							Tags:     []string{"generated"},
 							Priority: 5,

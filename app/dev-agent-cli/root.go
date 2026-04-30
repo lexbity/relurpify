@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 	workspace      string
 	sandboxBackend string
 
-	globalCfg *frameworkconfig.GlobalConfig
+	globalCfg *frameworkmanifest.GlobalConfig
 )
 
 // Execute is the entry point for the CLI.
@@ -43,15 +43,15 @@ func NewRootCmd() *cobra.Command {
 				}
 			}
 			if cfgFile == "" {
-				cfgFile = frameworkconfig.DefaultConfigPath(workspace)
-				altCfg := filepath.Join(frameworkconfig.New(workspace).ConfigRoot(), "relurpify.yaml")
+				cfgFile = frameworkmanifest.DefaultConfigPath(workspace)
+				altCfg := filepath.Join(frameworkmanifest.New(workspace).ConfigRoot(), "relurpify.yaml")
 				if _, err := os.Stat(cfgFile); errors.Is(err, os.ErrNotExist) {
 					if _, altErr := os.Stat(altCfg); altErr == nil {
 						cfgFile = altCfg
 					}
 				}
 			}
-			cfg, err := frameworkconfig.LoadGlobalConfig(cfgFile, workspace)
+			cfg, err := frameworkmanifest.LoadGlobalConfig(cfgFile, workspace)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
@@ -65,10 +65,8 @@ func NewRootCmd() *cobra.Command {
 
 	root.AddCommand(
 		newStartCmd(),
-		newEucloCmd(),
 		newWorkspaceCmd(),
 		newServiceCmd(),
-		newArchaeoCmd(),
 		newAgentsCmd(),
 		newSkillCmd(),
 		newConfigCmd(),

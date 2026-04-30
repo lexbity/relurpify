@@ -9,7 +9,6 @@
 //   - start: begin an agent session with a given instruction and agent type.
 //   - workspace: inspect workspace config, probes, and services.
 //   - service: manage workspace services.
-//   - archaeo: inspect workflow archaeology projections and workflow IDs.
 //   - agenttest: run integration test suites with optional tape recording and
 //     replay for deterministic CI.
 //   - agents: list registered agent types.

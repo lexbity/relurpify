@@ -6,11 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newConfigCmd registers subcommands that inspect or mutate config.yaml.
+// newConfigCmd registers subcommands that inspect or mutate manifest.yaml.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Inspect or modify config.yaml",
+		Short: "Inspect or modify manifest.yaml",
 	}
 	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd())
 	return cmd

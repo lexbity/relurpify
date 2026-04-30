@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/agents"
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 // ensureWorkspace resolves the workspace CLI flag, defaulting to cwd.
@@ -22,25 +23,125 @@ func ensureWorkspace() string {
 	return workspace
 }
 
-// buildRegistry loads manifests + rules scoped to the workspace.
-func buildRegistry(workspace string) (*agents.Registry, error) {
-	paths := []string{}
+type agentSummary struct {
+	Name        string
+	Mode        string
+	Model       string
+	Source      string
+	Description string
+}
+
+type agentLoadError struct {
+	Path  string
+	Error string
+}
+
+type agentRegistry struct {
+	manifests map[string]*frameworkmanifest.AgentManifest
+	summaries []agentSummary
+	errs      []agentLoadError
+}
+
+func newAgentRegistry() *agentRegistry {
+	return &agentRegistry{manifests: map[string]*frameworkmanifest.AgentManifest{}}
+}
+
+func (r *agentRegistry) Get(name string) (*frameworkmanifest.AgentManifest, bool) {
+	if r == nil {
+		return nil, false
+	}
+	m, ok := r.manifests[name]
+	return m, ok
+}
+
+func (r *agentRegistry) List() []agentSummary {
+	if r == nil {
+		return nil
+	}
+	out := make([]agentSummary, len(r.summaries))
+	copy(out, r.summaries)
+	return out
+}
+
+func (r *agentRegistry) Errors() []agentLoadError {
+	if r == nil {
+		return nil
+	}
+	out := make([]agentLoadError, len(r.errs))
+	copy(out, r.errs)
+	return out
+}
+
+// buildRegistry loads manifests scoped to the workspace.
+func buildRegistry(workspace string) (*agentRegistry, error) {
+	reg := newAgentRegistry()
+	paths := frameworkmanifest.DefaultAgentPaths(workspace)
 	if globalCfg != nil {
 		paths = globalCfg.AgentSearchPaths(workspace)
 	}
-	rulesPath := filepath.Join(frameworkconfig.New(workspace).ConfigRoot(), "rules.yaml")
-	reg := agents.NewRegistry(agents.RegistryOptions{
-		Workspace: workspace,
-		Paths:     paths,
-		RulesPath: rulesPath,
-	})
-	if err := reg.Load(); err != nil {
-		return nil, err
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			entries, err := os.ReadDir(path)
+			if err != nil {
+				reg.errs = append(reg.errs, agentLoadError{Path: path, Error: err.Error()})
+				continue
+			}
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml") {
+					continue
+				}
+				reg.load(filepath.Join(path, entry.Name()))
+			}
+			continue
+		}
+		reg.load(path)
 	}
+	sort.SliceStable(reg.summaries, func(i, j int) bool {
+		return reg.summaries[i].Name < reg.summaries[j].Name
+	})
 	return reg, nil
 }
 
-// readConfigMap deserializes config.yaml into a generic map for dotted lookups.
+func (r *agentRegistry) load(path string) {
+	loaded, err := frameworkmanifest.LoadAgentManifest(path)
+	if err != nil {
+		r.errs = append(r.errs, agentLoadError{Path: path, Error: err.Error()})
+		return
+	}
+	r.manifests[loaded.Metadata.Name] = loaded
+	summary := agentSummary{
+		Name:        loaded.Metadata.Name,
+		Description: loaded.Metadata.Description,
+		Source:      path,
+	}
+	if loaded.Spec.Agent != nil {
+		summary.Mode = string(loaded.Spec.Agent.Mode)
+		summary.Model = loaded.Spec.Agent.Model.Name
+	}
+	r.summaries = append(r.summaries, summary)
+}
+
+func effectiveAgentSpec(m *frameworkmanifest.AgentManifest, contract *frameworkmanifest.EffectiveAgentContract) *core.AgentRuntimeSpec {
+	if contract != nil {
+		return contract.AgentSpec
+	}
+	if m == nil {
+		return nil
+	}
+	return m.Spec.Agent
+}
+
+// readConfigMap deserializes manifest.yaml into a generic map for dotted lookups.
 func readConfigMap(path string) (map[string]interface{}, error) {
 	data := map[string]interface{}{}
 	bytes, err := os.ReadFile(path)
@@ -138,7 +239,7 @@ func prettyValue(v interface{}) string {
 
 // sessionDir returns the path where session yaml files live.
 func sessionDir() string {
-	return filepath.Join(frameworkconfig.New(ensureWorkspace()).ConfigRoot(), "sessions")
+	return filepath.Join(frameworkmanifest.New(ensureWorkspace()).ConfigRoot(), "sessions")
 }
 
 // sanitizeName normalizes user-provided identifiers for filenames.

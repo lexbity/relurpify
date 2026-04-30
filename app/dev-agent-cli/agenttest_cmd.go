@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"github.com/spf13/cobra"
 )
@@ -468,7 +468,7 @@ func discoverSuites(ws, agentName string) []string {
 		return matches
 	}
 	// Fallback: check relurpify_cfg/testsuites/ for locally-added suites.
-	cfgDir := config.New(ws).TestsuitesDir()
+	cfgDir := manifest.New(ws).TestsuitesDir()
 	if _, err := os.Stat(cfgDir); err == nil {
 		matches, _ = filepath.Glob(filepath.Join(cfgDir, pattern))
 	}

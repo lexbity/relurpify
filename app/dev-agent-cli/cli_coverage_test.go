@@ -14,15 +14,14 @@ import (
 	"codeburg.org/lexbit/relurpify/agents"
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	manifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"gopkg.in/yaml.v3"
@@ -71,7 +70,6 @@ func stubStartWorkspaceFn(t *testing.T, ws string, compiledPolicy bool) {
 			Config: &core.Config{
 				Name:              cfg.AgentName,
 				Model:             cfg.InferenceModel,
-				InferenceEndpoint: cfg.InferenceEndpoint,
 				MaxIterations:     cfg.MaxIterations,
 				NativeToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.NativeToolCallingEnabled(),
 				AgentSpec:         loaded.Spec.Agent,
@@ -82,16 +80,15 @@ func stubStartWorkspaceFn(t *testing.T, ws string, compiledPolicy bool) {
 			PermissionManager: perms,
 			IndexManager:      &ast.IndexManager{},
 		}
-		var compiled *policybundle.CompiledPolicyBundle
+		var compiled *manifest.CompiledPolicyBundle
 		if compiledPolicy && loaded.Spec.Agent != nil {
 			engine, err := authorization.FromAgentSpecWithConfig(loaded.Spec.Agent, loaded.Metadata.Name, perms)
 			if err != nil {
 				return nil, err
 			}
-			compiled = &policybundle.CompiledPolicyBundle{
+			compiled = &manifest.CompiledPolicyBundle{
 				AgentID: loaded.Metadata.Name,
 				Spec:    loaded.Spec.Agent,
-				Engine:  engine,
 			}
 			env.Registry.SetPolicyEngine(engine)
 		}
@@ -106,11 +103,11 @@ func stubStartWorkspaceFn(t *testing.T, ws string, compiledPolicy bool) {
 	}
 }
 
-func compiledEngine(bundle *policybundle.CompiledPolicyBundle) authorization.PolicyEngine {
+func compiledEngine(bundle *manifest.CompiledPolicyBundle) authorization.PolicyEngine {
 	if bundle == nil {
 		return nil
 	}
-	return bundle.Engine
+	return nil
 }
 
 func writeAgentManifestFixture(t *testing.T, ws, name string, includeAgent bool) string {
@@ -266,7 +263,7 @@ func TestUtilityHelpersAndDefaults(t *testing.T) {
 	if got := defaultModelName(); got != "codellama:13b" {
 		t.Fatalf("defaultModelName = %q", got)
 	}
-	globalCfg = &frameworkconfig.GlobalConfig{DefaultModel: frameworkconfig.ModelRef{Name: "test-model"}}
+	globalCfg = &manifest.GlobalConfig{DefaultModel: manifest.ModelRef{Name: "test-model"}}
 	if got := defaultModelName(); got != "test-model" {
 		t.Fatalf("defaultModelName with cfg = %q", got)
 	}
@@ -287,7 +284,7 @@ func TestUtilityHelpersAndDefaults(t *testing.T) {
 	if len(m) != 0 {
 		t.Fatalf("expected empty config map, got %#v", m)
 	}
-	cfgPath := filepath.Join(dir, "config.yaml")
+	cfgPath := filepath.Join(dir, "manifest.yaml")
 	cfgData := map[string]interface{}{"nested": map[string]interface{}{"value": 3}}
 	if err := writeConfigMap(cfgPath, cfgData); err != nil {
 		t.Fatal(err)
@@ -324,7 +321,7 @@ func TestRegistryAndAgentCommands(t *testing.T) {
 	if got := selectDefaultAgent(reg); got != "testfu" {
 		t.Fatalf("selectDefaultAgent = %q", got)
 	}
-	if got := selectDefaultAgent(agents.NewRegistry(agents.RegistryOptions{})); got != "coding" {
+	if got := selectDefaultAgent(newAgentRegistry()); got != "coding" {
 		t.Fatalf("selectDefaultAgent empty = %q", got)
 	}
 
@@ -397,7 +394,7 @@ func TestRegistryAndAgentCommands(t *testing.T) {
 func TestConfigSessionCommands(t *testing.T) {
 	ws := t.TempDir()
 	withCLIState(t, ws)
-	cfgPath := filepath.Join(ws, "relurpify_cfg", "config.yaml")
+	cfgPath := filepath.Join(ws, "relurpify_cfg", "manifest.yaml")
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +514,7 @@ func TestSkillHelpersAndCommands(t *testing.T) {
 	if got := effectiveAgentSpec(manifestSpec, nil); got != manifestSpec.Spec.Agent {
 		t.Fatal("expected manifest agent spec")
 	}
-	contractSpec := &contractpkg.EffectiveAgentContract{AgentSpec: &core.AgentRuntimeSpec{Mode: core.AgentModeSub}}
+	contractSpec := &manifest.EffectiveAgentContract{AgentSpec: &core.AgentRuntimeSpec{Mode: core.AgentModeSub}}
 	if got := effectiveAgentSpec(manifestSpec, contractSpec); got != contractSpec.AgentSpec {
 		t.Fatal("expected contract agent spec")
 	}
@@ -777,7 +774,7 @@ func TestDiscoverSuitesAndSuiteFilters(t *testing.T) {
 	if got := discoverSuites(ws, "alpha"); len(got) != 1 || got[0] != suitePath {
 		t.Fatalf("discoverSuites canonical = %+v", got)
 	}
-	fallbackDir := frameworkconfig.New(ws).TestsuitesDir()
+	fallbackDir := manifest.New(ws).TestsuitesDir()
 	if err := os.MkdirAll(fallbackDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -830,12 +827,12 @@ func (s *stubWorkflowExecutor) Initialize(config *core.Config) error {
 	return nil
 }
 
-func (s *stubWorkflowExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (s *stubWorkflowExecutor) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	s.executeCalled = true
 	return &core.Result{NodeID: "done", Data: map[string]any{"status": "ok"}}, nil
 }
 
-func (s *stubWorkflowExecutor) Capabilities() []core.Capability { return nil }
+func (s *stubWorkflowExecutor) Capabilities() []string { return nil }
 
 func (s *stubWorkflowExecutor) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return nil, nil
@@ -912,8 +909,8 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 		registerAgentCapabilitiesFn = origRegisterAgentCaps
 		buildFromSpecFn = origBuildFromSpec
 	})
-	globalCfg = &frameworkconfig.GlobalConfig{
-		Logging: frameworkconfig.LoggingConfig{LLM: true, Agent: true},
+	globalCfg = &manifest.GlobalConfig{
+		Logging: manifest.LoggingConfig{LLM: true, Agent: true},
 	}
 	stubStartWorkspaceFn(t, ws, true)
 
@@ -940,12 +937,12 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 		}, nil
 	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
-	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
+	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.BuiltinRelurpicOption) error {
 		return nil
 	}
 	registerAgentCapabilitiesFn = func(registry *capability.Registry, env agents.AgentEnvironment) error { return nil }
 	fakeAgent := &stubWorkflowExecutor{}
-	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+	buildFromSpecFn = func(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		return fakeAgent, nil
 	}
 
@@ -1060,12 +1057,12 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 		return &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms}, nil
 	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
-	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
+	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.BuiltinRelurpicOption) error {
 		return nil
 	}
 	registerAgentCapabilitiesFn = func(registry *capability.Registry, env agents.AgentEnvironment) error { return nil }
 	buildCalls := 0
-	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+	buildFromSpecFn = func(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		buildCalls++
 		if buildCalls == 1 {
 			return nil, fmt.Errorf("synthetic build failure")
@@ -1108,7 +1105,6 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 				Config: &core.Config{
 					Name:              cfg.AgentName,
 					Model:             cfg.InferenceModel,
-					InferenceEndpoint: cfg.InferenceEndpoint,
 					MaxIterations:     cfg.MaxIterations,
 					NativeToolCalling: loaded.Spec.Agent.NativeToolCallingEnabled(),
 					AgentSpec:         loaded.Spec.Agent,
@@ -1248,7 +1244,7 @@ func TestStartCmdProviderRegistrationError(t *testing.T) {
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error {
 		return fmt.Errorf("provider registration failed")
 	}
-	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+	buildFromSpecFn = func(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		return &stubWorkflowExecutor{}, nil
 	}
 	stubStartWorkspaceFn(t, ws, true)
@@ -1300,7 +1296,7 @@ func TestStartCmdInteractiveHitlBranch(t *testing.T) {
 		}, nil
 	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
-	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+	buildFromSpecFn = func(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		return &stubWorkflowExecutor{}, nil
 	}
 	stubStartWorkspaceFn(t, ws, true)
@@ -1941,7 +1937,7 @@ func TestConfigSetWriteError(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("file"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgFile = filepath.Join(blocker, "config.yaml")
+	cfgFile = filepath.Join(blocker, "manifest.yaml")
 	cmd := newConfigSetCmd()
 	if err := cmd.RunE(cmd, []string{"foo", "bar"}); err == nil {
 		t.Fatal("expected writeConfigMap failure")
