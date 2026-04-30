@@ -269,6 +269,9 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		taskType := TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
 		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
 		nodeCtx := WithTaskContext(ctx, TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
+		if g.telemetry != nil {
+			nodeCtx = core.WithTelemetry(nodeCtx, g.telemetry)
+		}
 		result, err := node.Execute(nodeCtx, env)
 		if err != nil {
 			err = fmt.Errorf("node %s execution failed: %w", current, err)

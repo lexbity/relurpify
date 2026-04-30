@@ -1019,6 +1019,7 @@ type ContextPolicySpec struct {
 	TrustDemotedPolicy    string          `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`
 	DegradedChunkPolicy   string          `yaml:"degraded_chunk_policy,omitempty" json:"degraded_chunk_policy,omitempty"`
 	BudgetShortfallPolicy string          `yaml:"budget_shortfall_policy,omitempty" json:"budget_shortfall_policy,omitempty"`
+	MaxTokens             int             `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	Rankers               []RankerRef     `yaml:"rankers,omitempty" json:"rankers,omitempty"`
 	Scanners              []ScannerRef    `yaml:"scanners,omitempty" json:"scanners,omitempty"`
 	Summarizers           []SummarizerRef `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`

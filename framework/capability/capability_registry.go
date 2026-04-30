@@ -27,7 +27,8 @@ type AgentSpecAware interface {
 	SetAgentSpec(spec *AgentRuntimeSpec, agentID string)
 }
 
-// SandboxScopeAware allows tools to receive the sandbox-enforced file scope.
+// SandboxScopeAware allows tools and capability handlers to receive the
+// sandbox-enforced file scope.
 type SandboxScopeAware interface {
 	SetSandboxScope(scope *sandbox.FileScopePolicy)
 }
@@ -233,10 +234,19 @@ func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
 		return
 	}
 	for _, entry := range r.entries {
-		if entry == nil || entry.legacyTool == nil {
+		if entry == nil {
 			continue
 		}
-		if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
+		if entry.legacyTool != nil {
+			if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
+				aware.SetSandboxScope(r.sandboxScope)
+			}
+			continue
+		}
+		if entry.handler == nil {
+			continue
+		}
+		if aware, ok := unwrapCapabilityHandler(entry.handler).(SandboxScopeAware); ok {
 			aware.SetSandboxScope(r.sandboxScope)
 		}
 	}
@@ -288,6 +298,11 @@ func (r *CapabilityRegistry) registerEntryLocked(desc core.CapabilityDescriptor,
 	}
 	if entry.legacyTool != nil && r.sandboxScope != nil {
 		if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
+			aware.SetSandboxScope(r.sandboxScope)
+		}
+	}
+	if entry.handler != nil && r.sandboxScope != nil {
+		if aware, ok := unwrapCapabilityHandler(entry.handler).(SandboxScopeAware); ok {
 			aware.SetSandboxScope(r.sandboxScope)
 		}
 	}

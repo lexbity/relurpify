@@ -9,12 +9,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // AcquireFromFile creates a pipeline for ingesting a file.
-func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore, scope *sandbox.FileScopePolicy) (*Pipeline, error) {
+	if scope != nil {
+		if err := scope.Check(core.FileSystemRead, path); err != nil {
+			return nil, fmt.Errorf("file scope denied: %w", err)
+		}
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)

@@ -11,6 +11,8 @@ const (
 	TaskTypeReview         TaskType = "review"
 	TaskTypeExplain        TaskType = "explain"
 	TaskTypeCodeGeneration TaskType = "code-generation"
+	TaskTypeAnalysis       TaskType = "analysis"
+	TaskTypePlanning       TaskType = "planning"
 )
 
 type taskContextKey struct{}

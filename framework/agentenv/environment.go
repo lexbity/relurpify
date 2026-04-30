@@ -60,6 +60,7 @@ type WorkspaceEnvironment struct {
 	Config        *core.Config
 	Model         core.LanguageModel
 	CommandPolicy sandbox.CommandPolicy
+	FileScope     *sandbox.FileScopePolicy
 	// CommandRunner is the sandbox-enforced runner built by ayenitd from the
 	// manifest-declared command allowlist. Named agents and their capability
 	// handlers use this to execute shell, git, and test commands without
@@ -141,6 +142,12 @@ func (e WorkspaceEnvironment) WithMemory(m *memory.WorkingMemoryStore) Workspace
 // full sandbox runtime.
 func (e WorkspaceEnvironment) WithCommandRunner(r sandbox.CommandRunner) WorkspaceEnvironment {
 	e.CommandRunner = r
+	return e
+}
+
+// WithFileScope returns a shallow copy with FileScope replaced.
+func (e WorkspaceEnvironment) WithFileScope(scope *sandbox.FileScopePolicy) WorkspaceEnvironment {
+	e.FileScope = scope
 	return e
 }
 

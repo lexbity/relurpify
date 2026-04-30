@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
@@ -33,6 +34,7 @@ type WorkspaceScanner struct {
 	ExcludeGlobs  []string
 	Scanners      []Scanner
 	QuarantineDir string
+	FileScope     *fsandbox.FileScopePolicy
 }
 
 // Scan performs a full workspace scan.
@@ -100,6 +102,11 @@ func (s *WorkspaceScanner) Scan(ctx context.Context, root string) (*ScanReport, 
 	return report, nil
 }
 
+// SetFileScope configures the filesystem boundary enforced during workspace scans.
+func (s *WorkspaceScanner) SetFileScope(scope *fsandbox.FileScopePolicy) {
+	s.FileScope = scope
+}
+
 // ScanIncremental performs an incremental scan based on git changes.
 func (s *WorkspaceScanner) ScanIncremental(ctx context.Context, root string, since string) (*ScanReport, error) {
 	// Get changed files from git
@@ -132,7 +139,7 @@ func (s *WorkspaceScanner) ScanIncremental(ctx context.Context, root string, sin
 			defer func() { <-sem }()
 
 			// Check if file should be processed
-			if !s.shouldInclude(file) {
+			if !s.shouldInclude(file) || !s.allowsPath(filepath.Join(root, file), false) {
 				return
 			}
 
@@ -177,6 +184,9 @@ func (s *WorkspaceScanner) discoverFiles(root string) ([]string, error) {
 
 		// Skip directories
 		if info.IsDir() {
+			if !s.allowsPath(path, true) {
+				return filepath.SkipDir
+			}
 			// Skip hidden directories and common exclude patterns
 			name := info.Name()
 			if strings.HasPrefix(name, ".") && name != "." {
@@ -187,6 +197,9 @@ func (s *WorkspaceScanner) discoverFiles(root string) ([]string, error) {
 			return nil
 		}
 
+		if !s.allowsPath(path, false) {
+			return nil
+		}
 		// Check if file should be included
 		if s.shouldInclude(path) {
 			files = append(files, path)
@@ -234,7 +247,7 @@ func (s *WorkspaceScanner) shouldInclude(path string) bool {
 // processFile processes a single file.
 func (s *WorkspaceScanner) processFile(ctx context.Context, root string, file string, report *ScanReport, mu *sync.Mutex) error {
 	// Create pipeline
-	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, nil, s.Store)
+	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, nil, s.Store, s.FileScope)
 	if err != nil {
 		return err
 	}
@@ -304,4 +317,15 @@ func (s *WorkspaceScanner) AddSkillIngestionSources(sources []SkillIngestionSour
 	for _, source := range sources {
 		s.IncludeGlobs = append(s.IncludeGlobs, source.Path)
 	}
+}
+
+func (s *WorkspaceScanner) allowsPath(path string, isDir bool) bool {
+	if s == nil || s.FileScope == nil {
+		return true
+	}
+	action := core.FileSystemRead
+	if isDir {
+		action = core.FileSystemList
+	}
+	return s.FileScope.Check(action, path) == nil
 }

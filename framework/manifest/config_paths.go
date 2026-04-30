@@ -165,9 +165,11 @@ func (p Paths) ModelProfilesDir() string {
 }
 
 // GovernanceRoots returns the canonical workspace governance paths that should
-// be protected from agent writes and executable mutation.
+// be protected from agent writes and executable mutation, including the
+// relurpify_cfg root itself.
 func (p Paths) GovernanceRoots(extra ...string) []string {
 	roots := []string{
+		p.ConfigRoot(),
 		p.AgentsDir(),
 		p.ConfigFile(),
 		p.NexusConfigFile(),

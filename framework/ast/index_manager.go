@@ -15,7 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // IndexConfig configures the IndexManager.
@@ -38,6 +40,7 @@ type IndexManager struct {
 	config           IndexConfig
 	symbolProvider   DocumentSymbolProvider
 	pathFilter       func(path string, isDir bool) bool
+	fileScope        *sandbox.FileScopePolicy
 	workspaceIndex   workspaceIndexState
 }
 
@@ -106,12 +109,17 @@ func (im *IndexManager) SetPathFilter(filter func(path string, isDir bool) bool)
 	im.pathFilter = filter
 }
 
+// SetFileScope installs a sandbox file scope that is enforced before files are
+// read or indexed.
+func (im *IndexManager) SetFileScope(scope *sandbox.FileScopePolicy) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	im.fileScope = scope
+}
+
 // IndexFile parses and stores AST for a file path.
 func (im *IndexManager) IndexFile(path string) error {
-	im.mu.Lock()
-	filter := im.pathFilter
-	im.mu.Unlock()
-	if filter != nil && !filter(path, false) {
+	if !im.allowedPath(core.FileSystemRead, path, false) {
 		return nil
 	}
 	im.mu.Lock()
@@ -179,10 +187,7 @@ func (im *IndexManager) RefreshFiles(paths []string) error {
 }
 
 func (im *IndexManager) refreshFile(path string) error {
-	im.mu.Lock()
-	filter := im.pathFilter
-	im.mu.Unlock()
-	if filter != nil && !filter(path, false) {
+	if !im.allowedPath(core.FileSystemRead, path, false) {
 		return im.removeIndexedFile(path)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -307,16 +312,13 @@ func (im *IndexManager) runWorkspaceIndex(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		im.mu.Lock()
-		filter := im.pathFilter
-		im.mu.Unlock()
 		if d.IsDir() {
-			if filter != nil && !filter(path, true) {
+			if !im.allowedPath(core.FileSystemList, path, true) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if filter != nil && !filter(path, false) {
+		if !im.allowedPath(core.FileSystemRead, path, false) {
 			return nil
 		}
 		if im.shouldIgnore(path) {
@@ -345,6 +347,20 @@ func (im *IndexManager) shouldIgnore(path string) bool {
 		}
 	}
 	return false
+}
+
+func (im *IndexManager) allowedPath(action core.FileSystemAction, path string, isDir bool) bool {
+	im.mu.Lock()
+	scope := im.fileScope
+	filter := im.pathFilter
+	im.mu.Unlock()
+	if scope != nil && scope.Check(action, path) != nil {
+		return false
+	}
+	if filter != nil && !filter(path, isDir) {
+		return false
+	}
+	return true
 }
 
 func (im *IndexManager) indexFilesSequential(ctx context.Context, files []string) error {
