@@ -15,6 +15,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -59,6 +60,7 @@ type BootstrappedAgentRuntime struct {
 	SkillResults         []manifest.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *manifest.EffectiveAgentContract
+	CompiledPolicy       *manifest.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 }
 
@@ -101,6 +103,14 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 	agentSpec := effectiveContract.AgentSpec
 	skillResults := append([]manifest.SkillResolution{}, effectiveContract.SkillResults...)
+	workspacePaths := manifest.New(workspace)
+	fileScope := fsandbox.NewFileScopePolicy(workspace, workspacePaths.GovernanceRoots(
+		workspacePaths.ManifestFile(),
+		workspacePaths.ConfigFile(),
+		workspacePaths.NexusConfigFile(),
+		workspacePaths.PolicyRulesFile(),
+		workspacePaths.ModelProfilesDir(),
+	))
 
 	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
@@ -176,7 +186,10 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	env := agentenv.WorkspaceEnvironment{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
+		CommandRunner:                 runner,
+		JobSubmitter:                  jobs.NoopSubmitter{},
 		CommandPolicy:                 fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "workspace"),
+		FileScope:                     fileScope,
 		Registry:                      registry,
 		PermissionManager:             opts.PermissionManager,
 		IndexManager:                  indexManager,

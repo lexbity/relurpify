@@ -293,6 +293,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		AgentSpec:            boot.AgentSpec,
 		AgentDefinitions:     boot.AgentDefinitions,
 		EffectiveContract:    boot.Contract,
+		CompiledPolicy:       boot.CompiledPolicy,
 		PolicyEngine:         boot.PolicyEngine,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		SkillResults:         boot.SkillResults,

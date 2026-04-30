@@ -32,6 +32,7 @@ type Workspace struct {
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	EffectiveContract    *manifest.EffectiveAgentContract
+	CompiledPolicy       *manifest.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 	CapabilityAdmissions []capability.AdmissionResult
 	SkillResults         []manifest.SkillResolution
