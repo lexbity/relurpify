@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
@@ -157,8 +158,8 @@ spec:
 	}
 }
 
-func TestReadTapeHeaderReturnsNilForLegacyTape(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.tape.jsonl")
+func TestReadTapeHeaderReturnsNilForHeaderlessTape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "headerless.tape.jsonl")
 	if err := os.WriteFile(path, []byte(`{"kind":"generate"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -168,6 +169,13 @@ func TestReadTapeHeaderReturnsNilForLegacyTape(t *testing.T) {
 	}
 	if header != nil {
 		t.Fatalf("expected nil header, got %+v", header)
+	}
+}
+
+func TestFormatTapeStatusReportsMissingHeader(t *testing.T) {
+	status := agentTestSurface.FormatTapeStatus(&llm.TapeInspection{}, "qwen2.5-coder:14b", time.Now())
+	if status != "missing header" {
+		t.Fatalf("expected missing header status, got %q", status)
 	}
 }
 

@@ -239,24 +239,8 @@ func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []st
 		}
 		var filteredCases []agenttest.CaseSpec
 		for _, c := range suite.Spec.Cases {
-			// Phase 8: Updated to use Benchmark.Euclo
 			if c.CapabilityDirectRun != nil && c.CapabilityDirectRun.CapabilityID == capabilityID {
 				filteredCases = append(filteredCases, c)
-				continue
-			}
-			euclo := c.Expect.Benchmark
-			if euclo != nil && euclo.Euclo != nil && euclo.Euclo.PrimaryRelurpicCapability == capabilityID {
-				filteredCases = append(filteredCases, c)
-				continue
-			}
-			// Check supporting capabilities
-			if euclo != nil && euclo.Euclo != nil {
-				for _, supp := range euclo.Euclo.SupportingRelurpicCapabilities {
-					if supp == capabilityID {
-						filteredCases = append(filteredCases, c)
-						break
-					}
-				}
 			}
 		}
 		if len(filteredCases) > 0 {
@@ -374,7 +358,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runRoot := reportRunRoot(report)
+			runRoot := agentTestSurface.RunRoot(report)
 			if runRoot == "" {
 				return errors.New("unable to determine run directory for refresh")
 			}

@@ -19,7 +19,7 @@
 // # Flags
 //
 //   - --agent: agent type to use (default: coding).
-//   - --mode: execution mode for euclo and other agents.
+//   - --mode: execution mode hint passed to the active surface adapter.
 //   - --instruction: task instruction (required for start).
 //   - --yes: approve all HITL prompts automatically (Allow policy).
 //   - --json: emit a machine-readable completion summary.

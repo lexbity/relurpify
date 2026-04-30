@@ -23,12 +23,10 @@ import (
 )
 
 var (
-	registerAgentFn                       = fauthorization.RegisterAgent
-	openWorkspaceFn                       = ayenitd.Open
-	registerBuiltinProvidersFn            = appruntime.RegisterBuiltinProviders
-	registerBuiltinRelurpicCapabilitiesFn = agents.RegisterBuiltinRelurpicCapabilitiesWithOptions
-	registerAgentCapabilitiesFn           = agents.RegisterAgentCapabilities
-	buildFromSpecFn                       = agents.BuildFromSpec
+	registerAgentFn            = fauthorization.RegisterAgent
+	openWorkspaceFn            = ayenitd.Open
+	registerBuiltinProvidersFn = appruntime.RegisterBuiltinProviders
+	buildFromSpecFn            = agents.BuildFromSpec
 )
 
 // newStartCmd constructs the development CLI command that runs an agent.
@@ -88,13 +86,7 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			if mode == "" {
-				if spec.Mode != "" {
-					mode = string(spec.Mode)
-				} else {
-					mode = "default"
-				}
-			}
+			mode = agentTestSurface.ResolveStartMode(mode, spec)
 			if instruction == "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "Agent %s ready in %s mode. Provide --instruction to execute a task.\n", agentName, mode)
 				return nil
@@ -208,13 +200,6 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			if err := registerBuiltinRelurpicCapabilitiesFn(
-				openedWS.Environment.Registry, openedWS.Environment.Model, openedWS.Environment.Config,
-				agents.WithIndexManager(openedWS.Environment.IndexManager),
-				agents.WithWorkflowStore(openedWS.Environment.AgentLifecycle),
-			); err != nil {
-				return fmt.Errorf("register relurpic capabilities: %w", err)
-			}
 			agentEnv := agents.AgentEnvironment{
 				Config:       openedWS.Environment.Config,
 				Model:        openedWS.Environment.Model,
@@ -222,9 +207,6 @@ func newStartCmd() *cobra.Command {
 				IndexManager: openedWS.Environment.IndexManager,
 				SearchEngine: openedWS.Environment.SearchEngine,
 				Memory:       openedWS.Environment.WorkingMemory,
-			}
-			if err := registerAgentCapabilitiesFn(openedWS.Environment.Registry, agentEnv); err != nil {
-				return fmt.Errorf("register agent capabilities: %w", err)
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -237,7 +219,6 @@ func newStartCmd() *cobra.Command {
 			}
 			providerRuntime := &appruntime.Runtime{
 				Tools:        openedWS.Environment.Registry,
-				Context:      core.NewContext(),
 				Registration: registration,
 				AgentSpec:    spec,
 				Model:        openedWS.Environment.Model,
@@ -268,10 +249,7 @@ func newStartCmd() *cobra.Command {
 				ID:          fmt.Sprintf("cli-%d", time.Now().UnixNano()),
 				Instruction: instruction,
 				Type:        string(core.TaskTypeCodeGeneration),
-				Context: map[string]any{
-					"mode":      mode,
-					"workspace": ws,
-				},
+				Context:     agentTestSurface.BuildStartTaskContext(mode, ws),
 			}
 			if resumeLatestWorkflow {
 				task.Context["resume_latest_workflow"] = true
@@ -304,7 +282,7 @@ func newStartCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", "default", "Execution mode (code, architect, ask, debug, security, docs)")
+	cmd.Flags().StringVar(&mode, "mode", "default", "Execution mode hint passed to the active surface adapter")
 	cmd.Flags().StringVar(&agentName, "agent", "", "Agent name from manifest registry")
 	cmd.Flags().StringVar(&instruction, "instruction", "", "Instruction to execute")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate configuration without executing")

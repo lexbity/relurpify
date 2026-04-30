@@ -31,7 +31,7 @@ func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool
 		if cr.Skipped || !cr.Success {
 			return fmt.Errorf("case %q did not pass in run %s", cr.Name, runDir)
 		}
-		if !promotionLayerAllowsCase(suite, cr) {
+		if !agentTestSurface.PromoteAllowed(suite.Metadata.Classification) {
 			return fmt.Errorf("case %q is not promotable for suite classification %q", cr.Name, suite.Metadata.Classification)
 		}
 		srcTape := filepath.Join(cr.ArtifactsDir, "tape.jsonl")
@@ -45,7 +45,7 @@ func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool
 		if strings.TrimSpace(header.ModelName) != "" && strings.TrimSpace(cr.Model) != "" && strings.TrimSpace(header.ModelName) != strings.TrimSpace(cr.Model) {
 			return fmt.Errorf("case %q tape header model %q does not match report model %q", cr.Name, header.ModelName, cr.Model)
 		}
-		destTape := filepath.Join(workspace, "testsuite", "agenttests", "tapes", suite.Metadata.Name, goldenTapeFilename(cr.Name, cr.Model))
+		destTape := agentTestSurface.TapePath(workspace, suite.Metadata.Name, cr.Name, cr.Model)
 		if err := os.MkdirAll(filepath.Dir(destTape), 0o755); err != nil {
 			return err
 		}
@@ -69,24 +69,6 @@ func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool
 		}
 	}
 	return nil
-}
-
-func promotionLayerAllowsCase(suite *agenttest.Suite, cr agenttest.CaseReport) bool {
-	if suite == nil {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(suite.Metadata.Classification)) {
-	case "":
-		return true
-	case "capability":
-		return true
-	case "journey":
-		return true
-	case "benchmark":
-		return true
-	default:
-		return false
-	}
 }
 
 func promoteSuiteLayerArtifacts(suite *agenttest.Suite, cr agenttest.CaseReport, runDir, destTape string, stdout io.Writer) error {
@@ -159,7 +141,7 @@ func writePromotionLineage(destDir string, suite *agenttest.Suite, cr agenttest.
 		Model:             cr.Model,
 		Provider:          cr.Provider,
 		Layer:             strings.TrimSpace(suite.Metadata.Classification),
-		PromotedArtifacts: promotedArtifactsForSuiteLayer(suite, cr),
+		PromotedArtifacts: agentTestSurface.PromotedArtifacts(suite.Metadata.Classification, cr),
 		SourceRunDir:      filepath.Dir(cr.ArtifactsDir),
 		SourceArtifacts:   cr.ArtifactsDir,
 		DestinationTape:   destTape,
@@ -169,22 +151,7 @@ func writePromotionLineage(destDir string, suite *agenttest.Suite, cr agenttest.
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(destDir, sanitizeAgentTestTapeName(cr.Name)+"__"+sanitizeAgentTestTapeName(cr.Model)+".promotion.json"), data, 0o644)
-}
-
-func promotedArtifactsForSuiteLayer(suite *agenttest.Suite, cr agenttest.CaseReport) []string {
-	switch strings.ToLower(strings.TrimSpace(suite.Metadata.Classification)) {
-	case "benchmark":
-		return []string{"benchmark_report.json", "benchmark_score.json", "benchmark_comparison.json"}
-	case "journey":
-		out := []string{"tape.jsonl"}
-		if _, err := os.Stat(filepath.Join(cr.ArtifactsDir, "interaction.tape.jsonl")); err == nil {
-			out = append(out, "interaction.tape.jsonl")
-		}
-		return out
-	default:
-		return []string{"tape.jsonl", "interaction.tape.jsonl", "baseline.json"}
-	}
+	return os.WriteFile(filepath.Join(destDir, agentTestSurface.PromotionLineageFilename(cr.Name, cr.Model)), data, 0o644)
 }
 
 func loadSuiteReport(path string) (*agenttest.SuiteReport, error) {
@@ -224,46 +191,10 @@ func readTapeHeader(path string) (*llm.TapeHeader, error) {
 	return inspection.Header, nil
 }
 
-func goldenTapeFilename(caseName, modelName string) string {
-	return sanitizeAgentTestTapeName(caseName) + "__" + sanitizeAgentTestTapeName(modelName) + ".tape.jsonl"
-}
-
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(dst, data, 0o644)
-}
-
-func reportRunRoot(report *agenttest.SuiteReport) string {
-	if report == nil || len(report.Cases) == 0 {
-		return ""
-	}
-	return filepath.Dir(report.Cases[0].ArtifactsDir)
-}
-
-func sanitizeAgentTestTapeName(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "unnamed"
-	}
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-		case r >= 'A' && r <= 'Z':
-			b.WriteRune(r)
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	out := strings.Trim(b.String(), "_")
-	if out == "" {
-		return "unnamed"
-	}
-	return out
 }

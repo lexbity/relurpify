@@ -326,7 +326,9 @@ func writeSkillTestSuite(root, name, agentName string, force bool) error {
 					TaskType: "analysis",
 					Prompt:   fmt.Sprintf("Use the %s skill to summarize the expected workflow.", name),
 					Expect: agenttest.ExpectSpec{
-						MustSucceed: true,
+						Outcome: &agenttest.OutcomeSpec{
+							MustSucceed: true,
+						},
 					},
 				},
 			},
