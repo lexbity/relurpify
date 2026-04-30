@@ -271,3 +271,37 @@ func TestRecipeCompilerConfigPreserved(t *testing.T) {
 		t.Errorf("Expected config temperature 0.7, got %v", nodes[0].Config["temperature"])
 	}
 }
+
+func TestRecipeCompilerPlanPropagatesCapabilityID(t *testing.T) {
+	compiler := NewCompiler()
+
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Capability Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:           "step1",
+					CapabilityID: "euclo:cap.ast_query",
+					Bindings: map[string]string{
+						"query": "euclo.task.envelope.instruction",
+					},
+				},
+			},
+		},
+	}
+
+	plan, err := compiler.CompilePlan(recipe, nil)
+	if err != nil {
+		t.Fatalf("CompilePlan failed: %v", err)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(plan.Steps))
+	}
+	if plan.Steps[0].CapabilityID != "euclo:cap.ast_query" {
+		t.Fatalf("expected capability ID to propagate, got %q", plan.Steps[0].CapabilityID)
+	}
+}

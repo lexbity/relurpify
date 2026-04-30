@@ -92,6 +92,7 @@ func (s *RecipeSequence) UnmarshalYAML(value *yaml.Node) error {
 type RecipeStep struct {
 	ID           string            `yaml:"id,omitempty"`
 	Type         string            `yaml:"type,omitempty"`
+	CapabilityID string            `yaml:"capability_id,omitempty"`
 	Description  string            `yaml:"description,omitempty"`
 	Mutation     string            `yaml:"mutation,omitempty"`
 	HITL         string            `yaml:"hitl,omitempty"`
@@ -237,7 +238,7 @@ func (r *ThoughtRecipe) usesSpecSchema() bool {
 		return true
 	}
 	for _, step := range r.StepList() {
-		if strings.TrimSpace(step.Mutation) != "" || strings.TrimSpace(step.HITL) != "" || strings.TrimSpace(step.Parent.Paradigm) != "" {
+		if strings.TrimSpace(step.Mutation) != "" || strings.TrimSpace(step.HITL) != "" || strings.TrimSpace(step.CapabilityID) != "" || strings.TrimSpace(step.Parent.Paradigm) != "" {
 			return true
 		}
 		if step.Parent.Context.Stream != nil || step.Parent.Context.Ingest != nil || len(step.Parent.Context.Inherit) > 0 || len(step.Parent.Context.Capture) > 0 {
@@ -335,6 +336,9 @@ func validateStep(step *RecipeStep, index int, seenStepIDs map[string]bool, spec
 		}
 		if err := validateStepHITL(step.HITL); err != nil {
 			return fmt.Errorf("step %s: %w", step.ID, err)
+		}
+		if strings.TrimSpace(step.CapabilityID) != "" && strings.TrimSpace(step.Parent.Paradigm) != "" {
+			return fmt.Errorf("step %s: capability_id and parent.paradigm are mutually exclusive", step.ID)
 		}
 		if err := validateStepParadigm(step.Parent.Paradigm); err != nil {
 			return fmt.Errorf("step %s: %w", step.ID, err)

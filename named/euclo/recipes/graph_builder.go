@@ -53,7 +53,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, tr
 			topology.last = nodeID
 		}
 
-		if step.Stream != nil {
+		if step.CapabilityID == "" && step.Stream != nil {
 			nodeID := step.ID + ".stream"
 			streamData := map[string]any{
 				"query_template": step.Stream.QueryTemplate,
@@ -83,7 +83,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, tr
 			topology.last = nodeID
 		}
 
-		if step.Mutation == "required" || step.HITL != "" && step.HITL != "never" {
+		if step.CapabilityID == "" && (step.Mutation == "required" || step.HITL != "" && step.HITL != "never") {
 			nodeID := step.ID + ".gate"
 			if err := graph.AddNode(newRecipeStageNode(nodeID, agentgraph.NodeTypeSystem, "gate", map[string]any{
 				"mutation": step.Mutation,

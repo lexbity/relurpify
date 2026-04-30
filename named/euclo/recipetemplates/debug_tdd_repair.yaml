@@ -1,0 +1,65 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.debug_tdd_repair
+name: Debug TDD Repair
+description: Debug and repair failing tests using TDD methodology
+version: 1.0.0
+
+steps:
+  - id: locate
+    name: Locate Failure
+    type: react
+    paradigm: debug
+    agent:
+      type: react
+      system_prompt: |
+        You are a debugging assistant. Your task is to locate the source of a test failure.
+        Use the test_run capability to run tests and identify which tests are failing.
+        Use the ast_query capability to examine the code structure.
+        Provide a clear description of the failure location and likely cause.
+    captures:
+      failure_location: envelope.WorkingData.failure_location
+      likely_cause: envelope.WorkingData.likely_cause
+
+  - id: repair
+    name: Repair Code
+    type: react
+    paradigm: debug
+    hitl: ask
+    mutation: required
+    agent:
+      type: react
+      system_prompt: |
+        You are a code repair assistant. Your task is to fix the identified test failure.
+        Use the failure_location and likely_cause from the previous step.
+        Make minimal changes to fix the issue while preserving existing functionality.
+        Use the ast_query and symbol_trace capabilities to understand code relationships.
+        Ask for human approval before making changes.
+    dependencies:
+      - locate
+    fallback:
+      type: react
+      paradigm: debug
+      agent:
+        type: react
+        system_prompt: |
+          The automated repair failed. Please provide alternative repair suggestions
+          or guide the user through manual repair steps.
+    captures:
+      repair_description: envelope.WorkingData.repair_description
+
+  - id: verify
+    name: Verify Fix
+    type: react
+    paradigm: debug
+    agent:
+      type: react
+      system_prompt: |
+        You are a verification assistant. Your task is to verify that the repair fixed the issue.
+        Use the test_run capability to run the failing tests again.
+        Confirm that all tests now pass.
+        If tests still fail, provide feedback on what needs to be adjusted.
+    dependencies:
+      - repair
+    captures:
+      verification_result: envelope.WorkingData.verification_result

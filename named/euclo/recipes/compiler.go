@@ -107,6 +107,7 @@ func (c *Compiler) CompilePlan(recipe *ThoughtRecipe, resolver *AliasResolver) (
 		executionStep := ExecutionStep{
 			ID:           step.ID,
 			Paradigm:     step.Parent.Paradigm,
+			CapabilityID: step.CapabilityID,
 			Prompt:       step.Parent.Prompt,
 			Mutation:     step.Mutation,
 			HITL:         step.HITL,

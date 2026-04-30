@@ -61,6 +61,10 @@ func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return nil, fmt.Errorf("recipe step node %q missing envelope", n.id)
 	}
 
+	if strings.TrimSpace(n.step.CapabilityID) != "" {
+		return n.executeCapability(ctx, env)
+	}
+
 	task := n.buildTask(env)
 	agent, err := n.buildAgent(task)
 	if err != nil {
@@ -101,6 +105,67 @@ func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	return result, nil
 }
 
+func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+	if n == nil {
+		return nil, fmt.Errorf("recipe step node is nil")
+	}
+	if env == nil {
+		return nil, fmt.Errorf("recipe step node %q missing envelope", n.id)
+	}
+
+	reg := n.env.Registry
+	if reg == nil {
+		return nil, fmt.Errorf("recipe step %q: capability_id requires a registry", n.id)
+	}
+	if scoped := n.scopedRegistry(); scoped != nil {
+		reg = scoped
+	}
+
+	args := n.buildCapabilityArgs(env)
+	toolResult, err := reg.InvokeCapability(ctx, env, n.step.CapabilityID, args)
+
+	data := map[string]any{
+		"capability_id": n.step.CapabilityID,
+	}
+	success := err == nil
+	if toolResult != nil {
+		data["output"] = toolResult.Data
+		if toolResult.Metadata != nil {
+			data["metadata"] = toolResult.Metadata
+		}
+		if strings.TrimSpace(toolResult.Error) != "" {
+			data["error"] = toolResult.Error
+		}
+		if !toolResult.Success {
+			success = false
+		}
+	}
+	if err != nil {
+		data["error"] = err.Error()
+	}
+
+	result := &agentgraph.Result{
+		NodeID:  n.id,
+		Success: success,
+		Data:    data,
+	}
+	if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
+		result.Error = msg
+	}
+
+	captured := n.captureValues(result)
+	for key, value := range captured {
+		env.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+	}
+	env.SetWorkingValue("euclo.recipe.step."+n.step.ID+".result", data, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.recipe.step."+n.step.ID+".success", success, contextdata.MemoryClassTask)
+	if result.Error != "" {
+		env.SetWorkingValue("euclo.recipe.step."+n.step.ID+".error", result.Error, contextdata.MemoryClassTask)
+	}
+
+	return result, nil
+}
+
 func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 	data := recipeTemplateData(env, n.step)
 	instruction := n.renderTemplate(n.step.Prompt, data)
@@ -128,6 +193,22 @@ func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 		}
 	}
 	return task
+}
+
+func (n *RecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) map[string]any {
+	data := recipeTemplateData(env, n.step)
+	args := make(map[string]any)
+	for key, ref := range n.step.Bindings {
+		if value, ok := lookupTemplateValue(data, ref); ok {
+			args[key] = value
+		}
+	}
+	for key, value := range n.step.Step.Config {
+		if _, exists := args[key]; !exists {
+			args[key] = value
+		}
+	}
+	return args
 }
 
 func (n *RecipeStepNode) buildAgent(task *core.Task) (agentgraph.WorkflowExecutor, error) {

@@ -55,6 +55,7 @@ type ExecutionPlan struct {
 type ExecutionStep struct {
 	ID           string
 	Paradigm     string
+	CapabilityID string
 	Prompt       string
 	Mutation     string
 	HITL         string

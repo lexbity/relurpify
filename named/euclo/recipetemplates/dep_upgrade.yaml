@@ -1,0 +1,94 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.dep_upgrade
+name: Dependency Upgrade
+description: Upgrade project dependencies with careful migration and testing
+version: 1.0.0
+
+steps:
+  - id: analyze
+    name: Analyze Dependencies
+    type: react
+    paradigm: maintenance
+    agent:
+      type: react
+      system_prompt: |
+        You are a dependency management assistant. Your task is to analyze current dependencies
+        and identify upgrade opportunities.
+        Examine go.mod, package.json, or other dependency files.
+        Identify outdated packages, security vulnerabilities, and breaking changes.
+        Determine the appropriate upgrade strategy for each dependency.
+    captures:
+      dependency_analysis: envelope.WorkingData.dependency_analysis
+      upgrade_plan: envelope.WorkingData.upgrade_plan
+
+  - id: upgrade
+    name: Perform Upgrade
+    type: react
+    paradigm: maintenance
+    hitl: ask
+    mutation: required
+    dependencies:
+      - analyze
+    agent:
+      type: react
+      system_prompt: |
+        You are a dependency management assistant. Your task is to perform the dependency upgrades.
+        Use the dependency_analysis and upgrade_plan from the previous step.
+        Update dependency files with the new versions.
+        Run go get, npm install, or appropriate package managers.
+        Handle breaking changes by updating code as needed.
+        Ask for human approval before making changes.
+    fallback:
+      type: react
+      paradigm: maintenance
+      agent:
+        type: react
+        system_prompt: |
+          The automated upgrade failed. Please provide alternative upgrade suggestions
+          or guide the user through manual upgrade steps.
+    captures:
+      upgrade_description: envelope.WorkingData.upgrade_description
+
+  - id: migrate
+    name: Migrate Breaking Changes
+    type: react
+    paradigm: maintenance
+    hitl: ask
+    mutation: required
+    dependencies:
+      - upgrade
+    agent:
+      type: react
+      system_prompt: |
+        You are a dependency management assistant. Your task is to handle breaking changes.
+        Use the ast_query capability to find code that needs migration.
+        Update code to use new APIs, deprecations, or changed behaviors.
+        Ensure backward compatibility where possible.
+        Ask for human approval before making code changes.
+    fallback:
+      type: react
+      paradigm: maintenance
+      agent:
+        type: react
+        system_prompt: |
+          The automated migration failed. Please provide alternative migration suggestions
+          or guide the user through manual migration steps.
+    captures:
+      migration_description: envelope.WorkingData.migration_description
+
+  - id: verify
+    name: Verify Upgrade
+    type: react
+    paradigm: maintenance
+    dependencies:
+      - migrate
+    agent:
+      type: react
+      system_prompt: |
+        You are a verification assistant. Your task is to verify that the upgrade was successful.
+        Use the test_run capability to run all tests.
+        Confirm that the application builds and runs correctly.
+        If tests fail, provide feedback on what needs to be adjusted.
+    captures:
+      verification_result: envelope.WorkingData.verification_result

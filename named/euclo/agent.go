@@ -9,6 +9,7 @@ package euclo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
@@ -18,6 +19,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -29,7 +33,8 @@ type Agent struct {
 	config      EucloConfig
 	initialized bool
 
-	streamTrigger *contextstream.Trigger
+	streamTrigger  *contextstream.Trigger
+	recipeRegistry *recipe.RecipeRegistry
 
 	// resume state: populated by Execute before calling BuildGraph
 	resumeClassification *intake.IntentClassification
@@ -72,6 +77,18 @@ func (a *Agent) Initialize(config *core.Config) error {
 		return nil
 	}
 
+	// Register all relurpic capability handlers
+	if err := relurpicabilities.RegisterAll(a.env); err != nil {
+		return fmt.Errorf("failed to register relurpic capabilities: %w", err)
+	}
+
+	// Load all recipe templates
+	var err error
+	a.recipeRegistry, err = recipetemplates.LoadAll()
+	if err != nil {
+		return fmt.Errorf("failed to load recipe templates: %w", err)
+	}
+
 	a.initialized = true
 	return nil
 }
@@ -111,7 +128,9 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	rootGraph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(a.env),
 		orchestrate.WithContextStreamTrigger(a.streamTrigger),
+		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
 		orchestrate.WithCapabilityRegistry(a.env.Registry),
+		orchestrate.WithRecipeRegistry(a.recipeRegistry),
 	)
 	graph := rootGraph.Graph()
 	if graph == nil {
@@ -130,6 +149,13 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	}
 
 	return graph, nil
+}
+
+func workspaceRootPath(env agentenv.WorkspaceEnvironment) string {
+	if env.IndexManager == nil {
+		return ""
+	}
+	return strings.TrimSpace(env.IndexManager.WorkspacePath())
 }
 
 func (a *Agent) captureResumeState(env *contextdata.Envelope) {

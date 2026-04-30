@@ -15,11 +15,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
-	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
+	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 type suiteRunner interface {
-	RunSuite(ctx context.Context, suite *runnerpkg.Suite, opts runnerpkg.RunOptions) (*runnerpkg.SuiteReport, error)
+	RunSuite(ctx context.Context, suite *agenttestpkg.Suite, opts agenttestpkg.RunOptions) (*agenttestpkg.SuiteReport, error)
 }
 
 type Agent struct {
@@ -55,7 +55,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		a.Workspace = workspaceFromContext(nil)
 	}
 	if a.Runner == nil {
-		a.Runner = &runnerpkg.Runner{}
+		a.Runner = &agenttestpkg.Runner{}
 	}
 	a.registerTools()
 	return a.Initialize(env.Config)
@@ -64,7 +64,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 func (a *Agent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Runner == nil {
-		a.Runner = &runnerpkg.Runner{}
+		a.Runner = &agenttestpkg.Runner{}
 	}
 	return nil
 }
@@ -146,7 +146,7 @@ func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contex
 // runAgentSuites globs all suite files matching the agent name, applies tag
 // filtering, distributes the context deadline budget across runs, and marks
 // remaining suites as skipped when the budget is exhausted.
-func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]*runnerpkg.SuiteReport, bool, error) {
+func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]*agenttestpkg.SuiteReport, bool, error) {
 	seen := map[string]struct{}{}
 	var paths []string
 	for _, pattern := range []string{
@@ -162,28 +162,28 @@ func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]
 			}
 		}
 	}
-	results := make(map[string]*runnerpkg.SuiteReport, len(paths))
+	results := make(map[string]*agenttestpkg.SuiteReport, len(paths))
 	deadline, hasDeadline := ctx.Deadline()
 	for i, suitePath := range paths {
 		if hasDeadline && time.Until(deadline) <= 0 {
 			for _, remaining := range paths[i:] {
-				results[filepath.Base(remaining)] = &runnerpkg.SuiteReport{SkippedCases: 1}
+				results[filepath.Base(remaining)] = &agenttestpkg.SuiteReport{SkippedCases: 1}
 			}
 			break
 		}
-		suite, err := runnerpkg.LoadSuite(suitePath)
+		suite, err := agenttestpkg.LoadSuite(suitePath)
 		if err != nil {
 			return results, false, err
 		}
 		if len(req.Tags) > 0 {
-			suite = runnerpkg.FilterSuiteCasesByTags(suite, req.Tags)
+			suite = agenttestpkg.FilterSuiteCasesByTags(suite, req.Tags)
 		}
 		if len(suite.Spec.Cases) == 0 {
 			continue
 		}
 		opts := req.RunOptions()
 		if hasDeadline {
-			opts.Timeout = runnerpkg.BudgetedTimeout(time.Until(deadline), len(paths)-i, 30*time.Second)
+			opts.Timeout = BudgetedTimeout(time.Until(deadline), len(paths)-i, 30*time.Second)
 		}
 		report, err := a.Runner.RunSuite(ctx, suite, opts)
 		if err != nil {
@@ -241,24 +241,24 @@ func (a *Agent) executeRequest(ctx context.Context, req runRequest) (map[string]
 	}
 }
 
-func (a *Agent) runSuite(ctx context.Context, req runRequest) (*runnerpkg.SuiteReport, error) {
+func (a *Agent) runSuite(ctx context.Context, req runRequest) (*agenttestpkg.SuiteReport, error) {
 	suitePath, err := resolveSuitePath(req.Workspace, req.SuitePath)
 	if err != nil {
 		return nil, err
 	}
-	suite, err := runnerpkg.LoadSuite(suitePath)
+	suite, err := agenttestpkg.LoadSuite(suitePath)
 	if err != nil {
 		return nil, err
 	}
 	return a.Runner.RunSuite(ctx, suite, req.RunOptions())
 }
 
-func (a *Agent) runCase(ctx context.Context, req runRequest) (*runnerpkg.CaseReport, error) {
+func (a *Agent) runCase(ctx context.Context, req runRequest) (*agenttestpkg.CaseReport, error) {
 	suitePath, err := resolveSuitePath(req.Workspace, req.SuitePath)
 	if err != nil {
 		return nil, err
 	}
-	suite, err := runnerpkg.LoadSuite(suitePath)
+	suite, err := agenttestpkg.LoadSuite(suitePath)
 	if err != nil {
 		return nil, err
 	}
@@ -317,12 +317,12 @@ type runRequest struct {
 	Timeout   time.Duration
 }
 
-func (r runRequest) RunOptions() runnerpkg.RunOptions {
+func (r runRequest) RunOptions() agenttestpkg.RunOptions {
 	timeout := r.Timeout
 	if timeout <= 0 {
 		timeout = 45 * time.Second
 	}
-	return runnerpkg.RunOptions{
+	return agenttestpkg.RunOptions{
 		TargetWorkspace:  r.Workspace,
 		Timeout:          timeout,
 		ModelOverride:    strings.TrimSpace(r.Model),

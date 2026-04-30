@@ -1,0 +1,28 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.code_review
+name: Code Review
+description: Perform comprehensive code review for correctness, security, style, and architecture
+version: 1.0.0
+
+steps:
+  - id: review
+    name: Review Code
+    type: react
+    paradigm: review
+    hitl: never
+    mutation: none
+    agent:
+      type: react
+      system_prompt: |
+        You are a code review assistant. Your task is to review the provided code for:
+        - Correctness: logic errors, edge cases, potential bugs
+        - Security: vulnerabilities, unsafe patterns, sensitive data handling
+        - Style: code quality, readability, idiomatic usage
+        - Architecture: design patterns, separation of concerns, modularity
+        
+        Use the code_review capability to perform the analysis.
+        Return structured findings with severity levels and actionable recommendations.
+    captures:
+      review_findings: envelope.WorkingData.review_findings
+      review_summary: envelope.WorkingData.review_summary

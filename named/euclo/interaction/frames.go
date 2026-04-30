@@ -12,9 +12,10 @@ func generateID() string {
 
 // NewScopeConfirmationFrame creates a scope confirmation frame for ingestion.
 func NewScopeConfirmationFrame(taskID, sessionID string) *InteractionFrame {
-	return &InteractionFrame{
+	frame := &InteractionFrame{
 		ID:        generateID(),
 		Type:      FrameScopeConfirmation,
+		Kind:      FrameScopeConfirmation,
 		TaskID:    taskID,
 		SessionID: sessionID,
 		Seq:       0, // Will be set by EmitFrame
@@ -43,18 +44,21 @@ func NewScopeConfirmationFrame(taskID, sessionID string) *InteractionFrame {
 		},
 		DefaultSlot: "use_selected_files",
 		Payload: map[string]any{
-			"mode": "files_only",
+			"selection": "files_only",
 		},
-		CreatedAt: time.Now(),
-		Timeout:   5 * time.Minute,
 	}
+	frame.CreatedAt = time.Now()
+	frame.Metadata.Timestamp = frame.CreatedAt
+	frame.Timeout = 5 * time.Minute
+	return frame
 }
 
 // NewHITLApprovalFrame creates a HITL approval frame.
 func NewHITLApprovalFrame(taskID, sessionID string, permission string, risk string) *InteractionFrame {
-	return &InteractionFrame{
+	frame := &InteractionFrame{
 		ID:        generateID(),
 		Type:      FrameHITLApproval,
+		Kind:      FrameHITLApproval,
 		TaskID:    taskID,
 		SessionID: sessionID,
 		Seq:       0,
@@ -79,9 +83,11 @@ func NewHITLApprovalFrame(taskID, sessionID string, permission string, risk stri
 			"permission": permission,
 			"risk":       risk,
 		},
-		CreatedAt: time.Now(),
-		Timeout:   5 * time.Minute,
 	}
+	frame.CreatedAt = time.Now()
+	frame.Metadata.Timestamp = frame.CreatedAt
+	frame.Timeout = 5 * time.Minute
+	return frame
 }
 
 // NewCandidateSelectionFrame creates a candidate selection frame for ambiguous classification.
@@ -97,9 +103,10 @@ func NewCandidateSelectionFrame(taskID, sessionID string, candidates []string) *
 		}
 	}
 
-	return &InteractionFrame{
+	frame := &InteractionFrame{
 		ID:          generateID(),
 		Type:        FrameCandidateSelection,
+		Kind:        FrameCandidateSelection,
 		TaskID:      taskID,
 		SessionID:   sessionID,
 		Seq:         0,
@@ -108,16 +115,19 @@ func NewCandidateSelectionFrame(taskID, sessionID string, candidates []string) *
 		Payload: map[string]any{
 			"candidates": candidates,
 		},
-		CreatedAt: time.Now(),
-		Timeout:   5 * time.Minute,
 	}
+	frame.CreatedAt = time.Now()
+	frame.Metadata.Timestamp = frame.CreatedAt
+	frame.Timeout = 5 * time.Minute
+	return frame
 }
 
 // NewOutcomeFeedbackFrame creates an outcome feedback frame.
 func NewOutcomeFeedbackFrame(taskID, sessionID string, outcome string) *InteractionFrame {
-	return &InteractionFrame{
+	frame := &InteractionFrame{
 		ID:        generateID(),
 		Type:      FrameOutcomeFeedback,
+		Kind:      FrameOutcomeFeedback,
 		TaskID:    taskID,
 		SessionID: sessionID,
 		Seq:       0,
@@ -148,7 +158,9 @@ func NewOutcomeFeedbackFrame(taskID, sessionID string, outcome string) *Interact
 		Payload: map[string]any{
 			"outcome": outcome,
 		},
-		CreatedAt: time.Now(),
-		Timeout:   30 * time.Second,
 	}
+	frame.CreatedAt = time.Now()
+	frame.Metadata.Timestamp = frame.CreatedAt
+	frame.Timeout = 30 * time.Second
+	return frame
 }

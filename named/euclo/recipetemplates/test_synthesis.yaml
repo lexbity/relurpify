@@ -1,0 +1,69 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.test_synthesis
+name: Test Synthesis
+description: Generate comprehensive tests for existing code to improve coverage and reliability
+version: 1.0.0
+
+steps:
+  - id: analyze
+    name: Analyze Code for Testing
+    type: react
+    paradigm: synthesis
+    agent:
+      type: react
+      system_prompt: |
+        You are a test synthesis assistant. Your task is to analyze code to determine
+        what tests should be written.
+        Use the ast_query capability to examine code structure.
+        Use the symbol_trace capability to understand function relationships.
+        Identify untested code paths, edge cases, and critical functionality.
+        Determine appropriate test cases and test structure.
+    captures:
+      test_targets: envelope.WorkingData.test_targets
+      test_plan: envelope.WorkingData.test_plan
+
+  - id: generate
+    name: Generate Tests
+    type: react
+    paradigm: synthesis
+    hitl: ask
+    mutation: required
+    dependencies:
+      - analyze
+    agent:
+      type: react
+      system_prompt: |
+        You are a test synthesis assistant. Your task is to generate test code.
+        Use the test_targets and test_plan from the previous step.
+        Write comprehensive tests covering the identified cases.
+        Use appropriate testing frameworks and patterns.
+        Ensure tests are clear, maintainable, and focused.
+        Ask for human approval before adding test files.
+    fallback:
+      type: react
+      paradigm: synthesis
+      agent:
+        type: react
+        system_prompt: |
+          The automated test generation failed. Please provide alternative test suggestions
+          or guide the user through manual test writing steps.
+    captures:
+      generated_tests: envelope.WorkingData.generated_tests
+
+  - id: verify
+    name: Verify Tests
+    type: react
+    paradigm: synthesis
+    dependencies:
+      - generate
+    agent:
+      type: react
+      system_prompt: |
+        You are a verification assistant. Your task is to verify that the generated tests work.
+        Use the test_run capability to run the new tests.
+        Confirm that tests pass and provide meaningful coverage.
+        If tests fail, provide feedback on what needs to be adjusted.
+    captures:
+      verification_result: envelope.WorkingData.verification_result
+      coverage_report: envelope.WorkingData.coverage_report

@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"context"
+	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
@@ -22,6 +23,7 @@ type RootGraphOptions struct {
 	streamTrigger      *contextstream.Trigger
 	capabilityRegistry *capability.CapabilityRegistry
 	recipeRegistry     *recipepkg.RecipeRegistry
+	workspace          string
 }
 
 // RootGraphOption mutates RootGraphOptions.
@@ -55,6 +57,13 @@ func WithRecipeRegistry(reg *recipepkg.RecipeRegistry) RootGraphOption {
 	}
 }
 
+// WithWorkspace wires the workspace root into orchestration nodes.
+func WithWorkspace(workspace string) RootGraphOption {
+	return func(opts *RootGraphOptions) {
+		opts.workspace = strings.TrimSpace(workspace)
+	}
+}
+
 // NewRootGraph creates a new root graph with all components wired together.
 func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 	cfg := RootGraphOptions{}
@@ -85,7 +94,10 @@ func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 			}
 			return &agentgraph.Result{NodeID: "euclo.intake", Success: true}, nil
 		}),
-		NewDispatcher("euclo.dispatch"),
+		NewDispatcher("euclo.dispatch").
+			WithWorkspace(cfg.workspace).
+			WithCapabilityRegistry(cfg.capabilityRegistry).
+			WithRecipeRegistry(cfg.recipeRegistry),
 		newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.policy.mutation_permitted", true, contextdata.MemoryClassTask)

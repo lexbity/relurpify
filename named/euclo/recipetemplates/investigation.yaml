@@ -1,0 +1,40 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.investigation
+name: Investigation
+description: Investigate code behavior and relationships through tracing and analysis
+version: 1.0.0
+
+steps:
+  - id: trace
+    name: Trace Code
+    type: react
+    paradigm: investigation
+    agent:
+      type: react
+      system_prompt: |
+        You are a code investigation assistant. Your task is to trace code execution paths
+        and understand behavior.
+        Use the symbol_trace capability to follow call chains.
+        Use the call_graph capability to understand broader relationships.
+        Use the ast_query capability to examine code structure.
+        Provide a clear explanation of the code flow and relationships.
+    captures:
+      trace_results: envelope.WorkingData.trace_results
+      call_graph: envelope.WorkingData.call_graph
+
+  - id: report
+    name: Report Findings
+    type: react
+    paradigm: investigation
+    dependencies:
+      - trace
+    agent:
+      type: react
+      system_prompt: |
+        You are a reporting assistant. Your task is to synthesize the investigation findings
+        into a clear, actionable report.
+        Use the trace_results and call_graph from the previous step.
+        Summarize key findings, potential issues, and recommendations.
+    captures:
+      investigation_report: envelope.WorkingData.investigation_report

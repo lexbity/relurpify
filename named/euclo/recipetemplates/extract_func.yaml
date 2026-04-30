@@ -1,0 +1,67 @@
+apiVersion: euclo.recipe/v1
+kind: ThoughtRecipe
+id: euclo.recipe.extract_func
+name: Extract Function
+description: Extract a function or method to improve code organization and reusability
+version: 1.0.0
+
+steps:
+  - id: analyze
+    name: Analyze Extraction Target
+    type: react
+    paradigm: refactor
+    agent:
+      type: react
+      system_prompt: |
+        You are a refactoring assistant. Your task is to analyze code that should be extracted
+        into a separate function.
+        Use the ast_query capability to examine the code structure.
+        Identify the code block to extract, its dependencies, and the appropriate function signature.
+        Consider parameter passing, return values, and side effects.
+    captures:
+      extraction_target: envelope.WorkingData.extraction_target
+      function_signature: envelope.WorkingData.function_signature
+
+  - id: extract
+    name: Perform Extraction
+    type: react
+    paradigm: refactor
+    hitl: ask
+    mutation: required
+    dependencies:
+      - analyze
+    agent:
+      type: react
+      system_prompt: |
+        You are a refactoring assistant. Your task is to perform the function extraction.
+        Use the extraction_target and function_signature from the previous step.
+        Replace the identified code block with a function call.
+        Create the new function with the extracted code.
+        Ensure all dependencies are properly passed as parameters.
+        Ask for human approval before making changes.
+    fallback:
+      type: react
+      paradigm: refactor
+      agent:
+        type: react
+        system_prompt: |
+          The automated extraction failed. Please provide alternative extraction suggestions
+          or guide the user through manual extraction steps.
+    captures:
+      extraction_description: envelope.WorkingData.extraction_description
+
+  - id: verify
+    name: Verify Extraction
+    type: react
+    paradigm: refactor
+    dependencies:
+      - extract
+    agent:
+      type: react
+      system_prompt: |
+        You are a verification assistant. Your task is to verify that the extraction was successful.
+        Use the test_run capability to run relevant tests.
+        Confirm that the extracted function works correctly.
+        If tests fail, provide feedback on what needs to be adjusted.
+    captures:
+      verification_result: envelope.WorkingData.verification_result

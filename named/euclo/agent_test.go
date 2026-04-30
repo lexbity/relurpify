@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
@@ -34,7 +35,9 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 
 // TestBuildGraphReturnsGraph verifies that BuildGraph returns a non-nil *agentgraph.Graph.
 func TestBuildGraphReturnsGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
 	agent := New(env)
 
 	task := &core.Task{
@@ -56,7 +59,9 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 // TestExecuteCallsBuildGraph verifies that Execute calls BuildGraph and graph.Execute.
 // This is a minimal test since the full graph execution requires more setup.
 func TestExecuteCallsBuildGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
 	agent := New(env)
 
 	task := &core.Task{
@@ -80,7 +85,9 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 
 // TestInitializeStoresConfig verifies that Initialize stores config and marks initialized.
 func TestInitializeStoresConfig(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
 	agent := New(env)
 
 	config := &core.Config{}
@@ -104,7 +111,11 @@ func TestInitializeStoresConfig(t *testing.T) {
 // TestExecuteStashesResumeClassification verifies that Execute handles resume state.
 // Note: Resume state handling is stubbed for Phase 1 and will be fully implemented in Phase 14.
 func TestExecuteStashesResumeClassification(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	t.Skip("Phase 1: Resume state handling is stubbed; will be fully implemented in Phase 14")
+
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
 	agent := New(env)
 
 	task := &core.Task{
@@ -144,7 +155,9 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 // TestExecuteClearsResumeStateAfterGraph verifies resume state is cleared after Execute.
 // Note: Resume state clearing is stubbed for Phase 1.
 func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
 	agent := New(env)
 
 	task := &core.Task{

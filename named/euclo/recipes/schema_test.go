@@ -165,3 +165,54 @@ func TestRecipeSchemaInvalidDependency(t *testing.T) {
 		t.Error("Expected validation error for invalid dependency")
 	}
 }
+
+func TestRecipeSchemaCapabilityStepValidation(t *testing.T) {
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Capability Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:           "step1",
+					CapabilityID: "euclo:cap.ast_query",
+				},
+			},
+		},
+	}
+
+	if err := recipe.Validate(); err != nil {
+		t.Fatalf("expected capability step recipe to validate, got %v", err)
+	}
+}
+
+func TestRecipeSchemaCapabilityStepAndParadigmConflict(t *testing.T) {
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Capability Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:           "step1",
+					CapabilityID: "euclo:cap.ast_query",
+					Parent: RecipeStepAgent{
+						Paradigm: "react",
+					},
+				},
+			},
+		},
+	}
+
+	err := recipe.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if got := err.Error(); got != "step step1: capability_id and parent.paradigm are mutually exclusive" {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
