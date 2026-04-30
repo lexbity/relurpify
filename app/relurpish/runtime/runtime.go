@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,28 +17,20 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
-	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
-	relurpishbindings "codeburg.org/lexbit/relurpify/archaeo/bindings/relurpish"
-	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
-	"codeburg.org/lexbit/relurpify/archaeo/guidance"
-	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
-	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
-	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 
 	// // memorydb "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist // TODO: package does not exist
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
@@ -59,20 +50,16 @@ type Runtime struct {
 	Config               Config
 	Tools                *capability.Registry
 	Memory               *memory.WorkingMemoryStore
-	Context              *core.Context
 	Agent                agentgraph.WorkflowExecutor
 	Model                core.LanguageModel
 	IndexManager         *ast.IndexManager
 	GraphDB              *graphdb.Engine
 	SearchEngine         *search.SearchEngine
 	AgentLifecycle       agentlifecycle.Repository
-	PlanStore            frameworkplan.PlanStore
-	GuidanceBroker       *guidance.GuidanceBroker
-	LearningBroker       *archaeolearning.Broker
 	Registration         *fauthorization.AgentRegistration
 	Delegations          *fauthorization.DelegationManager
 	AgentSpec            *core.AgentRuntimeSpec
-	AgentDefinitions     map[string]*core.AgentDefinition
+	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	CapabilityAdmissions []capability.AdmissionResult
 	EffectiveContract    *manifest.EffectiveAgentContract
 	CompiledPolicy       *manifest.CompiledPolicyBundle
@@ -237,7 +224,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
-	learningBroker := archaeolearning.NewBroker(0)
 	agentEnv := agents.AgentEnvironment{
 		Config:       env.Config,
 		Model:        env.Model,
@@ -246,39 +232,17 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		SearchEngine: env.SearchEngine,
 		Memory:       env.WorkingMemory,
 	}
-	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
-		env.Registry,
-		env.Model,
-		env.Config,
-		agents.WithIndexManager(env.IndexManager),
-		agents.WithGraphDB(graphDBFromIndexManager(env.IndexManager)),
-		// TODO: agents.WithRetrievalDB(env.RetrievalDB), // option doesn't exist
-		// TODO: agents.WithPlanStore(env.PlanStore), // option doesn't exist
-		// TODO: agents.WithGuidanceBroker(env.GuidanceBroker), // option doesn't exist
-		// TODO: agents.WithWorkflowStore(env.WorkflowStore), // option doesn't exist
-	); err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
-	}
-	if err := agents.RegisterAgentCapabilities(env.Registry, agentEnv); err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("register agent capabilities: %w", err)
-	}
 
 	// Use WorkflowStore interface directly
 	rt := &Runtime{
 		Config:               cfg,
 		Tools:                env.Registry,
 		Memory:               env.WorkingMemory,
-		Context:              core.NewContext(),
 		Model:                env.Model,
 		IndexManager:         env.IndexManager,
 		GraphDB:              graphDBFromIndexManager(env.IndexManager),
 		SearchEngine:         env.SearchEngine,
 		AgentLifecycle:       env.AgentLifecycle,
-		PlanStore:            nil,
-		GuidanceBroker:       nil,
-		LearningBroker:       learningBroker,
 		Logger:               logger,
 		logFile:              logFile,
 		eventLog:             eventLogCloser,
@@ -352,11 +316,6 @@ func (r *Runtime) Close() error {
 		}
 	}
 
-	if r.Context != nil && r.Context.Registry() != nil {
-		if err := r.Context.Registry().CloseAll(); err != nil {
-			errs = append(errs, err)
-		}
-	}
 	if r.AgentLifecycle != nil {
 		if err := r.AgentLifecycle.Close(); err != nil {
 			errs = append(errs, err)
@@ -461,7 +420,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manifest.EffectiveAgentContract, compiledPolicy *manifest.CompiledPolicyBundle, agentDefs map[string]*core.AgentDefinition) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manifest.EffectiveAgentContract, compiledPolicy *manifest.CompiledPolicyBundle, agentDefs map[string]*agentspec.AgentDefinition) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -488,12 +447,12 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 		Telemetry:         r.Telemetry,
 	}
 	agent := instantiateAgent(cfg, agents.AgentEnvironment{
-		Model:         r.Model,
-		Registry:      r.Tools,
-		IndexManager:  r.IndexManager,
-		SearchEngine:  r.SearchEngine,
-		Memory:        r.Memory,
-		Config:        agentCfg,
+		Model:        r.Model,
+		Registry:     r.Tools,
+		IndexManager: r.IndexManager,
+		SearchEngine: r.SearchEngine,
+		Memory:       r.Memory,
+		Config:       agentCfg,
 	}, agentDefs)
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
@@ -653,37 +612,6 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	}, nil
 }
 
-func embedderCfgFromRuntimeConfig(cfg Config, model string) retrieval.EmbedderConfig {
-	return retrieval.EmbedderConfig{
-		Provider: firstNonEmpty(strings.TrimSpace(cfg.EmbeddingProvider), strings.TrimSpace(cfg.InferenceProvider)),
-		Endpoint: firstNonEmpty(strings.TrimSpace(cfg.EmbeddingEndpoint), strings.TrimSpace(cfg.InferenceEndpoint)),
-		Model:    firstNonEmpty(strings.TrimSpace(cfg.EmbeddingModel), strings.TrimSpace(model), strings.TrimSpace(cfg.InferenceModel)),
-	}
-}
-
-// TODO: openRuntimeStores uses memorydb which doesn't exist - needs to be rewritten
-// func openRuntimeStores(workspace string) (*memory.WorkflowStateStore, frameworkplan.PlanStore, io.Closer, error) {
-// 	paths := manifest.New(workspace)
-// 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
-// 		return nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
-// 	}
-// 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
-// 		return nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
-// 	}
-//
-// 	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
-// 	if err != nil {
-// 		return nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
-// 	}
-// 	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
-// 	if err != nil {
-// 		_ = workflowStore.Close()
-// 		return nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
-// 	}
-//
-// 	return workflowStore, planStore, nil, nil
-// }
-
 func shouldIgnoreBootstrapIndexError(err error) bool {
 	if err == nil {
 		return false
@@ -706,8 +634,8 @@ func toCapabilityCandidates(input []frameworkskills.SkillCapabilityCandidate) []
 }
 
 // LoadAgentDefinitions scans the directory for YAML files and parses them.
-func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) {
-	defs := make(map[string]*core.AgentDefinition)
+func LoadAgentDefinitions(dir string) (map[string]*agentspec.AgentDefinition, error) {
+	defs := make(map[string]*agentspec.AgentDefinition)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -733,7 +661,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*core.AgentDefinition) agentgraph.WorkflowExecutor {
+func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*agentspec.AgentDefinition) agentgraph.WorkflowExecutor {
 	paths := manifest.New(cfg.Workspace)
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
@@ -768,7 +696,7 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 	}
 }
 
-func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
+func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
 	paths := manifest.New(cfg.Workspace)
 	spec := def.Spec
 	if env.Config != nil && env.Config.AgentSpec != nil {
@@ -782,7 +710,7 @@ func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agent
 	return configureBuiltAgent(agent, paths)
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.EffectiveAgentContract, *manifest.CompiledPolicyBundle, map[string]*core.AgentDefinition, error) {
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.EffectiveAgentContract, *manifest.CompiledPolicyBundle, map[string]*agentspec.AgentDefinition, error) {
 	agentDefs := r.AgentDefinitions
 	if r.Config.AgentsDir != "" {
 		loaded, err := LoadAgentDefinitions(r.Config.AgentsDir)
@@ -848,13 +776,7 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 			env.SetWorkingValue("meta."+key, value, contextdata.MemoryClassTask)
 		}
 	}
-	res, err := r.Agent.Execute(ctx, task, env)
-	if err == nil && r.Context != nil {
-		r.Context.Set("task.id", task.ID)
-		r.Context.Set("task.type", string(task.Type))
-		r.Context.Set("task.instruction", task.Instruction)
-	}
-	return res, err
+	return r.Agent.Execute(ctx, task, env)
 }
 
 // ExecuteInstruction convenience helper.
@@ -981,344 +903,6 @@ func (r *Runtime) DenyHITL(requestID, reason string) error {
 		return errors.New("hitl broker unavailable")
 	}
 	return r.Registration.HITL.Deny(requestID, reason)
-}
-
-func (r *Runtime) PendingGuidance() []*guidance.GuidanceRequest {
-	if r == nil || r.GuidanceBroker == nil {
-		return nil
-	}
-	return r.GuidanceBroker.Pending()
-}
-
-func (r *Runtime) ResolveGuidance(requestID, choiceID, freetext string) error {
-	if r == nil || r.GuidanceBroker == nil {
-		return errors.New("guidance broker unavailable")
-	}
-	return r.GuidanceBroker.Resolve(guidance.GuidanceDecision{
-		RequestID: requestID,
-		ChoiceID:  choiceID,
-		Freetext:  freetext,
-		DecidedAt: time.Now().UTC(),
-	})
-}
-
-func (r *Runtime) SubscribeGuidance() (<-chan guidance.GuidanceEvent, func()) {
-	if r == nil || r.GuidanceBroker == nil {
-		ch := make(chan guidance.GuidanceEvent)
-		close(ch)
-		return ch, func() {}
-	}
-	return r.GuidanceBroker.Subscribe(32)
-}
-
-func (r *Runtime) PendingLearning() []archaeolearning.Interaction {
-	if r == nil || r.LearningBroker == nil {
-		return nil
-	}
-	return r.LearningBroker.PendingInteractions()
-}
-
-func (r *Runtime) relurpishBinding() relurpishbindings.Runtime {
-	if r == nil {
-		return relurpishbindings.Runtime{}
-	}
-	return relurpishbindings.Runtime{
-		WorkflowStore: r.AgentLifecycle,
-		PlanStore:     r.PlanStore,
-		// Retrieval removed - archaeo/retrieval package deleted
-		LearningBroker: r.LearningBroker,
-	}
-}
-
-func workflowDB(store agentlifecycle.Repository) *sql.DB {
-	if store == nil {
-		return nil
-	}
-	// TODO: AgentLifecycle doesn't have DB() method, need to handle this differently
-	// return store.DB()
-	return nil
-}
-
-func (r *Runtime) ActiveExploration(workspaceID string) (*archaeoarch.SessionView, error) {
-	return r.relurpishBinding().ActiveExploration(context.Background(), workspaceID)
-}
-
-func (r *Runtime) ExplorationView(explorationID string) (*archaeoarch.SessionView, error) {
-	return r.relurpishBinding().ExplorationView(context.Background(), explorationID)
-}
-
-func (r *Runtime) PlanVersions(workflowID string) ([]archaeodomain.VersionedLivingPlan, error) {
-	return r.relurpishBinding().PlanVersions(context.Background(), workflowID)
-}
-
-func (r *Runtime) ActivePlanVersion(workflowID string) (*archaeodomain.VersionedLivingPlan, error) {
-	return r.relurpishBinding().ActivePlanVersion(context.Background(), workflowID)
-}
-
-func (r *Runtime) ComparePlanVersions(workflowID string, fromVersion, toVersion int) (map[string]any, error) {
-	return r.relurpishBinding().ComparePlanVersions(context.Background(), workflowID, fromVersion, toVersion)
-}
-
-func (r *Runtime) TensionsByWorkflow(workflowID string) ([]archaeodomain.Tension, error) {
-	return r.relurpishBinding().TensionsByWorkflow(context.Background(), workflowID)
-}
-
-func (r *Runtime) TensionsByExploration(explorationID string) ([]archaeodomain.Tension, error) {
-	return r.relurpishBinding().TensionsByExploration(context.Background(), explorationID)
-}
-
-func (r *Runtime) UpdateTensionStatus(workflowID, tensionID string, status archaeodomain.TensionStatus, commentRefs []string) (*archaeodomain.Tension, error) {
-	return r.relurpishBinding().UpdateTensionStatus(context.Background(), workflowID, tensionID, status, commentRefs)
-}
-
-func (r *Runtime) TensionSummaryByWorkflow(workflowID string) (*archaeodomain.TensionSummary, error) {
-	return r.relurpishBinding().TensionSummaryByWorkflow(context.Background(), workflowID)
-}
-
-func (r *Runtime) TensionSummaryByExploration(explorationID string) (*archaeodomain.TensionSummary, error) {
-	return r.relurpishBinding().TensionSummaryByExploration(context.Background(), explorationID)
-}
-
-func (r *Runtime) WorkflowProjection(workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
-	return r.relurpishBinding().WorkflowProjection(context.Background(), workflowID)
-}
-
-func (r *Runtime) ExplorationProjection(workflowID string) (*archaeoprojections.ExplorationProjection, error) {
-	return r.relurpishBinding().ExplorationProjection(context.Background(), workflowID)
-}
-
-func (r *Runtime) LearningQueueProjection(workflowID string) (*archaeoprojections.LearningQueueProjection, error) {
-	return r.relurpishBinding().LearningQueueProjection(context.Background(), workflowID)
-}
-
-func (r *Runtime) ActivePlanProjection(workflowID string) (*archaeoprojections.ActivePlanProjection, error) {
-	return r.relurpishBinding().ActivePlanProjection(context.Background(), workflowID)
-}
-
-func (r *Runtime) WorkflowTimeline(workflowID string) ([]archaeodomain.TimelineEvent, error) {
-	return r.relurpishBinding().WorkflowTimeline(context.Background(), workflowID)
-}
-
-func (r *Runtime) SubscribeWorkflowProjection(workflowID string) (<-chan archaeoprojections.ProjectionEvent, func()) {
-	return r.relurpishBinding().SubscribeWorkflowProjection(workflowID, 16)
-}
-
-func (r *Runtime) ResolveLearning(workflowID string, input archaeolearning.ResolveInput) error {
-	if strings.TrimSpace(input.WorkflowID) == "" {
-		input.WorkflowID = workflowID
-	}
-	if strings.TrimSpace(input.WorkflowID) == "" {
-		return errors.New("workflow id required")
-	}
-	_, err := r.relurpishBinding().ResolveLearning(context.Background(), input)
-	return err
-}
-
-func (r *Runtime) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
-	if r == nil || r.LearningBroker == nil {
-		ch := make(chan archaeolearning.Event)
-		close(ch)
-		return ch, func() {}
-	}
-	return r.LearningBroker.Subscribe(32)
-}
-
-func (r *Runtime) PendingDeferrals() []guidance.EngineeringObservation {
-	return nil
-}
-
-func (r *Runtime) ResolveDeferral(observationID string) error {
-	_ = observationID
-	return errors.New("deferral plan unavailable")
-}
-
-// AddBlobToPlan creates a plan step from the given blob and links the blob to
-// that step. If workflowID is empty the most recently created workflow is used.
-func (r *Runtime) AddBlobToPlan(ctx context.Context, workflowID, blobID string) error {
-	if r == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	workflowID, err := r.resolveWorkflowID(ctx, workflowID)
-	if err != nil {
-		return err
-	}
-	binding := r.relurpishBinding()
-
-	// Look in tensions first.
-	tensions, err := binding.TensionsByWorkflow(ctx, workflowID)
-	if err == nil {
-		for i := range tensions {
-			t := &tensions[i]
-			if t.ID == blobID {
-				return r.linkTensionToPlan(ctx, workflowID, t, binding)
-			}
-		}
-	}
-
-	// Fall back to learning queue.
-	lq, err := binding.LearningQueueProjection(ctx, workflowID)
-	if err == nil && lq != nil {
-		for _, item := range lq.PendingLearning {
-			if item.ID == blobID {
-				return r.linkLearningToPlan(ctx, workflowID, blobID, item.Title, item.Description)
-			}
-		}
-	}
-
-	return fmt.Errorf("blob %q not found in workflow %s", blobID, workflowID)
-}
-
-// RemoveBlobFromPlan removes the plan step that was created for the given blob
-// and unlinks the blob from that step.
-func (r *Runtime) RemoveBlobFromPlan(ctx context.Context, workflowID, blobID string) error {
-	if r == nil || r.PlanStore == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	workflowID, err := r.resolveWorkflowID(ctx, workflowID)
-	if err != nil {
-		return err
-	}
-	plan, err := r.PlanStore.LoadPlanByWorkflow(ctx, workflowID)
-	if err != nil || plan == nil {
-		return nil // nothing to remove
-	}
-
-	stepID := "step-" + blobID
-	if _, exists := plan.Steps[stepID]; !exists {
-		return nil // step not in plan
-	}
-	delete(plan.Steps, stepID)
-	newOrder := make([]string, 0, len(plan.StepOrder))
-	for _, sid := range plan.StepOrder {
-		if sid != stepID {
-			newOrder = append(newOrder, sid)
-		}
-	}
-	plan.StepOrder = newOrder
-	plan.UpdatedAt = time.Now()
-	if err := r.PlanStore.SavePlan(ctx, plan); err != nil {
-		return fmt.Errorf("save plan: %w", err)
-	}
-
-	// Unlink tension if applicable.
-	binding := r.relurpishBinding()
-	tensions, _ := binding.TensionsByWorkflow(ctx, workflowID)
-	for i := range tensions {
-		t := &tensions[i]
-		if t.ID == blobID {
-			t.RelatedPlanStepIDs = removeStringFromSlice(t.RelatedPlanStepIDs, stepID)
-			binding.TensionService().Update(ctx, t) //nolint:errcheck
-			break
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) linkTensionToPlan(ctx context.Context, workflowID string, t *archaeodomain.Tension, binding relurpishbindings.Runtime) error {
-	plan, err := r.loadOrCreateActivePlan(ctx, workflowID)
-	if err != nil {
-		return err
-	}
-	stepID := "step-" + t.ID
-	if _, exists := plan.Steps[stepID]; exists {
-		return nil // already added
-	}
-	now := time.Now()
-	step := &frameworkplan.PlanStep{
-		ID:          stepID,
-		Description: t.Description,
-		Scope:       append([]string(nil), t.AnchorRefs...),
-		Status:      frameworkplan.PlanStepPending,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	plan.Steps[stepID] = step
-	plan.StepOrder = append(plan.StepOrder, stepID)
-	plan.UpdatedAt = now
-	if err := r.PlanStore.SavePlan(ctx, plan); err != nil {
-		return fmt.Errorf("save plan: %w", err)
-	}
-	t.RelatedPlanStepIDs = appendStringUnique(t.RelatedPlanStepIDs, stepID)
-	binding.TensionService().Update(ctx, t) //nolint:errcheck
-	return nil
-}
-
-func (r *Runtime) linkLearningToPlan(ctx context.Context, workflowID, blobID, title, description string) error {
-	plan, err := r.loadOrCreateActivePlan(ctx, workflowID)
-	if err != nil {
-		return err
-	}
-	stepID := "step-" + blobID
-	if _, exists := plan.Steps[stepID]; exists {
-		return nil
-	}
-	now := time.Now()
-	desc := title
-	if description != "" {
-		desc = description
-	}
-	step := &frameworkplan.PlanStep{
-		ID:          stepID,
-		Description: desc,
-		Status:      frameworkplan.PlanStepPending,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	plan.Steps[stepID] = step
-	plan.StepOrder = append(plan.StepOrder, stepID)
-	plan.UpdatedAt = now
-	return r.PlanStore.SavePlan(ctx, plan)
-}
-
-func (r *Runtime) loadOrCreateActivePlan(ctx context.Context, workflowID string) (*frameworkplan.LivingPlan, error) {
-	if r.PlanStore == nil {
-		return nil, fmt.Errorf("plan store unavailable")
-	}
-	plan, err := r.PlanStore.LoadPlanByWorkflow(ctx, workflowID)
-	if err == nil && plan != nil {
-		return plan, nil
-	}
-	now := time.Now()
-	return &frameworkplan.LivingPlan{
-		ID:         "plan-" + workflowID,
-		WorkflowID: workflowID,
-		Title:      "Working Plan",
-		Steps:      map[string]*frameworkplan.PlanStep{},
-		StepOrder:  []string{},
-		Version:    1,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-	}, nil
-}
-
-func (r *Runtime) resolveWorkflowID(ctx context.Context, workflowID string) (string, error) {
-	if workflowID != "" {
-		return workflowID, nil
-	}
-	if r.AgentLifecycle == nil {
-		return "", fmt.Errorf("workflow store unavailable")
-	}
-	// TODO: AgentLifecycle.ListWorkflows has different signature
-	return "", fmt.Errorf("workflow ID resolution not yet migrated to AgentLifecycle interface")
-}
-
-func appendStringUnique(slice []string, s string) []string {
-	for _, v := range slice {
-		if v == s {
-			return slice
-		}
-	}
-	return append(slice, s)
-}
-
-func removeStringFromSlice(slice []string, s string) []string {
-	out := slice[:0]
-	for _, v := range slice {
-		if v != s {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {

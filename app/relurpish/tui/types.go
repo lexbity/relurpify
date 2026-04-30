@@ -2,8 +2,6 @@ package tui
 
 import (
 	"time"
-
-	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 )
 
 // TabID identifies one of the main TUI tabs. String-based to support
@@ -18,10 +16,7 @@ const (
 
 // Euclo tab IDs — registered by the euclo agent on init.
 const (
-	TabChat    TabID = "chat"
-	TabPlanner TabID = "planner"
-	TabDebug   TabID = "debug"
-	TabArchaeo TabID = "archaeo"
+	TabChat TabID = "chat"
 )
 
 // SubTabID identifies a subtab within a main tab. Alias so string literals are
@@ -36,28 +31,11 @@ const (
 	SubTabChatOnlineRead SubTabID = "online-read-on" // TODO: wire to Nexus MCP runtime
 	SubTabChatOnlineEdit SubTabID = "online-edit-on" // TODO: wire to Nexus MCP runtime
 
-	// Planner subtabs.
-	SubTabPlannerExplore  SubTabID = "explore"
-	SubTabPlannerAnalyze  SubTabID = "analyze"
-	SubTabPlannerFinalize SubTabID = "finalize"
-
-	// Debug subtabs.
-	SubTabDebugTest      SubTabID = "test"
-	SubTabDebugBenchmark SubTabID = "benchmark"
-	SubTabDebugTrace     SubTabID = "trace"
-	SubTabDebugPlanDiff  SubTabID = "live-plan-diff"
-
 	// Session subtabs — universal.
 	SubTabSessionLive     SubTabID = "live"
 	SubTabSessionTasks    SubTabID = "tasks"
 	SubTabSessionServices SubTabID = "services"
 	SubTabSessionSettings SubTabID = "settings"
-
-	// Archaeo subtabs — euclo-specific.
-	SubTabArchaeoPlan    SubTabID = "plan"
-	SubTabArchaeoExplore SubTabID = "archaeo-explore" // distinct from SubTabPlannerExplore
-	SubTabArchaeoReview  SubTabID = "review"
-	SubTabArchaeoHistory SubTabID = "history"
 )
 
 // TabDefinition declares a main tab and its subtabs.
@@ -244,47 +222,6 @@ func (r *TabRegistry) All() []TabDefinition {
 // Len returns the number of registered tabs.
 func (r *TabRegistry) Len() int { return len(r.tabs) }
 
-// registerEucloTabs adds the chat, planner, and debug tabs for the euclo agent.
-// Called from newRootModel when the euclo agent is loaded.
-func registerEucloTabs(reg *TabRegistry) {
-	reg.Register(TabDefinition{
-		ID: TabChat, Label: "chat", AgentFilter: []string{"euclo"},
-		SubTabs: []SubTabDefinition{
-			{SubTabChatLocalRead, "local-read-only"},
-			{SubTabChatLocalEdit, "local-edit-on"},
-			{SubTabChatOnlineRead, "online-read-on"}, // TODO: wire to Nexus MCP runtime
-			{SubTabChatOnlineEdit, "online-edit-on"}, // TODO: wire to Nexus MCP runtime
-		},
-	})
-	reg.Register(TabDefinition{
-		ID: TabPlanner, Label: "planner", AgentFilter: []string{"euclo"},
-		SubTabs: []SubTabDefinition{
-			{SubTabPlannerExplore, "explore"},
-			{SubTabPlannerAnalyze, "analyze"},
-			{SubTabPlannerFinalize, "finalize"},
-		},
-	})
-	reg.Register(TabDefinition{
-		ID: TabDebug, Label: "debug", AgentFilter: []string{"euclo"},
-		SubTabs: []SubTabDefinition{
-			{SubTabDebugTest, "test"},
-			{SubTabDebugBenchmark, "benchmark"},
-			{SubTabDebugTrace, "trace"},
-			{SubTabDebugPlanDiff, "live-plan-diff"},
-		},
-	})
-	reg.Register(TabDefinition{
-		ID: TabArchaeo, Label: "archaeo", AgentFilter: []string{"euclo"},
-		SubTabs: []SubTabDefinition{
-			{SubTabArchaeoPlan, "plan"},
-			{SubTabArchaeoExplore, "explore"},
-			{SubTabArchaeoReview, "review"},
-			{SubTabArchaeoHistory, "history"},
-		},
-	})
-	// Config and Session are registered universally in newRootModel.
-}
-
 // DiagnosticsUpdatedMsg delivers a fresh runtime diagnostics snapshot to the
 // session pane's live subtab.
 type DiagnosticsUpdatedMsg struct {
@@ -294,42 +231,6 @@ type DiagnosticsUpdatedMsg struct {
 // ServicesUpdatedMsg delivers a fresh service list to the session services subtab.
 type ServicesUpdatedMsg struct {
 	Services []ServiceInfo
-}
-
-// PlanUpdatedMsg delivers a refreshed live plan to the archaeo plan subtab.
-type PlanUpdatedMsg struct {
-	Plan *ActivePlanView
-}
-
-// BlobsUpdatedMsg delivers a refreshed blob list to the archaeo plan subtab sidebar.
-type BlobsUpdatedMsg struct {
-	Blobs []BlobEntry
-}
-
-// ArchaeoExploreMsg adds entries to the archaeo explore feed. Produced when an
-// explore run completes or when a FrameArchaeoFindings frame is received.
-type ArchaeoExploreMsg struct {
-	Entries []ExploreEntry
-}
-
-// PlanVersionInfo is a TUI-safe summary of an archaeo plan version.
-type PlanVersionInfo struct {
-	Version        int
-	Status         string // "active" | "draft" | "archived" | "superseded"
-	ExplorationRef string // derived-from exploration ID (short ref)
-	StepCount      int
-}
-
-// PlanHistoryUpdatedMsg delivers a refreshed list of plan versions for the
-// archaeo history subtab.
-type PlanHistoryUpdatedMsg struct {
-	Versions []PlanVersionInfo
-}
-
-// ArchaeoLearningQueueMsg delivers the current pending learning queue to the
-// archaeology pane review subtab.
-type ArchaeoLearningQueueMsg struct {
-	Interactions []archaeolearning.Interaction
 }
 
 // SessionLiveSnapshotMsg delivers the richer runtime-backed snapshot for the
@@ -348,14 +249,14 @@ type configRefreshMsg struct{}
 type NotificationKind string
 
 const (
-	NotifKindInfo     NotificationKind = "info"
-	NotifKindDeferred NotificationKind = "deferred"
-	NotifKindGuidance NotificationKind = "guidance"
-	NotifKindHITL     NotificationKind = "hitl"
-	NotifKindTaskDone NotificationKind = "task_done"
-	NotifKindRestore  NotificationKind = "restore"
-	NotifKindError    NotificationKind = "error"
-	// NotifKindInteraction is declared in euclo_emitter.go to avoid a cycle.
+	NotifKindInfo        NotificationKind = "info"
+	NotifKindDeferred    NotificationKind = "deferred"
+	NotifKindGuidance    NotificationKind = "guidance"
+	NotifKindHITL        NotificationKind = "hitl"
+	NotifKindTaskDone    NotificationKind = "task_done"
+	NotifKindRestore     NotificationKind = "restore"
+	NotifKindError       NotificationKind = "error"
+	NotifKindInteraction NotificationKind = "interaction"
 )
 
 // NotificationItem is a single item in the notification queue.
@@ -426,16 +327,7 @@ const (
 	InputModeFileRef                      // @ prefix — file picker overlay
 	InputModeFilter                       // # prefix — in-pane filter
 	InputModeHITL                         // HITL overlay has input focus
-	InputModePlanNote                     // planner/explore: @step:N prefix
 	InputModeCommentAuth                  // annotating a pattern; tab cycles intent type
-)
-
-// Backward-compatible aliases for code written against the old names.
-const (
-	ModeNormal     = InputModeNormal
-	ModeCommand    = InputModeCommand
-	ModeFilePicker = InputModeFileRef
-	ModeHITL       = InputModeHITL
 )
 
 // Message structures mirror the specification for rendering rich agent output.

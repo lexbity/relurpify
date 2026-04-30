@@ -138,10 +138,6 @@ func (b *InputBar) prefix(tab TabID) string {
 		return "@ "
 	case TabConfig:
 		return "? "
-	case TabPlanner:
-		return "✎ "
-	case TabDebug:
-		return "! "
 	default:
 		return "> "
 	}

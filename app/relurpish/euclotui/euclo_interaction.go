@@ -1,28 +1,31 @@
-package tui
+package euclotui
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-const NotifKindInteraction NotificationKind = "interaction"
+const NotifKindInteraction tui.NotificationKind = "interaction"
 
 // PushInteraction pushes an interaction notification with the frame's slots.
-func (q *NotificationQueue) PushInteraction(frame interaction.InteractionFrame) string {
-	id := generateID()
-	q.Push(notificationItemFromFrame(id, NotifKindInteraction, frame, nil))
+func PushInteraction(q *tui.NotificationQueue, frame interaction.InteractionFrame) string {
+	id := tui.GenerateID()
+	if q != nil {
+		q.Push(notificationItemFromFrame(id, tui.NotifKindInteraction, frame, nil))
+	}
 	return id
 }
 
-func notificationItemFromFrame(id string, kind NotificationKind, frame interaction.InteractionFrame, extra map[string]string) NotificationItem {
+func notificationItemFromFrame(id string, kind tui.NotificationKind, frame interaction.InteractionFrame, extra map[string]string) tui.NotificationItem {
 	itemExtra := serializeFrameSlots(frame)
 	for key, value := range extra {
 		itemExtra[key] = value
 	}
-	return NotificationItem{
+	return tui.NotificationItem{
 		ID:    id,
 		Kind:  kind,
 		Msg:   frameLabel(frame),
@@ -97,16 +100,16 @@ func frameLabel(frame interaction.InteractionFrame) string {
 	}
 }
 
-func notificationAllowsFreetext(item NotificationItem) bool {
+func notificationAllowsFreetext(item tui.NotificationItem) bool {
 	_ = item
 	return false
 }
 
 // RenderInteractionNotification renders the notification bar for an
 // interaction notification.
-func RenderInteractionNotification(item NotificationItem) string {
+func RenderInteractionNotification(item tui.NotificationItem) string {
 	label := "● " + item.Msg
-	rendered := eucloNotifStyle.Render(label)
+	rendered := eucloFrameStyle.Render(label)
 
 	countStr := item.Extra["slot_count"]
 	count, _ := strconv.Atoi(countStr)

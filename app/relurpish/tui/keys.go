@@ -28,23 +28,14 @@ type globalKeyMap struct {
 	ToggleBar  key.Binding
 	SearchMode key.Binding
 
-	// Sidebar operations (chat context sidebar + archaeo plan sidebar)
+	// Sidebar operations (chat context sidebar)
 	SidebarToggle key.Binding
 	SidebarFocus  key.Binding
-
-	// Blob operations (archaeo plan subtab sidebar)
-	BlobAdd    key.Binding
-	BlobRemove key.Binding
-	BlobExpand key.Binding
 
 	// Service operations (session services subtab)
 	ServiceStop       key.Binding
 	ServiceRestart    key.Binding
 	ServiceRestartAll key.Binding
-
-	// Explore operations (archaeo explore subtab)
-	ExploreStage      key.Binding
-	ExplorePromoteAll key.Binding
 }
 
 // GlobalKeys is the application-wide keybinding set.
@@ -77,19 +68,10 @@ var GlobalKeys = globalKeyMap{
 	SidebarToggle: key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "toggle sidebar")),
 	SidebarFocus:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "focus sidebar")),
 
-	// Blob operations
-	BlobAdd:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "add blob to plan")),
-	BlobRemove: key.NewBinding(key.WithKeys("x", "d"), key.WithHelp("x/d", "remove blob from plan")),
-	BlobExpand: key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "expand blob detail")),
-
 	// Service operations
 	ServiceStop:       key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "stop service")),
 	ServiceRestart:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "restart service")),
 	ServiceRestartAll: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "restart all services")),
-
-	// Explore operations
-	ExploreStage:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "stage blob")),
-	ExplorePromoteAll: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "promote all blobs")),
 }
 
 // ShortHelp returns compact keybinding descriptions.
@@ -124,16 +106,10 @@ func (k globalKeyMap) FullHelp() [][]key.Binding {
 		// UI toggles and search
 		{k.ToggleBar, k.SearchMode},
 
-		// Sidebar (chat context + archaeo plan)
+		// Sidebar operations (chat context)
 		{k.SidebarToggle, k.SidebarFocus},
-
-		// Blob operations (archaeo plan sidebar)
-		{k.BlobAdd, k.BlobRemove, k.BlobExpand},
 
 		// Service operations (session services subtab)
 		{k.ServiceStop, k.ServiceRestart, k.ServiceRestartAll},
-
-		// Explore operations (archaeo explore subtab)
-		{k.ExploreStage, k.ExplorePromoteAll},
 	}
 }

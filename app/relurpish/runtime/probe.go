@@ -14,7 +14,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
@@ -83,7 +82,6 @@ type StatusSnapshot struct {
 	Environment           EnvironmentReport
 	PendingHITL           []*authorization.PermissionRequest
 	ServerActive          bool
-	Context               *core.ContextSnapshot
 	ProtectedPaths        []string
 	ManifestFingerprint   string
 	ManifestPolicySummary string
@@ -366,12 +364,10 @@ func summarizeManifest(path string) ManifestSummary {
 // Status collects runtime + environment data for the status view.
 func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 	env := ProbeEnvironment(ctx, r.Config, r.Backend)
-	contextSnapshot := r.Context.Snapshot()
 	snapshot := StatusSnapshot{
 		Environment:  env,
 		PendingHITL:  r.PendingHITL(),
 		ServerActive: r.ServerRunning(),
-		Context:      &contextSnapshot,
 	}
 	if env.Workspace != "" {
 		snapshot.ProtectedPaths = manifest.New(env.Workspace).GovernanceRoots(

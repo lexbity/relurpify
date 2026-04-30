@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Session tracks high-level session metadata for the status bar.
@@ -390,10 +388,17 @@ func (ac *AgentContext) List() []string {
 	return out
 }
 
+// ContextFileContent holds the resolved content of a single context file.
+type ContextFileContent struct {
+	Path      string
+	Content   string
+	Truncated bool
+}
+
 // ContextFileResolution captures path validation and content loading results.
 type ContextFileResolution struct {
 	Allowed  []string
-	Contents []core.ContextFileContent
+	Contents []ContextFileContent
 	Denied   map[string]string
 }
 
@@ -448,35 +453,6 @@ const (
 	ServiceStatusRunning ServiceStatus = "running"
 	ServiceStatusStopped ServiceStatus = "stopped"
 	ServiceStatusError   ServiceStatus = "error"
-)
-
-// ActivePlanView represents a view of the active living plan
-type ActivePlanView struct {
-	WorkflowID string
-	Title      string
-	Steps      []PlanStepInfo
-	UpdatedAt  time.Time
-}
-
-// BlobEntry represents a tension, pattern, or learning item
-type BlobEntry struct {
-	ID          string
-	Kind        BlobKind // BlobTension | BlobPattern | BlobLearning
-	Title       string
-	Description string
-	Severity    string // for tensions: high/med/low
-	Status      string // for tensions: active/accepted/resolved
-	InPlan      bool
-	AnchorRefs  []string
-	StepID      string // set when InPlan is true
-}
-
-type BlobKind string
-
-const (
-	BlobTension  BlobKind = "tension"
-	BlobPattern  BlobKind = "pattern"
-	BlobLearning BlobKind = "learning"
 )
 
 // ─── TUI-safe data types added for the rework (Part 10 / plan-06) ────────────
@@ -642,7 +618,7 @@ type PatternMatchInfo struct {
 	Scope       string
 }
 
-// TraceInfo holds a parsed execution trace for the debug pane.
+// TraceInfo holds a parsed execution trace.
 type TraceInfo struct {
 	Description string
 	Frames      []TraceFrame

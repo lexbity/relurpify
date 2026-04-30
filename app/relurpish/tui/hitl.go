@@ -17,10 +17,6 @@ type HITLServiceIface interface {
 	SubscribeHITL() (<-chan authorization.HITLEvent, func())
 }
 
-// hitlService is a package-internal alias kept for backward compatibility with
-// existing usages that reference the unexported name.
-type hitlService = HITLServiceIface
-
 type hitlEventMsg struct{ event authorization.HITLEvent }
 
 func listenHITLEvents(ch <-chan authorization.HITLEvent) tea.Cmd {
@@ -42,7 +38,7 @@ type hitlResolvedMsg struct {
 	err       error
 }
 
-func approveHITLCmd(svc hitlService, requestID string, scope authorization.GrantScope) tea.Cmd {
+func approveHITLCmd(svc HITLServiceIface, requestID string, scope authorization.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
@@ -52,7 +48,7 @@ func approveHITLCmd(svc hitlService, requestID string, scope authorization.Grant
 	}
 }
 
-func denyHITLCmd(svc hitlService, requestID string) tea.Cmd {
+func denyHITLCmd(svc HITLServiceIface, requestID string) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: false, err: fmt.Errorf("hitl service unavailable")}

@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
@@ -50,7 +51,7 @@ type BootstrappedAgentRuntime struct {
 	AgentConfig          *core.Config
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
-	AgentDefinitions     map[string]*core.AgentDefinition
+	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	SkillResults         []manifest.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *manifest.EffectiveAgentContract
@@ -104,20 +105,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	_ = llm.ApplyProfile(boot.Backend, profileResolution.Profile)
 	_ = llm.ApplyProfile(boot.Environment.Model, profileResolution.Profile)
 
-	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
-		boot.Registry,
-		opts.Model,
-		boot.AgentConfig,
-		agents.WithIndexManager(boot.IndexManager),
-		agents.WithGraphDB(graphDBFromIndexManager(boot.IndexManager)),
-		agents.WithRetrievalDB(nil),
-		agents.WithPlanStore(nil),
-		agents.WithGuidanceBroker(nil),
-		agents.WithWorkflowStore(opts.AgentLifecycle),
-	); err != nil {
-		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
-	}
-
 	env := agents.AgentEnvironment{
 		Config:       boot.Environment.Config,
 		Model:        boot.Environment.Model,
@@ -125,9 +112,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		IndexManager: boot.Environment.IndexManager,
 		SearchEngine: boot.Environment.SearchEngine,
 		Memory:       boot.Environment.WorkingMemory,
-	}
-	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
-		return nil, fmt.Errorf("register agent capabilities: %w", err)
 	}
 
 	return &BootstrappedAgentRuntime{
@@ -154,7 +138,7 @@ func graphDBFromIndexManager(indexManager *ast.IndexManager) *graphdb.Engine {
 	return indexManager.GraphDB
 }
 
-func selectedAgentDefinitionOverlays(agentName string, defs map[string]*core.AgentDefinition) []core.AgentSpecOverlay {
+func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []core.AgentSpecOverlay {
 	if defs == nil {
 		return nil
 	}
@@ -162,5 +146,5 @@ func selectedAgentDefinitionOverlays(agentName string, defs map[string]*core.Age
 	if !ok || def == nil {
 		return nil
 	}
-	return []core.AgentSpecOverlay{core.AgentSpecOverlayFromSpec(&def.Spec)}
+	return []core.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
 }

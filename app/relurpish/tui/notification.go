@@ -100,13 +100,23 @@ func (q *NotificationQueue) Len() int {
 // NotificationBar renders the current notification as a one-line banner and
 // handles key presses for HITL approve/deny/dismiss.
 type NotificationBar struct {
-	queue *NotificationQueue
-	width int
+	queue               *NotificationQueue
+	width               int
+	interactionRenderer func(NotificationItem) string
 }
 
 // NewNotificationBar creates a NotificationBar backed by the given queue.
 func NewNotificationBar(q *NotificationQueue) *NotificationBar {
-	return &NotificationBar{queue: q}
+	return &NotificationBar{queue: q, interactionRenderer: renderGenericNotification}
+}
+
+// SetInteractionRenderer updates the renderer used for surface-specific
+// interaction notifications.
+func (nb *NotificationBar) SetInteractionRenderer(fn func(NotificationItem) string) {
+	if nb == nil || fn == nil {
+		return
+	}
+	nb.interactionRenderer = fn
 }
 
 // SetWidth updates the bar width (called on every WindowSizeMsg).
@@ -211,7 +221,7 @@ func (nb *NotificationBar) View() string {
 	case NotifKindDeferred:
 		hint = dimStyle.Render("  [enter] review  [d] dismiss")
 	case NotifKindInteraction, NotifKindGuidance:
-		rendered := RenderInteractionNotification(current)
+		rendered := nb.interactionRenderer(current)
 		if nb.queue.Len() > 1 {
 			rendered += dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
 		}
@@ -241,6 +251,27 @@ func (nb *NotificationBar) View() string {
 		rendered = notifInfoStyle.Render(label)
 	}
 	return rendered + hint + more
+}
+
+func renderGenericNotification(item NotificationItem) string {
+	label := "● " + item.Msg
+	var rendered string
+	switch item.Kind {
+	case NotifKindHITL:
+		rendered = notifHITLStyle.Render(label)
+	case NotifKindError:
+		rendered = notifErrorStyle.Render(label)
+	case NotifKindTaskDone:
+		rendered = notifSuccessStyle.Render(label)
+	case NotifKindDeferred:
+		rendered = notifInfoStyle.Render(label)
+	default:
+		rendered = notifInfoStyle.Render(label)
+	}
+	if item.Kind == NotifKindHITL {
+		rendered = rendered + dimStyle.Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+	}
+	return rendered
 }
 
 func renderApprovalNotification(item NotificationItem) string {

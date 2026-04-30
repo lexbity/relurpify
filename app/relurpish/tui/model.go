@@ -3,48 +3,34 @@ package tui
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/archaeo/guidance"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Run bootstraps the TUI without a euclo plugin. This is the public entrypoint
-// called by cmd/start.go when no agent-specific plugin is provided.
+// Run bootstraps the TUI with the default interaction surface factory.
 func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
-	return RunWithEuclo(ctx, rt, nil)
+	return RunWithSurface(ctx, rt, NewDefaultSurfaceFactory())
 }
 
-// RunWithEuclo bootstraps the TUI with an optional EucloPlugin that injects
-// euclo-specific panes, tabs, and an interaction emitter.
-func RunWithEuclo(ctx context.Context, rt *runtimesvc.Runtime, plugin *EucloPlugin) error {
+// RunWithSurface bootstraps the TUI with an agent-surface factory.
+func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory SurfaceFactory) error {
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}
 	adapter := newRuntimeAdapter(rt)
-	m := newRootModel(adapter, plugin)
+	m := newRootModel(adapter, factory)
 	program := tea.NewProgram(
 		m,
 		tea.WithContext(ctx),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
-	// Inject the interaction emitter into the euclo agent after program is created.
-	if plugin != nil && plugin.NewEmitter != nil {
-		emitter := plugin.NewEmitter(program)
-		m.eucloEmitter = emitter
-		if adapter != nil {
-			adapter.SetInteractionEmitter(emitter)
-		}
-	}
 	final, err := program.Run()
 	if rm, ok := final.(RootModel); ok {
 		rm.cleanup()
@@ -70,16 +56,11 @@ type RootModel struct {
 	notifQ     *NotificationQueue
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
-	// chat, planner, debug use interfaces so the euclo plugin can inject
-	// its implementations; the concrete *ChatPane/*PlannerPane/*DebugPane still
-	// live in this package and are the default implementations.
-	chat    ChatPaner
-	tasks   *TasksPane
-	session *SessionPane
-	planner PlannerPaner
-	debug   DebugPaner
-	archaeo ArchaeoPaner
-	config  *ConfigPane
+	chat     ChatPaner
+	tasks    *TasksPane
+	session  *SessionPane
+	manifest *ConfigPane
+	config   *ConfigPane
 
 	// Shared state
 	activeTab    TabID
@@ -92,23 +73,17 @@ type RootModel struct {
 	height       int
 
 	// Session-level state shared across panes
-	sharedSess *Session
-	sharedCtx  *AgentContext
-	runtime    RuntimeAdapter
-	store      *SessionStore
-
-	// Interaction emitter for euclo agent
-	eucloEmitter EucloEmitter
+	sharedSess     *Session
+	sharedCtx      *AgentContext
+	runtime        RuntimeAdapter
+	store          *SessionStore
+	surfaceFactory SurfaceFactory
+	surfaceCache   map[string]*surfaceState
+	activeSurface  AgentSurface
 
 	// HITL subscription
 	hitlCh    <-chan fauthorization.HITLEvent
 	hitlUnsub func()
-
-	guidanceCh    <-chan guidance.GuidanceEvent
-	guidanceUnsub func()
-
-	learningCh    <-chan archaeolearning.Event
-	learningUnsub func()
 
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
@@ -121,27 +96,14 @@ type RootModel struct {
 	scope  string
 }
 
-type plannerDataRuntime interface {
-	QueryPatternProposals(scope string) ([]PatternProposalInfo, error)
-	QueryConfirmedPatterns(scope string) ([]PatternRecordInfo, error)
-	QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error)
-	QueryTensions(scope string) ([]TensionInfo, error)
-	LoadLivePlan(workflowID string) (*LivePlanInfo, error)
-	AddPlanNote(stepRef string, body string) error
-	GetPlanDiff(workflowID string) (PlanDiffInfo, error)
-	GetLatestTrace() (TraceInfo, error)
+type surfaceState struct {
+	surface AgentSurface
+	tabs    *TabRegistry
+	cmdReg  *CommandRegistry
+	chat    ChatPaner
 }
 
-type debugExecRuntime interface {
-	RunTests(pkg string) (DebugTestResultMsg, error)
-	RunBenchmark(pkg string) (DebugBenchmarkResultMsg, error)
-}
-
-func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
-	var plugin *EucloPlugin
-	if len(plugins) > 0 {
-		plugin = plugins[0]
-	}
+func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	info := SessionInfo{MaxTokens: 100000}
 	if rt != nil {
 		info = rt.SessionInfo()
@@ -169,6 +131,9 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 	}
 
 	notifQ := &NotificationQueue{}
+	if factory == nil {
+		factory = NewDefaultSurfaceFactory()
+	}
 
 	inputBar := NewInputBar()
 	if info.Workspace != "" {
@@ -177,16 +142,60 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 	if rt != nil {
 		inputBar.SetRuntime(rt)
 	}
-	inputBar.SetCommandRegistry(rootCommandRegistry)
-	inputBar.SetContext(TabChat, SubTabChatLocalEdit)
+	state := buildSurfaceState(factory, info.Agent, rt, ctx, sess, notifQ)
+	inputBar.SetCommandRegistry(state.cmdReg)
+	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
 
-	// Build tab registry: euclo tabs (if plugin provided) + universal config + session tabs.
-	tabs := NewTabRegistry()
-	if plugin != nil && plugin.SetupTabs != nil {
-		plugin.SetupTabs(tabs)
-	} else {
-		registerEucloTabs(tabs)
+	tabBar := NewTabBar(state.tabs.ActiveTab().ID)
+	tabBar.SetRegistry(state.tabs)
+
+	m := RootModel{
+		tabs:           state.tabs,
+		subTabBar:      NewSubTabBar(state.tabs.ActiveTab()),
+		hitlPanel:      newGuidancePanel(),
+		titleBar:       NewTitleBar(info),
+		tabBar:         tabBar,
+		notifBar:       NewNotificationBar(notifQ),
+		inputBar:       inputBar,
+		cmdPalette:     NewCommandPalette(),
+		notifQ:         notifQ,
+		activeTab:      state.tabs.ActiveTab().ID,
+		titleVisible:   true,
+		sharedSess:     sess,
+		sharedCtx:      ctx,
+		runtime:        rt,
+		taskRunIDs:     make(map[string]bool),
+		cmdReg:         state.cmdReg,
+		scope:          info.Workspace,
+		surfaceFactory: factory,
+		surfaceCache:   map[string]*surfaceState{normalizeSurfaceKey(info.Agent): state},
+		activeSurface:  state.surface,
 	}
+	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
+
+	var store *SessionStore
+	if info.Workspace != "" {
+		store = NewSessionStore(info.Workspace)
+	}
+	m.store = store
+
+	m.chat = state.chat
+	m.tasks = NewTasksPane(rt, notifQ)
+	m.session = NewSessionPane(ctx, sess, rt)
+	m.session.SyncQueuedTasks(m.tasks.Items())
+	m.config = NewConfigPane(rt)
+	m.manifest = m.config
+
+	return m
+}
+
+func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) *surfaceState {
+	surface := factory.Resolve(agentName)
+	if surface == nil {
+		surface = newGenericSurface()
+	}
+	tabs := NewTabRegistry()
+	surface.RegisterTabs(tabs)
 	tabs.Register(TabDefinition{
 		ID:    TabConfig,
 		Label: "config",
@@ -195,67 +204,79 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 		ID:    TabSession,
 		Label: "session",
 		SubTabs: []SubTabDefinition{
-			{SubTabSessionLive, "live"},
-			{SubTabSessionTasks, "tasks"},
-			{SubTabSessionServices, "services"},
-			{SubTabSessionSettings, "settings"},
+			{ID: SubTabSessionLive, Label: "live"},
+			{ID: SubTabSessionTasks, Label: "tasks"},
+			{ID: SubTabSessionServices, Label: "services"},
+			{ID: SubTabSessionSettings, Label: "settings"},
 		},
 	})
-	tabs.SetActive(TabChat)
-	tabs.SetSubActive(TabChat, SubTabChatLocalEdit)
+	initialTab := surface.InitialTab()
+	if initialTab == "" {
+		initialTab = tabs.ActiveTab().ID
+	}
+	if initialTab == "" && tabs.Len() > 0 {
+		initialTab = tabs.All()[0].ID
+	}
+	if initialTab == "" {
+		initialTab = TabConfig
+	}
+	tabs.SetActive(initialTab)
+	initialSub := surface.InitialSubTab(initialTab)
+	if initialSub == "" {
+		if initialTab == TabConfig {
+			initialSub = ""
+		} else {
+			initialSub = tabs.ActiveSubTab()
+		}
+	}
+	if initialSub != "" {
+		tabs.SetSubActive(initialTab, initialSub)
+	}
 	tabs.SetSubActive(TabSession, SubTabSessionLive)
-
-	tabBar := NewTabBar(TabChat)
-	tabBar.SetRegistry(tabs)
-
-	m := RootModel{
-		tabs:         tabs,
-		subTabBar:    NewSubTabBar(tabs.ActiveTab()),
-		hitlPanel:    newGuidancePanel(),
-		titleBar:     NewTitleBar(info),
-		tabBar:       tabBar,
-		notifBar:     NewNotificationBar(notifQ),
-		inputBar:     inputBar,
-		cmdPalette:   NewCommandPalette(),
-		notifQ:       notifQ,
-		activeTab:    TabChat,
-		titleVisible: true,
-		sharedSess:   sess,
-		sharedCtx:    ctx,
-		runtime:      rt,
-		taskRunIDs:   make(map[string]bool),
-		cmdReg:       rootCommandRegistry,
-		scope:        info.Workspace,
+	cmdReg := NewCommandRegistry()
+	registerUniversalCommands(cmdReg)
+	surface.RegisterCommands(cmdReg)
+	chat := surface.NewChat(rt, ctx, sess, notifQ)
+	return &surfaceState{
+		surface: surface,
+		tabs:    tabs,
+		cmdReg:  cmdReg,
+		chat:    chat,
 	}
+}
 
-	var store *SessionStore
-	if info.Workspace != "" {
-		store = NewSessionStore(info.Workspace)
+func (m *RootModel) activateSurface(agentName string) {
+	if m == nil {
+		return
 	}
-	m.store = store
-
-	if plugin != nil && plugin.NewChat != nil {
-		m.chat = plugin.NewChat(rt, ctx, sess, notifQ)
-	} else {
-		m.chat = NewChatPane(rt, ctx, sess, notifQ)
+	if m.surfaceCache == nil {
+		m.surfaceCache = make(map[string]*surfaceState)
 	}
-	m.tasks = NewTasksPane(rt, notifQ)
-	m.session = NewSessionPane(ctx, sess, rt)
-	m.session.SyncQueuedTasks(m.tasks.Items())
-	if plugin != nil && plugin.NewPlanner != nil {
-		m.planner = plugin.NewPlanner()
-	} else {
-		m.planner = NewPlannerPane()
+	key := normalizeSurfaceKey(agentName)
+	if key == "" {
+		key = normalizeSurfaceKey(m.sharedSess.Agent)
 	}
-	if plugin != nil && plugin.NewDebug != nil {
-		m.debug = plugin.NewDebug()
-	} else {
-		m.debug = NewDebugPane()
+	state, ok := m.surfaceCache[key]
+	if !ok || state == nil {
+		state = buildSurfaceState(m.surfaceFactory, agentName, m.runtime, m.sharedCtx, m.sharedSess, m.notifQ)
+		m.surfaceCache[key] = state
 	}
-	m.archaeo = NewArchaeoPane(rt)
-	m.config = NewConfigPane(rt)
-
-	return m
+	m.activeSurface = state.surface
+	m.tabs = state.tabs
+	m.cmdReg = state.cmdReg
+	m.chat = state.chat
+	if m.inputBar != nil {
+		m.inputBar.SetCommandRegistry(state.cmdReg)
+		m.inputBar.SetContext(m.tabs.ActiveTab().ID, m.tabs.ActiveSubTab())
+	}
+	m.tabBar.SetRegistry(state.tabs)
+	m.tabBar.SetActive(m.tabs.ActiveTab().ID)
+	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
+	m.subTabBar.SetActive(m.tabs.ActiveSubTab())
+	if m.notifBar != nil && state.surface != nil {
+		m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
+	}
+	m.activeTab = m.tabs.ActiveTab().ID
 }
 
 func (m *RootModel) syncCommandPalette() {
@@ -267,135 +288,23 @@ func (m *RootModel) syncCommandPalette() {
 }
 
 func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
-	loader, ok := m.runtime.(plannerDataRuntime)
-	if !ok {
-		if m.activeTab == TabSession && m.tabs.ActiveSubTab() == SubTabSessionLive && m.runtime != nil {
-			return func() tea.Msg {
-				workflows, _ := m.runtime.ListWorkflows(3)
-				return SessionLiveSnapshotMsg{
-					Info:      m.runtime.Diagnostics(),
-					Workflows: workflows,
-					Providers: m.runtime.ListLiveProviders(),
-					Approvals: m.runtime.ListApprovals(),
-				}
-			}
-		}
+	if m.runtime == nil || m.activeTab != TabSession {
 		return nil
 	}
-	switch m.activeTab {
-	case TabPlanner:
-		switch m.tabs.ActiveSubTab() {
-		case SubTabPlannerExplore:
-			return func() tea.Msg {
-				records, err := loader.QueryConfirmedPatterns(m.scope)
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("planner load failed: %v", err)}
-				}
-				proposals, err := loader.QueryPatternProposals(m.scope)
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("planner load failed: %v", err)}
-				}
-				return PlannerPatternsMsg{Records: records, Proposals: proposals}
-			}
-		case SubTabPlannerAnalyze:
-			return func() tea.Msg {
-				tensions, err := loader.QueryTensions(m.scope)
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("analysis load failed: %v", err)}
-				}
-				gaps, err := loader.QueryIntentGaps("", m.scope)
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("analysis load failed: %v", err)}
-				}
-				return PlannerTensionsMsg{Tensions: tensions, Gaps: gaps}
-			}
-		case SubTabPlannerFinalize:
-			return func() tea.Msg {
-				plan, err := loader.LoadLivePlan("")
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("plan load failed: %v", err)}
-				}
-				if plan == nil {
-					return PlannerPlanMsg{}
-				}
-				return PlannerPlanMsg{Plan: *plan}
+	switch m.tabs.ActiveSubTab() {
+	case SubTabSessionLive:
+		return func() tea.Msg {
+			workflows, _ := m.runtime.ListWorkflows(3)
+			return SessionLiveSnapshotMsg{
+				Info:      m.runtime.Diagnostics(),
+				Workflows: workflows,
+				Providers: m.runtime.ListLiveProviders(),
+				Approvals: m.runtime.ListApprovals(),
 			}
 		}
-	case TabDebug:
-		switch m.tabs.ActiveSubTab() {
-		case SubTabDebugTest, SubTabDebugBenchmark:
-			return nil
-		case SubTabDebugTrace:
-			return func() tea.Msg {
-				trace, err := loader.GetLatestTrace()
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("trace load failed: %v", err)}
-				}
-				return DebugTraceMsg{Trace: trace}
-			}
-		case SubTabDebugPlanDiff:
-			return func() tea.Msg {
-				diff, err := loader.GetPlanDiff("")
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("plan diff load failed: %v", err)}
-				}
-				return DebugPlanDiffMsg{Diff: diff}
-			}
-		}
-	case TabArchaeo:
-		if m.runtime == nil {
-			return nil
-		}
-		rt := m.runtime
-		switch m.tabs.ActiveSubTab() {
-		case SubTabArchaeoPlan:
-			planCmd := func() tea.Msg {
-				plan, err := rt.LoadActivePlan(context.Background(), "")
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("plan load failed: %v", err)}
-				}
-				return PlanUpdatedMsg{Plan: plan}
-			}
-			blobsCmd := func() tea.Msg {
-				blobs, err := rt.LoadBlobs(context.Background(), "")
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("blob load failed: %v", err)}
-				}
-				return BlobsUpdatedMsg{Blobs: blobs}
-			}
-			return tea.Batch(planCmd, blobsCmd)
-		case SubTabArchaeoReview:
-			return func() tea.Msg {
-				return ArchaeoLearningQueueMsg{Interactions: rt.PendingLearning()}
-			}
-		case SubTabArchaeoHistory:
-			return func() tea.Msg {
-				versions, err := rt.ListPlanVersions(context.Background(), "")
-				if err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("history load failed: %v", err)}
-				}
-				return PlanHistoryUpdatedMsg{Versions: versions}
-			}
-		}
-	case TabSession:
-		if m.runtime == nil {
-			return nil
-		}
-		switch m.tabs.ActiveSubTab() {
-		case SubTabSessionLive:
-			return func() tea.Msg {
-				workflows, _ := m.runtime.ListWorkflows(3)
-				return SessionLiveSnapshotMsg{
-					Info:      m.runtime.Diagnostics(),
-					Workflows: workflows,
-					Providers: m.runtime.ListLiveProviders(),
-					Approvals: m.runtime.ListApprovals(),
-				}
-			}
-		case SubTabSessionServices:
-			return func() tea.Msg {
-				return ServicesUpdatedMsg{Services: m.runtime.ListServices()}
-			}
+	case SubTabSessionServices:
+		return func() tea.Msg {
+			return ServicesUpdatedMsg{Services: m.runtime.ListServices()}
 		}
 	}
 	return nil
@@ -418,9 +327,6 @@ func (m RootModel) Init() tea.Cmd {
 		m.session.Init(),
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
-		m.subscribeGuidanceCmd(),
-		m.subscribeLearningCmd(),
-		m.refreshArchaeoLearningQueueCmd(),
 	)
 }
 
@@ -451,38 +357,6 @@ func (m RootModel) subscribeHITLCmd() tea.Cmd {
 	}
 }
 
-func (m RootModel) subscribeGuidanceCmd() tea.Cmd {
-	rt := m.runtime
-	return func() tea.Msg {
-		if rt == nil {
-			return nil
-		}
-		ch, unsub := rt.SubscribeGuidance()
-		return guidanceSubscribedMsg{ch: ch, unsub: unsub}
-	}
-}
-
-func (m RootModel) subscribeLearningCmd() tea.Cmd {
-	rt := m.runtime
-	return func() tea.Msg {
-		if rt == nil {
-			return nil
-		}
-		ch, unsub := rt.SubscribeLearning()
-		return learningSubscribedMsg{ch: ch, unsub: unsub}
-	}
-}
-
-func (m RootModel) refreshArchaeoLearningQueueCmd() tea.Cmd {
-	rt := m.runtime
-	return func() tea.Msg {
-		if rt == nil {
-			return nil
-		}
-		return ArchaeoLearningQueueMsg{Interactions: rt.PendingLearning()}
-	}
-}
-
 // Update is the central message router.
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -507,7 +381,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Notification bar captures keys when active unless the current guidance
 		// request expects freetext input through the input bar.
-		if m.notifBar.Active() && !m.shouldRouteNotificationKeyToInput(msg) {
+		if m.notifBar.Active() {
 			nb, cmd := m.notifBar.Update(msg)
 			m.notifBar = nb
 			return m, cmd
@@ -533,7 +407,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Notification responses
 	case NotifHITLApproveMsg:
-		var hitlSvc hitlService
+		var hitlSvc HITLServiceIface
 		if m.chat != nil {
 			hitlSvc = m.chat.HITLService()
 		}
@@ -543,7 +417,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case NotifHITLDenyMsg:
-		var hitlSvc hitlService
+		var hitlSvc HITLServiceIface
 		if m.chat != nil {
 			hitlSvc = m.chat.HITLService()
 		}
@@ -555,7 +429,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NotifRestoreSessionMsg:
 		return m.handleRestoreSession(msg.ID)
 	case NotifReviewDeferredMsg:
-		return rootHandleDeferred(&m, nil)
+		return m, nil
 
 	// Stream events — always routed to chat pane regardless of active tab.
 	case streamDoneMsg:
@@ -589,41 +463,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case guidanceSubscribedMsg:
-		m.guidanceCh = msg.ch
-		m.guidanceUnsub = msg.unsub
-		if m.guidanceCh != nil {
-			return m, listenGuidanceEvents(m.guidanceCh)
-		}
-		return m, nil
-
-	case learningSubscribedMsg:
-		m.learningCh = msg.ch
-		m.learningUnsub = msg.unsub
-		if m.learningCh != nil {
-			return m, listenLearningEvents(m.learningCh)
-		}
-		return m, nil
-
-	case learningEventMsg:
-		return m.handleLearningEvent(msg)
-
-	case learningResolvedMsg:
-		if msg.err != nil {
-			m.addSystemMessage(fmt.Sprintf("Learning resolve failed: %v", msg.err))
-		} else {
-			m.addSystemMessage(fmt.Sprintf("Learning resolved: %s", msg.interactionID))
-		}
-		return m, m.refreshArchaeoLearningQueueCmd()
-
-	case ArchaeoLearningQueueMsg:
-		if m.archaeo != nil {
-			ap, cmd := m.archaeo.Update(msg)
-			m.archaeo = ap
-			return m, cmd
-		}
-		return m, nil
-
 	// Diagnostics snapshot — route to session pane regardless of active tab.
 	case DiagnosticsUpdatedMsg:
 		if m.session != nil {
@@ -642,55 +481,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.config = cp
 		return m, cmd
 
-	// Debug data messages — route to debug pane regardless of active tab.
-	case DebugTestResultMsg, DebugBenchmarkResultMsg, DebugTraceMsg, DebugPlanDiffMsg:
-		dp, cmd := m.debug.Update(msg)
-		m.debug = dp
-		return m, cmd
-
-	// Planner data messages — route to planner regardless of active tab.
-	case PlannerPatternsMsg, PlannerTensionsMsg, PlannerPlanMsg:
-		pp, cmd := m.planner.Update(msg)
-		m.planner = pp
-		return m, cmd
-	case plannerNoteAddedMsg:
-		if loader, ok := m.runtime.(plannerDataRuntime); ok {
-			if err := loader.AddPlanNote(msg.stepID, msg.note); err != nil {
-				m.addSystemMessage(fmt.Sprintf("plan note save failed: %v", err))
-			}
-		}
-		pp, cmd := m.planner.Update(msg)
-		m.planner = pp
-		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
-
-	// Archaeo pane data messages — route to archaeo pane regardless of active tab.
-	case PlanUpdatedMsg, ArchaeoExploreMsg, clearPlanHighlightMsg, PlanHistoryUpdatedMsg:
-		ap, cmd := m.archaeo.Update(msg)
-		m.archaeo = ap
-		return m, cmd
-
-	case BlobsUpdatedMsg:
-		ap, cmd := m.archaeo.Update(msg)
-		m.archaeo = ap
-		// Update titlebar blob counts when archaeo tab is active.
-		if m.activeTab == TabArchaeo {
-			tensions, patterns, learning := countBlobsByKind(msg.Blobs)
-			m.titleBar.SetBlobCounts(tensions, patterns, learning)
-		}
-		return m, cmd
-
-	// Archaeo blob operations — route to pane, then trigger a plan+blob refresh.
-	case blobAddedMsg, blobRemovedMsg:
-		ap, cmd := m.archaeo.Update(msg)
-		m.archaeo = ap
-		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
-
-	case planVersionActivatedMsg:
-		ap, cmd := m.archaeo.Update(msg)
-		m.archaeo = ap
-		// Refresh history after activation.
-		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
-
 	// File index for session pane.
 	case fileIndexMsg:
 		sp, cmd := m.session.Update(msg)
@@ -708,53 +498,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleHITLEvent(msg)
 	case hitlResolvedMsg:
 		return m.handleHITLResolved(msg)
-	case guidanceEventMsg:
-		return m.handleGuidanceEvent(msg)
-	case guidanceResolvedMsg:
-		return m.handleGuidanceResolved(msg)
-	case NotifGuidanceResolveMsg:
-		return m, guidanceRequestCmd(m.runtime, msg.RequestID, msg.ChoiceID, msg.Freetext)
 
 	// Guidance panel responses.
 	case GuidancePanelSubmitMsg:
 		m.syncCommandPalette()
-		return m, guidanceRequestCmd(m.runtime, msg.RequestID, "", msg.Response)
+		return m, nil
 	case GuidancePanelDeferMsg:
-		// Defer: resolve with empty choice (system records as deferred observation).
 		m.syncCommandPalette()
-		return m, guidanceRequestCmd(m.runtime, msg.RequestID, "defer", "")
+		return m, nil
 	case GuidancePanelAnnotateMsg:
 		// Annotation saved; panel stays open — no further model action needed here.
 		return m, nil
 	case GuidancePanelJumpExploreMsg:
-		// Jump to planner/explore at the relevant pattern.
-		m.setActiveTab(TabPlanner)
-		m.setActiveSubTab(SubTabPlannerExplore)
-		return m, m.refreshActiveSurfaceCmd()
-
-	// Euclo interaction frame handling.
-	case EucloFrameMsg:
-		// Push the frame as an interactive notification.
-		if m.notifQ != nil {
-			m.notifQ.PushInteraction(msg.Frame)
-		}
-		// Add the rendered frame to the chat feed and update sidebar on proposal frames.
-		if m.chat != nil {
-			m.chat.AppendMessage(msg.Msg)
-			m.chat.UpdateSidebarFromFrame(msg.Frame)
-		}
-		// Route archaeo findings frames to the archaeo pane regardless of active tab.
-		if msg.Frame.Kind == interaction.FrameArchaeoFindings && m.archaeo != nil {
-			ap, cmd := m.archaeo.Update(msg)
-			m.archaeo = ap
-			return m, cmd
-		}
+		m.addSystemMessage("expanded view is no longer available")
 		return m, nil
 
-	// Euclo interaction response handling.
-	case EucloResponseMsg:
-		if m.eucloEmitter != nil {
-			m.eucloEmitter.Resolve(msg.Response)
+	// Surface interaction frame handling.
+	case SurfaceFrameMsg:
+		if m.activeSurface != nil {
+			m.activeSurface.HandleFrame(context.Background(), &m, msg)
 		}
 		return m, nil
 
@@ -840,24 +602,6 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case TabPlanner:
-		pp, cmd := m.planner.Update(msg)
-		m.planner = pp
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	case TabDebug:
-		dp, cmd := m.debug.Update(msg)
-		m.debug = dp
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	case TabArchaeo:
-		ap, cmd := m.archaeo.Update(msg)
-		m.archaeo = ap
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 	case TabConfig:
 		cp, cmd := m.manifest.Update(msg)
 		m.config = cp
@@ -932,12 +676,6 @@ func (m RootModel) activePaneView() string {
 	switch m.activeTab {
 	case TabSession:
 		return m.session.View()
-	case TabPlanner:
-		return m.planner.View()
-	case TabDebug:
-		return m.debug.View()
-	case TabArchaeo:
-		return m.archaeo.View()
 	case TabConfig:
 		return m.manifest.View()
 	default:
@@ -963,9 +701,6 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 	m.chat.SetSize(msg.Width, paneH)
 	m.session.SetSize(msg.Width, paneH)
-	m.planner.SetSize(msg.Width, paneH)
-	m.debug.SetSize(msg.Width, paneH)
-	m.archaeo.SetSize(msg.Width, paneH)
 	m.manifest.SetSize(msg.Width, paneH)
 
 	return m, nil
@@ -995,7 +730,6 @@ func (m RootModel) layoutHeights() (title, pane, input, tab int) {
 // and the subtab bar consistently.
 func (m *RootModel) setActiveTab(id TabID) {
 	m.activeTab = id
-	m.titleBar.SetActiveTab(id)
 	m.tabBar.SetActive(id)
 	m.tabs.SetActive(id)
 	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
@@ -1005,17 +739,8 @@ func (m *RootModel) setActiveTab(id TabID) {
 	if id == TabChat && m.chat != nil {
 		m.chat.SetSubTab(sub)
 	}
-	if id == TabPlanner && m.planner != nil {
-		m.planner.SetSubTab(sub)
-	}
-	if id == TabDebug && m.debug != nil {
-		m.debug.SetSubTab(sub)
-	}
 	if id == TabSession && m.session != nil {
 		m.session.SetSubTab(sub)
-	}
-	if id == TabArchaeo && m.archaeo != nil {
-		m.archaeo.SetSubTab(sub)
 	}
 }
 
@@ -1029,17 +754,8 @@ func (m *RootModel) setActiveSubTab(sub SubTabID) {
 	if m.activeTab == TabChat && m.chat != nil {
 		m.chat.SetSubTab(sub)
 	}
-	if m.activeTab == TabPlanner && m.planner != nil {
-		m.planner.SetSubTab(sub)
-	}
-	if m.activeTab == TabDebug && m.debug != nil {
-		m.debug.SetSubTab(sub)
-	}
 	if m.activeTab == TabSession && m.session != nil {
 		m.session.SetSubTab(sub)
-	}
-	if m.activeTab == TabArchaeo && m.archaeo != nil {
-		m.archaeo.SetSubTab(sub)
 	}
 }
 
@@ -1078,8 +794,6 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		paneH := m.layout.MainPaneHeight(0)
 		m.chat.SetSize(m.width, paneH)
 		m.session.SetSize(m.width, paneH)
-		m.planner.SetSize(m.width, paneH)
-		m.debug.SetSize(m.width, paneH)
 		m.manifest.SetSize(m.width, paneH)
 	case "ctrl+f":
 		m.searchActive = !m.searchActive
@@ -1157,19 +871,6 @@ func (m RootModel) handleInputSubmitted(value string) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if requestID, ok := m.activeGuidanceFreetextRequestID(); ok && !strings.HasPrefix(value, "/") {
-		if m.notifQ != nil {
-			m.notifQ.Resolve(requestID)
-		}
-		return m, guidanceRequestCmd(m.runtime, requestID, "", value)
-	}
-	if notifID, actionID, ok := m.activeInteractionFreetextActionID(); ok && !strings.HasPrefix(value, "/") {
-		if m.notifQ != nil {
-			m.notifQ.Resolve(notifID)
-		}
-		resp := interaction.UserResponse{ActionID: actionID, Text: value}
-		return m, func() tea.Msg { return EucloResponseMsg{Response: resp} }
-	}
 	// Search mode: filter the chat feed instead of submitting a prompt.
 	if m.searchActive && m.chat != nil {
 		m.chat.SetSearchFilter(value)
@@ -1179,41 +880,6 @@ func (m RootModel) handleInputSubmitted(value string) (tea.Model, tea.Cmd) {
 	case TabSession:
 		m.session.HandleFilterInput(value)
 		return m, nil
-	case TabPlanner:
-		cmd := m.planner.HandleInputSubmit(value)
-		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
-	case TabDebug:
-		cmd := m.debug.HandleInputSubmit(value)
-		if runner, ok := m.runtime.(debugExecRuntime); ok {
-			switch m.tabs.ActiveSubTab() {
-			case SubTabDebugTest:
-				return m, tea.Batch(cmd, func() tea.Msg {
-					result, err := runner.RunTests(value)
-					if result.Package == "" {
-						result.Package = strings.TrimSpace(value)
-					}
-					if err != nil {
-						result.Err = err
-					}
-					return result
-				})
-			case SubTabDebugBenchmark:
-				return m, tea.Batch(cmd, func() tea.Msg {
-					result, err := runner.RunBenchmark(value)
-					if result.Package == "" {
-						result.Package = strings.TrimSpace(value)
-					}
-					if err != nil {
-						result.Err = err
-					}
-					return result
-				})
-			}
-		}
-		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
-	case TabArchaeo:
-		cmd := m.archaeo.HandleInputSubmit(value)
-		return m, cmd
 	case TabConfig:
 		// Config pane input: trigger refresh (any non-empty text acts as refresh).
 		return m, func() tea.Msg { return configRefreshMsg{} }
@@ -1274,9 +940,6 @@ func (m RootModel) cleanup() {
 	if m.hitlUnsub != nil {
 		m.hitlUnsub()
 	}
-	if m.guidanceUnsub != nil {
-		m.guidanceUnsub()
-	}
 	if m.chat != nil {
 		m.chat.Cleanup()
 	}
@@ -1329,172 +992,6 @@ func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) 
 	}
 	// Re-queue the listener to continue draining the channel
 	return m, listenHITLEvents(m.hitlCh)
-}
-
-func (m RootModel) handleGuidanceEvent(msg guidanceEventMsg) (RootModel, tea.Cmd) {
-	switch msg.event.Type {
-	case guidance.GuidanceEventRequested:
-		if msg.event.Request != nil {
-			req := msg.event.Request
-			m.hitlPanel.Open(guidanceKindToTrigger(req.Kind), req.ID, req.Title, req.Description, nil, "", "")
-		}
-	case guidance.GuidanceEventResolved, guidance.GuidanceEventExpired:
-		if msg.event.Request != nil {
-			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == msg.event.Request.ID {
-				m.hitlPanel.Close()
-			}
-			if m.notifQ != nil {
-				m.notifQ.Resolve(msg.event.Request.ID)
-			}
-		}
-	case guidance.GuidanceEventDeferred:
-		if msg.event.Request != nil {
-			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == msg.event.Request.ID {
-				m.hitlPanel.Close()
-			}
-			if m.notifQ != nil {
-				m.notifQ.Resolve(msg.event.Request.ID)
-			}
-		}
-		if m.runtime != nil && m.notifQ != nil {
-			pending := m.runtime.PendingDeferrals()
-			if len(pending) > 0 {
-				m.notifQ.Push(NotificationItem{
-					Kind: NotifKindDeferred,
-					ID:   generateID(),
-					Msg:  fmt.Sprintf("%d deferred guidance items pending review", len(pending)),
-				})
-			}
-		}
-	}
-	return m, listenGuidanceEvents(m.guidanceCh)
-}
-
-// guidanceKindToTrigger maps a guidance.GuidanceKind to the TUI GuidanceTriggerKind.
-func guidanceKindToTrigger(k guidance.GuidanceKind) GuidanceTriggerKind {
-	switch k {
-	case guidance.GuidanceAmbiguity, guidance.GuidanceContradiction:
-		return GuidanceTriggerAmbiguity
-	case guidance.GuidanceApproach, guidance.GuidanceScopeExpansion:
-		return GuidanceTriggerLearning
-	case guidance.GuidanceRecovery:
-		return GuidanceTriggerDeferred
-	default:
-		return GuidanceTriggerAmbiguity
-	}
-}
-
-func (m RootModel) handleGuidanceResolved(msg guidanceResolvedMsg) (RootModel, tea.Cmd) {
-	if m.notifQ != nil {
-		m.notifQ.Resolve(msg.requestID)
-	}
-	if msg.err != nil {
-		m.addSystemMessage(fmt.Sprintf("Guidance %s failed: %v", msg.requestID, msg.err))
-	} else {
-		m.addSystemMessage(fmt.Sprintf("Guidance resolved: %s", msg.requestID))
-	}
-	return m, nil
-}
-
-// handleLearningEvent routes learning broker events to the notification queue.
-// Blocking interactions also open the guidance panel so the operator can
-// confirm or defer before plan execution resumes.
-func (m RootModel) handleLearningEvent(msg learningEventMsg) (RootModel, tea.Cmd) {
-	switch msg.event.Type {
-	case archaeolearning.EventRequested:
-		if msg.event.Interaction != nil {
-			interaction := msg.event.Interaction
-			if m.notifQ != nil {
-				m.notifQ.Push(NotificationItem{
-					Kind: NotifKindGuidance,
-					ID:   interaction.ID,
-					Msg:  fmt.Sprintf("Learning: %s", interaction.Title),
-					Extra: map[string]string{
-						"interaction_id": interaction.ID,
-						"workflow_id":    interaction.WorkflowID,
-						"kind":           string(interaction.Kind),
-					},
-				})
-			}
-			// Blocking interactions open the guidance panel so the operator must
-			// respond before execution can continue.
-			if interaction.Blocking {
-				m.hitlPanel.Open(GuidanceTriggerLearning, interaction.ID, interaction.Title, interaction.Description, nil, "", "")
-			}
-		}
-	case archaeolearning.EventResolved, archaeolearning.EventExpired, archaeolearning.EventDeferred:
-		if msg.event.Interaction != nil {
-			id := msg.event.Interaction.ID
-			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == id {
-				m.hitlPanel.Close()
-			}
-			if m.notifQ != nil {
-				m.notifQ.Resolve(id)
-			}
-		}
-	}
-	return m, tea.Batch(listenLearningEvents(m.learningCh), m.refreshArchaeoLearningQueueCmd())
-}
-
-func (m RootModel) shouldRouteNotificationKeyToInput(msg tea.KeyMsg) bool {
-	if !m.notifBar.Active() {
-		return false
-	}
-	item, ok := m.notifQ.Current()
-	if !ok {
-		return false
-	}
-	isGuidanceFreetext := item.Kind == NotifKindGuidance && notificationAllowsFreetext(item)
-	isInteractionFreetext := item.Kind == NotifKindInteraction && notificationAllowsFreetext(item)
-	if !isGuidanceFreetext && !isInteractionFreetext {
-		return false
-	}
-	switch msg.String() {
-	case "d", "esc", "enter":
-		return false
-	}
-	if _, handled := ResolveInteractionKey(item, msg.String()); handled {
-		return false
-	}
-	return true
-}
-
-func (m RootModel) activeGuidanceFreetextRequestID() (string, bool) {
-	if m.notifQ == nil {
-		return "", false
-	}
-	item, ok := m.notifQ.Current()
-	if !ok || item.Kind != NotifKindGuidance || !notificationAllowsFreetext(item) {
-		return "", false
-	}
-	requestID := strings.TrimSpace(item.Extra["guidance_request_id"])
-	if requestID == "" {
-		return "", false
-	}
-	return requestID, true
-}
-
-// activeInteractionFreetextActionID returns the notification item ID and
-// freetext action ID when the current notification is an interaction with a
-// freetext slot active.
-func (m RootModel) activeInteractionFreetextActionID() (notifID, actionID string, ok bool) {
-	if m.notifQ == nil {
-		return "", "", false
-	}
-	item, exists := m.notifQ.Current()
-	if !exists || item.Kind != NotifKindInteraction || !notificationAllowsFreetext(item) {
-		return "", "", false
-	}
-	count, _ := strconv.Atoi(item.Extra["action_count"])
-	for i := 0; i < count; i++ {
-		if item.Extra[fmt.Sprintf("action_%d_kind", i)] == string(interaction.ActionFreetext) {
-			aID := strings.TrimSpace(item.Extra[fmt.Sprintf("action_%d_id", i)])
-			if aID != "" {
-				return item.ID, aID, true
-			}
-		}
-	}
-	return "", "", false
 }
 
 // dequeueNextTask starts the next pending task from the task queue, if any.

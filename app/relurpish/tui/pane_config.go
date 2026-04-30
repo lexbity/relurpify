@@ -295,7 +295,7 @@ func (p *ConfigPane) viewPolicies() string {
 }
 
 func (p *ConfigPane) viewCapabilities() string {
-	widths := (&PlannerPane{width: p.width}).splitWidths(5, 7)
+	widths := splitWidths(p.width, 5, 7)
 	lines := make([]string, 0, len(p.capabilities))
 	for _, capability := range p.capabilities {
 		lines = append(lines, fmt.Sprintf("%s  %s  %s", capability.Name, capability.Kind, capability.RuntimeFamily))
@@ -322,15 +322,15 @@ func (p *ConfigPane) viewCapabilities() string {
 	return strings.Join([]string{
 		p.sectionTabs(),
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			plannerPanel("Capabilities", widths[0], plannerList(lines, p.sel, p.height-10)),
-			plannerPanel("Detail", widths[1], detail...),
+			sectionPanel("Capabilities", widths[0], sectionList(lines, p.sel, p.height-10)),
+			sectionPanel("Detail", widths[1], detail...),
 		),
 		dimStyle.Render("↑↓ navigate  tab section  [r] refresh"),
 	}, "\n\n")
 }
 
 func (p *ConfigPane) viewPrompts() string {
-	widths := (&PlannerPane{width: p.width}).splitWidths(5, 7)
+	widths := splitWidths(p.width, 5, 7)
 	lines := make([]string, 0, len(p.prompts))
 	for _, prompt := range p.prompts {
 		lines = append(lines, fmt.Sprintf("%s  %s  %s", prompt.Meta.Title, prompt.Meta.RuntimeFamily, fallback(prompt.ProviderID, "local")))
@@ -359,8 +359,8 @@ func (p *ConfigPane) viewPrompts() string {
 	return strings.Join([]string{
 		p.sectionTabs(),
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			plannerPanel("Prompts", widths[0], plannerList(lines, p.sel, p.height-10)),
-			plannerPanel("Detail", widths[1], detail...),
+			sectionPanel("Prompts", widths[0], sectionList(lines, p.sel, p.height-10)),
+			sectionPanel("Detail", widths[1], detail...),
 		),
 		dimStyle.Render("↑↓ navigate  tab section  [r] refresh"),
 	}, "\n\n")

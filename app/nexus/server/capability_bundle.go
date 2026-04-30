@@ -13,8 +13,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/search"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
@@ -165,15 +165,21 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		return nil, err
 	}
 	manager.GraphDB = graphEngine
-	if cfg.PermissionManager != nil {
-		manager.SetPathFilter(func(path string, isDir bool) bool {
-			action := core.FileSystemRead
-			if isDir {
-				action = core.FileSystemList
-			}
-			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
-		})
-	}
+	fileScope := fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths)
+	manager.SetFileScope(fileScope)
+	manager.SetPathFilter(func(path string, isDir bool) bool {
+		action := core.FileSystemRead
+		if isDir {
+			action = core.FileSystemList
+		}
+		if fileScope.Check(action, path) != nil {
+			return false
+		}
+		if cfg.PermissionManager == nil {
+			return true
+		}
+		return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
+	})
 	attachASTSymbolProviderFn(manager, registry)
 	if err := register(ast.NewASTTool(manager)); err != nil {
 		return nil, err

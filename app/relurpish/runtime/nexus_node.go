@@ -204,10 +204,6 @@ func (p *localNexusNodeRuntimeProvider) Initialize(_ context.Context, rt *Runtim
 		return fmt.Errorf("runtime unavailable")
 	}
 	rt.NexusNodeProvider = p.provider
-	if rt.Context != nil {
-		rt.Context.Set("nexus.node_registration.enabled", true)
-		rt.Context.Set("nexus.node_registration.node_id", p.provider.NodeDescriptor().ID)
-	}
 	return nil
 }
 

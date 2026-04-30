@@ -5,8 +5,6 @@
 // The TUI is organised around five primary panes exposed by the root tab bar:
 //
 //   - Chat: conversational agent interaction and streamed execution output.
-//   - Planner: exploration, analysis, and living-plan review for euclo.
-//   - Debug: tests, benchmarks, trace inspection, and plan-diff views.
 //   - Config: agent-specific policies, capabilities, prompts, tools, and contract data.
 //   - Session: workspace files, pending changes, live runtime state, and queued tasks.
 //

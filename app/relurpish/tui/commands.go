@@ -55,13 +55,6 @@ func (r *CommandRegistry) Match(prefix string, tabID TabID, subTabID SubTabID) [
 		}
 		if strings.HasPrefix(cmd.Name, prefix) {
 			out = append(out, cmd)
-			continue
-		}
-		for _, alias := range cmd.Aliases {
-			if strings.HasPrefix(alias, prefix) {
-				out = append(out, cmd)
-				break
-			}
 		}
 	}
 	return out
@@ -101,11 +94,6 @@ func (r *CommandRegistry) Lookup(name string) (Command, bool) {
 		if cmd.Name == name {
 			return cmd, true
 		}
-		for _, alias := range cmd.Aliases {
-			if alias == name {
-				return cmd, true
-			}
-		}
 	}
 	return Command{}, false
 }
@@ -122,24 +110,21 @@ var rootCommandRegistry *CommandRegistry
 
 func registerUniversalCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
-		{Name: "help", Aliases: []string{"h", "?"}, Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
-		{Name: "mode", Aliases: []string{"m"}, Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
-		{Name: "agent", Aliases: []string{"ag"}, Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
-		{Name: "strategy", Aliases: []string{"s", "strat"}, Description: "Set execution strategy", Usage: "/strategy <strategy>", Handler: rootHandleStrategy},
-		{Name: "stop", Aliases: []string{"cancel"}, Description: "Stop current run", Usage: "/stop", Handler: rootHandleStop},
-		{Name: "retry", Aliases: []string{"re"}, Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
-		{Name: "export", Aliases: []string{"ex"}, Description: "Export session", Usage: "/export [md|json] [path]", Handler: rootHandleExport},
-		{Name: "workflows", Aliases: []string{"wfs"}, Description: "List persisted workflows", Usage: "/workflows [limit]", Handler: rootHandleWorkflows},
-		{Name: "workflow", Aliases: []string{"wf"}, Description: "Inspect one workflow", Usage: "/workflow <workflow-id>", Handler: rootHandleWorkflow},
-		{Name: "rerun", Aliases: []string{"rr"}, Description: "Replay a workflow from a step", Usage: "/rerun <workflow-id> <step-id>", Handler: rootHandleRerun},
-		{Name: "cancelwf", Aliases: []string{"cwf"}, Description: "Mark a workflow canceled", Usage: "/cancelwf <workflow-id>", Handler: rootHandleCancelWorkflow},
-		{Name: "resume", Aliases: []string{"rs"}, Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
-		{Name: "hitl", Aliases: []string{"hi"}, Description: "Show pending HITL approvals", Usage: "/hitl", Handler: rootHandleHITL},
-		{Name: "guidance", Aliases: []string{"gd"}, Description: "Show pending guidance requests", Usage: "/guidance", Handler: rootHandleGuidance},
-		{Name: "deferred", Aliases: []string{"df"}, Description: "Show deferred guidance observations", Usage: "/deferred", Handler: rootHandleDeferred},
-		{Name: "learning", Aliases: []string{"lq"}, Description: "Show pending learning interactions", Usage: "/learning", Handler: rootHandleLearning},
-		{Name: "queue", Aliases: []string{"qtask"}, Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
-		{Name: "service", Aliases: []string{"svc"}, Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabSession}},
+		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
+		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
+		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
+		{Name: "strategy", Description: "Set execution strategy", Usage: "/strategy <strategy>", Handler: rootHandleStrategy},
+		{Name: "stop", Description: "Stop current run", Usage: "/stop", Handler: rootHandleStop},
+		{Name: "retry", Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
+		{Name: "export", Description: "Export session", Usage: "/export [md|json] [path]", Handler: rootHandleExport},
+		{Name: "workflows", Description: "List persisted workflows", Usage: "/workflows [limit]", Handler: rootHandleWorkflows},
+		{Name: "workflow", Description: "Inspect one workflow", Usage: "/workflow <workflow-id>", Handler: rootHandleWorkflow},
+		{Name: "rerun", Description: "Replay a workflow from a step", Usage: "/rerun <workflow-id> <step-id>", Handler: rootHandleRerun},
+		{Name: "cancelwf", Description: "Mark a workflow canceled", Usage: "/cancelwf <workflow-id>", Handler: rootHandleCancelWorkflow},
+		{Name: "resume", Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
+		{Name: "hitl", Description: "Show pending HITL approvals", Usage: "/hitl", Handler: rootHandleHITL},
+		{Name: "queue", Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
+		{Name: "service", Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabSession}},
 	} {
 		r.Register(cmd)
 	}
@@ -147,20 +132,44 @@ func registerUniversalCommands(r *CommandRegistry) {
 
 func registerChatCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
-		{Name: "add", Aliases: []string{"a"}, Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
-		{Name: "remove", Aliases: []string{"rm", "drop"}, Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
-		{Name: "context", Aliases: []string{"ctx", "c"}, Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
-		{Name: "clear", Aliases: []string{"cls"}, Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
-		{Name: "approve", Aliases: []string{"ap"}, Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
-		{Name: "reject", Aliases: []string{"rej"}, Description: "Reject pending changes", Usage: "/reject", Handler: rootHandleReject, TabFilter: []TabID{TabChat}},
-		{Name: "diff", Aliases: []string{"d"}, Description: "Toggle diff expansion", Usage: "/diff [index|path]", Handler: rootHandleDiff, TabFilter: []TabID{TabChat}},
-		{Name: "parallel", Aliases: []string{"par"}, Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel, TabFilter: []TabID{TabChat}},
-		{Name: "commit", Aliases: []string{"ci"}, Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit, TabFilter: []TabID{TabChat}},
-		{Name: "local-review", Aliases: []string{"lr"}, Description: "Show git diff stat for current changes", Usage: "/local-review", Handler: rootHandleLocalReview, TabFilter: []TabID{TabChat}},
-		{Name: "checkpoint", Aliases: []string{"cp"}, Description: "Save a named session checkpoint", Usage: "/checkpoint [label]", Handler: rootHandleCheckpoint, TabFilter: []TabID{TabChat}},
-		{Name: "compact", Aliases: []string{"cmp"}, Description: "Compress chat history to a summary", Usage: "/compact", Handler: rootHandleCompact, TabFilter: []TabID{TabChat}},
+		{Name: "add", Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
+		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
+		{Name: "context", Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
+		{Name: "clear", Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
+		{Name: "approve", Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
+		{Name: "reject", Description: "Reject pending changes", Usage: "/reject", Handler: rootHandleReject, TabFilter: []TabID{TabChat}},
+		{Name: "diff", Description: "Toggle diff expansion", Usage: "/diff [index|path]", Handler: rootHandleDiff, TabFilter: []TabID{TabChat}},
+		{Name: "parallel", Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel, TabFilter: []TabID{TabChat}},
+		{Name: "commit", Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit, TabFilter: []TabID{TabChat}},
+		{Name: "local-review", Description: "Show git diff stat for current changes", Usage: "/local-review", Handler: rootHandleLocalReview, TabFilter: []TabID{TabChat}},
+		{Name: "checkpoint", Description: "Save a named session checkpoint", Usage: "/checkpoint [label]", Handler: rootHandleCheckpoint, TabFilter: []TabID{TabChat}},
+		{Name: "compact", Description: "Compress chat history to a summary", Usage: "/compact", Handler: rootHandleCompact, TabFilter: []TabID{TabChat}},
 	} {
 		r.Register(cmd)
+	}
+}
+
+func registerSurfaceCommands(reg *CommandRegistry) {
+	// Default surface commands preserve the current chat-oriented workflow.
+	// Agent-specific surfaces can replace or extend these commands.
+	// Keep the command surface free of aliases.
+	for _, cmd := range []Command{
+		{Name: "add", Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
+		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
+		{Name: "context", Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
+		{Name: "clear", Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
+		{Name: "approve", Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
+		{Name: "reject", Description: "Reject pending changes", Usage: "/reject", Handler: rootHandleReject, TabFilter: []TabID{TabChat}},
+		{Name: "diff", Description: "Toggle diff expansion", Usage: "/diff [index|path]", Handler: rootHandleDiff, TabFilter: []TabID{TabChat}},
+		{Name: "parallel", Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel, TabFilter: []TabID{TabChat}},
+		{Name: "commit", Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit, TabFilter: []TabID{TabChat}},
+		{Name: "local-review", Description: "Show git diff stat for current changes", Usage: "/local-review", Handler: rootHandleLocalReview, TabFilter: []TabID{TabChat}},
+		{Name: "checkpoint", Description: "Save a named session checkpoint", Usage: "/checkpoint [label]", Handler: rootHandleCheckpoint, TabFilter: []TabID{TabChat}},
+		{Name: "compact", Description: "Compress chat history to a summary", Usage: "/compact", Handler: rootHandleCompact, TabFilter: []TabID{TabChat}},
+	} {
+		if reg != nil {
+			reg.Register(cmd)
+		}
 	}
 }
 
@@ -168,46 +177,13 @@ func registerPlannerCommands(_ *CommandRegistry) {
 	// Planner-specific commands to be added here as they are implemented.
 }
 
-func registerArchaeoCommands(r *CommandRegistry) {
-	for _, cmd := range []Command{
-		{
-			Name:        "promote-all",
-			Aliases:     []string{"pa"},
-			Description: "Stage all proposed blobs from the current explore run",
-			Usage:       "/promote-all",
-			Handler:     rootHandlePromoteAll,
-			TabFilter:   []TabID{TabArchaeo},
-		},
-	} {
-		r.Register(cmd)
-	}
-}
-
-func rootHandlePromoteAll(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.archaeo != nil {
-		m.archaeo.PromoteAll()
-	}
-	return m, nil
-}
-
-func registerDebugCommands(r *CommandRegistry) {
-	for _, cmd := range []Command{
-		{Name: "test", Aliases: []string{"t"}, Description: "Run go tests for a package or pattern", Usage: "/test [package]", Handler: rootHandleRunTests, TabFilter: []TabID{TabDebug}},
-		{Name: "bench", Aliases: []string{"b"}, Description: "Run go benchmarks for a package or pattern", Usage: "/bench [package]", Handler: rootHandleRunBenchmark, TabFilter: []TabID{TabDebug}},
-		{Name: "trace-refresh", Aliases: []string{"tr"}, Description: "Reload the latest runtime trace", Usage: "/trace-refresh", Handler: rootHandleTraceRefresh, TabFilter: []TabID{TabDebug}},
-		{Name: "plan-diff", Aliases: []string{"pd"}, Description: "Reload the current live-plan diff", Usage: "/plan-diff", Handler: rootHandlePlanDiffRefresh, TabFilter: []TabID{TabDebug}},
-	} {
-		r.Register(cmd)
-	}
-}
+func registerDebugCommands(_ *CommandRegistry) {}
 
 func init() {
 	rootCommandRegistry = NewCommandRegistry()
 	registerUniversalCommands(rootCommandRegistry)
 	registerChatCommands(rootCommandRegistry)
 	registerPlannerCommands(rootCommandRegistry)
-	registerDebugCommands(rootCommandRegistry)
-	registerArchaeoCommands(rootCommandRegistry)
 }
 
 // executeCommand dispatches a command by name (with alias fallback).
@@ -360,94 +336,6 @@ func rootHandleQueueTask(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, m.dequeueNextTask()
 }
 
-func rootHandleRunTests(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	runner, ok := m.runtime.(debugExecRuntime)
-	if !ok {
-		m.addSystemMessage("debug test runner unavailable")
-		return m, nil
-	}
-	pkg := "./..."
-	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-		pkg = strings.TrimSpace(args[0])
-	}
-	m.setActiveTab(TabDebug)
-	m.setActiveSubTab(SubTabDebugTest)
-	if pane, ok := m.debug.(*DebugPane); ok {
-		pane.statusMsg = fmt.Sprintf("running tests: %s", pkg)
-	}
-	return m, func() tea.Msg {
-		result, err := runner.RunTests(pkg)
-		if result.Package == "" {
-			result.Package = pkg
-		}
-		if err != nil {
-			result.Err = err
-		}
-		return result
-	}
-}
-
-func rootHandleRunBenchmark(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	runner, ok := m.runtime.(debugExecRuntime)
-	if !ok {
-		m.addSystemMessage("debug benchmark runner unavailable")
-		return m, nil
-	}
-	pkg := "./..."
-	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-		pkg = strings.TrimSpace(args[0])
-	}
-	m.setActiveTab(TabDebug)
-	m.setActiveSubTab(SubTabDebugBenchmark)
-	if pane, ok := m.debug.(*DebugPane); ok {
-		pane.statusMsg = fmt.Sprintf("running benchmark: %s", pkg)
-	}
-	return m, func() tea.Msg {
-		result, err := runner.RunBenchmark(pkg)
-		if result.Package == "" {
-			result.Package = pkg
-		}
-		if err != nil {
-			result.Err = err
-		}
-		return result
-	}
-}
-
-func rootHandleTraceRefresh(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	loader, ok := m.runtime.(plannerDataRuntime)
-	if !ok {
-		m.addSystemMessage("trace loader unavailable")
-		return m, nil
-	}
-	m.setActiveTab(TabDebug)
-	m.setActiveSubTab(SubTabDebugTrace)
-	return m, func() tea.Msg {
-		trace, err := loader.GetLatestTrace()
-		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("trace load failed: %v", err)}
-		}
-		return DebugTraceMsg{Trace: trace}
-	}
-}
-
-func rootHandlePlanDiffRefresh(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	loader, ok := m.runtime.(plannerDataRuntime)
-	if !ok {
-		m.addSystemMessage("plan diff loader unavailable")
-		return m, nil
-	}
-	m.setActiveTab(TabDebug)
-	m.setActiveSubTab(SubTabDebugPlanDiff)
-	return m, func() tea.Msg {
-		diff, err := loader.GetPlanDiff("")
-		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("plan diff load failed: %v", err)}
-		}
-		return DebugPlanDiffMsg{Diff: diff}
-	}
-}
-
 func rootHandleApprove(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	if m.chat == nil {
 		return m, nil
@@ -589,38 +477,6 @@ func rootHandleHITL(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-func rootHandleGuidance(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable")
-		return m, nil
-	}
-	pending := m.runtime.PendingGuidance()
-	m.addSystemMessage(formatPendingGuidanceSummary(pending))
-	return m, nil
-}
-
-func rootHandleDeferred(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable")
-		return m, nil
-	}
-	observations := m.runtime.PendingDeferrals()
-	m.addSystemMessage(formatDeferredObservationsSummary(observations))
-	return m, nil
-}
-
-func rootHandleLearning(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable")
-		return m, nil
-	}
-	interactions := m.runtime.PendingLearning()
-	m.addSystemMessage(formatPendingLearningSummary(interactions))
-	m.setActiveTab(TabArchaeo)
-	m.setActiveSubTab(SubTabArchaeoReview)
-	return m, m.refreshArchaeoLearningQueueCmd()
-}
-
 func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if len(args) == 0 {
 		if m.sharedSess != nil && m.sharedSess.Mode != "" {
@@ -666,6 +522,7 @@ func rootHandleAgent(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.sharedSess != nil {
 		m.sharedSess.Agent = name
 	}
+	m.activateSurface(name)
 	m.addSystemMessage(fmt.Sprintf("Switched agent to: %s", name))
 	return m, nil
 }
@@ -903,7 +760,7 @@ func rootHandleResume(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 // pendingHITLSummaryCmd surfaces pending HITL via /hitl command.
-func pendingHITLSummaryCmd(svc hitlService) tea.Cmd {
+func pendingHITLSummaryCmd(svc HITLServiceIface) tea.Cmd {
 	if svc == nil {
 		return nil
 	}
@@ -922,7 +779,7 @@ func pendingHITLSummaryCmd(svc hitlService) tea.Cmd {
 }
 
 // approveHITLRootCmd approves a HITL request with the given scope.
-func approveHITLRootCmd(svc hitlService, requestID string, scope fauthorization.GrantScope) tea.Cmd {
+func approveHITLRootCmd(svc HITLServiceIface, requestID string, scope fauthorization.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
@@ -1008,7 +865,7 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 // denyHITLRootCmd denies a HITL request.
-func denyHITLRootCmd(svc hitlService, requestID string) tea.Cmd {
+func denyHITLRootCmd(svc HITLServiceIface, requestID string) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: false, err: fmt.Errorf("hitl service unavailable")}

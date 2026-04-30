@@ -88,10 +88,6 @@ func (m RootModel) statusBarText() string {
 		return "commands: ↑↓ select | tab complete | enter run | esc cancel"
 	case m.inputBar != nil && m.inputBar.IsFilePickerActive():
 		return "files: ↑↓ select | enter choose | esc cancel"
-	case m.activeTab == TabPlanner:
-		return "planner: [ ] subtabs | / commands | @ files | ctrl+f search"
-	case m.activeTab == TabDebug:
-		return "debug: [ ] subtabs | / commands | ctrl+f search"
 	case m.activeTab == TabSession:
 		return "session: [ ] subtabs | / commands | ctrl+f filter"
 	case m.activeTab == TabConfig:

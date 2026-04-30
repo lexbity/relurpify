@@ -429,7 +429,7 @@ func (p *SessionPane) viewChanges() string {
 }
 
 func (p *SessionPane) viewLive() string {
-	widths := (&PlannerPane{width: p.width}).splitWidths(4, 4, 4)
+	widths := splitWidths(p.width, 4, 4, 4)
 	var b strings.Builder
 	b.WriteString(sectionHeaderStyle.Render("Live Session") + "\n\n")
 
@@ -510,19 +510,19 @@ func (p *SessionPane) viewLive() string {
 	}
 
 	panels := []string{
-		plannerPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
-		plannerPanel("Workflows", widths[1], plannerList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
-		plannerPanel("Providers / Approvals", widths[2],
+		sectionPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
+		sectionPanel("Workflows", widths[1], sectionList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
+		sectionPanel("Providers / Approvals", widths[2],
 			sectionHeaderStyle.Render("Providers"),
-			plannerList(p.liveProviderLines(), p.providerSel, 4),
+			sectionList(p.liveProviderLines(), p.providerSel, 4),
 			"",
 			sectionHeaderStyle.Render("Approvals"),
-			plannerList(p.liveApprovalLines(), p.approvalSel, 4),
+			sectionList(p.liveApprovalLines(), p.approvalSel, 4),
 		),
 	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, panels...),
-		plannerPanel("Detail", p.width, p.liveDetailLines()...),
+		sectionPanel("Detail", p.width, p.liveDetailLines()...),
 		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate"),
 	}, "\n")
 }

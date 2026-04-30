@@ -35,10 +35,6 @@ func (p *nexusGatewayRuntimeProvider) Initialize(ctx context.Context, rt *Runtim
 		return err
 	}
 	rt.NexusClient = p.client
-	if rt.Context != nil {
-		rt.Context.Set("nexus.enabled", true)
-		rt.Context.Set("nexus.session_id", p.client.SessionID())
-	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	rt.nexusCancel = cancel
 	go consumeNexusEventsWithDispatcher(runCtx, rt, p.client)

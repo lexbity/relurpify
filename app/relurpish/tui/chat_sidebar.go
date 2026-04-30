@@ -9,17 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ──────────────────────────────────────────────────────────────
-// Chat context sidebar — euclo-specific
-//
-// The sidebar surfaces confirmed files and session pins produced by
-// ContextProposalPhase.  Its state lives in ChatPane but all methods
-// are defined here to keep euclo-specific TUI behaviour out of
-// pane_chat.go.
-// ──────────────────────────────────────────────────────────────
-
-// UpdateSidebarFromFrame implements ChatPaner. It dispatches to
-// UpdateSidebarFromProposalFrame when the frame carries a ContextProposalContent.
+// UpdateSidebarFromFrame dispatches to UpdateSidebarFromProposalFrame when the
+// frame carries a ContextProposalContent.
 func (p *ChatPane) UpdateSidebarFromFrame(frame interaction.InteractionFrame) {
 	if content, ok := frame.Content.(interaction.ContextProposalContent); ok {
 		p.UpdateSidebarFromProposalFrame(content)
@@ -31,8 +22,7 @@ func (p *ChatPane) UpdateSidebarFromFrame(frame interaction.InteractionFrame) {
 // session-pin status from the proposal.
 func (p *ChatPane) UpdateSidebarFromProposalFrame(content interaction.ContextProposalContent) {
 	seen := make(map[string]bool)
-	entries := make([]ContextSidebarEntry, 0,
-		len(content.AnchoredFiles)+len(content.ExpandedFiles))
+	entries := make([]ContextSidebarEntry, 0, len(content.AnchoredFiles)+len(content.ExpandedFiles))
 
 	for _, f := range content.AnchoredFiles {
 		if seen[f.Path] {
@@ -46,7 +36,7 @@ func (p *ChatPane) UpdateSidebarFromProposalFrame(content interaction.ContextPro
 		entries = append(entries, ContextSidebarEntry{
 			Path:            f.Path,
 			InsertionAction: action,
-			IsPin:           true, // anchored files are session pins
+			IsPin:           true,
 		})
 	}
 
@@ -71,7 +61,6 @@ func (p *ChatPane) UpdateSidebarFromProposalFrame(content interaction.ContextPro
 }
 
 // updateSidebarContent refreshes sidebar entries from the raw context file list.
-// This is the fallback path used before any ContextProposalContent frame arrives.
 func (p *ChatPane) updateSidebarContent() {
 	if p.context == nil {
 		p.contextEntries = []ContextSidebarEntry{}
@@ -91,17 +80,13 @@ func (p *ChatPane) updateSidebarContent() {
 	p.updateSidebarViewport()
 }
 
-// updateSidebarViewport regenerates the viewport content string from
-// the current contextEntries slice.
 func (p *ChatPane) updateSidebarViewport() {
 	content := p.renderSidebarContent()
 	p.sidebarViewport.SetContent(content)
 }
 
-// renderSidebarContent generates the full sidebar content string.
 func (p *ChatPane) renderSidebarContent() string {
 	var b strings.Builder
-
 	b.WriteString(sectionHeaderStyle.Render("context") + "\n")
 	b.WriteString(dimStyle.Render(strings.Repeat("─", p.sidebarWidth-2)) + "\n")
 
@@ -118,9 +103,8 @@ func (p *ChatPane) renderSidebarContent() string {
 	return b.String()
 }
 
-// renderSidebarEntry renders a single sidebar entry line.
 func (p *ChatPane) renderSidebarEntry(entry ContextSidebarEntry, selected bool) string {
-	maxPath := p.sidebarWidth - 9 // room for prefix + badge
+	maxPath := p.sidebarWidth - 9
 	displayPath := entry.Path
 	if len(displayPath) > maxPath {
 		displayPath = "..." + displayPath[len(displayPath)-maxPath:]
@@ -140,7 +124,6 @@ func (p *ChatPane) renderSidebarEntry(entry ContextSidebarEntry, selected bool) 
 	return panelItemStyle.Render(line)
 }
 
-// insertionActionBadge returns the display badge for an insertion action.
 func insertionActionBadge(action string) string {
 	switch action {
 	case "direct":
@@ -154,7 +137,6 @@ func insertionActionBadge(action string) string {
 	}
 }
 
-// renderSidebar renders the full sidebar widget (border + viewport).
 func (p *ChatPane) renderSidebar() string {
 	return lipgloss.NewStyle().
 		Width(p.sidebarWidth).
@@ -165,7 +147,6 @@ func (p *ChatPane) renderSidebar() string {
 		Render(p.sidebarViewport.View())
 }
 
-// ToggleSidebar shows or hides the context sidebar and recalculates pane sizes.
 func (p *ChatPane) ToggleSidebar() {
 	p.showSidebar = !p.showSidebar
 	p.SetSize(p.width, p.height)
@@ -174,7 +155,6 @@ func (p *ChatPane) ToggleSidebar() {
 	}
 }
 
-// AddFileToSidebar adds a file to the context and refreshes the sidebar.
 func (p *ChatPane) AddFileToSidebar(path string) error {
 	if p.context == nil {
 		return fmt.Errorf("context unavailable")
@@ -186,14 +166,11 @@ func (p *ChatPane) AddFileToSidebar(path string) error {
 	return nil
 }
 
-// RemoveFileFromSidebar removes a file from context and refreshes the sidebar.
 func (p *ChatPane) RemoveFileFromSidebar(path string) {
 	if p.context == nil {
 		return
 	}
 	p.context.RemoveFile(path)
-	// Also remove from contextEntries directly so sidebar updates immediately
-	// without waiting for the next proposal frame.
 	filtered := p.contextEntries[:0]
 	for _, e := range p.contextEntries {
 		if e.Path != path {
@@ -204,8 +181,6 @@ func (p *ChatPane) RemoveFileFromSidebar(path string) {
 	p.updateSidebarViewport()
 }
 
-// HandleSidebarKey routes a key event to sidebar navigation and actions.
-// Returns a tea.Cmd when an action produces a side-effect message.
 func (p *ChatPane) HandleSidebarKey(key string) tea.Cmd {
 	switch key {
 	case "up", "k":
@@ -218,24 +193,22 @@ func (p *ChatPane) HandleSidebarKey(key string) tea.Cmd {
 			p.sidebarCursor++
 			p.sidebarViewport.LineDown(1)
 		}
-	case "x", "d":
+	case "a":
 		if p.sidebarCursor >= 0 && p.sidebarCursor < len(p.contextEntries) {
 			entry := p.contextEntries[p.sidebarCursor]
-			if p.runtime != nil {
-				_ = p.runtime.DropFileFromContext(entry.Path)
-			}
-			p.RemoveFileFromSidebar(entry.Path)
-			if p.sidebarCursor >= len(p.contextEntries) {
-				p.sidebarCursor = max(0, len(p.contextEntries)-1)
-			}
 			return func() tea.Msg {
-				return chatSystemMsg{Text: fmt.Sprintf("removed from context: %s", entry.Path)}
+				p.AddSystemMessage(fmt.Sprintf("add file: %s", entry.Path))
+				return chatSystemMsg{Text: fmt.Sprintf("Added: %s", entry.Path)}
 			}
 		}
-	case "a":
-		// Delegate to the /add command flow via input bar.
-		return func() tea.Msg {
-			return chatSystemMsg{Text: "use /add <path> or @<path> to add a file"}
+	case "x":
+		if p.sidebarCursor >= 0 && p.sidebarCursor < len(p.contextEntries) {
+			entry := p.contextEntries[p.sidebarCursor]
+			p.RemoveFileFromSidebar(entry.Path)
+			return func() tea.Msg {
+				p.AddSystemMessage(fmt.Sprintf("removed file: %s", entry.Path))
+				return chatSystemMsg{Text: fmt.Sprintf("Removed: %s", entry.Path)}
+			}
 		}
 	}
 	return nil

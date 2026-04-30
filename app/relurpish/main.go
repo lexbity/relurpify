@@ -167,10 +167,7 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 	if rt != nil && rt.Logger != nil {
 		log.SetOutput(rt.Logger.Writer())
 	}
-	plugin := &tui.EucloPlugin{
-		SetupTabs: euclotui.RegisterEucloTabs,
-	}
-	return tui.RunWithEuclo(ctx, rt, plugin)
+	return tui.RunWithSurface(ctx, rt, euclotui.NewSurfaceFactory())
 }
 
 func runDoctor(cmd *cobra.Command, fix, yes bool) error {

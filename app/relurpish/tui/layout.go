@@ -12,7 +12,7 @@ import (
 //	subtab bar     1 row  subtabs of the active main tab
 //	main pane      N rows content (variable)
 //	input bar      1 row  universal input / command palette
-//	main tab bar   1 row  chat · planner · debug · config · session
+//	main tab bar   1 row  chat · config · session
 //	status bar     1 row  context-sensitive keybindings
 type ChromeLayout struct {
 	Width        int

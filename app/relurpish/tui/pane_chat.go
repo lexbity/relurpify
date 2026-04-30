@@ -21,6 +21,46 @@ import (
 // Exported so euclotui can emit this message type.
 type ChatSystemMsg struct{ Text string }
 
+// ChatPaner is the core chat surface contract used by the host shell and
+// agent-specific surfaces.
+type ChatPaner interface {
+	Init() tea.Cmd
+	Update(msg tea.Msg) (ChatPaner, tea.Cmd)
+	View() string
+	SetSize(w, h int)
+	SetSubTab(id SubTabID)
+	ActiveSubTab() SubTabID
+	HandleInputSubmit(value string) tea.Cmd
+	HasActiveRuns() bool
+	StartRun(description string) (tea.Cmd, string)
+	Undo() bool
+	Redo() bool
+	ToggleCompact()
+	Cleanup()
+	AppendMessage(msg Message)
+	ClearMessages()
+	Messages() []Message
+	SetSearchFilter(filter string)
+	ScrollUp()
+	PageDown()
+	PageUp()
+	AddSystemMessage(text string)
+	RollbackLastUndo()
+	PushUndoSnapshot(msgs []Message)
+	HITLService() HITLServiceIface
+	StartRunWithMetadata(prompt string, extra map[string]any) (tea.Cmd, string)
+	StartRunSilent(prompt string) (tea.Cmd, string)
+	SetCompactRunID(runID string, msgCount int)
+	AllowParallel() bool
+	SetAllowParallel(v bool)
+	LastPrompt() string
+	StopLatestRun() tea.Cmd
+	RetryLastRun() tea.Cmd
+	ApplyPendingChanges(status ChangeStatus) int
+	MutateMessages(fn func(msgs []Message))
+	AddFile(path string) tea.Cmd
+}
+
 // chatSystemMsg is the package-internal name for ChatSystemMsg.
 // It exists so that existing tui code can continue to use the lower-case
 // constructor syntax: chatSystemMsg{Text: "..."}
@@ -54,7 +94,7 @@ type ChatPane struct {
 	context    *AgentContext
 	session    *Session
 	notifQ     *NotificationQueue
-	hitlSvc    hitlService
+	hitlSvc    HITLServiceIface
 	runtime    RuntimeAdapter
 	lastPrompt string
 
@@ -85,7 +125,7 @@ func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *No
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
-	svc := hitlService(rt)
+	svc := HITLServiceIface(rt)
 
 	// Initialize sidebar viewport
 	vp := viewport.New(0, 0)
@@ -792,9 +832,9 @@ func summarizeResult(res *core.Result) string {
 		b.WriteString("\nData: ")
 		b.WriteString(fmt.Sprintf("%v", res.Data))
 	}
-	if res.Error != nil {
+	if strings.TrimSpace(res.Error) != "" {
 		b.WriteString("\nError: ")
-		b.WriteString(res.Error.Error())
+		b.WriteString(res.Error)
 	}
 	return b.String()
 }
@@ -807,8 +847,8 @@ func structuredResultFromCore(res *core.Result) *StructuredResult {
 		NodeID:  strings.TrimSpace(res.NodeID),
 		Success: res.Success,
 	}
-	if res.Error != nil {
-		rendered.ErrorText = res.Error.Error()
+	if strings.TrimSpace(res.Error) != "" {
+		rendered.ErrorText = res.Error
 	}
 	if envelope := extractResultEnvelope(res); envelope != nil {
 		rendered.Envelope = structuredEnvelopeFromCore(envelope)
