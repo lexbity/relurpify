@@ -22,7 +22,6 @@ type rewooExecutor struct {
 	OnFailure          StepOnFailure
 	MaxSteps           int
 	OnPermissionDenied StepOnFailure // How to handle denied permissions (default: abort)
-	StreamTrigger      *contextstream.Trigger
 	StreamMode         contextstream.Mode
 	StreamQuery        string
 	StreamMaxTokens    int
@@ -102,7 +101,6 @@ func ExecutePlan(ctx context.Context, registry *capability.Registry, plan *Rewoo
 		Registry:        registry,
 		OnFailure:       opts.OnFailure,
 		MaxSteps:        opts.MaxSteps,
-		StreamTrigger:   opts.StreamTrigger,
 		StreamMode:      opts.StreamMode,
 		StreamQuery:     opts.StreamQuery,
 		StreamMaxTokens: opts.StreamMaxTokens,
@@ -202,14 +200,11 @@ func (e *rewooExecutor) streamMaxTokens() int {
 
 // streamTriggerNode creates a streaming trigger node for the rewoo executor.
 func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.StreamTriggerNode {
-	if e.StreamTrigger == nil {
-		return nil
-	}
 	query := e.streamQuery(plan)
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("rewoo_stream", e.StreamTrigger, retrieval.RetrievalQuery{Text: query}, e.streamMaxTokens())
+	node := graph.NewContextStreamNode("rewoo_stream", retrieval.RetrievalQuery{Text: query}, e.streamMaxTokens())
 	node.Mode = e.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{
@@ -221,14 +216,10 @@ func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.StreamTriggerN
 
 // executeStreamingTrigger runs the streaming trigger before plan execution.
 func (e *rewooExecutor) executeStreamingTrigger(ctx context.Context, plan *RewooPlan, env *contextdata.Envelope) error {
-	if e.StreamTrigger == nil {
-		return nil
-	}
 	node := e.streamTriggerNode(plan)
 	if node == nil {
 		return nil
 	}
-	// Execute the stream node directly
 	_, err := node.Execute(ctx, env)
 	return err
 }

@@ -26,13 +26,6 @@ func (a *PlannerAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment)
 	return a.Initialize(env.Config)
 }
 
-// WithContextStreamTrigger wires an explicit streaming trigger into the planner.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *PlannerAgent) {
-		a.StreamTrigger = trigger
-	}
-}
-
 // WithContextStreamMode sets whether planner streaming blocks or runs in the background.
 func WithContextStreamMode(mode contextstream.Mode) Option {
 	return func(a *PlannerAgent) {

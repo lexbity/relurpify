@@ -25,7 +25,6 @@ type ChainerAgent struct {
 	Config          *core.Config
 	Chain           *Chain
 	ChainBuilder    func(*core.Task) (*Chain, error)
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -159,14 +158,11 @@ func (a *ChainerAgent) streamMaxTokens() int {
 }
 
 func (a *ChainerAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := agentgraph.NewContextStreamNode("chainer_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := agentgraph.NewContextStreamNode("chainer_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{"agent": "chainer"}
@@ -174,11 +170,12 @@ func (a *ChainerAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
 }
 
 func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	trigger := contextstream.TriggerFromContext(ctx)
+	if trigger == nil {
 		return nil
 	}
 	req := contextstream.Request{
@@ -187,7 +184,7 @@ func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *core.T
 		Mode:      a.streamMode(),
 		Query:     retrieval.RetrievalQuery{Text: query},
 	}
-	result, err := a.StreamTrigger.RequestBlocking(ctx, req)
+	result, err := trigger.RequestBlocking(ctx, req)
 	if err != nil {
 		return err
 	}

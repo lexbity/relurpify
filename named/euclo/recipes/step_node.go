@@ -31,19 +31,17 @@ import (
 // RecipeStepNode executes a compiled recipe step by delegating to the matching
 // /agents constructor for the step's paradigm.
 type RecipeStepNode struct {
-	id      string
-	env     agentenv.WorkspaceEnvironment
-	step    ExecutionStep
-	trigger *contextstream.Trigger
+	id   string
+	env  agentenv.WorkspaceEnvironment
+	step ExecutionStep
 }
 
 // NewRecipeStepNode creates a new agent-backed recipe step node.
-func NewRecipeStepNode(id string, env agentenv.WorkspaceEnvironment, step ExecutionStep, trigger *contextstream.Trigger) *RecipeStepNode {
+func NewRecipeStepNode(id string, env agentenv.WorkspaceEnvironment, step ExecutionStep) *RecipeStepNode {
 	return &RecipeStepNode{
-		id:      id,
-		env:     env,
-		step:    step,
-		trigger: trigger,
+		id:   id,
+		env:  env,
+		step: step,
 	}
 }
 
@@ -271,10 +269,7 @@ func (n *RecipeStepNode) scopedRegistry() *capability.Registry {
 }
 
 func (n *RecipeStepNode) streamOptions() []reactagent.Option {
-	opts := make([]reactagent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, reactagent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]reactagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, reactagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -290,10 +285,7 @@ func (n *RecipeStepNode) streamOptions() []reactagent.Option {
 }
 
 func (n *RecipeStepNode) streamOptionsHTN() []htnagent.Option {
-	opts := make([]htnagent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, htnagent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]htnagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, htnagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -309,10 +301,7 @@ func (n *RecipeStepNode) streamOptionsHTN() []htnagent.Option {
 }
 
 func (n *RecipeStepNode) streamOptionsBlackboard() []blackboardagent.Option {
-	opts := make([]blackboardagent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, blackboardagent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]blackboardagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, blackboardagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -328,10 +317,7 @@ func (n *RecipeStepNode) streamOptionsBlackboard() []blackboardagent.Option {
 }
 
 func (n *RecipeStepNode) streamOptionsChainer() []chaineragent.Option {
-	opts := make([]chaineragent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, chaineragent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]chaineragent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, chaineragent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -347,10 +333,7 @@ func (n *RecipeStepNode) streamOptionsChainer() []chaineragent.Option {
 }
 
 func (n *RecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
-	opts := make([]pipelineagent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, pipelineagent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]pipelineagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, pipelineagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -366,10 +349,7 @@ func (n *RecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
 }
 
 func (n *RecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
-	opts := make([]goalconagent.Option, 0, 4)
-	if n.trigger != nil {
-		opts = append(opts, goalconagent.WithContextStreamTrigger(n.trigger))
-	}
+	opts := make([]goalconagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, goalconagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -386,9 +366,6 @@ func (n *RecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
 
 func (n *RecipeStepNode) rewooOptions() rewooagent.RewooOptions {
 	opts := rewooagent.RewooOptions{}
-	if n.trigger != nil {
-		opts.StreamTrigger = n.trigger
-	}
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts.StreamMode = contextstream.Mode(mode)

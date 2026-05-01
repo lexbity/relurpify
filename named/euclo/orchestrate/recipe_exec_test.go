@@ -7,11 +7,23 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
+
+type noopCompiler struct{}
+
+func (noopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
+}
+
+func ctxWithTrigger(ctx context.Context) context.Context {
+	return contextstream.WithTrigger(ctx, contextstream.NewTrigger(noopCompiler{}))
+}
 
 func TestRecipeExecutionNodeExecute(t *testing.T) {
 	node := NewRecipeExecutorNode("recipe-exec1")
@@ -51,7 +63,7 @@ func TestRecipeExecutionNodeExecute(t *testing.T) {
 	}
 	node.WithRecipeRegistry(registry)
 
-	result, err := node.Execute(context.Background(), env)
+	result, err := node.Execute(ctxWithTrigger(context.Background()), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -119,7 +131,7 @@ func TestRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 	}
 	node.WithRecipeRegistry(registry)
 
-	_, err := node.Execute(context.Background(), env)
+	_, err := node.Execute(ctxWithTrigger(context.Background()), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}

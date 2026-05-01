@@ -8,6 +8,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
@@ -109,6 +110,10 @@ type WorkspaceEnvironment struct {
 	// Compiler is the concrete compiler implementation.
 	// Kept as concrete type for direct access to compilation methods.
 	Compiler *compiler.Compiler
+	// StreamTrigger is the context streaming trigger built from Compiler.
+	// Agents inject it into the execution context via contextstream.WithTrigger
+	// so StreamTriggerNodes can resolve it without holding it as a field.
+	StreamTrigger *contextstream.Trigger
 
 	// Event infrastructure
 	EventLog        event.Log

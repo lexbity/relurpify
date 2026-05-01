@@ -5,6 +5,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 )
 
+
 type Option func(*ReActAgent)
 
 func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *ReActAgent {
@@ -16,13 +17,6 @@ func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *ReActAgent {
 	}
 	_ = agent.InitializeEnvironment(env)
 	return agent
-}
-
-// WithContextStreamTrigger wires an explicit streaming trigger into the react agent.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *ReActAgent) {
-		a.StreamTrigger = trigger
-	}
 }
 
 // WithContextStreamMode sets whether react streaming blocks or runs in the background.

@@ -35,12 +35,13 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-1"},
 		},
 	}
-	node := NewContextStreamNode("stream-node", contextstream.NewTrigger(compilerStub), retrieval.RetrievalQuery{Text: "workspace query"}, 256)
+	node := NewContextStreamNode("stream-node", retrieval.RetrievalQuery{Text: "workspace query"}, 256)
 	node.Mode = contextstream.ModeBlocking
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.AssemblyMetadata.EventLogSeq = 12
-	result, err := node.Execute(context.Background(), env)
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	result, err := node.Execute(ctx, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node", result.NodeID)
@@ -67,11 +68,12 @@ func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
 			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-2"},
 		},
 	}
-	node := NewContextStreamNode("stream-node-bg", contextstream.NewTrigger(compilerStub), retrieval.RetrievalQuery{Text: "background query"}, 64)
+	node := NewContextStreamNode("stream-node-bg", retrieval.RetrievalQuery{Text: "background query"}, 64)
 	node.Mode = contextstream.ModeBackground
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	result, err := node.Execute(context.Background(), env)
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	result, err := node.Execute(ctx, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node-bg", result.NodeID)

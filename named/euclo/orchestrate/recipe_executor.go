@@ -8,7 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
@@ -18,7 +17,6 @@ type RecipeExecutorNode struct {
 	id                string
 	env               agentenv.WorkspaceEnvironment
 	registry          *recipepkg.RecipeRegistry
-	trigger           *contextstream.Trigger
 	ingestionPipeline *frameworkingestion.Pipeline
 }
 
@@ -42,14 +40,6 @@ func (n *RecipeExecutorNode) WithRecipeRegistry(reg *recipepkg.RecipeRegistry) *
 func (n *RecipeExecutorNode) WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) *RecipeExecutorNode {
 	if n != nil {
 		n.env = env
-	}
-	return n
-}
-
-// WithContextStreamTrigger sets the stream trigger passed into recipe graph building.
-func (n *RecipeExecutorNode) WithContextStreamTrigger(trigger *contextstream.Trigger) *RecipeExecutorNode {
-	if n != nil {
-		n.trigger = trigger
 	}
 	return n
 }
@@ -106,7 +96,7 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 		}, err
 	}
 
-	graph, err := recipepkg.BuildRecipeGraph(plan, n.env, n.trigger, n.ingestionPipeline)
+	graph, err := recipepkg.BuildRecipeGraph(plan, n.env, n.ingestionPipeline)
 	if err != nil {
 		return &agentgraph.Result{
 			NodeID:  n.id,

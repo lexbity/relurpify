@@ -19,7 +19,7 @@ import (
 // Each step expands into: ingest -> stream -> gate -> step -> fallback.
 // ingestionPipeline is accepted for future use; IngestionNode currently calls
 // frameworkingestion.AcquireFromFile per-file internally once fully implemented.
-func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, trigger *contextstream.Trigger, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
+func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
 	_ = ingestionPipeline // single-acquisition Pipeline cannot be reused across steps; see IngestionNode
 
 	if plan == nil {
@@ -55,23 +55,10 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, tr
 
 		if step.CapabilityID == "" && step.Stream != nil {
 			nodeID := step.ID + ".stream"
-			streamData := map[string]any{
-				"query_template": step.Stream.QueryTemplate,
-				"max_tokens":     step.Stream.MaxTokens,
-				"mode":           step.Stream.Mode,
-			}
-			var streamNode agentgraph.Node
-			if trigger != nil {
-				query := step.Stream.QueryTemplate
-				streamNode = agentgraph.NewContextStreamNode(nodeID, trigger, retrieval.RetrievalQuery{Text: query}, step.Stream.MaxTokens)
-				if typed, ok := streamNode.(*agentgraph.StreamTriggerNode); ok {
-					typed.Mode = contextstream.Mode(step.Stream.Mode)
-					typed.BudgetShortfallPolicy = "emit_partial"
-					typed.Metadata = map[string]any{"recipe_step_id": step.ID}
-				}
-			} else {
-				streamNode = newRecipeStageNode(nodeID, agentgraph.NodeTypeStream, "stream", streamData)
-			}
+			streamNode := agentgraph.NewContextStreamNode(nodeID, retrieval.RetrievalQuery{Text: step.Stream.QueryTemplate}, step.Stream.MaxTokens)
+			streamNode.Mode = contextstream.Mode(step.Stream.Mode)
+			streamNode.BudgetShortfallPolicy = "emit_partial"
+			streamNode.Metadata = map[string]any{"recipe_step_id": step.ID}
 			if err := graph.AddNode(streamNode); err != nil {
 				return nil, err
 			}
@@ -100,7 +87,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, tr
 		}
 
 		execNodeID := step.ID + ".execute"
-		execNode := NewRecipeStepNode(execNodeID, env, step, trigger)
+		execNode := NewRecipeStepNode(execNodeID, env, step)
 		if err := graph.AddNode(execNode); err != nil {
 			return nil, err
 		}
@@ -114,7 +101,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, tr
 		if step.Fallback != nil {
 			fallbackID := step.ID + ".fallback"
 			fallbackStep := executionStepFromAgent(fallbackID, step.Fallback)
-			if err := graph.AddNode(NewRecipeStepNode(fallbackID, env, fallbackStep, trigger)); err != nil {
+			if err := graph.AddNode(NewRecipeStepNode(fallbackID, env, fallbackStep)); err != nil {
 				return nil, err
 			}
 			if err := graph.AddEdge(execNodeID, fallbackID, func(result *agentgraph.Result, env *contextdata.Envelope) bool {

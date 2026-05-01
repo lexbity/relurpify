@@ -51,7 +51,6 @@ type PlannerAgent struct {
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
 	Config          *core.Config
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -263,14 +262,14 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 }
 
 func (a *PlannerAgent) streamTriggerNode(task *core.Task) graph.Node {
-	if a == nil || a.StreamTrigger == nil {
+	if a == nil {
 		return nil
 	}
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("planner_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("planner_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

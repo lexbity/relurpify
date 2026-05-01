@@ -13,13 +13,6 @@ func DefaultOperatorRegistry() *OperatorRegistry {
 	return operators.DefaultOperatorRegistry()
 }
 
-// WithContextStreamTrigger wires an explicit streaming trigger into the goalcon agent.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *GoalConAgent) {
-		a.StreamTrigger = trigger
-	}
-}
-
 // WithContextStreamMode sets whether goalcon streaming blocks or runs in the background.
 func WithContextStreamMode(mode contextstream.Mode) Option {
 	return func(a *GoalConAgent) {

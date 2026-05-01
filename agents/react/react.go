@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
+
 // ReActAgent implements the ReAct (Reason + Act) paradigm. It iteratively
 // thinks about the task, acts using tools, and observes results until completion.
 type ReActAgent struct {
@@ -24,7 +25,6 @@ type ReActAgent struct {
 	Config          *core.Config
 	IndexManager    *ast.IndexManager
 	SearchEngine    *search.SearchEngine
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -110,11 +110,8 @@ func (a *ReActAgent) outputIngestionEnabled() bool {
 
 // streamTriggerNode creates a streaming trigger node for the react agent.
 func (a *ReActAgent) streamTriggerNode(task *core.Task) graph.Node {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
-	node := graph.NewContextStreamNode("react_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("react_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	return node
 }

@@ -19,13 +19,6 @@ func WithStageFactory(factory PipelineStageFactory) Option {
 	}
 }
 
-// WithContextStreamTrigger wires an explicit streaming trigger into the pipeline agent.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *PipelineAgent) {
-		a.StreamTrigger = trigger
-	}
-}
-
 // WithContextStreamMode sets whether pipeline streaming blocks or runs in the background.
 func WithContextStreamMode(mode contextstream.Mode) Option {
 	return func(a *PipelineAgent) {

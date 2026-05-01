@@ -8,7 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 
@@ -84,10 +86,17 @@ func TestAgentUsesReconcilerHelpers(t *testing.T) {
 	}
 }
 
+type rexNoopCompiler struct{}
+
+func (rexNoopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
+}
+
 func TestAgentExecuteBuildsProofSurface(t *testing.T) {
 	agent := New(testEnv(t))
 	env := contextdata.NewEnvelope("task-1", "")
-	result, err := agent.Execute(context.Background(), &core.Task{
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(rexNoopCompiler{}))
+	result, err := agent.Execute(ctx, &core.Task{
 		ID:          "task-1",
 		Instruction: "review the code",
 		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": false},

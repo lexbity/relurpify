@@ -20,13 +20,6 @@ func WithChainBuilder(builder func(*core.Task) (*Chain, error)) Option {
 	}
 }
 
-// WithContextStreamTrigger wires an explicit streaming trigger into the chainer agent.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *ChainerAgent) {
-		a.StreamTrigger = trigger
-	}
-}
-
 // WithContextStreamMode sets whether chainer streaming blocks or runs in the background.
 func WithContextStreamMode(mode contextstream.Mode) Option {
 	return func(a *ChainerAgent) {

@@ -7,7 +7,7 @@ import (
 )
 
 func TestStreamTriggerNodeContract(t *testing.T) {
-	node := NewContextStreamNode("stream-node", nil, retrieval.RetrievalQuery{Text: "query"}, 128)
+	node := NewContextStreamNode("stream-node", retrieval.RetrievalQuery{Text: "query"}, 128)
 	contract := node.Contract()
 	if contract.SideEffectClass != SideEffectContext {
 		t.Fatalf("expected SideEffectContext, got %q", contract.SideEffectClass)

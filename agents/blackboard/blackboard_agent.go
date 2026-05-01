@@ -34,7 +34,6 @@ type BlackboardAgent struct {
 	// MaxCycles is the upper bound on control-loop iterations (default 20).
 	MaxCycles int
 
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -385,14 +384,11 @@ func (a *BlackboardAgent) streamMaxTokens() int {
 
 // streamTriggerNode creates a streaming trigger node for the blackboard agent.
 func (a *BlackboardAgent) streamTriggerNode(task *core.Task) graph.Node {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := graph.NewContextStreamNode("blackboard_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("blackboard_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{

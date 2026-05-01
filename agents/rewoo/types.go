@@ -92,8 +92,7 @@ type RewooOptions struct {
 	PermConfig RewooPermissionConfig
 	// GraphConfig controls graph-based execution
 	GraphConfig RewooGraphConfig
-	// Streaming trigger configuration
-	StreamTrigger   *contextstream.Trigger
+	// Streaming configuration
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int

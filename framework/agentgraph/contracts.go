@@ -6,7 +6,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // SideEffectClass describes the replay sensitivity of a node's execution.
@@ -71,7 +70,6 @@ type NodeContract struct {
 	Recoverability              NodeRecoverability        `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
 	CheckpointPolicy            CheckpointPolicyClass     `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
 	ContextPolicy               core.StateBoundaryPolicy  `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
-	SpeculativeCompilationQuery *retrieval.RetrievalQuery `json:"speculative_compilation_query,omitempty" yaml:"speculative_compilation_query,omitempty"`
 }
 
 // ContractNode extends Node with an explicit execution contract.

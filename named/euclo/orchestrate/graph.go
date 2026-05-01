@@ -8,7 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
 
@@ -20,7 +19,6 @@ type RootGraph struct {
 // RootGraphOptions configures dependency wiring for the root graph.
 type RootGraphOptions struct {
 	env                agentenv.WorkspaceEnvironment
-	streamTrigger      *contextstream.Trigger
 	capabilityRegistry *capability.CapabilityRegistry
 	recipeRegistry     *recipepkg.RecipeRegistry
 	workspace          string
@@ -33,13 +31,6 @@ type RootGraphOption func(*RootGraphOptions)
 func WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) RootGraphOption {
 	return func(opts *RootGraphOptions) {
 		opts.env = env
-	}
-}
-
-// WithContextStreamTrigger wires the stream trigger into executor nodes.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) RootGraphOption {
-	return func(opts *RootGraphOptions) {
-		opts.streamTrigger = trigger
 	}
 }
 
@@ -77,7 +68,6 @@ func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 
 	recipeExec := NewRecipeExecutorNode("euclo.execute_recipe").
 		WithWorkspaceEnvironment(cfg.env).
-		WithContextStreamTrigger(cfg.streamTrigger).
 		WithIngestionPipeline(nil)
 	if cfg.recipeRegistry != nil {
 		recipeExec.WithRecipeRegistry(cfg.recipeRegistry)

@@ -30,7 +30,6 @@ type PipelineAgent struct {
 	StageBuilder func(task *core.Task) ([]Stage, error)
 	StageFactory PipelineStageFactory
 
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -397,11 +396,8 @@ func (a *PipelineAgent) streamMaxTokens() int {
 
 // streamTriggerNode creates a streaming trigger node for the pipeline agent.
 func (a *PipelineAgent) streamTriggerNode(task *core.Task) graph.Node {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
-	node := graph.NewContextStreamNode("pipeline_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := graph.NewContextStreamNode("pipeline_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	return node
 }

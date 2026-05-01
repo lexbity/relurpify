@@ -94,7 +94,6 @@ type HTNAgent struct {
 	// When nil, HTNAgent falls back to a no-op that marks steps successful.
 	PrimitiveExec agentgraph.WorkflowExecutor
 
-	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -520,14 +519,11 @@ func (a *HTNAgent) streamMaxTokens() int {
 
 // streamTriggerNode creates a streaming trigger node for the HTN agent.
 func (a *HTNAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	node := agentgraph.NewContextStreamNode("htn_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node := agentgraph.NewContextStreamNode("htn_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()
 	node.BudgetShortfallPolicy = "emit_partial"
 	node.Metadata = map[string]any{
@@ -539,9 +535,6 @@ func (a *HTNAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
 
 // executeStreamingTrigger runs the streaming trigger before method decomposition.
 func (a *HTNAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
-	if a.StreamTrigger == nil {
-		return nil
-	}
 	node := a.streamTriggerNode(task)
 	if node == nil {
 		return nil

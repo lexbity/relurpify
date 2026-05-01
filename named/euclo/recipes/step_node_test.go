@@ -71,7 +71,7 @@ func TestRecipeStepNodeExecuteCapability(t *testing.T) {
 		},
 	}
 
-	node := NewRecipeStepNode("step1.execute", agentenv.WorkspaceEnvironment{Registry: reg}, step, nil)
+	node := NewRecipeStepNode("step1.execute", agentenv.WorkspaceEnvironment{Registry: reg}, step)
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)

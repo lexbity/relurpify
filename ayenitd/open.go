@@ -14,6 +14,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -296,6 +297,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(policyBundle)
 	env.Retriever = retriever
 	env.Compiler = compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
+	env.StreamTrigger = contextstream.NewTrigger(env.Compiler)
 
 	// Attach ServiceManager to environment (for direct access)
 	env.ServiceManager = sm

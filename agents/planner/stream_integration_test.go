@@ -69,12 +69,10 @@ func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning
 	model := &plannerModelStub{
 		response: `{"goal":"demo","steps":[{"id":"step-1","description":"collect context","tool":"","params":{}}],"dependencies":{},"files":[]}`,
 	}
-	trigger := contextstream.NewTrigger(compilerStub)
 	agent := &PlannerAgent{
 		Model:           model,
 		Tools:           nil,
 		Config:          &core.Config{},
-		StreamTrigger:   trigger,
 		StreamMode:      contextstream.ModeBlocking,
 		StreamMaxTokens: 128,
 		StreamQuery:     "workspace query",
@@ -83,7 +81,8 @@ func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	task := &core.Task{ID: "task-1", Instruction: "build a plan"}
 
-	result, err := agent.Execute(context.Background(), task, env)
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	result, err := agent.Execute(ctx, task, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -122,7 +121,6 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	agent := &PlannerAgent{
 		Model:           model,
 		Config:          &core.Config{},
-		StreamTrigger:   contextstream.NewTrigger(compilerStub),
 		StreamMode:      contextstream.ModeBackground,
 		StreamMaxTokens: 64,
 		StreamQuery:     "background query",
@@ -131,7 +129,8 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	env := contextdata.NewEnvelope("task-2", "session-2")
 	task := &core.Task{ID: "task-2", Instruction: "build a plan"}
 
-	result, err := agent.Execute(context.Background(), task, env)
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	result, err := agent.Execute(ctx, task, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 

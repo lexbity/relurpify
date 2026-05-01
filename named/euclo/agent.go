@@ -33,7 +33,6 @@ type Agent struct {
 	config      EucloConfig
 	initialized bool
 
-	streamTrigger  *contextstream.Trigger
 	recipeRegistry *recipe.RecipeRegistry
 
 	// resume state: populated by Execute before calling BuildGraph
@@ -65,13 +64,6 @@ func WithConfig(config EucloConfig) Option {
 	}
 }
 
-// WithStreamTrigger sets the context stream trigger.
-func WithStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *Agent) {
-		a.streamTrigger = trigger
-	}
-}
-
 func (a *Agent) Initialize(config *core.Config) error {
 	if a.initialized {
 		return nil
@@ -98,6 +90,10 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 		if err := a.Initialize(nil); err != nil {
 			return nil, fmt.Errorf("failed to initialize agent: %w", err)
 		}
+	}
+
+	if a.env.StreamTrigger != nil {
+		ctx = contextstream.WithTrigger(ctx, a.env.StreamTrigger)
 	}
 
 	a.captureResumeState(env)
@@ -127,7 +123,6 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
 	rootGraph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(a.env),
-		orchestrate.WithContextStreamTrigger(a.streamTrigger),
 		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
 		orchestrate.WithCapabilityRegistry(a.env.Registry),
 		orchestrate.WithRecipeRegistry(a.recipeRegistry),

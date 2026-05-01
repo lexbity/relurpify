@@ -14,13 +14,6 @@ func WithPrimitiveExec(agent agentgraph.WorkflowExecutor) Option {
 	}
 }
 
-// WithContextStreamTrigger wires an explicit streaming trigger into the HTN agent.
-func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
-	return func(a *HTNAgent) {
-		a.StreamTrigger = trigger
-	}
-}
-
 // WithContextStreamMode sets whether HTN streaming blocks or runs in the background.
 func WithContextStreamMode(mode contextstream.Mode) Option {
 	return func(a *HTNAgent) {

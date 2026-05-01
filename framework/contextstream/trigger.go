@@ -9,6 +9,26 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 )
 
+type triggerContextKey struct{}
+
+// WithTrigger stores a Trigger in context so StreamTriggerNode and agents
+// can retrieve it without holding it as a field.
+func WithTrigger(ctx context.Context, t *Trigger) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, triggerContextKey{}, t)
+}
+
+// TriggerFromContext retrieves the Trigger from context, or nil.
+func TriggerFromContext(ctx context.Context) *Trigger {
+	if ctx == nil {
+		return nil
+	}
+	t, _ := ctx.Value(triggerContextKey{}).(*Trigger)
+	return t
+}
+
 // Trigger invokes the compiler on behalf of agent execution.
 type Trigger struct {
 	Compiler CompilerInvoker
