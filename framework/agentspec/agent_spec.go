@@ -38,6 +38,7 @@ type AgentRuntimeSpec struct {
 	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	ToolCallingIntent   ToolCallingIntent               `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
 	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
+	IngestOutputs       bool                            `yaml:"ingest_outputs,omitempty" json:"ingest_outputs,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 	// Extensions holds agent-specific extension configurations.
 	// The "euclo" key contains Euclo-specific configuration (see named/euclo/euclo_manifest_extension.go).
@@ -95,6 +96,23 @@ func (a *AgentRuntimeSpec) ResolveToolCallingIntent() ToolCallingIntent {
 		return ToolCallingIntentAuto
 	}
 	return resolveToolCallingIntent(a.ToolCallingIntent, a.NativeToolCalling)
+}
+
+// IngestOutputsEnabled reports whether runtime output ingestion should be wired.
+// Pipeline-style agents remain opted out by default to avoid duplicating staged
+// workflow artifacts into the knowledge graph.
+func (a *AgentRuntimeSpec) IngestOutputsEnabled() bool {
+	if a == nil {
+		return true
+	}
+	if a.IngestOutputs {
+		return true
+	}
+	impl := strings.ToLower(strings.TrimSpace(a.Implementation))
+	if impl == "" && a.Composition != nil {
+		impl = strings.ToLower(strings.TrimSpace(a.Composition.Type))
+	}
+	return impl != "pipeline"
 }
 
 // AgentLoggingSpec controls debug logging toggles for the agent.
@@ -817,7 +835,7 @@ func ValidateProviderPolicy(policy ProviderPolicy) error {
 		return fmt.Errorf("activate=%s invalid", policy.Activate)
 	}
 	switch policy.DefaultTrust {
-	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
 		return nil
 	default:
 		return fmt.Errorf("default_trust=%s invalid", policy.DefaultTrust)
@@ -831,6 +849,8 @@ func ValidatePolicyClassKey(key string) error {
 		return fmt.Errorf("class key required")
 	case string(TrustClassBuiltinTrusted),
 		string(TrustClassWorkspaceTrusted),
+		string(TrustClassLLMGenerated),
+		string(TrustClassToolResult),
 		string(TrustClassProviderLocalUntrusted),
 		string(TrustClassRemoteDeclared),
 		string(TrustClassRemoteApproved),

@@ -3,6 +3,7 @@ package contextstream
 import (
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -15,9 +16,10 @@ func ApplyResult(env *contextdata.Envelope, result *Result) error {
 		for _, ref := range result.Compilation.StreamedRefs {
 			env.AddStreamedContextReference(ref)
 		}
+		ApplyStaleGaps(env, result.Compilation)
 	}
 	if result.Record != nil {
-		env.AssemblyMetadata = result.Record.AssemblyMetadata
+		env.SetAssemblyMetadata(result.Record.AssemblyMetadata)
 	}
 	if result.Trim.Truncated {
 		env.SetWorkingValue("contextstream.trimmed", true, contextdata.MemoryClassTask)
@@ -30,6 +32,23 @@ func ApplyResult(env *contextdata.Envelope, result *Result) error {
 		env.SetWorkingValue("contextstream.error", result.Err.Error(), contextdata.MemoryClassTask)
 	}
 	return nil
+}
+
+// ApplyStaleGaps surfaces stale chunks skipped during compilation into the envelope.
+func ApplyStaleGaps(env *contextdata.Envelope, compilation *compiler.CompilationResult) {
+	if env == nil || compilation == nil || len(compilation.SkippedStaleChunks) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(compilation.SkippedStaleChunks))
+	for _, id := range compilation.SkippedStaleChunks {
+		if id != "" {
+			ids = append(ids, string(id))
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	env.SetWorkingValue("contextstream.skipped_stale_chunks", ids, contextdata.MemoryClassTask)
 }
 
 // ApplyRequestMetadata annotates an envelope before a streaming request starts.

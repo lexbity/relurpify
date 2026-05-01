@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -53,6 +54,26 @@ func (a *Adapter) Status() channel.AdapterStatus {
 	return a.status
 }
 
+func (a *Adapter) connectionIDs() []string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.conns) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(a.conns))
+	for id := range a.conns {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func (a *Adapter) connectionCount() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return len(a.conns)
+}
+
 func (a *Adapter) Send(_ context.Context, msg channel.OutboundMessage) error {
 	a.mu.RLock()
 	conn, ok := a.conns[msg.ConversationID]
@@ -98,7 +119,10 @@ func (a *Adapter) readLoop(id string, conn *websocket.Conn) {
 		if err != nil {
 			return
 		}
-		if a.sink == nil {
+		a.mu.RLock()
+		sink := a.sink
+		a.mu.RUnlock()
+		if sink == nil {
 			continue
 		}
 		_ = a.emitInbound(id, string(data))
@@ -106,7 +130,10 @@ func (a *Adapter) readLoop(id string, conn *websocket.Conn) {
 }
 
 func (a *Adapter) emitInbound(id, text string) error {
-	if a.sink == nil {
+	a.mu.RLock()
+	sink := a.sink
+	a.mu.RUnlock()
+	if sink == nil {
 		return nil
 	}
 	msg := channel.InboundMessage{
@@ -123,7 +150,7 @@ func (a *Adapter) emitInbound(id, text string) error {
 		},
 	}
 	payload, _ := json.Marshal(msg)
-	return a.sink.Emit(context.Background(), core.FrameworkEvent{
+	return sink.Emit(context.Background(), core.FrameworkEvent{
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventMessageInbound,
 		Payload:   payload,

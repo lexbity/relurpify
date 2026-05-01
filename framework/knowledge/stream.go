@@ -153,18 +153,18 @@ func firstProvenanceRef(p ChunkProvenance) string {
 }
 
 func (s *Streamer) ChatSeed(files []string) (StreamSeed, error) {
-	chunks, err := s.Store.FindAll()
-	if err != nil {
-		return StreamSeed{}, err
-	}
-	allow := make(map[string]struct{}, len(files))
-	for _, file := range files {
-		allow[file] = struct{}{}
-	}
 	seed := StreamSeed{}
-	for _, chunk := range chunks {
-		filePath, _ := chunk.Body.Fields["file_path"].(string)
-		if _, ok := allow[filePath]; ok {
+	seen := make(map[ChunkID]struct{})
+	for _, file := range files {
+		chunks, err := s.Store.FindByFilePath(file)
+		if err != nil {
+			return StreamSeed{}, err
+		}
+		for _, chunk := range chunks {
+			if _, ok := seen[chunk.ID]; ok {
+				continue
+			}
+			seen[chunk.ID] = struct{}{}
 			seed.ChunkIDs = append(seed.ChunkIDs, chunk.ID)
 		}
 	}

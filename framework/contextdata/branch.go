@@ -48,15 +48,8 @@ func CloneEnvelope(env *Envelope, newBranchID string) *Envelope {
 	}
 
 	now := time.Now().UTC()
-
-	// Deep copy working data
-	workingDataCopy := make(map[string]any, len(env.WorkingData))
-	for k, v := range env.WorkingData {
-		workingDataCopy[k] = v
-	}
-
-	// Clone references bundle
-	refsCopy := env.References.Clone()
+	workingDataCopy := env.WorkingDataSnapshot()
+	refsCopy := env.ReferencesSnapshot()
 
 	return &Envelope{
 		TaskID:            env.TaskID,
@@ -65,7 +58,7 @@ func CloneEnvelope(env *Envelope, newBranchID string) *Envelope {
 		References:        refsCopy,
 		WorkingData:       workingDataCopy,
 		CheckpointRequest: nil, // Branch clones don't inherit checkpoint requests
-		AssemblyMetadata:  env.AssemblyMetadata,
+		AssemblyMetadata:  env.AssemblyMetadataSnapshot(),
 		createdAt:         now,
 	}
 }
@@ -101,14 +94,16 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 		if env == nil {
 			continue
 		}
+		workingData := env.WorkingDataSnapshot()
+		refs := env.ReferencesSnapshot()
 
 		// Merge working memory data
-		for k, v := range env.WorkingData {
+		for k, v := range workingData {
 			workingMemoryUnion[k] = v
 		}
 
 		// Merge streamed context references (deduplicate by chunk ID)
-		for _, ref := range env.References.StreamedContext {
+		for _, ref := range refs.StreamedContext {
 			if _, seen := seenChunkIDs[ref.ChunkID]; !seen {
 				seenChunkIDs[ref.ChunkID] = struct{}{}
 				merged.References.StreamedContext = append(
@@ -117,7 +112,7 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 		}
 
 		// Merge working memory references
-		for _, ref := range env.References.WorkingMemory {
+		for _, ref := range refs.WorkingMemory {
 			key := ref.TaskID + "/" + ref.Key
 			if _, seen := seenWorkingKeys[key]; !seen {
 				seenWorkingKeys[key] = struct{}{}
@@ -127,7 +122,7 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 		}
 
 		// Merge retrieval references (deduplicate by query ID)
-		for _, ref := range env.References.Retrieval {
+		for _, ref := range refs.Retrieval {
 			if _, seen := seenRetrievalIDs[ref.QueryID]; !seen {
 				seenRetrievalIDs[ref.QueryID] = struct{}{}
 				merged.References.Retrieval = append(
@@ -136,7 +131,7 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 		}
 
 		// Merge checkpoint references (deduplicate by checkpoint ID)
-		for _, ref := range env.References.Checkpoints {
+		for _, ref := range refs.Checkpoints {
 			if _, seen := seenCheckpointIDs[ref.CheckpointID]; !seen {
 				seenCheckpointIDs[ref.CheckpointID] = struct{}{}
 				merged.References.Checkpoints = append(
@@ -165,14 +160,18 @@ func ComputeBranchDelta(parent, child *Envelope) BranchDelta {
 	}
 
 	delta := BranchDelta{}
+	parentWorkingData := parent.WorkingDataSnapshot()
+	childWorkingData := child.WorkingDataSnapshot()
+	parentRefs := parent.ReferencesSnapshot()
+	childRefs := child.ReferencesSnapshot()
 
 	parentKeys := make(map[string]struct{})
-	for k := range parent.WorkingData {
+	for k := range parentWorkingData {
 		parentKeys[k] = struct{}{}
 	}
 
 	childKeys := make(map[string]struct{})
-	for k := range child.WorkingData {
+	for k := range childWorkingData {
 		childKeys[k] = struct{}{}
 		if _, existed := parentKeys[k]; !existed {
 			delta.WorkingMemoryAdded = append(delta.WorkingMemoryAdded, k)
@@ -193,11 +192,11 @@ func ComputeBranchDelta(parent, child *Envelope) BranchDelta {
 
 	// Track retrieval operations
 	parentRetrievalIDs := make(map[string]struct{})
-	for _, ref := range parent.References.Retrieval {
+	for _, ref := range parentRefs.Retrieval {
 		parentRetrievalIDs[ref.QueryID] = struct{}{}
 	}
 
-	for _, ref := range child.References.Retrieval {
+	for _, ref := range childRefs.Retrieval {
 		if _, existed := parentRetrievalIDs[ref.QueryID]; !existed {
 			delta.RetrievalPerformed = append(delta.RetrievalPerformed, ref.QueryID)
 		}

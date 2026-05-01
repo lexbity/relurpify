@@ -150,7 +150,7 @@ func (d ProviderDescriptor) Validate() error {
 		return fmt.Errorf("provider kind %s invalid", d.Kind)
 	}
 	switch d.TrustBaseline {
-	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
 	default:
 		return fmt.Errorf("trust baseline %s invalid", d.TrustBaseline)
 	}
@@ -175,7 +175,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider kind %s invalid", c.Kind)
 	}
 	switch c.TrustBaseline {
-	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
 	default:
 		return fmt.Errorf("trust baseline %s invalid", c.TrustBaseline)
 	}
@@ -332,7 +332,7 @@ func trustClassRank(class TrustClass) int {
 	switch class {
 	case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted:
 		return 0
-	case TrustClassRemoteApproved:
+	case TrustClassLLMGenerated, TrustClassToolResult, TrustClassRemoteApproved:
 		return 1
 	case TrustClassProviderLocalUntrusted:
 		return 2

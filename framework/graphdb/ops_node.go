@@ -91,6 +91,44 @@ func (e *Engine) ListNodes(kind NodeKind) []NodeRecord {
 	return out
 }
 
+// ListNodesByLabel returns active nodes matching the given label and optional kind.
+func (e *Engine) ListNodesByLabel(kind NodeKind, label string) []NodeRecord {
+	e.store.mu.RLock()
+	defer e.store.mu.RUnlock()
+	ids := e.store.labels.Lookup(label)
+	out := make([]NodeRecord, 0, len(ids))
+	for _, id := range ids {
+		node := e.store.nodes[id]
+		if node == nil || node.DeletedAt != 0 {
+			continue
+		}
+		if kind != "" && node.Kind != kind {
+			continue
+		}
+		out = append(out, cloneNode(node))
+	}
+	return out
+}
+
+// ListNodesByLabelPrefix returns active nodes matching any label with the given prefix.
+func (e *Engine) ListNodesByLabelPrefix(kind NodeKind, labelPrefix string) []NodeRecord {
+	e.store.mu.RLock()
+	defer e.store.mu.RUnlock()
+	ids := e.store.labels.LookupPrefix(labelPrefix)
+	out := make([]NodeRecord, 0, len(ids))
+	for _, id := range ids {
+		node := e.store.nodes[id]
+		if node == nil || node.DeletedAt != 0 {
+			continue
+		}
+		if kind != "" && node.Kind != kind {
+			continue
+		}
+		out = append(out, cloneNode(node))
+	}
+	return out
+}
+
 // NodesBySource returns active nodes for a source ID.
 func (e *Engine) NodesBySource(sourceID string) []NodeRecord {
 	e.store.mu.RLock()
@@ -115,9 +153,13 @@ func (e *Engine) applyUpsertNode(node NodeRecord) {
 	if ok && existing != nil && existing.SourceID != "" && existing.SourceID != node.SourceID {
 		e.store.removeNodeSourceIndex(existing.ID, existing.SourceID)
 	}
+	if ok && existing != nil {
+		e.store.removeNodeLabels(*existing)
+	}
 	n := node
 	e.store.nodes[node.ID] = &n
 	e.store.addNodeSourceIndex(node)
+	e.store.addNodeLabels(node)
 }
 
 func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
@@ -126,6 +168,7 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 	}
 	node, ok := e.store.nodes[id]
 	if ok {
+		e.store.removeNodeLabels(*node)
 		node.DeletedAt = deletedAt
 		node.UpdatedAt = deletedAt
 		e.store.removeNodeSourceIndex(node.ID, node.SourceID)

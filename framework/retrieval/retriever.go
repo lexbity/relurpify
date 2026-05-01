@@ -39,9 +39,8 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 		}, nil
 	}
 
-	// Get admitted rankers
-	rankers := r.registry.Admitted(r.policy)
-	if len(rankers) == 0 {
+	admitted := r.Admitted()
+	if len(admitted) == 0 {
 		return &RetrievalResult{
 			Query:      query,
 			Ranked:     nil,
@@ -50,10 +49,10 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 	}
 
 	// Scatter: execute rankers in parallel
-	rankedLists := r.scatter(ctx, query, rankers)
+	rankedLists, weights := r.scatter(ctx, query, admitted)
 
 	// Gather: merge results using RRF
-	merged := r.gather(rankedLists)
+	merged := r.gather(rankedLists, weights)
 
 	// Apply limit
 	if query.Limit > 0 && len(merged) > query.Limit {
@@ -67,14 +66,24 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 	}, nil
 }
 
+// Admitted returns the rankers admitted by the current policy.
+func (r *Retriever) Admitted() []AdmittedRanker {
+	if r == nil || r.registry == nil {
+		return nil
+	}
+	return r.registry.Admitted(r.policy)
+}
+
 // scatter executes rankers in parallel and returns their ranked lists.
-func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers []Ranker) [][]knowledge.ChunkID {
+func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers []AdmittedRanker) ([][]knowledge.ChunkID, []float64) {
 	results := make([][]knowledge.ChunkID, len(rankers))
+	weights := make([]float64, len(rankers))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for i, ranker := range rankers {
+	for i, admitted := range rankers {
 		wg.Add(1)
+		weights[i] = admitted.Weight
 		go func(index int, rnk Ranker) {
 			defer wg.Done()
 
@@ -86,34 +95,37 @@ func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers [
 			mu.Lock()
 			results[index] = chunkIDs
 			mu.Unlock()
-		}(i, ranker)
+		}(i, admitted.Ranker)
 	}
 
 	wg.Wait()
-	return results
+	return results, weights
 }
 
 // gather merges ranked lists using RRF fusion.
-func (r *Retriever) gather(rankedLists [][]knowledge.ChunkID) []RankedChunk {
+func (r *Retriever) gather(rankedLists [][]knowledge.ChunkID, weights []float64) []RankedChunk {
 	// Filter out nil/empty lists
 	validLists := make([][]knowledge.ChunkID, 0, len(rankedLists))
+	validWeights := make([]float64, 0, len(rankedLists))
 	for _, list := range rankedLists {
 		if len(list) > 0 {
 			validLists = append(validLists, list)
+		}
+	}
+	for i, list := range rankedLists {
+		if len(list) > 0 {
+			if i < len(weights) {
+				validWeights = append(validWeights, weights[i])
+			} else {
+				validWeights = append(validWeights, 1.0)
+			}
 		}
 	}
 
 	if len(validLists) == 0 {
 		return nil
 	}
-
-	// Use equal weights for all rankers
-	weights := make([]float64, len(validLists))
-	for i := range weights {
-		weights[i] = 1.0
-	}
-
-	return RRF(validLists, weights, 60.0)
+	return RRF(validLists, validWeights, 60.0)
 }
 
 // RetrieveBatch performs retrieval for multiple queries in parallel.

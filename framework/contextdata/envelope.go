@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,8 @@ import (
 // Streamed context is read-only to graph nodes. Working memory is mutable.
 // Retrieval results are stored as references. Checkpoints may be requested.
 type Envelope struct {
+	mu sync.RWMutex
+
 	// TaskID identifies the execution scope for this envelope.
 	TaskID string
 
@@ -92,8 +95,15 @@ func NewEnvelope(taskID, sessionID string) *Envelope {
 // SetWorkingValue stores a value in working memory.
 // This is the primary write path for graph nodes.
 func (e *Envelope) SetWorkingValue(key string, value any, class MemoryClass) {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
 		return
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.WorkingData == nil {
+		e.WorkingData = make(map[string]any)
 	}
 
 	now := time.Now().UTC()
@@ -124,7 +134,14 @@ func (e *Envelope) SetWorkingValue(key string, value any, class MemoryClass) {
 
 // GetWorkingValue retrieves a value from working memory.
 func (e *Envelope) GetWorkingValue(key string) (any, bool) {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
+		return nil, false
+	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.WorkingData == nil {
 		return nil, false
 	}
 	val, ok := e.WorkingData[key]
@@ -133,7 +150,14 @@ func (e *Envelope) GetWorkingValue(key string) (any, bool) {
 
 // DeleteWorkingValue removes a value from working memory.
 func (e *Envelope) DeleteWorkingValue(key string) {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
+		return
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.WorkingData == nil {
 		return
 	}
 	delete(e.WorkingData, key)
@@ -151,7 +175,12 @@ func (e *Envelope) DeleteWorkingValue(key string) {
 // ClearWorkingData removes all working memory entries for this envelope's task.
 // This is called by StateModeFresh paradigms at Execute entry.
 func (e *Envelope) ClearWorkingData() {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.WorkingData == nil {
 		return
 	}
 	// Clear all keys for this task
@@ -180,6 +209,8 @@ func (e *Envelope) RequestCheckpoint(reason string, priority int, evictMemory bo
 	if e == nil {
 		return
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.CheckpointRequest = &CheckpointRequest{
 		RequestedBy:        e.NodeID,
 		Reason:             reason,
@@ -195,6 +226,8 @@ func (e *Envelope) ClearCheckpointRequest() {
 	if e == nil {
 		return
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.CheckpointRequest = nil
 }
 
@@ -204,6 +237,8 @@ func (e *Envelope) AddRetrievalReference(ref RetrievalReference) {
 	if e == nil {
 		return
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.References.Retrieval = append(e.References.Retrieval, ref)
 }
 
@@ -213,6 +248,8 @@ func (e *Envelope) AddStreamedContextReference(ref ChunkReference) {
 	if e == nil {
 		return
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.References.StreamedContext = append(e.References.StreamedContext, ref)
 }
 
@@ -222,6 +259,9 @@ func (e *Envelope) StreamedChunkIDs() []ChunkID {
 	if e == nil {
 		return nil
 	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	ids := make([]ChunkID, len(e.References.StreamedContext))
 	for i, ref := range e.References.StreamedContext {
 		ids[i] = ref.ChunkID
@@ -234,6 +274,9 @@ func (e *Envelope) WorkingMemoryKeys() []string {
 	if e == nil {
 		return nil
 	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	keys := make([]string, 0, len(e.References.WorkingMemory))
 	for _, ref := range e.References.WorkingMemory {
 		if ref.TaskID == e.TaskID {
@@ -248,7 +291,56 @@ func (e *Envelope) IsEmpty() bool {
 	if e == nil {
 		return true
 	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return len(e.WorkingData) == 0 && e.References.IsEmpty()
+}
+
+// WorkingDataSnapshot returns a point-in-time copy of working memory data.
+func (e *Envelope) WorkingDataSnapshot() map[string]any {
+	if e == nil {
+		return nil
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.WorkingData == nil {
+		return nil
+	}
+	out := make(map[string]any, len(e.WorkingData))
+	for k, v := range e.WorkingData {
+		out[k] = v
+	}
+	return out
+}
+
+// ReferencesSnapshot returns a point-in-time copy of the reference bundle.
+func (e *Envelope) ReferencesSnapshot() ReferenceBundle {
+	if e == nil {
+		return ReferenceBundle{}
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.References.Clone()
+}
+
+// AssemblyMetadataSnapshot returns a point-in-time copy of the assembly metadata.
+func (e *Envelope) AssemblyMetadataSnapshot() AssemblyMeta {
+	if e == nil {
+		return AssemblyMeta{}
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.AssemblyMetadata
+}
+
+// SetAssemblyMetadata replaces the assembly metadata.
+func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.AssemblyMetadata = meta
 }
 
 // ContextKey is the key type for envelope storage in context.Context.
@@ -287,14 +379,7 @@ func MustEnvelopeFrom(ctx context.Context) *Envelope {
 
 // Snapshot returns a point-in-time copy of working memory data.
 func (e *Envelope) Snapshot() map[string]any {
-	if e == nil || e.WorkingData == nil {
-		return nil
-	}
-	out := make(map[string]any, len(e.WorkingData))
-	for k, v := range e.WorkingData {
-		out[k] = v
-	}
-	return out
+	return e.WorkingDataSnapshot()
 }
 
 // Clone returns a deep copy of the envelope.
@@ -302,17 +387,23 @@ func (e *Envelope) Clone() *Envelope {
 	if e == nil {
 		return nil
 	}
+	workingData := e.WorkingDataSnapshot()
+	refs := e.ReferencesSnapshot()
+	e.mu.RLock()
+	assemblyMetadata := e.AssemblyMetadata
+	createdAt := e.createdAt
+	e.mu.RUnlock()
 	clone := &Envelope{
 		TaskID:            e.TaskID,
 		SessionID:         e.SessionID,
 		NodeID:            e.NodeID,
-		WorkingData:       e.Snapshot(),
+		WorkingData:       workingData,
 		CheckpointRequest: nil, // Don't clone checkpoint requests
-		AssemblyMetadata:  e.AssemblyMetadata,
-		createdAt:         e.createdAt,
+		AssemblyMetadata:  assemblyMetadata,
+		createdAt:         createdAt,
 	}
 	// Clone references (shallow copy is sufficient for references)
-	clone.References = e.References.Clone()
+	clone.References = refs
 	return clone
 }
 
@@ -369,6 +460,8 @@ func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
 	if e == nil {
 		return nil
 	}
+	workingData := e.WorkingDataSnapshot()
+	refs := e.ReferencesSnapshot()
 	snapshot := &Envelope{
 		TaskID:      e.TaskID,
 		SessionID:   e.SessionID,
@@ -380,26 +473,28 @@ func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
 		snapshot.NodeID = e.NodeID
 	}
 	if policy.PreserveAssemblyMetadata {
+		e.mu.RLock()
 		snapshot.AssemblyMetadata = e.AssemblyMetadata
+		e.mu.RUnlock()
 	}
 	if policy.PreserveWorkingMemory {
-		snapshot.WorkingData = cloneWorkingDataForHandoff(e, policy)
-		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(e, policy)
+		snapshot.WorkingData = cloneWorkingDataForHandoff(workingData, policy)
+		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(refs.WorkingMemory, e.TaskID, policy)
 	}
 	if policy.PreserveStreamedContext {
-		snapshot.References.StreamedContext = append([]ChunkReference(nil), e.References.StreamedContext...)
+		snapshot.References.StreamedContext = append([]ChunkReference(nil), refs.StreamedContext...)
 	}
 	if policy.PreserveRetrieval {
-		snapshot.References.Retrieval = append([]RetrievalReference(nil), e.References.Retrieval...)
+		snapshot.References.Retrieval = append([]RetrievalReference(nil), refs.Retrieval...)
 	}
 	if policy.PreserveCheckpoints {
-		snapshot.References.Checkpoints = append([]CheckpointReference(nil), e.References.Checkpoints...)
+		snapshot.References.Checkpoints = append([]CheckpointReference(nil), refs.Checkpoints...)
 	}
 	return snapshot
 }
 
-func cloneWorkingDataForHandoff(env *Envelope, policy HandoffPolicy) map[string]any {
-	if env == nil || len(env.WorkingData) == 0 {
+func cloneWorkingDataForHandoff(workingData map[string]any, policy HandoffPolicy) map[string]any {
+	if len(workingData) == 0 {
 		return map[string]any{}
 	}
 	keys := make(map[string]struct{}, len(policy.WorkingKeys))
@@ -416,7 +511,7 @@ func cloneWorkingDataForHandoff(env *Envelope, policy HandoffPolicy) map[string]
 		}
 	}
 	out := make(map[string]any)
-	for key, value := range env.WorkingData {
+	for key, value := range workingData {
 		if len(keys) > 0 {
 			if _, ok := keys[key]; !ok {
 				if !hasWorkingPrefix(key, prefixes) {
@@ -431,8 +526,8 @@ func cloneWorkingDataForHandoff(env *Envelope, policy HandoffPolicy) map[string]
 	return out
 }
 
-func cloneWorkingMemoryRefsForHandoff(env *Envelope, policy HandoffPolicy) []WorkingMemoryReference {
-	if env == nil || len(env.References.WorkingMemory) == 0 {
+func cloneWorkingMemoryRefsForHandoff(refs []WorkingMemoryReference, taskID string, policy HandoffPolicy) []WorkingMemoryReference {
+	if len(refs) == 0 {
 		return nil
 	}
 	keys := make(map[string]struct{}, len(policy.WorkingKeys))
@@ -448,9 +543,9 @@ func cloneWorkingMemoryRefsForHandoff(env *Envelope, policy HandoffPolicy) []Wor
 			prefixes = append(prefixes, prefix)
 		}
 	}
-	out := make([]WorkingMemoryReference, 0, len(env.References.WorkingMemory))
-	for _, ref := range env.References.WorkingMemory {
-		if ref.TaskID != env.TaskID {
+	out := make([]WorkingMemoryReference, 0, len(refs))
+	for _, ref := range refs {
+		if ref.TaskID != taskID {
 			continue
 		}
 		if len(keys) > 0 {
@@ -477,17 +572,26 @@ func hasWorkingPrefix(key string, prefixes []string) bool {
 // Merge merges working data from another envelope into this one.
 // Source envelope data takes precedence on conflicts.
 func (e *Envelope) Merge(other *Envelope) {
-	if e == nil || other == nil || other.WorkingData == nil {
+	if e == nil || other == nil {
 		return
 	}
+	otherWorkingData := other.WorkingDataSnapshot()
+	otherRefs := other.ReferencesSnapshot()
+	if len(otherWorkingData) == 0 && len(otherRefs.WorkingMemory) == 0 {
+		return
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if e.WorkingData == nil {
 		e.WorkingData = make(map[string]any)
 	}
-	for k, v := range other.WorkingData {
+	for k, v := range otherWorkingData {
 		e.WorkingData[k] = v
 	}
 	// Merge working memory references
-	for _, ref := range other.References.WorkingMemory {
+	for _, ref := range otherRefs.WorkingMemory {
 		found := false
 		for i, existingRef := range e.References.WorkingMemory {
 			if existingRef.TaskID == ref.TaskID && existingRef.Key == ref.Key {
@@ -504,7 +608,7 @@ func (e *Envelope) Merge(other *Envelope) {
 
 // SetHandleScoped stores a value with a scope identifier.
 func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
 		return
 	}
 	scopedKey := fmt.Sprintf("%s:%s", scope, key)
@@ -513,7 +617,12 @@ func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
 
 // GetHandle retrieves a scoped value.
 func (e *Envelope) GetHandle(key string) (any, bool) {
-	if e == nil || e.WorkingData == nil {
+	if e == nil {
+		return nil, false
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.WorkingData == nil {
 		return nil, false
 	}
 	// Try exact match first
@@ -606,6 +715,8 @@ func (e *Envelope) String() string {
 	if e == nil {
 		return "<nil envelope>"
 	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return fmt.Sprintf("Envelope{TaskID:%s NodeID:%s Working:%d Streamed:%d Retrieval:%d}",
 		e.TaskID, e.NodeID, len(e.WorkingData),
 		len(e.References.StreamedContext), len(e.References.Retrieval))

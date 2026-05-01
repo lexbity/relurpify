@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
@@ -60,7 +63,7 @@ func (s *ChunkStore) Save(chunk KnowledgeChunk) (*KnowledgeChunk, error) {
 		ID:       string(chunk.ID),
 		Kind:     nodeKindChunk,
 		SourceID: chunk.WorkspaceID,
-		Labels:   []string{fmt.Sprintf("freshness:%s", chunk.Freshness)},
+		Labels:   chunkLabels(chunk),
 		Props:    props,
 	}); err != nil {
 		return nil, err
@@ -191,6 +194,57 @@ func (s *ChunkStore) FindByWorkspace(workspaceID string) ([]KnowledgeChunk, erro
 	})
 }
 
+func (s *ChunkStore) FindByContentHash(hash string) ([]KnowledgeChunk, error) {
+	if s == nil || s.Graph == nil || hash == "" {
+		return nil, nil
+	}
+	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, contentHashLabel(hash))
+	return decodeChunks(nodes)
+}
+
+func (s *ChunkStore) FindByCoverageHash(hash string) ([]KnowledgeChunk, error) {
+	if s == nil || s.Graph == nil || hash == "" {
+		return nil, nil
+	}
+	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, coverageHashLabel(hash))
+	return decodeChunks(nodes)
+}
+
+func (s *ChunkStore) FindByFilePath(path string) ([]KnowledgeChunk, error) {
+	if s == nil || s.Graph == nil || path == "" {
+		return nil, nil
+	}
+	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, filePathLabel(path))
+	return decodeChunks(nodes)
+}
+
+func (s *ChunkStore) FindByFilePathPrefix(prefix string) ([]KnowledgeChunk, error) {
+	if s == nil || s.Graph == nil || prefix == "" {
+		return nil, nil
+	}
+	normalized := normalizeFilePath(prefix)
+	if normalized == "" {
+		return nil, nil
+	}
+	nodes := s.Graph.ListNodesByLabelPrefix(nodeKindChunk, filePathLabelPrefix(normalized))
+	return decodeChunks(nodes)
+}
+
+func (s *ChunkStore) FindFreshByFilePath(path string) ([]KnowledgeChunk, error) {
+	chunks, err := s.FindByFilePath(path)
+	if err != nil || len(chunks) == 0 {
+		return chunks, err
+	}
+	out := make([]KnowledgeChunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		if chunk.Freshness == FreshnessValid {
+			out = append(out, chunk)
+		}
+	}
+	return out, nil
+}
+
+// NOTE: full scan — only use in migration or tooling.
 func (s *ChunkStore) FindAll() ([]KnowledgeChunk, error) {
 	return s.findMatching(nil)
 }
@@ -316,9 +370,7 @@ func (s *ChunkStore) MarkStaleByCoverageHash(coverageHash string) error {
 		return nil
 	}
 
-	chunks, err := s.findMatching(func(chunk KnowledgeChunk) bool {
-		return chunk.CoverageHash == coverageHash
-	})
+	chunks, err := s.FindByCoverageHash(coverageHash)
 	if err != nil {
 		return err
 	}
@@ -329,4 +381,107 @@ func (s *ChunkStore) MarkStaleByCoverageHash(coverageHash string) error {
 	}
 
 	return s.MarkStale(ids, "coverage_hash_changed")
+}
+
+func chunkLabels(chunk KnowledgeChunk) []string {
+	labels := make([]string, 0, 3)
+	if chunk.Freshness != "" {
+		labels = append(labels, fmt.Sprintf("freshness:%s", chunk.Freshness))
+	}
+	if label := coverageHashLabel(chunk.CoverageHash); label != "" {
+		labels = append(labels, label)
+	}
+	if label := contentHashLabel(chunk.ContentHash); label != "" {
+		labels = append(labels, label)
+	}
+	if label := filePathLabelFromChunk(chunk); label != "" {
+		labels = append(labels, label)
+	}
+	return uniqueChunkLabels(labels)
+}
+
+func coverageHashLabel(hash string) string {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return ""
+	}
+	return "coverage_hash:" + hash
+}
+
+func contentHashLabel(hash string) string {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return ""
+	}
+	return "content_hash:" + hash
+}
+
+func filePathLabelFromChunk(chunk KnowledgeChunk) string {
+	if chunk.Body.Fields == nil {
+		return ""
+	}
+	path, _ := chunk.Body.Fields["file_path"].(string)
+	return filePathLabel(path)
+}
+
+func filePathLabel(path string) string {
+	path = normalizeFilePath(path)
+	if path == "" {
+		return ""
+	}
+	return "file_path:" + path
+}
+
+func filePathLabelPrefix(prefix string) string {
+	prefix = normalizeFilePath(prefix)
+	if prefix == "" {
+		return ""
+	}
+	return "file_path:" + prefix
+}
+
+func normalizeFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return filepath.ToSlash(filepath.Clean(path))
+}
+
+func decodeChunks(nodes []graphdb.NodeRecord) ([]KnowledgeChunk, error) {
+	if len(nodes) == 0 {
+		return nil, nil
+	}
+	out := make([]KnowledgeChunk, 0, len(nodes))
+	for _, node := range nodes {
+		var chunk KnowledgeChunk
+		if err := json.Unmarshal(node.Props, &chunk); err != nil {
+			return nil, err
+		}
+		out = append(out, chunk)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func uniqueChunkLabels(labels []string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(labels))
+	out := make([]string, 0, len(labels))
+	for _, label := range labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		out = append(out, label)
+	}
+	return out
 }

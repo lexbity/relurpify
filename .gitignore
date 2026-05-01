@@ -14,6 +14,8 @@ relurpify/
 /relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
 
+/REFERENCE_ONLY
+
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/
 testsuite/agenttest_fixtures/**/__pycache__/

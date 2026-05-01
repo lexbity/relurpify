@@ -4,18 +4,19 @@ import "sort"
 
 // StalenessManager applies freshness transitions and propagation.
 type StalenessManager struct {
-	Store     *ChunkStore
-	MaxDepth  int
-	Propagate bool
+	Store         *ChunkStore
+	MaxDepth      int
+	Propagate     bool
+	propagateHook func([]ChunkID, int)
 }
 
 func (m *StalenessManager) MarkStale(id ChunkID) error {
-	_, err := m.markOne(id, FreshnessStale)
+	_, err := m.MarkOneSync(id, FreshnessStale)
 	return err
 }
 
 func (m *StalenessManager) MarkInvalid(id ChunkID) error {
-	_, err := m.markOne(id, FreshnessInvalid)
+	_, err := m.MarkOneSync(id, FreshnessInvalid)
 	return err
 }
 
@@ -31,7 +32,7 @@ func (m *StalenessManager) BulkMarkStaleCollect(ids []ChunkID) ([]ChunkID, error
 	seen := make(map[ChunkID]struct{}, len(ids))
 	changed := make([]ChunkID, 0, len(ids))
 	for _, id := range ids {
-		marked, err := m.markOne(id, FreshnessStale)
+		marked, err := m.MarkOneSync(id, FreshnessStale)
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +48,8 @@ func (m *StalenessManager) BulkMarkStaleCollect(ids []ChunkID) ([]ChunkID, error
 	return changed, nil
 }
 
-func (m *StalenessManager) markOne(id ChunkID, freshness FreshnessState) ([]ChunkID, error) {
+// MarkOneSync updates a single chunk freshness without propagation.
+func (m *StalenessManager) MarkOneSync(id ChunkID, freshness FreshnessState) ([]ChunkID, error) {
 	if m == nil || m.Store == nil || id == "" {
 		return nil, nil
 	}
@@ -62,28 +64,49 @@ func (m *StalenessManager) markOne(id ChunkID, freshness FreshnessState) ([]Chun
 	if _, err := m.Store.Save(*chunk); err != nil {
 		return nil, err
 	}
-	changed := []ChunkID{id}
-	if !m.Propagate {
-		return changed, nil
-	}
-	propagated, err := m.propagate(id, freshness)
-	if err != nil {
-		return nil, err
-	}
-	return append(changed, propagated...), nil
+	return []ChunkID{id}, nil
 }
 
-func (m *StalenessManager) propagate(origin ChunkID, freshness FreshnessState) ([]ChunkID, error) {
+// PropagateAsync schedules propagation by emitting a chunk-staled event.
+func (m *StalenessManager) PropagateAsync(bus *EventBus, ids []ChunkID, reason string) {
+	if bus == nil || len(ids) == 0 {
+		return
+	}
+	bus.EmitChunkStaled(ChunkStaledPayload{
+		ChunkIDs: chunkIDsToStrings(ids),
+		Reason:   reason,
+	})
+}
+
+// PropagateSync performs BFS propagation over invalidates and derives-from links.
+// It returns newly marked chunk IDs, excluding the origin set.
+func (m *StalenessManager) PropagateSync(ids []ChunkID, depth int) ([]ChunkID, error) {
+	if m == nil || m.Store == nil || len(ids) == 0 {
+		return nil, nil
+	}
+	if m.propagateHook != nil {
+		m.propagateHook(ids, depth)
+	}
 	type entry struct {
 		id    ChunkID
 		depth int
 	}
-	limit := m.MaxDepth
+	limit := depth
+	if limit <= 0 {
+		limit = m.MaxDepth
+	}
 	if limit <= 0 {
 		limit = 3
 	}
-	queue := []entry{{id: origin, depth: 0}}
-	seen := map[ChunkID]struct{}{origin: {}}
+	queue := make([]entry, 0, len(ids))
+	seen := make(map[ChunkID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		queue = append(queue, entry{id: id, depth: 0})
+		seen[id] = struct{}{}
+	}
 	changed := make([]ChunkID, 0)
 	for len(queue) > 0 {
 		item := queue[0]
@@ -91,7 +114,7 @@ func (m *StalenessManager) propagate(origin ChunkID, freshness FreshnessState) (
 		if item.depth >= limit {
 			continue
 		}
-		edges, err := m.Store.LoadEdgesFrom(item.id, EdgeKindInvalidates)
+		edges, err := m.Store.LoadEdgesFrom(item.id, EdgeKindInvalidates, EdgeKindDerivesFrom)
 		if err != nil {
 			return nil, err
 		}
@@ -103,13 +126,13 @@ func (m *StalenessManager) propagate(origin ChunkID, freshness FreshnessState) (
 				continue
 			}
 			seen[edge.ToChunk] = struct{}{}
-			chunk, ok, err := m.Store.Load(edge.ToChunk)
+			nextChunk, ok, err := m.Store.Load(edge.ToChunk)
 			if err != nil {
 				return nil, err
 			}
-			if ok && chunk != nil && chunk.Freshness != freshness {
-				chunk.Freshness = freshness
-				if _, err := m.Store.Save(*chunk); err != nil {
+			if ok && nextChunk != nil && nextChunk.Freshness != FreshnessStale {
+				nextChunk.Freshness = FreshnessStale
+				if _, err := m.Store.Save(*nextChunk); err != nil {
 					return nil, err
 				}
 				changed = append(changed, edge.ToChunk)

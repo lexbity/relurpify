@@ -63,6 +63,7 @@ type Graph struct {
 	nodes             map[string]Node
 	nodeContracts     map[string]NodeContract
 	edges             map[string][]Edge
+	speculation       *SpeculationCache
 	startNodeID       string
 	maxNodeVisits     int
 	telemetry         Telemetry
@@ -85,6 +86,7 @@ func NewGraph() *Graph {
 		nodes:           make(map[string]Node),
 		nodeContracts:   make(map[string]NodeContract),
 		edges:           make(map[string][]Edge),
+		speculation:     NewSpeculationCache(30 * time.Second),
 		maxNodeVisits:   1024,
 		visitCounts:     make(map[string]int),
 		executionPath:   make([]string, 0),
@@ -266,6 +268,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 		})
+		g.speculativeCompile(ctx, current, env, 2)
 		taskType := TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
 		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
 		nodeCtx := WithTaskContext(ctx, TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
@@ -454,6 +457,7 @@ func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdat
 		nodes:           g.nodes,
 		nodeContracts:   g.nodeContracts,
 		edges:           g.edges,
+		speculation:     g.speculation,
 		startNodeID:     start,
 		maxNodeVisits:   g.maxNodeVisits,
 		telemetry:       g.telemetry,

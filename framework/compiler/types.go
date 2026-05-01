@@ -40,17 +40,19 @@ type CompilationRequest struct {
 	EventLogSeq           uint64
 	MaxTokens             int
 	BudgetShortfallPolicy string // "fail" or "emit_partial"
+	Metadata              map[string]any
 }
 
 // CompilationResult contains the compiled context.
 type CompilationResult struct {
-	Chunks          []knowledge.KnowledgeChunk
-	RankedChunks    []retrieval.RankedChunk
-	StreamedRefs    []contextdata.ChunkReference // Populated into Envelope.References.StreamedContext
-	Substitutions   []SummarySubstitution
-	TotalTokens     int
-	ShortfallTokens int // If > 0, budget could not be met
-	ReplayMode      ReplayMode
+	Chunks             []knowledge.KnowledgeChunk
+	RankedChunks       []retrieval.RankedChunk
+	SkippedStaleChunks []knowledge.ChunkID
+	StreamedRefs       []contextdata.ChunkReference // Populated into Envelope.References.StreamedContext
+	Substitutions      []SummarySubstitution
+	TotalTokens        int
+	ShortfallTokens    int // If > 0, budget could not be met
+	ReplayMode         ReplayMode
 }
 
 // CompilationRecord captures the full compilation operation for replay and audit.

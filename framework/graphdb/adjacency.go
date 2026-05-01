@@ -11,6 +11,7 @@ type adjacencyStore struct {
 	bySource map[string]map[string]struct{}
 	forward  map[string][]EdgeRecord
 	reverse  map[string][]EdgeRecord
+	labels   *LabelIndex
 }
 
 func newAdjacencyStore() *adjacencyStore {
@@ -19,6 +20,7 @@ func newAdjacencyStore() *adjacencyStore {
 		bySource: make(map[string]map[string]struct{}),
 		forward:  make(map[string][]EdgeRecord),
 		reverse:  make(map[string][]EdgeRecord),
+		labels:   NewLabelIndex(),
 	}
 }
 
@@ -71,6 +73,24 @@ func (s *adjacencyStore) removeNodeSourceIndex(nodeID, sourceID string) {
 	delete(ids, nodeID)
 	if len(ids) == 0 {
 		delete(s.bySource, sourceID)
+	}
+}
+
+func (s *adjacencyStore) addNodeLabels(node NodeRecord) {
+	if s == nil || s.labels == nil || node.ID == "" || node.DeletedAt != 0 {
+		return
+	}
+	for _, label := range uniqueLabels(node.Labels) {
+		s.labels.Add(label, node.ID)
+	}
+}
+
+func (s *adjacencyStore) removeNodeLabels(node NodeRecord) {
+	if s == nil || s.labels == nil || node.ID == "" {
+		return
+	}
+	for _, label := range uniqueLabels(node.Labels) {
+		s.labels.Remove(label, node.ID)
 	}
 }
 

@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -20,6 +22,7 @@ import (
 // Compiler performs live context assembly with caching and event-driven invalidation.
 type Compiler struct {
 	retriever         *retrieval.Retriever
+	streamer          *knowledge.Streamer
 	policy            *contextpolicy.ContextPolicyBundle
 	chunkStore        *knowledge.ChunkStore
 	cache             map[CacheKey]*CacheEntry
@@ -27,6 +30,7 @@ type Compiler struct {
 	invalidatedChunks map[knowledge.ChunkID]struct{}
 	invalidatedMu     sync.RWMutex
 	eventLog          EventLog
+	telemetry         core.Telemetry
 	newID             func() string
 	now               func() time.Time
 	started           bool
@@ -45,9 +49,14 @@ type EventLog interface {
 }
 
 // NewCompiler creates a new compiler instance.
-func NewCompiler(retriever *retrieval.Retriever, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) *Compiler {
+func NewCompiler(retriever *retrieval.Retriever, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore, streamer ...*knowledge.Streamer) *Compiler {
+	var stream *knowledge.Streamer
+	if len(streamer) > 0 {
+		stream = streamer[0]
+	}
 	return &Compiler{
 		retriever:         retriever,
+		streamer:          stream,
 		policy:            policy,
 		chunkStore:        store,
 		cache:             make(map[CacheKey]*CacheEntry),
@@ -58,9 +67,19 @@ func NewCompiler(retriever *retrieval.Retriever, policy *contextpolicy.ContextPo
 	}
 }
 
+// SetStreamer wires the dependency-ordered streaming path used for compile seeding.
+func (c *Compiler) SetStreamer(streamer *knowledge.Streamer) {
+	c.streamer = streamer
+}
+
 // SetEventLog sets the event log for subscription.
 func (c *Compiler) SetEventLog(log EventLog) {
 	c.eventLog = log
+}
+
+// SetTelemetry wires structured compiler warnings and observability events.
+func (c *Compiler) SetTelemetry(telemetry core.Telemetry) {
+	c.telemetry = telemetry
 }
 
 // SetIDGenerator sets the ID generator function.
@@ -104,19 +123,28 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 		return result, record, nil
 	}
 
-	// Stage 1: Ranker admission
-	rankers := c.admitRankers()
-
-	// Stage 2: Scatter - parallel ranker invocations
-	retrievalResult, err := c.scatter(ctx, request.Query, rankers)
+	streamedChunks, skippedStaleChunks, err := c.streamCandidates(ctx, request)
 	if err != nil {
-		return nil, nil, fmt.Errorf("scatter failed: %w", err)
+		return nil, nil, fmt.Errorf("stream failed: %w", err)
+	}
+	admittedRankers := c.admitRankers()
+
+	var rankedChunks []retrieval.RankedChunk
+	if len(streamedChunks) > 0 {
+		rankedChunks = streamToRankedChunks(streamedChunks)
+		if retrievalResult, err := c.scatter(ctx, request.Query); err == nil && retrievalResult != nil && len(retrievalResult.Ranked) > 0 {
+			rankedChunks = mergeRankedChunks(rankedChunks, retrievalResult.Ranked)
+		}
+	} else {
+		// Stage 2: Scatter - parallel ranker invocations
+		retrievalResult, err := c.scatter(ctx, request.Query)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scatter failed: %w", err)
+		}
+		rankedChunks = retrievalResult.Ranked
 	}
 
-	// Stage 3: RRF fusion (already done by retriever)
-	rankedChunks := retrievalResult.Ranked
-
-	// Stage 4 & 5: Trust and freshness filtering
+	// Stage 3/4: Trust and freshness filtering
 	filteredChunks := c.applyFilters(rankedChunks)
 
 	// Stage 6: Budget fitting (tail-drop)
@@ -134,9 +162,10 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 
 	// Build result
 	result := &CompilationResult{
-		RankedChunks:    finalChunks,
-		ShortfallTokens: shortfall,
-		Substitutions:   substitutions,
+		RankedChunks:       finalChunks,
+		SkippedStaleChunks: skippedStaleChunks,
+		ShortfallTokens:    shortfall,
+		Substitutions:      substitutions,
 	}
 
 	// Build ChunkReference slice for contextdata.Envelope
@@ -174,7 +203,7 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 		Result:          *result,
 		CacheHit:        false,
 		EventLogSeq:     request.EventLogSeq,
-		RankersUsed:     c.getRankerNames(rankers),
+		RankersUsed:     c.getAdmittedRankerNames(admittedRankers),
 		Dependencies:    dependencies,
 		BudgetShortfall: shortfall,
 		AssemblyMetadata: contextdata.AssemblyMeta{
@@ -192,10 +221,15 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 	// Add to cache
 	c.addToCache(cacheKey, record)
 
-	// Persist compilation record to knowledge store
-	if err := c.persistCompilationRecord(ctx, record); err != nil {
-		// Log but don't fail - persistence is best-effort for observability
-		// In production, this could emit a warning event
+	if !isSpeculativeCompilation(request.Metadata) {
+		if err := c.persistCompilationRecord(ctx, record); err != nil {
+			c.emitWarning("compilation persistence failed", map[string]any{
+				"request_id":     record.RequestID,
+				"compilation_id": record.AssemblyMetadata.CompilationID,
+				"event_log_seq":  record.EventLogSeq,
+				"error":          err.Error(),
+			})
+		}
 	}
 
 	return result, record, nil
@@ -423,19 +457,150 @@ func (c *Compiler) cleanupCache() {
 	}
 }
 
-func (c *Compiler) admitRankers() []retrieval.Ranker {
+func (c *Compiler) admitRankers() []retrieval.AdmittedRanker {
 	if c.retriever == nil {
 		return nil
 	}
-	// Get rankers from retriever's registry
-	return nil // Placeholder - would get from registry
+	return c.retriever.Admitted()
 }
 
-func (c *Compiler) scatter(ctx context.Context, query retrieval.RetrievalQuery, rankers []retrieval.Ranker) (*retrieval.RetrievalResult, error) {
+func (c *Compiler) scatter(ctx context.Context, query retrieval.RetrievalQuery) (*retrieval.RetrievalResult, error) {
 	if c.retriever == nil {
 		return &retrieval.RetrievalResult{}, nil
 	}
 	return c.retriever.Retrieve(ctx, query)
+}
+
+func (c *Compiler) getAdmittedRankerNames(rankers []retrieval.AdmittedRanker) []string {
+	if len(rankers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(rankers))
+	for _, admitted := range rankers {
+		if admitted.Ranker == nil {
+			continue
+		}
+		names = append(names, admitted.Ranker.Name())
+	}
+	return names
+}
+
+func (c *Compiler) streamCandidates(ctx context.Context, request CompilationRequest) ([]knowledge.KnowledgeChunk, []knowledge.ChunkID, error) {
+	if c.streamer == nil || c.chunkStore == nil {
+		return nil, nil, nil
+	}
+	seeds := c.streamSeeds(request.Query)
+	if len(seeds) == 0 {
+		return nil, nil, nil
+	}
+	result, err := c.streamer.Stream(ctx, knowledge.StreamSeed{ChunkIDs: seeds}, request.MaxTokens)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result == nil {
+		return nil, nil, nil
+	}
+	return result.Chunks, append([]knowledge.ChunkID(nil), result.StaleDuringStream...), nil
+}
+
+func (c *Compiler) streamSeeds(query retrieval.RetrievalQuery) []knowledge.ChunkID {
+	if c.chunkStore == nil {
+		return nil
+	}
+	seen := make(map[knowledge.ChunkID]struct{})
+	seeds := make([]knowledge.ChunkID, 0, len(query.Anchors))
+	add := func(id knowledge.ChunkID) {
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		seeds = append(seeds, id)
+	}
+	for _, anchor := range query.Anchors {
+		if id := knowledge.ChunkID(strings.TrimSpace(anchor.ChunkID)); id != "" {
+			add(id)
+			continue
+		}
+		anchorID := strings.TrimSpace(anchor.AnchorID)
+		term := strings.TrimSpace(anchor.Term)
+		if anchorID == "" && term == "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(anchorID, "file:"):
+			path := strings.TrimSpace(strings.TrimPrefix(anchorID, "file:"))
+			if path == "" {
+				path = term
+			}
+			chunks, err := c.chunkStore.FindByFilePath(path)
+			if err != nil {
+				continue
+			}
+			for _, chunk := range chunks {
+				add(chunk.ID)
+			}
+		case strings.HasPrefix(anchorID, "pin:"):
+			path := strings.TrimSpace(strings.TrimPrefix(anchorID, "pin:"))
+			if path == "" {
+				path = term
+			}
+			chunks, err := c.chunkStore.FindByFilePath(path)
+			if err != nil {
+				continue
+			}
+			for _, chunk := range chunks {
+				add(chunk.ID)
+			}
+		}
+	}
+	return seeds
+}
+
+func streamToRankedChunks(chunks []knowledge.KnowledgeChunk) []retrieval.RankedChunk {
+	if len(chunks) == 0 {
+		return nil
+	}
+	out := make([]retrieval.RankedChunk, 0, len(chunks))
+	for i, chunk := range chunks {
+		out = append(out, retrieval.RankedChunk{
+			ChunkID: chunk.ID,
+			Rank:    i + 1,
+			Score:   float64(len(chunks)-i) / float64(len(chunks)+1),
+			Source:  "streamer",
+		})
+	}
+	return out
+}
+
+func mergeRankedChunks(primary, secondary []retrieval.RankedChunk) []retrieval.RankedChunk {
+	if len(primary) == 0 {
+		return append([]retrieval.RankedChunk(nil), secondary...)
+	}
+	lists := [][]knowledge.ChunkID{
+		rankedChunkIDs(primary),
+		rankedChunkIDs(secondary),
+	}
+	weights := []float64{10, 1}
+	return retrieval.RRF(lists, weights, 60)
+}
+
+func rankedChunkIDs(chunks []retrieval.RankedChunk) []knowledge.ChunkID {
+	out := make([]knowledge.ChunkID, 0, len(chunks))
+	seen := make(map[knowledge.ChunkID]struct{}, len(chunks))
+	for _, chunk := range chunks {
+		if chunk.ChunkID == "" {
+			continue
+		}
+		if _, ok := seen[chunk.ChunkID]; ok {
+			continue
+		}
+		seen[chunk.ChunkID] = struct{}{}
+		out = append(out, chunk.ChunkID)
+	}
+	return out
 }
 
 func (c *Compiler) applyFilters(ranked []retrieval.RankedChunk) []retrieval.RankedChunk {
@@ -519,7 +684,14 @@ func (c *Compiler) getRankerNames(rankers []retrieval.Ranker) []string {
 }
 
 func (c *Compiler) computeDigest(record *CompilationRecord) string {
+	return compilationDigest(record)
+}
+
+func compilationDigest(record *CompilationRecord) string {
 	h := sha256.New()
+	if record == nil {
+		return hex.EncodeToString(h.Sum(nil))
+	}
 	h.Write([]byte(record.Request.Query.Text))
 	h.Write([]byte(fmt.Sprintf("%d", record.EventLogSeq)))
 	for _, chunkID := range record.Dependencies {
@@ -556,8 +728,18 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 			continue
 		}
 
-		// Look up existing summary via CoverageHash
-		summaryChunk := c.findSummaryByCoverage(chunk.CoverageHash)
+		// Look up existing summary via indexed CoverageHash lookup.
+		var summaryChunk *knowledge.KnowledgeChunk
+		if c.chunkStore != nil && chunk.CoverageHash != "" {
+			if chunksByHash, err := c.chunkStore.FindByCoverageHash(chunk.CoverageHash); err == nil {
+				for i := range chunksByHash {
+					if chunksByHash[i].CoverageHash == chunk.CoverageHash && chunksByHash[i].SourceOrigin == "summary_derivation" {
+						summaryChunk = &chunksByHash[i]
+						break
+					}
+				}
+			}
+		}
 		if summaryChunk != nil {
 			// Check if summary is stale
 			if summaryChunk.Freshness == knowledge.FreshnessStale {
@@ -617,27 +799,6 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 	}
 
 	return result, substitutions
-}
-
-// findSummaryByCoverage looks up an existing summary chunk by coverage hash.
-func (c *Compiler) findSummaryByCoverage(coverageHash string) *knowledge.KnowledgeChunk {
-	if c.chunkStore == nil || coverageHash == "" {
-		return nil
-	}
-
-	// Search for chunks with matching coverage hash that are summaries
-	chunks, err := c.chunkStore.FindAll()
-	if err != nil {
-		return nil
-	}
-
-	for _, chunk := range chunks {
-		if chunk.CoverageHash == coverageHash && chunk.SourceOrigin == "summary_derivation" {
-			return &chunk
-		}
-	}
-
-	return nil
 }
 
 // generateAndPersistSummary generates a summary and persists it.
@@ -812,6 +973,30 @@ func (c *Compiler) persistCompilationRecord(ctx context.Context, record *Compila
 	}
 
 	return nil
+}
+
+func isSpeculativeCompilation(metadata map[string]any) bool {
+	if len(metadata) == 0 {
+		return false
+	}
+	value, ok := metadata["speculative"]
+	if !ok {
+		return false
+	}
+	flag, ok := value.(bool)
+	return ok && flag
+}
+
+func (c *Compiler) emitWarning(message string, metadata map[string]any) {
+	if c == nil || c.telemetry == nil {
+		return
+	}
+	c.telemetry.Emit(core.Event{
+		Type:      core.EventCompilerWarning,
+		Message:   message,
+		Timestamp: c.now(),
+		Metadata:  metadata,
+	})
 }
 
 // LoadCompilationRecord loads a compilation record by ID from the knowledge store.

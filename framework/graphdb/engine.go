@@ -155,6 +155,7 @@ func (e *Engine) loadSnapshot() error {
 		n := node
 		e.store.nodes[node.ID] = &n
 		e.store.addNodeSourceIndex(node)
+		e.store.addNodeLabels(node)
 	}
 	for _, edge := range state.Forward {
 		e.store.forward[edge.SourceID] = append(e.store.forward[edge.SourceID], cloneEdge(edge))

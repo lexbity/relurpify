@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
 type reactActNode struct {
@@ -329,6 +330,10 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call core.To
 		}
 	}
 	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
+	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
+		summary := strings.TrimSpace(observation.Summary)
+		knowledge.IngestObservationAsync(contextdata.WithEnvelope(context.Background(), env), n.agent.OutputIngester, summary)
+	}
 	// TODO: ContextManager integration requires framework-level fixes for missing types
 	// (core.ToolResultContextItem, core.FileContextItem)
 	// if visible && n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {

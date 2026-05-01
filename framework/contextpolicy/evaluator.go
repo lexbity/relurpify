@@ -157,7 +157,7 @@ func trustClassRank(tc agentspec.TrustClass) int {
 		return 2
 	case agentspec.TrustClassRemoteDeclared:
 		return 1
-	case agentspec.TrustClassProviderLocalUntrusted:
+	case agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult:
 		return 0
 	default:
 		return 0

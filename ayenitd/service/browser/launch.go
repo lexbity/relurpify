@@ -15,7 +15,7 @@ import (
 	"time"
 
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextmetric"
+	"codeburg.org/lexbit/relurpify/framework/contextbudget"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
@@ -343,18 +343,18 @@ func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req contracts.Co
 }
 
 type budgetManagerAdapter struct {
-	budget *contextmetric.ArtifactBudget
+	budget *contextbudget.ArtifactBudget
 }
 
 func newBudgetManager(maxTokens int) contracts.BudgetManager {
-	return budgetManagerAdapter{budget: contextmetric.NewArtifactBudget(maxTokens)}
+	return budgetManagerAdapter{budget: contextbudget.NewArtifactBudget(maxTokens)}
 }
 
 func (b budgetManagerAdapter) Allocate(category string, tokens int, item contracts.BudgetItem) error {
 	if b.budget == nil {
 		return fmt.Errorf("budget unavailable")
 	}
-	var adapted contextmetric.BudgetItem
+	var adapted contextbudget.BudgetItem
 	if item != nil {
 		adapted = budgetItemAdapter{item: item}
 	}
@@ -421,7 +421,7 @@ func (b budgetItemAdapter) CanCompress() bool {
 	return b.item.CanCompress()
 }
 
-func (b budgetItemAdapter) Compress() (contextmetric.BudgetItem, error) {
+func (b budgetItemAdapter) Compress() (contextbudget.BudgetItem, error) {
 	if b.item == nil {
 		return nil, nil
 	}

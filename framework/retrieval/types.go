@@ -20,6 +20,14 @@ type Ranker interface {
 // RankerRegistry holds admitted rankers for a compilation.
 type RankerRegistry struct {
 	rankers map[string]Ranker
+	order   []string
+}
+
+// AdmittedRanker couples a ranker with its policy-derived fusion weight.
+type AdmittedRanker struct {
+	Ranker   Ranker
+	Weight   float64
+	Priority int
 }
 
 // NewRankerRegistry creates a new ranker registry.
@@ -34,19 +42,81 @@ func (r *RankerRegistry) Register(ranker Ranker) {
 	if r == nil || ranker == nil {
 		return
 	}
-	r.rankers[ranker.Name()] = ranker
+	if r.rankers == nil {
+		r.rankers = make(map[string]Ranker)
+	}
+	name := ranker.Name()
+	if _, exists := r.rankers[name]; !exists {
+		r.order = append(r.order, name)
+	}
+	r.rankers[name] = ranker
 }
 
 // Admitted returns rankers that are admitted by the context policy.
-func (r *RankerRegistry) Admitted(policy *contextpolicy.ContextPolicyBundle) []Ranker {
+func (r *RankerRegistry) Admitted(policy *contextpolicy.ContextPolicyBundle) []AdmittedRanker {
 	if r == nil {
 		return nil
 	}
-	// For now, return all registered rankers
-	// Policy filtering can be added later based on policy rules
-	result := make([]Ranker, 0, len(r.rankers))
-	for _, ranker := range r.rankers {
-		result = append(result, ranker)
+	if len(r.rankers) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]float64)
+	allowedOrder := make([]string, 0, len(r.rankers))
+	addAllowed := func(id string, weight float64) {
+		if id == "" {
+			return
+		}
+		if weight <= 0 {
+			weight = 1.0
+		}
+		if _, exists := allowed[id]; exists {
+			return
+		}
+		allowed[id] = weight
+		allowedOrder = append(allowedOrder, id)
+	}
+
+	if policy != nil {
+		for _, ranker := range policy.Rankers {
+			addAllowed(ranker.ID, float64(ranker.Priority))
+		}
+		for _, rankerID := range policy.SkillContributions.AdmittedRankers {
+			addAllowed(rankerID, 1.0)
+		}
+	}
+
+	if len(allowedOrder) == 0 {
+		result := make([]AdmittedRanker, 0, len(r.order))
+		for _, name := range r.order {
+			ranker, ok := r.rankers[name]
+			if !ok || ranker == nil {
+				continue
+			}
+			result = append(result, AdmittedRanker{
+				Ranker:   ranker,
+				Weight:   1.0,
+				Priority: 1,
+			})
+		}
+		return result
+	}
+
+	result := make([]AdmittedRanker, 0, len(allowedOrder))
+	for _, name := range allowedOrder {
+		ranker, ok := r.rankers[name]
+		if !ok || ranker == nil {
+			continue
+		}
+		priority := int(allowed[name])
+		if priority <= 0 {
+			priority = 1
+		}
+		result = append(result, AdmittedRanker{
+			Ranker:   ranker,
+			Weight:   allowed[name],
+			Priority: priority,
+		})
 	}
 	return result
 }

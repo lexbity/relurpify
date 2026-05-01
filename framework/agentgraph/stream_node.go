@@ -11,6 +11,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
+const speculativeWaitTimeout = 200 * time.Millisecond
+
 // StreamTriggerNode requests a compiler-triggered streamed context update and
 // applies the compiler result back to the envelope.
 type StreamTriggerNode struct {
@@ -40,7 +42,7 @@ func (n *StreamTriggerNode) ID() string { return n.id }
 func (n *StreamTriggerNode) Type() NodeType { return NodeTypeStream }
 
 func (n *StreamTriggerNode) Contract() NodeContract {
-	return streamTriggerNodeContract()
+	return streamTriggerNodeContract(n)
 }
 
 func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
@@ -54,27 +56,22 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		return nil, fmt.Errorf("stream trigger node %q missing envelope", n.id)
 	}
 
-	req := contextstream.Request{
-		ID:                    n.requestID(env),
-		Query:                 n.Query,
-		MaxTokens:             n.MaxTokens,
-		EventLogSeq:           env.AssemblyMetadata.EventLogSeq,
-		BudgetShortfallPolicy: n.BudgetShortfallPolicy,
-		Mode:                  n.mode(),
-		RequestedAt:           time.Now().UTC(),
-		Metadata:              cloneAnyMap(n.Metadata),
-	}
+	req := n.request(env, false)
 	if err := contextstream.ApplyRequestMetadata(env, req); err != nil {
 		return nil, err
 	}
 
 	switch req.Mode {
 	case contextstream.ModeBackground:
-		job, err := n.Trigger.RequestBackground(ctx, req)
-		if err != nil {
-			return nil, err
+		job, ok := n.speculativeJob(env)
+		if !ok || job == nil {
+			var err error
+			job, err = n.requestBackground(ctx, req)
+			if err != nil {
+				return nil, err
+			}
 		}
-		env.SetWorkingValue("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
+		n.storeJob(env, job)
 		env.SetWorkingValue("contextstream.job_mode", string(req.Mode), contextdata.MemoryClassTask)
 		go func() {
 			result, err := job.Wait(context.Background())
@@ -95,7 +92,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 			},
 		}, nil
 	default:
-		result, err := n.Trigger.RequestBlocking(ctx, req)
+		result, err := n.requestBlocking(ctx, env, req)
 		if result != nil {
 			_ = contextstream.ApplyResult(env, result)
 		}
@@ -140,10 +137,89 @@ func (n *StreamTriggerNode) requestID(env *contextdata.Envelope) string {
 	return "stream.request"
 }
 
-func streamTriggerNodeContract() NodeContract {
+func (n *StreamTriggerNode) request(env *contextdata.Envelope, speculative bool) contextstream.Request {
+	req := contextstream.Request{
+		ID:                    n.requestID(env),
+		Query:                 n.Query,
+		MaxTokens:             n.MaxTokens,
+		EventLogSeq:           env.AssemblyMetadataSnapshot().EventLogSeq,
+		BudgetShortfallPolicy: n.BudgetShortfallPolicy,
+		Mode:                  n.mode(),
+		RequestedAt:           time.Now().UTC(),
+		Metadata:              cloneAnyMap(n.Metadata),
+	}
+	if speculative {
+		if req.Metadata == nil {
+			req.Metadata = make(map[string]any, 1)
+		}
+		req.Metadata["speculative"] = true
+	}
+	return req
+}
+
+func (n *StreamTriggerNode) requestBlocking(ctx context.Context, env *contextdata.Envelope, req contextstream.Request) (*contextstream.Result, error) {
+	if job, ok := n.speculativeJob(env); ok {
+		waitCtx, cancel := context.WithTimeout(ctx, speculativeWaitTimeout)
+		defer cancel()
+		result, err := job.Wait(waitCtx)
+		if err == nil && result != nil {
+			n.clearSpeculativeJob(env)
+			return result, nil
+		}
+	}
+	return n.Trigger.RequestBlocking(ctx, req)
+}
+
+func (n *StreamTriggerNode) requestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error) {
+	return n.Trigger.RequestBackground(ctx, req)
+}
+
+func (n *StreamTriggerNode) speculativeJob(env *contextdata.Envelope) (*contextstream.Job, bool) {
+	if env == nil {
+		return nil, false
+	}
+	if job, ok := env.GetWorkingValue(n.speculativeJobKey()); ok {
+		if typed, ok := job.(*contextstream.Job); ok && typed != nil {
+			return typed, true
+		}
+	}
+	return nil, false
+}
+
+func (n *StreamTriggerNode) storeJob(env *contextdata.Envelope, job *contextstream.Job) {
+	if env == nil || job == nil {
+		return
+	}
+	env.SetWorkingValue(n.speculativeJobKey(), job, contextdata.MemoryClassTask)
+	env.SetWorkingValue(n.speculativeIDKey(), job.ID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
+}
+
+func (n *StreamTriggerNode) clearSpeculativeJob(env *contextdata.Envelope) {
+	if env == nil {
+		return
+	}
+	env.DeleteWorkingValue(n.speculativeJobKey())
+	env.DeleteWorkingValue(n.speculativeIDKey())
+}
+
+func (n *StreamTriggerNode) speculativeJobKey() string {
+	return "contextstream.speculative_job." + n.id
+}
+
+func (n *StreamTriggerNode) speculativeIDKey() string {
+	return "contextstream.speculative." + n.id
+}
+
+func streamTriggerNodeContract(n *StreamTriggerNode) NodeContract {
+	query := retrieval.RetrievalQuery{}
+	if n != nil {
+		query = n.Query
+	}
 	return NodeContract{
-		SideEffectClass: SideEffectContext,
-		Idempotency:     IdempotencyReplaySafe,
+		SideEffectClass:             SideEffectContext,
+		Idempotency:                 IdempotencyReplaySafe,
+		SpeculativeCompilationQuery: &query,
 		ContextPolicy: core.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "contextstream.*"},
 			WriteKeys:                []string{"contextstream.*"},

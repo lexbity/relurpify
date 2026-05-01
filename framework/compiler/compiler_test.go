@@ -5,11 +5,25 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/summarization"
+	"github.com/stretchr/testify/require"
 )
+
+type staticRanker struct {
+	name string
+	ids  []knowledge.ChunkID
+}
+
+func (r *staticRanker) Name() string { return r.name }
+
+func (r *staticRanker) Rank(context.Context, retrieval.RetrievalQuery, *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+	return append([]knowledge.ChunkID(nil), r.ids...), nil
+}
 
 // mockEventLog is a test event log.
 type mockEventLog struct {
@@ -592,21 +606,200 @@ func TestCompilerTrySummarySubstitution(t *testing.T) {
 	}
 }
 
-func TestCompilerFindSummaryByCoverage(t *testing.T) {
-	c := NewCompiler(nil, nil, nil)
-
-	// Test with nil chunk store
-	result := c.findSummaryByCoverage("hash123")
-	if result != nil {
-		t.Error("expected nil when chunk store is nil")
+func TestCompilerFindSummaryByCoverageUsesIndexedStore(t *testing.T) {
+	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	store := &knowledge.ChunkStore{Graph: engine}
+	_, err = store.Save(knowledge.KnowledgeChunk{
+		ID:           knowledge.ChunkID("summary-1"),
+		WorkspaceID:  "ws",
+		CoverageHash: "hash123",
+		SourceOrigin: "summary_derivation",
+		Provenance: knowledge.ChunkProvenance{
+			CompiledBy: knowledge.CompilerDeterministic,
+			Timestamp:  time.Now().UTC(),
+		},
+		Body: knowledge.ChunkBody{Raw: "summary", Fields: map[string]any{"content": "summary"}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// Test with empty coverage hash
-	c.chunkStore = &knowledge.ChunkStore{}
-	result = c.findSummaryByCoverage("")
-	if result != nil {
-		t.Error("expected nil when coverage hash is empty")
+	c := NewCompiler(nil, nil, store)
+	chunks, err := c.chunkStore.FindByCoverageHash("hash123")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if len(chunks) != 1 || chunks[0].ID != "summary-1" {
+		t.Fatalf("expected indexed summary lookup, got %#v", chunks)
+	}
+}
+
+func TestCompiler_TwoStageUsesStreamOrder(t *testing.T) {
+	store := newCompilerTestStore(t)
+	now := time.Now().UTC()
+	for _, chunk := range []knowledge.KnowledgeChunk{
+		{
+			ID:          "chunk:a",
+			TrustClass:  agentspec.TrustClassBuiltinTrusted,
+			WorkspaceID: "ws",
+			Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+			Body:        knowledge.ChunkBody{Raw: "A", Fields: map[string]any{"content": "A"}},
+		},
+		{
+			ID:          "chunk:b",
+			TrustClass:  agentspec.TrustClassBuiltinTrusted,
+			WorkspaceID: "ws",
+			Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+			Body:        knowledge.ChunkBody{Raw: "B", Fields: map[string]any{"content": "B"}},
+		},
+		{
+			ID:          "chunk:c",
+			TrustClass:  agentspec.TrustClassBuiltinTrusted,
+			WorkspaceID: "ws",
+			Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+			Body:        knowledge.ChunkBody{Raw: "C", Fields: map[string]any{"content": "C"}},
+		},
+	} {
+		saved, err := store.Save(chunk)
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+	}
+	var err error
+	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: "chunk:a", ToChunk: "chunk:b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	require.NoError(t, err)
+	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: "chunk:b", ToChunk: "chunk:c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	require.NoError(t, err)
+
+	compiler := NewCompiler(nil, nil, store)
+	compiler.SetStreamer(&knowledge.Streamer{Store: store, Graph: &knowledge.ChunkGraph{Store: store}})
+
+	result, _, err := compiler.Compile(context.Background(), CompilationRequest{
+		Query: retrieval.RetrievalQuery{
+			Text:    "seed",
+			Anchors: []retrieval.AnchorRef{{ChunkID: "chunk:a", Active: true}},
+		},
+		MaxTokens: 64,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 3)
+	require.Equal(t, knowledge.ChunkID("chunk:c"), result.Chunks[0].ID)
+	require.Equal(t, knowledge.ChunkID("chunk:b"), result.Chunks[1].ID)
+	require.Equal(t, knowledge.ChunkID("chunk:a"), result.Chunks[2].ID)
+}
+
+func TestCompiler_StaleChunkSkipped(t *testing.T) {
+	store := newCompilerTestStore(t)
+	now := time.Now().UTC()
+	parent := knowledge.KnowledgeChunk{
+		ID:          "chunk:parent",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		WorkspaceID: "ws",
+		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+		Body:        knowledge.ChunkBody{Raw: "parent", Fields: map[string]any{"content": "parent"}},
+	}
+	child := knowledge.KnowledgeChunk{
+		ID:          "chunk:child",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		WorkspaceID: "ws",
+		Freshness:   knowledge.FreshnessStale,
+		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+		Body:        knowledge.ChunkBody{Raw: "child", Fields: map[string]any{"content": "child"}},
+	}
+	_, err := store.Save(parent)
+	require.NoError(t, err)
+	_, err = store.Save(child)
+	require.NoError(t, err)
+	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: parent.ID, ToChunk: child.ID, Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	require.NoError(t, err)
+
+	compiler := NewCompiler(nil, nil, store)
+	compiler.SetStreamer(&knowledge.Streamer{Store: store, Graph: &knowledge.ChunkGraph{Store: store}})
+	result, _, err := compiler.Compile(context.Background(), CompilationRequest{
+		Query: retrieval.RetrievalQuery{
+			Text:    "seed",
+			Anchors: []retrieval.AnchorRef{{ChunkID: string(parent.ID), Active: true}},
+		},
+		MaxTokens: 64,
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.SkippedStaleChunks, child.ID)
+	for _, chunk := range result.Chunks {
+		require.NotEqual(t, child.ID, chunk.ID)
+	}
+}
+
+func TestCompiler_AmplificationUsed(t *testing.T) {
+	store := newCompilerTestStore(t)
+	now := time.Now().UTC()
+	seed := knowledge.KnowledgeChunk{
+		ID:          "chunk:seed",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		WorkspaceID: "ws",
+		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+		Body:        knowledge.ChunkBody{Raw: "seed", Fields: map[string]any{"content": "seed"}},
+	}
+	enrichment := knowledge.KnowledgeChunk{
+		ID:          "chunk:enrich",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		WorkspaceID: "ws",
+		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+		Body:        knowledge.ChunkBody{Raw: "enrich", Fields: map[string]any{"content": "enrich"}},
+	}
+	_, err := store.Save(seed)
+	require.NoError(t, err)
+	_, err = store.Save(enrichment)
+	require.NoError(t, err)
+	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: seed.ID, ToChunk: enrichment.ID, Kind: knowledge.EdgeKindAmplifies, Weight: 2})
+	require.NoError(t, err)
+
+	compiler := NewCompiler(nil, nil, store)
+	compiler.SetStreamer(&knowledge.Streamer{Store: store, Graph: &knowledge.ChunkGraph{Store: store}})
+	result, _, err := compiler.Compile(context.Background(), CompilationRequest{
+		Query: retrieval.RetrievalQuery{
+			Text:    "seed",
+			Anchors: []retrieval.AnchorRef{{ChunkID: string(seed.ID), Active: true}},
+		},
+		MaxTokens: 64,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 2)
+	require.Equal(t, seed.ID, result.Chunks[0].ID)
+	require.Equal(t, enrichment.ID, result.Chunks[1].ID)
+}
+
+func TestCompiler_FallbackToFlatRankWhenNoAnchors(t *testing.T) {
+	store := newCompilerTestStore(t)
+	now := time.Now().UTC()
+	chunk := knowledge.KnowledgeChunk{
+		ID:          "chunk:flat",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		WorkspaceID: "ws",
+		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
+		Body:        knowledge.ChunkBody{Raw: "flat", Fields: map[string]any{"content": "flat"}},
+	}
+	_, err := store.Save(chunk)
+	require.NoError(t, err)
+	registry := retrieval.NewRankerRegistry()
+	registry.Register(&staticRanker{name: "flat-ranker", ids: []knowledge.ChunkID{chunk.ID}})
+	retriever := retrieval.NewRetriever(registry, store)
+	compiler := NewCompiler(retriever, nil, store)
+	result, _, err := compiler.Compile(context.Background(), CompilationRequest{
+		Query:     retrieval.RetrievalQuery{Text: "flat"},
+		MaxTokens: 64,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Chunks, 1)
+	require.Equal(t, chunk.ID, result.Chunks[0].ID)
+}
+
+func newCompilerTestStore(t *testing.T) *knowledge.ChunkStore {
+	t.Helper()
+	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	return &knowledge.ChunkStore{Graph: engine}
 }
 
 func TestCompilerGenerateAndPersistSummary(t *testing.T) {

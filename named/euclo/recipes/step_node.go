@@ -3,6 +3,7 @@ package recipe
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
 // RecipeStepNode executes a compiled recipe step by delegating to the matching
@@ -142,6 +144,12 @@ func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata
 	}
 	if err != nil {
 		data["error"] = err.Error()
+	}
+
+	if n.env.IngestOutputs && n.env.OutputIngester != nil {
+		if payload, marshalErr := json.Marshal(data); marshalErr == nil {
+			knowledge.IngestToolResultAsync(contextdata.WithEnvelope(ctx, env), n.env.OutputIngester, n.step.CapabilityID, payload)
+		}
 	}
 
 	result := &agentgraph.Result{

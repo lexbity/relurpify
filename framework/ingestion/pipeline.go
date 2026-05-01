@@ -305,6 +305,9 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 				},
 			},
 		}
+		if p.raw.FilePath != "" {
+			chunk.Body.Fields["file_path"] = filepath.Clean(p.raw.FilePath)
+		}
 
 		_, err := p.store.Save(chunk)
 		if err != nil {

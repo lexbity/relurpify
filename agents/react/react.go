@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/search"
@@ -27,6 +28,8 @@ type ReActAgent struct {
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+	OutputIngester  *knowledge.OutputIngester
+	IngestOutputs   bool
 
 	// Internal state
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
@@ -99,6 +102,10 @@ func (a *ReActAgent) streamMaxTokens() int {
 		return a.StreamMaxTokens
 	}
 	return 256
+}
+
+func (a *ReActAgent) outputIngestionEnabled() bool {
+	return a != nil && a.OutputIngester != nil && a.IngestOutputs
 }
 
 // streamTriggerNode creates a streaming trigger node for the react agent.

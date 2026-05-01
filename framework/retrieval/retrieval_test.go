@@ -4,7 +4,10 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
@@ -139,6 +142,35 @@ func TestRankerRegistry(t *testing.T) {
 	if len(admitted) != 2 {
 		t.Errorf("expected 2 admitted rankers, got %d", len(admitted))
 	}
+	if admitted[0].Ranker.Name() != "r1" || admitted[1].Ranker.Name() != "r2" {
+		t.Fatalf("expected registration order, got %s then %s", admitted[0].Ranker.Name(), admitted[1].Ranker.Name())
+	}
+}
+
+func TestRankerRegistry_PolicyAdmission(t *testing.T) {
+	registry := NewRankerRegistry()
+	registry.Register(&mockRanker{name: "keyword", results: []knowledge.ChunkID{"a"}})
+	registry.Register(&mockRanker{name: "recency", results: []knowledge.ChunkID{"b"}})
+	registry.Register(&mockRanker{name: "ast_proximity", results: []knowledge.ChunkID{"c"}})
+	registry.Register(&mockRanker{name: "trust", results: []knowledge.ChunkID{"d"}})
+
+	policy := &contextpolicy.ContextPolicyBundle{
+		Rankers: []contextpolicy.RankerRef{
+			{ID: "keyword", Priority: 10},
+			{ID: "recency", Priority: 5},
+		},
+	}
+
+	admitted := registry.Admitted(policy)
+	if len(admitted) != 2 {
+		t.Fatalf("expected 2 admitted rankers, got %d", len(admitted))
+	}
+	if admitted[0].Ranker.Name() != "keyword" || admitted[1].Ranker.Name() != "recency" {
+		t.Fatalf("unexpected admitted order: %s, %s", admitted[0].Ranker.Name(), admitted[1].Ranker.Name())
+	}
+	if admitted[0].Weight <= admitted[1].Weight {
+		t.Fatalf("expected keyword to have higher weight than recency, got %.2f <= %.2f", admitted[0].Weight, admitted[1].Weight)
+	}
 }
 
 func TestRetriever(t *testing.T) {
@@ -220,6 +252,44 @@ func TestRetrieverBatch(t *testing.T) {
 	}
 }
 
+func TestRetriever_ParallelScatter(t *testing.T) {
+	store := newRetrievalTestStore(t)
+	registry := NewRankerRegistry()
+	registry.Register(&sleepRanker{name: "r1", delay: 10 * time.Millisecond, results: []knowledge.ChunkID{"a"}})
+	registry.Register(&sleepRanker{name: "r2", delay: 10 * time.Millisecond, results: []knowledge.ChunkID{"b"}})
+	registry.Register(&sleepRanker{name: "r3", delay: 10 * time.Millisecond, results: []knowledge.ChunkID{"c"}})
+	registry.Register(&sleepRanker{name: "r4", delay: 10 * time.Millisecond, results: []knowledge.ChunkID{"d"}})
+
+	retriever := NewRetriever(registry, store)
+	start := time.Now()
+	result, err := retriever.Retrieve(context.Background(), RetrievalQuery{Text: "scatter"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed >= 25*time.Millisecond {
+		t.Fatalf("expected parallel scatter to finish quickly, took %s", elapsed)
+	}
+	if len(result.Ranked) != 4 {
+		t.Fatalf("expected 4 fused results, got %d", len(result.Ranked))
+	}
+}
+
+func TestRRF_WeightedFusion(t *testing.T) {
+	lists := [][]knowledge.ChunkID{
+		{"a", "b"},
+		{"b", "a"},
+	}
+	weights := []float64{10, 1}
+
+	result := RRF(lists, weights, 60.0)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 fused results, got %d", len(result))
+	}
+	if result[0].ChunkID != "a" {
+		t.Fatalf("expected higher-weighted list to dominate, got %s", result[0].ChunkID)
+	}
+}
+
 func TestComputeRRFScore(t *testing.T) {
 	ranks := []int{1, 2, 0} // 0 means not present
 	weights := []float64{1.0, 1.0, 1.0}
@@ -233,4 +303,30 @@ func TestComputeRRFScore(t *testing.T) {
 	if math.Abs(score-expected) > epsilon {
 		t.Errorf("expected %f, got %f", expected, score)
 	}
+}
+
+type sleepRanker struct {
+	name    string
+	delay   time.Duration
+	results []knowledge.ChunkID
+}
+
+func (s *sleepRanker) Name() string { return s.name }
+
+func (s *sleepRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+	_ = ctx
+	_ = query
+	_ = store
+	time.Sleep(s.delay)
+	return append([]knowledge.ChunkID(nil), s.results...), nil
+}
+
+func newRetrievalTestStore(t *testing.T) *knowledge.ChunkStore {
+	t.Helper()
+	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatalf("open graphdb: %v", err)
+	}
+	t.Cleanup(func() { _ = engine.Close() })
+	return &knowledge.ChunkStore{Graph: engine}
 }

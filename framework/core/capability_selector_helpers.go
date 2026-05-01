@@ -212,7 +212,7 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 	}
 	for _, trust := range selector.TrustClasses {
 		switch trust {
-		case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+		case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
 		default:
 			return fmt.Errorf("trust class %s invalid", trust)
 		}

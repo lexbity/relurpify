@@ -12,6 +12,7 @@ const (
 	EventBootstrapComplete   EventKind = "knowledge.bootstrap_complete"
 	EventCodeRevisionChanged EventKind = "knowledge.code_revision_changed"
 	EventChunkStaled         EventKind = "knowledge.chunk_staled"
+	EventChunkIngested       EventKind = "knowledge.chunk_ingested"
 	EventPatternConfirmed    EventKind = "knowledge.pattern_confirmed"
 	EventAnchorConfirmed     EventKind = "knowledge.anchor_confirmed"
 	EventIndexEntryProduced  EventKind = "knowledge.index_entry_produced"
@@ -45,6 +46,19 @@ type ChunkStaledPayload struct {
 	ChunkIDs      []string `json:"chunk_ids,omitempty"`
 	AffectedPaths []string `json:"affected_paths,omitempty"`
 	Reason        string   `json:"reason,omitempty"`
+}
+
+// ChunkIngestedPayload reports a newly ingested chunk.
+type ChunkIngestedPayload struct {
+	WorkspaceRoot  string   `json:"workspace_root,omitempty"`
+	SessionID      string   `json:"session_id,omitempty"`
+	WorkflowID     string   `json:"workflow_id,omitempty"`
+	NodeID         string   `json:"node_id,omitempty"`
+	ChunkID        string   `json:"chunk_id,omitempty"`
+	ContentHash    string   `json:"content_hash,omitempty"`
+	SourceOrigin   string   `json:"source_origin,omitempty"`
+	TokenEstimate  int      `json:"token_estimate,omitempty"`
+	SourceChunkIDs []string `json:"source_chunk_ids,omitempty"`
 }
 
 // EventBus is a lightweight in-process artifact event broker.
@@ -129,4 +143,12 @@ func (b *EventBus) EmitChunkStaled(payload ChunkStaledPayload) {
 		return
 	}
 	b.Publish(Event{Kind: EventChunkStaled, Timestamp: time.Now().UTC(), Payload: payload})
+}
+
+// EmitChunkIngested publishes a chunk ingestion event.
+func (b *EventBus) EmitChunkIngested(payload ChunkIngestedPayload) {
+	if b == nil {
+		return
+	}
+	b.Publish(Event{Kind: EventChunkIngested, Timestamp: time.Now().UTC(), Payload: payload})
 }

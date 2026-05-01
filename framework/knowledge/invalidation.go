@@ -3,6 +3,7 @@ package knowledge
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // StaleChunkReporter can surface stale chunks to domain-specific consumers.
@@ -26,12 +27,89 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 	}
 	ch, unsub := p.Events.Subscribe(8)
 	defer unsub()
+	const debounceWindow = 50 * time.Millisecond
+	var (
+		timer         *time.Timer
+		timerC        <-chan time.Time
+		pending       = make(map[ChunkID]struct{})
+		pendingPaths  = make(map[string]struct{})
+		pendingReason string
+	)
+	stopTimer := func() {
+		if timer == nil {
+			return
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer = nil
+		timerC = nil
+	}
+	schedule := func() {
+		if timer == nil {
+			timer = time.NewTimer(debounceWindow)
+			timerC = timer.C
+			return
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(debounceWindow)
+		timerC = timer.C
+	}
+	flush := func() error {
+		if len(pending) == 0 {
+			stopTimer()
+			return nil
+		}
+		ids := make([]ChunkID, 0, len(pending))
+		for id := range pending {
+			ids = append(ids, id)
+		}
+		paths := make([]string, 0, len(pendingPaths))
+		for path := range pendingPaths {
+			paths = append(paths, path)
+		}
+		reason := pendingReason
+		pending = make(map[ChunkID]struct{})
+		pendingPaths = make(map[string]struct{})
+		pendingReason = ""
+		stopTimer()
+
+		manager := p.stalenessManager()
+		propagated, err := manager.PropagateSync(ids, 0)
+		if err != nil {
+			return err
+		}
+		if err := p.SurfaceStaleChunks(ctx, ids, paths, reason); err != nil {
+			return err
+		}
+		if len(propagated) > 0 {
+			if err := p.SurfaceStaleChunks(ctx, propagated, paths, reason); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	for {
 		select {
 		case <-ctx.Done():
+			stopTimer()
 			return nil
+		case <-timerC:
+			if err := flush(); err != nil {
+				stopTimer()
+				return err
+			}
 		case event, ok := <-ch:
 			if !ok {
+				stopTimer()
 				return nil
 			}
 			switch event.Kind {
@@ -48,8 +126,20 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 				if !ok {
 					continue
 				}
-				if err := p.SurfaceStaleChunks(ctx, chunkIDsFromStrings(payload.ChunkIDs), payload.AffectedPaths, payload.Reason); err != nil {
-					return err
+				for _, id := range chunkIDsFromStrings(payload.ChunkIDs) {
+					pending[id] = struct{}{}
+				}
+				for _, path := range payload.AffectedPaths {
+					if strings.TrimSpace(path) != "" {
+						pendingPaths[strings.TrimSpace(path)] = struct{}{}
+					}
+				}
+				if pendingReason == "" {
+					pendingReason = payload.Reason
+				}
+				schedule()
+				if len(pending) == 0 {
+					continue
 				}
 			}
 		}
@@ -69,9 +159,6 @@ func (p *InvalidationPass) HandleRevisionChanged(ctx context.Context, payload Co
 	manager := p.stalenessManager()
 	staled, err := manager.BulkMarkStaleCollect(matches)
 	if err != nil || len(staled) == 0 {
-		return err
-	}
-	if err := p.SurfaceStaleChunks(ctx, staled, payload.AffectedPaths, "code_revision_changed"); err != nil {
 		return err
 	}
 	if p.Events != nil {
@@ -103,9 +190,8 @@ func (p *InvalidationPass) SurfaceStaleChunks(ctx context.Context, chunkIDs []Ch
 }
 
 func (p *InvalidationPass) matchAffectedChunks(paths []string, newRevision string) ([]ChunkID, error) {
-	chunks, err := p.Store.FindAll()
-	if err != nil || len(chunks) == 0 {
-		return nil, err
+	if p == nil || p.Store == nil {
+		return nil, nil
 	}
 	pathSet := make(map[string]struct{}, len(paths))
 	for _, path := range paths {
@@ -114,15 +200,26 @@ func (p *InvalidationPass) matchAffectedChunks(paths []string, newRevision strin
 			pathSet[path] = struct{}{}
 		}
 	}
+	if len(pathSet) == 0 {
+		return nil, nil
+	}
 	matches := make([]ChunkID, 0)
-	for _, chunk := range chunks {
-		if len(pathSet) > 0 && !chunkTouchesPaths(chunk, pathSet) {
-			continue
+	seen := make(map[ChunkID]struct{})
+	for path := range pathSet {
+		chunks, err := p.Store.FindByFilePath(path)
+		if err != nil {
+			return nil, err
 		}
-		if strings.TrimSpace(newRevision) != "" && strings.TrimSpace(chunk.Provenance.CodeStateRef) == strings.TrimSpace(newRevision) {
-			continue
+		for _, chunk := range chunks {
+			if strings.TrimSpace(newRevision) != "" && strings.TrimSpace(chunk.Provenance.CodeStateRef) == strings.TrimSpace(newRevision) {
+				continue
+			}
+			if _, ok := seen[chunk.ID]; ok {
+				continue
+			}
+			seen[chunk.ID] = struct{}{}
+			matches = append(matches, chunk.ID)
 		}
-		matches = append(matches, chunk.ID)
 	}
 	return matches, nil
 }

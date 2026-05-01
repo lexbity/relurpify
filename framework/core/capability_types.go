@@ -48,6 +48,8 @@ type TrustClass = agentspec.TrustClass
 const (
 	TrustClassBuiltinTrusted         TrustClass = agentspec.TrustClassBuiltinTrusted
 	TrustClassWorkspaceTrusted       TrustClass = agentspec.TrustClassWorkspaceTrusted
+	TrustClassLLMGenerated           TrustClass = agentspec.TrustClassLLMGenerated
+	TrustClassToolResult             TrustClass = agentspec.TrustClassToolResult
 	TrustClassProviderLocalUntrusted TrustClass = agentspec.TrustClassProviderLocalUntrusted
 	TrustClassRemoteDeclared         TrustClass = agentspec.TrustClassRemoteDeclared
 	TrustClassRemoteApproved         TrustClass = agentspec.TrustClassRemoteApproved

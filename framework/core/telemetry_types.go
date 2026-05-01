@@ -35,6 +35,7 @@ const (
 	EventSummaryCommitted      EventType = "summary_committed"
 	EventContextPolicyReloaded EventType = "context_policy_reloaded"
 	EventProviderSessionEnded  EventType = "provider_session_ended"
+	EventCompilerWarning       EventType = "compiler_warning"
 
 	// Phase 6: Ingestion events
 	EventBootstrapComplete EventType = "bootstrap_complete"

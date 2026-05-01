@@ -22,6 +22,7 @@ func (f fakeBackend) Embedder() llm.Embedder    { return nil }
 func (f fakeBackend) Capabilities() core.BackendCapabilities {
 	return core.BackendCapabilities{}
 }
+func (f fakeBackend) ModelContextSize(context.Context) (int, error) { return 0, nil }
 func (f fakeBackend) Health(context.Context) (*llm.HealthReport, error) {
 	return &llm.HealthReport{}, nil
 }

@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,16 +12,21 @@ import (
 )
 
 type fakeRPCConn struct {
+	mu     sync.Mutex
 	writes []any
 	reads  []map[string]json.RawMessage
 }
 
 func (f *fakeRPCConn) WriteJSON(v any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.writes = append(f.writes, v)
 	return nil
 }
 
 func (f *fakeRPCConn) ReadJSON(v any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	target := v.(*map[string]json.RawMessage)
 	if len(f.reads) == 0 {
 		time.Sleep(5 * time.Millisecond)
@@ -33,6 +39,21 @@ func (f *fakeRPCConn) ReadJSON(v any) error {
 
 func (f *fakeRPCConn) Close() error { return nil }
 
+func (f *fakeRPCConn) writeCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.writes)
+}
+
+func (f *fakeRPCConn) firstWrite() any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.writes) == 0 {
+		return nil
+	}
+	return f.writes[0]
+}
+
 func TestWSConnectionInvokeRoundTrip(t *testing.T) {
 	conn := &fakeRPCConn{}
 	ws := &WSConnection{Conn: conn}
@@ -43,10 +64,10 @@ func TestWSConnectionInvokeRoundTrip(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for len(conn.writes) == 0 {
+		for conn.writeCount() == 0 {
 			time.Sleep(time.Millisecond)
 		}
-		request := conn.writes[0].(invokeRequest)
+		request := conn.firstWrite().(invokeRequest)
 		payload, _ := json.Marshal(map[string]any{
 			"type":           "capability.result",
 			"correlation_id": request.CorrelationID,

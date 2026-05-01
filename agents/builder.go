@@ -23,6 +23,9 @@ import (
 // This is a local dispatch table for generic agent paradigms only.
 // Named agents (e.g., coding, rex, architect) are handled by named/factory.BuildFromSpec.
 func BuildFromSpec(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+	if env != nil {
+		env.IngestOutputs = spec.IngestOutputsEnabled()
+	}
 	agentType := strings.ToLower(strings.TrimSpace(spec.Implementation))
 	if agentType == "" && spec.Composition != nil {
 		agentType = strings.ToLower(strings.TrimSpace(spec.Composition.Type))

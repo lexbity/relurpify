@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,11 +16,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type sinkRecorder struct{ events []core.FrameworkEvent }
+type sinkRecorder struct {
+	mu     sync.Mutex
+	events []core.FrameworkEvent
+}
 
 func (s *sinkRecorder) Emit(_ context.Context, event core.FrameworkEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.events = append(s.events, event)
 	return nil
+}
+
+func (s *sinkRecorder) Snapshot() []core.FrameworkEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]core.FrameworkEvent, len(s.events))
+	copy(out, s.events)
+	return out
 }
 
 func TestWebchatAdapterEmitsInboundMessage(t *testing.T) {
@@ -27,11 +41,12 @@ func TestWebchatAdapterEmitsInboundMessage(t *testing.T) {
 	sink := &sinkRecorder{}
 	require.NoError(t, adapter.Start(context.Background(), nil, sink))
 	require.NoError(t, adapter.emitInbound("webchat-1", "hello"))
-	require.Eventually(t, func() bool { return len(sink.events) == 1 }, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return len(sink.Snapshot()) == 1 }, time.Second, 10*time.Millisecond)
 
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal(sink.events[0].Payload, &payload))
-	require.Equal(t, core.FrameworkEventMessageInbound, sink.events[0].Type)
+	events := sink.Snapshot()
+	require.NoError(t, json.Unmarshal(events[0].Payload, &payload))
+	require.Equal(t, core.FrameworkEventMessageInbound, events[0].Type)
 	require.Equal(t, "webchat", payload["channel"])
 }
 
@@ -53,13 +68,12 @@ func TestWebchatAdapterLifecycleAndSend(t *testing.T) {
 	defer conn.Close()
 
 	require.Eventually(t, func() bool {
-		return len(adapter.conns) == 1
+		return adapter.connectionCount() == 1
 	}, time.Second, 10*time.Millisecond)
 
-	var id string
-	for k := range adapter.conns {
-		id = k
-	}
+	ids := adapter.connectionIDs()
+	require.Len(t, ids, 1)
+	id := ids[0]
 	require.NotEmpty(t, id)
 
 	require.NoError(t, adapter.Send(context.Background(), channel.OutboundMessage{
@@ -74,7 +88,7 @@ func TestWebchatAdapterLifecycleAndSend(t *testing.T) {
 
 	require.NoError(t, adapter.Stop(context.Background()))
 	require.False(t, adapter.Status().Connected)
-	require.Len(t, adapter.conns, 0)
+	require.Len(t, adapter.connectionIDs(), 0)
 }
 
 func TestWebchatAdapterHandlerAndReadLoop(t *testing.T) {
@@ -90,22 +104,23 @@ func TestWebchatAdapterHandlerAndReadLoop(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		return len(adapter.conns) == 1
+		return adapter.connectionCount() == 1
 	}, time.Second, 10*time.Millisecond)
 
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte("inbound hello")))
 	require.Eventually(t, func() bool {
-		return len(sink.events) == 1
+		return len(sink.Snapshot()) == 1
 	}, time.Second, 10*time.Millisecond)
 
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal(sink.events[0].Payload, &payload))
+	events := sink.Snapshot()
+	require.NoError(t, json.Unmarshal(events[0].Payload, &payload))
 	require.Equal(t, "webchat", payload["channel"])
 	require.Equal(t, "inbound hello", payload["content"].(map[string]any)["text"])
 
 	require.NoError(t, conn.Close())
 	require.Eventually(t, func() bool {
-		return len(adapter.conns) == 0
+		return adapter.connectionCount() == 0
 	}, time.Second, 10*time.Millisecond)
 }
 

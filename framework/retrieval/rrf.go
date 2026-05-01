@@ -19,6 +19,8 @@ func RRF(rankedLists [][]knowledge.ChunkID, weights []float64, k float64) []Rank
 	// Collect all unique chunks and their scores
 	chunkScores := make(map[knowledge.ChunkID]float64)
 	chunkSources := make(map[knowledge.ChunkID][]string)
+	chunkOrder := make(map[knowledge.ChunkID]int)
+	order := 0
 
 	for i, list := range rankedLists {
 		weight := 1.0
@@ -38,6 +40,10 @@ func RRF(rankedLists [][]knowledge.ChunkID, weights []float64, k float64) []Rank
 				source = "ranker"
 			}
 			chunkSources[chunkID] = append(chunkSources[chunkID], source)
+			if _, ok := chunkOrder[chunkID]; !ok {
+				chunkOrder[chunkID] = order
+				order++
+			}
 		}
 	}
 
@@ -53,6 +59,12 @@ func RRF(rankedLists [][]knowledge.ChunkID, weights []float64, k float64) []Rank
 
 	// Sort by score descending
 	sort.Slice(result, func(i, j int) bool {
+		if result[i].Score == result[j].Score {
+			if chunkOrder[result[i].ChunkID] == chunkOrder[result[j].ChunkID] {
+				return result[i].ChunkID < result[j].ChunkID
+			}
+			return chunkOrder[result[i].ChunkID] < chunkOrder[result[j].ChunkID]
+		}
 		return result[i].Score > result[j].Score
 	})
 

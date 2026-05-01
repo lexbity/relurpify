@@ -12,9 +12,12 @@ import (
 
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/compiler"
+	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -279,6 +282,20 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.PermissionManager = registration.Permissions
 	env.KnowledgeStore = knowledgeStore
 	env.KnowledgeEvents = bkcEvents
+
+	policyBundle, err := contextpolicy.Compile(registration.Manifest, nil, contextpolicy.DefaultContextPolicy())
+	if err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("compile context policy: %w", err)
+	}
+	rankerRegistry := retrieval.NewRankerRegistry()
+	rankerRegistry.Register(&retrieval.KeywordRanker{K1: 1.2, B: 0.75})
+	rankerRegistry.Register(&retrieval.RecencyRanker{HalfLifeHours: 24.0})
+	rankerRegistry.Register(&retrieval.ASTProximityRanker{Index: env.IndexManager})
+	rankerRegistry.Register(&retrieval.TrustRanker{})
+	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(policyBundle)
+	env.Retriever = retriever
+	env.Compiler = compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
 
 	// Attach ServiceManager to environment (for direct access)
 	env.ServiceManager = sm

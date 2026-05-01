@@ -53,5 +53,7 @@ func (a *ReActAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) e
 	a.Config = env.Config
 	a.IndexManager = env.IndexManager
 	a.SearchEngine = env.SearchEngine
+	a.OutputIngester = env.OutputIngester
+	a.IngestOutputs = env.IngestOutputs
 	return a.Initialize(env.Config)
 }

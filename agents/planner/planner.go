@@ -441,11 +441,15 @@ func formatPlannerWorkflowRetrieval(payload map[string]any) string {
 }
 
 func formatPlannerStreamedContext(env *contextdata.Envelope) string {
-	if env == nil || len(env.References.StreamedContext) == 0 {
+	if env == nil {
 		return ""
 	}
-	lines := make([]string, 0, len(env.References.StreamedContext))
-	for _, ref := range env.References.StreamedContext {
+	streamed := env.ReferencesSnapshot().StreamedContext
+	if len(streamed) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(streamed))
+	for _, ref := range streamed {
 		chunkID := strings.TrimSpace(string(ref.ChunkID))
 		if chunkID == "" {
 			continue

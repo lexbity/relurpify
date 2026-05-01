@@ -63,7 +63,19 @@ func toCompilationRequest(req Request) compiler.CompilationRequest {
 		EventLogSeq:           req.EventLogSeq,
 		MaxTokens:             req.MaxTokens,
 		BudgetShortfallPolicy: req.BudgetShortfallPolicy,
+		Metadata:              cloneRequestMetadata(req.Metadata),
 	}
+}
+
+func cloneRequestMetadata(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
 }
 
 func trimMetadataFromCompilation(req Request, compilation *compiler.CompilationResult) TrimMetadata {

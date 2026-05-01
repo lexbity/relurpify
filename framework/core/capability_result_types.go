@@ -175,6 +175,8 @@ func DefaultInsertionDecision(descriptor CapabilityDescriptor, disposition Conte
 	switch descriptor.TrustClass {
 	case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted:
 		return InsertionDecision{Action: InsertionActionDirect, Reason: "trusted capability output allowed for direct insertion"}
+	case TrustClassLLMGenerated, TrustClassToolResult:
+		return InsertionDecision{Action: InsertionActionSummarized, Reason: "generated capability output requires summarized insertion"}
 	case TrustClassRemoteApproved:
 		return InsertionDecision{Action: InsertionActionSummarized, Reason: "remote-approved capability output requires summarized insertion"}
 	case TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared:

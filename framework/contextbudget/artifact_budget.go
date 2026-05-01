@@ -1,4 +1,4 @@
-package contextmetric
+package contextbudget
 
 import (
 	"errors"
@@ -48,11 +48,11 @@ type BudgetListener interface {
 
 // UsageStats summarize budget consumption across all categories.
 type UsageStats struct {
-	TotalTokens       int
-	UsedTokens        int
-	AvailableTokens   int
-	Percentage        float64
-	Categories        map[string]*CategoryStats
+	TotalTokens     int
+	UsedTokens      int
+	AvailableTokens int
+	Percentage      float64
+	Categories      map[string]*CategoryStats
 }
 
 // CategoryStats describe how a specific category is performing.
