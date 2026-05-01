@@ -5,6 +5,67 @@ import (
 	"time"
 )
 
+// UsageObserver is implemented by framework components that want to observe
+// token usage after each LLM call. Stored in context by the framework layer;
+// retrieved by InstrumentedModel without importing framework packages.
+type UsageObserver interface {
+	RecordTokenUsage(usage TokenUsageReport)
+	// ConsumeResetNotice returns an opaque snapshot value (suitable for telemetry
+	// metadata) and true when a session reset is warranted. Returns nil, false otherwise.
+	ConsumeResetNotice() (any, bool)
+}
+
+// SnapshotObserver is implemented by framework components that want to record
+// periodic budget snapshots. Called after every LLM response.
+type SnapshotObserver interface {
+	Observe()
+}
+
+// ResponseIngester is implemented by framework components that want to index
+// LLM responses into the knowledge graph as durable chunks.
+type ResponseIngester interface {
+	IngestLLMResponse(ctx context.Context, resp *LLMResponse) error
+}
+
+type (
+	usageObserverKey    struct{}
+	snapshotObserverKey struct{}
+	responseIngesterKey struct{}
+)
+
+// WithUsageObserver attaches a UsageObserver to the context.
+func WithUsageObserver(ctx context.Context, obs UsageObserver) context.Context {
+	return context.WithValue(ctx, usageObserverKey{}, obs)
+}
+
+// UsageObserverFromContext extracts the UsageObserver from context, or nil.
+func UsageObserverFromContext(ctx context.Context) UsageObserver {
+	v, _ := ctx.Value(usageObserverKey{}).(UsageObserver)
+	return v
+}
+
+// WithSnapshotObserver attaches a SnapshotObserver to the context.
+func WithSnapshotObserver(ctx context.Context, obs SnapshotObserver) context.Context {
+	return context.WithValue(ctx, snapshotObserverKey{}, obs)
+}
+
+// SnapshotObserverFromContext extracts the SnapshotObserver from context, or nil.
+func SnapshotObserverFromContext(ctx context.Context) SnapshotObserver {
+	v, _ := ctx.Value(snapshotObserverKey{}).(SnapshotObserver)
+	return v
+}
+
+// WithResponseIngester attaches a ResponseIngester to the context.
+func WithResponseIngester(ctx context.Context, ing ResponseIngester) context.Context {
+	return context.WithValue(ctx, responseIngesterKey{}, ing)
+}
+
+// ResponseIngesterFromContext extracts the ResponseIngester from context, or nil.
+func ResponseIngesterFromContext(ctx context.Context) ResponseIngester {
+	v, _ := ctx.Value(responseIngesterKey{}).(ResponseIngester)
+	return v
+}
+
 // LLMOptions configures language model calls. Keeping the options struct inside
 // the contracts package avoids hard-coding provider-specific fields in agent code.
 type LLMOptions struct {
@@ -24,12 +85,21 @@ type ToolCall struct {
 	Args map[string]interface{} `json:"args"`
 }
 
+// TokenUsageReport normalizes token accounting across LLM backends.
+type TokenUsageReport struct {
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	TotalTokens      int    `json:"total_tokens"`
+	Estimated        bool   `json:"estimated,omitempty"`
+	EstimationMethod string `json:"estimation_method,omitempty"`
+}
+
 // LLMResponse is the result of a language model invocation.
 type LLMResponse struct {
-	Text         string         `json:"text,omitempty"`
-	FinishReason string         `json:"finish_reason,omitempty"`
-	Usage        map[string]int `json:"usage,omitempty"`
-	ToolCalls    []ToolCall     `json:"tool_calls,omitempty"`
+	Text         string           `json:"text,omitempty"`
+	FinishReason string           `json:"finish_reason,omitempty"`
+	Usage        TokenUsageReport `json:"usage"`
+	ToolCalls    []ToolCall       `json:"tool_calls,omitempty"`
 }
 
 // Message is used for chat-like interactions.
@@ -108,11 +178,13 @@ const (
 
 // BackendCapabilities describes the high-level features a backend exposes.
 type BackendCapabilities struct {
-	NativeToolCalling bool
-	Streaming         bool
-	Embeddings        bool
-	ModelListing      bool
-	BackendClass      BackendClass
+	NativeToolCalling    bool
+	Streaming            bool
+	Embeddings           bool
+	ModelListing         bool
+	BackendClass         BackendClass
+	UsageReporting       bool
+	ContextSizeDiscovery bool
 }
 
 // LLMToolSpecFromTool builds an LLMToolSpec from a local Tool implementation.
@@ -173,8 +245,10 @@ func LLMToolSpecFromDescriptor(d CapabilityDescriptor) LLMToolSpec {
 type EventType string
 
 const (
-	EventLLMPrompt   EventType = "llm_prompt"
-	EventLLMResponse EventType = "llm_response"
+	EventLLMPrompt            EventType = "llm_prompt"
+	EventLLMResponse          EventType = "llm_response"
+	EventBudgetSnapshot       EventType = "budget_snapshot"
+	EventSessionResetRequired EventType = "session_reset_required"
 )
 
 // Event captures structured telemetry data.

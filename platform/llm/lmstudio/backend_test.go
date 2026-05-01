@@ -182,6 +182,22 @@ func TestLMStudioBackend_Warm_Unreachable(t *testing.T) {
 	require.Error(t, backend.Warm(context.Background()))
 }
 
+func TestLMStudioBackend_Capabilities(t *testing.T) {
+	backend := NewBackend(Config{NativeToolCalling: true})
+	caps := backend.Capabilities()
+	require.True(t, caps.NativeToolCalling)
+	require.True(t, caps.UsageReporting)
+	require.False(t, caps.ContextSizeDiscovery)
+}
+
+func TestLMStudioBackend_ModelContextSize_ProfileOverride(t *testing.T) {
+	backend := NewBackend(Config{Endpoint: "http://localhost:1234", Model: "test-model"})
+	backend.SetProfile(&openaicompat.ModelProfile{ContextSize: 4096})
+	size, err := backend.ModelContextSize(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 4096, size)
+}
+
 func TestLMStudioBackend_Chat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/v1/chat/completions", r.URL.Path)

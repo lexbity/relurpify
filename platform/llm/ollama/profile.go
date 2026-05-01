@@ -3,9 +3,10 @@ package ollama
 // ModelProfile captures model-specific quirks and configuration for the
 // Ollama transport.
 type ModelProfile struct {
-	Provider string `yaml:"provider,omitempty"`
-	Model    string `yaml:"model,omitempty"`
-	Pattern  string `yaml:"pattern"`
+	Provider    string `yaml:"provider,omitempty"`
+	Model       string `yaml:"model,omitempty"`
+	Pattern     string `yaml:"pattern"`
+	ContextSize int    `yaml:"context_size,omitempty"`
 
 	ToolCalling struct {
 		NativeAPI               bool `yaml:"native_api"`

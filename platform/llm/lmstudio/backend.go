@@ -75,12 +75,24 @@ func (b *Backend) Capabilities() BackendCapabilities {
 		return BackendCapabilities{}
 	}
 	return BackendCapabilities{
-		NativeToolCalling: b.cfg.NativeToolCalling,
-		Streaming:         true,
-		Embeddings:        true,
-		ModelListing:      true,
-		BackendClass:      BackendClassTransport,
+		NativeToolCalling:    b.cfg.NativeToolCalling,
+		Streaming:            true,
+		Embeddings:           true,
+		ModelListing:         true,
+		BackendClass:         BackendClassTransport,
+		UsageReporting:       true,
+		ContextSizeDiscovery: false,
 	}
+}
+
+// ModelContextSize is not reliably exposed by LM Studio.
+func (b *Backend) ModelContextSize(ctx context.Context) (int, error) {
+	if b != nil && b.client != nil {
+		if size := b.client.ContextSize(); size > 0 {
+			return size, nil
+		}
+	}
+	return 0, nil
 }
 
 // Health checks backend reachability via /v1/models.
@@ -112,12 +124,17 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		return nil, err
 	}
 	out := make([]ModelInfo, 0, len(models))
+	contextSize := b.client.ContextSize()
 	for _, m := range models {
+		size := m.ContextSize
+		if size == 0 && contextSize > 0 {
+			size = contextSize
+		}
 		out = append(out, ModelInfo{
 			Name:          m.Name,
 			Family:        m.Family,
 			ParameterSize: m.ParameterSize,
-			ContextSize:   m.ContextSize,
+			ContextSize:   size,
 			Quantization:  m.Quantization,
 			HasGPU:        m.HasGPU,
 		})

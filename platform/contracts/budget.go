@@ -12,7 +12,7 @@ type BudgetItem interface {
 }
 
 // BudgetManager defines the interface for artifact budget management.
-// This is implemented by framework/contextmetric.ArtifactBudget.
+// This is implemented by framework/contextbudget.ArtifactBudget.
 type BudgetManager interface {
 	Allocate(category string, tokens int, item BudgetItem) error
 	Free(category string, tokens int, itemID string)

@@ -26,6 +26,10 @@ func (s *stubManagedBackend) Capabilities() core.BackendCapabilities {
 	return core.BackendCapabilities{}
 }
 
+func (s *stubManagedBackend) ModelContextSize(context.Context) (int, error) {
+	return 0, nil
+}
+
 func (s *stubManagedBackend) Health(context.Context) (*HealthReport, error) {
 	return &HealthReport{State: BackendHealthReady}, nil
 }

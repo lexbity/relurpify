@@ -171,6 +171,14 @@ func (c *Client) SetProfile(p *ModelProfile) {
 	c.profile = p
 }
 
+// ContextSize reports the profile override when present.
+func (c *Client) ContextSize() int {
+	if c == nil || c.profile == nil {
+		return 0
+	}
+	return c.profile.ContextSize
+}
+
 // SetNativeToolCalling updates the transport capability flag.
 func (c *Client) SetNativeToolCalling(enabled bool) {
 	c.nativeToolCalling = enabled
@@ -277,6 +285,7 @@ func (c *Client) ollamaAPIEndpoint() string {
 }
 
 func (c *Client) doRequest(ctx context.Context, apiPath string, payload interface{}) (*LLMResponse, error) {
+	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -305,11 +314,12 @@ func (c *Client) doRequest(ctx context.Context, apiPath string, payload interfac
 		return nil, err
 	}
 	c.logResponse(apiPath, responseBody)
-	return c.decodeLLMResponse(bytes.NewReader(responseBody))
+	return c.decodeLLMResponse(bytes.NewReader(responseBody), promptTokens)
 }
 
 func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]interface{}, callback func(string)) (*LLMResponse, error) {
 	payload["stream"] = true
+	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -365,7 +375,7 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	result := &LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: finalChunk.DoneReason,
-		Usage:        normalizeUsage(finalChunk),
+		Usage:        normalizeUsage(finalChunk, promptTokens, fullText.String()),
 	}
 	if finalChunk.Message != nil {
 		result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.Message.ToolCalls)...)
@@ -461,7 +471,7 @@ func schemaToOllamaParameters(schema *Schema) map[string]interface{} {
 	return parameters
 }
 
-func (c *Client) decodeLLMResponse(body io.Reader) (*LLMResponse, error) {
+func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*LLMResponse, error) {
 	var raw ollamaResponse
 	if err := json.NewDecoder(body).Decode(&raw); err != nil {
 		return nil, err
@@ -469,10 +479,11 @@ func (c *Client) decodeLLMResponse(body io.Reader) (*LLMResponse, error) {
 	resp := &LLMResponse{
 		Text:         firstNonEmpty(raw.Text, raw.Response),
 		FinishReason: raw.DoneReason,
-		Usage:        normalizeUsage(raw),
+		Usage:        normalizeUsage(raw, promptTokens, firstNonEmpty(raw.Text, raw.Response)),
 	}
 	if resp.Text == "" && raw.Message != nil {
 		resp.Text = raw.Message.Content
+		resp.Usage = normalizeUsage(raw, promptTokens, resp.Text)
 	}
 	resp.ToolCalls = append(resp.ToolCalls, c.parseToolCalls(raw.ToolCalls)...)
 	if raw.Message != nil {
@@ -532,21 +543,87 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func normalizeUsage(raw ollamaResponse) map[string]int {
-	if raw.Usage != nil {
-		return raw.Usage
+func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) contracts.TokenUsageReport {
+	report := contracts.TokenUsageReport{}
+	if len(raw.Usage) > 0 {
+		for k, v := range raw.Usage {
+			switch strings.ToLower(k) {
+			case "prompt_tokens", "prompt_eval_count":
+				report.PromptTokens = v
+			case "completion_tokens", "eval_count":
+				report.CompletionTokens = v
+			case "total_tokens":
+				report.TotalTokens = v
+			}
+		}
+		if report.TotalTokens == 0 {
+			report.TotalTokens = report.PromptTokens + report.CompletionTokens
+		}
+		if report.PromptTokens > 0 || report.CompletionTokens > 0 || report.TotalTokens > 0 {
+			return report
+		}
 	}
-	usage := make(map[string]int)
 	if raw.EvalCount > 0 {
-		usage["completion_tokens"] = raw.EvalCount
+		report.CompletionTokens = raw.EvalCount
 	}
 	if raw.PromptEvalCount > 0 {
-		usage["prompt_tokens"] = raw.PromptEvalCount
+		report.PromptTokens = raw.PromptEvalCount
 	}
-	if len(usage) == 0 {
-		return nil
+	if report.PromptTokens > 0 || report.CompletionTokens > 0 {
+		report.TotalTokens = report.PromptTokens + report.CompletionTokens
+		return report
 	}
-	return usage
+	return estimateUsage(promptTokens, responseText)
+}
+
+func estimatePromptTokensFromPayload(payload interface{}) int {
+	switch p := payload.(type) {
+	case map[string]interface{}:
+		if prompt, ok := p["prompt"].(string); ok && prompt != "" {
+			return contracts.EstimateTokens(prompt)
+		}
+		return estimatePromptTokensFromMessages(p["messages"])
+	default:
+		return 0
+	}
+}
+
+func estimatePromptTokensFromMessages(value any) int {
+	switch msgs := value.(type) {
+	case []map[string]interface{}:
+		total := 0
+		for _, msg := range msgs {
+			if content, ok := msg["content"].(string); ok {
+				total += contracts.EstimateTokens(content)
+			}
+		}
+		return total
+	case []any:
+		total := 0
+		for _, item := range msgs {
+			msg, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if content, ok := msg["content"].(string); ok {
+				total += contracts.EstimateTokens(content)
+			}
+		}
+		return total
+	default:
+		return 0
+	}
+}
+
+func estimateUsage(promptTokens int, responseText string) contracts.TokenUsageReport {
+	completionTokens := contracts.EstimateTokens(responseText)
+	return contracts.TokenUsageReport{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      promptTokens + completionTokens,
+		Estimated:        true,
+		EstimationMethod: "char_div_4",
+	}
 }
 
 func (c *Client) logPayload(path string, payload []byte) {

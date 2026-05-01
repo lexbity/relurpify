@@ -49,6 +49,13 @@ func (a lmStudioBackendAdapter) Capabilities() BackendCapabilities {
 	return a.inner.Capabilities()
 }
 
+func (a lmStudioBackendAdapter) ModelContextSize(ctx context.Context) (int, error) {
+	if a.inner == nil {
+		return 0, nil
+	}
+	return a.inner.ModelContextSize(ctx)
+}
+
 func (a lmStudioBackendAdapter) Health(ctx context.Context) (*HealthReport, error) {
 	if a.inner == nil {
 		return nil, nil

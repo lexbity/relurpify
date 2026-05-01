@@ -21,12 +21,21 @@ func (a managedBackendAdapter) Embedder() Embedder {
 func (a managedBackendAdapter) Capabilities() BackendCapabilities {
 	caps := a.inner.Capabilities()
 	return BackendCapabilities{
-		NativeToolCalling: caps.NativeToolCalling,
-		Streaming:         caps.Streaming,
-		Embeddings:        caps.Embeddings,
-		ModelListing:      caps.ModelListing,
-		BackendClass:      caps.BackendClass,
+		NativeToolCalling:    caps.NativeToolCalling,
+		Streaming:            caps.Streaming,
+		Embeddings:           caps.Embeddings,
+		ModelListing:         caps.ModelListing,
+		BackendClass:         caps.BackendClass,
+		UsageReporting:       caps.UsageReporting,
+		ContextSizeDiscovery: caps.ContextSizeDiscovery,
 	}
+}
+
+func (a managedBackendAdapter) ModelContextSize(ctx context.Context) (int, error) {
+	if a.inner == nil {
+		return 0, nil
+	}
+	return a.inner.ModelContextSize(ctx)
 }
 
 func (a managedBackendAdapter) Health(ctx context.Context) (*HealthReport, error) {

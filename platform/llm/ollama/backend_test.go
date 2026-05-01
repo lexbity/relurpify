@@ -155,12 +155,20 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 }
 
 func TestBackend_Warm_Reachable(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/tags", r.URL.Path)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"models": []map[string]any{{"name": "test-model"}},
 		})
-	}))
+	})
+	mux.HandleFunc("/api/show", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"model_info": map[string]any{
+				"llama.context_length": 4096,
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"})
@@ -193,7 +201,36 @@ func TestBackend_Capabilities(t *testing.T) {
 	require.True(t, caps.NativeToolCalling)
 	require.True(t, caps.Streaming)
 	require.True(t, caps.ModelListing)
+	require.True(t, caps.UsageReporting)
+	require.True(t, caps.ContextSizeDiscovery)
 	require.Equal(t, core.BackendClassTransport, caps.BackendClass)
+}
+
+func TestBackend_ModelContextSize_ProfileOverride(t *testing.T) {
+	backend := NewBackend(Config{Model: "test-model"})
+	backend.SetProfile(&ModelProfile{ContextSize: 8192})
+	size, err := backend.ModelContextSize(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 8192, size)
+}
+
+func TestClient_NormalizeUsageMapping(t *testing.T) {
+	client := NewClient("http://localhost:11434", "test-model")
+	resp, err := client.decodeLLMResponse(strings.NewReader(`{"response":"ok","prompt_eval_count":512,"eval_count":128}`), 0)
+	require.NoError(t, err)
+	require.Equal(t, 512, resp.Usage.PromptTokens)
+	require.Equal(t, 128, resp.Usage.CompletionTokens)
+	require.Equal(t, 640, resp.Usage.TotalTokens)
+	require.False(t, resp.Usage.Estimated)
+}
+
+func TestClient_NormalizeUsageEstimationFallback(t *testing.T) {
+	client := NewClient("http://localhost:11434", "test-model")
+	resp, err := client.decodeLLMResponse(strings.NewReader(`{"response":"hello"}`), 0)
+	require.NoError(t, err)
+	require.True(t, resp.Usage.Estimated)
+	require.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
+	require.Greater(t, resp.Usage.TotalTokens, 0)
 }
 
 func TestBackend_Chat_RoundTrip(t *testing.T) {

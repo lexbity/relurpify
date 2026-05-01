@@ -26,6 +26,7 @@ type ManagedBackend interface {
 	Model() LanguageModel
 	Embedder() Embedder
 	Capabilities() BackendCapabilities
+	ModelContextSize(ctx context.Context) (int, error)
 	Health(ctx context.Context) (*HealthReport, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	Warm(ctx context.Context) error

@@ -9,10 +9,11 @@ import (
 
 // Re-export contract types for local usage
 type (
-	LLMOptions  = contracts.LLMOptions
-	LLMResponse = contracts.LLMResponse
-	Message     = contracts.Message
-	LLMToolSpec = contracts.LLMToolSpec
+	LLMOptions       = contracts.LLMOptions
+	LLMResponse      = contracts.LLMResponse
+	TokenUsageReport = contracts.TokenUsageReport
+	Message          = contracts.Message
+	LLMToolSpec      = contracts.LLMToolSpec
 )
 
 // SessionAwareBackend is implemented by backends that can bind and evict

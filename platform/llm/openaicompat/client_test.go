@@ -35,7 +35,10 @@ func TestChat_Sync(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 	require.Equal(t, "stop", resp.FinishReason)
-	require.Equal(t, 3, resp.Usage["prompt_tokens"])
+	require.Equal(t, 3, resp.Usage.PromptTokens)
+	require.Equal(t, 2, resp.Usage.CompletionTokens)
+	require.Equal(t, 5, resp.Usage.TotalTokens)
+	require.False(t, resp.Usage.Estimated)
 }
 
 func TestChat_Streaming(t *testing.T) {
@@ -194,6 +197,24 @@ func TestBearerAuth_NoKey(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
 	_, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
+}
+
+func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"role": "assistant", "content": "hello"}, "finish_reason": "stop"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	resp, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
+	require.NoError(t, err)
+	require.True(t, resp.Usage.Estimated)
+	require.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
+	require.Greater(t, resp.Usage.TotalTokens, 0)
 }
 
 func TestListModels(t *testing.T) {

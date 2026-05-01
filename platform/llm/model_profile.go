@@ -9,9 +9,10 @@ import (
 
 // ModelProfile captures model-specific quirks and configuration.
 type ModelProfile struct {
-	Provider string `yaml:"provider,omitempty"`
-	Model    string `yaml:"model,omitempty"`
-	Pattern  string `yaml:"pattern,omitempty"`
+	Provider    string `yaml:"provider,omitempty"`
+	Model       string `yaml:"model,omitempty"`
+	Pattern     string `yaml:"pattern,omitempty"`
+	ContextSize int    `yaml:"context_size,omitempty"`
 
 	ToolCalling struct {
 		NativeAPI               bool `yaml:"native_api"`
@@ -87,9 +88,10 @@ func (p *ModelProfile) AsOllamaProfile() *ollamapkg.ModelProfile {
 		return nil
 	}
 	return &ollamapkg.ModelProfile{
-		Provider: p.Provider,
-		Model:    p.Model,
-		Pattern:  p.Pattern,
+		Provider:    p.Provider,
+		Model:       p.Model,
+		Pattern:     p.Pattern,
+		ContextSize: p.ContextSize,
 		ToolCalling: struct {
 			NativeAPI               bool `yaml:"native_api"`
 			DoubleEncodedArgs       bool `yaml:"double_encoded_args"`
@@ -125,9 +127,10 @@ func (p *ModelProfile) AsOpenAICompatProfile() *openaicompatpkg.ModelProfile {
 		return nil
 	}
 	return &openaicompatpkg.ModelProfile{
-		Provider: p.Provider,
-		Model:    p.Model,
-		Pattern:  p.Pattern,
+		Provider:    p.Provider,
+		Model:       p.Model,
+		Pattern:     p.Pattern,
+		ContextSize: p.ContextSize,
 		ToolCalling: struct {
 			NativeAPI               bool `yaml:"native_api"`
 			DoubleEncodedArgs       bool `yaml:"double_encoded_args"`

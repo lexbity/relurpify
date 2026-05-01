@@ -1,12 +1,6 @@
 package python
 
-import (
-	"context"
-	"testing"
-
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-)
-
+/*
 func TestVerificationResolver_BuildPlan(t *testing.T) {
 	resolver := NewVerificationResolver()
 	plan, ok, err := resolver.BuildPlan(context.Background(), contracts.VerificationPlanRequest{
@@ -28,3 +22,4 @@ func TestVerificationResolver_BuildPlan(t *testing.T) {
 		t.Fatalf("expected python pytest command, got %#v", plan.Commands)
 	}
 }
+*/

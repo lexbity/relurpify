@@ -97,6 +97,14 @@ func (c *Client) SetProfile(p *ModelProfile) {
 	c.profile = p
 }
 
+// ContextSize reports the profile override when present.
+func (c *Client) ContextSize() int {
+	if c == nil || c.profile == nil {
+		return 0
+	}
+	return c.profile.ContextSize
+}
+
 func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
@@ -157,6 +165,7 @@ func (c *Client) nativeToolCallingEnabled() bool {
 }
 
 func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMResponse, error) {
+	promptTokens := estimatePromptTokensFromPayload(payload)
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
 		return nil, err
@@ -173,10 +182,11 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMRespon
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
-	return decodeChatResponse(raw)
+	return decodeChatResponse(raw, promptTokens)
 }
 
 func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string)) (*LLMResponse, error) {
+	promptTokens := estimatePromptTokensFromPayload(payload)
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
 		return nil, err
@@ -237,7 +247,7 @@ func (c *Client) doChatStream(ctx context.Context, payload map[string]any, token
 	respOut := &LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: firstFinishReason(final),
-		Usage:        normalizeUsage(final.Usage),
+		Usage:        normalizeUsage(final.Usage, promptTokens, fullText.String()),
 	}
 	respOut.ToolCalls = append(respOut.ToolCalls, buildToolCalls(builders)...)
 	respOut.ToolCalls = append(respOut.ToolCalls, parseToolCalls(firstChoiceMessage(final))...)
@@ -434,10 +444,10 @@ func parseArgs(raw string) map[string]any {
 	return map[string]any{"_raw": raw}
 }
 
-func decodeChatResponse(raw chatCompletionResponse) (*LLMResponse, error) {
+func decodeChatResponse(raw chatCompletionResponse, promptTokens int) (*LLMResponse, error) {
 	resp := &LLMResponse{}
 	if len(raw.Choices) == 0 {
-		resp.Usage = normalizeUsage(raw.Usage)
+		resp.Usage = normalizeUsage(raw.Usage, promptTokens, resp.Text)
 		return resp, nil
 	}
 	choice := raw.Choices[0]
@@ -446,7 +456,7 @@ func decodeChatResponse(raw chatCompletionResponse) (*LLMResponse, error) {
 		resp.ToolCalls = append(resp.ToolCalls, parseToolCalls(choice.Message)...)
 	}
 	resp.FinishReason = choice.FinishReason
-	resp.Usage = normalizeUsage(raw.Usage)
+	resp.Usage = normalizeUsage(raw.Usage, promptTokens, resp.Text)
 	return resp, nil
 }
 
@@ -464,25 +474,100 @@ func firstFinishReason(chunk chatCompletionChunk) string {
 	return chunk.Choices[0].FinishReason
 }
 
-func normalizeUsage(usage map[string]any) map[string]int {
-	if len(usage) == 0 {
-		return nil
-	}
-	out := make(map[string]int, len(usage))
+func normalizeUsage(usage map[string]any, promptTokens int, responseText string) contracts.TokenUsageReport {
+	report := contracts.TokenUsageReport{}
 	for k, v := range usage {
-		switch value := v.(type) {
-		case float64:
-			out[k] = int(value)
-		case int:
-			out[k] = value
-		case int64:
-			out[k] = int(value)
+		switch strings.ToLower(k) {
+		case "prompt_tokens":
+			report.PromptTokens = asInt(v)
+		case "completion_tokens":
+			report.CompletionTokens = asInt(v)
+		case "total_tokens":
+			report.TotalTokens = asInt(v)
 		}
 	}
-	if len(out) == 0 {
-		return nil
+	if report.PromptTokens > 0 || report.CompletionTokens > 0 || report.TotalTokens > 0 {
+		if report.TotalTokens == 0 {
+			report.TotalTokens = report.PromptTokens + report.CompletionTokens
+		}
+		return report
 	}
-	return out
+	return estimateUsage(promptTokens, responseText)
+}
+
+func estimatePromptTokensFromPayload(payload map[string]any) int {
+	if payload == nil {
+		return 0
+	}
+	if prompt, ok := payload["prompt"].(string); ok && prompt != "" {
+		return contracts.EstimateTokens(prompt)
+	}
+	messages := payload["messages"]
+	switch msgs := messages.(type) {
+	case []map[string]any:
+		total := 0
+		for _, msg := range msgs {
+			if content, ok := msg["content"].(string); ok {
+				total += contracts.EstimateTokens(content)
+			}
+		}
+		return total
+	case []any:
+		total := 0
+		for _, item := range msgs {
+			msg, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if content, ok := msg["content"].(string); ok {
+				total += contracts.EstimateTokens(content)
+			}
+		}
+		return total
+	default:
+		return 0
+	}
+}
+
+func estimateUsage(promptTokens int, responseText string) contracts.TokenUsageReport {
+	completionTokens := contracts.EstimateTokens(responseText)
+	totalTokens := promptTokens + completionTokens
+	return contracts.TokenUsageReport{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+		Estimated:        true,
+		EstimationMethod: "char_div_4",
+	}
+}
+
+func asInt(v any) int {
+	switch value := v.(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		n, _ := value.Int64()
+		return int(n)
+	case string:
+		return parseIntString(value)
+	default:
+		return 0
+	}
+}
+
+func parseIntString(text string) int {
+	n := 0
+	for _, ch := range strings.TrimSpace(text) {
+		if ch < '0' || ch > '9' {
+			break
+		}
+		n = n*10 + int(ch-'0')
+	}
+	return n
 }
 
 func readHTTPError(resp *http.Response) error {

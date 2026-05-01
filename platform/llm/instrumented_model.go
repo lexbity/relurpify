@@ -192,7 +192,43 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 }
 
 func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *LLMResponse, err error) {
-	if m == nil || m.Telemetry == nil {
+	if m == nil {
+		return
+	}
+	if obs := contracts.UsageObserverFromContext(ctx); obs != nil && resp != nil {
+		obs.RecordTokenUsage(resp.Usage)
+		if snapshot, ok := obs.ConsumeResetNotice(); ok && m.Telemetry != nil {
+			taskID, taskMeta := taskInfo(ctx)
+			metadata := map[string]interface{}{
+				"budget_snapshot": snapshot,
+			}
+			for k, v := range taskMeta {
+				metadata[k] = v
+			}
+			m.Telemetry.Emit(contracts.Event{
+				Type:      contracts.EventSessionResetRequired,
+				TaskID:    taskID,
+				Timestamp: time.Now().UTC(),
+				Message:   "session reset required",
+				Metadata:  metadata,
+			})
+		}
+	}
+	if obs := contracts.SnapshotObserverFromContext(ctx); obs != nil {
+		obs.Observe()
+	}
+	if ing := contracts.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
+		go func() {
+			baseCtx := ctx
+			if baseCtx == nil {
+				baseCtx = context.Background()
+			}
+			timeoutCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+			defer cancel()
+			_ = ing.IngestLLMResponse(timeoutCtx, resp)
+		}()
+	}
+	if m.Telemetry == nil {
 		return
 	}
 	taskID, taskMeta := taskInfo(ctx)
