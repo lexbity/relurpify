@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const (
@@ -51,7 +53,7 @@ type BrowserService struct {
 
 	workspaceRoot   string
 	registration    *fauthorization.AgentRegistration
-	agentSpec       *core.AgentRuntimeSpec
+	agentSpec       *agentspec.AgentRuntimeSpec
 	commandPolicy   sandbox.CommandPolicy
 	defaultBackend  string
 	allowedBackends map[string]struct{}
@@ -170,7 +172,7 @@ func (s *BrowserService) backendAllowed(backend string) bool {
 	return ok
 }
 
-func shouldEnableBrowserService(spec *core.AgentRuntimeSpec) bool {
+func shouldEnableBrowserService(spec *agentspec.AgentRuntimeSpec) bool {
 	return spec != nil && spec.Browser != nil && spec.Browser.Enabled
 }
 
@@ -188,7 +190,7 @@ func (s *BrowserService) fileScopePolicy() *sandbox.FileScopePolicy {
 	return s.fileScope
 }
 
-func (s *BrowserService) checkFileScope(action core.FileSystemAction, target string) error {
+func (s *BrowserService) checkFileScope(action contracts.FileSystemAction, target string) error {
 	scope := s.fileScopePolicy()
 	if scope == nil {
 		return nil
@@ -212,7 +214,7 @@ func (s *BrowserService) ensureSessionPaths(sessionID string) (browserSessionPat
 	paths := s.paths.session(sessionID)
 	for label, path := range paths.roots() {
 		if label == "metadata_file" || label == "log_file" {
-			if err := s.checkFileScope(core.FileSystemWrite, filepath.Dir(path)); err != nil {
+			if err := s.checkFileScope(contracts.FileSystemWrite, filepath.Dir(path)); err != nil {
 				return browserSessionPaths{}, fmt.Errorf("browser %s out of scope: %w", label, err)
 			}
 			continue
@@ -234,7 +236,7 @@ func (s *BrowserService) persistSessionMetadata(handle *browserSessionHandle) {
 	if strings.TrimSpace(handle.paths.metadataFile) == "" {
 		return
 	}
-	if err := s.checkFileScope(core.FileSystemWrite, handle.paths.metadataFile); err != nil {
+	if err := s.checkFileScope(contracts.FileSystemWrite, handle.paths.metadataFile); err != nil {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(handle.paths.metadataFile), 0o755); err != nil {
@@ -263,19 +265,19 @@ func browserPermissionAction(action string) string {
 	return "browser:" + action
 }
 
-func (s *BrowserService) actionPolicy(action string) core.AgentPermissionLevel {
+func (s *BrowserService) actionPolicy(action string) agentspec.AgentPermissionLevel {
 	action = canonicalBrowserAction(action)
 	if s == nil || s.agentSpec == nil || s.agentSpec.Browser == nil {
 		if action == browserActionExecuteJS {
-			return core.AgentPermissionAsk
+			return agentspec.AgentPermissionAsk
 		}
-		return core.AgentPermissionAllow
+		return agentspec.AgentPermissionAllow
 	}
 	if level, ok := s.agentSpec.Browser.Actions[action]; ok && level != "" {
 		return level
 	}
 	if action == browserActionExecuteJS {
-		return core.AgentPermissionAsk
+		return agentspec.AgentPermissionAsk
 	}
-	return core.AgentPermissionAllow
+	return agentspec.AgentPermissionAllow
 }

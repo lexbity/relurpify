@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ChainerAgent executes a deterministic chain of isolated LLM links.
@@ -20,7 +21,7 @@ import (
 // the envelope, runs the LLM call, parses the response, and writes the result
 // to its OutputKey.
 type ChainerAgent struct {
-	Model           core.LanguageModel
+	Model           contracts.LanguageModel
 	Tools           *capability.Registry
 	Config          *core.Config
 	Chain           *Chain

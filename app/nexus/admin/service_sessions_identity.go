@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 func (s *service) ListSessions(ctx context.Context, req ListSessionsRequest) (ListSessionsResult, error) {
@@ -81,7 +82,7 @@ func (s *service) CloseSession(ctx context.Context, req CloseSessionRequest) (Cl
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventSessionClosed,
 			Payload:   payload,
-			Actor: core.EventActor{
+			Actor: identity.EventActor{
 				Kind:     "system",
 				ID:       req.SessionID,
 				TenantID: boundary.TenantID,
@@ -254,12 +255,12 @@ func (s *service) BindExternalIdentity(ctx context.Context, req BindExternalIden
 		return BindExternalIdentityResult{}, notFound("subject not found", map[string]any{"tenant_id": tenantID, "subject_kind": req.SubjectKind, "subject_id": subjectID})
 	}
 	now := time.Now().UTC()
-	identity := core.ExternalIdentity{
+	identity := identity.ExternalIdentity{
 		TenantID:      tenantID,
 		Provider:      req.Provider,
 		AccountID:     strings.TrimSpace(req.AccountID),
 		ExternalID:    externalID,
-		Subject:       core.SubjectRef{TenantID: tenantID, Kind: req.SubjectKind, ID: subjectID},
+		Subject:       identity.SubjectRef{TenantID: tenantID, Kind: req.SubjectKind, ID: subjectID},
 		VerifiedAt:    now,
 		LastSeenAt:    now,
 		DisplayName:   strings.TrimSpace(req.DisplayName),
@@ -365,13 +366,13 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 	}
 	subjectKind := req.SubjectKind
 	if subjectKind == "" {
-		subjectKind = core.SubjectKindServiceAccount
+		subjectKind = identity.SubjectKindServiceAccount
 	}
 	tokenID, token, err := newAdminToken()
 	if err != nil {
 		return IssueTokenResult{}, internalError("issue token failed", err, nil)
 	}
-	record := core.AdminTokenRecord{
+	record := identity.AdminTokenRecord{
 		ID:          tokenID,
 		Name:        subjectID,
 		TenantID:    tenantID,

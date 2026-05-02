@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"sort"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type NodeSelectionCriteria struct {
@@ -42,7 +44,7 @@ func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider 
 	if err := desc.Validate(); err != nil {
 		return err
 	}
-	registrar, err := r.ProviderCapabilityRegistrar(desc, core.ProviderPolicy{DefaultTrust: nodeDesc.TrustClass})
+	registrar, err := r.ProviderCapabilityRegistrar(desc, agentspec.ProviderPolicy{DefaultTrust: nodeDesc.TrustClass})
 	if err != nil {
 		return err
 	}
@@ -59,7 +61,7 @@ func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider 
 }
 
 // InvokeOnBestNode invokes a capability on the best available node.
-func (r *CapabilityRegistry) InvokeOnBestNode(ctx context.Context, capabilityName string, args map[string]any, criteria NodeSelectionCriteria, state *contextdata.Envelope) (*core.CapabilityExecutionResult, error) {
+func (r *CapabilityRegistry) InvokeOnBestNode(ctx context.Context, capabilityName string, args map[string]any, criteria NodeSelectionCriteria, state *contextdata.Envelope) (*contracts.CapabilityExecutionResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,7 +47,7 @@ type ManifestSpec struct {
 	Image       string                                    `yaml:"image" json:"image"`
 	Runtime     string                                    `yaml:"runtime" json:"runtime"`
 	Policy      *ManifestPolicySpec                       `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Permissions core.PermissionSet                        `yaml:"permissions" json:"permissions"`
+	Permissions contracts.PermissionSet                   `yaml:"permissions" json:"permissions"`
 	Resources   ResourceSpec                              `yaml:"resources" json:"resources"`
 	Security    SecuritySpec                              `yaml:"security" json:"security"`
 	Audit       AuditSpec                                 `yaml:"audit" json:"audit"`
@@ -63,7 +63,7 @@ type ManifestSpec struct {
 
 // ManifestPolicySpec groups policy-adjacent fields under spec.policy.
 type ManifestPolicySpec struct {
-	Permissions core.PermissionSet                        `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	Permissions contracts.PermissionSet                   `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 	Resources   ResourceSpec                              `yaml:"resources,omitempty" json:"resources,omitempty"`
 	Security    SecuritySpec                              `yaml:"security,omitempty" json:"security,omitempty"`
 	Audit       AuditSpec                                 `yaml:"audit,omitempty" json:"audit,omitempty"`
@@ -73,8 +73,8 @@ type ManifestPolicySpec struct {
 
 // ManifestDefaults defines global defaults applied before skills.
 type ManifestDefaults struct {
-	Permissions *core.PermissionSet `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-	Resources   *ResourceSpec       `yaml:"resources,omitempty" json:"resources,omitempty"`
+	Permissions *contracts.PermissionSet `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	Resources   *ResourceSpec            `yaml:"resources,omitempty" json:"resources,omitempty"`
 }
 
 // ResourceSpec declares resource limits.
@@ -371,7 +371,7 @@ func compatibilityWarnings(raw ManifestSpec) []string {
 	return warnings
 }
 
-func hasPermissionScopes(perms core.PermissionSet) bool {
+func hasPermissionScopes(perms contracts.PermissionSet) bool {
 	return len(perms.FileSystem) > 0 ||
 		len(perms.Executables) > 0 ||
 		len(perms.Network) > 0 ||

@@ -21,10 +21,6 @@ type BudgetManager interface {
 	CanAddTokens(tokens int) bool
 }
 
-// ArtifactBudget is an alias for BudgetManager for backward compatibility.
-// Use BudgetManager for new code.
-type ArtifactBudget = BudgetManager
-
 // EstimateTokens estimates the token count for a value.
 // This is a simplified version; the framework provides the actual implementation.
 func EstimateTokens(v interface{}) int {

@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // FilteredRegistry wraps a Registry and restricts visible capabilities to a
@@ -102,7 +102,7 @@ func (f *FilteredRegistry) AllowedIDs() []string {
 }
 
 // Get returns a tool by name if it is allowed.
-func (f *FilteredRegistry) Get(name string) (Tool, bool) {
+func (f *FilteredRegistry) Get(name string) (contracts.Tool, bool) {
 	if f == nil || f.base == nil {
 		return nil, false
 	}
@@ -123,7 +123,7 @@ func (f *FilteredRegistry) Get(name string) (Tool, bool) {
 }
 
 // ModelCallableTools returns only the allowed callable tools.
-func (f *FilteredRegistry) ModelCallableTools() []Tool {
+func (f *FilteredRegistry) ModelCallableTools() []contracts.Tool {
 	if f == nil || f.base == nil {
 		return nil
 	}
@@ -133,7 +133,7 @@ func (f *FilteredRegistry) ModelCallableTools() []Tool {
 		return allTools
 	}
 
-	filtered := make([]Tool, 0, len(allTools))
+	filtered := make([]contracts.Tool, 0, len(allTools))
 	for _, tool := range allTools {
 		if desc, ok := f.base.GetCapability(tool.Name()); ok {
 			if f.IsAllowed(desc.ID) {
@@ -146,7 +146,7 @@ func (f *FilteredRegistry) ModelCallableTools() []Tool {
 }
 
 // InvokeCapability executes an invocable capability by ID if it is allowed.
-func (f *FilteredRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, name string, args map[string]any) (*core.ToolResult, error) {
+func (f *FilteredRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, name string, args map[string]any) (*contracts.ToolResult, error) {
 	if f == nil || f.base == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}

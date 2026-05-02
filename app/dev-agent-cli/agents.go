@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -95,18 +96,18 @@ func newAgentsCreateCmd() *cobra.Command {
 					Image:   "ghcr.io/relurpify/runtime:latest",
 					Runtime: "gvisor",
 					Defaults: &frameworkmanifest.ManifestDefaults{
-						Permissions: &core.PermissionSet{
-							FileSystem: []core.FileSystemPermission{
-								{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
-								{Action: core.FileSystemList, Path: wsGlob, Justification: "List workspace"},
-								{Action: core.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
-								{Action: core.FileSystemExecute, Path: wsGlob, Justification: "Execute tooling inside workspace"},
+						Permissions: &contracts.PermissionSet{
+							FileSystem: []contracts.FileSystemPermission{
+								{Action: contracts.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
+								{Action: contracts.FileSystemList, Path: wsGlob, Justification: "List workspace"},
+								{Action: contracts.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
+								{Action: contracts.FileSystemExecute, Path: wsGlob, Justification: "Execute tooling inside workspace"},
 							},
-							Executables: []core.ExecutablePermission{
+							Executables: []contracts.ExecutablePermission{
 								{Binary: "bash", Args: []string{"-c", "*"}},
 								{Binary: "go", Args: []string{"*"}},
 							},
-							Network: []core.NetworkPermission{
+							Network: []contracts.NetworkPermission{
 								{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
 							},
 						},
@@ -127,12 +128,12 @@ func newAgentsCreateCmd() *cobra.Command {
 						Level:         "verbose",
 						RetentionDays: 7,
 					},
-					Agent: &core.AgentRuntimeSpec{
-						Mode:              core.AgentMode(kind),
+					Agent: &agentspec.AgentRuntimeSpec{
+						Mode:              agentspec.AgentMode(kind),
 						Version:           "1.0.0",
 						Prompt:            defaultManifestPrompt(name),
 						NativeToolCalling: &defaultToolCalling,
-						Model: core.AgentModelConfig{
+						Model: agentspec.AgentModelConfig{
 							Provider:    "ollama",
 							Name:        model,
 							Temperature: 0.2,
@@ -149,14 +150,14 @@ func newAgentsCreateCmd() *cobra.Command {
 							{Name: "search_semantic", Kind: core.CapabilityKindTool},
 							{Name: "query_ast", Kind: core.CapabilityKindTool},
 						},
-						Bash: core.AgentBashPermissions{
-							Default:       core.AgentPermissionAsk,
+						Bash: agentspec.AgentBashPermissions{
+							Default:       agentspec.AgentPermissionAsk,
 							AllowPatterns: []string{"git diff*", "git status"},
 							DenyPatterns:  []string{"rm -rf*", "sudo*"},
 						},
 						Files: agentspec.AgentFileMatrix{
-							Write: agentspec.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: core.AgentPermissionAsk},
-							Edit:  agentspec.AgentFilePermissionSet{Default: core.AgentPermissionAsk, RequireApproval: true},
+							Write: agentspec.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: agentspec.AgentPermissionAsk},
+							Edit:  agentspec.AgentFilePermissionSet{Default: agentspec.AgentPermissionAsk, RequireApproval: true},
 						},
 						Invocation: agentspec.AgentInvocationSpec{
 							CanInvokeSubagents: true,
@@ -190,7 +191,7 @@ func newAgentsCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Agent name")
-	cmd.Flags().StringVar(&kind, "kind", string(core.AgentModePrimary), "Agent kind (primary|subagent|system)")
+	cmd.Flags().StringVar(&kind, "kind", string(agentspec.AgentModePrimary), "Agent kind (primary|subagent|system)")
 	cmd.Flags().StringVar(&model, "model", "", "Model name")
 	cmd.Flags().StringVar(&description, "description", "Custom agent", "Description")
 	return cmd

@@ -6,18 +6,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ExecutionCapabilityCatalogEntry records the effective visibility of one
 // admitted capability for a single execution snapshot.
 type ExecutionCapabilityCatalogEntry struct {
-	Descriptor    CapabilityDescriptor
+	Descriptor    core.CapabilityDescriptor
 	Exposure      core.CapabilityExposure
 	Inspectable   bool
 	Callable      bool
 	ModelCallable bool
 	LocalTool     bool
-	localTool     Tool
+	localTool     contracts.Tool
 }
 
 // ExecutionCapabilityCatalogSnapshot freezes the effective capability catalog
@@ -40,10 +41,10 @@ type ExecutionCapabilityCatalogSnapshot struct {
 	AgentID    string
 
 	entries                []ExecutionCapabilityCatalogEntry
-	callableCapabilities   []CapabilityDescriptor
-	inspectableCaps        []CapabilityDescriptor
-	modelCallableTools     []Tool
-	modelCallableToolSpecs []core.LLMToolSpec
+	callableCapabilities   []core.CapabilityDescriptor
+	inspectableCaps        []core.CapabilityDescriptor
+	modelCallableTools     []contracts.Tool
+	modelCallableToolSpecs []contracts.LLMToolSpec
 	policySnapshot         *core.PolicySnapshot
 	allowedCapabilities    []core.CapabilitySelector
 }
@@ -73,10 +74,10 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 		CapturedAt:             now,
 		AgentID:                r.registeredAgentID,
 		entries:                make([]ExecutionCapabilityCatalogEntry, 0, len(r.entries)),
-		callableCapabilities:   make([]CapabilityDescriptor, 0, len(r.entries)),
-		inspectableCaps:        make([]CapabilityDescriptor, 0, len(r.entries)),
-		modelCallableTools:     make([]Tool, 0, len(r.entries)),
-		modelCallableToolSpecs: make([]core.LLMToolSpec, 0, len(r.entries)),
+		callableCapabilities:   make([]core.CapabilityDescriptor, 0, len(r.entries)),
+		inspectableCaps:        make([]core.CapabilityDescriptor, 0, len(r.entries)),
+		modelCallableTools:     make([]contracts.Tool, 0, len(r.entries)),
+		modelCallableToolSpecs: make([]contracts.LLMToolSpec, 0, len(r.entries)),
 		policySnapshot:         r.capturePolicySnapshotLocked(now),
 		allowedCapabilities:    core.CloneCapabilitySelectors(r.allowedCapabilities),
 	}
@@ -111,7 +112,7 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 			switch {
 			case entry.legacyTool != nil:
 				snapshot.modelCallableTools = append(snapshot.modelCallableTools, entry.legacyTool)
-				snapshot.modelCallableToolSpecs = append(snapshot.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
+				snapshot.modelCallableToolSpecs = append(snapshot.modelCallableToolSpecs, contracts.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
 			case isInvocableCapabilityEntry(entry):
 				snapshot.modelCallableToolSpecs = append(snapshot.modelCallableToolSpecs, core.LLMToolSpecFromDescriptor(entry.descriptor))
 			}
@@ -138,39 +139,39 @@ func (s *ExecutionCapabilityCatalogSnapshot) Entries() []ExecutionCapabilityCata
 }
 
 // CallableCapabilities returns the callable capability descriptors for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) CallableCapabilities() []CapabilityDescriptor {
+func (s *ExecutionCapabilityCatalogSnapshot) CallableCapabilities() []core.CapabilityDescriptor {
 	if s == nil {
 		return nil
 	}
-	return append([]CapabilityDescriptor(nil), s.callableCapabilities...)
+	return append([]core.CapabilityDescriptor(nil), s.callableCapabilities...)
 }
 
 // InspectableCapabilities returns the non-hidden capability descriptors for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) InspectableCapabilities() []CapabilityDescriptor {
+func (s *ExecutionCapabilityCatalogSnapshot) InspectableCapabilities() []core.CapabilityDescriptor {
 	if s == nil {
 		return nil
 	}
-	return append([]CapabilityDescriptor(nil), s.inspectableCaps...)
+	return append([]core.CapabilityDescriptor(nil), s.inspectableCaps...)
 }
 
 // ModelCallableLLMToolSpecs returns the precompiled LLM tool specs for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []core.LLMToolSpec {
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec {
 	if s == nil {
 		return nil
 	}
-	return append([]core.LLMToolSpec(nil), s.modelCallableToolSpecs...)
+	return append([]contracts.LLMToolSpec(nil), s.modelCallableToolSpecs...)
 }
 
 // ModelCallableTools returns the callable local tools for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableTools() []Tool {
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableTools() []contracts.Tool {
 	if s == nil {
 		return nil
 	}
-	return append([]Tool(nil), s.modelCallableTools...)
+	return append([]contracts.Tool(nil), s.modelCallableTools...)
 }
 
 // GetModelTool resolves a callable local tool from the execution snapshot.
-func (s *ExecutionCapabilityCatalogSnapshot) GetModelTool(name string) (Tool, bool) {
+func (s *ExecutionCapabilityCatalogSnapshot) GetModelTool(name string) (contracts.Tool, bool) {
 	if s == nil {
 		return nil, false
 	}
@@ -259,7 +260,7 @@ func (s *ExecutionCapabilityCatalogSnapshot) filteredByAllowlist(allowed map[str
 		if e.ModelCallable {
 			if e.LocalTool && e.localTool != nil {
 				out.modelCallableTools = append(out.modelCallableTools, e.localTool)
-				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(e.localTool)))
+				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, contracts.LLMToolSpecFromTool(unwrapTool(e.localTool)))
 			} else {
 				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromDescriptor(e.Descriptor))
 			}
@@ -284,7 +285,7 @@ func (s *ExecutionCapabilityCatalogSnapshot) filteredByAllowlist(allowed map[str
 		if desc, ok := reg.GetCapability(t.Name()); ok {
 			if isAllowed(desc.ID) {
 				out.modelCallableTools = append(out.modelCallableTools, t)
-				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(t)))
+				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, contracts.LLMToolSpecFromTool(unwrapTool(t)))
 			}
 		}
 	}

@@ -9,13 +9,14 @@ import (
 	"sync"
 	"testing"
 
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestGraphToolExecutionIntegration(t *testing.T) {
@@ -27,7 +28,7 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 		t.Fatalf("write note: %v", err)
 	}
 
-	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead, core.FileSystemList)
+	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead, contracts.FileSystemList)
 	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
 	if err != nil {
 		t.Fatalf("permission manager: %v", err)
@@ -225,18 +226,18 @@ type integrationFileTool struct {
 func (t *integrationFileTool) Name() string        { return t.name }
 func (t *integrationFileTool) Description() string { return "reads a workspace note" }
 func (t *integrationFileTool) Category() string    { return "filesystem" }
-func (t *integrationFileTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *integrationFileTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "path", Type: "string", Description: "file to read"},
 	}
 }
 
-func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"status":  "ok",
@@ -247,9 +248,9 @@ func (t *integrationFileTool) Execute(ctx context.Context, args map[string]inter
 
 func (t *integrationFileTool) IsAvailable(context.Context) bool { return true }
 
-func (t *integrationFileTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{
-		Permissions: core.NewFileSystemPermissionSet(t.base, core.FileSystemRead),
+func (t *integrationFileTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{
+		Permissions: core.NewFileSystemPermissionSet(t.base, contracts.FileSystemRead),
 	}
 }
 func (t *integrationFileTool) Tags() []string { return nil }
@@ -266,25 +267,25 @@ type scriptedLLM struct {
 	text string
 }
 
-func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: s.text}, nil
+func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: s.text}, nil
 }
 
-func (s *scriptedLLM) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+func (s *scriptedLLM) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
 	return nil, fmt.Errorf("streaming not supported")
 }
 
-func (s *scriptedLLM) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
+func (s *scriptedLLM) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	return nil, fmt.Errorf("chat not supported")
 }
 
-func (s *scriptedLLM) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
+func (s *scriptedLLM) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	return nil, fmt.Errorf("chat tools not supported")
 }
 
 type llmPlanNode struct {
 	name   string
-	model  core.LanguageModel
+	model  contracts.LanguageModel
 	prompt string
 }
 
@@ -312,7 +313,7 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) 
 
 type toolExecNode struct {
 	name string
-	tool core.Tool
+	tool contracts.Tool
 	args map[string]interface{}
 }
 
@@ -353,7 +354,12 @@ func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope)
 		NodeID:  n.name,
 		Success: success,
 		Data:    data,
-		Error:   func() string { if execErr != nil { return execErr.Error() }; return "" }(),
+		Error: func() string {
+			if execErr != nil {
+				return execErr.Error()
+			}
+			return ""
+		}(),
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // MergeNode merges results from parallel execution paths.
@@ -30,10 +31,10 @@ func (n *MergeNode) Type() agentgraph.NodeType {
 }
 
 // Execute merges results from parallel branches.
-func (n *MergeNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *MergeNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	env.SetWorkingValue("euclo.execution.merged", true, contextdata.MemoryClassTask)
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{

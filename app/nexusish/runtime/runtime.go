@@ -11,8 +11,9 @@ import (
 
 	nexusadminapi "codeburg.org/lexbit/relurpify/app/nexus/adminapi"
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	mcpclient "codeburg.org/lexbit/relurpify/relurpnet/mcp/client"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
@@ -79,7 +80,7 @@ func (r *Runtime) IssueToken(ctx context.Context, req IssueTokenRequest) (string
 	}
 	subjectKind := strings.TrimSpace(req.SubjectKind)
 	if subjectKind == "" {
-		subjectKind = string(core.SubjectKindServiceAccount)
+		subjectKind = string(identity.SubjectKindServiceAccount)
 	}
 	createSubjectResult, err := client.CallTool(ctx, protocol.CallToolParams{
 		Name: "nexus.identity.create_subject",
@@ -413,7 +414,7 @@ func toSessionInfos(in []core.SessionBoundary) []SessionInfo {
 	return out
 }
 
-func toExternalIdentityInfos(in []core.ExternalIdentity) []ExternalIdentityInfo {
+func toExternalIdentityInfos(in []identity.ExternalIdentity) []ExternalIdentityInfo {
 	out := make([]ExternalIdentityInfo, 0, len(in))
 	for _, identity := range in {
 		out = append(out, ExternalIdentityInfo{

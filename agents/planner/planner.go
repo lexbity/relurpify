@@ -12,6 +12,7 @@ import (
 
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -19,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // TaskPayload retrieves workflow retrieval payload from task context.
@@ -47,7 +49,7 @@ func TaskPayload(task *core.Task, key string) []byte {
 // tackle unfamiliar tasks and serves as reference implementation for creating
 // new multi-step agents.
 type PlannerAgent struct {
-	Model           core.LanguageModel
+	Model           contracts.LanguageModel
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
 	Config          *core.Config
@@ -365,7 +367,7 @@ func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope
 Return valid JSON Plan struct with fields goal, steps (array of {id, description, tool, params, expected, verification, files}), dependencies (map of step id -> [step id]), files.
 Use string step ids (UUID-safe).
 `, extraPrompt, n.task.Instruction)
-	resp, err := n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
+	resp, err := n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
 		MaxTokens:   800,
@@ -735,7 +737,7 @@ func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan pl.Plan) (p
 		adjustments = append(adjustments, fmt.Sprintf("assigned ids to %d plan steps", added))
 	}
 	repairPlannerSteps(agent.Tools, &plan, &adjustments)
-	var fallback *core.AgentRuntimeSpec
+	var fallback *agentspec.AgentRuntimeSpec
 	if agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
@@ -922,7 +924,7 @@ func plannerStepDescription(kind, toolName string) string {
 	}
 }
 
-func plannerToolArgs(tool core.Tool, task *core.Task, plan pl.Plan) (map[string]interface{}, bool) {
+func plannerToolArgs(tool contracts.Tool, task *core.Task, plan pl.Plan) (map[string]interface{}, bool) {
 	args := map[string]interface{}{}
 	required := map[string]bool{}
 	for _, param := range tool.Parameters() {

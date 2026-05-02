@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
@@ -59,7 +60,7 @@ func (n *RecipeExecutorNode) ID() string { return n.id }
 func (n *RecipeExecutorNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute resolves the route's recipe and executes it as a subgraph.
-func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	if env == nil {
 		return nil, fmt.Errorf("recipe executor missing envelope")
@@ -75,7 +76,7 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 
 	recipe, ok := n.registry.Get(recipeID)
 	if !ok || recipe == nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Data: map[string]any{
@@ -87,7 +88,7 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 	resolver := recipepkg.NewAliasResolver(recipe)
 	plan, err := recipepkg.Compile(recipe, resolver)
 	if err != nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Data: map[string]any{
@@ -98,7 +99,7 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 
 	graph, err := recipepkg.BuildRecipeGraph(plan, n.env, n.ingestionPipeline)
 	if err != nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Data: map[string]any{
@@ -114,7 +115,7 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 		env.SetWorkingValue("euclo.execution.completed", err == nil && subResult != nil && subResult.Success, contextdata.MemoryClassTask)
 	}
 	if subResult == nil {
-		subResult = &agentgraph.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
+		subResult = &core.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
 	}
 	subResult.NodeID = n.id
 	return subResult, err

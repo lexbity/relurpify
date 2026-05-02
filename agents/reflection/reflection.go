@@ -9,14 +9,16 @@ import (
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
 type ReflectionAgent struct {
-	Reviewer      core.LanguageModel
+	Reviewer      contracts.LanguageModel
 	Delegate      graph.WorkflowExecutor
 	Config        *core.Config
 	maxIterations int
@@ -145,7 +147,7 @@ func (n *reflectionReviewNode) Execute(ctx context.Context, env *contextdata.Env
 %s
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
 Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), compactResultForReview(lastResult))
-	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &core.LLMOptions{
+	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &contracts.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
 		MaxTokens:   600,
@@ -263,7 +265,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 }
 
 func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
-	var fallback *core.AgentRuntimeSpec
+	var fallback *agentspec.AgentRuntimeSpec
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
@@ -282,7 +284,7 @@ func reflectionApprovalPasses(agent *ReflectionAgent, env *contextdata.Envelope,
 }
 
 func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
-	var fallback *core.AgentRuntimeSpec
+	var fallback *agentspec.AgentRuntimeSpec
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}

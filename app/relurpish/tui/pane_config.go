@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -28,7 +28,7 @@ type ConfigPane struct {
 	sel     int
 
 	// Loaded state
-	classPolicies map[string]core.AgentPermissionLevel
+	classPolicies map[string]agentspec.AgentPermissionLevel
 	capabilities  []CapabilityInfo
 	capability    *CapabilityDetail
 	prompts       []PromptInfo
@@ -100,9 +100,9 @@ func (p *ConfigPane) Update(msg tea.Msg) (*ConfigPane, tea.Cmd) {
 		case "r":
 			return p, func() tea.Msg { return configRefreshMsg{} }
 		case "a":
-			return p, p.togglePolicy(core.AgentPermissionAllow)
+			return p, p.togglePolicy(agentspec.AgentPermissionAllow)
 		case "d":
-			return p, p.togglePolicy(core.AgentPermissionDeny)
+			return p, p.togglePolicy(agentspec.AgentPermissionDeny)
 		case "c":
 			return p, p.togglePolicy("")
 		}
@@ -125,7 +125,7 @@ func (p *ConfigPane) maxSel() int {
 	}
 }
 
-func (p *ConfigPane) togglePolicy(level core.AgentPermissionLevel) tea.Cmd {
+func (p *ConfigPane) togglePolicy(level agentspec.AgentPermissionLevel) tea.Cmd {
 	if p.runtime == nil {
 		return nil
 	}
@@ -169,7 +169,7 @@ func (p *ConfigPane) togglePolicy(level core.AgentPermissionLevel) tea.Cmd {
 
 type classPolicyRow struct {
 	class  string
-	policy core.AgentPermissionLevel
+	policy agentspec.AgentPermissionLevel
 }
 
 func (p *ConfigPane) classPolicyRows() []classPolicyRow {
@@ -274,9 +274,9 @@ func (p *ConfigPane) viewPolicies() string {
 			levelStyle := dimStyle
 			levelLabel := string(row.policy)
 			switch row.policy {
-			case core.AgentPermissionAllow:
+			case agentspec.AgentPermissionAllow:
 				levelStyle = completedStyle
-			case core.AgentPermissionDeny:
+			case agentspec.AgentPermissionDeny:
 				levelStyle = diffRemoveStyle
 			default:
 				levelLabel = "inherit"
@@ -391,9 +391,9 @@ func (p *ConfigPane) viewTools() string {
 			levelStyle := dimStyle
 			levelLabel := string(tool.Policy)
 			switch tool.Policy {
-			case core.AgentPermissionAllow:
+			case agentspec.AgentPermissionAllow:
 				levelStyle = completedStyle
-			case core.AgentPermissionDeny:
+			case agentspec.AgentPermissionDeny:
 				levelStyle = diffRemoveStyle
 			default:
 				levelLabel = "default"

@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // Controller drives the blackboard control loop. Each cycle it evaluates all
@@ -24,7 +24,7 @@ const defaultMaxCycles = 20
 // Run executes the blackboard loop until a terminal condition is met.
 // It returns the final blackboard state and an error if the loop gets stuck.
 // The semctx parameter provides pre-resolved semantic context to KS implementations.
-func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel, semctx agentspec.AgentSemanticContext) error {
+func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.Registry, model contracts.LanguageModel, semctx agentspec.AgentSemanticContext) error {
 	maxCycles := c.MaxCycles
 	if maxCycles <= 0 {
 		maxCycles = defaultMaxCycles

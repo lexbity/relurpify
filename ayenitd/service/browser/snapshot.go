@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // BrowserServiceSnapshot captures the workspace-level browser service state.
@@ -250,8 +251,8 @@ func browserTransportForBackend(backend string) string {
 	}
 }
 
-func success(data map[string]interface{}) *core.ToolResult {
-	return &core.ToolResult{Success: true, Data: data}
+func success(data map[string]interface{}) *contracts.ToolResult {
+	return &contracts.ToolResult{Success: true, Data: data}
 }
 
 func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, agentID, taskID, message string, metadata map[string]interface{}) {

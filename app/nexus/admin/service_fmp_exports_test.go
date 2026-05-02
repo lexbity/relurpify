@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,11 +23,11 @@ func TestSetAndListTenantFMPExports(t *testing.T) {
 	svc := NewService(ServiceConfig{FMPExports: exportStore}).(*service)
 	_, err = svc.SetTenantFMPExport(context.Background(), SetTenantFMPExportRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -37,11 +38,11 @@ func TestSetAndListTenantFMPExports(t *testing.T) {
 
 	result, err := svc.ListTenantFMPExports(context.Background(), ListTenantFMPExportsRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -68,7 +69,7 @@ func TestTenantExportStoreFeedsFMPRouteAndAcceptPolicy(t *testing.T) {
 		TenantID:     "tenant-1",
 		TaskClass:    "agent.run",
 		ContextClass: "workflow-runtime",
-		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		Owner:        identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "svc-1"},
 	}
 	require.NoError(t, ownership.CreateLineage(context.Background(), lineage))
 	require.NoError(t, ownership.UpsertAttempt(context.Background(), fwfmp.AttemptRecord{

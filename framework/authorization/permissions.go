@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -41,7 +42,7 @@ type hitlRateBucket struct {
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
 	basePath         string
-	declared         *core.PermissionSet
+	declared         *contracts.PermissionSet
 	audit            core.AuditLogger
 	hitl             HITLProvider
 	runtime          sandbox.SandboxRuntime
@@ -49,13 +50,13 @@ type PermissionManager struct {
 	mu               sync.RWMutex
 	grantClock       func() time.Time
 	netPolicy        []sandbox.NetworkRule
-	defaultPolicy    core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
-	eventLogger      func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
+	defaultPolicy    agentspec.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
+	eventLogger      func(context.Context, contracts.PermissionDescriptor, string, string, map[string]interface{})
 	runtimePolicyErr error
 	taskGrants       map[string]taskGrant
 	hitlRateLimits   map[string]*hitlRateBucket
-	fsPermCache      map[string]*core.FileSystemPermission
-	execPermCache    map[string]*core.ExecutablePermission
+	fsPermCache      map[string]*contracts.FileSystemPermission
+	execPermCache    map[string]*contracts.ExecutablePermission
 }
 
 type taskGrant struct {
@@ -64,7 +65,7 @@ type taskGrant struct {
 }
 
 // NewPermissionManager creates an enforcement instance.
-func NewPermissionManager(basePath string, declared *core.PermissionSet, audit core.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
+func NewPermissionManager(basePath string, declared *contracts.PermissionSet, audit core.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
 	if declared == nil {
 		return nil, errors.New("permission manager requires permission set")
 	}
@@ -79,8 +80,8 @@ func NewPermissionManager(basePath string, declared *core.PermissionSet, audit c
 		grants:         make(map[string]*PermissionGrant),
 		taskGrants:     make(map[string]taskGrant),
 		hitlRateLimits: make(map[string]*hitlRateBucket),
-		fsPermCache:    make(map[string]*core.FileSystemPermission),
-		execPermCache:  make(map[string]*core.ExecutablePermission),
+		fsPermCache:    make(map[string]*contracts.FileSystemPermission),
+		execPermCache:  make(map[string]*contracts.ExecutablePermission),
 		grantClock:     time.Now,
 	}
 	pm.inflateScopes()
@@ -96,31 +97,31 @@ func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
 }
 
 // SetDefaultPolicy configures how undeclared permissions are handled.
-// core.AgentPermissionAsk (default) routes to HITL; Allow bypasses; Deny hard-blocks.
-func (m *PermissionManager) SetDefaultPolicy(level core.AgentPermissionLevel) {
+// agentspec.AgentPermissionAsk (default) routes to HITL; Allow bypasses; Deny hard-blocks.
+func (m *PermissionManager) SetDefaultPolicy(level agentspec.AgentPermissionLevel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.defaultPolicy = level
 }
 
 // SetEventLogger configures a callback for structured policy decision events.
-func (m *PermissionManager) SetEventLogger(logger func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})) {
+func (m *PermissionManager) SetEventLogger(logger func(context.Context, contracts.PermissionDescriptor, string, string, map[string]interface{})) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.eventLogger = logger
 }
 
 // DefaultPolicy returns the configured default policy level, falling back to Ask.
-func (m *PermissionManager) DefaultPolicy() core.AgentPermissionLevel {
+func (m *PermissionManager) DefaultPolicy() agentspec.AgentPermissionLevel {
 	return m.effectiveDefaultPolicy()
 }
 
 // effectiveDefaultPolicy returns the configured policy, falling back to Ask.
-func (m *PermissionManager) effectiveDefaultPolicy() core.AgentPermissionLevel {
+func (m *PermissionManager) effectiveDefaultPolicy() agentspec.AgentPermissionLevel {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.defaultPolicy == "" {
-		return core.AgentPermissionAsk
+		return agentspec.AgentPermissionAsk
 	}
 	return m.defaultPolicy
 }
@@ -163,13 +164,13 @@ func expandWorkspacePlaceholder(workspace, pattern string) string {
 // AuthorizeTool ensures the tool requirements fit the declared permissions.
 // Undeclared permissions are handled according to the configured defaultPolicy:
 // Ask (default) routes to HITL, Allow proceeds, Deny returns an error.
-func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool core.Tool, args map[string]interface{}) error {
+func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool contracts.Tool, args map[string]interface{}) error {
 	if m == nil || tool == nil {
 		return errors.New("permission manager or tool missing")
 	}
 	if m.toolAllowedByTaskGrant(ctx, tool) {
-		desc := core.PermissionDescriptor{
-			Type:     core.PermissionTypeHITL,
+		desc := contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeHITL,
 			Action:   fmt.Sprintf("tool:%s", tool.Name()),
 			Resource: agentID,
 		}
@@ -184,29 +185,29 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 	undeclared := m.collectUndeclared(requirements.Permissions)
 	if len(undeclared) > 0 {
 		switch m.effectiveDefaultPolicy() {
-		case core.AgentPermissionDeny:
-			m.emitPolicyDecision(ctx, core.PermissionDescriptor{
-				Type:     core.PermissionTypeHITL,
+		case agentspec.AgentPermissionDeny:
+			m.emitPolicyDecision(ctx, contracts.PermissionDescriptor{
+				Type:     contracts.PermissionTypeHITL,
 				Action:   fmt.Sprintf("tool:%s", tool.Name()),
 				Resource: agentID,
 			}, "deny", "tool exceeds declared permissions", map[string]interface{}{"undeclared": undeclared})
 			return fmt.Errorf("tool %s exceeds agent permissions: %s", tool.Name(), strings.Join(undeclared, "; "))
-		case core.AgentPermissionAllow:
-			m.emitPolicyDecision(ctx, core.PermissionDescriptor{
-				Type:     core.PermissionTypeHITL,
+		case agentspec.AgentPermissionAllow:
+			m.emitPolicyDecision(ctx, contracts.PermissionDescriptor{
+				Type:     contracts.PermissionTypeHITL,
 				Action:   fmt.Sprintf("tool:%s", tool.Name()),
 				Resource: agentID,
 			}, "allow", "undeclared permissions allowed by default policy", map[string]interface{}{"undeclared": undeclared})
 			// undeclared permissions are explicitly allowed — proceed
-		default: // core.AgentPermissionAsk
-			m.emitPolicyDecision(ctx, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
+		default: // agentspec.AgentPermissionAsk
+			m.emitPolicyDecision(ctx, contracts.PermissionDescriptor{
+				Type:         contracts.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", tool.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
 			}, "require_approval", "undeclared permissions require approval", map[string]interface{}{"undeclared": undeclared})
-			if err := m.RequireApproval(ctx, agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
+			if err := m.RequireApproval(ctx, agentID, contracts.PermissionDescriptor{
+				Type:         contracts.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", tool.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
@@ -216,8 +217,8 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 			}
 		}
 	}
-	desc := core.PermissionDescriptor{
-		Type:     core.PermissionTypeHITL,
+	desc := contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeHITL,
 		Action:   fmt.Sprintf("tool:%s", tool.Name()),
 		Resource: agentID,
 	}
@@ -264,7 +265,7 @@ func (m *PermissionManager) RevokeTaskGrant(runID string) {
 }
 
 // GrantPermission records a manual approval for a specific permission key.
-func (m *PermissionManager) GrantPermission(desc core.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
+func (m *PermissionManager) GrantPermission(desc contracts.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
 	if m == nil {
 		return
 	}
@@ -274,7 +275,7 @@ func (m *PermissionManager) GrantPermission(desc core.PermissionDescriptor, appr
 	m.grants[desc.Action+":"+desc.Resource] = grant
 }
 
-func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool core.Tool) bool {
+func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool contracts.Tool) bool {
 	if m == nil || tool == nil {
 		return false
 	}
@@ -306,7 +307,7 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool cor
 }
 
 // CheckFileAccess validates filesystem access.
-func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string, action core.FileSystemAction, path string) error {
+func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string, action contracts.FileSystemAction, path string) error {
 	if m == nil {
 		return errors.New("permission manager missing")
 	}
@@ -316,25 +317,25 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 	}
 	perm := m.findFilesystemPermission(action, clean)
 	if perm == nil {
-		desc := core.PermissionDescriptor{
-			Type:     core.PermissionTypeFilesystem,
+		desc := contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeFilesystem,
 			Action:   string(action),
 			Resource: clean,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case core.AgentPermissionAllow:
+		case agentspec.AgentPermissionAllow:
 			m.log(ctx, agentID, desc, "granted (default allow)", nil)
 			return nil
-		case core.AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "not declared")
-		default: // core.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeFilesystem,
+		if err := m.ensureGrant(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeFilesystem,
 			Action:       string(action),
 			Resource:     perm.Path,
 			RequiresHITL: true,
@@ -342,8 +343,8 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			return err
 		}
 	}
-	m.log(ctx, agentID, core.PermissionDescriptor{
-		Type:     core.PermissionTypeFilesystem,
+	m.log(ctx, agentID, contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeFilesystem,
 		Action:   string(action),
 		Resource: clean,
 	}, "granted", map[string]interface{}{
@@ -359,39 +360,39 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 	}
 	perm := m.findExecutablePermission(binary)
 	if perm == nil {
-		desc := core.PermissionDescriptor{
-			Type:     core.PermissionTypeExecutable,
+		desc := contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeExecutable,
 			Action:   fmt.Sprintf("exec:binary:%s", binary),
 			Resource: binary,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case core.AgentPermissionAllow:
+		case agentspec.AgentPermissionAllow:
 			m.log(ctx, agentID, desc, "granted (default allow)", nil)
 			return nil
-		case core.AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "binary not declared")
-		default: // core.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
 	}
 	if len(perm.Args) > 0 && !matchArgs(perm.Args, args) {
-		return m.deny(ctx, agentID, core.PermissionDescriptor{
-			Type:     core.PermissionTypeExecutable,
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeExecutable,
 			Action:   fmt.Sprintf("exec:args:%s", strings.Join(args, " ")),
 			Resource: binary,
 		}, "arguments rejected")
 	}
 	if len(perm.Env) > 0 && !matchEnv(perm.Env, env) {
-		return m.deny(ctx, agentID, core.PermissionDescriptor{
-			Type:     core.PermissionTypeExecutable,
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeExecutable,
 			Action:   "exec:env",
 			Resource: binary,
 		}, "environment rejected")
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeExecutable,
+		if err := m.ensureGrant(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeExecutable,
 			Action:       fmt.Sprintf("exec:binary:%s", binary),
 			Resource:     binary,
 			RequiresHITL: true,
@@ -399,8 +400,8 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			return err
 		}
 	}
-	m.log(ctx, agentID, core.PermissionDescriptor{
-		Type:     core.PermissionTypeExecutable,
+	m.log(ctx, agentID, contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeExecutable,
 		Action:   fmt.Sprintf("exec:%s", binary),
 		Resource: binary,
 	}, "granted", map[string]interface{}{
@@ -414,25 +415,25 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, direction string, protocol string, host string, port int) error {
 	perm := m.findNetworkPermission(direction, protocol, host, port)
 	if perm == nil {
-		desc := core.PermissionDescriptor{
-			Type:     core.PermissionTypeNetwork,
+		desc := contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeNetwork,
 			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
 			Resource: host,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case core.AgentPermissionAllow:
+		case agentspec.AgentPermissionAllow:
 			m.log(ctx, agentID, desc, "granted (default allow)", nil)
 			return nil
-		case core.AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "network scope missing")
-		default: // core.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeNetwork,
+		if err := m.ensureGrant(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeNetwork,
 			Action:       fmt.Sprintf("net:%s:%s", direction, protocol),
 			Resource:     fmt.Sprintf("%s:%d", host, port),
 			RequiresHITL: true,
@@ -440,8 +441,8 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			return err
 		}
 	}
-	m.log(ctx, agentID, core.PermissionDescriptor{
-		Type:     core.PermissionTypeNetwork,
+	m.log(ctx, agentID, contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeNetwork,
 		Action:   fmt.Sprintf("net:%s", direction),
 		Resource: fmt.Sprintf("%s:%d", host, port),
 	}, "granted", nil)
@@ -511,14 +512,14 @@ func (m *PermissionManager) currentSandboxPolicyLocked() sandbox.SandboxPolicy {
 // CheckCapability verifies capability usage.
 func (m *PermissionManager) CheckCapability(ctx context.Context, agentID string, capability string) error {
 	if !m.hasCapability(capability) {
-		return m.deny(ctx, agentID, core.PermissionDescriptor{
-			Type:     core.PermissionTypeCapability,
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeCapability,
 			Action:   fmt.Sprintf("cap:%s", capability),
 			Resource: capability,
 		}, "capability not declared")
 	}
-	m.log(ctx, agentID, core.PermissionDescriptor{
-		Type:     core.PermissionTypeCapability,
+	m.log(ctx, agentID, contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeCapability,
 		Action:   fmt.Sprintf("cap:%s", capability),
 		Resource: capability,
 	}, "granted", nil)
@@ -529,15 +530,15 @@ func (m *PermissionManager) CheckCapability(ctx context.Context, agentID string,
 func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind string, target string) error {
 	perm := m.findIPCPermission(kind, target)
 	if perm == nil {
-		return m.deny(ctx, agentID, core.PermissionDescriptor{
-			Type:     core.PermissionTypeIPC,
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeIPC,
 			Action:   fmt.Sprintf("ipc:%s", kind),
 			Resource: target,
 		}, "ipc scope missing")
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeIPC,
+		if err := m.ensureGrant(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeIPC,
 			Action:       fmt.Sprintf("ipc:%s", kind),
 			Resource:     perm.Target,
 			RequiresHITL: true,
@@ -545,8 +546,8 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 			return err
 		}
 	}
-	m.log(ctx, agentID, core.PermissionDescriptor{
-		Type:     core.PermissionTypeIPC,
+	m.log(ctx, agentID, contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeIPC,
 		Action:   fmt.Sprintf("ipc:%s", kind),
 		Resource: target,
 	}, "granted", nil)
@@ -555,7 +556,7 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 
 // collectUndeclared returns human-readable descriptions of any permissions
 // required by the tool that are not covered by the agent manifest.
-func (m *PermissionManager) collectUndeclared(requirements *core.PermissionSet) []string {
+func (m *PermissionManager) collectUndeclared(requirements *contracts.PermissionSet) []string {
 	var missing []string
 	for _, perm := range requirements.FileSystem {
 		if m.findFilesystemPermission(perm.Action, perm.Path) == nil {
@@ -627,7 +628,7 @@ func resolveCanonicalPath(path string) (string, error) {
 
 // findFilesystemPermission returns the first filesystem permission matching the
 // requested action/path pair.
-func (m *PermissionManager) findFilesystemPermission(action core.FileSystemAction, path string) *core.FileSystemPermission {
+func (m *PermissionManager) findFilesystemPermission(action contracts.FileSystemAction, path string) *contracts.FileSystemPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -639,7 +640,7 @@ func (m *PermissionManager) findFilesystemPermission(action core.FileSystemActio
 		return perm
 	}
 	m.mu.RUnlock()
-	var matched *core.FileSystemPermission
+	var matched *contracts.FileSystemPermission
 	for _, perm := range m.declared.FileSystem {
 		if perm.Action != action {
 			continue
@@ -657,7 +658,7 @@ func (m *PermissionManager) findFilesystemPermission(action core.FileSystemActio
 }
 
 // findExecutablePermission locates the manifest entry authorizing a binary.
-func (m *PermissionManager) findExecutablePermission(binary string) *core.ExecutablePermission {
+func (m *PermissionManager) findExecutablePermission(binary string) *contracts.ExecutablePermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -668,7 +669,7 @@ func (m *PermissionManager) findExecutablePermission(binary string) *core.Execut
 		return perm
 	}
 	m.mu.RUnlock()
-	var matched *core.ExecutablePermission
+	var matched *contracts.ExecutablePermission
 	for _, perm := range m.declared.Executables {
 		if perm.Binary == binary {
 			permCopy := perm
@@ -684,7 +685,7 @@ func (m *PermissionManager) findExecutablePermission(binary string) *core.Execut
 
 // findNetworkPermission resolves whether the host/port pair is authorized for
 // the given direction/protocol combination.
-func (m *PermissionManager) findNetworkPermission(direction, protocol, host string, port int) *core.NetworkPermission {
+func (m *PermissionManager) findNetworkPermission(direction, protocol, host string, port int) *contracts.NetworkPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -715,7 +716,7 @@ func (m *PermissionManager) findNetworkPermission(direction, protocol, host stri
 }
 
 // findIPCPermission determines if the IPC target was declared in the manifest.
-func (m *PermissionManager) findIPCPermission(kind, target string) *core.IPCPermission {
+func (m *PermissionManager) findIPCPermission(kind, target string) *contracts.IPCPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -741,7 +742,7 @@ func (m *PermissionManager) hasCapability(cap string) bool {
 }
 
 // ensureGrant obtains a HITL approval when a permission requires human review.
-func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc core.PermissionDescriptor) error {
+func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc contracts.PermissionDescriptor) error {
 	key := desc.Action + ":" + desc.Resource
 	m.mu.Lock()
 	if grant, ok := m.grants[key]; ok {
@@ -790,7 +791,7 @@ func (m *PermissionManager) checkHITLRateLimit(key string) error {
 
 // RequireApproval requests HITL approval for an arbitrary runtime decision
 // (tool gating, file matrix, bash policy) and caches the resulting grant.
-func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc core.PermissionDescriptor, justification string, scope GrantScope, risk RiskLevel, duration time.Duration) error {
+func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, justification string, scope GrantScope, risk RiskLevel, duration time.Duration) error {
 	if m == nil {
 		return errors.New("permission manager missing")
 	}
@@ -836,18 +837,18 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 
 // deny records an audit event and returns a structured error describing why an
 // action was blocked.
-func (m *PermissionManager) deny(ctx context.Context, agentID string, desc core.PermissionDescriptor, reason string) error {
+func (m *PermissionManager) deny(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, reason string) error {
 	m.log(ctx, agentID, desc, "denied", map[string]interface{}{
 		"reason": reason,
 	})
 	m.emitPolicyDecision(ctx, desc, "deny", reason, nil)
-	return &core.PermissionDeniedError{
+	return &contracts.PermissionDeniedError{
 		Descriptor: desc,
 		Message:    reason,
 	}
 }
 
-func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 	if m == nil {
 		return
 	}
@@ -862,7 +863,7 @@ func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc core.Pe
 
 // log forwards permission decisions to the configured audit sink to provide a
 // tamper-evident trail of runtime behavior.
-func (m *PermissionManager) log(ctx context.Context, agentID string, desc core.PermissionDescriptor, result string, fields map[string]interface{}) {
+func (m *PermissionManager) log(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, result string, fields map[string]interface{}) {
 	if m.audit == nil {
 		return
 	}
@@ -950,7 +951,7 @@ func globToRegex(pattern string) string {
 
 // PermissionRequirement declares a permission needed by a tool or plugin.
 type PermissionRequirement struct {
-	Type     core.PermissionType
+	Type     contracts.PermissionType
 	Action   string
 	Resource string
 }
@@ -963,7 +964,7 @@ type HITLProvider interface {
 // PermissionGrant captures approval metadata.
 type PermissionGrant struct {
 	ID          string
-	Permission  core.PermissionDescriptor
+	Permission  contracts.PermissionDescriptor
 	Scope       GrantScope
 	ExpiresAt   time.Time
 	ApprovedBy  string

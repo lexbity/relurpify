@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
@@ -13,13 +13,13 @@ import (
 type CommandAuthorizationPolicy struct {
 	manager *PermissionManager
 	agentID string
-	spec    *core.AgentRuntimeSpec
+	spec    *agentspec.AgentRuntimeSpec
 	source  string
 }
 
 // NewCommandAuthorizationPolicy creates a sandbox policy adapter backed by the
 // current authorization state.
-func NewCommandAuthorizationPolicy(manager *PermissionManager, agentID string, spec *core.AgentRuntimeSpec, source string) sandbox.CommandPolicy {
+func NewCommandAuthorizationPolicy(manager *PermissionManager, agentID string, spec *agentspec.AgentRuntimeSpec, source string) sandbox.CommandPolicy {
 	return CommandAuthorizationPolicy{
 		manager: manager,
 		agentID: agentID,

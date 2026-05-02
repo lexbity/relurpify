@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func resolveInsertionDecision(agent *ReActAgent, task *core.Task, envelope *core.CapabilityResultEnvelope) core.InsertionDecision {
@@ -14,7 +15,7 @@ func resolveInsertionDecision(agent *ReActAgent, task *core.Task, envelope *core
 	return core.EffectiveInsertionDecision(agent.effectiveAgentSpec(task), envelope)
 }
 
-func renderInsertionFilteredSummary(agent *ReActAgent, task *core.Task, toolName string, payload *core.ToolResult, envelope *core.CapabilityResultEnvelope) (string, bool) {
+func renderInsertionFilteredSummary(agent *ReActAgent, task *core.Task, toolName string, payload *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) (string, bool) {
 	if payload == nil {
 		return "", false
 	}

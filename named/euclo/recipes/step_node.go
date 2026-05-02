@@ -53,7 +53,7 @@ func (n *RecipeStepNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 
 // Execute builds the selected paradigm agent, runs it, and writes captures back
 // to the envelope.
-func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("recipe step node is nil")
 	}
@@ -73,7 +73,7 @@ func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope)
 
 	result, execErr := agent.Execute(ctx, task, env)
 	if result == nil {
-		result = &agentgraph.Result{
+		result = &core.Result{
 			NodeID:  n.id,
 			Success: execErr == nil,
 			Data:    map[string]any{},
@@ -105,7 +105,7 @@ func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	return result, nil
 }
 
-func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("recipe step node is nil")
 	}
@@ -150,7 +150,7 @@ func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata
 		}
 	}
 
-	result := &agentgraph.Result{
+	result := &core.Result{
 		NodeID:  n.id,
 		Success: success,
 		Data:    data,
@@ -380,7 +380,7 @@ func (n *RecipeStepNode) rewooOptions() rewooagent.RewooOptions {
 	return opts
 }
 
-func (n *RecipeStepNode) captureValues(result *agentgraph.Result) map[string]any {
+func (n *RecipeStepNode) captureValues(result *core.Result) map[string]any {
 	if n == nil || result == nil {
 		return nil
 	}

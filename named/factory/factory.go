@@ -9,10 +9,11 @@ import (
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 var namedAgentRegistry sync.Map
@@ -58,18 +59,18 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 	if registry == nil {
 		return capability.NewRegistry()
 	}
-	cloned := registry.CloneFiltered(func(tool core.Tool) bool {
+	cloned := registry.CloneFiltered(func(tool contracts.Tool) bool {
 		perms := tool.Permissions()
 		if perms.Permissions == nil {
 			return true
 		}
 		for _, fs := range perms.Permissions.FileSystem {
 			switch fs.Action {
-			case core.FileSystemWrite:
+			case contracts.FileSystemWrite:
 				if !scope.AllowWrite {
 					return false
 				}
-			case core.FileSystemExecute:
+			case contracts.FileSystemExecute:
 				if !scope.AllowExecute {
 					return false
 				}
@@ -89,7 +90,7 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 	return cloned
 }
 
-func BuildFromSpec(env agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (agentgraph.WorkflowExecutor, error) {
+func BuildFromSpec(env agentenv.WorkspaceEnvironment, spec agentspec.AgentRuntimeSpec) (agentgraph.WorkflowExecutor, error) {
 	agentType := strings.ToLower(strings.TrimSpace(spec.Implementation))
 	if agentType == "" && spec.Composition != nil {
 		agentType = strings.ToLower(strings.TrimSpace(spec.Composition.Type))
@@ -115,7 +116,7 @@ func InstantiateByName(workspace, name string, env agentenv.WorkspaceEnvironment
 		_ = agent.Initialize(env.Config)
 		return agent
 	}
-	agent, err := BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: name})
+	agent, err := BuildFromSpec(env, agentspec.AgentRuntimeSpec{Implementation: name})
 	if err != nil {
 		agent = rex.NewWithWorkspace(&env, workspace)
 		_ = agent.Initialize(env.Config)
@@ -123,9 +124,9 @@ func InstantiateByName(workspace, name string, env agentenv.WorkspaceEnvironment
 	return agent
 }
 
-func ApplyManifestDefaults(spec *core.AgentRuntimeSpec) *core.AgentRuntimeSpec {
+func ApplyManifestDefaults(spec *agentspec.AgentRuntimeSpec) *agentspec.AgentRuntimeSpec {
 	if spec == nil {
-		return &core.AgentRuntimeSpec{}
+		return &agentspec.AgentRuntimeSpec{}
 	}
 	return spec
 }

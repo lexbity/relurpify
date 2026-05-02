@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // InvocationPrecheck is checked after policy evaluation and before invocation.
@@ -16,7 +17,7 @@ type InvocationPrecheck interface {
 
 // PostInvocationHook receives the completed invocation result.
 type PostInvocationHook interface {
-	Record(descriptor core.CapabilityDescriptor, result *core.ToolResult) error
+	Record(descriptor core.CapabilityDescriptor, result *contracts.ToolResult) error
 }
 
 // WritePathPrecheck blocks filesystem-mutating capabilities from writing to

@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
@@ -16,14 +15,14 @@ func TestSQLiteIdentityStoreExternalIdentityRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	record := core.ExternalIdentity{
+	record := identity.ExternalIdentity{
 		TenantID:   "tenant-1",
 		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "user-42",
-		Subject: core.SubjectRef{
+		Subject: identity.SubjectRef{
 			TenantID: "tenant-1",
-			Kind:     core.SubjectKindUser,
+			Kind:     identity.SubjectKindUser,
 			ID:       "internal-user-1",
 		},
 		VerifiedAt:    time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
@@ -51,14 +50,14 @@ func TestSQLiteIdentityStoreTenantAndSubjectRoundTrip(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, store.UpsertTenant(context.Background(), core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(context.Background(), identity.TenantRecord{
 		ID:          "tenant-1",
 		DisplayName: "Tenant 1",
 		CreatedAt:   now,
 	}))
-	require.NoError(t, store.UpsertSubject(context.Background(), core.SubjectRecord{
+	require.NoError(t, store.UpsertSubject(context.Background(), identity.SubjectRecord{
 		TenantID:    "tenant-1",
-		Kind:        core.SubjectKindServiceAccount,
+		Kind:        identity.SubjectKindServiceAccount,
 		ID:          "svc-1",
 		DisplayName: "Service 1",
 		Roles:       []string{"operator"},
@@ -70,7 +69,7 @@ func TestSQLiteIdentityStoreTenantAndSubjectRoundTrip(t *testing.T) {
 	require.NotNil(t, tenant)
 	require.Equal(t, "Tenant 1", tenant.DisplayName)
 
-	subject, err := store.GetSubject(context.Background(), "tenant-1", core.SubjectKindServiceAccount, "svc-1")
+	subject, err := store.GetSubject(context.Background(), "tenant-1", identity.SubjectKindServiceAccount, "svc-1")
 	require.NoError(t, err)
 	require.NotNil(t, subject)
 	require.Equal(t, []string{"operator"}, subject.Roles)
@@ -89,20 +88,20 @@ func TestSQLiteIdentityStoreNodeEnrollmentRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	enrollment := core.NodeEnrollment{
+	enrollment := identity.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-1",
 		TrustClass: identity.TrustClassWorkspaceTrusted,
-		Owner: core.SubjectRef{
+		Owner: identity.SubjectRef{
 			TenantID: "tenant-1",
-			Kind:     core.SubjectKindNode,
+			Kind:     identity.SubjectKindNode,
 			ID:       "node-1",
 		},
 		PublicKey:      []byte("public-key"),
 		KeyID:          "k1",
 		PairedAt:       time.Date(2026, 3, 10, 11, 0, 0, 0, time.UTC),
 		LastVerifiedAt: time.Date(2026, 3, 10, 11, 30, 0, 0, time.UTC),
-		AuthMethod:     core.AuthMethodNodeChallenge,
+		AuthMethod:     identity.AuthMethodNodeChallenge,
 	}
 	require.NoError(t, store.UpsertNodeEnrollment(context.Background(), enrollment))
 

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,11 +50,11 @@ func TestGetEffectiveFMPFederationPolicyCombinesTenantAndBoundaryControls(t *tes
 	}).(*service)
 	result, err := svc.GetEffectiveFMPFederationPolicy(context.Background(), GetEffectiveFMPFederationPolicyRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "observer"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "observer"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -77,11 +77,11 @@ func TestGetEffectiveFMPFederationPolicyDeniesCrossTenantAccess(t *testing.T) {
 	svc := NewService(ServiceConfig{}).(*service)
 	_, err := svc.GetEffectiveFMPFederationPolicy(context.Background(), GetEffectiveFMPFederationPolicyRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "observer"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "observer"},
 			},
 			TenantID: "tenant-2",
 		},

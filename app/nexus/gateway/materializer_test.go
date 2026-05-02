@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,20 +24,20 @@ func TestStateMaterializerTracksSessionsAndChannels(t *testing.T) {
 			Seq:       2,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventSessionCreated,
-			Actor:     core.EventActor{Kind: "agent", ID: "agent-session", TenantID: "tenant-a"},
+			Actor:     identity.EventActor{Kind: "agent", ID: "agent-session", TenantID: "tenant-a"},
 		},
 		{
 			Seq:       3,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
 			Payload:   inbound,
 		},
 		{
 			Seq:       4,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventMessageOutbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "slack", TenantID: "tenant-b"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "slack", TenantID: "tenant-b"},
 			Payload:   outbound,
 		},
 	})
@@ -70,7 +71,7 @@ func TestStateMaterializerSnapshotRestore(t *testing.T) {
 		Seq:       1,
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventSessionCreated,
-		Actor:     core.EventActor{Kind: "user", ID: "user-session", TenantID: "tenant-a"},
+		Actor:     identity.EventActor{Kind: "user", ID: "user-session", TenantID: "tenant-a"},
 	}}))
 
 	data, err := materializer.Snapshot(context.Background())

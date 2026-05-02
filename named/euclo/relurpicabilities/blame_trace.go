@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -83,7 +84,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke executes git blame and returns parsed blame entries.
-func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	// Extract arguments
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {
@@ -149,7 +150,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Execute command
 	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		return &core.CapabilityExecutionResult{
+		return &contracts.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -162,7 +163,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Parse porcelain blame output
 	entries := parsePorcelainBlame(stdout)
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
@@ -104,7 +105,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, in
 			if err := graph.AddNode(NewRecipeStepNode(fallbackID, env, fallbackStep)); err != nil {
 				return nil, err
 			}
-			if err := graph.AddEdge(execNodeID, fallbackID, func(result *agentgraph.Result, env *contextdata.Envelope) bool {
+			if err := graph.AddEdge(execNodeID, fallbackID, func(result *core.Result, env *contextdata.Envelope) bool {
 				_ = env
 				return result != nil && !result.Success
 			}, false); err != nil {
@@ -132,7 +133,7 @@ func BuildRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, in
 			nextFirst = steps[i+1].first
 		}
 		if topology.last != "" {
-			if err := graph.AddEdge(topology.last, nextFirst, func(result *agentgraph.Result, env *contextdata.Envelope) bool {
+			if err := graph.AddEdge(topology.last, nextFirst, func(result *core.Result, env *contextdata.Envelope) bool {
 				_ = env
 				return result == nil || result.Success
 			}, false); err != nil {
@@ -189,7 +190,7 @@ func newRecipeStageNode(id string, nodeType agentgraph.NodeType, op string, data
 
 func (n *recipeStageNode) ID() string                { return n.id }
 func (n *recipeStageNode) Type() agentgraph.NodeType { return agentgraph.NodeType(n.kind) }
-func (n *recipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *recipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	if env != nil && n.data != nil {
 		for key, value := range n.data {
@@ -209,7 +210,7 @@ func (n *recipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope
 			env.SetWorkingValue("euclo.policy.verification_required", mutationPermitted == false || hitlRequired, contextdata.MemoryClassTask)
 		}
 	}
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data:    n.data,

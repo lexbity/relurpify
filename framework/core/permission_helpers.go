@@ -3,27 +3,29 @@ package core
 import (
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // NewFileSystemPermissionSet builds a permission set for the provided actions scoped to base.
-func NewFileSystemPermissionSet(base string, actions ...FileSystemAction) *PermissionSet {
+func NewFileSystemPermissionSet(base string, actions ...contracts.FileSystemAction) *contracts.PermissionSet {
 	scope := computeWorkspaceScope(base)
-	perms := make([]FileSystemPermission, 0, len(actions))
+	perms := make([]contracts.FileSystemPermission, 0, len(actions))
 	for _, action := range actions {
-		perms = append(perms, FileSystemPermission{
+		perms = append(perms, contracts.FileSystemPermission{
 			Action: action,
 			Path:   scope,
 		})
 	}
-	return &PermissionSet{
+	return &contracts.PermissionSet{
 		FileSystem: perms,
 	}
 }
 
 // NewExecutionPermissionSet extends filesystem permissions with execution metadata.
-func NewExecutionPermissionSet(base string, binary string, args []string) *PermissionSet {
-	perms := NewFileSystemPermissionSet(base, FileSystemRead, FileSystemWrite, FileSystemExecute, FileSystemList)
-	perms.Executables = append(perms.Executables, ExecutablePermission{
+func NewExecutionPermissionSet(base string, binary string, args []string) *contracts.PermissionSet {
+	perms := NewFileSystemPermissionSet(base, contracts.FileSystemRead, contracts.FileSystemWrite, contracts.FileSystemExecute, contracts.FileSystemList)
+	perms.Executables = append(perms.Executables, contracts.ExecutablePermission{
 		Binary: binary,
 		Args:   normalizeArgs(args),
 	})

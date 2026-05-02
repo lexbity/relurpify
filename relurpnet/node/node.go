@@ -13,7 +13,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // Type aliases for moved types
@@ -41,7 +43,7 @@ type Connection interface {
 	Node() NodeDescriptor
 	Health() NodeHealth
 	Capabilities() []core.CapabilityDescriptor
-	Invoke(ctx context.Context, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error)
+	Invoke(ctx context.Context, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error)
 	Close(ctx context.Context) error
 }
 
@@ -300,7 +302,7 @@ func (m *Manager) ListCapabilitiesForTenant(tenantID string) []core.CapabilityDe
 
 // InvokeCapabilityForTenant invokes a capability by ID or name on a connected node
 // that belongs to the given tenant. Returns an error if no matching capability is found.
-func (m *Manager) InvokeCapabilityForTenant(ctx context.Context, tenantID, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (m *Manager) InvokeCapabilityForTenant(ctx context.Context, tenantID, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	m.mu.RLock()
 	var target Connection
 	var targetCapID string
@@ -386,7 +388,7 @@ func (m *Manager) emit(ctx context.Context, actorID, eventType string, payload m
 		Timestamp: time.Now().UTC(),
 		Type:      eventType,
 		Payload:   data,
-		Actor:     core.EventActor{Kind: "node", ID: actorID},
+		Actor:     identity.EventActor{Kind: "node", ID: actorID},
 		Partition: "local",
 	}})
 }

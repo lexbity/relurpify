@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,11 +22,11 @@ func TestSetAndGetTenantFMPFederationPolicy(t *testing.T) {
 	svc := NewService(ServiceConfig{FMPFederation: store}).(*service)
 	_, err = svc.SetTenantFMPFederationPolicy(context.Background(), SetTenantFMPFederationPolicyRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -38,11 +39,11 @@ func TestSetAndGetTenantFMPFederationPolicy(t *testing.T) {
 
 	result, err := svc.GetTenantFMPFederationPolicy(context.Background(), GetTenantFMPFederationPolicyRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -69,11 +70,11 @@ func TestGetTenantFMPFederationPolicyDeniesCrossTenantAccess(t *testing.T) {
 	svc := NewService(ServiceConfig{FMPFederation: store}).(*service)
 	_, err = svc.GetTenantFMPFederationPolicy(context.Background(), GetTenantFMPFederationPolicyRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-2",
 		},

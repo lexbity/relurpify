@@ -7,8 +7,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type SessionSink struct {
@@ -103,7 +103,7 @@ func (s *SessionSink) Emit(ctx context.Context, ev core.FrameworkEvent) error {
 		Timestamp: ev.Timestamp,
 		Type:      core.FrameworkEventSessionMessage,
 		Payload:   payload,
-		Actor:     core.EventActor{Kind: "session", ID: boundary.SessionID, TenantID: boundary.TenantID},
+		Actor:     identity.EventActor{Kind: "session", ID: boundary.SessionID, TenantID: boundary.TenantID},
 		Partition: partition,
 		CausedBy:  []uint64{ev.Seq},
 	}})

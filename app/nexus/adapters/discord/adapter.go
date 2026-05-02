@@ -10,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type Session interface {
@@ -104,7 +105,7 @@ func (a *Adapter) EmitMessage(ctx context.Context, msg Message, botUserID string
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventMessageInbound,
 		Payload:   payload,
-		Actor:     core.EventActor{Kind: "channel", ID: "discord"},
+		Actor:     identity.EventActor{Kind: "channel", ID: "discord"},
 		Partition: "local",
 	})
 }

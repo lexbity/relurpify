@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 type agentTestSurfaceAdapter interface {
 	Name() string
-	ResolveStartMode(requested string, spec *core.AgentRuntimeSpec) string
+	ResolveStartMode(requested string, spec *agentspec.AgentRuntimeSpec) string
 	BuildStartTaskContext(mode, workspace string) map[string]any
 	GoldenTapeFilename(caseName, modelName string) string
 	TapePath(workspace, suiteName, caseName, modelName string) string
@@ -34,7 +34,7 @@ var agentTestSurface agentTestSurfaceAdapter = eucloAgentTestSurfaceAdapter{}
 
 func (eucloAgentTestSurfaceAdapter) Name() string { return "euclo" }
 
-func (eucloAgentTestSurfaceAdapter) ResolveStartMode(requested string, spec *core.AgentRuntimeSpec) string {
+func (eucloAgentTestSurfaceAdapter) ResolveStartMode(requested string, spec *agentspec.AgentRuntimeSpec) string {
 	if trimmed := strings.TrimSpace(requested); trimmed != "" {
 		return trimmed
 	}

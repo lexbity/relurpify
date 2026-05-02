@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	rexstate "codeburg.org/lexbit/relurpify/named/rex/state"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 var _ rexstate.ExecutionObserver = (*LineageBridge)(nil)
@@ -535,7 +536,7 @@ func (b *LineageBridge) resolveTrustedExecutionContext(ctx context.Context, task
 		return trusted
 	}
 	if b != nil && b.PolicyResolver != nil {
-		actor := core.EventActor{
+		actor := identity.EventActor{
 			TenantID: firstNonEmpty(
 				envelopeString(env, rexkeys.RexAdmissionTenantID),
 				envelopeString(env, rexkeys.GatewayTenantID),
@@ -553,7 +554,7 @@ func (b *LineageBridge) resolveTrustedExecutionContext(ctx context.Context, task
 			return resolved
 		}
 	}
-	resolved, _ := rexctx.DefaultTrustedContextResolver{}.Resolve(ctx, core.EventActor{})
+	resolved, _ := rexctx.DefaultTrustedContextResolver{}.Resolve(ctx, identity.EventActor{})
 	return resolved
 }
 

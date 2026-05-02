@@ -14,6 +14,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/gorilla/websocket"
 )
@@ -82,7 +83,7 @@ type Server struct {
 	Capabilities                 []core.CapabilityDescriptor
 	ListCapabilities             func() []core.CapabilityDescriptor
 	ListCapabilitiesForPrincipal func(principal ConnectionPrincipal) []core.CapabilityDescriptor
-	InvokeCapability             func(ctx context.Context, principal ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error)
+	InvokeCapability             func(ctx context.Context, principal ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error)
 	HandleOutboundMessage        func(ctx context.Context, principal ConnectionPrincipal, sessionKey, content string) error
 	VerifyNodeConnection         func(ctx context.Context, principal ConnectionPrincipal, info NodeConnectInfo, conn *websocket.Conn) error
 	HandleNodeConnection         func(ctx context.Context, principal ConnectionPrincipal, info NodeConnectInfo, conn *websocket.Conn) error
@@ -468,7 +469,7 @@ func (s *Server) invokeCapability(ctx context.Context, bc *broadcastClient, prin
 			Partition: partition,
 		}})
 	}
-	result := &core.CapabilityExecutionResult{Success: false}
+	result := &contracts.CapabilityExecutionResult{Success: false}
 	if strings.TrimSpace(request.SessionKey) == "" {
 		result.Error = "capability invocation requires session_key"
 	} else if s.InvokeCapability != nil {
@@ -595,7 +596,7 @@ func clonePrincipal(principal *identity.AuthenticatedPrincipal) *identity.Authen
 	return &clone
 }
 
-func actorForLog(principal ConnectionPrincipal, fallbackKind string) core.EventActor {
+func actorForLog(principal ConnectionPrincipal, fallbackKind string) identity.EventActor {
 	actor := principal.Actor
 	if strings.TrimSpace(actor.Kind) == "" {
 		actor.Kind = connectionRole(principal, fallbackKind)

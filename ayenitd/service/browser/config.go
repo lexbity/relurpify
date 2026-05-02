@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -17,7 +18,7 @@ type BrowserServiceConfig struct {
 	Registration      *fauthorization.AgentRegistration
 	Registry          *capability.Registry
 	PermissionManager *fauthorization.PermissionManager
-	AgentSpec         *core.AgentRuntimeSpec
+	AgentSpec         *agentspec.AgentRuntimeSpec
 	CommandPolicy     sandbox.CommandPolicy
 	DefaultBackend    string
 	AllowedBackends   []string

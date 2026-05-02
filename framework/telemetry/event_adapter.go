@@ -8,13 +8,14 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // EventTelemetry mirrors legacy telemetry events into the framework event log.
 type EventTelemetry struct {
 	Log       event.Log
 	Partition string
-	Actor     core.EventActor
+	Actor     identity.EventActor
 	Clock     func() time.Time
 }
 
@@ -68,9 +69,9 @@ func (e EventTelemetry) partition() string {
 	return e.Partition
 }
 
-func (e EventTelemetry) actor() core.EventActor {
+func (e EventTelemetry) actor() identity.EventActor {
 	if e.Actor.Kind == "" && e.Actor.ID == "" {
-		return core.EventActor{Kind: "system", ID: "relurpify"}
+		return identity.EventActor{Kind: "system", ID: "relurpify"}
 	}
 	return e.Actor
 }

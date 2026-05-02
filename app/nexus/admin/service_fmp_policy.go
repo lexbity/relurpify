@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type fmpTrustBundleLister interface {
@@ -93,7 +93,7 @@ func (s *service) SetFMPBoundaryPolicy(ctx context.Context, req SetFMPBoundaryPo
 	return SetFMPBoundaryPolicyResult{AdminResult: resultEnvelope(req.AdminRequest), Policy: req.Policy}, nil
 }
 
-func authorizeGlobalFMPAdmin(principal core.AuthenticatedPrincipal) error {
+func authorizeGlobalFMPAdmin(principal identity.AuthenticatedPrincipal) error {
 	if !hasGlobalTenantScope(principal) {
 		return AdminError{
 			Code:    AdminErrorPolicyDenied,

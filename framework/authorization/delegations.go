@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
@@ -21,11 +23,11 @@ type DelegationCapabilityRegistry interface {
 	CapturePolicySnapshot() *core.PolicySnapshot
 	GetCoordinationTarget(idOrName string) (core.CapabilityDescriptor, bool)
 	CoordinationTargets(selectors ...core.CapabilitySelector) []core.CapabilityDescriptor
-	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
+	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
 }
 
 type BackgroundDelegationOutcome struct {
-	Result *core.ToolResult
+	Result *contracts.ToolResult
 	Error  error
 }
 
@@ -44,7 +46,7 @@ type DelegationBackgroundRunner interface {
 type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
-	AgentSpec        *core.AgentRuntimeSpec
+	AgentSpec        *agentspec.AgentRuntimeSpec
 	State            *contextdata.Envelope
 	LifecycleRepo    agentlifecycle.Repository
 	WorkflowRunID    string
@@ -101,7 +103,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request core.
 	if opts.Registry == nil {
 		return nil, fmt.Errorf("delegation registry required")
 	}
-	coordination := core.EffectiveCoordination(opts.AgentSpec)
+	coordination := agentspec.EffectiveCoordination(opts.AgentSpec)
 	target, err := resolveDelegationTarget(request, opts.Registry, coordination)
 	if err != nil {
 		return nil, err
@@ -416,7 +418,7 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentli
 	return nil
 }
 
-func resolveDelegationTarget(request core.DelegationRequest, registry DelegationCapabilityRegistry, coordination core.AgentCoordinationSpec) (core.CapabilityDescriptor, error) {
+func resolveDelegationTarget(request core.DelegationRequest, registry DelegationCapabilityRegistry, coordination agentspec.AgentCoordinationSpec) (core.CapabilityDescriptor, error) {
 	if registry == nil {
 		return core.CapabilityDescriptor{}, fmt.Errorf("delegation registry required")
 	}
@@ -430,7 +432,7 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 	}
 	selectors := make([]core.CapabilitySelector, 0, len(coordination.DelegationTargetSelectors))
 	for _, selector := range coordination.DelegationTargetSelectors {
-		selectors = append(selectors, core.CapabilitySelectorFromAgentSpec(selector))
+		selectors = append(selectors, selector)
 	}
 	candidates := registry.CoordinationTargets(selectors...)
 	for _, candidate := range candidates {
@@ -450,7 +452,7 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 	return core.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s", request.TaskType)
 }
 
-func validateDelegationTargetPolicy(request core.DelegationRequest, target core.CapabilityDescriptor, coordination core.AgentCoordinationSpec) error {
+func validateDelegationTargetPolicy(request core.DelegationRequest, target core.CapabilityDescriptor, coordination agentspec.AgentCoordinationSpec) error {
 	if target.Coordination == nil || !target.Coordination.Target {
 		return fmt.Errorf("capability %s is not a coordination target", target.ID)
 	}
@@ -516,14 +518,14 @@ func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationR
 	return args, nil
 }
 
-func buildDelegationResult(request core.DelegationRequest, target core.CapabilityDescriptor, result *core.ToolResult, invokeErr error, snapshot *core.PolicySnapshot, spec *core.AgentRuntimeSpec, callerTrust core.TrustClass) *core.DelegationResult {
+func buildDelegationResult(request core.DelegationRequest, target core.CapabilityDescriptor, result *contracts.ToolResult, invokeErr error, snapshot *core.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust core.TrustClass) *core.DelegationResult {
 	if invokeErr != nil {
 		failed := core.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, target.TrustClass, core.DelegationStateFailed, false, nil, snapshot)
 		failed.Diagnostics = []string{invokeErr.Error()}
 		return failed
 	}
 	if result == nil {
-		result = &core.ToolResult{Success: true}
+		result = &contracts.ToolResult{Success: true}
 	}
 	state := core.DelegationStateSucceeded
 	if !result.Success {
@@ -757,14 +759,14 @@ func normalizeArgumentMap(value any) map[string]any {
 	return map[string]any{}
 }
 
-func requiresCrossTrustApproval(callerTrust, targetTrust core.TrustClass, spec *core.AgentRuntimeSpec, request core.DelegationRequest) bool {
+func requiresCrossTrustApproval(callerTrust, targetTrust core.TrustClass, spec *agentspec.AgentRuntimeSpec, request core.DelegationRequest) bool {
 	if request.ApprovalRequired {
 		return true
 	}
 	if callerTrust == "" || callerTrust == targetTrust {
 		return false
 	}
-	return core.EffectiveCoordination(spec).RequireApprovalCrossTrust
+	return agentspec.EffectiveCoordination(spec).RequireApprovalCrossTrust
 }
 
 func mergeAnyMaps(parts ...map[string]any) map[string]any {

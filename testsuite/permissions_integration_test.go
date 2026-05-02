@@ -9,12 +9,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestToolRegistryPermissionEnforcement(t *testing.T) {
 	base := t.TempDir()
-	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead, core.FileSystemList)
-	perms.Network = []core.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
+	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead, contracts.FileSystemList)
+	perms.Network = []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
 	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
 	if err != nil {
 		t.Fatalf("manager init failed: %v", err)
@@ -22,8 +23,8 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 	runtime := &recordingRuntime{}
 	manager.AttachRuntime(runtime)
 
-	allowedToolPerms := core.NewFileSystemPermissionSet(base, core.FileSystemRead)
-	allowedToolPerms.Network = []core.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
+	allowedToolPerms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
+	allowedToolPerms.Network = []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
 	allowedTool := &permissionedTool{
 		toolName: "workspace_reader",
 		perms:    allowedToolPerms,
@@ -32,7 +33,7 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 		path:     filepath.Join(base, "file.txt"),
 		host:     "example.com",
 	}
-	escapePerms := core.NewFileSystemPermissionSet("/etc", core.FileSystemRead)
+	escapePerms := core.NewFileSystemPermissionSet("/etc", contracts.FileSystemRead)
 	escapeTool := &permissionedTool{
 		toolName: "escape",
 		perms:    escapePerms,
@@ -72,16 +73,16 @@ func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 	hitl := &stubHITL{
 		grants: []*authorization.PermissionGrant{{
 			ID: "grant-1",
-			Permission: core.PermissionDescriptor{
-				Type:     core.PermissionTypeNetwork,
+			Permission: contracts.PermissionDescriptor{
+				Type:     contracts.PermissionTypeNetwork,
 				Action:   "net:egress",
 				Resource: "api.service.local:443",
 			},
 			Scope: authorization.GrantScopeSession,
 		}},
 	}
-	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead)
-	perms.Network = []core.NetworkPermission{
+	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
+	perms.Network = []contracts.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
 	manager, err := authorization.NewPermissionManager(base, perms, nil, hitl)
@@ -89,8 +90,8 @@ func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
-	toolPerms := core.NewFileSystemPermissionSet(base, core.FileSystemRead)
-	toolPerms.Network = []core.NetworkPermission{
+	toolPerms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
+	toolPerms.Network = []contracts.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
 	netTool := &permissionedTool{
@@ -156,7 +157,7 @@ func (r *recordingRuntime) Policy() sandbox.SandboxPolicy {
 
 type permissionedTool struct {
 	toolName string
-	perms    *core.PermissionSet
+	perms    *contracts.PermissionSet
 	manager  *authorization.PermissionManager
 	agent    string
 	path     string
@@ -167,13 +168,13 @@ type permissionedTool struct {
 func (t *permissionedTool) Name() string        { return t.toolName }
 func (t *permissionedTool) Description() string { return "integration test tool" }
 func (t *permissionedTool) Category() string    { return "integration" }
-func (t *permissionedTool) Parameters() []core.ToolParameter {
+func (t *permissionedTool) Parameters() []contracts.ToolParameter {
 	return nil
 }
-func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	if t.manager != nil {
 		if t.path != "" {
-			if err := t.manager.CheckFileAccess(ctx, t.agent, core.FileSystemRead, t.path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agent, contracts.FileSystemRead, t.path); err != nil {
 				return nil, err
 			}
 		}
@@ -184,11 +185,11 @@ func (t *permissionedTool) Execute(ctx context.Context, args map[string]interfac
 		}
 	}
 	t.ran = true
-	return &core.ToolResult{Success: true}, nil
+	return &contracts.ToolResult{Success: true}, nil
 }
 func (t *permissionedTool) IsAvailable(context.Context) bool { return true }
-func (t *permissionedTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: t.perms}
+func (t *permissionedTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: t.perms}
 }
 func (t *permissionedTool) Tags() []string { return nil }
 

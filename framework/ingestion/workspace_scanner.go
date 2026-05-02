@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
@@ -323,9 +324,9 @@ func (s *WorkspaceScanner) allowsPath(path string, isDir bool) bool {
 	if s == nil || s.FileScope == nil {
 		return true
 	}
-	action := core.FileSystemRead
+	action := contracts.FileSystemRead
 	if isDir {
-		action = core.FileSystemList
+		action = contracts.FileSystemList
 	}
 	return s.FileScope.Check(action, path) == nil
 }

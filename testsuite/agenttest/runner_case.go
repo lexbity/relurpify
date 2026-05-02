@@ -14,6 +14,7 @@ import (
 	"time"
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -137,7 +138,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	client.SetDebugLogging(executionOpts.DebugLLM)
 
-	lm := core.LanguageModel(client)
+	lm := contracts.LanguageModel(client)
 	if execution.RecordingMode != "" && execution.RecordingMode != "off" {
 		wrapped, err := llm.NewTapeModel(lm, execution.TapePath, execution.RecordingMode)
 		if err != nil {
@@ -550,7 +551,7 @@ type preparedCaseAttempt struct {
 	runner          fsandbox.CommandRunner
 }
 
-func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model core.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
+func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model contracts.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
 	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, resolveTemplateProfile(suite, c), suite.Spec.Manifest, resolveWorkspaceExclude(suite, c), resolveWorkspaceFiles(suite, c)); err != nil {
 		return nil, err
 	}
@@ -598,7 +599,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 
 	baseSpec := manifest.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
 	if baseSpec == nil {
-		baseSpec = &core.AgentRuntimeSpec{}
+		baseSpec = &agentspec.AgentRuntimeSpec{}
 	}
 	agentSpec := effectiveAgentSpecForCase(baseSpec, c)
 

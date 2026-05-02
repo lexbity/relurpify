@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type relurpicCapabilitySpec struct {
@@ -25,7 +28,7 @@ func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env
 	return core.NormalizeCapabilityDescriptor(h.descriptor)
 }
 
-func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if h.handler == nil {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}
@@ -36,13 +39,13 @@ func (h availabilityWrappedInvocableHandler) Availability(ctx context.Context, e
 	return h.descriptor.Availability
 }
 
-func (h availabilityWrappedInvocableHandler) SetPermissionManager(manager *capability.PermissionManager, agentID string) {
+func (h availabilityWrappedInvocableHandler) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
 	if aware, ok := h.handler.(capability.PermissionAware); ok {
 		aware.SetPermissionManager(manager, agentID)
 	}
 }
 
-func (h availabilityWrappedInvocableHandler) SetAgentSpec(spec *capability.AgentRuntimeSpec, agentID string) {
+func (h availabilityWrappedInvocableHandler) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	if aware, ok := h.handler.(capability.AgentSpecAware); ok {
 		aware.SetAgentSpec(spec, agentID)
 	}

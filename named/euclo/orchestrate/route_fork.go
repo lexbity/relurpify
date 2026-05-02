@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // RouteForkNode branches execution based on the route selected by the dispatcher.
@@ -25,7 +26,7 @@ func (f *RouteForkNode) ID() string { return f.id }
 func (f *RouteForkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeConditional }
 
 // Execute resolves the branch name and returns the next node identifier.
-func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	routeKind := "capability"
 	if env != nil {
@@ -49,7 +50,7 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	if env != nil {
 		env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)
 	}
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  f.id,
 		Success: true,
 		Data: map[string]any{

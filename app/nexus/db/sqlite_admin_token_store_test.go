@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,11 +16,11 @@ func TestSQLiteAdminTokenStoreCreateListAndRevoke(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, store.CreateToken(context.Background(), core.AdminTokenRecord{
+	require.NoError(t, store.CreateToken(context.Background(), identity.AdminTokenRecord{
 		ID:          "tok-1",
 		Name:        "subject-a",
 		TenantID:    "tenant-1",
-		SubjectKind: core.SubjectKindServiceAccount,
+		SubjectKind: identity.SubjectKindServiceAccount,
 		SubjectID:   "subject-a",
 		TokenHash:   "hash-1",
 		Scopes:      []string{"nexus:admin"},
@@ -32,7 +32,7 @@ func TestSQLiteAdminTokenStoreCreateListAndRevoke(t *testing.T) {
 	require.Len(t, records, 1)
 	require.Equal(t, "tok-1", records[0].ID)
 	require.Equal(t, "tenant-1", records[0].TenantID)
-	require.Equal(t, core.SubjectKindServiceAccount, records[0].SubjectKind)
+	require.Equal(t, identity.SubjectKindServiceAccount, records[0].SubjectKind)
 	require.Equal(t, []string{"nexus:admin"}, records[0].Scopes)
 
 	recordByHash, err := store.GetTokenByHash(context.Background(), "hash-1")

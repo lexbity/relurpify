@@ -35,11 +35,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
@@ -51,14 +53,14 @@ type Runtime struct {
 	Tools                *capability.Registry
 	Memory               *memory.WorkingMemoryStore
 	Agent                agentgraph.WorkflowExecutor
-	Model                core.LanguageModel
+	Model                contracts.LanguageModel
 	IndexManager         *ast.IndexManager
 	GraphDB              *graphdb.Engine
 	SearchEngine         *search.SearchEngine
 	AgentLifecycle       agentlifecycle.Repository
 	Registration         *fauthorization.AgentRegistration
 	Delegations          *fauthorization.DelegationManager
-	AgentSpec            *core.AgentRuntimeSpec
+	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	CapabilityAdmissions []capability.AdmissionResult
 	EffectiveContract    *manifest.EffectiveAgentContract
@@ -159,7 +161,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	baseTelemetry := ws.Telemetry
 	profileResolution := ws.ProfileResolution
 	if registration != nil && registration.Permissions != nil {
-		var agentSpec *core.AgentRuntimeSpec
+		var agentSpec *agentspec.AgentRuntimeSpec
 		if registration.Manifest != nil {
 			agentSpec = registration.Manifest.Spec.Agent
 		}
@@ -176,12 +178,12 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 				eventTelemetry = telemetry.EventTelemetry{
 					Log:       eventLog,
 					Partition: "local",
-					Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+					Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 				}
 				eventLogCloser = eventLog
 				// Re-wire the permission event logger with full event log support.
 				if registration.Permissions != nil {
-					registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+					registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 						payload := map[string]interface{}{
 							"permission_type": desc.Type,
 							"action":          desc.Action,
@@ -195,7 +197,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 								Timestamp: time.Now().UTC(),
 								Type:      core.FrameworkEventPolicyEvaluated,
 								Payload:   data,
-								Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+								Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 								Partition: "local",
 							}})
 						}
@@ -476,7 +478,7 @@ type CapabilityRegistryOptions struct {
 	Context           context.Context
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
-	AgentSpec         *core.AgentRuntimeSpec
+	AgentSpec         *agentspec.AgentRuntimeSpec
 	InferenceEndpoint string
 	InferenceModel    string
 	SkipASTIndex      bool
@@ -525,7 +527,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	}
 	paths := manifest.New(workspace)
 	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
-	register := func(tool core.Tool) error {
+	register := func(tool contracts.Tool) error {
 		if err := registry.Register(tool); err != nil {
 			return err
 		}
@@ -536,7 +538,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	for _, tool := range []core.Tool{
+	for _, tool := range []contracts.Tool{
 		&platformsearch.SimilarityTool{BasePath: workspace},
 		&platformsearch.SemanticSearchTool{BasePath: workspace},
 	} {
@@ -544,7 +546,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	for _, tool := range []core.Tool{
+	for _, tool := range []contracts.Tool{
 		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: sandboxCommandRunnerAdapter{runner: runner}},
 		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: sandboxCommandRunnerAdapter{runner: runner}},
 		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: sandboxCommandRunnerAdapter{runner: runner}},
@@ -582,9 +584,9 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	fileScope := fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots())
 	manager.SetFileScope(fileScope)
 	manager.SetPathFilter(func(path string, isDir bool) bool {
-		action := core.FileSystemRead
+		action := contracts.FileSystemRead
 		if isDir {
-			action = core.FileSystemList
+			action = contracts.FileSystemList
 		}
 		if fileScope.Check(action, path) != nil {
 			return false
@@ -705,7 +707,7 @@ func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env 
 	workspaceEnv := agents.ToWorkspace(env)
 	agent, err := agents.BuildFromSpec(&workspaceEnv, spec)
 	if err != nil {
-		agent, _ = agents.BuildFromSpec(&workspaceEnv, core.AgentRuntimeSpec{Implementation: "react"})
+		agent, _ = agents.BuildFromSpec(&workspaceEnv, agentspec.AgentRuntimeSpec{Implementation: "react"})
 	}
 	return configureBuiltAgent(agent, paths)
 }
@@ -858,7 +860,7 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog *nexusdb.SQLiteEven
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventManifestReloaded,
 			Payload:   data,
-			Actor:     core.EventActor{Kind: "agent", ID: agentID, Label: label},
+			Actor:     identity.EventActor{Kind: "agent", ID: agentID, Label: label},
 			Partition: "local",
 		}})
 	}

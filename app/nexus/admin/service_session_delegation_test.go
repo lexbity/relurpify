@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,10 +23,10 @@ func TestGrantSessionDelegation(t *testing.T) {
 	require.NoError(t, err)
 	defer identityStore.Close()
 
-	require.NoError(t, identityStore.UpsertTenant(context.Background(), core.TenantRecord{ID: "tenant-1", CreatedAt: time.Now().UTC()}))
-	require.NoError(t, identityStore.UpsertSubject(context.Background(), core.SubjectRecord{
+	require.NoError(t, identityStore.UpsertTenant(context.Background(), identity.TenantRecord{ID: "tenant-1", CreatedAt: time.Now().UTC()}))
+	require.NoError(t, identityStore.UpsertSubject(context.Background(), identity.SubjectRecord{
 		TenantID:  "tenant-1",
-		Kind:      core.SubjectKindServiceAccount,
+		Kind:      identity.SubjectKindServiceAccount,
 		ID:        "operator-1",
 		CreatedAt: time.Now().UTC(),
 	}))
@@ -37,7 +38,7 @@ func TestGrantSessionDelegation(t *testing.T) {
 		Scope:      core.SessionScopePerChannelPeer,
 		ChannelID:  "webchat",
 		PeerID:     "conv-1",
-		Owner:      core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(core.SubjectKindUser), ID: "user-1"},
+		Owner:      core.DelegationSubjectRef{TenantID: "tenant-1", Kind: string(identity.SubjectKindUser), ID: "user-1"},
 		TrustClass: core.TrustClassRemoteApproved,
 		CreatedAt:  time.Now().UTC(),
 	}))
@@ -48,16 +49,16 @@ func TestGrantSessionDelegation(t *testing.T) {
 	}).(*service)
 	result, err := svc.GrantSessionDelegation(context.Background(), GrantSessionDelegationRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin-1"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin-1"},
 			},
 			TenantID: "tenant-1",
 		},
 		SessionID:   "sess-1",
-		SubjectKind: core.SubjectKindServiceAccount,
+		SubjectKind: identity.SubjectKindServiceAccount,
 		SubjectID:   "operator-1",
 		Operations:  []core.SessionOperation{core.SessionOperationSend},
 	})

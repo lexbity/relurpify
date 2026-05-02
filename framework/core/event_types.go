@@ -7,19 +7,16 @@ import (
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
-// EventActor is re-exported from identity to maintain backward compatibility.
-type EventActor = identity.EventActor
-
 // FrameworkEvent is the replayable framework event envelope used by the V2 event log.
 type FrameworkEvent struct {
-	Seq            uint64          `json:"seq"`
-	Timestamp      time.Time       `json:"ts"`
-	Type           string          `json:"type"`
-	CausedBy       []uint64        `json:"caused_by,omitempty"`
-	Payload        json.RawMessage `json:"payload"`
-	Actor          EventActor      `json:"actor"`
-	IdempotencyKey string          `json:"idem_key,omitempty"`
-	Partition      string          `json:"partition"`
+	Seq            uint64              `json:"seq"`
+	Timestamp      time.Time           `json:"ts"`
+	Type           string              `json:"type"`
+	CausedBy       []uint64            `json:"caused_by,omitempty"`
+	Payload        json.RawMessage     `json:"payload"`
+	Actor          identity.EventActor `json:"actor"`
+	IdempotencyKey string              `json:"idem_key,omitempty"`
+	Partition      string              `json:"partition"`
 }
 
 const (

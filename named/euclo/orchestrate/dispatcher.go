@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
@@ -57,7 +58,7 @@ func (d *Dispatcher) ID() string { return d.id }
 func (d *Dispatcher) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute selects recipe or capability execution and writes the route to the envelope.
-func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	req := routeRequestFromEnvelope(env)
 	if env != nil {
 		if v, ok := env.GetWorkingValue("euclo.route.telemetry_off"); ok {
@@ -77,7 +78,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*a
 	if skillFilterName != "" && caps != nil {
 		scopedCaps, err := applySkillFilterToRegistry(d.workspace, skillFilterName, caps)
 		if err != nil {
-			return &agentgraph.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
+			return &core.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
 		}
 		caps = scopedCaps
 	}
@@ -90,7 +91,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*a
 		report, dryRunErr := DryRun(ctx, env, req, caps, d.recipeRegistry)
 		err = dryRunErr
 		if err != nil {
-			return &agentgraph.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
+			return &core.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
 		}
 		result = &RouteResult{
 			RouteKind:           report.SelectedKind,
@@ -106,7 +107,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*a
 	} else {
 		result, err = Dispatch(ctx, env, req, caps, d.recipeRegistry)
 		if err != nil {
-			return &agentgraph.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
+			return &core.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
 		}
 		if result != nil && skillFilterName != "" {
 			result.SkillFilterName = skillFilterName
@@ -115,7 +116,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*a
 
 	applyRouteResultToEnvelope(env, result)
 
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  d.id,
 		Success: true,
 		Data: map[string]any{

@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // UsePermissionManager enables default-deny enforcement for all tools.
-func (r *CapabilityRegistry) UsePermissionManager(agentID string, manager *PermissionManager) {
+func (r *CapabilityRegistry) UsePermissionManager(agentID string, manager *authorization.PermissionManager) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.permissionManager = manager
@@ -22,7 +24,7 @@ func (r *CapabilityRegistry) UsePermissionManager(agentID string, manager *Permi
 }
 
 // UseAgentSpec wires per-tool policies and other manifest-driven knobs into the registry.
-func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec) {
+func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *agentspec.AgentRuntimeSpec) {
 	if spec == nil {
 		return
 	}
@@ -33,7 +35,7 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec
 	r.mu.Unlock()
 
 	if spec.AllowedCapabilities != nil {
-		r.setAllowedCapabilities(core.EffectiveAllowedCapabilitySelectors(spec), true)
+		r.setAllowedCapabilities(agentspec.EffectiveAllowedCapabilitySelectors(spec), true)
 	}
 	r.setToolPolicies(spec.ToolExecutionPolicy)
 	r.setCapabilityPolicies(spec.CapabilityPolicies)
@@ -79,12 +81,12 @@ func (r *CapabilityRegistry) setAllowedCapabilities(allowed []core.CapabilitySel
 	r.RestrictToCapabilities(allowed)
 }
 
-func (r *CapabilityRegistry) setToolPolicies(policies map[string]ToolPolicy) {
+func (r *CapabilityRegistry) setToolPolicies(policies map[string]agentspec.ToolPolicy) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
-	r.toolPolicies = make(map[string]ToolPolicy, len(policies))
+	r.toolPolicies = make(map[string]agentspec.ToolPolicy, len(policies))
 	for name, policy := range policies {
 		r.toolPolicies[name] = policy
 	}
@@ -92,12 +94,12 @@ func (r *CapabilityRegistry) setToolPolicies(policies map[string]ToolPolicy) {
 	r.mu.Unlock()
 }
 
-func (r *CapabilityRegistry) setCapabilityPolicies(policies []core.CapabilityPolicy) {
+func (r *CapabilityRegistry) setCapabilityPolicies(policies []agentspec.CapabilityPolicy) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
-	r.capabilityPolicies = append([]core.CapabilityPolicy{}, policies...)
+	r.capabilityPolicies = append([]agentspec.CapabilityPolicy{}, policies...)
 	r.refreshRuntimePolicyLocked()
 	r.mu.Unlock()
 }
@@ -151,7 +153,7 @@ func (r *CapabilityRegistry) snapshotResolvedExposureLocked() []resolvedExposure
 	return out
 }
 
-func effectiveExposurePolicies(spec *AgentRuntimeSpec) []core.CapabilityExposurePolicy {
+func effectiveExposurePolicies(spec *agentspec.AgentRuntimeSpec) []core.CapabilityExposurePolicy {
 	if spec == nil {
 		return nil
 	}
@@ -250,22 +252,22 @@ func exposureRestrictiveness(access core.CapabilityExposure) int {
 	}
 }
 
-func cloneToolPolicies(input map[string]ToolPolicy) map[string]ToolPolicy {
+func cloneToolPolicies(input map[string]agentspec.ToolPolicy) map[string]agentspec.ToolPolicy {
 	if input == nil {
 		return nil
 	}
-	out := make(map[string]ToolPolicy, len(input))
+	out := make(map[string]agentspec.ToolPolicy, len(input))
 	for k, v := range input {
 		out[k] = v
 	}
 	return out
 }
 
-func cloneGlobalPolicies(input map[string]AgentPermissionLevel) map[string]AgentPermissionLevel {
+func cloneGlobalPolicies(input map[string]agentspec.AgentPermissionLevel) map[string]agentspec.AgentPermissionLevel {
 	if input == nil {
 		return nil
 	}
-	out := make(map[string]AgentPermissionLevel, len(input))
+	out := make(map[string]agentspec.AgentPermissionLevel, len(input))
 	for k, v := range input {
 		out[k] = v
 	}
@@ -294,11 +296,11 @@ func cloneInsertionPolicies(input []core.CapabilityInsertionPolicy) []core.Capab
 	return out
 }
 
-func cloneProviderPolicies(input map[string]core.ProviderPolicy) map[string]core.ProviderPolicy {
+func cloneProviderPolicies(input map[string]agentspec.ProviderPolicy) map[string]agentspec.ProviderPolicy {
 	if input == nil {
 		return nil
 	}
-	out := make(map[string]core.ProviderPolicy, len(input))
+	out := make(map[string]agentspec.ProviderPolicy, len(input))
 	for k, v := range input {
 		out[k] = v
 	}
@@ -314,7 +316,7 @@ func cloneRuntimeSafetySpec(input *agentspec.RuntimeSafetySpec) *agentspec.Runti
 }
 
 // setClassPolicies stores global capability-class policies and re-wraps all tools.
-func (r *CapabilityRegistry) setClassPolicies(policies map[string]AgentPermissionLevel) {
+func (r *CapabilityRegistry) setClassPolicies(policies map[string]agentspec.AgentPermissionLevel) {
 	if r == nil {
 		return
 	}
@@ -325,10 +327,10 @@ func (r *CapabilityRegistry) setClassPolicies(policies map[string]AgentPermissio
 }
 
 // GetToolPolicies returns a snapshot of per-tool execution policies.
-func (r *CapabilityRegistry) GetToolPolicies() map[string]ToolPolicy {
+func (r *CapabilityRegistry) GetToolPolicies() map[string]agentspec.ToolPolicy {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make(map[string]ToolPolicy, len(r.currentRuntimePolicyLocked().toolPolicies))
+	out := make(map[string]agentspec.ToolPolicy, len(r.currentRuntimePolicyLocked().toolPolicies))
 	for k, v := range r.currentRuntimePolicyLocked().toolPolicies {
 		out[k] = v
 	}
@@ -336,7 +338,7 @@ func (r *CapabilityRegistry) GetToolPolicies() map[string]ToolPolicy {
 }
 
 // GetClassPolicies returns a snapshot of capability-class permission policies.
-func (r *CapabilityRegistry) GetClassPolicies() map[string]AgentPermissionLevel {
+func (r *CapabilityRegistry) GetClassPolicies() map[string]agentspec.AgentPermissionLevel {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return cloneGlobalPolicies(r.currentRuntimePolicyLocked().globalPolicies)
@@ -365,8 +367,8 @@ func (r *CapabilityRegistry) capturePolicySnapshotLocked(now time.Time) *core.Po
 		ID:                 fmt.Sprintf("policy-%d", now.UnixNano()),
 		CapturedAt:         now,
 		AgentID:            r.registeredAgentID,
-		ToolPolicies:       make(map[string]ToolPolicy, len(policy.toolPolicies)),
-		CapabilityPolicies: append([]core.CapabilityPolicy{}, policy.capabilityPolicies...),
+		ToolPolicies:       make(map[string]agentspec.ToolPolicy, len(policy.toolPolicies)),
+		CapabilityPolicies: append([]agentspec.CapabilityPolicy{}, policy.capabilityPolicies...),
 		ExposurePolicies:   append([]core.CapabilityExposurePolicy{}, policy.exposurePolicies...),
 		GlobalPolicies:     cloneGlobalPolicies(policy.globalPolicies),
 	}
@@ -393,7 +395,7 @@ func clonePolicySnapshot(input *core.PolicySnapshot) *core.PolicySnapshot {
 		CapturedAt:         input.CapturedAt,
 		AgentID:            input.AgentID,
 		ToolPolicies:       cloneToolPolicies(input.ToolPolicies),
-		CapabilityPolicies: append([]core.CapabilityPolicy{}, input.CapabilityPolicies...),
+		CapabilityPolicies: append([]agentspec.CapabilityPolicy{}, input.CapabilityPolicies...),
 		ExposurePolicies:   append([]core.CapabilityExposurePolicy{}, input.ExposurePolicies...),
 		InsertionPolicies:  cloneInsertionPolicies(input.InsertionPolicies),
 		GlobalPolicies:     cloneGlobalPolicies(input.GlobalPolicies),
@@ -484,22 +486,22 @@ func (r *CapabilityRegistry) RecordSessionNetworkRequest(sessionID string, count
 }
 
 // UpdateToolPolicy updates a single tool's execution policy in-memory.
-func (r *CapabilityRegistry) UpdateToolPolicy(name string, policy ToolPolicy) {
+func (r *CapabilityRegistry) UpdateToolPolicy(name string, policy agentspec.ToolPolicy) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.toolPolicies == nil {
-		r.toolPolicies = make(map[string]ToolPolicy)
+		r.toolPolicies = make(map[string]agentspec.ToolPolicy)
 	}
 	r.toolPolicies[name] = policy
 	r.refreshRuntimePolicyLocked()
 }
 
 // UpdateClassPolicy updates a single capability-class policy in-memory.
-func (r *CapabilityRegistry) UpdateClassPolicy(class string, level AgentPermissionLevel) {
+func (r *CapabilityRegistry) UpdateClassPolicy(class string, level agentspec.AgentPermissionLevel) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.globalPolicies == nil {
-		r.globalPolicies = make(map[string]AgentPermissionLevel)
+		r.globalPolicies = make(map[string]agentspec.AgentPermissionLevel)
 	}
 	if level == "" {
 		delete(r.globalPolicies, class)
@@ -509,8 +511,8 @@ func (r *CapabilityRegistry) UpdateClassPolicy(class string, level AgentPermissi
 	r.refreshRuntimePolicyLocked()
 }
 
-func effectiveClassPolicy(tool Tool, policies map[string]AgentPermissionLevel) AgentPermissionLevel {
-	var result AgentPermissionLevel
+func effectiveClassPolicy(tool contracts.Tool, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
+	var result agentspec.AgentPermissionLevel
 	for _, label := range capabilityPolicyLabels(tool) {
 		level, ok := policies[label]
 		if !ok {
@@ -529,7 +531,7 @@ func effectiveClassPolicy(tool Tool, policies map[string]AgentPermissionLevel) A
 }
 
 // UseTelemetry wires a telemetry sink for all tool executions.
-func (r *CapabilityRegistry) UseTelemetry(telemetry Telemetry) {
+func (r *CapabilityRegistry) UseTelemetry(telemetry core.Telemetry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.telemetry = telemetry
@@ -584,7 +586,7 @@ func matchesAnyCompiledCapabilitySelector(selectors []compiledSelector, profile 
 	return false
 }
 
-func capabilityPolicyLabels(tool Tool) []string {
+func capabilityPolicyLabels(tool contracts.Tool) []string {
 	if tool == nil {
 		return nil
 	}
@@ -634,14 +636,14 @@ func capabilityPolicyLabelsForDescriptor(desc core.CapabilityDescriptor) []strin
 	return out
 }
 
-func effectiveCapabilityPolicy(tool Tool, policies []core.CapabilityPolicy) AgentPermissionLevel {
+func effectiveCapabilityPolicy(tool contracts.Tool, policies []agentspec.CapabilityPolicy) agentspec.AgentPermissionLevel {
 	if tool == nil || len(policies) == 0 {
 		return ""
 	}
 	desc := core.ToolDescriptor(context.Background(), tool)
-	var result AgentPermissionLevel
+	var result agentspec.AgentPermissionLevel
 	for _, policy := range policies {
-		if !core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(policy.Selector), desc) {
+		if !core.SelectorMatchesDescriptor(policy.Selector, desc) {
 			continue
 		}
 		switch {
@@ -656,15 +658,15 @@ func effectiveCapabilityPolicy(tool Tool, policies []core.CapabilityPolicy) Agen
 	return result
 }
 
-func effectiveCapabilityPolicyForDescriptor(desc core.CapabilityDescriptor, policies []core.CapabilityPolicy) AgentPermissionLevel {
+func effectiveCapabilityPolicyForDescriptor(desc core.CapabilityDescriptor, policies []agentspec.CapabilityPolicy) agentspec.AgentPermissionLevel {
 	return effectiveCompiledCapabilityPolicyForProfile(buildDescriptorProfile(desc), compileCapabilityPolicies(policies))
 }
 
-func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, policies []compiledCapabilityPolicy) AgentPermissionLevel {
+func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, policies []compiledCapabilityPolicy) agentspec.AgentPermissionLevel {
 	if len(policies) == 0 {
 		return ""
 	}
-	var result AgentPermissionLevel
+	var result agentspec.AgentPermissionLevel
 	for _, policy := range policies {
 		if !compiledSelectorMatches(policy.selector, profile) {
 			continue
@@ -681,12 +683,12 @@ func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, poli
 	return result
 }
 
-func effectiveClassPolicyForDescriptor(desc core.CapabilityDescriptor, policies map[string]AgentPermissionLevel) AgentPermissionLevel {
+func effectiveClassPolicyForDescriptor(desc core.CapabilityDescriptor, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
 	return effectiveClassPolicyForProfile(buildDescriptorProfile(desc), policies)
 }
 
-func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[string]AgentPermissionLevel) AgentPermissionLevel {
-	var result AgentPermissionLevel
+func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
+	var result agentspec.AgentPermissionLevel
 	for _, label := range profile.classLabels {
 		level, ok := policies[label]
 		if !ok {

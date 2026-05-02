@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -210,11 +210,11 @@ spec:
 func TestManifestCoversFileAction(t *testing.T) {
 	m := &manifest.AgentManifest{
 		Spec: manifest.ManifestSpec{
-			Permissions: core.PermissionSet{
-				FileSystem: []core.FileSystemPermission{
-					{Action: core.FileSystemWrite, Path: "${workspace}/**"},
-					{Action: core.FileSystemRead, Path: "/tmp/*.log"},
-					{Action: core.FileSystemDelete, Path: "/var/data/*"},
+			Permissions: contracts.PermissionSet{
+				FileSystem: []contracts.FileSystemPermission{
+					{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
+					{Action: contracts.FileSystemRead, Path: "/tmp/*.log"},
+					{Action: contracts.FileSystemDelete, Path: "/var/data/*"},
 				},
 			},
 		},
@@ -223,32 +223,32 @@ func TestManifestCoversFileAction(t *testing.T) {
 	workspace := "/home/user/project"
 
 	// Test: write within workspace should be covered
-	if !ManifestCoversFileAction(m, core.FileSystemWrite, "file.go", workspace) {
+	if !ManifestCoversFileAction(m, contracts.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected write to file.go to be covered by ${workspace}/**")
 	}
 
 	// Test: write to absolute path within workspace
-	if !ManifestCoversFileAction(m, core.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
+	if !ManifestCoversFileAction(m, contracts.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
 		t.Error("Expected write to /home/user/project/src/main.go to be covered")
 	}
 
 	// Test: read from /tmp with matching pattern
-	if !ManifestCoversFileAction(m, core.FileSystemRead, "/tmp/app.log", workspace) {
+	if !ManifestCoversFileAction(m, contracts.FileSystemRead, "/tmp/app.log", workspace) {
 		t.Error("Expected read of /tmp/app.log to be covered")
 	}
 
 	// Test: read from /tmp with non-matching pattern
-	if ManifestCoversFileAction(m, core.FileSystemRead, "/tmp/app.txt", workspace) {
+	if ManifestCoversFileAction(m, contracts.FileSystemRead, "/tmp/app.txt", workspace) {
 		t.Error("Expected read of /tmp/app.txt to NOT be covered (wrong extension)")
 	}
 
 	// Test: action not matching (write vs read)
-	if ManifestCoversFileAction(m, core.FileSystemWrite, "/tmp/app.log", workspace) {
+	if ManifestCoversFileAction(m, contracts.FileSystemWrite, "/tmp/app.log", workspace) {
 		t.Error("Expected write to /tmp/app.log to NOT be covered (pattern is read-only)")
 	}
 
 	// Test: nil manifest
-	if ManifestCoversFileAction(nil, core.FileSystemWrite, "file.go", workspace) {
+	if ManifestCoversFileAction(nil, contracts.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected nil manifest to not cover anything")
 	}
 }
@@ -257,8 +257,8 @@ func TestManifestCoversFileAction(t *testing.T) {
 func TestManifestCoversExecutable(t *testing.T) {
 	m := &manifest.AgentManifest{
 		Spec: manifest.ManifestSpec{
-			Permissions: core.PermissionSet{
-				Executables: []core.ExecutablePermission{
+			Permissions: contracts.PermissionSet{
+				Executables: []contracts.ExecutablePermission{
 					{Binary: "go"},
 					{Binary: "git"},
 					{Binary: "python*"},
@@ -297,8 +297,8 @@ func TestManifestCoversExecutable(t *testing.T) {
 func TestManifestCoversNetworkCall(t *testing.T) {
 	m := &manifest.AgentManifest{
 		Spec: manifest.ManifestSpec{
-			Permissions: core.PermissionSet{
-				Network: []core.NetworkPermission{
+			Permissions: contracts.PermissionSet{
+				Network: []contracts.NetworkPermission{
 					{Host: "api.example.com", Port: 443},
 					{Host: "*.local", Port: 0}, // any port
 					{Host: "localhost", Port: 8080},

@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func TestGetSessionDeniesCrossTenantAccess(t *testing.T) {
 		Scope:      core.SessionScopePerChannelPeer,
 		ChannelID:  "webchat",
 		PeerID:     "conv-1",
-		Owner:      core.DelegationSubjectRef{TenantID: "tenant-b", Kind: string(core.SubjectKindServiceAccount), ID: "svc-b"},
+		Owner:      core.DelegationSubjectRef{TenantID: "tenant-b", Kind: string(identity.SubjectKindServiceAccount), ID: "svc-b"},
 		TrustClass: core.TrustClassRemoteApproved,
 		CreatedAt:  time.Now().UTC(),
 	}))
@@ -33,11 +34,11 @@ func TestGetSessionDeniesCrossTenantAccess(t *testing.T) {
 	svc := NewService(ServiceConfig{Sessions: sessionStore}).(*service)
 	_, err = svc.GetSession(context.Background(), GetSessionRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:operator"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-b",
 		},
@@ -56,19 +57,19 @@ func TestListEventsFiltersToAuthorizedTenant(t *testing.T) {
 	require.NoError(t, err)
 	defer eventLog.Close()
 	_, err = eventLog.Append(context.Background(), "local", []core.FrameworkEvent{
-		{Timestamp: time.Now().UTC(), Type: "message.inbound.v1", Actor: core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"}, Partition: "local"},
-		{Timestamp: time.Now().UTC(), Type: "message.inbound.v1", Actor: core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"}, Partition: "local"},
+		{Timestamp: time.Now().UTC(), Type: "message.inbound.v1", Actor: identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"}, Partition: "local"},
+		{Timestamp: time.Now().UTC(), Type: "message.inbound.v1", Actor: identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"}, Partition: "local"},
 	})
 	require.NoError(t, err)
 
 	svc := NewService(ServiceConfig{Events: eventLog, Partition: "local"}).(*service)
 	result, err := svc.ReadEventStream(context.Background(), ReadEventStreamRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:operator"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},

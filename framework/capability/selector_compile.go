@@ -3,6 +3,7 @@ package capability
 import (
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -44,7 +45,7 @@ type compiledSelector struct {
 }
 
 type compiledCapabilityPolicy struct {
-	execute  AgentPermissionLevel
+	execute  agentspec.AgentPermissionLevel
 	selector compiledSelector
 }
 
@@ -122,7 +123,7 @@ func compileSelector(selector core.CapabilitySelector) compiledSelector {
 	}
 }
 
-func compileCapabilityPolicies(policies []core.CapabilityPolicy) []compiledCapabilityPolicy {
+func compileCapabilityPolicies(policies []agentspec.CapabilityPolicy) []compiledCapabilityPolicy {
 	if len(policies) == 0 {
 		return nil
 	}
@@ -130,7 +131,7 @@ func compileCapabilityPolicies(policies []core.CapabilityPolicy) []compiledCapab
 	for _, policy := range policies {
 		out = append(out, compiledCapabilityPolicy{
 			execute:  policy.Execute,
-			selector: compileSelector(core.CapabilitySelectorFromAgentSpec(policy.Selector)),
+			selector: compileSelector(policy.Selector),
 		})
 	}
 	return out
@@ -144,7 +145,7 @@ func compileExposurePolicies(policies []core.CapabilityExposurePolicy) []compile
 	for _, policy := range policies {
 		out = append(out, compiledExposurePolicy{
 			access:   policy.Access,
-			selector: compileSelector(core.CapabilitySelectorFromAgentSpec(policy.Selector)),
+			selector: compileSelector(policy.Selector),
 		})
 	}
 	return out

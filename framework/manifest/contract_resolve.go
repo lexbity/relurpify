@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // SkillResolver is an interface for resolving skills, provided by the skills package.
@@ -18,7 +18,7 @@ type ResolvedSkill struct {
 	Name        string
 	Manifest    *SkillManifest
 	Spec        *agentspec.AgentRuntimeSpec
-	Permissions []core.PermissionDescriptor
+	Permissions []contracts.PermissionDescriptor
 }
 
 // SkillResolution records the outcome of attempting to resolve a skill.

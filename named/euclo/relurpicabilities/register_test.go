@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type availabilityTool struct {
@@ -18,15 +19,15 @@ type availabilityTool struct {
 func (t availabilityTool) Name() string        { return t.name }
 func (t availabilityTool) Description() string { return t.name }
 func (t availabilityTool) Category() string    { return "test" }
-func (t availabilityTool) Parameters() []core.ToolParameter {
+func (t availabilityTool) Parameters() []contracts.ToolParameter {
 	return nil
 }
-func (t availabilityTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	return &core.ToolResult{Success: true}, nil
+func (t availabilityTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+	return &contracts.ToolResult{Success: true}, nil
 }
 func (t availabilityTool) IsAvailable(ctx context.Context) bool { return t.available }
-func (t availabilityTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
+func (t availabilityTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t availabilityTool) Tags() []string { return []string{"test"} }
 

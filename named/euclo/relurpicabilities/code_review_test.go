@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type mockReviewModel struct {
@@ -16,17 +16,17 @@ type mockReviewModel struct {
 	reply func(prompt string) string
 }
 
-func (m *mockReviewModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *mockReviewModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	if m.reply != nil {
-		return &core.LLMResponse{Text: m.reply(prompt)}, nil
+		return &contracts.LLMResponse{Text: m.reply(prompt)}, nil
 	}
-	return &core.LLMResponse{Text: `{"thought":"complete","complete":true,"summary":"ok"}`}, nil
+	return &contracts.LLMResponse{Text: `{"thought":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -40,11 +40,11 @@ func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, opt
 	return ch, nil
 }
 
-func (m *mockReviewModel) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *mockReviewModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	return m.Generate(ctx, "", options)
 }
 
-func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	return m.Generate(ctx, "", options)
 }
 

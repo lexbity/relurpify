@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
@@ -20,12 +19,12 @@ func newEnrollmentTestSvc(t *testing.T) (*service, *db.SQLiteIdentityStore) {
 	return NewService(ServiceConfig{Identities: identityStore}).(*service), identityStore
 }
 
-func globalAdminPrincipal(tenantID string) core.AuthenticatedPrincipal {
-	return core.AuthenticatedPrincipal{
+func globalAdminPrincipal(tenantID string) identity.AuthenticatedPrincipal {
+	return identity.AuthenticatedPrincipal{
 		TenantID:      tenantID,
 		Authenticated: true,
 		Scopes:        []string{"nexus:admin", "nexus:admin:global"},
-		Subject:       core.SubjectRef{TenantID: tenantID, Kind: core.SubjectKindServiceAccount, ID: "admin"},
+		Subject:       identity.SubjectRef{TenantID: tenantID, Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 	}
 }
 
@@ -38,7 +37,7 @@ func TestListNodeEnrollmentsReturnsEnrollmentsForTenant(t *testing.T) {
 	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-a",
-		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-a"},
+		Owner:      identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindNode, ID: "node-a"},
 		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-a"),
 		PairedAt:   now,
@@ -46,7 +45,7 @@ func TestListNodeEnrollmentsReturnsEnrollmentsForTenant(t *testing.T) {
 	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-2",
 		NodeID:     "node-b",
-		Owner:      core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindNode, ID: "node-b"},
+		Owner:      identity.SubjectRef{TenantID: "tenant-2", Kind: identity.SubjectKindNode, ID: "node-b"},
 		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-b"),
 		PairedAt:   now,
@@ -72,7 +71,7 @@ func TestRevokeNodeEnrollmentDeletesEnrollment(t *testing.T) {
 	require.NoError(t, store.UpsertNodeEnrollment(ctx, identity.NodeEnrollment{
 		TenantID:   "tenant-1",
 		NodeID:     "node-x",
-		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-x"},
+		Owner:      identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindNode, ID: "node-x"},
 		TrustClass: identity.TrustClassRemoteApproved,
 		PublicKey:  []byte("pk-x"),
 		PairedAt:   now,

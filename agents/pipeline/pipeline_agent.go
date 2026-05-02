@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PipelineStageFactory resolves pipeline stages for a task.
@@ -21,7 +22,7 @@ type PipelineStageFactory interface {
 
 // PipelineAgent executes a deterministic sequence of typed pipeline stages.
 type PipelineAgent struct {
-	Model             core.LanguageModel
+	Model             contracts.LanguageModel
 	Config            *core.Config
 	Tools             *capability.Registry
 	WorkflowStatePath string
@@ -229,7 +230,7 @@ func (a *PipelineAgent) telemetry() core.Telemetry {
 	return a.Config.Telemetry
 }
 
-func (a *PipelineAgent) availableTools() []core.Tool {
+func (a *PipelineAgent) availableTools() []contracts.Tool {
 	if a == nil {
 		return nil
 	}

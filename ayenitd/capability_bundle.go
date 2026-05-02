@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -26,9 +26,9 @@ import (
 var (
 	newCapabilityRegistryFn  = capability.NewRegistry
 	platformFileOperationsFn = platformfs.FileOperations
-	newSimilarityToolFn      = func(workspace string) core.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
-	newSemanticSearchToolFn  = func(workspace string) core.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
-	newGitCommandToolFn      = func(workspace, command string, runner contracts.CommandRunner) core.Tool {
+	newSimilarityToolFn      = func(workspace string) contracts.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
+	newSemanticSearchToolFn  = func(workspace string) contracts.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
+	newGitCommandToolFn      = func(workspace, command string, runner contracts.CommandRunner) contracts.Tool {
 		return &platformgit.GitCommandTool{RepoPath: workspace, Command: command, Runner: runner}
 	}
 	platformShellCommandLineToolsFn = platformshell.CommandLineTools
@@ -61,7 +61,7 @@ type CapabilityRegistryOptions struct {
 	Context           context.Context
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
-	AgentSpec         *core.AgentRuntimeSpec
+	AgentSpec         *agentspec.AgentRuntimeSpec
 	ProtectedPaths    []string
 	InferenceEndpoint string
 	InferenceModel    string
@@ -101,7 +101,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if len(cfg.ProtectedPaths) > 0 {
 		registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
 	}
-	register := func(tool core.Tool) error {
+	register := func(tool contracts.Tool) error {
 		if err := registry.Register(tool); err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	for _, tool := range []core.Tool{
+	for _, tool := range []contracts.Tool{
 		newSimilarityToolFn(workspace),
 		newSemanticSearchToolFn(workspace),
 	} {
@@ -120,7 +120,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	for _, tool := range []core.Tool{
+	for _, tool := range []contracts.Tool{
 		newGitCommandToolFn(workspace, "diff", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "history", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "branch", commandRunnerAdapter{runner: runner}),
@@ -157,9 +157,9 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	fileScope := fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths)
 	manager.SetFileScope(fileScope)
 	manager.SetPathFilter(func(path string, isDir bool) bool {
-		action := core.FileSystemRead
+		action := contracts.FileSystemRead
 		if isDir {
-			action = core.FileSystemList
+			action = contracts.FileSystemList
 		}
 		if fileScope.Check(action, path) != nil {
 			return false

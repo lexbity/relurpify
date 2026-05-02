@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type ToolDescriptorRegistry interface {
-	CallableTools() []capability.Tool
+	CallableTools() []contracts.Tool
 }
 
 func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []agentspec.CapabilitySelector {
@@ -20,17 +20,17 @@ func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []agentspec.Capabili
 // DeriveSandboxAllowlist returns the binary allowlist for the sandbox
 // by walking the effective (allowed) tool set and collecting each tool's
 // declared executable permissions.
-func DeriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+func DeriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []contracts.ExecutablePermission {
 	return deriveSandboxAllowlist(allowed, registry)
 }
 
-func deriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+func deriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []contracts.ExecutablePermission {
 	if registry == nil {
 		return nil
 	}
 
 	seen := make(map[string]bool)
-	var result []core.ExecutablePermission
+	var result []contracts.ExecutablePermission
 	for _, tool := range registry.CallableTools() {
 		desc := core.ToolDescriptor(context.Background(), tool)
 		if len(allowed) > 0 && !matchesAnyCapabilitySelector(allowed, desc) {
@@ -56,7 +56,7 @@ func matchesAnyCapabilitySelector(selectors []agentspec.CapabilitySelector, desc
 		return true
 	}
 	for _, selector := range selectors {
-		if core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(selector), desc) {
+		if core.SelectorMatchesDescriptor(selector, desc) {
 			return true
 		}
 	}

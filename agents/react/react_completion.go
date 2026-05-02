@@ -5,9 +5,11 @@ import (
 	"regexp"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
@@ -347,7 +349,7 @@ func verificationStopAllowed(agent *ReActAgent, task *core.Task) bool {
 	return len(agent.verificationSuccessTools(task)) == 0
 }
 
-func verificationLikeTool(tool core.Tool) bool {
+func verificationLikeTool(tool contracts.Tool) bool {
 	if tool == nil {
 		return false
 	}
@@ -376,6 +378,6 @@ func explicitlyRequestedToolNames(task *core.Task) map[string]struct{} {
 	return out
 }
 
-func agentSpecFromTask(task *core.Task) *core.AgentRuntimeSpec {
+func agentSpecFromTask(task *core.Task) *agentspec.AgentRuntimeSpec {
 	return frameworkskills.EffectiveAgentSpec(task, nil)
 }

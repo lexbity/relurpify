@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
@@ -98,7 +99,7 @@ var layerRules = []layerRule{
 }
 
 // Invoke scans the import graph and returns any boundary violations.
-func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), nil
 	}
@@ -177,7 +178,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	}
 
 	passed := len(violations) == 0
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

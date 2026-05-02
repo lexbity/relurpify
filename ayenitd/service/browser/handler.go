@@ -9,15 +9,17 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type browserCapability struct {
 	service *BrowserService
-	spec    *core.AgentRuntimeSpec
+	spec    *agentspec.AgentRuntimeSpec
 }
 
 func (h *browserCapability) Name() string { return "browser" }
@@ -28,8 +30,8 @@ func (h *browserCapability) Description() string {
 
 func (h *browserCapability) Category() string { return "browser" }
 
-func (h *browserCapability) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (h *browserCapability) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "action", Type: "string", Required: true},
 		{Name: "session_id", Type: "string", Required: false},
 		{Name: "backend", Type: "string", Required: false, Default: defaultBrowserBackend},
@@ -48,13 +50,13 @@ func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) 
 	return true
 }
 
-func (h *browserCapability) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(".", core.FileSystemRead)}
+func (h *browserCapability) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(".", contracts.FileSystemRead)}
 }
 
-func (h *browserCapability) Tags() []string { return []string{core.TagNetwork, "browser", "web"} }
+func (h *browserCapability) Tags() []string { return []string{contracts.TagNetwork, "browser", "web"} }
 
-func (h *browserCapability) SetAgentSpec(spec *core.AgentRuntimeSpec, _ string) {
+func (h *browserCapability) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, _ string) {
 	h.spec = spec
 	if h != nil && h.service != nil {
 		h.service.agentSpec = spec
@@ -110,11 +112,11 @@ func browserInputSchema() *core.Schema {
 	}
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	return h.Execute(ctx, env, args)
 }
 
-func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
+func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
 	action := canonicalBrowserAction(fmt.Sprint(args["action"]))
 	if err := h.authorizeAction(ctx, action, env, args); err != nil {
 		return nil, err
@@ -289,15 +291,15 @@ func (h *browserCapability) authorizeAction(ctx context.Context, action string, 
 			return err
 		}
 	}
-	if action == browserActionExecuteJS && policy != core.AgentPermissionDeny {
-		policy = core.AgentPermissionAsk
+	if action == browserActionExecuteJS && policy != agentspec.AgentPermissionDeny {
+		policy = agentspec.AgentPermissionAsk
 	}
 	switch policy {
-	case "", core.AgentPermissionAllow:
+	case "", agentspec.AgentPermissionAllow:
 		return nil
-	case core.AgentPermissionDeny:
+	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("browser action %s denied by agent spec", action)
-	case core.AgentPermissionAsk:
+	case agentspec.AgentPermissionAsk:
 		risk := fauthorization.RiskLevelMedium
 		if action == browserActionExecuteJS {
 			risk = fauthorization.RiskLevelHigh
@@ -393,8 +395,8 @@ func (s *BrowserService) requireActionApproval(ctx context.Context, action strin
 	metadata := map[string]string{
 		"browser_action": browserPermissionAction(action),
 	}
-	return s.permissionManager.RequireApproval(ctx, s.agentID(), core.PermissionDescriptor{
-		Type:         core.PermissionTypeCapability,
+	return s.permissionManager.RequireApproval(ctx, s.agentID(), contracts.PermissionDescriptor{
+		Type:         contracts.PermissionTypeCapability,
 		Action:       browserPermissionAction(action),
 		Resource:     resource,
 		Metadata:     metadata,

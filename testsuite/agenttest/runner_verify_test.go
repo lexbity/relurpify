@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -220,7 +220,7 @@ func writeVerifyGoWorkspace(t *testing.T) string {
 	return workspace
 }
 
-func keysOfToolIndex(index map[string]core.Tool) []string {
+func keysOfToolIndex(index map[string]contracts.Tool) []string {
 	keys := make([]string, 0, len(index))
 	for key := range index {
 		keys = append(keys, key)

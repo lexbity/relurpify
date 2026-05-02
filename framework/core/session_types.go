@@ -3,6 +3,8 @@ package core
 import (
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 const RestrictedExternalTenantID = "__relurpify_unresolved_external__"
@@ -32,7 +34,7 @@ type SessionBoundary struct {
 	LastActivityAt time.Time            `json:"last_activity_at,omitempty" yaml:"last_activity_at,omitempty"`
 }
 
-func (b SessionBoundary) OwnerMatches(actor EventActor) bool {
+func (b SessionBoundary) OwnerMatches(actor identity.EventActor) bool {
 	if b.Owner.ID != "" {
 		return b.Owner.Matches(actor)
 	}

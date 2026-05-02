@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type dryRunCountingHandler struct {
@@ -27,11 +28,11 @@ func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	h.mu.Lock()
 	h.invocations++
 	h.mu.Unlock()
-	return &core.CapabilityExecutionResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+	return &contracts.CapabilityExecutionResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
 }
 
 func (h *dryRunCountingHandler) count() int {

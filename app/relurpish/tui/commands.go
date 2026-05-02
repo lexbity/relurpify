@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -800,7 +800,7 @@ func savePolicyCmd(rt RuntimeAdapter, action string) tea.Cmd {
 		return nil // not a tool action
 	}
 	return func() tea.Msg {
-		if err := rt.SaveToolPolicy(toolName, core.AgentPermissionAllow); err != nil {
+		if err := rt.SaveToolPolicy(toolName, agentspec.AgentPermissionAllow); err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("Failed to save policy for %s: %v", toolName, err)}
 		}
 		return chatSystemMsg{Text: fmt.Sprintf("Policy for '%s' saved to manifest (always allow)", toolName)}

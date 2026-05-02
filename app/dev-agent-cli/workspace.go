@@ -12,7 +12,7 @@ import (
 
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"gopkg.in/yaml.v3"
 )
@@ -25,7 +25,7 @@ type inspectionTarget struct {
 	workspace    string
 	agentName    string
 	manifestPath string
-	spec         *core.AgentRuntimeSpec
+	spec         *agentspec.AgentRuntimeSpec
 	cfg          ayenitd.WorkspaceConfig
 }
 

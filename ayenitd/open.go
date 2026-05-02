@@ -23,6 +23,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,7 +37,7 @@ var (
 	registerAgentFn             = fauthorization.RegisterAgent
 	newCommandRunnerFn          = fsandbox.NewCommandRunner
 	newProfileRegistryFn        = llm.NewProfileRegistry
-	newInstrumentedModelFn      = func(inner core.LanguageModel, telemetry contracts.Telemetry, debug bool) core.LanguageModel {
+	newInstrumentedModelFn      = func(inner contracts.LanguageModel, telemetry contracts.Telemetry, debug bool) contracts.LanguageModel {
 		return llm.NewInstrumentedModel(inner, telemetry, debug)
 	}
 	bootstrapAgentRuntimeFn           = BootstrapAgentRuntime
@@ -108,7 +109,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 			if logStore, err := nexusdb.NewSQLiteEventLog(cfg.EventsPath); err == nil {
 				eventLog = logStore
 				if registration.Permissions != nil {
-					registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+					registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 						payload := map[string]interface{}{
 							"permission_type": desc.Type,
 							"action":          desc.Action,
@@ -122,7 +123,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 								Timestamp: time.Now().UTC(),
 								Type:      core.FrameworkEventPolicyEvaluated,
 								Payload:   data,
-								Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+								Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 								Partition: "local",
 							}})
 						}
@@ -139,7 +140,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 							Timestamp: time.Now().UTC(),
 							Type:      core.FrameworkEventManifestReloaded,
 							Payload:   data,
-							Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+							Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 							Partition: "local",
 						}})
 					}
@@ -195,10 +196,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	_ = applyProfileFn(model, profileResolution.Profile)
 	// Wire permission event logger if event telemetry is available.
 	if et, ok := tel.(interface {
-		EmitPermissionEvent(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{})
+		EmitPermissionEvent(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{})
 	}); ok {
 		if registration.Permissions != nil {
-			registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+			registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 				et.EmitPermissionEvent(ctx, desc, effect, reason, fields)
 			})
 		}

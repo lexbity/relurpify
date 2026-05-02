@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // DiffSummaryHandler implements the diff summary capability.
@@ -95,7 +96,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke runs git diff and returns a structured summary.
-func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), nil
 	}
@@ -135,7 +136,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	}
 	statOut, _, err := h.env.CommandRunner.Run(ctx, statReq)
 	if err != nil {
-		return &core.CapabilityExecutionResult{
+		return &contracts.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -176,7 +177,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 		}
 	}
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":       true,

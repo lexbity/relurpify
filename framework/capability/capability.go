@@ -3,6 +3,7 @@ package capability
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type Registry = CapabilityRegistry
@@ -14,7 +15,7 @@ type Exposure = agentspec.CapabilityExposure
 type Selector = agentspec.CapabilitySelector
 type Policy = agentspec.CapabilityPolicy
 type ExposurePolicy = agentspec.CapabilityExposurePolicy
-type ExecutionResult = core.CapabilityExecutionResult
+type ExecutionResult = contracts.CapabilityExecutionResult
 type PromptRenderResult = core.PromptRenderResult
 type ResourceReadResult = core.ResourceReadResult
 type Registrar = core.CapabilityRegistrar

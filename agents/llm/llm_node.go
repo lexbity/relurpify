@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // NodeTypeLLM represents an LLM call node type.
@@ -22,16 +23,16 @@ const NodeTypeLLM agentgraph.NodeType = "llm"
 // or conditional branches inside the same graph.
 type LLMNode struct {
 	id                 string
-	Model              core.LanguageModel
+	Model              contracts.LanguageModel
 	Prompt             string
-	Options            *core.LLMOptions
+	Options            *contracts.LLMOptions
 	CompilationTrigger agentgraph.CompilationTrigger // Optional: triggers context compilation before LLM call
 	Query              string                        // Query for context compilation (if CompilationTrigger set)
 	MaxTokens          int                           // Max tokens for compiled context
 }
 
 // NewLLMNode creates a new LLM node.
-func NewLLMNode(id string, model core.LanguageModel, prompt string, options *core.LLMOptions) *LLMNode {
+func NewLLMNode(id string, model contracts.LanguageModel, prompt string, options *contracts.LLMOptions) *LLMNode {
 	return &LLMNode{
 		id:      id,
 		Model:   model,
@@ -71,7 +72,7 @@ func (n *LLMNode) Contract() agentgraph.NodeContract {
 
 // Execute runs the prompt against the language model.
 // If CompilationTrigger is set, context is compiled and added to the prompt.
-func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
 	if n.Model == nil {
 		return nil, errors.New("llm node missing model")
 	}
@@ -114,7 +115,7 @@ func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*ag
 		data["compilation_shortfall"] = compilationShortfall
 	}
 
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data:    data,

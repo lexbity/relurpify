@@ -9,15 +9,16 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
 
-func testPrincipal(scopes ...string) core.AuthenticatedPrincipal {
-	return core.AuthenticatedPrincipal{
+func testPrincipal(scopes ...string) identity.AuthenticatedPrincipal {
+	return identity.AuthenticatedPrincipal{
 		TenantID:      "tenant-a",
 		Authenticated: true,
-		Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+		Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 		Scopes:        scopes,
 	}
 }

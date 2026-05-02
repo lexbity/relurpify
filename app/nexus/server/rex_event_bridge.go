@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 const rexEventBridgeConsumerID = "rex_event_bridge.v1"
@@ -350,7 +351,7 @@ func emitAdmissionRejection(ctx context.Context, log event.Log, frameworkEvent c
 		Timestamp: time.Now().UTC(),
 		Payload:   payload,
 		Partition: partitionOrDefault(frameworkEvent.Partition),
-		Actor: core.EventActor{
+		Actor: identity.EventActor{
 			Kind:     frameworkEvent.Actor.Kind,
 			ID:       frameworkEvent.Actor.ID,
 			TenantID: frameworkEvent.Actor.TenantID,

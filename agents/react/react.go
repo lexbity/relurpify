@@ -13,13 +13,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
-
 
 // ReActAgent implements the ReAct (Reason + Act) paradigm. It iteratively
 // thinks about the task, acts using tools, and observes results until completion.
 type ReActAgent struct {
-	Model           core.LanguageModel
+	Model           contracts.LanguageModel
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
 	Config          *core.Config

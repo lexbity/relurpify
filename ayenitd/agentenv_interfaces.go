@@ -1,16 +1,19 @@
 package ayenitd
 
-import "codeburg.org/lexbit/relurpify/framework/agentenv"
+import (
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
 
 // Type aliases so that callers can reference ayenitd.VerificationPlanner etc.
-// without importing framework/agentenv directly. These are the same types.
+// without importing framework/agentenv or platform/contracts directly.
 type (
 	VerificationPlanner           = agentenv.VerificationPlanner
-	VerificationPlan              = agentenv.VerificationPlan
-	VerificationPlanRequest       = agentenv.VerificationPlanRequest
-	VerificationCommand           = agentenv.VerificationCommand
+	VerificationPlan              = contracts.VerificationPlan
+	VerificationPlanRequest       = contracts.VerificationPlanRequest
+	VerificationCommand           = contracts.VerificationCommand
 	CompatibilitySurfaceExtractor = agentenv.CompatibilitySurfaceExtractor
-	CompatibilitySurface          = agentenv.CompatibilitySurface
-	CompatibilitySurfaceRequest   = agentenv.CompatibilitySurfaceRequest
+	CompatibilitySurface          = contracts.CompatibilitySurface
+	CompatibilitySurfaceRequest   = contracts.CompatibilitySurfaceRequest
 	WorkspaceEnvironment          = agentenv.WorkspaceEnvironment
 )

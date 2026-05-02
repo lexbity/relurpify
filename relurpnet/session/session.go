@@ -56,7 +56,7 @@ type PolicyEngine = authorization.PolicyEngine
 
 // AuthorizationRequest is the normalized session authorization input.
 type AuthorizationRequest struct {
-	Actor         core.EventActor
+	Actor         identity.EventActor
 	Authenticated bool
 	Operation     core.SessionOperation
 	Boundary      *core.SessionBoundary
@@ -134,7 +134,7 @@ func (r *DefaultRouter) Route(ctx context.Context, msg InboundMessage) (*core.Se
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventSessionCreated,
 			Payload:   payload,
-			Actor:     core.EventActor{Kind: "system", ID: "session-router", TenantID: boundary.TenantID},
+			Actor:     identity.EventActor{Kind: "system", ID: "session-router", TenantID: boundary.TenantID},
 			Partition: partition,
 		}})
 	}
@@ -271,7 +271,7 @@ func routedActorID(msg InboundMessage) string {
 	return msg.ActorID
 }
 
-func (r *DefaultRouter) isDelegated(ctx context.Context, boundary *core.SessionBoundary, actor core.EventActor, operation core.SessionOperation) (bool, error) {
+func (r *DefaultRouter) isDelegated(ctx context.Context, boundary *core.SessionBoundary, actor identity.EventActor, operation core.SessionOperation) (bool, error) {
 	if r == nil || r.Store == nil || boundary == nil {
 		return false, nil
 	}

@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type fmpLineageLister interface {
@@ -184,7 +185,7 @@ func eventLineageID(ev core.FrameworkEvent) string {
 	return ""
 }
 
-func (s *service) authorizeFMPLineage(ctx context.Context, principal core.AuthenticatedPrincipal, requestedTenantID, lineageID string) (string, *fwfmp.LineageRecord, error) {
+func (s *service) authorizeFMPLineage(ctx context.Context, principal identity.AuthenticatedPrincipal, requestedTenantID, lineageID string) (string, *fwfmp.LineageRecord, error) {
 	tenantID, err := authorizeTenant(principal, requestedTenantID)
 	if err != nil {
 		return "", nil, err

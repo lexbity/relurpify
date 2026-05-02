@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type InsertionAction = agentspec.InsertionAction
@@ -122,7 +123,7 @@ type PolicySnapshot struct {
 
 type CapabilityResultEnvelope struct {
 	Descriptor      CapabilityDescriptor    `json:"descriptor" yaml:"descriptor"`
-	Result          *ToolResult             `json:"result,omitempty" yaml:"result,omitempty"`
+	Result          *contracts.ToolResult   `json:"result,omitempty" yaml:"result,omitempty"`
 	ContentBlocks   []ContentBlock          `json:"-" yaml:"-"`
 	BlockInsertions []ContentBlockInsertion `json:"block_insertions,omitempty" yaml:"block_insertions,omitempty"`
 	Provenance      ContentProvenance       `json:"provenance,omitempty" yaml:"provenance,omitempty"`
@@ -133,7 +134,7 @@ type CapabilityResultEnvelope struct {
 	RecordedAt      time.Time               `json:"recorded_at" yaml:"recorded_at"`
 }
 
-func NewCapabilityResultEnvelope(descriptor CapabilityDescriptor, result *ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding) *CapabilityResultEnvelope {
+func NewCapabilityResultEnvelope(descriptor CapabilityDescriptor, result *contracts.ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding) *CapabilityResultEnvelope {
 	provenance := ContentProvenance{
 		CapabilityID: descriptor.ID,
 		ProviderID:   descriptor.Source.ProviderID,
@@ -197,7 +198,7 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 		return nil
 	}
 	summary = strings.TrimSpace(summary)
-	result := &ToolResult{
+	result := &contracts.ToolResult{
 		Success: true,
 		Data:    map[string]interface{}{"summary": summary},
 	}
@@ -237,7 +238,7 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 	return ApplyInsertionDecision(envelope, decision)
 }
 
-func ToolResultEnvelope(result *ToolResult) (*CapabilityResultEnvelope, bool) {
+func ToolResultEnvelope(result *contracts.ToolResult) (*CapabilityResultEnvelope, bool) {
 	if result == nil || result.Metadata == nil {
 		return nil, false
 	}
@@ -251,11 +252,11 @@ func ToolResultEnvelope(result *ToolResult) (*CapabilityResultEnvelope, bool) {
 
 // CapabilityExecutionEnvelope returns the capability envelope attached to an
 // execution result.
-func CapabilityExecutionEnvelope(result *CapabilityExecutionResult) (*CapabilityResultEnvelope, bool) {
+func CapabilityExecutionEnvelope(result *contracts.CapabilityExecutionResult) (*CapabilityResultEnvelope, bool) {
 	return ToolResultEnvelope(result)
 }
 
-func capabilityResultBlocks(result *ToolResult, provenance ContentProvenance) []ContentBlock {
+func capabilityResultBlocks(result *contracts.ToolResult, provenance ContentProvenance) []ContentBlock {
 	if result == nil {
 		return nil
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -42,18 +43,18 @@ func registerBrowserWorkspaceService(ctx context.Context, cfg WorkspaceConfig, r
 	return nil
 }
 
-func browserWorkspaceAgentSpec(registration *fauthorization.AgentRegistration) *core.AgentRuntimeSpec {
+func browserWorkspaceAgentSpec(registration *fauthorization.AgentRegistration) *agentspec.AgentRuntimeSpec {
 	if registration == nil || registration.Manifest == nil {
 		return nil
 	}
 	return registration.Manifest.Spec.Agent
 }
 
-func shouldEnableBrowserWorkspaceService(spec *core.AgentRuntimeSpec) bool {
+func shouldEnableBrowserWorkspaceService(spec *agentspec.AgentRuntimeSpec) bool {
 	return spec != nil && spec.Browser != nil && spec.Browser.Enabled
 }
 
-func browserDefaultBackend(spec *core.AgentRuntimeSpec) string {
+func browserDefaultBackend(spec *agentspec.AgentRuntimeSpec) string {
 	if spec != nil && spec.Browser != nil {
 		backend := strings.TrimSpace(spec.Browser.DefaultBackend)
 		if backend != "" {
@@ -63,7 +64,7 @@ func browserDefaultBackend(spec *core.AgentRuntimeSpec) string {
 	return "cdp"
 }
 
-func browserAllowedBackends(spec *core.AgentRuntimeSpec) []string {
+func browserAllowedBackends(spec *agentspec.AgentRuntimeSpec) []string {
 	if spec == nil || spec.Browser == nil || len(spec.Browser.AllowedBackends) == 0 {
 		return nil
 	}

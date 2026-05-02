@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
@@ -95,7 +96,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 }
 
 // Invoke executes the test command and returns parsed results.
-func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	// Extract arguments
 	command, ok := stringArg(args, "command")
 	if !ok {
@@ -136,7 +137,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
 		// Command execution failed (e.g., timeout, permission denied)
-		return &core.CapabilityExecutionResult{
+		return &contracts.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success":      false,
@@ -162,7 +163,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 		passed = false
 	}
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":      true,

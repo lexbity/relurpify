@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
@@ -32,7 +33,7 @@ func defaultTenant(tenantID string) string {
 	return tenantID
 }
 
-func authorizeTenant(principal core.AuthenticatedPrincipal, requestedTenantID string) (string, error) {
+func authorizeTenant(principal identity.AuthenticatedPrincipal, requestedTenantID string) (string, error) {
 	principalTenantID := strings.TrimSpace(principal.TenantID)
 	requestedTenantID = strings.TrimSpace(requestedTenantID)
 	if requestedTenantID == "" {
@@ -54,7 +55,7 @@ func authorizeTenant(principal core.AuthenticatedPrincipal, requestedTenantID st
 	}
 }
 
-func hasGlobalTenantScope(principal core.AuthenticatedPrincipal) bool {
+func hasGlobalTenantScope(principal identity.AuthenticatedPrincipal) bool {
 	for _, scope := range principal.Scopes {
 		switch strings.ToLower(strings.TrimSpace(scope)) {
 		case "nexus:admin:global", "gateway:admin:global", "admin:global":
@@ -137,7 +138,7 @@ func nodeDescriptorFromCoreNodeDescriptor(node core.NodeDescriptor) fwnode.NodeD
 		Platform:   relurpnet.NodePlatform(node.Platform),
 		TrustClass: node.TrustClass,
 		PairedAt:   time.Unix(node.PairedAt, 0).UTC(),
-		Owner:      core.SubjectRef{TenantID: node.TenantID, Kind: core.SubjectKindNode, ID: node.Owner},
+		Owner:      identity.SubjectRef{TenantID: node.TenantID, Kind: identity.SubjectKindNode, ID: node.Owner},
 	}
 	if len(node.Tags) > 0 {
 		out.Tags = copyStringMap(node.Tags)

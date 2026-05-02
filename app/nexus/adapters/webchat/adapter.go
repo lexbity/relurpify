@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/gorilla/websocket"
 )
 
@@ -154,7 +155,7 @@ func (a *Adapter) emitInbound(id, text string) error {
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventMessageInbound,
 		Payload:   payload,
-		Actor:     core.EventActor{Kind: "channel", ID: "webchat"},
+		Actor:     identity.EventActor{Kind: "channel", ID: "webchat"},
 		Partition: "local",
 	})
 }

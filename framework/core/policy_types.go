@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // PolicyRule is a declarative security rule evaluated at invocation time.
@@ -73,7 +75,7 @@ type RateLimit struct {
 
 type PolicyRequest struct {
 	Target                 PolicyTarget
-	Actor                  EventActor
+	Actor                  identity.EventActor
 	Authenticated          bool
 	ActorTenantID          string
 	ResourceTenantID       string

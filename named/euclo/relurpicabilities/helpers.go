@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // stringArg extracts a string argument from args map.
@@ -38,8 +38,8 @@ func intArg(args map[string]interface{}, key string, defaultValue int) (int, boo
 }
 
 // failResult returns a failure result with an error message.
-func failResult(message string) *core.CapabilityExecutionResult {
-	return &core.CapabilityExecutionResult{
+func failResult(message string) *contracts.CapabilityExecutionResult {
+	return &contracts.CapabilityExecutionResult{
 		Success: false,
 		Data: map[string]interface{}{
 			"success": false,

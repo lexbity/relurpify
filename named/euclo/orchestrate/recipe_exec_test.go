@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type noopCompiler struct{}
@@ -175,20 +176,20 @@ func TestRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 
 type stubRecipeModel struct{}
 
-func (stubRecipeModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubRecipeModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (stubRecipeModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+func (stubRecipeModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubRecipeModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "{}"}, nil
+func (stubRecipeModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: "{}"}, nil
 }
 
-func (stubRecipeModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubRecipeModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }

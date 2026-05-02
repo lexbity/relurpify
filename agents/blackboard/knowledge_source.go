@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // KnowledgeSourceSpec describes one specialist's scheduling and capability
@@ -32,7 +33,7 @@ type KnowledgeSource interface {
 	CanActivate(bb *Blackboard) bool
 	// Execute reads from bb, does work, and writes results back.
 	// The semctx parameter provides typed access to pre-resolved semantic context.
-	Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel, semctx agentspec.AgentSemanticContext) error
+	Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, model contracts.LanguageModel, semctx agentspec.AgentSemanticContext) error
 	// Priority breaks ties when multiple KS can activate. Higher wins.
 	Priority() int
 }

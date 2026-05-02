@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 func TestEnsureFederatedMeshGatewayInstallsHTTPForwarder(t *testing.T) {
@@ -50,7 +50,7 @@ func TestFederatedMeshGatewayRegistersHandlerAndForwards(t *testing.T) {
 	result, err := gateway.Forwarder.ForwardSealedContext(context.Background(), fwfmp.GatewayForwardRequest{
 		TrustDomain:        "mesh.remote",
 		SourceDomain:       "mesh.remote",
-		GatewayIdentity:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"},
+		GatewayIdentity:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "gw-1"},
 		DestinationExport:  "mesh://mesh.remote/agent.resume",
 		RouteMode:          fwfmp.RouteModeGateway,
 		SizeBytes:          128,
@@ -123,7 +123,7 @@ func TestHTTPGatewayForwarderPostsToRemoteFederationEndpoint(t *testing.T) {
 		TenantID:           "tenant-1",
 		TrustDomain:        "mesh.remote",
 		SourceDomain:       "mesh.local",
-		GatewayIdentity:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-local"},
+		GatewayIdentity:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "gw-local"},
 		DestinationExport:  "mesh://mesh.remote/agent.resume",
 		RouteMode:          fwfmp.RouteModeGateway,
 		SizeBytes:          128,

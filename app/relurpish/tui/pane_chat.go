@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -869,11 +870,11 @@ func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
 			continue
 		}
 		switch typed := raw.(type) {
-		case *core.ToolResult:
+		case *contracts.ToolResult:
 			if envelope, ok := core.ToolResultEnvelope(typed); ok {
 				return envelope
 			}
-		case core.ToolResult:
+		case contracts.ToolResult:
 			copy := typed
 			if envelope, ok := core.ToolResultEnvelope(&copy); ok {
 				return envelope

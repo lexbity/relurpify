@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // AgentEnvironment is the shared agent dependency container.
@@ -15,7 +16,7 @@ import (
 // This is a subset of WorkspaceEnvironment for use by generic agents.
 type AgentEnvironment struct {
 	Config         *core.Config
-	Model          core.LanguageModel
+	Model          contracts.LanguageModel
 	Registry       *capability.Registry
 	Memory         *memory.WorkingMemoryStore
 	IndexManager   *ast.IndexManager

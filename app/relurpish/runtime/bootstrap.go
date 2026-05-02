@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -26,11 +27,11 @@ type AgentBootstrapOptions struct {
 	AgentName           string
 	ConfigName          string
 	AgentsDir           string
-	AgentSpec           *core.AgentRuntimeSpec
+	AgentSpec           *agentspec.AgentRuntimeSpec
 	Manifest            *manifest.AgentManifest
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
-	Model               core.LanguageModel
+	Model               contracts.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
 	Telemetry           core.Telemetry
@@ -47,7 +48,7 @@ type BootstrappedAgentRuntime struct {
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
 	Memory               *memory.WorkingMemoryStore
-	AgentSpec            *core.AgentRuntimeSpec
+	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *core.Config
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
@@ -138,7 +139,7 @@ func graphDBFromIndexManager(indexManager *ast.IndexManager) *graphdb.Engine {
 	return indexManager.GraphDB
 }
 
-func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []core.AgentSpecOverlay {
+func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []agentspec.AgentSpecOverlay {
 	if defs == nil {
 		return nil
 	}
@@ -146,5 +147,5 @@ func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspe
 	if !ok || def == nil {
 		return nil
 	}
-	return []core.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
+	return []agentspec.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
 }

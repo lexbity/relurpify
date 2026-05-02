@@ -8,11 +8,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type chainRunner struct {
-	Model   core.LanguageModel
-	Options core.LLMOptions
+	Model   contracts.LanguageModel
+	Options contracts.LLMOptions
 }
 
 // FilterState returns only the requested state keys.
@@ -34,7 +35,7 @@ func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
 }
 
 // RunChain executes a chain against state using isolated prompts.
-func RunChain(ctx context.Context, model core.LanguageModel, task *core.Task, chain *Chain, env *contextdata.Envelope) error {
+func RunChain(ctx context.Context, model contracts.LanguageModel, task *core.Task, chain *Chain, env *contextdata.Envelope) error {
 	return (&chainRunner{Model: model}).Run(ctx, task, chain, env)
 }
 
@@ -61,7 +62,7 @@ func (r *chainRunner) Run(ctx context.Context, task *core.Task, chain *Chain, en
 		}
 		userPrompt := taskInstruction(task)
 		for {
-			resp, err := r.Model.Chat(ctx, []core.Message{
+			resp, err := r.Model.Chat(ctx, []contracts.Message{
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userPrompt},
 			}, &r.Options)

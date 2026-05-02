@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +25,7 @@ func TestGetTenantReturnsTenantInfo(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 
-	require.NoError(t, store.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:          "acme",
 		DisplayName: "Acme Corp",
 		CreatedAt:   now,
@@ -67,7 +67,7 @@ func TestSetTenantEnabledDisablesTenant(t *testing.T) {
 	svc, store := newTenantTestSvc(t)
 	ctx := context.Background()
 
-	require.NoError(t, store.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:        "tenant-x",
 		CreatedAt: time.Now().UTC(),
 	}))
@@ -97,7 +97,7 @@ func TestSetTenantEnabledReenablesTenant(t *testing.T) {
 	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	disabledAt := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 
-	require.NoError(t, store.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:         "tenant-y",
 		CreatedAt:  createdAt,
 		DisabledAt: &disabledAt,
@@ -132,14 +132,14 @@ func TestIssueTokenBlockedForDisabledTenant(t *testing.T) {
 	ctx := context.Background()
 	createdAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	disabledAt := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	require.NoError(t, identityStore.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, identityStore.UpsertTenant(ctx, identity.TenantRecord{
 		ID:         "disabled-tenant",
 		CreatedAt:  createdAt,
 		DisabledAt: &disabledAt,
 	}))
-	require.NoError(t, identityStore.UpsertSubject(ctx, core.SubjectRecord{
+	require.NoError(t, identityStore.UpsertSubject(ctx, identity.SubjectRecord{
 		TenantID:  "disabled-tenant",
-		Kind:      core.SubjectKindServiceAccount,
+		Kind:      identity.SubjectKindServiceAccount,
 		ID:        "svc-1",
 		CreatedAt: time.Now().UTC(),
 	}))
@@ -154,7 +154,7 @@ func TestIssueTokenBlockedForDisabledTenant(t *testing.T) {
 			Principal: globalAdminPrincipal("disabled-tenant"),
 			TenantID:  "disabled-tenant",
 		},
-		SubjectKind: core.SubjectKindServiceAccount,
+		SubjectKind: identity.SubjectKindServiceAccount,
 		SubjectID:   "svc-1",
 	})
 	require.Error(t, err)
@@ -170,13 +170,13 @@ func TestListTenantsReturnsDisplayNameAndDisabledAt(t *testing.T) {
 	createdAt := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	disabledAt := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
 
-	require.NoError(t, store.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:          "alpha",
 		DisplayName: "Alpha Team",
 		CreatedAt:   createdAt,
 		DisabledAt:  &disabledAt,
 	}))
-	require.NoError(t, store.UpsertTenant(ctx, core.TenantRecord{
+	require.NoError(t, store.UpsertTenant(ctx, identity.TenantRecord{
 		ID:          "beta",
 		DisplayName: "Beta Team",
 		CreatedAt:   createdAt,
@@ -184,11 +184,11 @@ func TestListTenantsReturnsDisplayNameAndDisabledAt(t *testing.T) {
 
 	result, err := svc.ListTenants(ctx, ListTenantsRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin", "nexus:admin:global"},
-				Subject:       core.SubjectRef{Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 		},
 	})

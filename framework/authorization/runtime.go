@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
 )
 
@@ -140,7 +141,7 @@ func buildSandboxPolicy(baseFS string, agentManifest *manifest.AgentManifest) sa
 // buildNetworkPolicy converts network permissions into sandbox-friendly rules
 // so the selected backend enforces the same view of allowed hosts/ports as the
 // permission manager.
-func buildNetworkPolicy(perms []core.NetworkPermission) []sandbox.NetworkRule {
+func buildNetworkPolicy(perms []contracts.NetworkPermission) []sandbox.NetworkRule {
 	var rules []sandbox.NetworkRule
 	for _, perm := range perms {
 		if perm.Direction != "egress" {
@@ -179,7 +180,7 @@ func (r *AgentRegistration) QueryAudit(ctx context.Context, filter core.AuditQue
 }
 
 // GrantPermission allows operators to programmatically approve scopes.
-func (r *AgentRegistration) GrantPermission(desc core.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
+func (r *AgentRegistration) GrantPermission(desc contracts.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
 	if r == nil || r.Permissions == nil {
 		return
 	}

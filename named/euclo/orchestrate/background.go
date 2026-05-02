@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // BackgroundJobNode manages background jobs (e.g., long-running tests, builds).
@@ -30,9 +31,9 @@ func (n *BackgroundJobNode) Type() agentgraph.NodeType {
 }
 
 // Execute manages a background job.
-func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
-	result := &agentgraph.Result{
+	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{
@@ -45,10 +46,10 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 
 // JobRecord tracks a background job.
 type JobRecord struct {
-	JobID      string
-	JobType    string
-	StartedAt  int64
-	Status     string
-	Output     string
+	JobID       string
+	JobType     string
+	StartedAt   int64
+	Status      string
+	Output      string
 	CompletedAt *int64
 }

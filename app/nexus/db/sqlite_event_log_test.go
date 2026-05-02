@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
 		Timestamp:      time.Now().UTC(),
 		Type:           core.FrameworkEventSystemStarted,
 		Payload:        payload,
-		Actor:          core.EventActor{Kind: "system", ID: "relurpify"},
+		Actor:          identity.EventActor{Kind: "system", ID: "relurpify"},
 		IdempotencyKey: "start-1",
 	}})
 	require.NoError(t, err)
@@ -33,7 +34,7 @@ func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
 		Timestamp:      time.Now().UTC(),
 		Type:           core.FrameworkEventSystemStarted,
 		Payload:        payload,
-		Actor:          core.EventActor{Kind: "system", ID: "relurpify"},
+		Actor:          identity.EventActor{Kind: "system", ID: "relurpify"},
 		IdempotencyKey: "start-1",
 	}})
 	require.NoError(t, err)
@@ -61,7 +62,7 @@ func TestSQLiteEventLogReadByTypeAndPartition(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 			Type:      eventType,
 			Partition: partition,
-			Actor:     core.EventActor{Kind: "system", ID: partition},
+			Actor:     identity.EventActor{Kind: "system", ID: partition},
 		}})
 		require.NoError(t, err)
 	}

@@ -11,22 +11,23 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
 type principalKey struct{}
 
-type adminToolHandler func(context.Context, AdminService, core.AuthenticatedPrincipal, string, map[string]any) (*protocol.CallToolResult, error)
+type adminToolHandler func(context.Context, AdminService, identity.AuthenticatedPrincipal, string, map[string]any) (*protocol.CallToolResult, error)
 
-func WithPrincipal(ctx context.Context, principal core.AuthenticatedPrincipal) context.Context {
+func WithPrincipal(ctx context.Context, principal identity.AuthenticatedPrincipal) context.Context {
 	return context.WithValue(ctx, principalKey{}, principal)
 }
 
-func principalFromContext(ctx context.Context) (core.AuthenticatedPrincipal, bool) {
+func principalFromContext(ctx context.Context) (identity.AuthenticatedPrincipal, bool) {
 	if ctx == nil {
-		return core.AuthenticatedPrincipal{}, false
+		return identity.AuthenticatedPrincipal{}, false
 	}
-	principal, ok := ctx.Value(principalKey{}).(core.AuthenticatedPrincipal)
+	principal, ok := ctx.Value(principalKey{}).(identity.AuthenticatedPrincipal)
 	return principal, ok
 }
 
@@ -97,7 +98,7 @@ func mustSchema(sample any) map[string]any {
 	}
 }
 
-func requestEnvelope(principal core.AuthenticatedPrincipal, version, tenantID string) AdminRequest {
+func requestEnvelope(principal identity.AuthenticatedPrincipal, version, tenantID string) AdminRequest {
 	return AdminRequest{
 		APIVersion: apiVersionOrDefault(version),
 		Principal:  principal,
@@ -200,7 +201,7 @@ func normalizeScope(s string) string {
 	}
 }
 
-func hasScope(principal core.AuthenticatedPrincipal, minimum string) bool {
+func hasScope(principal identity.AuthenticatedPrincipal, minimum string) bool {
 	if minimum == "" {
 		return true
 	}
@@ -217,7 +218,7 @@ func hasScope(principal core.AuthenticatedPrincipal, minimum string) bool {
 	return false
 }
 
-func tenantFromPrincipal(principal core.AuthenticatedPrincipal) string {
+func tenantFromPrincipal(principal identity.AuthenticatedPrincipal) string {
 	return strings.TrimSpace(principal.TenantID)
 }
 

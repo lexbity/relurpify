@@ -14,11 +14,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // RewooAgent executes a ReWOO-style plan with mechanical tool execution.
 type RewooAgent struct {
-	Model        core.LanguageModel
+	Model        contracts.LanguageModel
 	Tools        *capability.Registry
 	Memory       *memory.WorkingMemoryStore
 	Config       *core.Config

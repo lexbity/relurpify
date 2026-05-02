@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -99,7 +100,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 }
 
 // Invoke runs go test -cover and returns per-package coverage results.
-func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}
@@ -142,7 +143,7 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Enve
 
 	passed := err == nil && (threshold == 0 || totalCoverage >= threshold)
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: err == nil,
 		Data: map[string]interface{}{
 			"success":        err == nil,

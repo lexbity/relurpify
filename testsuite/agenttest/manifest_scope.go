@@ -4,15 +4,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ManifestCoversFileAction returns true if the manifest explicitly permits
 // the given action on the given path. Path may be absolute or relative to workspace.
 func ManifestCoversFileAction(
 	m *manifest.AgentManifest,
-	action core.FileSystemAction,
+	action contracts.FileSystemAction,
 	path, workspace string,
 ) bool {
 	if m == nil {

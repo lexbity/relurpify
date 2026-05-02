@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // envelopeGet retrieves a value from envelope working memory.
@@ -187,7 +188,7 @@ type blackboardDispatchNode struct {
 	id         string
 	controller *Controller
 	tools      *capability.Registry
-	model      core.LanguageModel
+	model      contracts.LanguageModel
 	semctx     agentspec.AgentSemanticContext
 	telemetry  core.Telemetry
 }

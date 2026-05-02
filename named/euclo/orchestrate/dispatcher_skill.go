@@ -50,7 +50,7 @@ func applySkillFilterToRegistry(workspace, skillName string, caps *capability.Ca
 	allowedIDs := make([]string, 0, len(snapshots))
 	for _, snap := range snapshots {
 		for _, selector := range selectors {
-			if core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(selector), snap.Descriptor) {
+			if core.SelectorMatchesDescriptor(selector, snap.Descriptor) {
 				allowedIDs = append(allowedIDs, snap.Descriptor.ID)
 				break
 			}

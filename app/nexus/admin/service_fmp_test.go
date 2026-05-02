@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestListFMPContinuationsFiltersToAuthorizedTenant(t *testing.T) {
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
 		ContextClass:   "workflow-runtime",
-		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		Owner:          identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "svc-a"},
 		UpdatedAt:      now,
 		LineageVersion: 1,
 	}))
@@ -32,7 +33,7 @@ func TestListFMPContinuationsFiltersToAuthorizedTenant(t *testing.T) {
 		TenantID:       "tenant-b",
 		TaskClass:      "agent.run",
 		ContextClass:   "workflow-runtime",
-		Owner:          core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindServiceAccount, ID: "svc-b"},
+		Owner:          identity.SubjectRef{TenantID: "tenant-b", Kind: identity.SubjectKindServiceAccount, ID: "svc-b"},
 		UpdatedAt:      now.Add(time.Minute),
 		LineageVersion: 2,
 	}))
@@ -40,11 +41,11 @@ func TestListFMPContinuationsFiltersToAuthorizedTenant(t *testing.T) {
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
 	result, err := svc.ListFMPContinuations(context.Background(), ListFMPContinuationsRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -70,7 +71,7 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
 		ContextClass:   "workflow-runtime",
-		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		Owner:          identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "svc-a"},
 		SessionID:      "sess-1",
 		UpdatedAt:      now,
 		LineageVersion: 1,
@@ -80,21 +81,21 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 		{
 			Timestamp: now,
 			Type:      fwfmp.FrameworkEventFMPResumeCommitted,
-			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(core.SubjectKindServiceAccount)},
+			Actor:     identity.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(identity.SubjectKindServiceAccount)},
 			Partition: "local",
 			Payload:   []byte(`{"lineage_id":"lineage-1","new_attempt":"attempt-b"}`),
 		},
 		{
 			Timestamp: now,
 			Type:      fwfmp.FrameworkEventFMPResumeCommitted,
-			Actor:     core.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(core.SubjectKindServiceAccount)},
+			Actor:     identity.EventActor{Kind: "service_account", ID: "svc-a", TenantID: "tenant-a", SubjectKind: string(identity.SubjectKindServiceAccount)},
 			Partition: "local",
 			Payload:   []byte(`{"lineage_id":"lineage-2","new_attempt":"attempt-c"}`),
 		},
 		{
 			Timestamp: now,
 			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
 			Partition: "local",
 			Payload:   []byte(`{"channel":"webchat"}`),
 		},
@@ -104,11 +105,11 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 	svc := NewService(ServiceConfig{FMP: mesh, Events: eventLog, Partition: "local"}).(*service)
 	result, err := svc.ReadFMPContinuationAudit(context.Background(), ReadFMPContinuationAuditRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -140,7 +141,7 @@ func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
 		ContextClass:   "workflow-runtime",
-		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		Owner:          identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "svc-a"},
 		UpdatedAt:      time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
 		LineageVersion: 1,
 	}))
@@ -159,11 +160,11 @@ func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
 	result, err := svc.ReadFMPContinuationAudit(context.Background(), ReadFMPContinuationAuditRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -194,7 +195,7 @@ func TestVerifyFMPAuditTrailReportsIntegrity(t *testing.T) {
 		TenantID:       "tenant-a",
 		TaskClass:      "agent.run",
 		ContextClass:   "workflow-runtime",
-		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		Owner:          identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "svc-a"},
 		UpdatedAt:      time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
 		LineageVersion: 1,
 	}))
@@ -210,11 +211,11 @@ func TestVerifyFMPAuditTrailReportsIntegrity(t *testing.T) {
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
 	result, err := svc.VerifyFMPAuditTrail(context.Background(), VerifyFMPAuditTrailRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -235,17 +236,17 @@ func TestReadFMPContinuationAuditDeniesCrossTenantAccess(t *testing.T) {
 		TenantID:     "tenant-a",
 		TaskClass:    "agent.run",
 		ContextClass: "workflow-runtime",
-		Owner:        core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		Owner:        identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "svc-a"},
 	}))
 
 	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
 	_, err := svc.ReadFMPContinuationAudit(context.Background(), ReadFMPContinuationAuditRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-b",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindServiceAccount, ID: "admin-b"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-b", Kind: identity.SubjectKindServiceAccount, ID: "admin-b"},
 			},
 			TenantID: "tenant-a",
 		},

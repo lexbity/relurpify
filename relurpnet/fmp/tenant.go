@@ -102,7 +102,7 @@ func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, ac
 			TrustClass: lineage.TrustClass,
 		}, nil
 	}
-	eventActor := core.EventActor{
+	eventActor := identity.EventActor{
 		ID:          actor.ID,
 		TenantID:    actor.TenantID,
 		SubjectKind: string(actor.Kind),

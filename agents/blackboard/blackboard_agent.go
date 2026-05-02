@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // BlackboardAgent implements graph.WorkflowExecutor using the Blackboard architecture.
@@ -21,7 +22,7 @@ import (
 // data-driven rather than structurally predetermined.
 type BlackboardAgent struct {
 	// Model is the language model available to knowledge sources.
-	Model core.LanguageModel
+	Model contracts.LanguageModel
 	// Tools is the capability registry available to knowledge sources.
 	Tools *capability.Registry
 	// Memory is the memory store for the agent.

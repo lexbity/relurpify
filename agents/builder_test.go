@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
@@ -15,7 +17,7 @@ func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
 		Registry: capability.NewRegistry(),
 	}
 
-	spec := core.AgentRuntimeSpec{Implementation: "react"}
+	spec := agentspec.AgentRuntimeSpec{Implementation: "react"}
 	executor, err := BuildFromSpec(env, spec)
 	if err != nil {
 		t.Fatalf("BuildFromSpec failed: %v", err)
@@ -31,7 +33,7 @@ func TestBuildFromSpec_ReturnsPipelineForPipelineType(t *testing.T) {
 		Registry: capability.NewRegistry(),
 	}
 
-	spec := core.AgentRuntimeSpec{Implementation: "pipeline"}
+	spec := agentspec.AgentRuntimeSpec{Implementation: "pipeline"}
 	executor, err := BuildFromSpec(env, spec)
 	if err != nil {
 		t.Fatalf("BuildFromSpec failed: %v", err)
@@ -47,7 +49,7 @@ func TestBuildFromSpec_UnknownTypeReturnsError(t *testing.T) {
 		Registry: capability.NewRegistry(),
 	}
 
-	spec := core.AgentRuntimeSpec{Implementation: "unknown_agent_type"}
+	spec := agentspec.AgentRuntimeSpec{Implementation: "unknown_agent_type"}
 	_, err := BuildFromSpec(env, spec)
 	if err == nil {
 		t.Fatal("expected error for unknown agent type")
@@ -66,8 +68,8 @@ func TestAgentBuilder_RequiresEnvironment(t *testing.T) {
 
 type mockModel struct{}
 
-func (m *mockModel) Complete(ctx context.Context, prompt string, opts *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "mock response"}, nil
+func (m *mockModel) Complete(ctx context.Context, prompt string, opts *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: "mock response"}, nil
 }
 
 type mockMemory struct{}

@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // MergePermissionSets unions multiple permission sets in order, de-duping entries.
-func MergePermissionSets(sets ...*core.PermissionSet) core.PermissionSet {
-	var merged core.PermissionSet
+func MergePermissionSets(sets ...*contracts.PermissionSet) contracts.PermissionSet {
+	var merged contracts.PermissionSet
 	fsSeen := make(map[string]struct{})
 	execSeen := make(map[string]struct{})
 	netSeen := make(map[string]struct{})

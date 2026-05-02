@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // TargetedRefactorHandler implements the targeted refactor capability.
@@ -104,7 +105,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextda
 }
 
 // Invoke locates the target symbol and applies the transformation.
-func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
 		return failResult("symbol argument is required"), nil
@@ -174,7 +175,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.E
 
 	if preview {
 		result["updated_content"] = newContent
-		return &core.CapabilityExecutionResult{Success: true, Data: result}, nil
+		return &contracts.CapabilityExecutionResult{Success: true, Data: result}, nil
 	}
 
 	if err := h.authorizeFileWrite(ctx, h.env, resolvedSourcePath); err != nil {
@@ -187,7 +188,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.E
 		_ = h.env.IndexManager.RefreshFiles([]string{resolvedSourcePath})
 	}
 	result["applied"] = true
-	return &core.CapabilityExecutionResult{Success: true, Data: result}, nil
+	return &contracts.CapabilityExecutionResult{Success: true, Data: result}, nil
 }
 
 type targetedRefactorProposal struct {
@@ -319,7 +320,7 @@ Return ONLY valid JSON with this shape:
 {"replacement":"full replacement block text","summary":"short explanation"}
 Do not include markdown fences. Do not edit outside the selected block.`,
 		sourcePath, target.Name, target.Type, target.StartLine, target.EndLine, transformation, original)
-	resp, err := h.env.Model.Generate(ctx, prompt, &core.LLMOptions{
+	resp, err := h.env.Model.Generate(ctx, prompt, &contracts.LLMOptions{
 		Model:       configuredModelName(h.env.Config),
 		Temperature: 0,
 		MaxTokens:   800,

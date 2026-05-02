@@ -29,7 +29,7 @@ type Workspace struct {
 	eventLog io.Closer
 
 	// Derived fields for callers that need them
-	AgentSpec            *core.AgentRuntimeSpec
+	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	EffectiveContract    *manifest.EffectiveAgentContract
 	CompiledPolicy       *manifest.CompiledPolicyBundle

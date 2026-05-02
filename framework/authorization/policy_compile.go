@@ -27,7 +27,7 @@ func CompileManifestPolicyRules(m *manifest.AgentManifest) ([]core.PolicyRule, e
 
 // CompileAgentSpecPolicyRules compiles policy surfaces from an effective agent
 // spec rather than a raw manifest.
-func CompileAgentSpecPolicyRules(spec *core.AgentRuntimeSpec) ([]core.PolicyRule, error) {
+func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]core.PolicyRule, error) {
 	if spec == nil {
 		return nil, nil
 	}
@@ -80,7 +80,7 @@ func CompileAgentSpecPolicyRules(spec *core.AgentRuntimeSpec) ([]core.PolicyRule
 	return rules, nil
 }
 
-func compileToolExecutionPolicy(toolName string, policy core.ToolPolicy) (core.PolicyRule, bool) {
+func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (core.PolicyRule, bool) {
 	if strings.TrimSpace(toolName) == "" || policy.Execute == "" {
 		return core.PolicyRule{}, false
 	}
@@ -98,7 +98,7 @@ func compileToolExecutionPolicy(toolName string, policy core.ToolPolicy) (core.P
 	}, true
 }
 
-func compileCapabilityPolicy(index int, policy core.CapabilityPolicy) (core.PolicyRule, error) {
+func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (core.PolicyRule, error) {
 	conditions, err := compileCapabilitySelector(policy.Selector)
 	if err != nil {
 		return core.PolicyRule{}, fmt.Errorf("capability_policies[%d] unsupported selector: %w", index, err)
@@ -113,7 +113,7 @@ func compileCapabilityPolicy(index int, policy core.CapabilityPolicy) (core.Poli
 	}, nil
 }
 
-func compileProviderPolicy(providerID string, policy core.ProviderPolicy) (core.PolicyRule, bool) {
+func compileProviderPolicy(providerID string, policy agentspec.ProviderPolicy) (core.PolicyRule, bool) {
 	if strings.TrimSpace(providerID) == "" || policy.Activate == "" {
 		return core.PolicyRule{}, false
 	}
@@ -151,7 +151,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 			RequireRestrictedExternal: policy.Selector.RequireRestrictedExternal,
 			AuthenticatedOnly:         policy.Selector.AuthenticatedOnly,
 		},
-		Effect:      core.AgentPermissionLevel(policy.Effect),
+		Effect:      agentspec.AgentPermissionLevel(policy.Effect),
 		Approvers:   append([]string{}, policy.Approvers...),
 		ApprovalTTL: policy.ApprovalTTL,
 		Reason:      policy.Reason,
@@ -223,7 +223,7 @@ func convertExternalProvidersToStrings(values []agentspec.ExternalProvider) []st
 	return out
 }
 
-func compileGlobalPolicy(key string, level core.AgentPermissionLevel) (*core.PolicyRule, error) {
+func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*core.PolicyRule, error) {
 	key = strings.TrimSpace(strings.ToLower(key))
 	if key == "" || key == "default_tool_policy" || level == "" {
 		return nil, nil
@@ -251,7 +251,7 @@ func compileGlobalPolicy(key string, level core.AgentPermissionLevel) (*core.Pol
 }
 
 func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.PolicyConditions, error) {
-	legacy := core.CapabilitySelectorFromAgentSpec(selector)
+	legacy := selector
 	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
 		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
 		selector.CoordinationLongRunning != nil || selector.CoordinationDirectInsertion != nil {
@@ -275,18 +275,18 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.Poli
 	return conditions, nil
 }
 
-func permissionLevelToEffect(level core.AgentPermissionLevel, reason string) core.PolicyEffect {
+func permissionLevelToEffect(level agentspec.AgentPermissionLevel, reason string) core.PolicyEffect {
 	return core.PolicyEffect{
 		Action: permissionLevelToAction(level),
 		Reason: reason,
 	}
 }
 
-func permissionLevelToAction(level core.AgentPermissionLevel) string {
+func permissionLevelToAction(level agentspec.AgentPermissionLevel) string {
 	switch level {
-	case core.AgentPermissionAllow:
+	case agentspec.AgentPermissionAllow:
 		return "allow"
-	case core.AgentPermissionDeny:
+	case agentspec.AgentPermissionDeny:
 		return "deny"
 	default:
 		return "require_approval"

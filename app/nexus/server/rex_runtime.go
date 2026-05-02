@@ -13,9 +13,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/named/rex"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
@@ -24,6 +24,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	rexstore "codeburg.org/lexbit/relurpify/named/rex/store"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
@@ -283,7 +284,7 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 	}
 	p.LineageBridge = &rexnexus.LineageBridge{
 		Service:        service,
-		LifecycleRepo:   p.Agent.Environment.AgentLifecycle,
+		LifecycleRepo:  p.Agent.Environment.AgentLifecycle,
 		RuntimeID:      p.runtimeDescriptor().RuntimeID,
 		PolicyResolver: p.TrustedResolver,
 	}
@@ -398,7 +399,7 @@ func (p *RexRuntimeProvider) CapabilityDescriptor() core.CapabilityDescriptor {
 	})
 }
 
-func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey string, principalTenantID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey string, principalTenantID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	if p == nil || p.Adapter == nil {
 		return nil, fmt.Errorf("rex runtime unavailable")
 	}
@@ -413,7 +414,7 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 		state.SetWorkingValue(rexkeys.GatewayTenantID, principalTenantID, contextdata.MemoryClassTask)
 	}
 	result, err := p.Adapter.Invoke(ctx, task, state)
-	out := &core.CapabilityExecutionResult{Success: err == nil, Data: map[string]any{}}
+	out := &contracts.CapabilityExecutionResult{Success: err == nil, Data: map[string]any{}}
 	if result != nil {
 		out.Success = result.Success
 		out.Data = result.Data

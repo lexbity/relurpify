@@ -57,9 +57,9 @@ func (n *RetrievalNode) Contract() NodeContract {
 }
 
 // Execute performs the retrieval operation.
-func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n.retriever == nil {
-		return &Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Error:   "retriever not configured",
@@ -84,7 +84,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	// Execute retrieval
 	result, err := n.retriever.Retrieve(ctx, query)
 	if err != nil {
-		return &Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Error:   fmt.Sprintf("retrieval failed: %v", err),
@@ -118,7 +118,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 	env.AddRetrievalReference(ref)
 
-	return &Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data:    map[string]any{"result": result},

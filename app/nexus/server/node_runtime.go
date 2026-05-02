@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/relurpnet"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/relurpnet"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 	"codeburg.org/lexbit/relurpify/relurpnet/session"
 	"github.com/gorilla/websocket"
@@ -98,11 +99,11 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 		switch frameType {
 		case "fmp.runtime.register":
 			var req struct {
-				Type        string                 `json:"type"`
-				TrustDomain string                 `json:"trust_domain"`
+				Type        string                  `json:"type"`
+				TrustDomain string                  `json:"trust_domain"`
 				Runtime     fwfmp.RuntimeDescriptor `json:"runtime"`
-				ExpiresAt   time.Time              `json:"expires_at,omitempty"`
-				Signature   string                 `json:"signature,omitempty"`
+				ExpiresAt   time.Time               `json:"expires_at,omitempty"`
+				Signature   string                  `json:"signature,omitempty"`
 			}
 			if err := remarshalNodeFrame(frame, &req); err != nil {
 				return err
@@ -138,12 +139,12 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			return conn.SendJSON(map[string]any{"type": "fmp.runtime.registered", "runtime_id": req.Runtime.RuntimeID, "trust_domain": req.TrustDomain})
 		case "fmp.export.advertise":
 			var req struct {
-				Type        string                `json:"type"`
-				TrustDomain string                `json:"trust_domain"`
-				RuntimeID   string                `json:"runtime_id"`
+				Type        string                 `json:"type"`
+				TrustDomain string                 `json:"trust_domain"`
+				RuntimeID   string                 `json:"runtime_id"`
 				Export      fwfmp.ExportDescriptor `json:"export"`
-				ExpiresAt   time.Time             `json:"expires_at,omitempty"`
-				Signature   string                `json:"signature,omitempty"`
+				ExpiresAt   time.Time              `json:"expires_at,omitempty"`
+				Signature   string                 `json:"signature,omitempty"`
 			}
 			if err := remarshalNodeFrame(frame, &req); err != nil {
 				return err
@@ -178,8 +179,8 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			return conn.SendJSON(map[string]any{"type": "fmp.export.advertised", "runtime_id": req.RuntimeID, "export_name": req.Export.ExportName, "trust_domain": req.TrustDomain})
 		case "fmp.chunk.open":
 			var req struct {
-				Type      string               `json:"type"`
-				LineageID string               `json:"lineage_id"`
+				Type      string                `json:"type"`
+				LineageID string                `json:"lineage_id"`
 				Manifest  fwfmp.ContextManifest `json:"manifest"`
 				Sealed    fwfmp.SealedContext   `json:"sealed"`
 			}
@@ -241,10 +242,10 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			return conn.SendJSON(map[string]any{"type": "fmp.chunk.cancelled", "transfer_id": req.TransferID, "reason": req.Reason})
 		case "fmp.resume.execute":
 			var req struct {
-				Type        string                `json:"type"`
-				Actor       identity.SubjectRef   `json:"actor"`
-				RuntimeID   string                `json:"runtime_id,omitempty"`
-				Offer       fwfmp.HandoffOffer    `json:"offer"`
+				Type        string                 `json:"type"`
+				Actor       identity.SubjectRef    `json:"actor"`
+				RuntimeID   string                 `json:"runtime_id,omitempty"`
+				Offer       fwfmp.HandoffOffer     `json:"offer"`
 				Destination fwfmp.ExportDescriptor `json:"destination"`
 				Manifest    fwfmp.ContextManifest  `json:"manifest"`
 				Sealed      fwfmp.SealedContext    `json:"sealed"`
@@ -535,14 +536,14 @@ func ListNodeCapabilities(manager *fwnode.Manager, principal fwgateway.Connectio
 	return manager.ListCapabilitiesForTenant(NormalizeTenantID(principal.Actor.TenantID))
 }
 
-func InvokeNodeCapability(ctx context.Context, manager *fwnode.Manager, principal fwgateway.ConnectionPrincipal, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func InvokeNodeCapability(ctx context.Context, manager *fwnode.Manager, principal fwgateway.ConnectionPrincipal, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	if manager == nil {
 		return nil, fmt.Errorf("node manager unavailable")
 	}
 	return manager.InvokeCapabilityForTenant(ctx, NormalizeTenantID(principal.Actor.TenantID), capabilityID, args)
 }
 
-func InvokeAuthorizedNodeCapability(ctx context.Context, router session.Router, store session.Store, manager *fwnode.Manager, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func InvokeAuthorizedNodeCapability(ctx context.Context, router session.Router, store session.Store, manager *fwnode.Manager, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	if store == nil {
 		return nil, fmt.Errorf("session store unavailable")
 	}

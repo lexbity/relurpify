@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextbudget"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
@@ -315,7 +315,7 @@ func browserCommandPolicyFromConfig(cfg browserSessionConfig) contracts.CommandP
 	if cfg.registration == nil || cfg.registration.Permissions == nil {
 		return nil
 	}
-	var spec *core.AgentRuntimeSpec
+	var spec *agentspec.AgentRuntimeSpec
 	if cfg.service != nil {
 		spec = cfg.service.agentSpec
 	}

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +29,7 @@ func TestCreateSubjectThenIssueToken(t *testing.T) {
 	createResult, err := svc.CreateSubject(context.Background(), CreateSubjectRequest{
 		AdminRequest:    AdminRequest{TenantID: "tenant-1"},
 		SubjectTenantID: "tenant-1",
-		SubjectKind:     core.SubjectKindServiceAccount,
+		SubjectKind:     identity.SubjectKindServiceAccount,
 		SubjectID:       "svc-1",
 		DisplayName:     "Service 1",
 		Roles:           []string{"operator"},
@@ -41,7 +40,7 @@ func TestCreateSubjectThenIssueToken(t *testing.T) {
 	tokenResult, err := svc.IssueToken(context.Background(), IssueTokenRequest{
 		AdminRequest:    AdminRequest{TenantID: "tenant-1"},
 		SubjectTenantID: "tenant-1",
-		SubjectKind:     core.SubjectKindServiceAccount,
+		SubjectKind:     identity.SubjectKindServiceAccount,
 		SubjectID:       "svc-1",
 		Scopes:          []string{"nexus:operator"},
 	})
@@ -52,7 +51,7 @@ func TestCreateSubjectThenIssueToken(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, record)
 	require.Equal(t, "tenant-1", record.TenantID)
-	require.Equal(t, core.SubjectKindServiceAccount, record.SubjectKind)
+	require.Equal(t, identity.SubjectKindServiceAccount, record.SubjectKind)
 }
 
 func TestBindExternalIdentity(t *testing.T) {
@@ -69,7 +68,7 @@ func TestBindExternalIdentity(t *testing.T) {
 	_, err = svc.CreateSubject(context.Background(), CreateSubjectRequest{
 		AdminRequest:    AdminRequest{TenantID: "tenant-1"},
 		SubjectTenantID: "tenant-1",
-		SubjectKind:     core.SubjectKindUser,
+		SubjectKind:     identity.SubjectKindUser,
 		SubjectID:       "user-1",
 		DisplayName:     "User 1",
 	})
@@ -81,7 +80,7 @@ func TestBindExternalIdentity(t *testing.T) {
 		Provider:        identity.ExternalProviderDiscord,
 		AccountID:       "guild-1",
 		ExternalID:      "discord-user-1",
-		SubjectKind:     core.SubjectKindUser,
+		SubjectKind:     identity.SubjectKindUser,
 		SubjectID:       "user-1",
 		DisplayName:     "Discord User 1",
 		ProviderLabel:   "Guild 1",

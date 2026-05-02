@@ -42,7 +42,7 @@ func (n *StreamTriggerNode) Contract() NodeContract {
 	return streamTriggerNodeContract(n)
 }
 
-func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("stream trigger node is nil")
 	}
@@ -76,7 +76,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 				env.SetWorkingValue("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
 			}
 		}()
-		return &Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
 			Data: map[string]any{
@@ -103,7 +103,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 			data["trimmed"] = result.Trim.Truncated
 			data["streamed_ref_count"] = len(result.Compilation.StreamedRefs)
 		}
-		return &Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
 			Data:    data,

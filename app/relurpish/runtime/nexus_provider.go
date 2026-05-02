@@ -7,9 +7,11 @@ import (
 	"strings"
 	"sync"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type nexusGatewayRuntimeProvider struct {
@@ -45,7 +47,7 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 	if rt == nil || rt.Tools == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	registrar, err := rt.Tools.ProviderCapabilityRegistrar(p.Descriptor(), core.ProviderPolicy{DefaultTrust: core.TrustClassRemoteApproved})
+	registrar, err := rt.Tools.ProviderCapabilityRegistrar(p.Descriptor(), agentspec.ProviderPolicy{DefaultTrust: core.TrustClassRemoteApproved})
 	if err != nil {
 		return err
 	}
@@ -148,7 +150,7 @@ func (c nexusRemoteInvocableCapability) Descriptor(context.Context, *contextdata
 	return c.desc
 }
 
-func (c nexusRemoteInvocableCapability) Invoke(ctx context.Context, state *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (c nexusRemoteInvocableCapability) Invoke(ctx context.Context, state *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("nexus client unavailable")
 	}

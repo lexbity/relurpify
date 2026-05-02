@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
@@ -86,7 +87,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 }
 
 // Invoke executes the call graph traversal and returns structured nodes and edges.
-func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	// Extract arguments
 	entryPoint, ok := stringArg(args, "entry_point")
 	if !ok || entryPoint == "" {
@@ -149,7 +150,7 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	}
 	writeRetrievalReferences(env, "call_graph_"+entryPoint, allNodes)
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":     true,

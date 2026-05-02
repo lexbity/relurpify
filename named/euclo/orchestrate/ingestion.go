@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 )
 
@@ -31,9 +32,9 @@ func (n *IngestionNode) Type() agentgraph.NodeType {
 }
 
 // Execute performs file ingestion.
-func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
-	result := &agentgraph.Result{
+	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{

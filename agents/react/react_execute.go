@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task, env *contextdata.Envelope, result *core.Result, err error) (*core.Result, error) {
@@ -84,7 +85,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 	if err != nil {
 		return err
 	}
-	call := core.ToolCall{
+	call := contracts.ToolCall{
 		ID:   NewUUID(),
 		Name: "file_read",
 		Args: map[string]any{"path": path},

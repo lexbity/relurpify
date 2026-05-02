@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
@@ -22,21 +21,21 @@ func TestListExternalIdentitiesSubjectKindFilter(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
+	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, identity.ExternalIdentity{
 		TenantID:   "tenant-1",
 		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "discord-user-1",
-		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+		Subject:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindUser, ID: "user-1"},
 		VerifiedAt: now,
 		LastSeenAt: now,
 	}))
-	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
+	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, identity.ExternalIdentity{
 		TenantID:   "tenant-1",
 		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "discord-bot-1",
-		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "bot-1"},
+		Subject:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "bot-1"},
 		VerifiedAt: now,
 		LastSeenAt: now,
 	}))
@@ -49,7 +48,7 @@ func TestListExternalIdentitiesSubjectKindFilter(t *testing.T) {
 			Principal: globalAdminPrincipal("tenant-1"),
 			TenantID:  "tenant-1",
 		},
-		SubjectKind: core.SubjectKindUser,
+		SubjectKind: identity.SubjectKindUser,
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Identities, 1)
@@ -66,21 +65,21 @@ func TestListExternalIdentitiesSubjectIDFilter(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
+	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, identity.ExternalIdentity{
 		TenantID:   "tenant-1",
 		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "ext-a",
-		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-alice"},
+		Subject:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindUser, ID: "user-alice"},
 		VerifiedAt: now,
 		LastSeenAt: now,
 	}))
-	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
+	require.NoError(t, identityStore.UpsertExternalIdentity(ctx, identity.ExternalIdentity{
 		TenantID:   "tenant-1",
 		Provider:   identity.ExternalProviderDiscord,
 		AccountID:  "guild-1",
 		ExternalID: "ext-b",
-		Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-bob"},
+		Subject:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindUser, ID: "user-bob"},
 		VerifiedAt: now,
 		LastSeenAt: now,
 	}))
@@ -110,12 +109,12 @@ func TestListExternalIdentitiesNoFilterReturnsAll(t *testing.T) {
 	now := time.Now().UTC()
 
 	for i, extID := range []string{"ext-1", "ext-2", "ext-3"} {
-		require.NoError(t, identityStore.UpsertExternalIdentity(ctx, core.ExternalIdentity{
+		require.NoError(t, identityStore.UpsertExternalIdentity(ctx, identity.ExternalIdentity{
 			TenantID:   "tenant-1",
 			Provider:   identity.ExternalProviderDiscord,
 			AccountID:  "guild-1",
 			ExternalID: extID,
-			Subject:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: extID},
+			Subject:    identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindUser, ID: extID},
 			VerifiedAt: now.Add(time.Duration(i) * time.Second),
 			LastSeenAt: now.Add(time.Duration(i) * time.Second),
 		}))

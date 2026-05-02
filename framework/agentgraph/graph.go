@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // NodeType enumerates supported node categories.
@@ -33,11 +34,11 @@ const (
 type Node interface {
 	ID() string
 	Type() NodeType
-	Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error)
+	Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error)
 }
 
 // ConditionFunc determines whether an edge should be followed.
-type ConditionFunc func(result *Result, env *contextdata.Envelope) bool
+type ConditionFunc func(result *core.Result, env *contextdata.Envelope) bool
 
 // Edge describes a transition between nodes.
 type Edge struct {
@@ -65,7 +66,7 @@ type Graph struct {
 	edges             map[string][]Edge
 	startNodeID       string
 	maxNodeVisits     int
-	telemetry         Telemetry
+	telemetry         core.Telemetry
 	execMu            sync.Mutex
 	visitCounts       map[string]int
 	executionPath     []string
@@ -95,7 +96,7 @@ func NewGraph() *Graph {
 }
 
 // SetTelemetry wires a telemetry sink for execution traces.
-func (g *Graph) SetTelemetry(t Telemetry) {
+func (g *Graph) SetTelemetry(t core.Telemetry) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.telemetry = t
@@ -123,7 +124,7 @@ func (g *Graph) SetMaxNodeVisits(limit int) {
 }
 
 // emit sends telemetry events when a sink is configured; a no-op otherwise.
-func (g *Graph) emit(event Event) {
+func (g *Graph) emit(event core.Event) {
 	g.mu.RLock()
 	telemetry := g.telemetry
 	g.mu.RUnlock()
@@ -188,7 +189,7 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 }
 
 // Execute runs the graph from its start node.
-func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -198,8 +199,8 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result
 
 	taskID := g.extractTaskID(env)
 	taskMeta := g.extractTaskMeta(env)
-	g.emit(Event{
-		Type:      EventGraphStart,
+	g.emit(core.Event{
+		Type:      core.EventGraphStart,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  taskMeta,
@@ -210,8 +211,8 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result
 		if execErr != nil {
 			status = "error"
 		}
-		g.emit(Event{
-			Type:      EventGraphFinish,
+		g.emit(core.Event{
+			Type:      core.EventGraphFinish,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]interface{}{
@@ -230,7 +231,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result
 	return lastResult, err
 }
 
-func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*Result, error) {
+func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*core.Result, error) {
 	g.execMu.Lock()
 	defer g.execMu.Unlock()
 	if reset {
@@ -242,7 +243,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 	// adds step nodes/edges dynamically). Holding a read lock here would
 	// deadlock against the write lock those mutations require.
 
-	var lastResult *Result
+	var lastResult *core.Result
 	for current != "" {
 		select {
 		case <-ctx.Done():
@@ -260,24 +261,24 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, fmt.Errorf("potential cycle detected at node %s", current)
 		}
 		g.executionPath = append(g.executionPath, current)
-		g.emit(Event{
-			Type:      EventNodeStart,
+		g.emit(core.Event{
+			Type:      core.EventNodeStart,
 			NodeID:    current,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 		})
 
-		taskType := TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
+		taskType := core.TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
 		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
-		nodeCtx := WithTaskContext(ctx, TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
+		nodeCtx := core.WithTaskContext(ctx, core.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
 		if g.telemetry != nil {
 			nodeCtx = core.WithTelemetry(nodeCtx, g.telemetry)
 		}
 		result, err := node.Execute(nodeCtx, env)
 		if err != nil {
 			err = fmt.Errorf("node %s execution failed: %w", current, err)
-			g.emit(Event{
-				Type:      EventNodeError,
+			g.emit(core.Event{
+				Type:      core.EventNodeError,
 				NodeID:    current,
 				TaskID:    taskID,
 				Timestamp: time.Now().UTC(),
@@ -286,15 +287,15 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, err
 		}
 		if result == nil {
-			result = &Result{NodeID: current, Success: true, Data: map[string]interface{}{}}
+			result = &core.Result{NodeID: current, Success: true, Data: map[string]interface{}{}}
 		}
 		result.NodeID = current
 		lastResult = result
 		for key, value := range result.Data {
 			env.SetWorkingValue(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
-		g.emit(Event{
-			Type:      EventNodeFinish,
+		g.emit(core.Event{
+			Type:      core.EventNodeFinish,
 			NodeID:    current,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
@@ -342,7 +343,7 @@ func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]interface{
 // executed optimistically on cloned contexts while serial edges behave like a
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
-func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *Result) (string, string, error) {
+func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *core.Result) (string, string, error) {
 	g.mu.RLock()
 	outEdges := make([]Edge, len(g.edges[node.ID()]))
 	copy(outEdges, g.edges[node.ID()])
@@ -448,7 +449,7 @@ func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []paral
 // executeBranch runs a detached sub-graph that starts at the provided node.
 // The parent graph shares the node/edge definitions but each branch receives a
 // cloned Envelope, which preserves determinism until Merge recombines updates.
-func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*Result, error) {
+func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*core.Result, error) {
 	// We reuse the same node/edge maps because branch graphs are read-only. The
 	// only mutable data lives inside the cloned Envelope passed to this function.
 	subGraph := &Graph{
@@ -524,7 +525,7 @@ func (g *Graph) Validate() error {
 // ToolNode executes a tool by name.
 type ToolNode struct {
 	id       string
-	Tool     Tool
+	Tool     contracts.Tool
 	Args     map[string]interface{}
 	Registry CapabilityInvoker
 }
@@ -532,13 +533,13 @@ type ToolNode struct {
 // CapabilityInvoker is the narrow registry contract ToolNode needs for
 // capability-routed execution without importing the concrete registry package.
 type CapabilityInvoker interface {
-	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
+	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
 	CapturePolicySnapshot() *core.PolicySnapshot
 	GetCapability(idOrName string) (core.CapabilityDescriptor, bool)
 }
 
 // NewToolNode constructs a tool node with a required capability invoker.
-func NewToolNode(id string, tool Tool, args map[string]interface{}, registry CapabilityInvoker) *ToolNode {
+func NewToolNode(id string, tool contracts.Tool, args map[string]interface{}, registry CapabilityInvoker) *ToolNode {
 	if registry == nil {
 		panic("graph.NewToolNode requires a capability registry")
 	}
@@ -563,7 +564,7 @@ func (n *ToolNode) Contract() NodeContract {
 }
 
 // Execute calls the tool through the capability registry.
-func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n.Tool == nil {
 		return nil, errors.New("tool node missing tool")
 	}
@@ -602,12 +603,12 @@ func (n *ConditionalNode) ID() string { return n.id }
 func (n *ConditionalNode) Type() NodeType { return NodeTypeConditional }
 
 // Execute just evaluates the condition and stores the decision.
-func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	to, err := n.Condition(env)
 	if err != nil {
 		return nil, err
 	}
-	return &Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]interface{}{
@@ -647,13 +648,13 @@ func (n *HumanNode) Contract() NodeContract {
 }
 
 // Execute pauses execution until callback completes.
-func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n.Callback != nil {
 		if err := n.Callback(env); err != nil {
 			return nil, err
 		}
 	}
-	return &Result{NodeID: n.id, Success: true}, nil
+	return &core.Result{NodeID: n.id, Success: true}, nil
 }
 
 // TerminalNode marks the end of the workflow.
@@ -689,8 +690,8 @@ func (n *TerminalNode) Contract() NodeContract {
 }
 
 // Execute completes immediately.
-func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
-	return &Result{NodeID: n.id, Success: true}, nil
+func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	return &core.Result{NodeID: n.id, Success: true}, nil
 }
 
 // errorFromString reconstructs an error from a stored message, enabling tool
@@ -702,15 +703,15 @@ func errorFromString(err string) error {
 	return errors.New(err)
 }
 
-func resultFromToolExecution(nodeID string, res *core.ToolResult) *Result {
+func resultFromToolExecution(nodeID string, res *contracts.ToolResult) *core.Result {
 	if res == nil {
-		return &Result{NodeID: nodeID, Success: true, Data: map[string]interface{}{}}
+		return &core.Result{NodeID: nodeID, Success: true, Data: map[string]interface{}{}}
 	}
 	data := res.Data
 	if data == nil {
 		data = map[string]interface{}{}
 	}
-	return &Result{
+	return &core.Result{
 		NodeID:   nodeID,
 		Success:  res.Success,
 		Data:     data,
@@ -719,7 +720,7 @@ func resultFromToolExecution(nodeID string, res *core.ToolResult) *Result {
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, env *contextdata.Envelope, res *core.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool contracts.Tool, env *contextdata.Envelope, res *contracts.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}

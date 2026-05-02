@@ -902,7 +902,7 @@ func (s *Service) validateContinuationAuthority(ctx context.Context, lineage Lin
 				return err
 			}
 			allowed := false
-			eventActor := core.EventActor{
+			eventActor := identity.EventActor{
 				ID:          authorized.Subject.ID,
 				TenantID:    authorized.Subject.TenantID,
 				SubjectKind: string(authorized.Subject.Kind),
@@ -1020,7 +1020,7 @@ func (s *Service) emit(ctx context.Context, eventType string, owner identity.Sub
 		Type:      eventType,
 		Payload:   body,
 		Partition: partition,
-		Actor: core.EventActor{
+		Actor: identity.EventActor{
 			Kind:        string(owner.Kind),
 			ID:          owner.ID,
 			TenantID:    owner.TenantID,

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // RiskLevel models the qualitative assessment required by the HITL flow.
@@ -39,17 +39,17 @@ const (
 
 // PermissionRequest captures a pending permission escalation.
 type PermissionRequest struct {
-	ID              string                    `json:"id"`
-	Permission      core.PermissionDescriptor `json:"permission"`
-	Justification   string                    `json:"justification"`
-	Scope           GrantScope                `json:"scope"`
-	Duration        time.Duration             `json:"duration"`
-	Risk            RiskLevel                 `json:"risk"`
-	RunID           string                    `json:"run_id,omitempty"`
-	Timeout         time.Duration             `json:"timeout,omitempty"`
-	TimeoutBehavior HITLTimeoutBehavior       `json:"timeout_behavior,omitempty"`
-	RequestedAt     time.Time                 `json:"requested_at"`
-	State           string                    `json:"state"`
+	ID              string                         `json:"id"`
+	Permission      contracts.PermissionDescriptor `json:"permission"`
+	Justification   string                         `json:"justification"`
+	Scope           GrantScope                     `json:"scope"`
+	Duration        time.Duration                  `json:"duration"`
+	Risk            RiskLevel                      `json:"risk"`
+	RunID           string                         `json:"run_id,omitempty"`
+	Timeout         time.Duration                  `json:"timeout,omitempty"`
+	TimeoutBehavior HITLTimeoutBehavior            `json:"timeout_behavior,omitempty"`
+	RequestedAt     time.Time                      `json:"requested_at"`
+	State           string                         `json:"state"`
 }
 
 // PermissionDecision encapsulates an approval or rejection.
@@ -303,7 +303,7 @@ func (h *HITLBroker) PendingRequests() []*PermissionRequest {
 }
 
 // GrantManual creates a permission grant without the async flow.
-func GrantManual(permission core.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) *PermissionGrant {
+func GrantManual(permission contracts.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) *PermissionGrant {
 	grant := &PermissionGrant{
 		ID:         fmt.Sprintf("manual-%d", time.Now().UnixNano()),
 		Permission: permission,

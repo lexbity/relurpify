@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
@@ -313,23 +314,23 @@ func (m *mockNoRegistryAgent) BuildGraph(task *core.Task) (*graph.Graph, error) 
 
 var _ graph.WorkflowExecutor = (*mockNoRegistryAgent)(nil)
 
-// mockTool implements a minimal core.Tool for testing
+// mockTool implements a minimal contracts.Tool for testing
 type mockTool struct {
 	name string
 }
 
-func (m *mockTool) Name() string                     { return m.name }
-func (m *mockTool) Description() string              { return "Mock tool " + m.name }
-func (m *mockTool) Category() string                 { return "test" }
-func (m *mockTool) Parameters() []core.ToolParameter { return nil }
-func (m *mockTool) Execute(ctx context.Context, args map[string]any) (*core.ToolResult, error) {
-	return &core.ToolResult{Data: map[string]any{"result": "ok"}}, nil
+func (m *mockTool) Name() string                          { return m.name }
+func (m *mockTool) Description() string                   { return "Mock tool " + m.name }
+func (m *mockTool) Category() string                      { return "test" }
+func (m *mockTool) Parameters() []contracts.ToolParameter { return nil }
+func (m *mockTool) Execute(ctx context.Context, args map[string]any) (*contracts.ToolResult, error) {
+	return &contracts.ToolResult{Data: map[string]any{"result": "ok"}}, nil
 }
-func (m *mockTool) IsAvailable(ctx context.Context) bool { return true }
-func (m *mockTool) Permissions() core.ToolPermissions                         { return core.ToolPermissions{} }
-func (m *mockTool) Tags() []string                                            { return nil }
+func (m *mockTool) IsAvailable(ctx context.Context) bool   { return true }
+func (m *mockTool) Permissions() contracts.ToolPermissions { return contracts.ToolPermissions{} }
+func (m *mockTool) Tags() []string                         { return nil }
 
-var _ core.Tool = (*mockTool)(nil)
+var _ contracts.Tool = (*mockTool)(nil)
 
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsInternal(s, substr))

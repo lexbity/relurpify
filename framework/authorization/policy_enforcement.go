@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type ApprovalRequest struct {
 	AgentID            string
 	Manager            *PermissionManager
-	Permission         core.PermissionDescriptor
+	Permission         contracts.PermissionDescriptor
 	Justification      string
 	Scope              GrantScope
 	Risk               RiskLevel

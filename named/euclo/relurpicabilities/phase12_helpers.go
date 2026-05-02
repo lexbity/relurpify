@@ -15,16 +15,17 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type frameworkPolicyContext struct {
 	permissionManager *authorization.PermissionManager
 	agentID           string
-	agentSpec         *core.AgentRuntimeSpec
+	agentSpec         *agentspec.AgentRuntimeSpec
 	sandboxScope      *sandbox.FileScopePolicy
 }
 
@@ -36,7 +37,7 @@ func (c *frameworkPolicyContext) SetPermissionManager(manager *authorization.Per
 	c.agentID = agentID
 }
 
-func (c *frameworkPolicyContext) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
+func (c *frameworkPolicyContext) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	if c == nil {
 		return
 	}
@@ -67,10 +68,10 @@ func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agent
 
 func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env agentenv.WorkspaceEnvironment, path string) error {
 	if c != nil && c.permissionManager != nil {
-		return c.permissionManager.CheckFileAccess(ctx, c.agentID, core.FileSystemWrite, path)
+		return c.permissionManager.CheckFileAccess(ctx, c.agentID, contracts.FileSystemWrite, path)
 	}
 	if scope := c.fileScopePolicy(env); scope != nil {
-		return scope.Check(core.FileSystemWrite, path)
+		return scope.Check(contracts.FileSystemWrite, path)
 	}
 	return fmt.Errorf("write denied: no file scope configured")
 }
@@ -103,7 +104,7 @@ func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.WorkspaceEnvi
 	}
 	resolved = filepath.Clean(resolved)
 	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(core.FileSystemRead, resolved); err != nil {
+		if err := scope.Check(contracts.FileSystemRead, resolved); err != nil {
 			return "", err
 		}
 	}
@@ -128,7 +129,7 @@ func (c *frameworkPolicyContext) writeWorkspaceFile(env agentenv.WorkspaceEnviro
 		return "", err
 	}
 	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(core.FileSystemWrite, resolved); err != nil {
+		if err := scope.Check(contracts.FileSystemWrite, resolved); err != nil {
 			return "", err
 		}
 	}

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +31,7 @@ func TestChat_Sync(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, APIKey: "token"})
-	resp, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, &core.LLMOptions{Model: "model-a"})
+	resp, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, &contracts.LLMOptions{Model: "model-a"})
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 	require.Equal(t, "stop", resp.FinishReason)
@@ -56,7 +56,7 @@ func TestChat_Streaming(t *testing.T) {
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
 	var got strings.Builder
-	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil, &core.LLMOptions{
+	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, &contracts.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestChatWithTools_NativeEnabled_Sync(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
-	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, []core.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.ToolCalls, 1)
 	require.Equal(t, "echo", resp.ToolCalls[0].Name)
@@ -117,7 +117,7 @@ func TestChatWithTools_NativeEnabled_Streaming(t *testing.T) {
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
 	var got strings.Builder
-	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, []core.LLMToolSpec{{Name: "echo"}}, &core.LLMOptions{
+	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, &contracts.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestChatWithTools_NativeDisabled(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: false})
-	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, []core.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
 }
@@ -169,7 +169,7 @@ func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 			NativeAPI: false,
 		},
 	})
-	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, []core.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
 	require.False(t, client.UsesNativeToolCalling())
@@ -183,7 +183,7 @@ func TestBearerAuth(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, APIKey: "secret"})
-	_, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
 
@@ -195,7 +195,7 @@ func TestBearerAuth_NoKey(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
-	_, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
 
@@ -210,7 +210,7 @@ func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
-	resp, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.True(t, resp.Usage.Estimated)
 	require.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
@@ -277,7 +277,7 @@ func TestHTTPError_500(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
-	_, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "500")
 }

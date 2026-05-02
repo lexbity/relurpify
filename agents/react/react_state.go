@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ToolObservation records a single tool execution result within the ReAct loop.
@@ -169,7 +170,7 @@ func compactReactLoopState(env *contextdata.Envelope) {
 	}
 	if raw, ok := env.GetWorkingValue("react.tool_calls"); ok {
 		switch calls := raw.(type) {
-		case []core.ToolCall:
+		case []contracts.ToolCall:
 			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		case []any:
 			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
@@ -210,7 +211,7 @@ func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
 	return out
 }
 
-func recordActiveToolNames(env *contextdata.Envelope, tools []core.Tool) {
+func recordActiveToolNames(env *contextdata.Envelope, tools []contracts.Tool) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name())

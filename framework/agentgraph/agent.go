@@ -13,7 +13,7 @@ import (
 // to any single agent paradigm.
 type WorkflowExecutor interface {
 	Initialize(config *core.Config) error
-	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error)
+	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error)
 	Capabilities() []string
 	BuildGraph(task *core.Task) (*Graph, error)
 }

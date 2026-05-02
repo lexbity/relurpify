@@ -21,23 +21,12 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-// Re-export VerificationPlan types from platform/contracts for backward compatibility.
-// The canonical definitions now live in platform/contracts.
-type VerificationPlanRequest = contracts.VerificationPlanRequest
-type VerificationPlan = contracts.VerificationPlan
-type VerificationCommand = contracts.VerificationCommand
-
 type VerificationPlanner interface {
-	SelectVerificationPlan(context.Context, VerificationPlanRequest) (VerificationPlan, bool, error)
+	SelectVerificationPlan(context.Context, contracts.VerificationPlanRequest) (contracts.VerificationPlan, bool, error)
 }
 
-// Re-export CompatibilitySurface types from platform/contracts for backward compatibility.
-// The canonical definitions now live in platform/contracts.
-type CompatibilitySurface = contracts.CompatibilitySurface
-type CompatibilitySurfaceRequest = contracts.CompatibilitySurfaceRequest
-
 type CompatibilitySurfaceExtractor interface {
-	ExtractSurface(context.Context, CompatibilitySurfaceRequest) (CompatibilitySurface, bool, error)
+	ExtractSurface(context.Context, contracts.CompatibilitySurfaceRequest) (contracts.CompatibilitySurface, bool, error)
 }
 
 // WorkspaceEnvironment is the canonical runtime environment shared by all agents
@@ -59,7 +48,7 @@ type CompatibilitySurfaceExtractor interface {
 type WorkspaceEnvironment struct {
 	// Identity + model
 	Config        *core.Config
-	Model         core.LanguageModel
+	Model         contracts.LanguageModel
 	CommandPolicy sandbox.CommandPolicy
 	FileScope     *sandbox.FileScopePolicy
 	// CommandRunner is the sandbox-enforced runner built by ayenitd from the

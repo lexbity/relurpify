@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CapabilityHandler is the canonical runtime contract for registry-managed
@@ -38,7 +39,7 @@ type ResourceReadResult struct {
 // directly executed by the framework.
 type InvocableCapabilityHandler interface {
 	CapabilityHandler
-	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*CapabilityExecutionResult, error)
+	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error)
 }
 
 // PromptCapabilityHandler is implemented by runtime-backed prompt capabilities.

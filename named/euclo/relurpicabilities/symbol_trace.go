@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
@@ -82,7 +83,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke executes the symbol trace and returns call graph information.
-func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	// Extract arguments
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
@@ -127,7 +128,7 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	// Convert to trace entries
 	entries := traceEntries(callees, callers)
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 
 	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
@@ -25,19 +26,19 @@ import (
 
 type stubModel struct{}
 
-func (stubModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
-func (stubModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+func (stubModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
-func (stubModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "{}"}, nil
+func (stubModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: "{}"}, nil
 }
-func (stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
 func testEnv(t *testing.T) *agentenv.WorkspaceEnvironment {

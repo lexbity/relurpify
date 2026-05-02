@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/gorilla/websocket"
 )
 
@@ -36,7 +37,7 @@ type NexusClient struct {
 	capabilities []core.CapabilityDescriptor
 	subscribers  map[int]chan core.FrameworkEvent
 	nextSubID    int
-	pending      map[string]chan core.CapabilityExecutionResult
+	pending      map[string]chan contracts.CapabilityExecutionResult
 }
 
 func NewNexusClient(cfg NexusConfig) *NexusClient {
@@ -46,7 +47,7 @@ func NewNexusClient(cfg NexusConfig) *NexusClient {
 		AutoReconnect: cfg.AutoReconnect,
 		Dial:          dialNexusWebsocket,
 		subscribers:   map[int]chan core.FrameworkEvent{},
-		pending:       map[string]chan core.CapabilityExecutionResult{},
+		pending:       map[string]chan contracts.CapabilityExecutionResult{},
 	}
 }
 
@@ -100,7 +101,7 @@ func (c *NexusClient) SessionID() string {
 	return c.sessionID
 }
 
-func (c *NexusClient) InvokeCapability(ctx context.Context, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (c *NexusClient) InvokeCapability(ctx context.Context, sessionKey, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	c.mu.RLock()
 	conn := c.conn
 	c.mu.RUnlock()
@@ -108,7 +109,7 @@ func (c *NexusClient) InvokeCapability(ctx context.Context, sessionKey, capabili
 		return nil, fmt.Errorf("nexus client not connected")
 	}
 	correlationID := randomCorrelationID()
-	ch := make(chan core.CapabilityExecutionResult, 1)
+	ch := make(chan contracts.CapabilityExecutionResult, 1)
 	c.mu.Lock()
 	c.pending[correlationID] = ch
 	c.mu.Unlock()
@@ -299,9 +300,9 @@ func (c *NexusClient) handleFrame(frame map[string]json.RawMessage) error {
 		}
 	case "capability.result":
 		var response struct {
-			Type          string                         `json:"type"`
-			CorrelationID string                         `json:"correlation_id"`
-			Result        core.CapabilityExecutionResult `json:"result"`
+			Type          string                              `json:"type"`
+			CorrelationID string                              `json:"correlation_id"`
+			Result        contracts.CapabilityExecutionResult `json:"result"`
 		}
 		if err := remarshalNexusFrame(frame, &response); err != nil {
 			return err

@@ -10,6 +10,7 @@ import (
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type RenameSymbolHandler struct {
@@ -58,7 +59,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 	}
 }
 
-func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	from, ok := stringArg(args, "from")
 	if !ok || strings.TrimSpace(from) == "" {
 		return failResult("from argument is required"), fmt.Errorf("from argument is required")
@@ -159,7 +160,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envel
 	if preview {
 		result["updated_files"] = previewFiles
 	}
-	return &core.CapabilityExecutionResult{Success: true, Data: result}, nil
+	return &contracts.CapabilityExecutionResult{Success: true, Data: result}, nil
 }
 
 func (h *RenameSymbolHandler) normalizedFileHint(fileHint string) (string, error) {

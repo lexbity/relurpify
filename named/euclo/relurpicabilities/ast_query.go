@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -89,7 +90,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 }
 
 // Invoke executes the AST query and returns matching nodes.
-func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	// Extract arguments
 	query, ok := stringArg(args, "query")
 	if !ok || query == "" {
@@ -139,7 +140,7 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope,
 	// Write retrieval reference to envelope
 	writeRetrievalReferences(env, query, nodes)
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":     true,

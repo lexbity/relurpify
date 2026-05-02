@@ -10,6 +10,7 @@ import (
 	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type reactThinkNode struct {
@@ -37,7 +38,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			Summary:   summary,
 			Timestamp: time.Now().UTC(),
 		}
-		env.SetWorkingValue("react.tool_calls", []core.ToolCall{}, contextdata.MemoryClassTask)
+		env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
 		env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
 		return &core.Result{
 			NodeID:  n.id,
@@ -47,14 +48,14 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			},
 		}, nil
 	}
-	var resp *core.LLMResponse
+	var resp *contracts.LLMResponse
 	var err error
 	tools := n.agent.availableToolsForPhase(env, n.task)
 	recordActiveToolNames(env, tools)
 	configNativeTC := n.agent.Config != nil && n.agent.Config.NativeToolCalling
 	profileNativeTC := false
 	if !configNativeTC {
-		if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+		if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
 			profileNativeTC = pm.UsesNativeToolCalling()
 		}
 	}
@@ -62,7 +63,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(env, tools)
-		resp, err = n.agent.Model.ChatWithTools(ctx, messages, core.LLMToolSpecsFromTools(tools), &core.LLMOptions{
+		resp, err = n.agent.Model.ChatWithTools(ctx, messages, contracts.LLMToolSpecsFromTools(tools), &contracts.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
 			MaxTokens:      512,
@@ -73,7 +74,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		}
 	} else {
 		prompt := n.buildPrompt(env)
-		resp, err = n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
+		resp, err = n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
 			MaxTokens:      512,
@@ -108,16 +109,16 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	}, nil
 }
 
-func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata.Envelope, resp *core.LLMResponse, useToolCalling bool, tools []core.Tool) (decisionPayload, []core.ToolCall, error) {
+func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata.Envelope, resp *contracts.LLMResponse, useToolCalling bool, tools []contracts.Tool) (decisionPayload, []contracts.ToolCall, error) {
 	if resp == nil {
 		return decisionPayload{}, nil, fmt.Errorf("empty llm response")
 	}
 	// Apply MaxToolsPerCall limit if model supports ProfiledModel
 	maxTools := 0
-	if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+	if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
 		maxTools = pm.MaxToolsPerCall()
 	}
-	var toolCalls []core.ToolCall
+	var toolCalls []contracts.ToolCall
 	if len(resp.ToolCalls) > 0 {
 		toolCalls = filterToolCalls(resp.ToolCalls)
 		if maxTools > 0 && len(toolCalls) > maxTools {
@@ -151,7 +152,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	}
 	// Check repair strategy
 	repairStrategy := "heuristic-only"
-	if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+	if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
 		repairStrategy = pm.ToolRepairStrategy()
 	}
 	var repaired string
@@ -173,16 +174,16 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 		return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	if parsed.Tool != "" {
-		return parsed, []core.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
+		return parsed, []contracts.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
 	}
 	return parsed, nil, nil
 }
 
-func (n *reactThinkNode) repairDecision(ctx context.Context, tools []core.Tool, raw string, useToolCalling bool) (string, error) {
+func (n *reactThinkNode) repairDecision(ctx context.Context, tools []contracts.Tool, raw string, useToolCalling bool) (string, error) {
 	schema := `Return ONLY valid JSON:
 {"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`
 	prompt := fmt.Sprintf("%s\nAllowed tools: %s\nOriginal response:\n%s", schema, strings.Join(toolNames(tools), ", "), raw)
-	resp, err := n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
+	resp, err := n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0,
 		MaxTokens:   256,
@@ -216,11 +217,11 @@ func textSuggestsPendingToolCall(text string) bool {
 	return strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `""`)
 }
 
-func filterToolCalls(calls []core.ToolCall) []core.ToolCall {
+func filterToolCalls(calls []contracts.ToolCall) []contracts.ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}
-	out := make([]core.ToolCall, 0, len(calls))
+	out := make([]contracts.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		name := strings.TrimSpace(call.Name)
 		if name == "" || strings.EqualFold(name, "none") {
@@ -382,13 +383,13 @@ Return ONLY JSON with fields:
 // ensureMessages seeds or extends the chat history so each tool-calling
 // iteration keeps prior assistant/tool turns while refreshing the current
 // prompt context.
-func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []core.Tool) []core.Message {
+func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contracts.Tool) []contracts.Message {
 	assembler := newPromptContextAssembler(n.agent, n.task)
 	systemPrompt := n.buildSystemPrompt(tools)
 	userPrompt := assembler.buildPrompt(env, tools, true)
 	messages := getReactMessages(env)
 	if len(messages) == 0 {
-		messages = []core.Message{
+		messages = []contracts.Message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
 		}
@@ -396,16 +397,16 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []core.
 		if messages[0].Role == "system" {
 			messages[0].Content = systemPrompt
 		} else {
-			messages = append([]core.Message{{Role: "system", Content: systemPrompt}}, messages...)
+			messages = append([]contracts.Message{{Role: "system", Content: systemPrompt}}, messages...)
 		}
-		messages = append(messages, core.Message{Role: "user", Content: userPrompt})
+		messages = append(messages, contracts.Message{Role: "user", Content: userPrompt})
 	}
 	saveReactMessages(env, messages)
 	return messages
 }
 
 // buildSystemPrompt summarizes tool descriptions for the chat-based workflow.
-func (n *reactThinkNode) buildSystemPrompt(tools []core.Tool) string {
+func (n *reactThinkNode) buildSystemPrompt(tools []contracts.Tool) string {
 	var lines []string
 	var hasLSP, hasAST bool
 	for _, tool := range tools {

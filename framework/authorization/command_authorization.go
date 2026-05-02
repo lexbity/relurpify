@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const commandApprovalAction = "command:exec"
@@ -20,7 +21,7 @@ type CommandAuthorizationRequest struct {
 
 // AuthorizeCommand centralizes runtime command authorization so all wrappers
 // share the same executable, bash policy, and HITL approval behavior.
-func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID string, spec *core.AgentRuntimeSpec, req CommandAuthorizationRequest) error {
+func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID string, spec *agentspec.AgentRuntimeSpec, req CommandAuthorizationRequest) error {
 	if len(req.Command) == 0 {
 		return fmt.Errorf("command empty")
 	}
@@ -40,9 +41,9 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 	commandString := strings.TrimSpace(binary + " " + strings.Join(args, " "))
 	decision := decideCommandByPatterns(commandString, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
 	switch decision {
-	case core.AgentPermissionDeny:
+	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("command blocked: denied by bash_permissions")
-	case core.AgentPermissionAsk:
+	case agentspec.AgentPermissionAsk:
 		if manager == nil {
 			return fmt.Errorf("command blocked: approval required but permission manager missing")
 		}
@@ -50,8 +51,8 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 		if source := strings.TrimSpace(req.Source); source != "" {
 			metadata["source"] = source
 		}
-		return manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeHITL,
+		return manager.RequireApproval(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeHITL,
 			Action:       commandApprovalAction,
 			Resource:     commandString,
 			Metadata:     metadata,
@@ -62,7 +63,7 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 	}
 }
 
-func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision core.AgentPermissionLevel) core.AgentPermissionLevel {
+func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
 	target = strings.TrimSpace(target)
 	for _, pattern := range denyPatterns {
 		pattern = strings.TrimSpace(pattern)
@@ -70,7 +71,7 @@ func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return core.AgentPermissionDeny
+			return agentspec.AgentPermissionDeny
 		}
 	}
 	for _, pattern := range allowPatterns {
@@ -79,11 +80,11 @@ func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return core.AgentPermissionAllow
+			return agentspec.AgentPermissionAllow
 		}
 	}
 	if defaultDecision == "" {
-		return core.AgentPermissionAllow
+		return agentspec.AgentPermissionAllow
 	}
 	return defaultDecision
 }

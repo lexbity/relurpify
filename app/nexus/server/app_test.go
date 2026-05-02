@@ -12,6 +12,7 @@ import (
 	rexproof "codeburg.org/lexbit/relurpify/named/rex/proof"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,8 +49,8 @@ func TestSnapshotForPrincipalFiltersTenantAdminView(t *testing.T) {
 
 	snapshot, err := snapshotForPrincipal(context.Background(), materializer, nil, fwgateway.ConnectionPrincipal{
 		Authenticated: true,
-		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
-		Principal: &core.AuthenticatedPrincipal{
+		Actor:         identity.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
+		Principal: &identity.AuthenticatedPrincipal{
 			Authenticated: true,
 			TenantID:      "tenant-a",
 			Scopes:        []string{"gateway:admin"},
@@ -83,8 +84,8 @@ func TestSnapshotForPrincipalAllowsGlobalAdminView(t *testing.T) {
 
 	snapshot, err := snapshotForPrincipal(context.Background(), materializer, nil, fwgateway.ConnectionPrincipal{
 		Authenticated: true,
-		Actor:         core.EventActor{Kind: "admin", ID: "admin-global", TenantID: "tenant-a"},
-		Principal: &core.AuthenticatedPrincipal{
+		Actor:         identity.EventActor{Kind: "admin", ID: "admin-global", TenantID: "tenant-a"},
+		Principal: &identity.AuthenticatedPrincipal{
 			Authenticated: true,
 			TenantID:      "tenant-a",
 			Scopes:        []string{"gateway:admin", "gateway:admin:global"},

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,11 +30,11 @@ func TestReadRexSLOSignalsUsesProvider(t *testing.T) {
 
 	result, err := svc.ReadRexSLOSignals(context.Background(), ReadRexSLOSignalsRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin:global"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},

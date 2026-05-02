@@ -3,7 +3,7 @@
 //
 // # Managed backends
 //
-// Provider subpackages implement the framework/core.LanguageModel interface
+// Provider subpackages implement the framework/contracts.LanguageModel interface
 // against local or OpenAI-compatible backends. LLM parameters are normalized
 // by the transport-specific adapters.
 //

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,9 +16,9 @@ func TestFileScopePolicyCheck(t *testing.T) {
 	require.NoError(t, os.WriteFile(protected, []byte("config"), 0o644))
 
 	policy := NewFileScopePolicy(dir, []string{protected})
-	err := policy.Check(core.FileSystemWrite, protected)
+	err := policy.Check(contracts.FileSystemWrite, protected)
 	require.ErrorIs(t, err, ErrFileScopeProtectedPath)
 
-	err = policy.Check(core.FileSystemWrite, filepath.Join(dir, "..", "escape.txt"))
+	err = policy.Check(contracts.FileSystemWrite, filepath.Join(dir, "..", "escape.txt"))
 	require.ErrorIs(t, err, ErrFileScopeOutsideWorkspace)
 }

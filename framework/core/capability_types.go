@@ -253,7 +253,7 @@ type CoordinationMetadataProvider interface {
 }
 
 // ToolDescriptor derives a framework-owned capability descriptor from a tool.
-func ToolDescriptor(ctx context.Context, tool Tool) CapabilityDescriptor {
+func ToolDescriptor(ctx context.Context, tool contracts.Tool) CapabilityDescriptor {
 	if tool == nil {
 		return CapabilityDescriptor{}
 	}
@@ -338,7 +338,7 @@ func NormalizeCapabilityDescriptor(desc CapabilityDescriptor) CapabilityDescript
 	return normalizeCapabilityDescriptor(desc)
 }
 
-func ToolCapabilityID(tool Tool) string {
+func ToolCapabilityID(tool contracts.Tool) string {
 	if tool == nil {
 		return ""
 	}
@@ -350,7 +350,7 @@ func ToolCapabilityID(tool Tool) string {
 	return fmt.Sprintf("tool:%s", strings.TrimSpace(tool.Name()))
 }
 
-func ToolVersion(tool Tool) string {
+func ToolVersion(tool contracts.Tool) string {
 	if tool == nil {
 		return ""
 	}
@@ -360,7 +360,7 @@ func ToolVersion(tool Tool) string {
 	return ""
 }
 
-func ToolCapabilitySource(tool Tool) CapabilitySource {
+func ToolCapabilitySource(tool contracts.Tool) CapabilitySource {
 	if tool == nil {
 		return CapabilitySource{Scope: CapabilityScopeBuiltin}
 	}
@@ -374,7 +374,7 @@ func ToolCapabilitySource(tool Tool) CapabilitySource {
 	return CapabilitySource{Scope: CapabilityScopeBuiltin}
 }
 
-func ToolCapabilityRuntimeFamily(tool Tool) CapabilityRuntimeFamily {
+func ToolCapabilityRuntimeFamily(tool contracts.Tool) CapabilityRuntimeFamily {
 	if tool == nil {
 		return CapabilityRuntimeFamilyLocalTool
 	}
@@ -392,7 +392,7 @@ func ToolCapabilityRuntimeFamily(tool Tool) CapabilityRuntimeFamily {
 	}
 }
 
-func ToolTrustClass(tool Tool) TrustClass {
+func ToolTrustClass(tool contracts.Tool) TrustClass {
 	if tool == nil {
 		return TrustClassBuiltinTrusted
 	}
@@ -413,14 +413,14 @@ func ToolTrustClass(tool Tool) TrustClass {
 	}
 }
 
-func ToolCapabilityTags(tool Tool) []string {
+func ToolCapabilityTags(tool contracts.Tool) []string {
 	if tool == nil {
 		return nil
 	}
 	return normalizeCapabilityTags(tool.Tags())
 }
 
-func ToolRiskClasses(tool Tool) []RiskClass {
+func ToolRiskClasses(tool contracts.Tool) []RiskClass {
 	if tool == nil {
 		return nil
 	}
@@ -465,7 +465,7 @@ func ToolRiskClasses(tool Tool) []RiskClass {
 	return riskClassSetToSlice(set)
 }
 
-func ToolEffectClasses(tool Tool) []EffectClass {
+func ToolEffectClasses(tool contracts.Tool) []EffectClass {
 	if tool == nil {
 		return nil
 	}
@@ -476,7 +476,7 @@ func ToolEffectClasses(tool Tool) []EffectClass {
 	perms := tool.Permissions().Permissions
 	if perms != nil {
 		for _, fs := range perms.FileSystem {
-			if fs.Action == FileSystemWrite || fs.Action == FileSystemExecute {
+			if fs.Action == contracts.FileSystemWrite || fs.Action == contracts.FileSystemExecute {
 				set[EffectClassFilesystemMutation] = struct{}{}
 				break
 			}
@@ -495,7 +495,7 @@ func ToolEffectClasses(tool Tool) []EffectClass {
 	return effectClassSetToSlice(set)
 }
 
-func ToolInputSchema(tool Tool) *Schema {
+func ToolInputSchema(tool contracts.Tool) *Schema {
 	if tool == nil {
 		return nil
 	}
@@ -738,10 +738,10 @@ func cloneSchema(schema *Schema) *Schema {
 
 func isReservedSecurityTag(tag string) bool {
 	switch tag {
-	case strings.ToLower(TagReadOnly),
-		strings.ToLower(TagExecute),
-		strings.ToLower(TagDestructive),
-		strings.ToLower(TagNetwork),
+	case strings.ToLower(contracts.TagReadOnly),
+		strings.ToLower(contracts.TagExecute),
+		strings.ToLower(contracts.TagDestructive),
+		strings.ToLower(contracts.TagNetwork),
 		string(TrustClassBuiltinTrusted),
 		string(TrustClassWorkspaceTrusted),
 		string(TrustClassProviderLocalUntrusted),
@@ -821,24 +821,24 @@ func effectClassSetToSlice(set map[EffectClass]struct{}) []EffectClass {
 	return out
 }
 
-func hasFilesystemMutation(perms *PermissionSet) bool {
+func hasFilesystemMutation(perms *contracts.PermissionSet) bool {
 	if perms == nil {
 		return false
 	}
 	for _, fs := range perms.FileSystem {
-		if fs.Action == FileSystemWrite || fs.Action == FileSystemExecute {
+		if fs.Action == contracts.FileSystemWrite || fs.Action == contracts.FileSystemExecute {
 			return true
 		}
 	}
 	return false
 }
 
-func hasFilesystemReadOnly(perms *PermissionSet) bool {
+func hasFilesystemReadOnly(perms *contracts.PermissionSet) bool {
 	if perms == nil || len(perms.FileSystem) == 0 {
 		return false
 	}
 	for _, fs := range perms.FileSystem {
-		if fs.Action != FileSystemRead && fs.Action != FileSystemList {
+		if fs.Action != contracts.FileSystemRead && fs.Action != contracts.FileSystemList {
 			return false
 		}
 	}

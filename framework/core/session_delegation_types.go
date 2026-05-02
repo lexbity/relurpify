@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // DelegationSubjectRef identifies a subject granted delegation permissions.
@@ -27,7 +29,7 @@ func (s DelegationSubjectRef) Validate() error {
 	return nil
 }
 
-func (s DelegationSubjectRef) Matches(actor EventActor) bool {
+func (s DelegationSubjectRef) Matches(actor identity.EventActor) bool {
 	// Match kind case-insensitively
 	if !strings.EqualFold(s.Kind, actor.Kind) && !strings.EqualFold(s.Kind, actor.SubjectKind) {
 		return false
@@ -88,7 +90,7 @@ func (r SessionDelegationRecord) Validate() error {
 	return nil
 }
 
-func (r SessionDelegationRecord) Allows(actor EventActor, operation SessionOperation, now time.Time) bool {
+func (r SessionDelegationRecord) Allows(actor identity.EventActor, operation SessionOperation, now time.Time) bool {
 	if !r.Grantee.Matches(actor) {
 		return false
 	}

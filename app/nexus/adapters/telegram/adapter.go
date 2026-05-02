@@ -10,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type Client interface {
@@ -140,7 +141,7 @@ func (a *Adapter) EmitUpdate(ctx context.Context, update Update) error {
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventMessageInbound,
 		Payload:   payload,
-		Actor:     core.EventActor{Kind: "channel", ID: "telegram"},
+		Actor:     identity.EventActor{Kind: "channel", ID: "telegram"},
 		Partition: "local",
 	})
 }

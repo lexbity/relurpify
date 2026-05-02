@@ -85,7 +85,7 @@ func (a *Agent) Initialize(config *core.Config) error {
 	return nil
 }
 
-func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	if !a.initialized {
 		if err := a.Initialize(nil); err != nil {
 			return nil, fmt.Errorf("failed to initialize agent: %w", err)

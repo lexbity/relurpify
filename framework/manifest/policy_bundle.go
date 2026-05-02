@@ -5,13 +5,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PermissionManager is the interface required for policy compilation.
 // This avoids importing framework/authorization and creating an import cycle.
 type PermissionManager interface {
-	GetPermission(permissionID string) (core.PermissionDescriptor, bool)
-	ResolveCapabilityPermission(capabilityID string) (core.PermissionDescriptor, bool)
+	GetPermission(permissionID string) (contracts.PermissionDescriptor, bool)
+	ResolveCapabilityPermission(capabilityID string) (contracts.PermissionDescriptor, bool)
 }
 
 // PolicyEngine evaluates whether a capability invocation is permitted.

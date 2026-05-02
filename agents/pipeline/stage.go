@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // Stage describes one typed unit of pipeline work.
@@ -14,7 +15,7 @@ type Stage interface {
 	Name() string
 	Contract() ContractDescriptor
 	BuildPrompt(ctx *contextdata.Envelope) (string, error)
-	Decode(resp *core.LLMResponse) (any, error)
+	Decode(resp *contracts.LLMResponse) (any, error)
 	Validate(output any) error
 	Apply(ctx *contextdata.Envelope, output any) error
 }
@@ -27,7 +28,7 @@ type ToolScopedStage interface {
 // ToolRequiredStage marks stages that require at least one allowed tool to run
 // before the stage output is accepted.
 type ToolRequiredStage interface {
-	RequiresToolExecution(task *core.Task, state *contextdata.Envelope, tools []core.Tool) bool
+	RequiresToolExecution(task *core.Task, state *contextdata.Envelope, tools []contracts.Tool) bool
 }
 
 // ValidateStage checks stage identity and its declared contract metadata.
@@ -46,7 +47,7 @@ func ValidateStage(stage Stage) error {
 }
 
 // DecodeStageOutput annotates stage decode failures with stage/contract context.
-func DecodeStageOutput(stage Stage, resp *core.LLMResponse) (any, error) {
+func DecodeStageOutput(stage Stage, resp *contracts.LLMResponse) (any, error) {
 	if err := ValidateStage(stage); err != nil {
 		return nil, err
 	}

@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ClassificationResponse is defined in classification_prompt.go
@@ -139,7 +140,7 @@ func (gc *GoalClarifier) requestHITLClarification(
 
 	// Submit async (non-blocking) so we can continue with fallback
 	req := authorization.PermissionRequest{
-		Permission: core.PermissionDescriptor{
+		Permission: contracts.PermissionDescriptor{
 			Action:   "goal_clarification",
 			Resource: fmt.Sprintf("goal:%s", session.Goal.Description),
 		},

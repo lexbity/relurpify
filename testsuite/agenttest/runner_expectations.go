@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
@@ -628,14 +629,14 @@ func evaluateSecurityExpectations(spec SecuritySpec, m *manifest.AgentManifest, 
 				obs.Resource = path
 
 				// Determine action type for manifest check
-				var action core.FileSystemAction
+				var action contracts.FileSystemAction
 				switch entry.Tool {
 				case "file_write", "file_create":
-					action = core.FileSystemWrite
+					action = contracts.FileSystemWrite
 				case "file_delete":
-					action = core.FileSystemDelete
+					action = contracts.FileSystemDelete
 				case "file_read":
-					action = core.FileSystemRead
+					action = contracts.FileSystemRead
 				}
 
 				// Check if path is within manifest scope

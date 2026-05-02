@@ -12,14 +12,16 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type agenttestApprovalStubTool struct {
@@ -32,17 +34,19 @@ func (t agenttestApprovalStubTool) Description() string { return "stub tool" }
 
 func (t agenttestApprovalStubTool) Category() string { return "test" }
 
-func (t agenttestApprovalStubTool) Parameters() []core.ToolParameter { return nil }
+func (t agenttestApprovalStubTool) Parameters() []contracts.ToolParameter { return nil }
 
-func (t agenttestApprovalStubTool) Execute(context.Context, map[string]interface{}) (*core.ToolResult, error) {
-	return &core.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
+func (t agenttestApprovalStubTool) Execute(context.Context, map[string]interface{}) (*contracts.ToolResult, error) {
+	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
 }
 
 func (t agenttestApprovalStubTool) IsAvailable(context.Context) bool { return true }
 
-func (t agenttestApprovalStubTool) Permissions() core.ToolPermissions { return core.ToolPermissions{} }
+func (t agenttestApprovalStubTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{}
+}
 
-func (t agenttestApprovalStubTool) Tags() []string { return []string{core.TagReadOnly} }
+func (t agenttestApprovalStubTool) Tags() []string { return []string{contracts.TagReadOnly} }
 
 func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 	workspace := t.TempDir()
@@ -68,10 +72,10 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
-				Model:    opts.Model,
-				Registry: registry,
+				Model:         opts.Model,
+				Registry:      registry,
 				WorkingMemory: nil,
-				Config:   cfg,
+				Config:        cfg,
 			},
 		}, nil
 	}
@@ -116,9 +120,9 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
 		bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
 			AgentID: "coding",
-			AgentSpec: &core.AgentRuntimeSpec{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Implementation: "coding",
-				Model:          core.AgentModelConfig{Name: "test-model"},
+				Model:          agentspec.AgentModelConfig{Name: "test-model"},
 			},
 			SkipASTIndex: true,
 		})
@@ -131,10 +135,10 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
-				Model:    opts.Model,
-				Registry: registry,
+				Model:         opts.Model,
+				Registry:      registry,
 				WorkingMemory: nil,
-				Config:   cfg,
+				Config:        cfg,
 			},
 		}, nil
 	}
@@ -193,10 +197,10 @@ func TestBuildAgentPropagatesSkipASTIndexToBootstrap(t *testing.T) {
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
-				Model:    opts.Model,
-				Registry: registry,
+				Model:         opts.Model,
+				Registry:      registry,
 				WorkingMemory: nil,
-				Config:   cfg,
+				Config:        cfg,
 			},
 		}, nil
 	}
@@ -274,9 +278,9 @@ func TestPregrantAgentTestCapabilitiesMatchesRuntimeApprovalKey(t *testing.T) {
 		t.Fatalf("register tool: %v", err)
 	}
 
-	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &core.PermissionSet{
-		FileSystem: []core.FileSystemPermission{{
-			Action: core.FileSystemRead,
+	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &contracts.PermissionSet{
+		FileSystem: []contracts.FileSystemPermission{{
+			Action: contracts.FileSystemRead,
 			Path:   "**",
 		}},
 	}, nil, nil)
@@ -287,8 +291,8 @@ func TestPregrantAgentTestCapabilitiesMatchesRuntimeApprovalKey(t *testing.T) {
 	const agentID = "agenttest-coding"
 	pregrantAgentTestCapabilities(manager, agentID, "react", registry)
 
-	err = manager.RequireApproval(context.Background(), agentID, core.PermissionDescriptor{
-		Type:         core.PermissionTypeHITL,
+	err = manager.RequireApproval(context.Background(), agentID, contracts.PermissionDescriptor{
+		Type:         contracts.PermissionTypeHITL,
 		Action:       "capability:" + core.ToolCapabilityID(requireTool),
 		Resource:     agentID,
 		RequiresHITL: true,
@@ -297,8 +301,8 @@ func TestPregrantAgentTestCapabilitiesMatchesRuntimeApprovalKey(t *testing.T) {
 		t.Fatalf("require approval should be pregranted: %v", err)
 	}
 
-	err = manager.RequireApproval(context.Background(), agentID, core.PermissionDescriptor{
-		Type:         core.PermissionTypeHITL,
+	err = manager.RequireApproval(context.Background(), agentID, contracts.PermissionDescriptor{
+		Type:         contracts.PermissionTypeHITL,
 		Action:       "capability:" + requireTool.Name(),
 		Resource:     agentID,
 		RequiresHITL: true,
@@ -345,9 +349,9 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 	workspace := t.TempDir()
 	bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
 		AgentID: "coding",
-		AgentSpec: &core.AgentRuntimeSpec{
+		AgentSpec: &agentspec.AgentRuntimeSpec{
 			Implementation: "coding",
-			Model:          core.AgentModelConfig{Name: "test-model"},
+			Model:          agentspec.AgentModelConfig{Name: "test-model"},
 		},
 		SkipASTIndex: true,
 	})

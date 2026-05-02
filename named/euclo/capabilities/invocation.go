@@ -4,25 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	frameworkcapability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // capabilityInvoker matches the framework capability registry invocation contract.
 type capabilityInvoker interface {
-	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*frameworkcapability.ToolResult, error)
+	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
 }
 
 // InvokeCapability invokes a capability through the capability registry.
-// It adapts the ToolResult to agentgraph.Result.
-func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *contextdata.Envelope, registry capabilityInvoker) (*agentgraph.Result, error) {
+// It adapts the ToolResult to core.Result.
+func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *contextdata.Envelope, registry capabilityInvoker) (*core.Result, error) {
 	_ = task
 	args := map[string]any{}
 
 	if registry == nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  capID,
 			Success: true,
 			Data: map[string]any{
@@ -34,7 +33,7 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 
 	toolResult, err := registry.InvokeCapability(ctx, env, capID, args)
 	if err != nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  capID,
 			Success: false,
 			Data: map[string]any{
@@ -43,7 +42,7 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 		}, err
 	}
 	if toolResult == nil {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  capID,
 			Success: false,
 			Data: map[string]any{
@@ -56,7 +55,7 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 	if toolResult.Error != "" {
 		resultErr = fmt.Errorf("%s", toolResult.Error)
 	}
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  capID,
 		Success: toolResult.Success,
 		Data:    toolResult.Data,
@@ -64,9 +63,9 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 }
 
 // InvokeCapabilitySequence invokes a sequence of capabilities with an operator (AND/OR).
-func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, operator string, task *core.Task, env *contextdata.Envelope, registry capabilityInvoker) (*agentgraph.Result, error) {
+func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, operator string, task *core.Task, env *contextdata.Envelope, registry capabilityInvoker) (*core.Result, error) {
 	if len(capabilityIDs) == 0 {
-		return &agentgraph.Result{
+		return &core.Result{
 			Success: false,
 			Data: map[string]any{
 				"error": "no capabilities to invoke",
@@ -81,7 +80,7 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 				return result, err
 			}
 		}
-		return &agentgraph.Result{
+		return &core.Result{
 			Success: true,
 			Data: map[string]any{
 				"sequence_operator": "AND",
@@ -99,7 +98,7 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 			}
 			lastError = err
 		}
-		return &agentgraph.Result{
+		return &core.Result{
 			Success: false,
 			Data: map[string]any{
 				"error": "all capabilities in OR sequence failed",
@@ -107,7 +106,7 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 		}, lastError
 	}
 
-	return &agentgraph.Result{
+	return &core.Result{
 		Success: false,
 		Data: map[string]any{
 			"error": fmt.Sprintf("unknown operator: %s", operator),

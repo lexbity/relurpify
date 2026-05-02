@@ -8,13 +8,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestFileToolGranularPermissionEnforcement(t *testing.T) {
 	base := t.TempDir()
 
 	// Create permission set that requires HITL for everything
-	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead)
+	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
 	for i := range perms.FileSystem {
 		perms.FileSystem[i].HITLRequired = true
 	}
@@ -24,7 +25,7 @@ func TestFileToolGranularPermissionEnforcement(t *testing.T) {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
-	err = manager.CheckFileAccess(context.Background(), "test-agent", core.FileSystemRead, filepath.Join(base, "secret.txt"))
+	err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, filepath.Join(base, "secret.txt"))
 	if err == nil {
 		t.Fatal("expected HITL error, got success")
 	}
@@ -37,7 +38,7 @@ func TestWriteToolBackupPermissionEnforcement(t *testing.T) {
 	base := t.TempDir()
 
 	// Permission to write everything, BUT with HITL
-	perms := core.NewFileSystemPermissionSet(base, core.FileSystemWrite)
+	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemWrite)
 	for i := range perms.FileSystem {
 		perms.FileSystem[i].HITLRequired = true
 	}
@@ -47,7 +48,7 @@ func TestWriteToolBackupPermissionEnforcement(t *testing.T) {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
-	err = manager.CheckFileAccess(context.Background(), "test-agent", core.FileSystemWrite, filepath.Join(base, "manifest.json"))
+	err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemWrite, filepath.Join(base, "manifest.json"))
 	if err == nil {
 		t.Fatal("expected HITL error, got success")
 	}

@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
@@ -51,7 +52,7 @@ func TestFromFrameworkEventPreservesActorPartitionAndIdempotency(t *testing.T) {
 		Timestamp:      time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC),
 		Type:           core.FrameworkEventAgentRunStarted,
 		Payload:        payload,
-		Actor:          core.EventActor{ID: "nexus", TenantID: "tenant-1"},
+		Actor:          identity.EventActor{ID: "nexus", TenantID: "tenant-1"},
 		IdempotencyKey: "idem-42",
 		Partition:      "tenant-1",
 	})

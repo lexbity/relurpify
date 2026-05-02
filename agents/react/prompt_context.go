@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // TaskPayload retrieves workflow retrieval payload from task context.
@@ -42,7 +43,7 @@ func newPromptContextAssembler(agent *ReActAgent, task *core.Task) *promptContex
 	return &promptContextAssembler{agent: agent, task: task}
 }
 
-func (a *promptContextAssembler) buildPrompt(state *contextdata.Envelope, tools []core.Tool, compactHistory bool) string {
+func (a *promptContextAssembler) buildPrompt(state *contextdata.Envelope, tools []contracts.Tool, compactHistory bool) string {
 	if a == nil || a.task == nil {
 		return ""
 	}
@@ -506,7 +507,7 @@ func (a *promptContextAssembler) recentToolObservations(state *contextdata.Envel
 	return strings.Join(lines, "\n")
 }
 
-func toolNames(tools []core.Tool) []string {
+func toolNames(tools []contracts.Tool) []string {
 	out := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		out = append(out, tool.Name())
@@ -515,7 +516,7 @@ func toolNames(tools []core.Tool) []string {
 	return out
 }
 
-func summarizeToolPayload(result *core.ToolResult) string {
+func summarizeToolPayload(result *contracts.ToolResult) string {
 	if result == nil {
 		return ""
 	}

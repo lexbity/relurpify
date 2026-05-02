@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // SideEffectClass describes the replay sensitivity of a node's execution.
@@ -64,12 +65,12 @@ type NodeContract struct {
 	SideEffectClass      SideEffectClass           `json:"side_effect_class,omitempty" yaml:"side_effect_class,omitempty"`
 	Idempotency          IdempotencyClass          `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
-	PreferredPlacement          PlacementPreference       `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass                core.RiskClass            `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
-	RequiredTrustClass          core.TrustClass           `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
-	Recoverability              NodeRecoverability        `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	CheckpointPolicy            CheckpointPolicyClass     `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
-	ContextPolicy               core.StateBoundaryPolicy  `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
+	PreferredPlacement PlacementPreference      `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
+	MaxRiskClass       core.RiskClass           `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	RequiredTrustClass core.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
+	Recoverability     NodeRecoverability       `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
+	CheckpointPolicy   CheckpointPolicyClass    `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
+	ContextPolicy      core.StateBoundaryPolicy `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
 }
 
 // ContractNode extends Node with an explicit execution contract.
@@ -196,7 +197,7 @@ func validateNodeContract(node Node, contract NodeContract) error {
 	return nil
 }
 
-func toolNodeContract(tool Tool) NodeContract {
+func toolNodeContract(tool contracts.Tool) NodeContract {
 	contract := NodeContract{
 		SideEffectClass: SideEffectExternal,
 		Idempotency:     IdempotencyUnknown,

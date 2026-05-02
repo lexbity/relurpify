@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ClassificationResponse is the expected LLM response structure.
@@ -75,7 +75,7 @@ func ParseClassificationResponse(rawResponse string) (*ClassificationResponse, e
 }
 
 // classifyWithLLM invokes the language model for goal classification.
-func classifyWithLLM(model core.LanguageModel, instruction string, availablePredicates []string) (*ClassificationResponse, error) {
+func classifyWithLLM(model contracts.LanguageModel, instruction string, availablePredicates []string) (*ClassificationResponse, error) {
 	if model == nil {
 		return nil, fmt.Errorf("language model is nil")
 	}
@@ -83,7 +83,7 @@ func classifyWithLLM(model core.LanguageModel, instruction string, availablePred
 	prompt := buildClassificationPrompt(instruction, availablePredicates)
 
 	// Invoke model with default options
-	resp, err := model.Generate(context.Background(), prompt, &core.LLMOptions{})
+	resp, err := model.Generate(context.Background(), prompt, &contracts.LLMOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("model.Generate failed: %w", err)
 	}

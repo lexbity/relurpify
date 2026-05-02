@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // RuntimeSurfaces holds runtime surface references for workflow operations.
@@ -82,7 +83,7 @@ func ApplyTaskRetrieval(task *core.Task, payload interface{}) *core.Task {
 // work, it only executes focused, narrowly-scoped subtasks.
 type HTNAgent struct {
 	// Model is the language model used by the primitive executor.
-	Model core.LanguageModel
+	Model contracts.LanguageModel
 	// Tools is the capability registry passed to the primitive executor.
 	Tools *capability.Registry
 	// Config holds runtime configuration.

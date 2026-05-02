@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type browserSessionHandle struct {
@@ -33,7 +34,7 @@ type browserSessionHandle struct {
 	service     *BrowserService
 }
 
-func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
+func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
 	backendName := s.resolveBackend(args)
 	cfg := browserSessionConfig{
 		backendName:  backendName,
@@ -98,7 +99,7 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 	return result, nil
 }
 
-func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interface{}) (*core.ToolResult, error) {
+func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
 	sessionID := defaultSessionID(env, args)
 	if sessionID == "" {
 		return nil, fmt.Errorf("browser session not found")
@@ -501,7 +502,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	return nil
 }
 
-func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextdata.Envelope, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*core.ToolResult, error) {
+func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextdata.Envelope, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*contracts.ToolResult, error) {
 	if data == nil {
 		data = make(map[string]interface{})
 	}

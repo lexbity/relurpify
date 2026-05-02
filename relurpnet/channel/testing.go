@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // TestChannelAdapter is a controllable adapter for end-to-end tests.
@@ -81,7 +82,7 @@ func (a *TestChannelAdapter) SendInbound(ctx context.Context, msg InboundMessage
 		Type:      core.FrameworkEventMessageInbound,
 		Payload:   payload,
 		Timestamp: time.Now().UTC(),
-		Actor:     core.EventActor{Kind: "channel", ID: a.AdapterName},
+		Actor:     identity.EventActor{Kind: "channel", ID: a.AdapterName},
 		Partition: a.partition(),
 	})
 }

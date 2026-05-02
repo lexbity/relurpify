@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CodeReviewHandler implements the code review capability via an LLM sub-agent.
@@ -81,14 +82,14 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke reviews code from the envelope's user files or retrieval context.
-func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	focus, _ := stringArg(args, "focus")
 	if focus == "" {
 		focus = "all"
 	}
 
 	if !hasReviewContext(env) {
-		return &core.CapabilityExecutionResult{
+		return &contracts.CapabilityExecutionResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -102,7 +103,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 
 	contextText, fileCount := buildReviewContext(env)
 	if fileCount == 0 && strings.TrimSpace(contextText) == "" {
-		return &core.CapabilityExecutionResult{
+		return &contracts.CapabilityExecutionResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -131,7 +132,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 		}
 	}
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

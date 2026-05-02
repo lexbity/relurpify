@@ -8,6 +8,7 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,13 +22,13 @@ func TestListChannelsFiltersActivityToAuthorizedTenant(t *testing.T) {
 	_, err = eventLog.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
 			Partition: "local",
 			Payload:   []byte(`{"channel":"webchat"}`),
 		},
 		{
 			Type:      core.FrameworkEventMessageOutbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"},
 			Partition: "local",
 			Payload:   []byte(`{"channel":"webchat"}`),
 		},
@@ -46,11 +47,11 @@ func TestListChannelsFiltersActivityToAuthorizedTenant(t *testing.T) {
 
 	result, err := svc.ListChannels(context.Background(), ListChannelsRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:operator"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -80,14 +81,14 @@ func TestHealthFiltersEventCountsToAuthorizedTenant(t *testing.T) {
 		{
 			Seq:       0,
 			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
 			Partition: "local",
 			Payload:   []byte(`{"channel":"webchat"}`),
 		},
 		{
 			Seq:       0,
 			Type:      core.FrameworkEventMessageOutbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"},
+			Actor:     identity.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"},
 			Partition: "local",
 			Payload:   []byte(`{"channel":"webchat"}`),
 		},
@@ -109,11 +110,11 @@ func TestHealthFiltersEventCountsToAuthorizedTenant(t *testing.T) {
 
 	result, err := svc.Health(context.Background(), HealthRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:operator"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},

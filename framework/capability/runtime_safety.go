@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type runtimeSafetyController struct {
@@ -173,7 +174,7 @@ func (c *runtimeSafetyController) CheckBeforeExecution(desc core.CapabilityDescr
 	return nil
 }
 
-func (c *runtimeSafetyController) RecordResult(desc core.CapabilityDescriptor, result *core.ToolResult) error {
+func (c *runtimeSafetyController) RecordResult(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
 	if c == nil || c.spec == nil {
 		return nil
 	}
@@ -240,7 +241,7 @@ func (c *runtimeSafetyController) specMaxNetworkRequests(spec *core.RuntimeSafet
 	return spec.MaxNetworkRequestsSession
 }
 
-func runtimeSafetySessionID(desc core.CapabilityDescriptor, result *core.ToolResult) string {
+func runtimeSafetySessionID(desc core.CapabilityDescriptor, result *contracts.ToolResult) string {
 	if desc.Source.SessionID != "" {
 		return desc.Source.SessionID
 	}

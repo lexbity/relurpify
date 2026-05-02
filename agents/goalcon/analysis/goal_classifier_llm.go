@@ -6,7 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ClassifierConfig controls LLM-based classification behavior.
@@ -33,7 +33,7 @@ func DefaultClassifierConfig() ClassifierConfig {
 // Falls back to keyword-based classification if LLM fails or is disabled.
 func ClassifyGoalWithLLM(
 	taskInstruction string,
-	model core.LanguageModel,
+	model contracts.LanguageModel,
 	operators *types.OperatorRegistry,
 	config ClassifierConfig,
 ) types.GoalCondition {
@@ -76,7 +76,7 @@ func ClassifyGoalWithLLM(
 // classifyViaLLM handles the actual LLM invocation with timeout.
 func classifyViaLLM(
 	instruction string,
-	model core.LanguageModel,
+	model contracts.LanguageModel,
 	operators *types.OperatorRegistry,
 	config ClassifierConfig,
 ) *types.GoalCondition {
@@ -136,7 +136,7 @@ func classifyViaLLM(
 func ClassifyGoalWithContext(
 	coreCtx *contextdata.Envelope,
 	instruction string,
-	model core.LanguageModel,
+	model contracts.LanguageModel,
 	operators *types.OperatorRegistry,
 ) types.GoalCondition {
 	config := DefaultClassifierConfig()

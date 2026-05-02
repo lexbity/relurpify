@@ -16,8 +16,8 @@ type internalContractNode struct {
 
 func (n internalContractNode) ID() string     { return n.id }
 func (n internalContractNode) Type() NodeType { return n.kind }
-func (n internalContractNode) Execute(context.Context, *contextdata.Envelope) (*Result, error) {
-	return &Result{NodeID: n.id, Success: true, Data: map[string]any{}}, nil
+func (n internalContractNode) Execute(context.Context, *contextdata.Envelope) (*core.Result, error) {
+	return &core.Result{NodeID: n.id, Success: true, Data: map[string]any{}}, nil
 }
 
 func TestValidateNodeContractRejectsInvalidPlacement(t *testing.T) {

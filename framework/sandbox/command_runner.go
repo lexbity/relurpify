@@ -55,9 +55,6 @@ type SandboxCommandRunner struct {
 	noNewPrivileges bool
 }
 
-// Note: For backward compatibility, type alias the contracts type
-type CommandRunnerConfig = contracts.CommandRunnerConfig
-
 // NewSandboxCommandRunner wires the config/runtime metadata into a runner.
 func NewSandboxCommandRunner(config *contracts.CommandRunnerConfig, runtime SandboxRuntime) (*SandboxCommandRunner, error) {
 	if config == nil {

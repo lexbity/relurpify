@@ -7,9 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")
@@ -69,7 +72,7 @@ func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	return nil
 }
 
-func mergeConfiguredProviders(spec *core.AgentRuntimeSpec) []core.ProviderConfig {
+func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []core.ProviderConfig {
 	if spec == nil || len(spec.Providers) == 0 {
 		return nil
 	}
@@ -143,7 +146,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		}
 		_, err := fauthorization.EnforcePolicyRequest(ctx, r.Registration.Policy, core.PolicyRequest{
 			Target:         core.PolicyTargetProvider,
-			Actor:          core.EventActor{Kind: "agent", ID: r.Registration.ID},
+			Actor:          identity.EventActor{Kind: "agent", ID: r.Registration.ID},
 			CapabilityID:   "provider:" + desc.ID + ":activate",
 			CapabilityName: "provider:" + desc.ID + ":activate",
 			ProviderKind:   desc.Kind,
@@ -152,8 +155,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		}, fauthorization.ApprovalRequest{
 			AgentID: r.Registration.ID,
 			Manager: r.Registration.Permissions,
-			Permission: core.PermissionDescriptor{
-				Type:         core.PermissionTypeCapability,
+			Permission: contracts.PermissionDescriptor{
+				Type:         contracts.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 				Resource:     desc.ID,
 				Metadata:     metadata,
@@ -170,12 +173,12 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		}
 		return nil
 	}
-	level := core.AgentPermissionAllow
+	level := agentspec.AgentPermissionAllow
 	if desc.Security.Origin == core.ProviderOriginRemote || desc.Kind == core.ProviderKindMCPClient || desc.Kind == core.ProviderKindMCPServer {
-		level = core.AgentPermissionAsk
+		level = agentspec.AgentPermissionAsk
 	}
 	if desc.Kind == core.ProviderKindBuiltin || desc.Kind == core.ProviderKindAgentRuntime {
-		level = core.AgentPermissionAllow
+		level = agentspec.AgentPermissionAllow
 	}
 	if r.AgentSpec != nil && r.AgentSpec.ProviderPolicies != nil {
 		if policy, ok := r.AgentSpec.ProviderPolicies[desc.ID]; ok && policy.Activate != "" {
@@ -183,11 +186,11 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		}
 	}
 	switch level {
-	case core.AgentPermissionAllow, "":
+	case agentspec.AgentPermissionAllow, "":
 		return nil
-	case core.AgentPermissionDeny:
+	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("provider %s activation denied by policy", desc.ID)
-	case core.AgentPermissionAsk:
+	case agentspec.AgentPermissionAsk:
 		if r.Registration == nil || r.Registration.Permissions == nil {
 			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
 		}
@@ -198,8 +201,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		return r.Registration.Permissions.RequireApproval(ctx, r.Registration.ID, core.PermissionDescriptor{
-			Type:         core.PermissionTypeCapability,
+		return r.Registration.Permissions.RequireApproval(ctx, r.Registration.ID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeCapability,
 			Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 			Resource:     desc.ID,
 			Metadata:     metadata,

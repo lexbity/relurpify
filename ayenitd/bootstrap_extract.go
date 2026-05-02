@@ -21,6 +21,7 @@ import (
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -31,11 +32,11 @@ type AgentBootstrapOptions struct {
 	AgentName           string
 	ConfigName          string
 	AgentsDir           string
-	AgentSpec           *core.AgentRuntimeSpec
+	AgentSpec           *agentspec.AgentRuntimeSpec
 	Manifest            *manifest.AgentManifest
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
-	Model               core.LanguageModel
+	Model               contracts.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
 	Telemetry           core.Telemetry
@@ -52,7 +53,7 @@ type BootstrappedAgentRuntime struct {
 	Registry             *capability.Registry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
-	AgentSpec            *core.AgentRuntimeSpec
+	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *core.Config
 	Backend              llm.ManagedBackend
 	Environment          agentenv.WorkspaceEnvironment
@@ -170,7 +171,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	admissionResults, err := capability.AdmitCandidates(
 		registry,
 		nil,
-		core.EffectiveAllowedCapabilitySelectors(agentSpec),
+		agentspec.EffectiveAllowedCapabilitySelectors(agentSpec),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("admit skill capabilities: %w", err)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type rpcConn interface {
@@ -38,13 +39,13 @@ type invokeRequest struct {
 }
 
 type invokeResponse struct {
-	Type          string                         `json:"type"`
-	CorrelationID string                         `json:"correlation_id"`
-	Result        core.CapabilityExecutionResult `json:"result"`
+	Type          string                              `json:"type"`
+	CorrelationID string                              `json:"correlation_id"`
+	Result        contracts.CapabilityExecutionResult `json:"result"`
 }
 
 type healthFrame struct {
-	Type   string          `json:"type"`
+	Type   string     `json:"type"`
 	Health NodeHealth `json:"health"`
 }
 
@@ -90,7 +91,7 @@ func (c *WSConnection) Capabilities() []core.CapabilityDescriptor {
 	return out
 }
 
-func (c *WSConnection) Invoke(ctx context.Context, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func (c *WSConnection) Invoke(ctx context.Context, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("node connection unavailable")
 	}

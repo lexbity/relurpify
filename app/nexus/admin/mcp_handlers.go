@@ -235,7 +235,7 @@ type readRexSLOSignalsArgs struct {
 	APIVersion string `json:"api_version,omitempty"`
 }
 
-func handleListPendingPairings(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListPendingPairings(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		req := ListPendingPairingsRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), Page: PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)}}
@@ -249,7 +249,7 @@ func handleListPendingPairings(ctx context.Context, svc AdminService, principal 
 	}
 }
 
-func handleApprovePairing(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleApprovePairing(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ApprovePairing(ctx, ApprovePairingRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), Code: stringArg(args, "code", "")})
@@ -262,7 +262,7 @@ func handleApprovePairing(ctx context.Context, svc AdminService, principal core.
 	}
 }
 
-func handleRejectPairing(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleRejectPairing(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.RejectPairing(ctx, RejectPairingRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), Code: stringArg(args, "code", "")})
@@ -275,7 +275,7 @@ func handleRejectPairing(ctx context.Context, svc AdminService, principal core.A
 	}
 }
 
-func handleListNodes(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListNodes(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListNodes(ctx, ListNodesRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), Page: PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)}})
@@ -288,7 +288,7 @@ func handleListNodes(ctx context.Context, svc AdminService, principal core.Authe
 	}
 }
 
-func handleGetNode(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleGetNode(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.GetNode(ctx, GetNodeRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), NodeID: stringArg(args, "node_id", "")})
@@ -301,7 +301,7 @@ func handleGetNode(ctx context.Context, svc AdminService, principal core.Authent
 	}
 }
 
-func handleUpdateNodeCapabilities(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleUpdateNodeCapabilities(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.UpdateNodeCapabilities(ctx, UpdateNodeCapabilitiesRequest{
@@ -318,7 +318,7 @@ func handleUpdateNodeCapabilities(ctx context.Context, svc AdminService, princip
 	}
 }
 
-func handleListEvents(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListEvents(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListEvents(ctx, ListEventsRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), PageRequest: PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)}})
@@ -331,7 +331,7 @@ func handleListEvents(ctx context.Context, svc AdminService, principal core.Auth
 	}
 }
 
-func handleDescribeRexRuntime(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
+func handleDescribeRexRuntime(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.DescribeRexRuntime(ctx, DescribeRexRuntimeRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal))})
@@ -344,7 +344,7 @@ func handleDescribeRexRuntime(ctx context.Context, svc AdminService, principal c
 	}
 }
 
-func handleReadRexAdminSnapshot(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
+func handleReadRexAdminSnapshot(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ReadRexAdminSnapshot(ctx, ReadRexAdminSnapshotRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal))})
@@ -357,7 +357,7 @@ func handleReadRexAdminSnapshot(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleListFMPContinuations(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListFMPContinuations(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListFMPContinuations(ctx, ListFMPContinuationsRequest{
@@ -373,7 +373,7 @@ func handleListFMPContinuations(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleReadFMPContinuationAudit(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleReadFMPContinuationAudit(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ReadFMPContinuationAudit(ctx, ReadFMPContinuationAuditRequest{
@@ -390,7 +390,7 @@ func handleReadFMPContinuationAudit(ctx context.Context, svc AdminService, princ
 	}
 }
 
-func handleVerifyFMPAuditTrail(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleVerifyFMPAuditTrail(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.VerifyFMPAuditTrail(ctx, VerifyFMPAuditTrailRequest{
@@ -407,7 +407,7 @@ func handleVerifyFMPAuditTrail(ctx context.Context, svc AdminService, principal 
 	}
 }
 
-func handleListFMPTrustBundles(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListFMPTrustBundles(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListFMPTrustBundles(ctx, ListFMPTrustBundlesRequest{
@@ -423,7 +423,7 @@ func handleListFMPTrustBundles(ctx context.Context, svc AdminService, principal 
 	}
 }
 
-func handleUpsertFMPTrustBundle(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleUpsertFMPTrustBundle(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		bundle, err := trustBundleArg(args, "bundle")
@@ -443,7 +443,7 @@ func handleUpsertFMPTrustBundle(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleListFMPBoundaryPolicies(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListFMPBoundaryPolicies(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListFMPBoundaryPolicies(ctx, ListFMPBoundaryPoliciesRequest{
@@ -459,7 +459,7 @@ func handleListFMPBoundaryPolicies(ctx context.Context, svc AdminService, princi
 	}
 }
 
-func handleSetFMPBoundaryPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetFMPBoundaryPolicy(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		policy, err := boundaryPolicyArg(args, "policy")
@@ -479,7 +479,7 @@ func handleSetFMPBoundaryPolicy(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleListTenantFMPExports(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListTenantFMPExports(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListTenantFMPExports(ctx, ListTenantFMPExportsRequest{
@@ -495,7 +495,7 @@ func handleListTenantFMPExports(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleSetTenantFMPExport(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetTenantFMPExport(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetTenantFMPExport(ctx, SetTenantFMPExportRequest{
@@ -512,7 +512,7 @@ func handleSetTenantFMPExport(ctx context.Context, svc AdminService, principal c
 	}
 }
 
-func handleGetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleGetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.GetTenantFMPFederationPolicy(ctx, GetTenantFMPFederationPolicyRequest{
@@ -527,7 +527,7 @@ func handleGetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, p
 	}
 }
 
-func handleSetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetTenantFMPFederationPolicy(ctx, SetTenantFMPFederationPolicyRequest{
@@ -546,7 +546,7 @@ func handleSetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, p
 	}
 }
 
-func handleGetEffectiveFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleGetEffectiveFMPFederationPolicy(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.GetEffectiveFMPFederationPolicy(ctx, GetEffectiveFMPFederationPolicyRequest{
@@ -562,7 +562,7 @@ func handleGetEffectiveFMPFederationPolicy(ctx context.Context, svc AdminService
 	}
 }
 
-func handleRevokeNode(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleRevokeNode(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.RevokeNode(ctx, RevokeNodeRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), NodeID: stringArg(args, "node_id", "")})
@@ -575,7 +575,7 @@ func handleRevokeNode(ctx context.Context, svc AdminService, principal core.Auth
 	}
 }
 
-func handleCloseSession(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleCloseSession(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.CloseSession(ctx, CloseSessionRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), SessionID: stringArg(args, "session_id", "")})
@@ -588,7 +588,7 @@ func handleCloseSession(ctx context.Context, svc AdminService, principal core.Au
 	}
 }
 
-func handleGrantSessionDelegation(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleGrantSessionDelegation(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		expiresAt, err := timeArg(args, "expires_at")
@@ -598,7 +598,7 @@ func handleGrantSessionDelegation(ctx context.Context, svc AdminService, princip
 		result, err := svc.GrantSessionDelegation(ctx, GrantSessionDelegationRequest{
 			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
 			SessionID:    stringArg(args, "session_id", ""),
-			SubjectKind:  core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectKind:  identity.SubjectKind(stringArg(args, "subject_kind", "")),
 			SubjectID:    stringArg(args, "subject_id", ""),
 			Operations:   sessionOperationsArg(args, "operations"),
 			ExpiresAt:    expiresAt,
@@ -612,7 +612,7 @@ func handleGrantSessionDelegation(ctx context.Context, svc AdminService, princip
 	}
 }
 
-func handleRestartChannel(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleRestartChannel(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.RestartChannel(ctx, RestartChannelRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), Channel: stringArg(args, "channel", "")})
@@ -625,13 +625,13 @@ func handleRestartChannel(ctx context.Context, svc AdminService, principal core.
 	}
 }
 
-func handleIssueToken(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleIssueToken(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.IssueToken(ctx, IssueTokenRequest{
 			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
 			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
-			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectKind:     identity.SubjectKind(stringArg(args, "subject_kind", "")),
 			SubjectID:       stringArg(args, "subject_id", ""),
 			Scopes:          stringListArg(args, "scopes"),
 		})
@@ -644,13 +644,13 @@ func handleIssueToken(ctx context.Context, svc AdminService, principal core.Auth
 	}
 }
 
-func handleCreateSubject(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleCreateSubject(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.CreateSubject(ctx, CreateSubjectRequest{
 			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
 			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
-			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectKind:     identity.SubjectKind(stringArg(args, "subject_kind", "")),
 			SubjectID:       stringArg(args, "subject_id", ""),
 			DisplayName:     stringArg(args, "display_name", ""),
 			Roles:           stringListArg(args, "roles"),
@@ -664,7 +664,7 @@ func handleCreateSubject(ctx context.Context, svc AdminService, principal core.A
 	}
 }
 
-func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.BindExternalIdentity(ctx, BindExternalIdentityRequest{
@@ -673,7 +673,7 @@ func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal
 			Provider:        identity.ExternalProvider(stringArg(args, "provider", "")),
 			AccountID:       stringArg(args, "account_id", ""),
 			ExternalID:      stringArg(args, "external_id", ""),
-			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectKind:     identity.SubjectKind(stringArg(args, "subject_kind", "")),
 			SubjectID:       stringArg(args, "subject_id", ""),
 			DisplayName:     stringArg(args, "display_name", ""),
 			ProviderLabel:   stringArg(args, "provider_label", ""),
@@ -687,7 +687,7 @@ func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal
 	}
 }
 
-func handleRevokeToken(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleRevokeToken(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.RevokeToken(ctx, RevokeTokenRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), TokenID: stringArg(args, "token_id", "")})
@@ -700,7 +700,7 @@ func handleRevokeToken(ctx context.Context, svc AdminService, principal core.Aut
 	}
 }
 
-func handleSetPolicyRuleEnabled(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetPolicyRuleEnabled(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetPolicyRuleEnabled(ctx, SetPolicyRuleEnabledRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), RuleID: stringArg(args, "rule_id", ""), Enabled: boolArg(args, "enabled", false)})
@@ -715,7 +715,7 @@ func handleSetPolicyRuleEnabled(ctx context.Context, svc AdminService, principal
 
 // Phase 6.4: Compatibility Window handlers
 
-func handleListFMPCompatibilityWindows(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListFMPCompatibilityWindows(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListFMPCompatibilityWindows(ctx, ListFMPCompatibilityWindowsRequest{
@@ -730,7 +730,7 @@ func handleListFMPCompatibilityWindows(ctx context.Context, svc AdminService, pr
 	}
 }
 
-func handleSetFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetFMPCompatibilityWindow(ctx, SetFMPCompatibilityWindowRequest{
@@ -752,7 +752,7 @@ func handleSetFMPCompatibilityWindow(ctx context.Context, svc AdminService, prin
 	}
 }
 
-func handleDeleteFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleDeleteFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.DeleteFMPCompatibilityWindow(ctx, DeleteFMPCompatibilityWindowRequest{
@@ -770,7 +770,7 @@ func handleDeleteFMPCompatibilityWindow(ctx context.Context, svc AdminService, p
 
 // Phase 6.5: Circuit Breaker handlers
 
-func handleListFMPCircuitBreakers(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleListFMPCircuitBreakers(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListFMPCircuitBreakers(ctx, ListFMPCircuitBreakersRequest{
@@ -785,7 +785,7 @@ func handleListFMPCircuitBreakers(ctx context.Context, svc AdminService, princip
 	}
 }
 
-func handleSetFMPCircuitBreakerConfig(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleSetFMPCircuitBreakerConfig(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetFMPCircuitBreakerConfig(ctx, SetFMPCircuitBreakerConfigRequest{
@@ -805,7 +805,7 @@ func handleSetFMPCircuitBreakerConfig(ctx context.Context, svc AdminService, pri
 	}
 }
 
-func handleResetFMPCircuitBreaker(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleResetFMPCircuitBreaker(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ResetFMPCircuitBreaker(ctx, ResetFMPCircuitBreakerRequest{
@@ -823,7 +823,7 @@ func handleResetFMPCircuitBreaker(ctx context.Context, svc AdminService, princip
 
 // Phase 7.2: SLO Signals handler
 
-func handleReadRexSLOSignals(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+func handleReadRexSLOSignals(ctx context.Context, svc AdminService, principal identity.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ReadRexSLOSignals(ctx, ReadRexSLOSignalsRequest{

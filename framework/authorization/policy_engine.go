@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PolicyEngine evaluates whether a capability invocation is permitted.
@@ -37,7 +39,7 @@ func FromManifestWithConfig(m *manifest.AgentManifest, agentID string, manager *
 
 // FromAgentSpecWithConfig constructs a ManifestPolicyEngine from an effective
 // runtime spec rather than a raw manifest.
-func FromAgentSpecWithConfig(spec *core.AgentRuntimeSpec, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
+func FromAgentSpecWithConfig(spec *agentspec.AgentRuntimeSpec, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
 	rules, err := CompileAgentSpecPolicyRules(spec)
 	if err != nil {
 		return nil, err
@@ -106,9 +108,9 @@ func (e *ManifestPolicyEngine) capabilityFallbackDecision(req core.PolicyRequest
 		return core.PolicyDecisionAllow("workspace trusted")
 	default:
 		switch e.manager.DefaultPolicy() {
-		case core.AgentPermissionAllow:
+		case agentspec.AgentPermissionAllow:
 			return core.PolicyDecisionAllow("default policy: allow")
-		case core.AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return core.PolicyDecisionDeny(
 				fmt.Sprintf("capability %q denied by default policy for agent %s", req.CapabilityName, e.agentID),
 			)
@@ -135,8 +137,8 @@ func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req core.Policy
 	if e == nil || e.manager == nil {
 		return
 	}
-	desc := core.PermissionDescriptor{
-		Type:     core.PermissionTypeCapability,
+	desc := contracts.PermissionDescriptor{
+		Type:     contracts.PermissionTypeCapability,
 		Action:   permissionActionForRequest(req),
 		Resource: permissionResourceForRequest(req),
 	}

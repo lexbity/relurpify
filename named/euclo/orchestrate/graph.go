@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
 
@@ -78,38 +79,38 @@ func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 	}
 
 	nodes := []agentgraph.Node{
-		newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+		newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.execution.completed", false, contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.intake", Success: true}, nil
+			return &core.Result{NodeID: "euclo.intake", Success: true}, nil
 		}),
 		NewDispatcher("euclo.dispatch").
 			WithWorkspace(cfg.workspace).
 			WithCapabilityRegistry(cfg.capabilityRegistry).
 			WithRecipeRegistry(cfg.recipeRegistry),
-		newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+		newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.policy.mutation_permitted", true, contextdata.MemoryClassTask)
 				env.SetWorkingValue("euclo.policy.hitl_required", false, contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.policy_gate", Success: true}, nil
+			return &core.Result{NodeID: "euclo.policy_gate", Success: true}, nil
 		}),
 		NewRouteForkNode("euclo.route_fork"),
 		recipeExec,
 		capabilityExec,
-		newStageNode("euclo.merge", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+		newStageNode("euclo.merge", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.execution.merged", true, contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.merge", Success: true}, nil
+			return &core.Result{NodeID: "euclo.merge", Success: true}, nil
 		}),
-		newStageNode("euclo.report", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+		newStageNode("euclo.report", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
 			if env != nil {
 				env.SetWorkingValue("euclo.outcome.category", "success", contextdata.MemoryClassTask)
 				env.SetWorkingValue("euclo.outcome.reason", "execution completed successfully", contextdata.MemoryClassTask)
 			}
-			return &agentgraph.Result{NodeID: "euclo.report", Success: true}, nil
+			return &core.Result{NodeID: "euclo.report", Success: true}, nil
 		}),
 		agentgraph.NewTerminalNode("euclo.done"),
 	}
@@ -129,7 +130,7 @@ func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 	if err := g.AddEdge("euclo.policy_gate", "euclo.route_fork", nil, false); err != nil {
 		panic(err)
 	}
-	if err := g.AddEdge("euclo.route_fork", "euclo.execute_recipe", func(result *agentgraph.Result, _ *contextdata.Envelope) bool {
+	if err := g.AddEdge("euclo.route_fork", "euclo.execute_recipe", func(result *core.Result, _ *contextdata.Envelope) bool {
 		if result == nil || result.Data == nil {
 			return false
 		}
@@ -138,7 +139,7 @@ func NewRootGraph(opts ...RootGraphOption) *RootGraph {
 	}, false); err != nil {
 		panic(err)
 	}
-	if err := g.AddEdge("euclo.route_fork", "euclo.execute_capability", func(result *agentgraph.Result, _ *contextdata.Envelope) bool {
+	if err := g.AddEdge("euclo.route_fork", "euclo.execute_capability", func(result *core.Result, _ *contextdata.Envelope) bool {
 		if result == nil || result.Data == nil {
 			return false
 		}
@@ -185,15 +186,15 @@ func (g *RootGraph) Execute(ctx context.Context, env *contextdata.Envelope) erro
 type stageNode struct {
 	id       string
 	nodeType agentgraph.NodeType
-	execFn   func(context.Context, *contextdata.Envelope) (*agentgraph.Result, error)
+	execFn   func(context.Context, *contextdata.Envelope) (*core.Result, error)
 }
 
-func newStageNode(id string, nodeType agentgraph.NodeType, execFn func(context.Context, *contextdata.Envelope) (*agentgraph.Result, error)) *stageNode {
+func newStageNode(id string, nodeType agentgraph.NodeType, execFn func(context.Context, *contextdata.Envelope) (*core.Result, error)) *stageNode {
 	return &stageNode{id: id, nodeType: nodeType, execFn: execFn}
 }
 
 func (n *stageNode) ID() string                { return n.id }
 func (n *stageNode) Type() agentgraph.NodeType { return n.nodeType }
-func (n *stageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *stageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	return n.execFn(ctx, env)
 }

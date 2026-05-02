@@ -6,12 +6,12 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // RenderToolsToPrompt converts tool definitions into a schema-like string.
 // This is used when the LLM does not support native tool calling API.
-func RenderToolsToPrompt(tools []core.Tool) string {
+func RenderToolsToPrompt(tools []contracts.Tool) string {
 	if len(tools) == 0 {
 		return "No tools available."
 	}
@@ -43,8 +43,8 @@ func RenderToolsToPrompt(tools []core.Tool) string {
 
 // ParseToolCallsFromText extracts potential tool calls from raw LLM output.
 // It looks for JSON blocks that match the tool call schema.
-func ParseToolCallsFromText(text string) []ToolCall {
-	var calls []ToolCall
+func ParseToolCallsFromText(text string) []contracts.ToolCall {
+	var calls []contracts.ToolCall
 
 	// Attempt to find Markdown JSON blocks
 	jsonBlockRegex := regexp.MustCompile("(?s)```json\\s*(.*?)```")
@@ -117,7 +117,7 @@ func extractTopLevelJSONObjects(text string) []string {
 	return out
 }
 
-func tryParseSingleToolCall(jsonText string) (core.ToolCall, bool) {
+func tryParseSingleToolCall(jsonText string) (contracts.ToolCall, bool) {
 	var raw struct {
 		Tool      string                 `json:"tool"`
 		Name      string                 `json:"name"` // alias for 'tool'
@@ -128,7 +128,7 @@ func tryParseSingleToolCall(jsonText string) (core.ToolCall, bool) {
 	if err := json.Unmarshal([]byte(jsonText), &raw); err != nil {
 		normalized := normalizeMultilineJSONStringLiterals(jsonText)
 		if normalized == jsonText || json.Unmarshal([]byte(normalized), &raw) != nil {
-			return ToolCall{}, false
+			return contracts.ToolCall{}, false
 		}
 	}
 
@@ -137,7 +137,7 @@ func tryParseSingleToolCall(jsonText string) (core.ToolCall, bool) {
 		name = raw.Name
 	}
 	if name == "" {
-		return ToolCall{}, false
+		return contracts.ToolCall{}, false
 	}
 
 	args := raw.Arguments
@@ -148,7 +148,7 @@ func tryParseSingleToolCall(jsonText string) (core.ToolCall, bool) {
 		args = make(map[string]interface{})
 	}
 
-	return core.ToolCall{
+	return contracts.ToolCall{
 			Name: name,
 			Args: args,
 		},

@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type capabilityRegistrar interface {
@@ -221,7 +222,7 @@ func (c skillResourceCapability) Descriptor(context.Context, *contextdata.Envelo
 
 func (c skillResourceCapability) ReadResource(ctx context.Context, _ *contextdata.Envelope) (*core.ResourceReadResult, error) {
 	if c.manager != nil {
-		if err := c.manager.CheckFileAccess(ctx, c.agentID, core.FileSystemRead, c.path); err != nil {
+		if err := c.manager.CheckFileAccess(ctx, c.agentID, contracts.FileSystemRead, c.path); err != nil {
 			return nil, err
 		}
 	}

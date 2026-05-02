@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -17,10 +17,10 @@ type fakeBackend struct {
 	listErr error
 }
 
-func (f fakeBackend) Model() core.LanguageModel { return nil }
-func (f fakeBackend) Embedder() llm.Embedder    { return nil }
-func (f fakeBackend) Capabilities() core.BackendCapabilities {
-	return core.BackendCapabilities{}
+func (f fakeBackend) Model() contracts.LanguageModel { return nil }
+func (f fakeBackend) Embedder() llm.Embedder         { return nil }
+func (f fakeBackend) Capabilities() contracts.BackendCapabilities {
+	return contracts.BackendCapabilities{}
 }
 func (f fakeBackend) ModelContextSize(context.Context) (int, error) { return 0, nil }
 func (f fakeBackend) Health(context.Context) (*llm.HealthReport, error) {

@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
@@ -131,7 +131,7 @@ func (r *agentRegistry) load(path string) {
 	r.summaries = append(r.summaries, summary)
 }
 
-func effectiveAgentSpec(m *frameworkmanifest.AgentManifest, contract *frameworkmanifest.EffectiveAgentContract) *core.AgentRuntimeSpec {
+func effectiveAgentSpec(m *frameworkmanifest.AgentManifest, contract *frameworkmanifest.EffectiveAgentContract) *agentspec.AgentRuntimeSpec {
 	if contract != nil {
 		return contract.AgentSpec
 	}

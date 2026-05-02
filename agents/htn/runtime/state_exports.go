@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -70,7 +71,7 @@ func PublishWorkflowRetrieval(env *contextdata.Envelope, payload any, applied bo
 }
 
 // PublishPlanState is the exported version of publishPlanState.
-func PublishPlanState(env *contextdata.Envelope, plan *graph.Plan) {
+func PublishPlanState(env *contextdata.Envelope, plan *plan.Plan) {
 	publishPlanState(env, plan)
 }
 
@@ -80,7 +81,7 @@ func PublishTerminationState(env *contextdata.Envelope, termination string) {
 }
 
 // PlanPreflight checks plan step required capabilities against the registry.
-func PlanPreflight(plan *graph.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+func PlanPreflight(plan *plan.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
 	return planPreflight(plan, registry)
 }
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	rexproof "codeburg.org/lexbit/relurpify/named/rex/proof"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,11 +20,11 @@ func TestDescribeRexRuntime(t *testing.T) {
 
 	result, err := svc.DescribeRexRuntime(context.Background(), DescribeRexRuntimeRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},
@@ -43,11 +43,11 @@ func TestReadRexAdminSnapshot(t *testing.T) {
 
 	result, err := svc.ReadRexAdminSnapshot(context.Background(), ReadRexAdminSnapshotRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:observer"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-a"},
 			},
 			TenantID: "tenant-a",
 		},

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type fmpTrustBundleGetter interface {
@@ -80,7 +80,7 @@ func (s *service) GetEffectiveFMPFederationPolicy(ctx context.Context, req GetEf
 				info.BoundaryPolicy = policy
 				info.RequireGatewayAuth = policy.RequireGatewayAuthentication
 				info.AcceptedSourceDomains = append([]string(nil), policy.AcceptedSourceDomains...)
-				info.AcceptedSourceIdentities = append([]core.SubjectRef(nil), policy.AcceptedSourceIdentities...)
+				info.AcceptedSourceIdentities = append([]identity.SubjectRef(nil), policy.AcceptedSourceIdentities...)
 				if len(policy.AllowedRouteModes) > 0 {
 					info.AllowedRouteModes = intersectStrings(info.AllowedRouteModes, routeModeStrings(policy.AllowedRouteModes))
 				}

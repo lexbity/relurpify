@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -70,16 +71,16 @@ func shouldSkipCase(req RequiresSpec, agent graph.WorkflowExecutor) (reason stri
 	return "", false
 }
 
-func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.AgentRuntimeSpec {
+func effectiveAgentSpecForCase(base *agentspec.AgentRuntimeSpec, c CaseSpec) *agentspec.AgentRuntimeSpec {
 	if base == nil {
-		base = &core.AgentRuntimeSpec{}
+		base = &agentspec.AgentRuntimeSpec{}
 	}
 	clone := *base
 
 	// Agenttest defaults: keep writes safe without relying on filesystem-permission
 	// rewrites (tools declare broad perms for authorization).
-	clone.Files.Write.Default = core.AgentPermissionDeny
-	clone.Files.Edit.Default = core.AgentPermissionDeny
+	clone.Files.Write.Default = agentspec.AgentPermissionDeny
+	clone.Files.Edit.Default = agentspec.AgentPermissionDeny
 	clone.Files.Write.RequireApproval = false
 	clone.Files.Edit.RequireApproval = false
 
@@ -107,7 +108,7 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem *memory.WorkingMemoryStore) (graph.WorkflowExecutor, *contextdata.Envelope, fsandbox.CommandRunner, error) {
+func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *agentspec.AgentRuntimeSpec, model contracts.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem *memory.WorkingMemoryStore) (graph.WorkflowExecutor, *contextdata.Envelope, fsandbox.CommandRunner, error) {
 	executionAgentName := resolveExecutionAgentName(agentName, c)
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
@@ -116,10 +117,10 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	if agentSpec == nil {
 		agentSpec = manifest.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
 		if agentSpec == nil {
-			agentSpec = &core.AgentRuntimeSpec{}
+			agentSpec = &agentspec.AgentRuntimeSpec{}
 		}
 	}
-	bootstrapSpec := core.MergeAgentSpecs(agentSpec, core.AgentSpecOverlay{
+	bootstrapSpec := agentspec.MergeAgentSpecs(agentSpec, agentspec.AgentSpecOverlay{
 		AllowedCapabilities: uniqueCapabilitySelectors(allowedCapabilities),
 	})
 
@@ -391,8 +392,8 @@ func pregrantAgentTestCapabilities(manager *fauthorization.PermissionManager, ag
 				if resource == "" {
 					continue
 				}
-				manager.GrantPermission(core.PermissionDescriptor{
-					Type:         core.PermissionTypeCapability,
+				manager.GrantPermission(contracts.PermissionDescriptor{
+					Type:         contracts.PermissionTypeCapability,
 					Action:       action,
 					Resource:     resource,
 					RequiresHITL: true,

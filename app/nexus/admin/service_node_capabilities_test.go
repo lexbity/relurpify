@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 	"github.com/stretchr/testify/require"
 )
@@ -27,17 +28,17 @@ func TestUpdateNodeCapabilitiesPersistsApprovedSet(t *testing.T) {
 		Platform:   relurpnet.NodePlatformLinux,
 		TrustClass: core.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
-		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
+		Owner:      identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindNode, ID: "node-1"},
 	}))
 
 	svc := NewService(ServiceConfig{Nodes: nodeStore}).(*service)
 	result, err := svc.UpdateNodeCapabilities(context.Background(), UpdateNodeCapabilitiesRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin-1"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin-1"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -74,17 +75,17 @@ func TestUpdateNodeCapabilitiesDeniesCrossTenantAccess(t *testing.T) {
 		Platform:   relurpnet.NodePlatformLinux,
 		TrustClass: core.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
-		Owner:      core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindNode, ID: "node-1"},
+		Owner:      identity.SubjectRef{TenantID: "tenant-b", Kind: identity.SubjectKindNode, ID: "node-1"},
 	}))
 
 	svc := NewService(ServiceConfig{Nodes: nodeStore}).(*service)
 	_, err = svc.UpdateNodeCapabilities(context.Background(), UpdateNodeCapabilitiesRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-a",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-1"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-a", Kind: identity.SubjectKindServiceAccount, ID: "admin-1"},
 			},
 			TenantID: "tenant-b",
 		},

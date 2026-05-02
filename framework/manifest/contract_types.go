@@ -2,7 +2,7 @@ package manifest
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
@@ -11,7 +11,7 @@ type EffectiveAgentContract struct {
 	AgentID        string
 	Manifest       *AgentManifest
 	AgentSpec      *agentspec.AgentRuntimeSpec
-	Permissions    core.PermissionSet
+	Permissions    contracts.PermissionSet
 	Resources      ResourceSpec
 	ResolvedSkills []ResolvedSkill
 	SkillResults   []SkillResolution

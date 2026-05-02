@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,11 +18,11 @@ func TestListFMPTrustBundlesRequiresGlobalAdmin(t *testing.T) {
 	}).(*service)
 	_, err := svc.ListFMPTrustBundles(context.Background(), ListFMPTrustBundlesRequest{
 		AdminRequest: AdminRequest{
-			Principal: core.AuthenticatedPrincipal{
+			Principal: identity.AuthenticatedPrincipal{
 				TenantID:      "tenant-1",
 				Authenticated: true,
 				Scopes:        []string{"nexus:admin"},
-				Subject:       core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "admin"},
+				Subject:       identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "admin"},
 			},
 			TenantID: "tenant-1",
 		},
@@ -42,7 +42,7 @@ func TestUpsertAndListFMPTrustBundles(t *testing.T) {
 	bundle := fwfmp.TrustBundle{
 		TrustDomain:       "mesh.remote",
 		BundleID:          "bundle-1",
-		GatewayIdentities: []core.SubjectRef{{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}},
+		GatewayIdentities: []identity.SubjectRef{{TenantID: "tenant-1", Kind: identity.SubjectKindServiceAccount, ID: "gw-1"}},
 		IssuedAt:          now,
 		ExpiresAt:         now.Add(time.Hour),
 	}

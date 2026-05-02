@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // IngestionNode is an agentgraph.Node that runs the ingestion pipeline.
@@ -41,7 +42,7 @@ func (n *IngestionNode) Contract() agentgraph.NodeContract {
 }
 
 // Execute runs the ingestion pipeline.
-func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	result := &IngestionResult{
 		Mode:        n.spec.Mode,
 		CompletedAt: 0, // Set after completion
@@ -49,7 +50,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	// If no files to ingest and mode is files_only, skip
 	if n.spec.Mode == IngestionModeFilesOnly && len(n.spec.ExplicitFiles) == 0 {
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
 			Data: map[string]any{
@@ -63,7 +64,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	case IngestionModeFilesOnly:
 		if err := n.ingestFiles(ctx, env, result); err != nil {
 			result.Error = err.Error()
-			return &agentgraph.Result{
+			return &core.Result{
 				NodeID:  n.id,
 				Success: false,
 				Data: map[string]any{
@@ -76,7 +77,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	case IngestionModeIncremental:
 		if err := n.ingestIncremental(ctx, env, result); err != nil {
 			result.Error = err.Error()
-			return &agentgraph.Result{
+			return &core.Result{
 				NodeID:  n.id,
 				Success: false,
 				Data: map[string]any{
@@ -89,7 +90,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	case IngestionModeFull:
 		if err := n.ingestFull(ctx, env, result); err != nil {
 			result.Error = err.Error()
-			return &agentgraph.Result{
+			return &core.Result{
 				NodeID:  n.id,
 				Success: false,
 				Data: map[string]any{
@@ -101,7 +102,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	default:
 		err := fmt.Errorf("unknown ingestion mode: %s", n.spec.Mode)
-		return &agentgraph.Result{
+		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
 			Data: map[string]any{
@@ -113,7 +114,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	// Write result to envelope
 	env.SetWorkingValue("euclo.ingestion_result", result, contextdata.MemoryClassTask)
 
-	return &agentgraph.Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{

@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 type TrustedExecutionContext struct {
@@ -26,7 +27,7 @@ type TenantPolicyReader interface {
 }
 
 type TrustedContextResolver interface {
-	Resolve(context.Context, core.EventActor) (TrustedExecutionContext, error)
+	Resolve(context.Context, identity.EventActor) (TrustedExecutionContext, error)
 }
 
 type DefaultTrustedContextResolver struct {
@@ -47,7 +48,7 @@ func TrustedExecutionContextFromContext(ctx context.Context) (TrustedExecutionCo
 	return trusted, ok
 }
 
-func (r DefaultTrustedContextResolver) Resolve(ctx context.Context, actor core.EventActor) (TrustedExecutionContext, error) {
+func (r DefaultTrustedContextResolver) Resolve(ctx context.Context, actor identity.EventActor) (TrustedExecutionContext, error) {
 	trusted := TrustedExecutionContext{
 		TenantID:          firstNonEmpty(actor.TenantID, "default"),
 		SessionID:         firstNonEmpty(actor.SessionID, actor.ID),
@@ -72,14 +73,14 @@ func (r DefaultTrustedContextResolver) Resolve(ctx context.Context, actor core.E
 	return trusted, nil
 }
 
-func deriveWorkloadClass(actor core.EventActor) rexcontrolplane.WorkloadClass {
+func deriveWorkloadClass(actor identity.EventActor) rexcontrolplane.WorkloadClass {
 	if isPrivilegedActor(actor) {
 		return rexcontrolplane.WorkloadCritical
 	}
 	return rexcontrolplane.WorkloadBestEffort
 }
 
-func isPrivilegedActor(actor core.EventActor) bool {
+func isPrivilegedActor(actor identity.EventActor) bool {
 	switch strings.ToLower(strings.TrimSpace(actor.Kind)) {
 	case "operator", "admin", "nexus:operator", "nexus:admin", "gateway:admin":
 		return true

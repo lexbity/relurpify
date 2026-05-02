@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const reactMessagesKey = "react.messages"
@@ -133,32 +134,32 @@ type Interaction struct {
 }
 
 // getReactMessages reads a copy of the stored chat transcript.
-func getReactMessages(state *contextdata.Envelope) []core.Message {
+func getReactMessages(state *contextdata.Envelope) []contracts.Message {
 	raw, ok := state.GetWorkingValue(reactMessagesKey)
 	if !ok {
 		return nil
 	}
-	messages, ok := raw.([]core.Message)
+	messages, ok := raw.([]contracts.Message)
 	if !ok || len(messages) == 0 {
 		return nil
 	}
-	copyMessages := make([]core.Message, len(messages))
+	copyMessages := make([]contracts.Message, len(messages))
 	copy(copyMessages, messages)
 	return copyMessages
 }
 
 // saveReactMessages overwrites the stored transcript with a defensive copy.
-func saveReactMessages(state *contextdata.Envelope, messages []core.Message) {
+func saveReactMessages(state *contextdata.Envelope, messages []contracts.Message) {
 	if len(messages) == 0 {
-		state.SetWorkingValue(reactMessagesKey, []core.Message{}, contextdata.MemoryClassTask)
+		state.SetWorkingValue(reactMessagesKey, []contracts.Message{}, contextdata.MemoryClassTask)
 		return
 	}
-	copyMessages := make([]core.Message, len(messages))
+	copyMessages := make([]contracts.Message, len(messages))
 	copy(copyMessages, messages)
 	state.SetWorkingValue(reactMessagesKey, copyMessages, contextdata.MemoryClassTask)
 }
 
-func appendAssistantMessage(state *contextdata.Envelope, resp *core.LLMResponse) {
+func appendAssistantMessage(state *contextdata.Envelope, resp *contracts.LLMResponse) {
 	if state == nil || resp == nil {
 		return
 	}
@@ -166,17 +167,17 @@ func appendAssistantMessage(state *contextdata.Envelope, resp *core.LLMResponse)
 	if len(messages) == 0 {
 		return
 	}
-	messages = append(messages, core.Message{
+	messages = append(messages, contracts.Message{
 		Role:      "assistant",
 		Content:   resp.Text,
-		ToolCalls: append([]core.ToolCall{}, resp.ToolCalls...),
+		ToolCalls: append([]contracts.ToolCall{}, resp.ToolCalls...),
 	})
 	saveReactMessages(state, messages)
 }
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, call core.ToolCall, res *core.ToolResult, envelope *core.CapabilityResultEnvelope) {
+func appendToolMessage(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
@@ -185,7 +186,7 @@ func appendToolMessage(agent *ReActAgent, task *core.Task, state *contextdata.En
 	if !ok {
 		return
 	}
-	messages = append(messages, core.Message{
+	messages = append(messages, contracts.Message{
 		Role:       "tool",
 		Name:       call.Name,
 		Content:    fmt.Sprintf("success=%t %s", res.Success, content),
@@ -223,7 +224,7 @@ func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	}
 }
 
-func summarizeToolResult(state *contextdata.Envelope, call core.ToolCall, res *core.ToolResult) ToolObservation {
+func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult) ToolObservation {
 	phase := ""
 	if state != nil {
 		phase = getWorkingValueAsString(state, "react.phase")
@@ -245,7 +246,7 @@ func summarizeToolResult(state *contextdata.Envelope, call core.ToolCall, res *c
 	return observation
 }
 
-func compactToolData(call core.ToolCall, res *core.ToolResult) (string, map[string]interface{}) {
+func compactToolData(call contracts.ToolCall, res *contracts.ToolResult) (string, map[string]interface{}) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}

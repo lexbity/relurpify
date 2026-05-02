@@ -18,13 +18,14 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	nexusgateway "codeburg.org/lexbit/relurpify/app/nexus/gateway"
-	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	mcpprotocol "codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	mcpserver "codeburg.org/lexbit/relurpify/relurpnet/mcp/server"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
@@ -237,7 +238,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		SessionEventAuthorizer: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionID string) (bool, error) {
 			return authorizeSessionEvent(ctx, router, a.SessionStore, principal, sessionID)
 		},
-		InvokeCapability: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+		InvokeCapability: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 			return InvokeAuthorizedGatewayCapability(ctx, router, a.SessionStore, nodeManager, a.RexRuntime, principal, sessionKey, capabilityID, args)
 		},
 		HandleOutboundMessage: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, content string) error {
@@ -498,7 +499,7 @@ func listGatewayCapabilities(manager *fwnode.Manager, rexRuntime *RexRuntimeProv
 	return capabilities
 }
 
-func InvokeAuthorizedGatewayCapability(ctx context.Context, router session.Router, store session.Store, manager *fwnode.Manager, rexRuntime *RexRuntimeProvider, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+func InvokeAuthorizedGatewayCapability(ctx context.Context, router session.Router, store session.Store, manager *fwnode.Manager, rexRuntime *RexRuntimeProvider, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*contracts.CapabilityExecutionResult, error) {
 	if capabilityID == rexCapabilityID && rexRuntime != nil {
 		if store == nil {
 			return nil, fmt.Errorf("session store unavailable")
@@ -599,7 +600,7 @@ func bearerToken(header string) string {
 	return ""
 }
 
-func isAdminOrOperator(principal core.AuthenticatedPrincipal) bool {
+func isAdminOrOperator(principal identity.AuthenticatedPrincipal) bool {
 	for _, scope := range principal.Scopes {
 		switch strings.ToLower(strings.TrimSpace(scope)) {
 		case "gateway:admin", "nexus:admin", "nexus:operator", "admin", "operator":

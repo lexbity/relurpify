@@ -10,14 +10,16 @@ import (
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 const contextFileMaxBytes = 8000
@@ -33,7 +35,7 @@ type ToolInfo struct {
 	EffectClasses []string
 	TrustClass    string
 	Exposure      string
-	Policy        core.AgentPermissionLevel // per-tool override; "" means no override
+	Policy        agentspec.AgentPermissionLevel // per-tool override; "" means no override
 	HasPolicy     bool
 }
 
@@ -70,7 +72,7 @@ type RuntimeAdapter interface {
 	CapabilityAdmissions() []CapabilityAdmissionInfo
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
-	SaveToolPolicy(toolName string, level core.AgentPermissionLevel) error
+	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
 	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
 	// ListCapabilities returns all registered capabilities with runtime-family metadata.
@@ -90,20 +92,20 @@ type RuntimeAdapter interface {
 	GetLiveSessionDetail(sessionID string) (*LiveProviderSessionDetail, error)
 	GetApprovalDetail(id string) (*ApprovalDetail, error)
 	// GetClassPolicies returns the current capability-class permission policies.
-	GetClassPolicies() map[string]core.AgentPermissionLevel
+	GetClassPolicies() map[string]agentspec.AgentPermissionLevel
 	// SetToolPolicyLive updates a per-tool execution policy in-memory (current session only).
 	// Pass level="" to clear the override.
-	SetToolPolicyLive(name string, level core.AgentPermissionLevel)
+	SetToolPolicyLive(name string, level agentspec.AgentPermissionLevel)
 	// SetClassPolicyLive updates a class permission policy in-memory (current session only).
 	// Pass level="" to clear the class policy.
-	SetClassPolicyLive(class string, level core.AgentPermissionLevel)
+	SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel)
 	ListWorkflows(limit int) ([]WorkflowInfo, error)
 	GetWorkflow(workflowID string) (*WorkflowDetails, error)
 	CancelWorkflow(workflowID string) error
 	// InvokeCapability invokes a registered capability by name through the
 	// capability registry, applying the same policy, HITL, audit, and sandbox
 	// enforcement that applies to agent tool calls.
-	InvokeCapability(ctx context.Context, name string, args map[string]any) (*core.ToolResult, error)
+	InvokeCapability(ctx context.Context, name string, args map[string]any) (*contracts.ToolResult, error)
 	// Diagnostics returns a snapshot of runtime resource and agent state for
 	// display in the session live subtab.
 	Diagnostics() DiagnosticsInfo
@@ -283,7 +285,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		abs = filepath.Clean(abs)
 
 		if perm != nil {
-			if err := perm.CheckFileAccess(ctx, r.rt.Registration.ID, core.FileSystemRead, abs); err != nil {
+			if err := perm.CheckFileAccess(ctx, r.rt.Registration.ID, contracts.FileSystemRead, abs); err != nil {
 				res.Denied[path] = err.Error()
 				continue
 			}
@@ -423,7 +425,7 @@ func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
 	return fmt.Errorf("workflow cancellation not available during migration")
 }
 
-func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args map[string]any) (*core.ToolResult, error) {
+func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args map[string]any) (*contracts.ToolResult, error) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil, fmt.Errorf("capability registry unavailable")
 	}
@@ -520,11 +522,11 @@ func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, erro
 				Kind:  cap.Kind,
 				Title: cap.Name,
 			},
-			Description: cap.Description,
-			Category:     cap.Category,
-			Exposure:     cap.Exposure,
-			Callable:     cap.Callable,
-			ProviderID:   cap.ProviderID,
+			Description:     cap.Description,
+			Category:        cap.Category,
+			Exposure:        cap.Exposure,
+			Callable:        cap.Callable,
+			ProviderID:      cap.ProviderID,
 			SessionAffinity: cap.Scope,
 		}, nil
 	}
@@ -598,28 +600,28 @@ func (r *runtimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail, error) {
 	return nil, fmt.Errorf("approval %s not found", id)
 }
 
-func (r *runtimeAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel {
+func (r *runtimeAdapter) GetClassPolicies() map[string]agentspec.AgentPermissionLevel {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil
 	}
 	return r.rt.Tools.GetClassPolicies()
 }
 
-func (r *runtimeAdapter) SetToolPolicyLive(name string, level core.AgentPermissionLevel) {
+func (r *runtimeAdapter) SetToolPolicyLive(name string, level agentspec.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateToolPolicy(name, core.ToolPolicy{Execute: core.AgentPermissionLevel(level)})
+	r.rt.Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)})
 }
 
-func (r *runtimeAdapter) SetClassPolicyLive(class string, level core.AgentPermissionLevel) {
+func (r *runtimeAdapter) SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateClassPolicy(class, core.AgentPermissionLevel(level))
+	r.rt.Tools.UpdateClassPolicy(class, agentspec.AgentPermissionLevel(level))
 }
 
-func (r *runtimeAdapter) SaveToolPolicy(toolName string, level core.AgentPermissionLevel) error {
+func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error {
 	_ = toolName
 	_ = level
 	return nil
@@ -1044,7 +1046,7 @@ func splitNonEmptyLines(raw string) []string {
 	return out
 }
 
-func combineToolOutput(result *core.ToolResult) []byte {
+func combineToolOutput(result *contracts.ToolResult) []byte {
 	if result == nil {
 		return nil
 	}

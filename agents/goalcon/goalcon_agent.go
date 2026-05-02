@@ -14,11 +14,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
 type GoalConAgent struct {
-	Model            core.LanguageModel
+	Model            contracts.LanguageModel
 	Tools            *capability.Registry
 	Memory           *memory.WorkingMemoryStore
 	Config           *core.Config

@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // IndexConfig configures the IndexManager.
@@ -119,7 +119,7 @@ func (im *IndexManager) SetFileScope(scope *sandbox.FileScopePolicy) {
 
 // IndexFile parses and stores AST for a file path.
 func (im *IndexManager) IndexFile(path string) error {
-	if !im.allowedPath(core.FileSystemRead, path, false) {
+	if !im.allowedPath(contracts.FileSystemRead, path, false) {
 		return nil
 	}
 	im.mu.Lock()
@@ -187,7 +187,7 @@ func (im *IndexManager) RefreshFiles(paths []string) error {
 }
 
 func (im *IndexManager) refreshFile(path string) error {
-	if !im.allowedPath(core.FileSystemRead, path, false) {
+	if !im.allowedPath(contracts.FileSystemRead, path, false) {
 		return im.removeIndexedFile(path)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -313,12 +313,12 @@ func (im *IndexManager) runWorkspaceIndex(ctx context.Context) error {
 			return err
 		}
 		if d.IsDir() {
-			if !im.allowedPath(core.FileSystemList, path, true) {
+			if !im.allowedPath(contracts.FileSystemList, path, true) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !im.allowedPath(core.FileSystemRead, path, false) {
+		if !im.allowedPath(contracts.FileSystemRead, path, false) {
 			return nil
 		}
 		if im.shouldIgnore(path) {
@@ -349,7 +349,7 @@ func (im *IndexManager) shouldIgnore(path string) bool {
 	return false
 }
 
-func (im *IndexManager) allowedPath(action core.FileSystemAction, path string, isDir bool) bool {
+func (im *IndexManager) allowedPath(action contracts.FileSystemAction, path string, isDir bool) bool {
 	im.mu.Lock()
 	scope := im.fileScope
 	filter := im.pathFilter

@@ -15,6 +15,7 @@ import (
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -155,8 +156,8 @@ func newStartCmd() *cobra.Command {
 				return fmt.Errorf("compiled policy missing from workspace")
 			}
 			if autoApprove {
-				registration.Permissions.SetDefaultPolicy(core.AgentPermissionAllow)
-				spec.Bash.Default = core.AgentPermissionAllow
+				registration.Permissions.SetDefaultPolicy(agentspec.AgentPermissionAllow)
+				spec.Bash.Default = agentspec.AgentPermissionAllow
 			} else if registration.HITL != nil {
 				hitlEvents, unsub := registration.HITL.Subscribe(4)
 				defer unsub()
@@ -235,7 +236,7 @@ func newStartCmd() *cobra.Command {
 			var buildErr error
 			agent, buildErr = buildFromSpecFn(&openedWS.Environment, *spec)
 			if buildErr != nil {
-				agent, buildErr = buildFromSpecFn(&openedWS.Environment, core.AgentRuntimeSpec{Implementation: "react"})
+				agent, buildErr = buildFromSpecFn(&openedWS.Environment, agentspec.AgentRuntimeSpec{Implementation: "react"})
 			}
 			if buildErr != nil {
 				return buildErr

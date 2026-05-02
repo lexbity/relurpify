@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/shell"
 	"codeburg.org/lexbit/relurpify/platform/shell/command"
 )
@@ -23,9 +23,9 @@ type VerifyStepResult struct {
 	Summary   string
 }
 
-func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]core.Tool {
+func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]contracts.Tool {
 	tools := shell.CommandLineTools(workspace, commandRunnerAdapter{runner: runner})
-	index := make(map[string]core.Tool, len(tools))
+	index := make(map[string]contracts.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool
 	}
@@ -109,7 +109,7 @@ func normalizeVerifyArgs(args map[string]any) map[string]interface{} {
 	return out
 }
 
-func extractVerifyMessage(result *core.ToolResult, err error) string {
+func extractVerifyMessage(result *contracts.ToolResult, err error) string {
 	var parts []string
 	if err != nil {
 		parts = append(parts, err.Error())

@@ -1,6 +1,9 @@
 package capability
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import (
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
 
 // CapabilityCallingMode determines whether a model invocation should use a
 // provider-native tool-call API or the framework-owned render/parse fallback.
@@ -16,7 +19,7 @@ const (
 // Native tool calling is only used when the agent spec enables it and the
 // backend reports native tool-call support. Everything else falls back to the
 // framework-rendered tool prompt and parser.
-func ResolveCallingMode(spec *core.AgentRuntimeSpec, caps core.BackendCapabilities) CapabilityCallingMode {
+func ResolveCallingMode(spec *agentspec.AgentRuntimeSpec, caps contracts.BackendCapabilities) CapabilityCallingMode {
 	if spec != nil && spec.NativeToolCallingEnabled() && caps.NativeToolCalling {
 		return CapabilityCallingNative
 	}

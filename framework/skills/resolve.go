@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -125,7 +126,7 @@ func convertCoreProviderConfigs(values []core.ProviderConfig) []agentspec.Provid
 // ApplySkills resolves skill contributions and then registers any skill-backed
 // capabilities against the provided registry.
 func ApplySkills(workspace string, baseSpec *agentspec.AgentRuntimeSpec, skillNames []string,
-	registry *capability.Registry, permissions *capability.PermissionManager, agentID string,
+	registry *capability.Registry, permissions *authorization.PermissionManager, agentID string,
 ) (*agentspec.AgentRuntimeSpec, []SkillResolution) {
 	spec, resolved, resolutionResults := ResolveSkills(workspace, baseSpec, skillNames)
 	results := make([]SkillResolution, 0, len(resolutionResults)+len(resolved))

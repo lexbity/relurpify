@@ -70,7 +70,7 @@ func (r *AuthorizationPolicyResolver) EvaluateResume(ctx context.Context, req Re
 	} else if ok {
 		return decision, nil
 	}
-	actor := core.EventActor{
+	actor := identity.EventActor{
 		Kind:        string(req.Actor.Kind),
 		ID:          req.Actor.ID,
 		TenantID:    req.Actor.TenantID,
@@ -107,7 +107,7 @@ func (r *AuthorizationPolicyResolver) evaluateResumeRules(ctx context.Context, r
 	}
 	policyReq := core.PolicyRequest{
 		Target: core.PolicyTargetResume,
-		Actor: core.EventActor{
+		Actor: identity.EventActor{
 			Kind:        string(req.Actor.Kind),
 			ID:          req.Actor.ID,
 			TenantID:    req.Actor.TenantID,

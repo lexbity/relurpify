@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // StepExecutionRequest encapsulates parameters for executing a single plan step.
@@ -223,8 +224,8 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 		return
 	}
 
-	// Convert core.Result to core.ToolResult for the envelope
-	toolResultEnv := &core.ToolResult{
+	// Convert core.Result to contracts.ToolResult for the envelope
+	toolResultEnv := &contracts.ToolResult{
 		Success: toolResult.Success,
 		Data:    toolResult.Data,
 		Error:   "",

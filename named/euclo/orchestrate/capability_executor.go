@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 )
 
@@ -38,7 +39,7 @@ func (n *CapabilityExecutionNode) ID() string { return n.id }
 func (n *CapabilityExecutionNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute invokes the selected capability and persists execution metadata.
-func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*agentgraph.Result, error) {
+func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	capabilityID := "euclo:cap.ast_query"
 	if env != nil {
@@ -57,7 +58,7 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 	}
 
 	var (
-		result *agentgraph.Result
+		result *core.Result
 		err    error
 	)
 	if n.registry == nil {
@@ -71,7 +72,7 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		env.SetWorkingValue("euclo.execution.completed", result != nil && result.Success, contextdata.MemoryClassTask)
 	}
 	if result == nil {
-		result = &agentgraph.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
+		result = &core.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
 	}
 	result.NodeID = n.id
 	return result, err

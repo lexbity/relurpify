@@ -10,6 +10,7 @@ import (
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type BoundaryReportHandler struct {
@@ -53,7 +54,7 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
 	}
@@ -111,7 +112,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Env
 	report := buildBoundaryReportMarkdown(layer, checked, dependencyCounts, violations)
 	summary := fmt.Sprintf("%d import edges checked, %d violations found", checked, len(violations))
 
-	return &core.CapabilityExecutionResult{
+	return &contracts.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":           true,

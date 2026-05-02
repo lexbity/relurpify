@@ -2,7 +2,7 @@ package agents
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ToolScope defines the permission envelope used to filter a capability
@@ -22,7 +22,7 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 	if registry == nil {
 		return capability.NewRegistry()
 	}
-	cloned := registry.CloneFiltered(func(tool core.Tool) bool {
+	cloned := registry.CloneFiltered(func(tool contracts.Tool) bool {
 		return toolAllowed(tool, scope)
 	})
 	if len(scope.WritePathGlobs) > 0 {
@@ -32,18 +32,18 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 }
 
 // toolAllowed reports whether the tool's declared permissions fit within scope.
-func toolAllowed(tool core.Tool, scope ToolScope) bool {
+func toolAllowed(tool contracts.Tool, scope ToolScope) bool {
 	perms := tool.Permissions()
 	if perms.Permissions == nil {
 		return true
 	}
 	for _, fs := range perms.Permissions.FileSystem {
 		switch fs.Action {
-		case core.FileSystemWrite:
+		case contracts.FileSystemWrite:
 			if !scope.AllowWrite {
 				return false
 			}
-		case core.FileSystemExecute:
+		case contracts.FileSystemExecute:
 			if !scope.AllowExecute {
 				return false
 			}

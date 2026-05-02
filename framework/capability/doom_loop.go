@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type DoomLoopKind string
@@ -134,7 +135,7 @@ func (d *DoomLoopDetector) Check(desc core.CapabilityDescriptor, args map[string
 	return nil
 }
 
-func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *core.ToolResult) error {
+func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
 	if d == nil {
 		return nil
 	}
@@ -181,7 +182,7 @@ func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *
 	return nil
 }
 
-func (d *DoomLoopDetector) Record(desc core.CapabilityDescriptor, result *core.ToolResult) error {
+func (d *DoomLoopDetector) Record(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
 	return d.RecordResult(desc, result)
 }
 
@@ -278,7 +279,7 @@ func hashArgs(args map[string]any) string {
 	return string(data)
 }
 
-func normalizeResultError(result *core.ToolResult) string {
+func normalizeResultError(result *contracts.ToolResult) string {
 	if result == nil {
 		return ""
 	}
@@ -289,7 +290,7 @@ func normalizeResultError(result *core.ToolResult) string {
 	return errText
 }
 
-func extractModifiedPath(result *core.ToolResult) string {
+func extractModifiedPath(result *contracts.ToolResult) string {
 	if result == nil {
 		return ""
 	}
@@ -314,7 +315,7 @@ func extractModifiedPath(result *core.ToolResult) string {
 	return ""
 }
 
-func successfulCoordinationProgress(desc core.CapabilityDescriptor, result *core.ToolResult) bool {
+func successfulCoordinationProgress(desc core.CapabilityDescriptor, result *contracts.ToolResult) bool {
 	if result == nil || strings.TrimSpace(result.Error) != "" {
 		return false
 	}

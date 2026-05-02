@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // EucloConfig configures the Euclo agent behavior.
@@ -16,7 +17,7 @@ type EucloConfig struct {
 	BuiltinFamilies bool
 
 	// CapabilityClassifierModel overrides the model used for tier-2 classification.
-	CapabilityClassifierModel core.LanguageModel
+	CapabilityClassifierModel contracts.LanguageModel
 
 	// MaxStreamTokens is the token budget passed to context stream requests.
 	MaxStreamTokens int
@@ -57,16 +58,16 @@ type EucloConfig struct {
 // DefaultConfig returns the default Euclo configuration.
 func DefaultConfig() EucloConfig {
 	return EucloConfig{
-		RecipeDirs:             []string{},
-		BuiltinFamilies:        true,
-		MaxStreamTokens:        8192,
-		DefaultStreamMode:      contextstream.ModeBlocking,
-		WorkspaceIngestionMode: "files_only",
-		IngestionIncludeGlobs:  []string{},
-		IngestionExcludeGlobs:  []string{},
-		HITLTimeout:            5 * time.Minute,
-		TelemetrySink:          nil,
-		DryRun:                 false,
+		RecipeDirs:              []string{},
+		BuiltinFamilies:         true,
+		MaxStreamTokens:         8192,
+		DefaultStreamMode:       contextstream.ModeBlocking,
+		WorkspaceIngestionMode:  "files_only",
+		IngestionIncludeGlobs:   []string{},
+		IngestionExcludeGlobs:   []string{},
+		HITLTimeout:             5 * time.Minute,
+		TelemetrySink:           nil,
+		DryRun:                  false,
 		SuppressOutcomeFeedback: false,
 	}
 }
