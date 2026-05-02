@@ -238,6 +238,17 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		boot.Environment.Registry.SetPolicyEngine(boot.PolicyEngine)
 	}
 
+	// Phase G.5: Prompt Registry
+	// BuildPromptRegistry loads .prompt files from relurpify_cfg/prompts/.
+	// Provider registration is deferred to named-agent Initialize() calls.
+	promptRegistry, err := BuildPromptRegistry(cfg.Workspace, tel)
+	if err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("build prompt registry: %w", err)
+	}
+	boot.Environment.PromptRegistry = promptRegistry
+	logger.Printf("ayenitd: prompt registry loaded: %d prompts", promptRegistry.Count())
+
 	// Phase H: Embedder Initialization
 
 	// Phase I: ServiceManager Setup & Scheduler Registration
@@ -325,6 +336,19 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	if err := registerBrowserWorkspaceServiceFn(ctx, cfg, registration, env.Registry, sm, tel); err != nil {
 		_ = ws.Close()
 		return nil, err
+	}
+
+	// Deferred prompt provider validation. Named agents register providers
+	// during their own Initialize() calls after receiving WorkspaceEnvironment.
+	// This early call catches any structural issues in the loaded prompt files
+	// (e.g. malformed requires_providers). Missing-provider errors are expected
+	// at this point and are logged as warnings — they resolve when agents init.
+	if promptRegistry.Count() > 0 {
+		if issues := promptRegistry.ValidateProviders(); len(issues) > 0 {
+			for _, iss := range issues {
+				logger.Printf("ayenitd: prompt validation: %s", iss.Error())
+			}
+		}
 	}
 
 	logger.Printf("ayenitd: workspace opened successfully")
