@@ -2,473 +2,399 @@
 
 ## Synopsis
 
-The `framework/` layer is the infrastructure that all agents, applications, and platform integrations build on. It provides foundational types, runtime services, and protocol implementations with no dependencies on specific agent logic or application surfaces.
+`framework/` is the shared runtime foundation used by agents, app entry points,
+and platform code. It owns the canonical contracts for manifests, agent
+specs, capabilities, authorization, sandboxing, workflow execution, context
+assembly, memory, persistence, retrieval, search, telemetry, and workspace
+analysis.
 
-The intended rule is strict dependency direction:
+At a technical level, the framework is where the runtime's enforcement
+surface is defined. It resolves the effective agent spec, compiles context and
+context policy, admits capabilities, enforces permissions, and provides the
+execution envelope used by graph-based agents. Higher layers consume these
+contracts; they do not redefine them.
 
-- `framework/` may define the canonical enforcement contract
-- `agents/` may consume that contract
-- `framework/` must not import `agents`
+The current tree does not split this area into separate `pipeline/`,
+`middleware/`, or `contextmgr/` packages. Those responsibilities are spread
+across packages such as `agentgraph`, `contextdata`, `contextstream`,
+`contextpolicy`, `compiler`, `capability`, `authorization`, and `sandbox`.
 
-This boundary is enforced by `scripts/check-framework-boundaries.sh`.
+The dependency rule is simple:
+
+- `framework/` defines enforcement-critical runtime contracts
+- `agents/` and `named/` consume those contracts
+- `framework/` must not import `agents/`
+
+That boundary is checked by `scripts/check-framework-boundaries.sh`.
+
+For the higher-level architecture and layering rules, see
+[architecture.md](architecture.md) and [layering.md](layering.md).
 
 ---
 
 ## Package Map
 
-```
-framework/
-├── core/           Foundational types shared across every layer
-├── capability/     Central capability registry
-├── capabilityplan/ Explicit capability admission planning
-├── contract/       Effective runtime contract resolution
-├── contextmgr/     LLM context window management
-├── graph/          Deterministic state-machine workflow runtime
-├── pipeline/       Staged LLM execution with typed contracts
-├── manifest/       Agent security manifest parsing (relurpify/v1alpha1)
-├── memory/         Hybrid storage (checkpoints, messages, vectors, workflows)
-├── authorization/  Permission enforcement and HITL approval
-├── policybundle/   Compiled policy bundle built from effective contract
-├── search/         File glob and content search
-├── identity/       Identity resolution and storage
-├── telemetry/      Structured audit logging and execution tracing
-├── event/          Shared event log
-├── ast/            AST parsing and code indexing
-├── sandbox/        Command execution (local and gVisor-sandboxed)
-├── templates/      Prompt template resolution
-├── config/         Workspace configuration path resolution
-└── middleware/     Transport and protocol layers
-    ├── channel/    Concurrent communication channel manager
-    ├── gateway/    HTTP server and replay recording
-    ├── node/       WebSocket connections to remote nodes
-    ├── session/    Session routing and event-stream isolation
-    └── mcp/        Full MCP (Model Context Protocol) implementation
-        ├── protocol/   Wire-format types (2025-06-18, 2025-11-25)
-        ├── client/     MCP client
-        ├── server/     MCP server
-        ├── session/    MCP session management
-        ├── schema/     JSON schema validation and conversion
-        ├── mapping/    Import/export capability mapping
-        └── versioning/ Protocol version negotiation
-```
+### Contracts and composition
+
+| Package | Role |
+|--------|------|
+| `core` | Shared runtime types and compatibility aliases for tasks, tools, providers, policies, capabilities, permissions, and state boundaries. |
+| `agentspec` | Agent-spec models, overlay merge logic, selector evaluation, and effective runtime-spec composition. |
+| `manifest` | Parses agent and skill manifests, resolves workspace paths under `relurpify_cfg/`, and expands skill references. |
+| `contextpolicy` | Compiles manifest and skill context policy into a runtime `ContextPolicyBundle`. |
+| `contextbudget` | Live token accounting, budget snapshots, and session reset advisories for compiler-aware LLM calls. |
+| `agentenv` | Defines `WorkspaceEnvironment`, the composition-root object produced by `ayenitd.Open()`. |
+| `capability` | Capability registry, dispatch, tool formatting, provenance wrapping, and runtime-family handling. |
+| `authorization` | Allow/Ask/Deny policy enforcement, HITL handling, command authorization, and delegation checks. |
+| `sandbox` | Command-execution policy and backend-neutral runner abstractions, including filesystem scoping helpers. |
+
+### Execution and context
+
+| Package | Role |
+|--------|------|
+| `agentgraph` | Deterministic workflow runtime with node contracts, preflight, checkpointing, branch merging, and system nodes. |
+| `contextdata` | Execution envelope for working memory, streamed context, and retrieval references. |
+| `contextstream` | Compiler-triggered context streaming requests, triggers, and job primitives. |
+| `compiler` | Live context assembly, caching, replay, audit, and event-driven invalidation. |
+| `contextmetric` | Artifact-budget and context-budget telemetry helpers. |
+
+### State and persistence
+
+| Package | Role |
+|--------|------|
+| `memory` | Durable workflow state, runtime memory, checkpoint snapshots, message/vector stores, and hydrators. |
+| `persistence` | Schema and adapter boundaries for persisted runtime data. |
+| `graphdb` | Embedded graph engine for durable traversal-oriented storage. |
+| `agentlifecycle` | Workflow, run, delegation, lineage, and runtime lifecycle records. |
+| `event` | Shared event log used across the runtime and audit surfaces. |
+| `telemetry` | Local structured audit trail and event-log bridge. |
+| `jobs` | Job boundaries, worker lifecycle, and scheduler-facing types. |
+
+### Workspace intelligence
+
+| Package | Role |
+|--------|------|
+| `ast` | Go and Markdown parsing plus workspace symbol indexing. |
+| `search` | File glob and content search helpers. |
+| `retrieval` | Ranking and retrieval utilities for knowledge selection. |
+| `knowledge` | Semantic chunk substrate, freshness, invalidation, and graph helpers. |
+| `summarization` | Code and prose summarizers used during context compaction. |
+| `ingestion` | Workspace scanning, file parsing, and typed ingestion pipeline for files, LLM output, and tool results. |
+| `templates` | Prompt-template resolution and caching. |
+| `skills` | Skill manifest expansion, selector resolution, and skill capability registration. |
+| `patterns` | Durable pattern, comment, and gap storage types. |
+| `perfstats` | Lightweight counters for framework-level runtime behavior. |
 
 ---
 
-## core
+## Selected Packages
 
-`framework/core` defines every type shared between agents, tools, providers, and the runtime. No other framework package defines domain types — they all import from core.
+### `core`
 
-**Agent & task** — `Agent`, `AgentRuntimeSpec`, `Task`, `Plan`. The spec merge/overlay system composes manifest defaults, skill contributions, agent-definition overlays, and runtime overrides into the effective runtime contract.
+`core` is the shared contract layer for the rest of the framework. It
+contains the common runtime types used across graph execution, capabilities,
+permissions, tasks, tools, and provider metadata.
 
-**Context** — `Context` is the mutable state bag threaded through every graph node and tool call. It holds messages, tool observations, budget signals, and per-scope key/value pairs. `SharedContext` is a richer working-set and budget wrapper used by higher-level runtimes; graph-level parallel branch merging is handled by explicit context-delta rules in `framework/graph`.
+Important detail: `core` is not the only place where domain types live. Many
+framework concerns are now owned by more specific packages such as
+`agentspec`, `manifest`, `contextpolicy`, `agentgraph`, `memory`, and
+`compiler`.
 
-**Memory classes and state data classes** — graph state is typed to control what each node may read and write.
+Technical notes:
 
-`MemoryClass` categorises data by lifecycle:
+- Most cross-package compatibility aliases live here so older call sites can
+  continue compiling while the ownership model moves to more specific
+  packages.
+- State-boundary types, capability selectors, policy classes, and task/context
+  shapes are defined here because they are used by multiple subsystems.
+- `core` is intentionally broad, but it should be treated as a contract layer
+  rather than a place for behavior-heavy logic.
 
-| Class | Meaning |
-|-------|---------|
-| `working` | Transient per-run coordination state — cleared at graph completion |
-| `declarative` | Durable facts, decisions, constraints, summaries — persisted across runs |
-| `procedural` | Reusable routines and capability compositions — persisted and versioned |
+### `agentspec`
 
-`StateDataClass` categorises individual state entries by semantic role: `task-metadata`, `step-metadata`, `routing-flag`, `artifact-ref`, `memory-ref`, `structured-state`, `transcript`, `raw-payload`, `retrieval-dump`, `subagent-history`.
+`framework/agentspec` composes the effective agent runtime spec from manifests,
+skill contributions, overlays, and runtime overrides. It is the package to use
+when you need the resolved agent configuration rather than a raw manifest.
 
-`StateBoundaryPolicy` declares what a node may read and write: allowed key patterns, allowed memory and data classes, inline size limits, and a `PreferArtifactReferences` flag that lint-flags raw payload stored inline instead of by reference. `LintStateMap` runs lint checks against a live state snapshot without blocking execution.
+Technical notes:
 
-`ArtifactReference` is the preferred graph-state shape for any large output. State carries the reference; the payload lives in the workflow store. `MemoryReference` is the analogous pointer for declarative and procedural memory records.
+- `AgentDefinition` and `AgentRuntimeSpec` are the primary entry points for
+  loading and validating agent configuration.
+- Runtime behavior is normalized before execution: tool-calling intent,
+  capability selectors, permission levels, provider policies, runtime safety,
+  browser/LSP/search flags, and composition metadata are all resolved into one
+  effective spec.
+- This package owns the compatibility layer for merging agent definitions and
+  runtime overlays without forcing callers to manually reconcile all of the
+  input sources.
+- It is the right layer when you need the final runtime intent, not the raw
+  manifest text.
 
-**Capabilities** — `CapabilityDescriptor`, `CapabilityKind` (Tool/Prompt/Resource), `TrustClass`, `EffectClass`, `RiskClass`, and `InsertionAction` model where a capability came from and how its output may be used. `CapabilityResultEnvelope` wraps every result with provenance and an `InsertionDecision`.
+### `manifest`
 
-**Providers** — `Provider` is the common interface for all capability sources: builtin, plugin, MCP client/server, agent-runtime, LSP, node-device. `ProviderPolicy`, `CapabilityPolicy`, and `GlobalPolicy` form the declarative authorization layer.
+`framework/manifest` is responsible for the on-disk agent and skill manifests
+under `relurpify_cfg/`. It also owns the canonical workspace path layout used
+to locate `config.yaml`, `agent.yaml`, `skills/`, `logs/`, `telemetry/`,
+`sessions/`, `memory/`, and the other runtime data files.
 
-**LLM** — `LanguageModel`, `LLMOptions`, `LLMResponse`, `Message`, `ToolCall`, `Tool`. `LanguageModel` is implemented by provider-backed transports in `platform/llm`.
+Technical notes:
 
-**Managed backends** — `BackendCapabilities`, `BackendClass`, and backend health/model metadata are the shared contract used by runtime bootstrap, capability routing, probe/doctor reporting, retrieval selection, and the TUI. The `framework/` layer never imports `platform/llm`; it consumes the shared capability types only.
+- The package validates the manifest version and shape before the runtime uses
+  any of the declared settings.
+- It resolves workspace-relative paths into the canonical `relurpify_cfg/`
+  structure so runtime code can stay path-agnostic.
+- Skill manifests are not just metadata; they are resolved into concrete
+  runtime contributions that later participate in capability and policy
+  admission.
+- This package is about declaration and resolution, not execution.
 
-**Permissions & HITL** — `ToolPermissions`, `PermissionSet`, `ApprovalBinding`, `HITLRequest`. `HITLRequest` carries a `Timeout`, `TimeoutBehavior`, and `RunID` for background task flows.
+### `contextpolicy`
 
-**Sessions & nodes** — `SessionInfo`, `NodeInfo`, `NodeDescriptor` support the Nexus distributed model.
+`framework/contextpolicy` compiles the context policy section from the manifest
+and any resolved skills into a runtime bundle. That bundle captures policy
+defaults, rankers, scanners, summarizers, quota and rate-limit settings, and
+skill contributions.
 
-**Policy** — `GlobalPolicy`, `CapabilityPolicy`, `ProviderPolicy`, `PolicyDuration`. These are the declarative types; enforcement logic lives in `framework/authorization`.
+Technical notes:
+
+- The compiled bundle is the runtime-facing object used by context assembly
+  and context admission.
+- Manifest defaults are applied first, then skill contributions are merged in,
+  so the final policy reflects both the agent definition and resolved skill
+  surface.
+- The package carries the knobs that control budget behavior, trust handling,
+  degraded content handling, and substitution policy when context is short on
+  space.
+- It exists to make context assembly deterministic and inspectable.
+
+### `capability`
+
+`framework/capability` owns the registry for already-admitted capabilities.
+It handles local tools, prompt capabilities, resource capabilities, and
+provider-backed or higher-order runtime families through the same registry and
+policy machinery.
+
+Technical notes:
+
+- The registry is the runtime lookup point for capabilities an agent may
+  actually invoke.
+- Dispatch is gated by policy, trust, effect class, and provenance; the
+  registry wraps outcomes in a result envelope so the caller can preserve
+  insertion and audit metadata.
+- Tool formatting lives here because transport backends need a normalized tool
+  schema, even though the capability itself may originate elsewhere.
+- Runtime families are distinct from capability kinds, which lets the system
+  treat local tools, prompts, resources, and opinionated higher-order flows
+  consistently.
+
+### `authorization`
+
+`framework/authorization` enforces the runtime policy model. It decides
+whether a requested action is allowed, needs human approval, or is denied,
+but it does not itself launch processes or provide OS-level isolation.
+
+Technical notes:
+
+- This package implements the Allow / Ask / Deny boundary used by tool calls
+  and other privileged actions.
+- It is responsible for HITL request flow, command authorization, and
+  delegation checks, but the actual command execution remains in `sandbox`.
+- The enforcement logic consumes the effective runtime contract rather than
+  the raw manifest so runtime overlays and admitted capability state are
+  reflected correctly.
+
+### `sandbox`
+
+`framework/sandbox` abstracts command execution. It defines the backend-neutral
+policy contract and the filesystem-scoping helpers used by sandbox-aware tools.
+
+Technical notes:
+
+- The package is intentionally backend-neutral so the same policy surface can
+  be applied to local execution and sandboxed execution paths.
+- It owns the pre-execution checks that keep protected filesystem roots out of
+  reach before a host command is launched.
+- Higher layers decide which backend is active; `sandbox` defines the policy
+  and enforcement mechanics.
+
+### `agentgraph`
+
+`framework/agentgraph` is the deterministic workflow runtime used by agents.
+Nodes declare execution contracts, preflight validates required capabilities,
+checkpointing records transition-boundary state, and parallel branches merge
+only explicit state changes back into the parent context.
+
+Technical notes:
+
+- `WorkflowExecutor` is the execution contract that higher-level agents
+  implement.
+- `NodeContract` captures side-effect class, idempotency, placement,
+  checkpoint policy, recoverability, trust/risk ceilings, and the allowed
+  state boundary for a node.
+- Default contracts vary by node type, which lets the runtime enforce different
+  replay and state-access rules for tool nodes, human nodes, terminal nodes,
+  and streaming or observation nodes.
+- Checkpoints are transition-boundary records. Resume starts at the next node,
+  which prevents re-running completed single-shot steps.
+- Branch merges are explicit and conservative: only branch-local state writes
+  that do not conflict are merged back.
+- The package also exposes the compiler-trigger interface used when graph
+  execution needs fresh assembled context.
+
+### `contextdata`
+
+`framework/contextdata` defines the execution envelope threaded through graph
+nodes. It carries working memory, streamed context, and retrieval results
+without duplicating the underlying data.
+
+Technical notes:
+
+- The envelope is the shared in-flight execution state for graph nodes.
+- It separates mutable working memory from streamed context and retrieval
+  references so the runtime can keep provenance and mutation rules explicit.
+- Branch clone and merge semantics are defined around the envelope, not around
+  ad hoc maps, so the runtime can control which changes are safe to propagate.
+- This package exists to make context flow cheap to copy and precise to merge.
+
+### `contextstream`
+
+`framework/contextstream` models compiler-triggered context streaming. It
+provides the request and job primitives used when execution asks the compiler
+to assemble or refresh context.
+
+Technical notes:
+
+- This package is about orchestration, not assembly.
+- It gives graph execution a way to request a refreshed or filtered context
+  view from the compiler without directly coupling nodes to compiler internals.
+- Keeping the trigger/job types separate from the assembled envelope makes the
+  control plane explicit.
+
+### `compiler`
+
+`framework/compiler` assembles runtime context from retrieval, knowledge, and
+policy state. It caches compilation results, emits replay records, and applies
+event-driven invalidation.
+
+Technical notes:
+
+- Compilation is staged: ranker admission, scatter, fusion, trust filtering,
+  freshness filtering, budget fitting, and result emission.
+- The compiler keeps enough metadata to replay a prior assembly and compare it
+  against current state.
+- Budget pressure can trigger substitution of chunks with summaries so the
+  runtime can stay within the configured token window.
+- Caching is keyed by the query, manifest, policy bundle, and event-log
+  sequence so the compiled result remains deterministic and inspectable.
+- This package is the bridge between retrieval, knowledge storage, and the
+  execution envelope.
+
+### `memory`
+
+`framework/memory` owns durable workflow state and runtime memory. It
+includes the stores and adapters used for checkpoints, declarative and
+procedural memory, message history, vectors, and workflow records.
+
+Technical notes:
+
+- The package distinguishes between transient working memory and durable
+  runtime records.
+- Declarative memory is for facts, decisions, constraints, and similar
+  long-lived knowledge.
+- Procedural memory is for reusable routines and capability compositions.
+- Hydrators convert retrieved memory records back into either a raw state map
+  or an execution envelope, which keeps the graph runtime decoupled from the
+  underlying store implementation.
+- Checkpoint storage is treated as a first-class runtime concern so interrupted
+  execution can resume without replaying the entire workflow.
+
+### `persistence`
+
+`framework/persistence` defines the adapter boundary for persisted runtime
+data. The domain packages depend on these narrow interfaces instead of talking
+to a specific backend directly.
+
+Technical notes:
+
+- This package defines schema and adapter boundaries, not domain semantics.
+- It exists to keep compiler, lifecycle, and memory packages backend-agnostic
+  while still allowing durable storage to be implemented elsewhere.
+- The shape of the adapter is intentionally narrow so the storage backend can
+  evolve without forcing the domain packages to absorb backend details.
+
+### `ast`, `search`, `retrieval`, `knowledge`
+
+These packages work together to let agents find and rank workspace content
+without loading entire files into context. `ast` indexes symbols, `search`
+locates files and content, `retrieval` ranks candidates, and `knowledge`
+provides the durable semantic chunk substrate.
+
+Technical notes:
+
+- `ast` is the symbol-oriented entry point for language-aware workspace
+  navigation.
+- `search` is the coarse file and content locator that helps narrow the working
+  set before more expensive analysis runs.
+- `retrieval` ranks and filters candidate chunks so the compiler can assemble a
+  bounded context window.
+- `knowledge` stores the semantic artifacts that survive across runs and feed
+  retrieval and compilation.
+
+### `summarization`, `ingestion`, `templates`, `skills`
+
+These packages support prompt construction and context reduction. `ingestion`
+scans and parses workspace content, `summarization` compresses large artifacts,
+`templates` resolves prompt templates, and `skills` expands skill manifests
+into capabilities and resource contributions.
+
+Technical notes:
+
+- `ingestion` converts workspace files into typed inputs for downstream
+  analysis and chunking.
+- `summarization` exists so large artifacts can be downsampled without losing
+  the structure the runtime needs to keep working.
+- `templates` is the prompt assembly layer for reusable text inputs.
+- `skills` is the bridge between skill manifests and runtime-admitted
+  capabilities, including prompt and resource contributions.
 
 ---
 
-## capability
-
-`framework/capability` is the runtime container for already admitted capabilities. It owns descriptor lookup, wrapper/runtime-policy bindings, and common invocation gating across tools, prompt capabilities, and resource capabilities.
-
-Runtime family is distinct from capability kind. In addition to local-tool and
-provider-backed capabilities, the framework also supports the `relurpic`
-runtime family for opinionated higher-order execution behaviors. See
-[relurpic-capabilities.md](relurpic-capabilities.md).
-
-**CapabilityRegistry** is the authoritative source for what an agent may call. It distinguishes:
-- `KindTool` — local-native tools, subject to gVisor sandboxing.
-- `KindPrompt` — LLM prompt templates injected into context.
-- `KindResource` — structured data resources attached to context.
-
-Dispatch is gated by the compiled policy engine plus concrete permission checks. Every result is wrapped in a `CapabilityResultEnvelope` carrying provenance and an `InsertionDecision`.
-
-`tool_formatting.go` converts descriptors to provider-native tool-call formats used by the transport backends. `node_support.go` wires node-device providers for Nexus-backed capabilities.
-
-## capabilityplan
-
-`framework/capabilityplan` evaluates capability candidates against the final allowed selector set before they are admitted to the registry.
-
-Today it is used primarily for skill-backed prompt/resource capabilities so startup can record a deterministic admitted/rejected result set instead of relying on incremental register-then-prune behavior.
-
-**AdmissionResult** records:
-
-- capability ID and public name
-- capability kind
-- admitted / rejected state
-- rejection reason when filtered
-
-This admission output is surfaced into runtime inspection so the TUI and debug tooling can explain why a capability is missing.
-
-## contract
-
-`framework/contract` resolves one canonical `EffectiveAgentContract` for a runtime.
-
-The contract is built from:
-
-1. manifest defaults
-2. manifest `spec.agent`
-3. skill contributions
-4. agent-definition overlays
-5. runtime overlays
-
-The resulting contract includes:
-
-- effective `AgentRuntimeSpec`
-- effective permission set and resources
-- resolved skills and skill application results
-- a source summary for inspection/debugging
-
-Downstream runtime code should consume this contract instead of recomputing manifest, skill, and overlay state independently.
-
----
-
-## contextmgr
-
-`framework/contextmgr` keeps agents within LLM token limits across long sessions.
-
-**Strategies** — four compression strategies selectable via `ContextPolicy`:
-- `Conservative` — retains as much as possible, drops only stale items.
-- `Adaptive` — adjusts aggressiveness based on remaining budget.
-- `Pruning` — removes least-recently-accessed items first.
-- `Aggressive` — maximum compression; reduces non-essential items to metadata.
-
-**ProgressiveLoader** defers loading file contents until the agent needs them, reducing upfront token cost. Files start as path-only stubs and are promoted to full content on first access.
-
----
-
-## graph
-
-`framework/graph` provides a deterministic state-machine workflow runtime with contract-aware preflight, safe checkpoint resumption, explicit system nodes, and pattern builder helpers.
-
-### Node types
-
-| Node | Responsibility |
-|------|---------------|
-| `LLMNode` | Calls the language model and routes its response |
-| `ToolNode` | Invokes a capability through `CapabilityInvoker` and captures the observation |
-| `ConditionalNode` | Branches on a predicate over the current context |
-| `HumanNode` | Pauses for HITL input |
-| `TerminalNode` | Signals completion or failure |
-| `ObservationNode` | Records a tool observation into context |
-| `CheckpointNode` | Persists a resumable checkpoint explicitly as a graph step |
-| `SummarizeContextNode` | Summarises selected state keys and history into a durable artifact |
-| `RetrieveDeclarativeMemoryNode` | Fetches bounded declarative memory records into state |
-| `RetrieveProceduralMemoryNode` | Fetches bounded procedural routines into state |
-| `HydrateContextNode` | Restores artifact or memory references into active working state |
-| `PersistenceWriterNode` | Writes declarative records, procedural routines, and artifacts with an audit trail |
-
-### Node contracts
-
-Every node may implement `ContractNode` to declare a `NodeContract`:
-
-| Field | Meaning |
-|-------|---------|
-| `RequiredCapabilities` | Capability selectors the node needs to function |
-| `SideEffectClass` | None / Context / Local / External / Human |
-| `Idempotency` | Unknown / ReplaySafe / SingleShot |
-| `Placement` | Any / Local / Remote / StickySession |
-| `CheckpointPolicy` | None / Preferred / Required |
-| `Recoverability` | None / InProcess / Persisted |
-| `ContextPolicy` | `StateBoundaryPolicy` — allowed keys, classes, size limits |
-
-`validateNodeContract` enforces that active fields are coherent (e.g. a node that declares `CheckpointRequired` without `Persisted` recoverability is invalid). `ResolveNodeContract` returns default contracts for built-in node types when the node does not implement `ContractNode` itself.
-
-### Capability routing at ToolNode
-
-`ToolNode` holds a `Registry CapabilityInvoker` field. When the registry is set, every tool call is routed through `InvokeCapability`, which applies `CapabilityPolicy` evaluation, `EffectClass` checks, trust-class enforcement, and wraps the result in a `CapabilityResultEnvelope`. This is the primary path. Direct `tool.Execute()` is not called at the graph level.
-
-```go
-type CapabilityInvoker interface {
-    InvokeCapability(ctx, state, idOrName string, args map[string]any) (*core.ToolResult, error)
-}
-```
-
-### Preflight and placement
-
-Before execution begins, `Graph.Preflight(catalog)` validates all nodes against the available capability catalog:
-
-1. For each node with a `NodeContract`, required capabilities are resolved against the catalog.
-2. Missing required capabilities produce blocking `PreflightIssue` entries.
-3. `PlacementDecision` records are produced for capabilities with a placement preference, scored by trust rank and risk rank.
-4. `PreflightReport.HasBlockingIssues()` determines whether it is safe to execute.
-
-Agents set a catalog via `g.SetCapabilityCatalog(registry)` before calling `Execute`.
-
-Resolved node contracts, validation results, and preflight reports are cached
-until the graph structure or capability catalog changes.
-
-### Checkpoint semantics
-
-`GraphCheckpoint` captures execution state at a transition boundary — not at a node entry point:
-
-```
-CompletedNodeID   the node that just finished
-NextNodeID        the node that should run next on resume
-LastTransition    NodeTransitionRecord — includes transition reason and timestamp
-Context           snapshot of the full context at that boundary
-```
-
-`ResumeFromCheckpoint` starts execution from `NextNodeID`, not from `CompletedNodeID`. This means a completed `SingleShot` node (e.g. a tool with an external side effect) is never replayed. The graph skips directly to whatever follows it.
-
-`CreateCheckpoint` and `CreateCompressedCheckpoint` both accept a `NodeTransitionRecord` so the caller controls what reason is recorded.
-
-The callback-based `WithCheckpointing(every N, saveFn)` is available for incremental checkpointing during execution without inserting explicit `CheckpointNode` steps.
-
-Automatic callback checkpointing is active when `WithCheckpointing` is set.
-Explicit `CheckpointNode` steps remain useful when a graph wants a visible,
-first-class persistence boundary in the workflow itself.
-
-### Parallel branch merge semantics
-
-Parallel graph edges clone the parent `Context`, execute each branch
-independently, and merge only the branch's explicit state-key writes back into
-the parent.
-
-The default merge policy:
-
-- allows non-conflicting state writes
-- rejects conflicting writes to the same state key
-- rejects variable mutations
-- rejects knowledge mutations
-- rejects history, compressed-history, compression-log, and phase mutations
-
-This keeps branch execution deterministic and makes merge conflicts explicit
-instead of silently accepting last-writer-wins behavior.
-
-### System node interfaces
-
-The system nodes in `system_nodes.go` and `persistence_node.go` depend on narrow interfaces, not concrete store types:
-
-| Interface | Role |
-|-----------|------|
-| `ArtifactSink` | Receives artifact records for durable storage |
-| `CheckpointPersister` | Persists `GraphCheckpoint` values |
-| `MemoryRetriever` | Returns bounded `[]MemoryRecordEnvelope` for a query |
-| `StateHydrator` | Restores references into active state |
-| `RuntimePersistenceStore` | `PutDeclarative / SearchDeclarative / PutProcedural / SearchProcedural` |
-| `PersistenceAuditSink` | Receives `PersistenceAuditRecord` entries |
-
-`framework/memory` provides bridge functions (`AdaptWorkflowStateStoreArtifactSink`, `AdaptWorkflowStateStoreAuditSink`, `AdaptRuntimeStoreForGraph`) to wire concrete stores to these interfaces without the graph importing memory directly.
-
-### Pattern builder helpers
-
-`patterns.go` provides composable graph constructors and wrappers:
-
-| Function | Topology produced |
-|----------|------------------|
-| `BuildPlanExecuteVerifyGraph` | plan → execute → verify → done |
-| `BuildPlanExecuteSummarizeVerifyGraph` | plan → execute → summarize → verify → done |
-| `BuildThinkActObserveGraph` | think → act → observe ⟲ (loop until done condition) |
-| `BuildReviewIterateGraph` | execute → review ⟲ (loop until done condition) |
-| `WrapWithCheckpointing` | inserts a `CheckpointNode` before the terminal node of an existing graph |
-| `WrapWithPeriodicSummaries` | inserts a `SummarizeContextNode` before the terminal node |
-| `WrapWithDeclarativeRetrieval` | prepends a `RetrieveDeclarativeMemoryNode` before the start node |
-| `WrapWithProceduralRetrieval` | prepends a `RetrieveProceduralMemoryNode` before the start node |
-
-### Agent feature flags
-
-Agents that use system nodes expose opt-in `*bool` fields on `core.Config`:
-
-| Flag | Effect |
-|------|--------|
-| `UseExplicitCheckpointNodes` | Inserts `CheckpointNode` steps into the graph; disables callback-based checkpointing |
-| `UseDeclarativeRetrieval` | Prepends `RetrieveDeclarativeMemoryNode` before the agent's first node |
-| `UseStructuredPersistence` | Includes `PersistenceWriterNode` at graph completion |
-
-All flags default to false. Agents remain backward-compatible when flags are unset.
-
----
-
-## pipeline
-
-`framework/pipeline` is a staged LLM execution model for workflows that need typed, contract-declared steps.
-
-Each **Stage** implements four methods:
-- `BuildPrompt` — constructs the LLM prompt.
-- `Decode` — parses the raw response into a typed result.
-- `Validate` — checks the result against a schema contract.
-- `Apply` — writes the result into the shared context map.
-
-**ContractDescriptor** declares a stage's input key, output key, schema version, and retry policy (`RetryOnDecodeError`, `RetryOnValidationError`, `MaxAttempts`).
-
-**Runner** executes stages sequentially. Key `RunnerOptions` fields:
-
-| Field | Purpose |
-|-------|---------|
-| `CapabilityInvoker` | Routes tool calls through the capability registry; falls back to direct `tool.Execute()` with a deprecation warning when nil |
-| `CheckpointStore` | Persists a `Checkpoint` after each stage when `CheckpointAfterStage` is true |
-| `ResumeCheckpoint` | If set, skips all stages up to and including the checkpointed stage on the next run |
-| `EnableToolCalling` | Enables `ChatWithTools` and tool-execution paths per stage |
-
-**CheckpointStore** is the pipeline-level checkpoint interface (`Save / Load`). It is separate from the graph-level `CheckpointSnapshotStore` — pipeline checkpoints capture stage-level snapshots, not graph-node transitions.
-
-**`BuildGraph`** on `PipelineAgent` returns a visualization graph of the stage sequence for inspection. The nodes are stubs — the graph is not executable. Stage execution always goes through the `Runner` directly.
-
----
-
-## manifest
-
-`framework/manifest` parses and validates agent security contracts (relurpify/v1alpha1).
-
-**AgentManifest** declares everything an agent is permitted to do: filesystem paths, allowed executables, network endpoints, container image, default policy, and skill references.
-
-**SkillManifest** defines reusable skill packages composed into agent manifests.
-
-**Composition** — permission/resource defaults are resolved before contract compilation; skill manifests are validated and resolved into pure skill data first, then admitted later against the final selector set. Skill resource paths are containment-checked against the workspace and later read through permission-aware handlers rather than direct filesystem reads.
-
----
-
-## memory
-
-`framework/memory` owns durable runtime persistence. The package separates transient scratch memory from authoritative durable workflow, checkpoint, and structured runtime records.
-
-### Stores
-
-| Store | Purpose |
-|-------|---------|
-| `MemoryStore` | Generic compatibility surface for scratch and legacy memory callers |
-| `RuntimeMemoryStore` | Structured declarative/procedural runtime memory (`DeclarativeMemoryStore` + `ProceduralMemoryStore`) |
-| `CheckpointSnapshotStore` | Resumable graph execution checkpoints (`Save / Load / List`) |
-| `WorkflowStateStore` | Authoritative durable workflow records: runs, steps, artifacts, events, provider snapshots, delegations |
-| `CompositeRuntimeStore` | Unified runtime surface: `WorkflowStateStore` + `RuntimeMemoryStore` + `CheckpointSnapshotStore` |
-| `MessageStore` | Conversation history |
-| `VectorStore` | Embeddings for semantic recall |
-| `WorkflowStore` | Legacy top-level workflow compatibility layer (file-backed JSON) |
-| `CodeIndexStore` | Workspace symbol index |
-
-### Structured runtime memory
-
-`RuntimeMemoryStore` distinguishes two lanes:
-
-**Declarative** (`DeclarativeMemoryRecord`) — facts, decisions, constraints, preferences, and project knowledge. Fields include `Kind`, `Title`, `Content`, `Summary`, `ArtifactRef`, `Tags`, `Verified`, and scope/workflow/task identifiers. Searchable by query, scope, kind, tags, and workflow.
-
-**Procedural** (`ProceduralMemoryRecord`) — reusable routines and capability compositions. Fields include `Kind`, `Name`, `Description`, `InlineBody` or `BodyRef`, `CapabilityDependencies`, `VerifiedField`, and `Version`. Procedural records require `Verified: true` before they are persisted by `PersistenceWriterNode`.
-
-`SQLiteRuntimeMemoryStore` implements both lanes in a single SQLite file with separate tables. It also satisfies the legacy `MemoryStore` interface by routing `Remember` / `Recall` through the declarative lane.
-
-### Checkpoints
-
-`SQLiteCheckpointStore` persists `GraphCheckpoint` values to a `graph_checkpoints` table keyed by checkpoint ID, task ID, workflow ID, and run ID. It implements `CheckpointSnapshotStore` and optionally emits events to a `WorkflowStateStore` for cross-store audit visibility.
-
-The file-backed `CheckpointStore` (`memory.NewCheckpointStore`) remains available as a lightweight fallback for agent configurations that do not configure a workflow database.
-
-### Adapter layer
-
-Three bridge functions connect stores to the graph's narrow interfaces without creating import cycles:
-
-| Function | Bridges |
-|----------|---------|
-| `AdaptWorkflowStateStoreArtifactSink` | `WorkflowStateStore` → `graph.ArtifactSink` |
-| `AdaptWorkflowStateStoreAuditSink` | `WorkflowStateStore` → `graph.PersistenceAuditSink` |
-| `AdaptRuntimeStoreForGraph` | `RuntimeMemoryStore` → `graph.RuntimePersistenceStore` |
-
-### Database layout
-
-All stores open their own SQLite files. Path constants live in `framework/config/paths.go`:
-
-| File | Owner |
-|------|-------|
-| `workflow_state.db` | Framework/agents — workflow state, runtime memory, checkpoints |
-| `index.db` | Framework/agents — code symbol index |
-| `checkpoints/` | Framework/agents — file-backed checkpoint fallback |
-| `nodes.db` | Nexus only — registered agent nodes |
-| `sessions.db` | Nexus only — session boundaries and delegations |
-| `identities.db` | Nexus only — tenants, subjects, external identities |
-| `admin_tokens.db` | Nexus only — admin API tokens |
-| `events.db` | Nexus only — gateway event log |
-
-Nexus-specific stores (`sqlite_identity_store`, `sqlite_session_store`, `sqlite_node_store`, `sqlite_admin_token_store`, `sqlite_event_log`) live in `app/nexus/db/`. Framework/agent stores (`sqlite_workflow_state_store`, `sqlite_runtime_memory_store`, `sqlite_checkpoint_store`) live in `framework/memory/db/`. The two packages do not share code.
-
----
-
-## authorization
-
-`framework/authorization` enforces the three-level policy model: **Allow**, **Ask**, **Deny**.
-
-**PermissionManager** gates every tool invocation, checking required file paths, executables, and network endpoints against declared permissions. It now also serves permission-aware capability/resource handlers, including skill-backed resource capabilities.
-
-**PolicyEngine** compiles declarative `PolicyRule` objects into a fast match structure. It is built from the effective contract rather than the raw manifest so provider/session/capability enforcement all evaluate the final resolved runtime spec.
-
-**HITL** — when a request falls into the Ask path, `hitl.go` surfaces a `HITLRequest` to the operator. Responses: `[y]` once, `[s]` session, `[a]` always, `[n]` deny.
-
-**Command authorization** — `command_authorization.go` checks binary names and argument patterns against the manifest's allowed executables.
-
-**Delegations** — `delegations.go` manages bounded grants of capability authority issued by one agent to another.
-
-## policybundle
-
-`framework/policybundle` compiles an immutable runtime policy bundle from an effective agent spec.
-
-The compiled bundle carries:
-
-- effective `PolicyRule` set
-- executable `PolicyEngine`
-- agent ID and effective spec metadata
-
-Runtime startup, preset switching, and live reload compile through `BuildFromSpec(agentID, spec, ...)`, with `BuildFromContract(...)` retained only as a compatibility wrapper.
-
----
-
-## middleware
-
-`relurpnet` provides transport and protocol layers connecting agents to each other and to external systems.
-
-### channel
-
-Multiplexes logical communication streams between agents and the Nexus gateway over a shared transport. Provides ordered delivery and back-pressure per channel.
-
-### gateway
-
-HTTP server and replay recording for the Nexus gateway. Capture mode writes all requests/responses to a tape file; replay mode plays it back deterministically for integration tests.
-
-### node
-
-Manages WebSocket connections to remote agent nodes: pairing, authentication, capability advertisement, and disconnect. `ws_connection.go` owns per-node framing; `credential.go` stores authentication material.
-
-### session
-
-Session routing and event-stream isolation. `SessionManager` maps requests to sessions; `SessionSink` gives each session its own delivery queue so a slow consumer cannot block others.
-
-### mcp
-
-Full implementation of the Model Context Protocol (MCP), versions 2025-06-18 and 2025-11-25.
-
-| Subpackage | Role |
-|------------|------|
-| `protocol` | Wire-format types (all JSON-RPC messages) |
-| `client` | Connects to external MCP servers; imports capabilities |
-| `server` | Exposes Relurpify capabilities to external MCP clients |
-| `session` | Tracks active MCP sessions and their lifecycle |
-| `schema` | JSON schema validation and format conversion |
-| `mapping` | Import/export translation between MCP wire format and `CapabilityDescriptor` |
-| `versioning` | Protocol version negotiation during initialize handshake |
-
----
+## Runtime Flow
+
+The packages are designed to be used in a predictable sequence:
+
+1. `manifest` loads the declared agent and skill inputs.
+2. `agentspec` resolves those inputs into one effective runtime spec.
+3. `contextpolicy` compiles the policy bundle that controls context
+   admission and budget behavior.
+4. `capability` admits the callable surface the agent may use.
+5. `authorization` and `sandbox` enforce the action boundary for privileged
+   operations.
+6. `agentgraph` executes the workflow and requests compiled context as
+   needed.
+7. `compiler`, `retrieval`, `knowledge`, `ast`, `search`, and `memory`
+   cooperate to assemble, store, and refresh the working set.
+
+That flow is the reason the package boundaries matter: the runtime stays
+inspectable only if contract resolution, admission, execution, and persistence
+remain separate.
+
+## Practical Reading Order
+
+If you are trying to understand the framework from the code outward, read the
+packages in this order:
+
+1. `core`
+2. `agentspec`
+3. `manifest`
+4. `contextpolicy`
+5. `capability`
+6. `authorization`
+7. `sandbox`
+8. `contextdata`
+9. `agentgraph`
+10. `compiler`
+11. `memory`
+
+That sequence follows the flow from shared contracts, to policy, to execution,
+to durable state.

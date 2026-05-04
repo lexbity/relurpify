@@ -294,3 +294,53 @@ In practice, the current Euclo layering is:
 That separation keeps relurpic general-purpose at the framework level while
 still allowing named agents to provide strong domain-specific behavior
 guarantees.
+
+---
+
+## Streaming Behavior
+
+Relurpic capabilities handle their own streaming behavior independently of the
+calling agent's streaming trigger configuration.
+
+This design choice reflects the fact that relurpic capabilities are
+self-contained execution behaviors that may:
+
+- compose multiple sub-agents or execution paradigms
+- perform staged reasoning with multiple context retrieval phases
+- coordinate verification and recovery workflows
+- manage their own context budgeting and token allocation
+
+Because relurpic capabilities are reusable capability-level behaviors rather
+than agent-orchestrated workflows, each capability is responsible for:
+
+- determining when context streaming is needed for its specific task
+- configuring appropriate streaming queries and token budgets
+- choosing blocking vs background streaming mode based on its execution model
+- integrating streaming results into its internal reasoning flow
+
+When a capability grounds its own outputs back into the knowledge graph, the
+trust target matters. LLM-generated output is intentionally labeled with
+`TrustClassLLMGenerated`, which lets downstream policy target grounded model
+output without conflating it with raw tool output or file-derived content.
+
+This contrasts with top-level agents (react, pipeline, htn, goalcon, blackboard,
+rewoo), which have agent-level streaming triggers that fire at specific points
+in their execution cycle:
+
+- **react**: per think-act-observe cycle (after act, before observe)
+- **pipeline**: once before entire pipeline execution
+- **htn**: before method decomposition only
+- **goalcon**: before goal clarification
+- **blackboard**: before control loop starts
+- **rewoo**: before task decomposition
+
+When a top-level agent invokes a relurpic capability, the agent's streaming
+trigger has already run (if configured). The relurpic capability may then
+perform additional streaming operations specific to its execution needs.
+
+This separation ensures:
+
+- Agent-level streaming provides contextual grounding for the overall task
+- Capability-level streaming provides detailed context for specific behaviors
+- No double-counting or redundant streaming for the same query
+- Clear ownership of streaming decisions at each layer of the stack

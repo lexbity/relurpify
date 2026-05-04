@@ -83,6 +83,19 @@ Cases may assert on:
 - Euclo-specific proof surface fields
 - performance baseline artifacts
 
+### 5. Replay, provenance, and bi-directional loop checks
+
+Phase 9 adds coverage for the closed loop between workspace changes, compiler
+replay, and ingested outputs. The integration suite now includes scenarios that
+validate:
+
+- `TestCompilationReplay_Determinism` preserves the original
+  `DeterministicDigest`
+- `TestProvenance_FullChain` keeps provenance traversable from LLM output back
+  to source files
+- budget exhaustion can be reset without losing existing knowledge chunks
+- output ingestion feeds later compilations with the new grounded context
+
 ---
 
 ## What It Benchmarks
@@ -131,7 +144,7 @@ The rapid family is the live-model validation slice. It is split into mode-speci
 - `euclo.rapid.debug.testsuite.yaml`
 - `euclo.rapid.archaeology.testsuite.yaml`
 
-The legacy aggregate `euclo.rapid.testsuite.yaml` is still available for compatibility, but the split rapid suites are the canonical live passes.
+The rapid suites are split by subject area and the split rapid suites are the canonical live passes.
 
 ---
 
@@ -275,7 +288,7 @@ go build -o dev-agent ./app/dev-agent-cli
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.archaeology.testsuite.yaml --tier live-flaky
 ```
 
-### Run the legacy aggregate rapid suite
+### Run the rapid suite family
 
 ```bash
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.testsuite.yaml --tier live-flaky
@@ -353,7 +366,7 @@ When authoring or reviewing a suite, the most useful assertions are usually:
 - `state_keys_must_exist`
 - `state_keys_not_empty`
 - `workflow_has_tensions`
-- `euclo.mode`
+- `context.extensions.euclo.mode` as a subject-specific mode hint
 - `euclo.profile`
 - `euclo.behavior_family`
 - `euclo.primary_relurpic_capability`

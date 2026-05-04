@@ -4,10 +4,12 @@
 
 Relurpify has four relevant ownership layers for runtime composition:
 
+- `platform/` owns local execution tools 
 - `framework/` owns enforcement-critical schemas, resolution, and policy surfaces
 - `agents/` owns generic execution paradigms as reusable API
 - `named/` owns top-level specialized agents with own control scheme, configuration, and domain logic
 - `app/` owns product/runtime bootstrap and user-facing assembly
+- `ayenitd/` long service runner daemon 
 
 The key rule is dependency direction, not just package placement. For the
 full four-layer architecture overview, see [architecture.md](architecture.md).
@@ -29,6 +31,7 @@ full four-layer architecture overview, see [architecture.md](architecture.md).
 - `codeburg.org/lexbit/relurpify/agents/...`
 - `codeburg.org/lexbit/relurpify/named`
 - `codeburg.org/lexbit/relurpify/named/...`
+- `codeburg.org/lexbit/relurpify/platform/...`
 
 `agents/` may own:
 

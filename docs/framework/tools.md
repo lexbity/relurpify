@@ -24,8 +24,8 @@ type Tool interface {
     Description() string
     Category() string
     Parameters() []ToolParameter
-    Execute(ctx context.Context, state *Context, args map[string]interface{}) (*ToolResult, error)
-    IsAvailable(ctx context.Context, state *Context) bool
+    Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ToolResult, error)
+    IsAvailable(ctx context.Context, env *contextdata.Envelope) bool
     Permissions() ToolPermissions
     Tags() []string
 }

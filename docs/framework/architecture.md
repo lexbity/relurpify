@@ -57,11 +57,6 @@ and provenance cut across those layers rather than replacing one of them:
 │  Event log · Telemetry · AST index                   │
 └──────────────────────┬───────────────────────────────┘
                        │
-┌──────────────────────▼───────────────────────────────┐
-│  Middleware Layer                                     │
-│  MCP client/server · Nexus transport (WebSocket)     │
-│  Session routing · Channel manager · Replay recorder │
-└──────────────────────┬───────────────────────────────┘
                        │
 ┌──────────────────────▼───────────────────────────────┐
 │  Platform / Execution Layer              platform/   │
@@ -102,10 +97,13 @@ sequences with declared contracts. Runtime startup first resolves an effective
 contract from the manifest, skills, and overlays, then compiles one policy
 bundle from that contract, then admits capabilities into the registry. The
 authorization manager enforces the three-level policy (Allow/Ask/Deny) against
-that final resolved state. Artifact budgeting is a supporting compatibility
-surface here; the system center remains execution, capability admission, and
-graph state. Memory is separated into working, declarative (facts, decisions),
-and procedural (routines) lanes backed by SQLite.
+that final resolved state. The streaming path is unified: speculative
+pre-compilation, contextstream jobs, and output ingestion all feed the same
+knowledge graph without blocking graph execution. Artifact budgeting and
+budget snapshots are supporting compatibility surfaces here; the system center
+remains execution, capability admission, and graph state. Memory is separated
+into working, declarative (facts, decisions), and procedural (routines) lanes
+backed by SQLite.
 
 **Middleware layer** — transport, coordination, and protocol. This is the
 distributed coordination fabric and protocol platform. The MCP client/server

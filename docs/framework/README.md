@@ -6,6 +6,7 @@ This section covers the shared runtime and feature sets that map most directly t
 |----------|-------------|
 | architecture.md | System-level architecture and layering |
 | framework.md | Package-by-package framework overview |
+| packages/README.md | Detailed specification for each `framework/` package |
 | relurpic-capabilities.md | Framework definition of relurpic capability as a runtime family |
 | configuration.md | Config surfaces, manifests, and policy |
 | permission-model.md | Runtime authorization and HITL |
