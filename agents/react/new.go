@@ -49,5 +49,6 @@ func (a *ReActAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) e
 	a.SearchEngine = env.SearchEngine
 	a.OutputIngester = env.OutputIngester
 	a.IngestOutputs = env.IngestOutputs
+	a.PromptRegistry = env.PromptRegistry
 	return a.Initialize(env.Config)
 }

@@ -57,6 +57,7 @@ type ExecutionStep struct {
 	Paradigm     string
 	CapabilityID string
 	Prompt       string
+	PromptID     string
 	Mutation     string
 	HITL         string
 	Stream       *RecipeStreamSpec

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"codeburg.org/lexbit/relurpify/agents/promptprovider"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -19,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
@@ -72,6 +74,16 @@ func (a *Agent) Initialize(config *core.Config) error {
 	// Register all relurpic capability handlers
 	if err := relurpicabilities.RegisterAll(a.env); err != nil {
 		return fmt.Errorf("failed to register relurpic capabilities: %w", err)
+	}
+
+	// Register prompt providers if the environment has a prompt registry
+	if a.env.PromptRegistry != nil {
+		if err := promptprovider.RegisterAll(a.env.PromptRegistry); err != nil {
+			return fmt.Errorf("register paradigm prompt providers: %w", err)
+		}
+		if err := eucloprovider.RegisterAll(a.env.PromptRegistry); err != nil {
+			return fmt.Errorf("register euclo prompt providers: %w", err)
+		}
 	}
 
 	// Load all recipe templates

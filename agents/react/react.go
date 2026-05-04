@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -30,6 +31,7 @@ type ReActAgent struct {
 	StreamMaxTokens int
 	OutputIngester  *knowledge.OutputIngester
 	IngestOutputs   bool
+	PromptRegistry  prompt.Registry
 
 	// Internal state
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot

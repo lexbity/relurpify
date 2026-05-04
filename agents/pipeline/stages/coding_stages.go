@@ -13,7 +13,9 @@ import (
 
 // ExploreStage identifies the most relevant files and next tools for a task.
 type ExploreStage struct {
-	Task *core.Task
+	Task     *core.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *ExploreStage) Name() string { return "explore" }
@@ -50,6 +52,22 @@ func (s *ExploreStage) Contract() pipeline.ContractDescriptor {
 	}
 }
 func (s *ExploreStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
 	return buildStagePrompt("explore", s.Task, ctx, "Exploration focus", map[string]any{
 		"task_instruction": taskInstruction(s.Task),
 	}, s.AllowedToolNames(), `{
@@ -84,7 +102,9 @@ func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // AnalyzeStage converts explored context into a structured issue list.
 type AnalyzeStage struct {
-	Task *core.Task
+	Task     *core.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *AnalyzeStage) Name() string { return "analyze" }
@@ -116,6 +136,22 @@ func (s *AnalyzeStage) Contract() pipeline.ContractDescriptor {
 	}
 }
 func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
 	raw, _ := ctx.GetWorkingValue("pipeline.explore")
 	return buildStagePrompt("analyze", s.Task, ctx, "Explore output", map[string]any{
 		"explore_output": raw,
@@ -149,7 +185,9 @@ func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // PlanStage turns issues into an ordered fix plan.
 type PlanStage struct {
-	Task *core.Task
+	Task     *core.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *PlanStage) Name() string { return "plan" }
@@ -165,6 +203,22 @@ func (s *PlanStage) Contract() pipeline.ContractDescriptor {
 	}
 }
 func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
 	raw, _ := ctx.GetWorkingValue("pipeline.analyze")
 	return buildStagePrompt("plan", s.Task, ctx, "Issue list", raw, nil, `{
   "strategy":"...",
@@ -199,7 +253,9 @@ func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // CodeStage proposes concrete edits derived from the fix plan.
 type CodeStage struct {
-	Task *core.Task
+	Task     *core.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *CodeStage) Name() string { return "code" }
@@ -220,6 +276,22 @@ func (s *CodeStage) Contract() pipeline.ContractDescriptor {
 	}
 }
 func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
 	raw, _ := ctx.GetWorkingValue("pipeline.plan")
 	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
 		"fix_plan":     raw,
@@ -274,7 +346,9 @@ func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // VerifyStage summarizes the verification outcome for the planned edits.
 type VerifyStage struct {
-	Task *core.Task
+	Task     *core.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *VerifyStage) Name() string { return "verify" }
@@ -333,6 +407,22 @@ func (s *VerifyStage) Contract() pipeline.ContractDescriptor {
 	}
 }
 func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
 	raw, _ := ctx.GetWorkingValue("pipeline.code")
 	if raw == nil {
 		raw, _ = ctx.GetWorkingValue("pipeline.explore")
@@ -372,4 +462,23 @@ func (s *VerifyStage) Validate(output any) error {
 func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
 	ctx.SetWorkingValue("pipeline.verify", output, contextdata.MemoryClassTask)
 	return nil
+}
+
+// buildPipelineRuntimeContext creates a prompt.RuntimeContext for pipeline stages.
+func buildPipelineRuntimeContext(env *contextdata.Envelope, task *core.Task, paradigm string) interface{} {
+	// Return a map that matches the expected RuntimeContext structure
+	// Using interface{} to avoid import cycles with framework/prompt
+	return map[string]interface{}{
+		"Variables": map[string]string{
+			"instruction": taskInstruction(task),
+		},
+		"State":        map[string]interface{}{},
+		"Envelope":     env,
+		"Paradigm":     paradigm,
+		"ConsumerID":   "pipeline",
+		"Task":         task,
+		"Tools":        []interface{}{}, // Tools not available at build time
+		"Capabilities": []interface{}{}, // Capabilities not available at build time
+		"AgentSpec":    nil,             // AgentSpec not available at build time
+	}
 }

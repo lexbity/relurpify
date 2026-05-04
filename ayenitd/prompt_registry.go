@@ -9,9 +9,9 @@ import (
 )
 
 // BuildPromptRegistry constructs the workspace prompt registry and loads all
-// .prompt files from relurpify_cfg/prompts/. Provider registration is deferred
-// to named-agent Initialize() calls. ValidateProviders() must be called after
-// all agents have initialized.
+// .prompt files from templates/prompts/ (framework, agents, named) first, then relurpify_cfg/prompts/.
+// Provider registration is deferred to named-agent Initialize() calls.
+// ValidateProviders() must be called after all agents have initialized.
 //
 // tel may be nil; a no-op sink is used in that case.
 func BuildPromptRegistry(workspacePath string, tel core.Telemetry) (prompt.Registry, error) {
@@ -21,10 +21,32 @@ func BuildPromptRegistry(workspacePath string, tel core.Telemetry) (prompt.Regis
 	} else {
 		registry = prompt.NewRegistry()
 	}
+
+	// Load templates tree first (distributed with project)
+	// Load from framework subdirectory
+	frameworkDir := filepath.Join(workspacePath, "templates", "prompts", "framework")
+	if err := registry.LoadDir(frameworkDir); err != nil {
+		return nil, fmt.Errorf("load framework prompts: %w", err)
+	}
+
+	// Load from agents subdirectory
+	agentsDir := filepath.Join(workspacePath, "templates", "prompts", "agents")
+	if err := registry.LoadDir(agentsDir); err != nil {
+		return nil, fmt.Errorf("load agent prompts: %w", err)
+	}
+
+	// Load from named subdirectory
+	namedDir := filepath.Join(workspacePath, "templates", "prompts", "named")
+	if err := registry.LoadDir(namedDir); err != nil {
+		return nil, fmt.Errorf("load named prompts: %w", err)
+	}
+
+	// Load workspace tree second (user-specific prompts)
 	promptDir := filepath.Join(workspacePath, "relurpify_cfg", "prompts")
 	if err := registry.LoadDir(promptDir); err != nil {
-		return nil, fmt.Errorf("load prompts: %w", err)
+		return nil, fmt.Errorf("load workspace prompts: %w", err)
 	}
+
 	return registry, nil
 }
 

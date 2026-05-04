@@ -94,6 +94,8 @@ type RecipeStep struct {
 	Type         string            `yaml:"type,omitempty"`
 	CapabilityID string            `yaml:"capability_id,omitempty"`
 	Description  string            `yaml:"description,omitempty"`
+	Prompt       string            `yaml:"prompt,omitempty"`    // inline prose; kept for ad-hoc steps
+	PromptID     string            `yaml:"prompt_id,omitempty"` // registry id; takes precedence when set
 	Mutation     string            `yaml:"mutation,omitempty"`
 	HITL         string            `yaml:"hitl,omitempty"`
 	Parent       RecipeStepAgent   `yaml:"parent,omitempty"`
@@ -375,7 +377,7 @@ func validateStepHITL(value string) error {
 
 func validateStepParadigm(value string) error {
 	switch strings.TrimSpace(value) {
-	case "", "react", "planner", "htn", "reflection", "blackboard", "chainer", "pipeline", "rewoo", "goalcon":
+	case "", "react", "planner", "htn", "reflection", "blackboard", "chainer", "pipeline", "rewoo", "goalcon", "euclo":
 		return nil
 	default:
 		return fmt.Errorf("invalid paradigm value: %s", value)

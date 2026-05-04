@@ -3,6 +3,7 @@ package react
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -318,4 +319,45 @@ func reactTaskScope(state *contextdata.Envelope) string {
 		return ""
 	}
 	return getWorkingValueAsString(state, "task.id")
+}
+
+func truncateForPrompt(value string, max int) string {
+	value = strings.TrimSpace(value)
+	if max <= 0 || len(value) <= max {
+		return value
+	}
+	return strings.TrimSpace(value[:max]) + "..."
+}
+
+func toolNames(tools []contracts.Tool) []string {
+	out := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, tool.Name())
+	}
+	sort.Strings(out)
+	return out
+}
+
+func summarizeToolPayload(result *contracts.ToolResult) string {
+	if result == nil {
+		return ""
+	}
+	if summary, ok := result.Data["summary"].(string); ok && summary != "" {
+		return summary
+	}
+	if result.Error != "" {
+		return result.Error
+	}
+	return truncateForPrompt(fmt.Sprint(result.Data), 220)
+}
+
+func toolSummaryBudgetForPhase(phase string) int {
+	switch phase {
+	case contextmgrPhaseVerify:
+		return 6
+	case contextmgrPhaseEdit:
+		return 4
+	default:
+		return 5
+	}
 }

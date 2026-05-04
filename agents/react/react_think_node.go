@@ -10,6 +10,7 @@ import (
 	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -73,7 +74,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			saveReactMessages(env, messages)
 		}
 	} else {
-		prompt := n.buildPrompt(env)
+		prompt := n.resolvePrompt(env, tools)
 		resp, err = n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
@@ -361,32 +362,97 @@ func (n *reactThinkNode) streamCallback() func(string) {
 	return nil
 }
 
-// buildPrompt returns a textual prompt when tool-calling chat APIs are not
-// available.
-func (n *reactThinkNode) buildPrompt(env *contextdata.Envelope) string {
-	tools := n.agent.availableToolsForPhase(env, n.task)
-	toolSection := frameworktools.RenderToolsToPrompt(tools)
-	assembler := newPromptContextAssembler(n.agent, n.task)
-	promptBody := assembler.buildPrompt(env, tools, true)
-	return fmt.Sprintf(`You are a ReAct agent optimized for a small-context local model.
-Work step-by-step. Prefer the smallest useful action. Do not restate the task.
-
-%s
-
-Prompt context:
-%s
-
-Return ONLY JSON with fields:
-{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, toolSection, promptBody)
+// buildVariables seeds runtime variables from the task.
+func buildVariables(task *core.Task) map[string]string {
+	vars := make(map[string]string)
+	if task != nil {
+		vars["instruction"] = task.Instruction
+	}
+	return vars
 }
 
-// ensureMessages seeds or extends the chat history so each tool-calling
-// iteration keeps prior assistant/tool turns while refreshing the current
-// prompt context.
+// buildState seeds state values evaluated by when-expressions.
+func buildState(env *contextdata.Envelope, task *core.Task) map[string]any {
+	state := make(map[string]any)
+
+	// React phase state
+	if phase := envGetString(env, "react.phase"); phase != "" {
+		state["react.phase"] = phase
+	}
+
+	// Plan existence state
+	if _, ok := envelopeGet(env, "architect.plan"); ok {
+		state["architect.plan_exists"] = true
+	}
+	if _, ok := envelopeGet(env, "planner.plan"); ok {
+		state["planner.plan_exists"] = true
+	}
+
+	// Current step state
+	if task != nil && task.Context != nil {
+		if _, ok := task.Context["current_step"]; ok {
+			state["react.current_step_exists"] = true
+		}
+	}
+
+	// Tool observations state
+	if _, ok := envelopeGet(env, "react.tool_observations"); ok {
+		state["react.has_observations"] = true
+	}
+
+	return state
+}
+
+// buildRuntimeContext assembles a prompt.RuntimeContext from the agent and task.
+func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []contracts.Tool) prompt.RuntimeContext {
+	caps := n.agent.Tools.AllCapabilities()
+	agentSpec := n.agent.effectiveAgentSpec(n.task)
+	variables := buildVariables(n.task)
+	state := buildState(env, n.task)
+
+	consumerID := "react"
+	if n.agent.Config != nil {
+		consumerID = n.agent.Config.Name
+	}
+
+	return prompt.RuntimeContext{
+		Variables:    variables,
+		State:        state,
+		Envelope:     env,
+		Paradigm:     "react",
+		ConsumerID:   consumerID,
+		Task:         n.task,
+		Tools:        tools,
+		Capabilities: caps,
+		AgentSpec:    agentSpec,
+	}
+}
+
+// resolvePrompt returns the assembled user prompt for the current iteration.
+// When the registry is populated and the prompt resolves, it uses that.
+// Otherwise it falls back to a minimal inline prompt so the agent stays functional
+// before prompt files are authored.
+func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []contracts.Tool) string {
+	reg := n.agent.PromptRegistry
+	if reg != nil {
+		promptID := promptIDFromTask(n.task)
+		rctx := n.buildRuntimeContext(env, tools)
+		if text, err := reg.Resolve(promptID, rctx); err == nil && text != "" {
+			return text
+		}
+	}
+	return minimalReactUserPrompt(n.task, tools)
+}
+
+// resolveSystemPrompt returns the system prompt for chat-based iterations.
+func (n *reactThinkNode) resolveSystemPrompt(tools []contracts.Tool) string {
+	return minimalReactSystemPrompt(tools, n.agent)
+}
+
+// ensureMessages seeds or extends the chat history for tool-calling iterations.
 func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contracts.Tool) []contracts.Message {
-	assembler := newPromptContextAssembler(n.agent, n.task)
-	systemPrompt := n.buildSystemPrompt(tools)
-	userPrompt := assembler.buildPrompt(env, tools, true)
+	systemPrompt := n.resolveSystemPrompt(tools)
+	userPrompt := n.resolvePrompt(env, tools)
 	messages := getReactMessages(env)
 	if len(messages) == 0 {
 		messages = []contracts.Message{
@@ -405,8 +471,20 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contr
 	return messages
 }
 
-// buildSystemPrompt summarizes tool descriptions for the chat-based workflow.
-func (n *reactThinkNode) buildSystemPrompt(tools []contracts.Tool) string {
+// promptIDFromTask reads "prompt_id" from task.Context, falling back to the
+// default react prompt ID.
+func promptIDFromTask(task *core.Task) string {
+	if task != nil && task.Context != nil {
+		if id, ok := task.Context["prompt_id"].(string); ok && id != "" {
+			return id
+		}
+	}
+	return "agent.react.default"
+}
+
+// minimalReactSystemPrompt is the inline fallback used when the registry has
+// no matching prompt.
+func minimalReactSystemPrompt(tools []contracts.Tool, agent *ReActAgent) string {
 	var lines []string
 	var hasLSP, hasAST bool
 	for _, tool := range tools {
@@ -418,7 +496,6 @@ func (n *reactThinkNode) buildSystemPrompt(tools []contracts.Tool) string {
 			hasAST = true
 		}
 	}
-
 	var guidance strings.Builder
 	if hasLSP || hasAST {
 		guidance.WriteString("\n\n### Code Analysis Capabilities\n")
@@ -430,16 +507,13 @@ func (n *reactThinkNode) buildSystemPrompt(tools []contracts.Tool) string {
 		}
 		guidance.WriteString("- Always analyze the code context (definitions/refs) BEFORE attempting edits.\n")
 	}
-
-	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
-		prompt := strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
-		if prompt != "" {
+	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
+		if p := strings.TrimSpace(agent.Config.AgentSpec.Prompt); p != "" {
 			guidance.WriteString("\n\n### Skill Guidance\n")
-			guidance.WriteString(prompt)
+			guidance.WriteString(p)
 			guidance.WriteRune('\n')
 		}
 	}
-
 	return fmt.Sprintf(`You are a ReAct agent optimized for small local models.
 Think carefully, but keep reasoning short.
 Available tools:
@@ -447,4 +521,22 @@ Available tools:
 IMPORTANT: Only call tools listed above. Never invent or use tool names that are not in this list.
 When information is missing, read/search before editing.
 Return ONLY structured JSON. No prose outside the JSON object.`, strings.Join(lines, "\n"), guidance.String())
+}
+
+// minimalReactUserPrompt is the inline fallback prompt body.
+func minimalReactUserPrompt(task *core.Task, tools []contracts.Tool) string {
+	toolSection := frameworktools.RenderToolsToPrompt(tools)
+	instruction := ""
+	if task != nil {
+		instruction = task.Instruction
+	}
+	return fmt.Sprintf(`You are a ReAct agent optimized for a small-context local model.
+Work step-by-step. Prefer the smallest useful action. Do not restate the task.
+
+%s
+
+Task: %s
+
+Return ONLY JSON with fields:
+{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, toolSection, instruction)
 }

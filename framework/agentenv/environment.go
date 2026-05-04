@@ -8,6 +8,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
@@ -104,6 +105,12 @@ type WorkspaceEnvironment struct {
 	// so StreamTriggerNodes can resolve it without holding it as a field.
 	StreamTrigger *contextstream.Trigger
 
+	// PromptRegistry is the workspace-scoped prompt registry. Loaded from
+	// relurpify_cfg/prompts/ at Open() time. Named agents register their
+	// providers during Initialize(). Nil in test environments that do not
+	// exercise prompt resolution.
+	PromptRegistry prompt.Registry
+
 	// Event infrastructure
 	EventLog        event.Log
 	KnowledgeEvents *knowledge.EventBus
@@ -165,5 +172,11 @@ func (e WorkspaceEnvironment) WithService(id string, s Service) WorkspaceEnviron
 		e.ServiceManager.Registry = make(map[string]Service)
 	}
 	e.ServiceManager.Registry[id] = s
+	return e
+}
+
+// WithPromptRegistry returns a shallow copy with PromptRegistry replaced.
+func (e WorkspaceEnvironment) WithPromptRegistry(r prompt.Registry) WorkspaceEnvironment {
+	e.PromptRegistry = r
 	return e
 }

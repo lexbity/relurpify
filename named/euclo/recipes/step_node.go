@@ -26,6 +26,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // RecipeStepNode executes a compiled recipe step by delegating to the matching
@@ -174,10 +176,26 @@ func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata
 
 func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 	data := recipeTemplateData(env, n.step)
-	instruction := n.renderTemplate(n.step.Prompt, data)
-	if instruction == "" {
-		instruction = n.step.Prompt
+
+	// Check for registry-based resolution first
+	var instruction string
+	var err error
+	if n.step.PromptID != "" && n.env.PromptRegistry != nil {
+		instruction, err = n.resolveFromRegistry(env)
+		if err != nil {
+			// Fall through to inline prompt on error
+			instruction = ""
+		}
 	}
+
+	// Use inline prompt path if registry resolution failed or wasn't available
+	if instruction == "" {
+		instruction = n.renderTemplate(n.step.Prompt, data)
+		if instruction == "" {
+			instruction = n.step.Prompt
+		}
+	}
+
 	task := &core.Task{
 		ID:          n.id,
 		Type:        n.step.Paradigm,
@@ -198,7 +216,50 @@ func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 			}
 		}
 	}
+
+	// Set prompt_id in task context for downstream agents (like react think node)
+	if n.step.PromptID != "" {
+		task.Context["prompt_id"] = n.step.PromptID
+	}
+
 	return task
+}
+
+// resolveFromRegistry resolves the prompt from the registry using the PromptID.
+func (n *RecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (string, error) {
+	if n.env.PromptRegistry == nil {
+		return "", fmt.Errorf("no prompt registry available")
+	}
+
+	// Build runtime context for prompt resolution
+	rctx := n.buildRuntimeContext(env)
+
+	// Resolve the prompt from registry
+	return n.env.PromptRegistry.Resolve(n.step.PromptID, rctx)
+}
+
+// buildRuntimeContext creates a prompt.RuntimeContext for recipe step resolution.
+func (n *RecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) prompt.RuntimeContext {
+	data := recipeTemplateData(env, n.step)
+
+	return prompt.RuntimeContext{
+		Variables: map[string]string{
+			"instruction": n.renderTemplate(n.step.Prompt, data),
+		},
+		State:      map[string]interface{}{},
+		Envelope:   env,
+		Paradigm:   n.step.Paradigm,
+		ConsumerID: "euclo",
+		Task: &core.Task{
+			ID:          n.id,
+			Type:        n.step.Paradigm,
+			Instruction: n.renderTemplate(n.step.Prompt, data),
+			Context:     data,
+		},
+		Tools:        []contracts.Tool{},            // Tools not available at build time
+		Capabilities: []core.CapabilityDescriptor{}, // Capabilities not available at build time
+		AgentSpec:    nil,                           // AgentSpec not available at build time
+	}
 }
 
 func (n *RecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) map[string]any {

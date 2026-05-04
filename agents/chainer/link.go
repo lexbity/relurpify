@@ -37,6 +37,7 @@ var ErrLinkParseFailure = errors.New("chainer: link parse failure")
 type Link struct {
 	Name         string
 	SystemPrompt string
+	PromptID     string // registry id; takes precedence over SystemPrompt when set
 	InputKeys    []string
 	OutputKey    string
 	Parse        ParseFunc
