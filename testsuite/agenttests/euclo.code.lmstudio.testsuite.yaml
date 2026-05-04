@@ -1,0 +1,62 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.code.lmstudio
+  description: Example Euclo code mode suite using LMStudio provider.
+  owner: agent-platform
+  tier: stable
+  classification: capability
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 90s
+    matrix_order: provider-first
+  workspace:
+    strategy: derived
+    exclude:
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
+  providers:
+  - name: lmstudio
+    endpoint: http://localhost:1234
+    reset_strategy: none
+  models:
+  - name: qwen2.5-coder:14b
+  recording:
+    mode: 'off'
+  cases:
+  - name: basic_edit_task
+    description: Full code mode interaction flow for a simple edit using LMStudio.
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - code
+    - edit_verify_repair
+    - level:1
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    prompt: Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead
+      of 'hello'.
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+      extensions:
+        euclo:
+          mode: code
+    expect:
+      must_succeed: true
+      files_changed:
+      - testsuite/agenttest_fixtures/gosuite/hello/hello.go
+      files_contain:
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        contains:
+        - "hello world"

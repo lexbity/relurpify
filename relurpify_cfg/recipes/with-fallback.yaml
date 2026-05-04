@@ -17,11 +17,11 @@ sequence:
   - id: primary
     mutation: required
     hitl: ask
+    prompt_id: agent.generic.default
     parent:
       paradigm: goalcon
-      prompt: "Attempt to solve: {{.Instruction}}"
       context:
         capture: [primary_result]
     fallback:
       paradigm: planner
-      prompt: "Primary execution failed. Produce a diagnostic fallback plan."
+      prompt_id: agent.generic.default

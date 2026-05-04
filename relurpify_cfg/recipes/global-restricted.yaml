@@ -21,10 +21,8 @@ sequence:
   - id: analyze
     mutation: none
     hitl: never
+    prompt_id: named.euclo.code.analyze
     parent:
-      paradigm: blackboard
-      prompt: |
-        Analyze the codebase for: {{.Instruction}}
-        You have read-only access.
+      paradigm: euclo
       context:
         capture: [analysis]

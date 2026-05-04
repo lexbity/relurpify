@@ -17,11 +17,9 @@ sequence:
   - id: plan
     mutation: none
     hitl: never
+    prompt_id: named.euclo.code.plan
     parent:
       paradigm: htn
-      prompt: |
-        Create a plan for: {{.Instruction}}
-        Context: {{.Instruction}}
     fallback:
       paradigm: react
-      prompt: "Refine the plan into executable steps."
+      prompt_id: agent.react.default

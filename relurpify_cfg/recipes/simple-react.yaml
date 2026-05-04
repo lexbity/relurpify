@@ -17,8 +17,8 @@ sequence:
   - id: analyze
     mutation: none
     hitl: never
+    prompt_id: agent.react.default
     parent:
       paradigm: react
-      prompt: "Analyze the task: {{.Instruction}}"
       context:
         capture: [analysis]

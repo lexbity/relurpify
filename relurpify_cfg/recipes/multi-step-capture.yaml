@@ -24,30 +24,25 @@ sequence:
   - id: explore
     mutation: none
     hitl: never
+    prompt_id: named.euclo.code.explore
     parent:
-      paradigm: blackboard
-      prompt: "Explore the codebase and identify files relevant to: {{.Instruction}}"
+      paradigm: euclo
       context:
         capture: [explored_files]
   - id: analyze
     mutation: none
     hitl: never
+    prompt_id: named.euclo.code.analyze
     parent:
-      paradigm: reflection
-      prompt: |
-        Analyze the files found in the previous step:
-        {{explored_files}}
+      paradigm: euclo
       context:
         inherit: [explored_files]
         capture: [analysis_result]
   - id: implement
     mutation: required
     hitl: ask
+    prompt_id: named.euclo.code.implement
     parent:
-      paradigm: react
-      prompt: |
-        Based on the analysis:
-        {{analysis_result}}
-        Implement the required changes.
+      paradigm: euclo
       context:
         inherit: [analysis_result]
