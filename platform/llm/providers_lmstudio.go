@@ -125,6 +125,11 @@ func (a lmStudioBackendAdapter) SetProfile(profile *ModelProfile) {
 	a.inner.SetProfile(profile.AsOpenAICompatProfile())
 }
 
+func (a lmStudioBackendAdapter) Reset(ctx context.Context, strategy string) error {
+	// LM Studio has no reset API - always return nil
+	return nil
+}
+
 func convertResourceSnapshot(src *lmstudiobackend.ResourceSnapshot) *ResourceSnapshot {
 	if src == nil {
 		return nil
@@ -139,3 +144,5 @@ func convertResourceSnapshot(src *lmstudiobackend.ResourceSnapshot) *ResourceSna
 		ModelLoaded:     src.ModelLoaded,
 	}
 }
+
+var _ ManagedBackend = lmStudioBackendAdapter{}

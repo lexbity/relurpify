@@ -32,9 +32,11 @@ func (f fakeBackend) ListModels(context.Context) ([]llm.ModelInfo, error) {
 	}
 	return append([]llm.ModelInfo(nil), f.models...), nil
 }
-func (f fakeBackend) Warm(context.Context) error { return f.warmErr }
-func (f fakeBackend) Close() error               { return nil }
-func (f fakeBackend) SetDebugLogging(bool)       {}
+func (f fakeBackend) Warm(context.Context) error          { return f.warmErr }
+func (f fakeBackend) Close() error                        { return nil }
+func (f fakeBackend) SetDebugLogging(bool)                {}
+func (f fakeBackend) SetProfile(*llm.ModelProfile)        {}
+func (f fakeBackend) Reset(context.Context, string) error { return nil }
 
 // findResult returns the ProbeResult with the given name, or fails the test.
 func findResult(t *testing.T, results []ayenitd.ProbeResult, name string) ayenitd.ProbeResult {

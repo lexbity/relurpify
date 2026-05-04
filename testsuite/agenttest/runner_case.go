@@ -23,7 +23,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	ollama "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
@@ -107,15 +106,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model_profile.provenance.json"), data, 0o644)
 		}
 	}
-	modelProvenance, err := resolveCaseModelProvenance(execution)
-	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
-	}
-	if modelProvenance != nil {
-		if data, marshalErr := json.MarshalIndent(modelProvenance, "", "  "); marshalErr == nil {
-			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model.provenance.json"), data, 0o644)
-		}
-	}
+
+	var modelProvenance *BackendModelProvenance
+
 	providerProvenance := providerProvenanceForExecution(execution)
 	if providerProvenance != nil {
 		if data, marshalErr := json.MarshalIndent(providerProvenance, "", "  "); marshalErr == nil {
@@ -126,26 +119,42 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	executionOpts := opts
 	executionOpts.BackendReset = firstNonEmpty(execution.ProviderResetStrategy, executionOpts.BackendReset)
 	executionOpts.BackendResetBetween = executionOpts.BackendResetBetween || execution.ProviderResetBetween
+
+	// Build the managed backend for preflight and model extraction
+	backend, err := buildCaseManagedBackend(execution, resolvedProfile, executionOpts.DebugLLM)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+
 	if executionOpts.BackendResetBetween {
-		maybeResetBackend(logger, executionOpts, execution.Model)
+		if err := resetBackendIfNeeded(context.Background(), logger, backend, executionOpts, execution.Model); err != nil {
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		}
 	}
 
-	var client *ollama.Client
-	if resolvedProfile != nil {
-		client = ollama.NewClientWithProfile(execution.Endpoint, execution.Model, resolvedProfile.AsOllamaProfile())
-	} else {
-		client = ollama.NewClient(execution.Endpoint, execution.Model)
+	// Preflight the backend using the new provider-agnostic approach
+	if shouldPreflightBackend(execution.RecordingMode) {
+		modelProvenance, err = preflightCaseBackend(context.Background(), backend, execution.Model)
+		if err != nil {
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		}
+		if modelProvenance != nil {
+			if data, marshalErr := json.MarshalIndent(modelProvenance, "", "  "); marshalErr == nil {
+				_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model.provenance.json"), data, 0o644)
+			}
+		}
 	}
-	client.SetDebugLogging(executionOpts.DebugLLM)
 
-	lm := contracts.LanguageModel(client)
+	// Extract the LanguageModel from the backend
+	lm := backend.Model()
+
 	if execution.RecordingMode != "" && execution.RecordingMode != "off" {
 		wrapped, err := llm.NewTapeModel(lm, execution.TapePath, execution.RecordingMode)
 		if err != nil {
 			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 		}
 		if err := wrapped.ConfigureHeader(llm.TapeHeader{
-			ProviderID:  "ollama",
+			ProviderID:  execution.Provider,
 			ModelName:   execution.Model,
 			ModelDigest: modelProvenanceDigest(modelProvenance),
 			SuiteName:   suite.Metadata.Name,
@@ -246,7 +255,10 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			break
 		}
 		retryReasons = append(retryReasons, execErr.Error())
-		maybeResetBackend(logger, opts, execution.Model)
+		if err := resetBackendIfNeeded(context.Background(), logger, backend, opts, execution.Model); err != nil {
+			// Log the error but continue - reset failure shouldn't stop retry
+			logger.Printf("backend reset failed on retry: %v", err)
+		}
 	}
 	defer func() {
 		if cleanup != nil {
@@ -932,24 +944,28 @@ func extractOutput(state *contextdata.Envelope, res *core.Result) string {
 	return ""
 }
 
-func resolveCaseModelProvenance(execution resolvedCaseExecution) (*BackendModelProvenance, error) {
-	if !shouldPreflightBackend(execution.RecordingMode) {
-		return nil, nil
-	}
-	return lookupBackendModelProvenance(execution.Endpoint, execution.Model)
-}
-
 func modelProvenanceDigest(provenance *BackendModelProvenance) string {
 	if provenance == nil {
 		return ""
 	}
-	return provenance.Digest
+	// Digest may not be available for all providers (e.g., LM Studio)
+	// Try to extract from details if not in top-level field
+	if provenance.Digest != "" {
+		return provenance.Digest
+	}
+	if provenance.Details != nil {
+		if digest, ok := provenance.Details["digest"].(string); ok {
+			return digest
+		}
+	}
+	return ""
 }
 
 func modelProvenanceName(provenance *BackendModelProvenance) string {
 	if provenance == nil {
 		return ""
 	}
+	// Use LoadedName/LoadedModel which are populated from generic ModelInfo
 	return firstNonEmpty(provenance.LoadedName, provenance.LoadedModel)
 }
 

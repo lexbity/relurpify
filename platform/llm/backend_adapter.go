@@ -2,12 +2,16 @@ package llm
 
 import (
 	"context"
+	"os/exec"
+	"strings"
+	"time"
 
 	ollamabackend "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
 type managedBackendAdapter struct {
-	inner *ollamabackend.Backend
+	inner     *ollamabackend.Backend
+	modelName string
 }
 
 func (a managedBackendAdapter) Model() LanguageModel {
@@ -90,6 +94,42 @@ func (a managedBackendAdapter) SetProfile(profile *ModelProfile) {
 		return
 	}
 	a.inner.SetProfile(profile.AsOllamaProfile())
+}
+
+func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error {
+	strategy = strings.ToLower(strings.TrimSpace(strategy))
+	if strategy == "" || strategy == "none" {
+		return nil
+	}
+
+	switch strategy {
+	case "model":
+		// Unload the specific model from VRAM
+		model := strings.TrimSpace(a.modelName)
+		if model == "" {
+			return nil
+		}
+		cmd := exec.CommandContext(ctx, "ollama", "stop", model)
+		_ = cmd.Run()
+		time.Sleep(200 * time.Millisecond)
+		return nil
+	case "server":
+		// Restart the Ollama service
+		cmd := exec.CommandContext(ctx, "systemctl", "restart", "ollama")
+		err := cmd.Run()
+		if err != nil {
+			// Fallback: try to stop the model if systemctl fails
+			model := strings.TrimSpace(a.modelName)
+			if model != "" {
+				_ = exec.CommandContext(ctx, "ollama", "stop", model).Run()
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+		return nil
+	default:
+		// Unknown strategy - ignore safely
+		return nil
+	}
 }
 
 var _ ManagedBackend = managedBackendAdapter{}

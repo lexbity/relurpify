@@ -32,6 +32,8 @@ type ManagedBackend interface {
 	Warm(ctx context.Context) error
 	Close() error
 	SetDebugLogging(enabled bool)
+	SetProfile(profile *ModelProfile)
+	Reset(ctx context.Context, strategy string) error
 }
 
 // BackendHealthState classifies backend availability and recovery status.

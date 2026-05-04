@@ -324,7 +324,14 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 				continue
 			}
 			checked[key] = struct{}{}
-			if err := preflightBackend(exec.Endpoint, exec.Model); err != nil {
+			// Build backend for preflight
+			backend, err := buildCaseManagedBackend(exec, nil, opts.DebugLLM)
+			if err != nil {
+				return fmt.Errorf("inference backend construction failed for preflight: %w", err)
+			}
+			// Preflight using provider-agnostic approach
+			_, err = preflightCaseBackend(context.Background(), backend, exec.Model)
+			if err != nil {
 				return fmt.Errorf("inference backend preflight failed for suite %s case %s: %w", filepath.Base(suite.SourcePath), c.Name, err)
 			}
 		}

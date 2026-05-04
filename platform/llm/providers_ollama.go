@@ -9,15 +9,18 @@ func init() {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
-		return managedBackendAdapter{inner: ollamabackend.NewBackend(ollamabackend.Config{
-			Endpoint:          cfg.Endpoint,
-			Model:             cfg.Model,
-			ModelPath:         cfg.ModelPath,
-			APIKey:            cfg.APIKey,
-			Timeout:           cfg.Timeout,
-			NativeToolCalling: cfg.NativeToolCalling,
-			Debug:             cfg.Debug,
-			Config:            cfg.Config,
-		})}, nil
+		return managedBackendAdapter{
+			inner: ollamabackend.NewBackend(ollamabackend.Config{
+				Endpoint:          cfg.Endpoint,
+				Model:             cfg.Model,
+				ModelPath:         cfg.ModelPath,
+				APIKey:            cfg.APIKey,
+				Timeout:           cfg.Timeout,
+				NativeToolCalling: cfg.NativeToolCalling,
+				Debug:             cfg.Debug,
+				Config:            cfg.Config,
+			}),
+			modelName: cfg.Model,
+		}, nil
 	})
 }

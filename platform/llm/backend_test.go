@@ -48,6 +48,12 @@ func (s *stubManagedBackend) Close() error {
 
 func (s *stubManagedBackend) SetDebugLogging(bool) {}
 
+func (s *stubManagedBackend) SetProfile(*ModelProfile) {}
+
+func (s *stubManagedBackend) Reset(context.Context, string) error {
+	return nil
+}
+
 func (s *stubManagedBackend) WithSession(string) contracts.LanguageModel {
 	return s.model
 }

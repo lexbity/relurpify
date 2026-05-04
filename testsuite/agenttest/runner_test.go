@@ -686,30 +686,6 @@ func TestCountTokenUsage(t *testing.T) {
 	}
 }
 
-func TestLookupBackendModelProvenance(t *testing.T) {
-	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/tags":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[]}`))
-		case "/api/ps":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[{"name":"qwen2.5-coder:14b-q8_0","model":"qwen2.5-coder:14b","digest":"sha256:abc123","details":{"quantization_level":"Q8_0"}}]}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	provenance, err := lookupBackendModelProvenance(server.URL, "qwen2.5-coder:14b")
-	if err != nil {
-		t.Fatalf("lookupBackendModelProvenance: %v", err)
-	}
-	if provenance == nil || provenance.Digest != "sha256:abc123" || provenance.LoadedName != "qwen2.5-coder:14b-q8_0" {
-		t.Fatalf("unexpected provenance: %+v", provenance)
-	}
-}
-
 func TestRunSuiteAggregatesCaseCounts(t *testing.T) {
 	report := &SuiteReport{
 		Cases: []CaseReport{
