@@ -267,7 +267,10 @@ spec:
   providers:                     # optional explicit provider matrix
     - name: ollama
       endpoint: http://localhost:11434
-      reset_strategy: model
+      reset_strategy: model      # none | model | server
+    - name: lmstudio
+      endpoint: http://localhost:1234
+      reset_strategy: none
 
   recording:
     mode: off                     # off | record | replay

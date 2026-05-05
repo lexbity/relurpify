@@ -1,0 +1,279 @@
+package framework
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// TestPermissionToAuditToTelemetryFlow validates the complete flow from
+// permission enforcement through audit logging to telemetry emission.
+// This test consolidates the permission->audit and audit->telemetry flows
+// that were previously tested separately.
+func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
+	env := NewTestEnvironment(t)
+
+	// Step 1: Create permission set
+	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+
+	// Step 2: Create permission manager with audit sink
+	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
+	if err != nil {
+		t.Fatalf("permission manager creation failed: %v", err)
+	}
+
+	// Step 3: Create a test file
+	testFile := filepath.Join(env.WorkspacePath, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// Step 4: Check file permission (transition point: permission enforcement)
+	ctx := context.Background()
+	agentID := "test-agent"
+	err = manager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testFile)
+	if err != nil {
+		t.Fatalf("file access check failed: %v", err)
+	}
+
+	// Step 5: Verify audit record was created (transition point: audit capture)
+	records := env.AuditSink.Records()
+	if len(records) == 0 {
+		t.Error("expected audit records to be created")
+	}
+
+	foundPermissionRecord := false
+	for _, record := range records {
+		if record.Type == string(contracts.PermissionTypeFilesystem) {
+			foundPermissionRecord = true
+			if record.Result != "granted" {
+				t.Errorf("expected permission to be granted, got %s", record.Result)
+			}
+			break
+		}
+	}
+	if !foundPermissionRecord {
+		t.Error("expected to find permission audit record")
+	}
+
+	// Step 6: Emit telemetry event (transition point: telemetry emission)
+	env.TelemetrySink.Emit(core.Event{
+		Type:      core.EventNodeFinish,
+		NodeID:    "test-node",
+		TaskID:    "test-task",
+		Message:   "permission decision completed",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"permission_type": "filesystem",
+			"decision":        "granted",
+		},
+	})
+
+	// Step 7: Verify telemetry event was captured (transition point: telemetry capture)
+	events := env.TelemetrySink.Events()
+	if len(events) == 0 {
+		t.Fatal("expected telemetry events to be captured")
+	}
+
+	foundTelemetryEvent := false
+	for _, event := range events {
+		if event.Type == core.EventNodeFinish {
+			foundTelemetryEvent = true
+			if event.NodeID != "test-node" {
+				t.Errorf("expected node ID 'test-node', got %s", event.NodeID)
+			}
+			if event.TaskID != "test-task" {
+				t.Errorf("expected task ID 'test-task', got %s", event.TaskID)
+			}
+			break
+		}
+	}
+	if !foundTelemetryEvent {
+		t.Fatal("expected to find telemetry event")
+	}
+
+	// Step 8: Validate the complete flow
+	if len(records) == 0 || len(events) == 0 {
+		t.Error("expected both audit records and telemetry events to exist")
+	}
+}
+
+// TestFullFrameworkFlowScenario validates a complete end-to-end flow through
+// multiple framework seams: permissions, knowledge, envelope, audit, and telemetry.
+func TestFullFrameworkFlowScenario(t *testing.T) {
+	env := NewTestEnvironment(t)
+
+	// Step 1: Create permission manager (permission seam)
+	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
+	if err != nil {
+		t.Fatalf("permission manager creation failed: %v", err)
+	}
+
+	// Step 2: Check file permission directly (permission enforcement seam)
+	testFile := filepath.Join(env.WorkspacePath, "config.yaml")
+	configContent := "version: 1.0\nname: test\n"
+	if err := os.WriteFile(testFile, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	ctx := context.Background()
+	err = manager.CheckFileAccess(ctx, "full-flow-agent", contracts.FileSystemRead, testFile)
+	if err != nil {
+		t.Fatalf("file access check failed: %v", err)
+	}
+
+	// Step 3: Create knowledge store and ingest result (knowledge seam)
+	opts := graphdb.DefaultOptions(env.WorkspacePath)
+	graph, err := graphdb.Open(opts)
+	if err != nil {
+		t.Fatalf("failed to open graph engine: %v", err)
+	}
+	defer graph.Close()
+
+	store := &knowledge.ChunkStore{Graph: graph}
+	events := &knowledge.EventBus{}
+	ingester := knowledge.NewOutputIngester(store, events)
+
+	envelope := contextdata.NewEnvelope("full-flow-task", "full-flow-session")
+	ctx = contextdata.WithEnvelope(ctx, envelope)
+
+	llmResponse := &contracts.LLMResponse{
+		Text: "Configuration loaded successfully",
+	}
+
+	savedChunk, err := ingester.IngestLLMResponseFull(ctx, llmResponse)
+	if err != nil {
+		t.Fatalf("ingestion failed: %v", err)
+	}
+
+	// Transition assertion: chunk ingested
+	if savedChunk == nil || savedChunk.ID == "" {
+		t.Fatal("expected valid chunk from ingestion")
+	}
+
+	// Step 4: Add chunk to envelope (envelope seam)
+	envelope.AddStreamedContextReference(contextdata.ChunkReference{
+		ChunkID: contextdata.ChunkID(savedChunk.ID),
+		Source:  "full-flow",
+		Rank:    0,
+	})
+
+	// Transition assertion: envelope updated
+	if len(envelope.References.StreamedContext) != 1 {
+		t.Errorf("expected 1 streamed reference, got %d", len(envelope.References.StreamedContext))
+	}
+
+	// Step 5: Verify audit records (audit seam)
+	records := env.AuditSink.Records()
+	if len(records) == 0 {
+		t.Error("expected audit records")
+	}
+
+	// Transition assertion: audit captured
+	foundFilePermission := false
+	for _, record := range records {
+		if record.Type == string(contracts.PermissionTypeFilesystem) && record.Result == "granted" {
+			foundFilePermission = true
+			break
+		}
+	}
+	if !foundFilePermission {
+		t.Error("expected to find file permission audit record")
+	}
+
+	// Step 6: Emit and verify telemetry (telemetry seam)
+	env.TelemetrySink.Emit(core.Event{
+		Type:      core.EventGraphFinish,
+		NodeID:    "full-flow-node",
+		TaskID:    envelope.TaskID,
+		Message:   "full framework flow completed",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"chunk_id": savedChunk.ID,
+			"seams":    []string{"permission", "registry", "knowledge", "envelope", "audit", "telemetry"},
+		},
+	})
+
+	telemetryEvents := env.TelemetrySink.Events()
+	if len(telemetryEvents) == 0 {
+		t.Error("expected telemetry events")
+	}
+
+	// Transition assertion: telemetry captured
+	foundGraphFinish := false
+	for _, event := range telemetryEvents {
+		if event.Type == core.EventGraphFinish {
+			foundGraphFinish = true
+			if event.TaskID != envelope.TaskID {
+				t.Errorf("expected task ID %s, got %s", envelope.TaskID, event.TaskID)
+			}
+			break
+		}
+	}
+	if !foundGraphFinish {
+		t.Error("expected to find graph finish telemetry event")
+	}
+
+	// Step 7: Validate the complete flow
+	if len(records) == 0 || len(telemetryEvents) == 0 || len(envelope.References.StreamedContext) == 0 {
+		t.Error("expected all seams to be active: audit, telemetry, envelope")
+	}
+
+	// Verify the chunk can be retrieved (knowledge persistence validation)
+	loadedChunk, ok, err := store.Load(savedChunk.ID)
+	if err != nil || !ok {
+		t.Errorf("failed to retrieve chunk from storage: %v", err)
+	}
+	if loadedChunk.ID != savedChunk.ID {
+		t.Errorf("chunk ID mismatch: expected %s, got %s", savedChunk.ID, loadedChunk.ID)
+	}
+}
+
+// mockFileTool is a minimal tool implementation for testing.
+type mockFileTool struct {
+	name string
+	path string
+}
+
+func (t *mockFileTool) Name() string        { return t.name }
+func (t *mockFileTool) Description() string { return "reads a file" }
+func (t *mockFileTool) Category() string    { return "filesystem" }
+func (t *mockFileTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
+		{Name: "path", Type: "string", Description: "file path"},
+	}
+}
+
+func (t *mockFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+	data, err := os.ReadFile(t.path)
+	if err != nil {
+		return nil, err
+	}
+	return &contracts.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"content": string(data),
+		},
+	}, nil
+}
+
+func (t *mockFileTool) Permissions() contracts.ToolPermissions {
+	// Return nil permissions for simplicity - the permission manager handles enforcement
+	return contracts.ToolPermissions{}
+}
+
+func (t *mockFileTool) Tags() []string {
+	return []string{contracts.TagReadOnly}
+}
+
+func (t *mockFileTool) IsAvailable(context.Context) bool { return true }

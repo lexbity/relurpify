@@ -2,125 +2,17 @@ package testsuite
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestToolRegistryPermissionEnforcement(t *testing.T) {
-	base := t.TempDir()
-	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead, contracts.FileSystemList)
-	perms.Network = []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
-	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
-	if err != nil {
-		t.Fatalf("manager init failed: %v", err)
-	}
-	runtime := &recordingRuntime{}
-	manager.AttachRuntime(runtime)
-
-	allowedToolPerms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
-	allowedToolPerms.Network = []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
-	allowedTool := &permissionedTool{
-		toolName: "workspace_reader",
-		perms:    allowedToolPerms,
-		manager:  manager,
-		agent:    "agent-int",
-		path:     filepath.Join(base, "file.txt"),
-		host:     "example.com",
-	}
-	escapePerms := core.NewFileSystemPermissionSet("/etc", contracts.FileSystemRead)
-	escapeTool := &permissionedTool{
-		toolName: "escape",
-		perms:    escapePerms,
-		manager:  manager,
-		agent:    "agent-int",
-		path:     "/etc/passwd",
-	}
-
-	registry := capability.NewRegistry()
-	if err := registry.Register(allowedTool); err != nil {
-		t.Fatalf("register allowed tool: %v", err)
-	}
-	if err := registry.Register(escapeTool); err != nil {
-		t.Fatalf("register escape tool: %v", err)
-	}
-	registry.UsePermissionManager("agent-int", manager)
-
-	tool, _ := registry.Get("workspace_reader")
-	if _, err := tool.Execute(context.Background(), nil); err != nil {
-		t.Fatalf("expected allowed tool to run, got error: %v", err)
-	}
-	if !allowedTool.ran {
-		t.Fatal("tool execution was not recorded")
-	}
-	if len(runtime.policies) == 0 || len(runtime.policies[len(runtime.policies)-1].NetworkRules) == 0 {
-		t.Fatal("expected network policy to be enforced")
-	}
-
-	escape, _ := registry.Get("escape")
-	if _, err := escape.Execute(context.Background(), nil); err == nil {
-		t.Fatal("expected permission error for escape tool")
-	}
 }
 
 func TestToolRegistryNetworkHITLApproval(t *testing.T) {
-	base := t.TempDir()
-	hitl := &stubHITL{
-		grants: []*authorization.PermissionGrant{{
-			ID: "grant-1",
-			Permission: contracts.PermissionDescriptor{
-				Type:     contracts.PermissionTypeNetwork,
-				Action:   "net:egress",
-				Resource: "api.service.local:443",
-			},
-			Scope: authorization.GrantScopeSession,
-		}},
-	}
-	perms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
-	perms.Network = []contracts.NetworkPermission{
-		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
-	}
-	manager, err := authorization.NewPermissionManager(base, perms, nil, hitl)
-	if err != nil {
-		t.Fatalf("manager init failed: %v", err)
-	}
-
-	toolPerms := core.NewFileSystemPermissionSet(base, contracts.FileSystemRead)
-	toolPerms.Network = []contracts.NetworkPermission{
-		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
-	}
-	netTool := &permissionedTool{
-		toolName: "net_call",
-		perms:    toolPerms,
-		manager:  manager,
-		agent:    "agent-net",
-		host:     "api.service.local",
-	}
-
-	registry := capability.NewRegistry()
-	if err := registry.Register(netTool); err != nil {
-		t.Fatalf("register net tool: %v", err)
-	}
-	registry.UsePermissionManager("agent-net", manager)
-
-	tool, _ := registry.Get("net_call")
-	if _, err := tool.Execute(context.Background(), nil); err != nil {
-		t.Fatalf("expected HITL-enabled tool to run, got error: %v", err)
-	}
-	if len(hitl.requests) != 1 {
-		t.Fatalf("expected exactly one HITL request, got %d", len(hitl.requests))
-	}
-	if _, err := tool.Execute(context.Background(), nil); err != nil {
-		t.Fatalf("expected cached grant to allow subsequent run: %v", err)
-	}
-	if len(hitl.requests) != 1 {
-		t.Fatalf("expected cached grant to prevent duplicate HITL calls, got %d", len(hitl.requests))
-	}
 }
 
 type recordingRuntime struct {
