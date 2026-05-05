@@ -15,7 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/rex"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
@@ -103,7 +103,7 @@ type RexRuntimeProvider struct {
 	Packager        fwfmp.ContextPackager
 	WorkflowStore   *rexstore.SQLiteWorkflowStore
 	CheckpointStore *CheckpointStore
-	Bundle          *CapabilityBundle
+	Environment     *agentenv.WorkspaceEnvironment
 	TrustedResolver rexctx.TrustedContextResolver
 	EventBridge     interface{ Health() (bool, string) }
 	// Phase 7.1: Admission control for gateway routing
@@ -132,21 +132,18 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 	if err != nil {
 		return nil, err
 	}
-	runner := sandbox.NewLocalCommandRunner(workspace, nil)
-	bundle, err := BuildBuiltinCapabilityBundle(workspace, runner, CapabilityRegistryOptions{
-		Context: ctx,
-	})
+
+	// Build workspace environment using framework composition root
+	env, err := agentenv.BuildWorkspaceEnvironment(ctx, agentenv.WorkspaceConfig{
+		Workspace:    workspace,
+		SkipASTIndex: false,
+	}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		_ = workflowStore.Close()
 		return nil, err
 	}
-	agent := rex.NewWithWorkspace(&agentenv.WorkspaceEnvironment{
-		Registry:      bundle.Registry,
-		IndexManager:  bundle.IndexManager,
-		SearchEngine:  bundle.SearchEngine,
-		WorkingMemory: memory.NewWorkingMemoryStore(),
-		Config:        &core.Config{Name: "rex"},
-	}, workspace)
+
+	agent := rex.NewWithWorkspace(env, workspace)
 	agent.Runtime.Start(ctx)
 	provider := &RexRuntimeProvider{
 		Agent:           agent,
@@ -154,7 +151,7 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		SnapshotStore:   &rexnexus.SnapshotStore{WorkflowStore: workflowStore},
 		WorkflowStore:   workflowStore,
 		CheckpointStore: &CheckpointStore{},
-		Bundle:          bundle,
+		Environment:     env,
 		TrustedResolver: &rexctx.DefaultTrustedContextResolver{},
 		// Phase 7.1: Initialize admission controller with default capacity and fairness quotas
 		Admission: &rexcontrolplane.LoadController{
@@ -182,8 +179,8 @@ func (p *RexRuntimeProvider) Close() {
 	if p.Agent != nil && p.Agent.Runtime != nil {
 		p.Agent.Runtime.Stop()
 	}
-	if p.Bundle != nil && p.Bundle.IndexManager != nil {
-		_ = p.Bundle.IndexManager.Close()
+	if p.Environment != nil && p.Environment.IndexManager != nil {
+		_ = p.Environment.IndexManager.Close()
 	}
 	if p.WorkflowStore != nil {
 		_ = p.WorkflowStore.Close()

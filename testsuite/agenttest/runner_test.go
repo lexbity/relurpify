@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -617,7 +617,7 @@ spec:
 		switch r.URL.Path {
 		case "/api/tags":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[]}`))
+			_, _ = w.Write([]byte(`{"models":[{"name":"other-model"}]}`))
 		case "/api/ps":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"models":[]}`))
@@ -642,8 +642,8 @@ spec:
 	}
 
 	err := (&Runner{}).preflightSuite(suite, RunOptions{}, workspace, suite.Spec.Models)
-	if err == nil || !strings.Contains(err.Error(), "not loaded") {
-		t.Fatalf("expected preflight model-not-loaded error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected preflight model-not-found error, got %v", err)
 	}
 }
 
@@ -849,7 +849,7 @@ spec:
 	}
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		<-opts.Context.Done()
 		return nil, opts.Context.Err()
 	}
@@ -938,7 +938,7 @@ spec:
 	}
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		time.Sleep(40 * time.Millisecond)
 		<-opts.Context.Done()
 		return nil, opts.Context.Err()

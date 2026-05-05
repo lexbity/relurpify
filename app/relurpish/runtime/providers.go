@@ -57,7 +57,7 @@ type runtimeProviderRecord struct {
 
 // RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
 func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
-	for _, providerCfg := range mergeConfiguredProviders(rt.AgentSpec) {
+	for _, providerCfg := range mergeConfiguredProviders(rt.AgentWorkspace().AgentSpec) {
 		provider, err := providerFromConfig(providerCfg)
 		if err != nil {
 			return err
@@ -136,7 +136,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if r.Registration != nil && r.Registration.Policy != nil {
+	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.Policy != nil {
 		metadata := map[string]string{
 			"provider_id":   desc.ID,
 			"provider_kind": string(desc.Kind),
@@ -144,17 +144,17 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		_, err := fauthorization.EnforcePolicyRequest(ctx, r.Registration.Policy, core.PolicyRequest{
+		_, err := fauthorization.EnforcePolicyRequest(ctx, r.AgentWorkspace().Registration.Policy, core.PolicyRequest{
 			Target:         core.PolicyTargetProvider,
-			Actor:          identity.EventActor{Kind: "agent", ID: r.Registration.ID},
+			Actor:          identity.EventActor{Kind: "agent", ID: r.AgentWorkspace().Registration.ID},
 			CapabilityID:   "provider:" + desc.ID + ":activate",
 			CapabilityName: "provider:" + desc.ID + ":activate",
 			ProviderKind:   desc.Kind,
 			ProviderOrigin: desc.Security.Origin,
 			TrustClass:     desc.TrustBaseline,
 		}, fauthorization.ApprovalRequest{
-			AgentID: r.Registration.ID,
-			Manager: r.Registration.Permissions,
+			AgentID: r.AgentWorkspace().Registration.ID,
+			Manager: r.AgentWorkspace().Registration.Permissions,
 			Permission: contracts.PermissionDescriptor{
 				Type:         contracts.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
@@ -180,8 +180,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 	if desc.Kind == core.ProviderKindBuiltin || desc.Kind == core.ProviderKindAgentRuntime {
 		level = agentspec.AgentPermissionAllow
 	}
-	if r.AgentSpec != nil && r.AgentSpec.ProviderPolicies != nil {
-		if policy, ok := r.AgentSpec.ProviderPolicies[desc.ID]; ok && policy.Activate != "" {
+	if r.AgentWorkspace().AgentSpec != nil && r.AgentWorkspace().AgentSpec.ProviderPolicies != nil {
+		if policy, ok := r.AgentWorkspace().AgentSpec.ProviderPolicies[desc.ID]; ok && policy.Activate != "" {
 			level = policy.Activate
 		}
 	}
@@ -191,7 +191,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("provider %s activation denied by policy", desc.ID)
 	case agentspec.AgentPermissionAsk:
-		if r.Registration == nil || r.Registration.Permissions == nil {
+		if r.AgentWorkspace().Registration == nil || r.AgentWorkspace().Registration.Permissions == nil {
 			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
 		}
 		metadata := map[string]string{
@@ -201,7 +201,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		return r.Registration.Permissions.RequireApproval(ctx, r.Registration.ID, contracts.PermissionDescriptor{
+		return r.AgentWorkspace().Registration.Permissions.RequireApproval(ctx, r.AgentWorkspace().Registration.ID, contracts.PermissionDescriptor{
 			Type:         contracts.PermissionTypeCapability,
 			Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 			Resource:     desc.ID,
@@ -321,7 +321,7 @@ func providerDescriptor(provider RuntimeProvider) core.ProviderDescriptor {
 }
 
 func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]interface{}) {
-	if r == nil || r.Telemetry == nil {
+	if r == nil || r.AgentWorkspace().Telemetry == nil {
 		return
 	}
 	if metadata == nil {
@@ -337,7 +337,7 @@ func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reaso
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	r.Telemetry.Emit(core.Event{
+	r.AgentWorkspace().Telemetry.Emit(core.Event{
 		Type:      core.EventStateChange,
 		Timestamp: time.Now().UTC(),
 		Message:   strings.ReplaceAll(event, "_", " "),

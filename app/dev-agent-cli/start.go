@@ -13,7 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
@@ -25,7 +25,6 @@ import (
 
 var (
 	registerAgentFn            = fauthorization.RegisterAgent
-	openWorkspaceFn            = ayenitd.Open
 	registerBuiltinProvidersFn = appruntime.RegisterBuiltinProviders
 	buildFromSpecFn            = agents.BuildFromSpec
 )
@@ -111,7 +110,7 @@ func newStartCmd() *cobra.Command {
 			if modelName == "" {
 				modelName = defaultModelName()
 			}
-			wsCfg := ayenitd.WorkspaceConfig{
+			workspace, err := agentenv.Open(runCtx, agentenv.WorkspaceConfig{
 				Workspace:         runtimeCfg.Workspace,
 				ManifestPath:      runtimeCfg.ManifestPath,
 				InferenceProvider: "ollama",
@@ -122,37 +121,23 @@ func newStartCmd() *cobra.Command {
 				AgentName:         agentName,
 				SandboxBackend:    sandboxBackend,
 				LogPath:           logPath,
-				TelemetryPath:     telemetryPath,
-				EventsPath:        eventsLogPath,
-				MemoryPath:        runtimeCfg.MemoryPath,
-				MaxIterations:     8,
-				SkipASTIndex:      skipASTIndex,
-				HITLTimeout:       runtimeCfg.HITLTimeout,
-				AuditLimit:        runtimeCfg.AuditLimit,
-				Sandbox:           runtimeCfg.Sandbox,
-				DebugLLM:          logLLM,
-				DebugAgent:        logAgent,
-			}
-			if wsCfg.LogPath == "" {
-				wsCfg.LogPath = frameworkmanifest.New(wsCfg.Workspace).LogFile("ayenitd.log")
-			}
-			openedWS, err := openWorkspaceFn(runCtx, wsCfg)
+			}, agentenv.AgentRegistrationFuncs{})
 			if err != nil {
 				return err
 			}
 			defer func() {
-				_ = openedWS.Close()
+				_ = workspace.Close()
 			}()
-			if openedWS.ServiceManager != nil {
-				if err := openedWS.ServiceManager.StartAll(runCtx); err != nil {
+			if workspace.ServiceManager != nil {
+				if err := workspace.ServiceManager.StartAll(runCtx); err != nil {
 					return err
 				}
 			}
-			registration := openedWS.Registration
+			registration := workspace.Registration
 			if registration == nil {
 				return fmt.Errorf("workspace registration missing")
 			}
-			if openedWS.CompiledPolicy == nil {
+			if workspace.CompiledPolicy == nil {
 				return fmt.Errorf("compiled policy missing from workspace")
 			}
 			if autoApprove {
@@ -186,10 +171,10 @@ func newStartCmd() *cobra.Command {
 					}
 				}()
 			}
-			if openedWS.Environment.Config != nil && openedWS.Environment.Config.AgentSpec != nil {
-				openedWS.Environment.Registry.UseAgentSpec(registration.ID, openedWS.Environment.Config.AgentSpec)
+			if workspace.Environment.Config != nil && workspace.Environment.Config.AgentSpec != nil {
+				workspace.Environment.Registry.UseAgentSpec(registration.ID, workspace.Environment.Config.AgentSpec)
 			}
-			spec = openedWS.AgentSpec
+			spec = workspace.AgentSpec
 			if spec == nil {
 				return fmt.Errorf("workspace agent spec missing")
 			}
@@ -202,12 +187,12 @@ func newStartCmd() *cobra.Command {
 				}
 			}
 			agentEnv := agents.AgentEnvironment{
-				Config:       openedWS.Environment.Config,
-				Model:        openedWS.Environment.Model,
-				Registry:     openedWS.Environment.Registry,
-				IndexManager: openedWS.Environment.IndexManager,
-				SearchEngine: openedWS.Environment.SearchEngine,
-				Memory:       openedWS.Environment.WorkingMemory,
+				Config:       workspace.Environment.Config,
+				Model:        workspace.Environment.Model,
+				Registry:     workspace.Environment.Registry,
+				IndexManager: workspace.Environment.IndexManager,
+				SearchEngine: workspace.Environment.SearchEngine,
+				Memory:       workspace.Environment.WorkingMemory,
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -219,24 +204,23 @@ func newStartCmd() *cobra.Command {
 				DebugAgent:        logAgent,
 			}
 			providerRuntime := &appruntime.Runtime{
-				Tools:        openedWS.Environment.Registry,
-				Registration: registration,
-				AgentSpec:    spec,
-				Model:        openedWS.Environment.Model,
-				IndexManager: openedWS.Environment.IndexManager,
-				SearchEngine: openedWS.Environment.SearchEngine,
-				Memory:       openedWS.Environment.WorkingMemory,
+				Workspace:    workspace,
+				Tools:        workspace.Environment.Registry,
+				Model:        workspace.Environment.Model,
+				IndexManager: workspace.Environment.IndexManager,
+				SearchEngine: workspace.Environment.SearchEngine,
+				Memory:       workspace.Environment.WorkingMemory,
 			}
 			if err := registerBuiltinProvidersFn(runCtx, providerRuntime); err != nil {
 				return err
 			}
-			openedWS.Environment.Config = cfg
+			workspace.Environment.Config = cfg
 			agentEnv.Config = cfg
 			var agent graph.WorkflowExecutor
 			var buildErr error
-			agent, buildErr = buildFromSpecFn(&openedWS.Environment, *spec)
+			agent, buildErr = buildFromSpecFn(&workspace.Environment, *spec)
 			if buildErr != nil {
-				agent, buildErr = buildFromSpecFn(&openedWS.Environment, agentspec.AgentRuntimeSpec{Implementation: "react"})
+				agent, buildErr = buildFromSpecFn(&workspace.Environment, agentspec.AgentRuntimeSpec{Implementation: "react"})
 			}
 			if buildErr != nil {
 				return buildErr

@@ -6,12 +6,12 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/agents"
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/rex"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -19,10 +19,10 @@ import (
 var namedAgentRegistry sync.Map
 
 // RegisterNamedAgent registers a named agent constructor under the given name.
-// The constructor receives ayenitd.WorkspaceEnvironment so it can access all
+// The constructor receives agentenv.WorkspaceEnvironment so it can access all
 // workspace services. Named agents that only need the common fields can ignore
 // the extra fields; they will be nil/zero when invoked from lower-level callers.
-func RegisterNamedAgent(name string, ctor func(workspace string, env ayenitd.WorkspaceEnvironment) agentgraph.WorkflowExecutor) {
+func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || ctor == nil {
 		return
@@ -30,21 +30,16 @@ func RegisterNamedAgent(name string, ctor func(workspace string, env ayenitd.Wor
 	namedAgentRegistry.Store(name, ctor)
 }
 
-func instantiateRegisteredNamedAgent(workspace, name string, env ayenitd.WorkspaceEnvironment) (agentgraph.WorkflowExecutor, bool) {
+func instantiateRegisteredNamedAgent(workspace, name string, env agentenv.WorkspaceEnvironment) (agentgraph.WorkflowExecutor, bool) {
 	value, ok := namedAgentRegistry.Load(strings.ToLower(strings.TrimSpace(name)))
 	if !ok {
 		return nil, false
 	}
-	ctor, ok := value.(func(workspace string, env ayenitd.WorkspaceEnvironment) agentgraph.WorkflowExecutor)
+	ctor, ok := value.(func(workspace string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor)
 	if !ok || ctor == nil {
 		return nil, false
 	}
 	return ctor(workspace, env), true
-}
-
-// envToWorkspace normalizes legacy callers onto WorkspaceEnvironment.
-func envToWorkspace(env agentenv.WorkspaceEnvironment) ayenitd.WorkspaceEnvironment {
-	return ayenitd.WorkspaceEnvironment(env)
 }
 
 type ToolScope struct {
@@ -107,13 +102,17 @@ func BuildFromSpec(env agentenv.WorkspaceEnvironment, spec agentspec.AgentRuntim
 }
 
 func InstantiateByName(workspace, name string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
-	if agent, ok := instantiateRegisteredNamedAgent(workspace, name, envToWorkspace(env)); ok {
+	if agent, ok := instantiateRegisteredNamedAgent(workspace, name, env); ok {
 		return agent
 	}
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "rex":
 		agent := rex.NewWithWorkspace(&env, workspace)
 		_ = agent.Initialize(env.Config)
+		return agent
+	case "euclo":
+		agent := euclo.New(env)
+		// Don't call Initialize here - euclo calls it lazily in Execute()
 		return agent
 	}
 	agent, err := BuildFromSpec(env, agentspec.AgentRuntimeSpec{Implementation: name})

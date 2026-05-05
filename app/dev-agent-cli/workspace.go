@@ -12,21 +12,18 @@ import (
 
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"gopkg.in/yaml.v3"
 )
-
-var probeWorkspaceFn = func(cfg ayenitd.WorkspaceConfig) []ayenitd.ProbeResult {
-	return ayenitd.ProbeWorkspace(cfg, nil)
-}
 
 type inspectionTarget struct {
 	workspace    string
 	agentName    string
 	manifestPath string
 	spec         *agentspec.AgentRuntimeSpec
-	cfg          ayenitd.WorkspaceConfig
+	cfg          agentenv.WorkspaceConfig
 }
 
 func newWorkspaceCmd() *cobra.Command {
@@ -34,35 +31,8 @@ func newWorkspaceCmd() *cobra.Command {
 		Use:   "workspace",
 		Short: "Inspect workspace configuration and services",
 	}
-	cmd.AddCommand(newWorkspaceProbeCmd(), newWorkspaceStatusCmd(), newWorkspaceServicesCmd(), newWorkspaceInitCmd())
+	cmd.AddCommand(newWorkspaceStatusCmd(), newWorkspaceServicesCmd(), newWorkspaceInitCmd())
 	return cmd
-}
-
-func newWorkspaceProbeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "probe",
-		Short: "Run workspace platform checks",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ws := ensureWorkspace()
-			cfg := buildProbeWorkspaceConfig(ws)
-			results := probeWorkspaceFn(cfg)
-			failedRequired := false
-			for _, result := range results {
-				status := "FAIL"
-				if result.OK {
-					status = "OK"
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-20s %-4s %s\n", result.Name, status, result.Message)
-				if result.Required && !result.OK {
-					failedRequired = true
-				}
-			}
-			if failedRequired {
-				return fmt.Errorf("one or more required workspace checks failed")
-			}
-			return nil
-		},
-	}
 }
 
 func newWorkspaceStatusCmd() *cobra.Command {
@@ -220,7 +190,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 	if modelName == "" {
 		modelName = defaultModelName()
 	}
-	cfg := ayenitd.WorkspaceConfig{
+	cfg := agentenv.WorkspaceConfig{
 		Workspace:         runtimeCfg.Workspace,
 		ManifestPath:      runtimeCfg.ManifestPath,
 		InferenceProvider: "ollama",
@@ -230,12 +200,11 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		AgentsDir:         runtimeCfg.AgentsDir,
 		AgentName:         agentName,
 		SandboxBackend:    sandboxBackend,
-		LogPath:           frameworkmanifest.New(ws).LogFile("ayenitd.log"),
+		LogPath:           frameworkmanifest.New(ws).LogFile("agentenv.log"),
 		MemoryPath:        runtimeCfg.MemoryPath,
 		SkipASTIndex:      true,
 		HITLTimeout:       runtimeCfg.HITLTimeout,
 		AuditLimit:        runtimeCfg.AuditLimit,
-		Sandbox:           runtimeCfg.Sandbox,
 	}
 	return &inspectionTarget{
 		workspace:    ws,
@@ -246,7 +215,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 	}, nil
 }
 
-func openWorkspaceForInspection(ctx context.Context, ws string) (*ayenitd.Workspace, error) {
+func openWorkspaceForInspection(ctx context.Context, ws string) (*agentenv.Workspace, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -254,5 +223,5 @@ func openWorkspaceForInspection(ctx context.Context, ws string) (*ayenitd.Worksp
 	if err != nil {
 		return nil, err
 	}
-	return openWorkspaceFn(ctx, target.cfg)
+	return agentenv.Open(ctx, target.cfg, agentenv.AgentRegistrationFuncs{})
 }

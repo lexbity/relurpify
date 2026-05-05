@@ -363,7 +363,7 @@ func summarizeManifest(path string) ManifestSummary {
 
 // Status collects runtime + environment data for the status view.
 func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
-	env := ProbeEnvironment(ctx, r.Config, r.Backend)
+	env := ProbeEnvironment(ctx, r.Config, r.AgentWorkspace().Backend)
 	snapshot := StatusSnapshot{
 		Environment:  env,
 		PendingHITL:  r.PendingHITL(),
@@ -375,17 +375,17 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 			r.Config.ConfigPath,
 		)
 	}
-	if r.Registration != nil && r.Registration.ManifestSnapshot != nil {
-		snapshot.ManifestFingerprint = fmt.Sprintf("%x", r.Registration.ManifestSnapshot.Fingerprint)
-		snapshot.DeprecationNotices = append([]string(nil), r.Registration.ManifestSnapshot.Warnings...)
+	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.ManifestSnapshot != nil {
+		snapshot.ManifestFingerprint = fmt.Sprintf("%x", r.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
+		snapshot.DeprecationNotices = append([]string(nil), r.AgentWorkspace().Registration.ManifestSnapshot.Warnings...)
 	}
-	if r.ProfileResolution.Profile != nil {
-		snapshot.SelectedProfile = r.ProfileResolution.Profile.MatchPattern()
+	if r.AgentWorkspace().ProfileResolution.Profile != nil {
+		snapshot.SelectedProfile = r.AgentWorkspace().ProfileResolution.Profile.MatchPattern()
 	}
-	snapshot.ProfileReason = r.ProfileResolution.Reason
-	snapshot.ProfileSource = r.ProfileResolution.SourcePath
-	if r.Registration != nil && r.Registration.Manifest != nil {
-		snapshot.ManifestPolicySummary = summarizeManifestPolicy(r.Registration.Manifest)
+	snapshot.ProfileReason = r.AgentWorkspace().ProfileResolution.Reason
+	snapshot.ProfileSource = r.AgentWorkspace().ProfileResolution.SourcePath
+	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.Manifest != nil {
+		snapshot.ManifestPolicySummary = summarizeManifestPolicy(r.AgentWorkspace().Registration.Manifest)
 	}
 	return snapshot
 }

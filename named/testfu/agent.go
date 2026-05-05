@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -30,12 +30,12 @@ type Agent struct {
 }
 
 func init() {
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
 		return New(env, WithWorkspace(workspace))
 	})
 }
 
-func New(env ayenitd.WorkspaceEnvironment, opts ...Option) *Agent {
+func New(env agentenv.WorkspaceEnvironment, opts ...Option) *Agent {
 	agent := &Agent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -46,7 +46,7 @@ func New(env ayenitd.WorkspaceEnvironment, opts ...Option) *Agent {
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
+func (a *Agent) InitializeEnvironment(env agentenv.WorkspaceEnvironment) error {
 	a.Config = env.Config
 	if a.Tools == nil {
 		a.Tools = env.Registry

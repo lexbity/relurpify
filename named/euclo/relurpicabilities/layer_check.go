@@ -96,6 +96,8 @@ var layerRules = []layerRule{
 	{"ayenitd must not import named", "ayenitd/", "named/", "named"},
 	{"framework must not import ayenitd", "framework/", "ayenitd/", "framework"},
 	{"platform must not import ayenitd", "platform/", "ayenitd/", "framework"},
+	{"framework/services must not import ayenitd", "framework/services/", "ayenitd/", "framework/services"},
+	{"framework/agentenv must not import ayenitd", "framework/agentenv/", "ayenitd/", "framework/agentenv"},
 }
 
 // Invoke scans the import graph and returns any boundary violations.

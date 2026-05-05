@@ -24,7 +24,7 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
 	opts.Registry = r.Tools
-	opts.AgentSpec = r.AgentSpec
+	opts.AgentSpec = r.AgentWorkspace().AgentSpec
 	opts.State = firstDelegationContext(opts.State)
 	if shouldUseBackgroundDelegation(request) {
 		runner, err := r.ensureBackgroundDelegationProvider(ctx)
@@ -129,7 +129,7 @@ func (r *Runtime) observeDelegationSnapshot(snapshot core.DelegationSnapshot) {
 }
 
 func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
-	if r == nil || r.Telemetry == nil {
+	if r == nil || r.AgentWorkspace().Telemetry == nil {
 		return
 	}
 	eventType := core.EventDelegationFinish
@@ -157,7 +157,7 @@ func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
 		metadata["insertion_action"] = snapshot.Result.Insertion.Action
 		metadata["result_trust_class"] = snapshot.Result.Provenance.TrustClass
 	}
-	r.Telemetry.Emit(core.Event{
+	r.AgentWorkspace().Telemetry.Emit(core.Event{
 		Type:      eventType,
 		TaskID:    firstDelegationTaskID(snapshot),
 		Message:   delegationTelemetryMessage(snapshot),
@@ -167,7 +167,7 @@ func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
 }
 
 func (r *Runtime) logDelegationAudit(snapshot core.DelegationSnapshot) {
-	if r == nil || r.Registration == nil || r.Registration.Audit == nil {
+	if r == nil || r.AgentWorkspace().Registration == nil || r.AgentWorkspace().Registration.Audit == nil {
 		return
 	}
 	result := string(snapshot.State)
@@ -190,9 +190,9 @@ func (r *Runtime) logDelegationAudit(snapshot core.DelegationSnapshot) {
 		metadata["insertion_action"] = snapshot.Result.Insertion.Action
 		metadata["result_success"] = snapshot.Result.Success
 	}
-	_ = r.Registration.Audit.Log(context.Background(), core.AuditRecord{
+	_ = r.AgentWorkspace().Registration.Audit.Log(context.Background(), core.AuditRecord{
 		Timestamp: time.Now().UTC(),
-		AgentID:   r.Registration.ID,
+		AgentID:   r.AgentWorkspace().Registration.ID,
 		Action:    "delegation",
 		Type:      string(snapshot.State),
 		Result:    result,

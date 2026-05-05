@@ -164,8 +164,8 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 		defer stop(context.Background())
 	}
 	// Prevent stdlib logger output (used by some debug paths) from drawing over the TUI.
-	if rt != nil && rt.Logger != nil {
-		log.SetOutput(rt.Logger.Writer())
+	if rt != nil && rt.AgentWorkspace() != nil && rt.AgentWorkspace().Logger != nil {
+		log.SetOutput(rt.AgentWorkspace().Logger.Writer())
 	}
 	return tui.RunWithSurface(ctx, rt, euclotui.NewSurfaceFactory())
 }

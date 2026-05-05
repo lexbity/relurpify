@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents"
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
@@ -59,13 +59,12 @@ type BootstrappedAgentRuntime struct {
 	CompiledPolicy       *manifest.CompiledPolicyBundle
 }
 
-// BootstrapAgentRuntime delegates to ayenitd.BootstrapAgentRuntime and then
-// registers relurpic and agent capabilities on top. ayenitd intentionally omits
+// BootstrapAgentRuntime delegates to agentenv.BootstrapAgentRuntime and then
+// registers relurpic and agent capabilities on top. agentenv intentionally omits
 // relurpic capabilities because named agents register their own. app/relurpish
-// uses this bootstrap path directly (not through named agents), so we add them
-// here.
+// registers them here.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
-	boot, err := ayenitd.BootstrapAgentRuntime(workspace, ayenitd.AgentBootstrapOptions{
+	boot, err := agentenv.BootstrapAgentRuntime(workspace, agentenv.AgentBootstrapOptions{
 		Context:             opts.Context,
 		AgentID:             opts.AgentID,
 		AgentName:           opts.AgentName,

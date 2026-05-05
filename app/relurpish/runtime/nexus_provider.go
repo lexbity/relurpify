@@ -133,7 +133,7 @@ func registerNexusGatewayProvider(ctx context.Context, rt *Runtime) error {
 	if rt == nil {
 		return nil
 	}
-	cfg := rt.Workspace.Nexus
+	cfg := rt.WorkspaceConfig.Nexus
 	if !cfg.Enabled || cfg.Address == "" {
 		return nil
 	}

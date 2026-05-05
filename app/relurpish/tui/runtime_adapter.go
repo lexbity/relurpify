@@ -176,19 +176,19 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Provider = cfg.InferenceProvider
 	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
-	if r.rt.ProfileResolution.Profile != nil {
-		info.Profile = r.rt.ProfileResolution.Profile.MatchPattern()
+	if r.rt.AgentWorkspace().ProfileResolution.Profile != nil {
+		info.Profile = r.rt.AgentWorkspace().ProfileResolution.Profile.MatchPattern()
 	}
-	info.ProfileReason = r.rt.ProfileResolution.Reason
-	info.ProfileSource = r.rt.ProfileResolution.SourcePath
-	if r.rt.Backend != nil {
-		if health, err := r.rt.Backend.Health(context.Background()); err == nil && health != nil {
+	info.ProfileReason = r.rt.AgentWorkspace().ProfileResolution.Reason
+	info.ProfileSource = r.rt.AgentWorkspace().ProfileResolution.SourcePath
+	if r.rt.AgentWorkspace().Backend != nil {
+		if health, err := r.rt.AgentWorkspace().Backend.Health(context.Background()); err == nil && health != nil {
 			info.BackendState = string(health.State)
 		}
 	}
 
-	if r.rt.Registration != nil && r.rt.Registration.Manifest != nil {
-		manifest := r.rt.Registration.Manifest
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.Manifest != nil {
+		manifest := r.rt.AgentWorkspace().Registration.Manifest
 		info.Agent = manifest.Metadata.Name
 		if manifest.Spec.Agent != nil {
 			if manifest.Spec.Agent.Model.Provider != "" {
@@ -210,28 +210,28 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 }
 
 func (r *runtimeAdapter) ContractSummary() *ContractSummary {
-	if r == nil || r.rt == nil || r.rt.EffectiveContract == nil {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace().EffectiveContract == nil {
 		return nil
 	}
 	summary := &ContractSummary{
-		AgentID:         r.rt.EffectiveContract.AgentID,
-		ManifestName:    r.rt.EffectiveContract.Sources.ManifestName,
-		ManifestVersion: r.rt.EffectiveContract.Sources.ManifestVersion,
-		Workspace:       r.rt.EffectiveContract.Sources.Workspace,
-		AppliedSkills:   append([]string(nil), r.rt.EffectiveContract.Sources.AppliedSkills...),
-		FailedSkills:    append([]string(nil), r.rt.EffectiveContract.Sources.FailedSkills...),
-		AdmissionCount:  len(r.rt.CapabilityAdmissions),
+		AgentID:         r.rt.AgentWorkspace().EffectiveContract.AgentID,
+		ManifestName:    r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestName,
+		ManifestVersion: r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestVersion,
+		Workspace:       r.rt.AgentWorkspace().EffectiveContract.Sources.Workspace,
+		AppliedSkills:   append([]string(nil), r.rt.AgentWorkspace().EffectiveContract.Sources.AppliedSkills...),
+		FailedSkills:    append([]string(nil), r.rt.AgentWorkspace().EffectiveContract.Sources.FailedSkills...),
+		AdmissionCount:  len(r.rt.AgentWorkspace().CapabilityAdmissions),
 	}
 	if r.rt.Tools != nil {
 		summary.CapabilityCount = len(r.rt.Tools.AllCapabilities())
 	}
-	for _, admission := range r.rt.CapabilityAdmissions {
+	for _, admission := range r.rt.AgentWorkspace().CapabilityAdmissions {
 		if !admission.Admitted {
 			summary.RejectedCount++
 		}
 	}
-	if r.rt.CompiledPolicy != nil {
-		summary.PolicyRuleCount = len(r.rt.CompiledPolicy.Rules)
+	if r.rt.AgentWorkspace().CompiledPolicy != nil {
+		summary.PolicyRuleCount = len(r.rt.AgentWorkspace().CompiledPolicy.Rules)
 	}
 	return summary
 }
@@ -240,8 +240,8 @@ func (r *runtimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo {
 	if r == nil || r.rt == nil {
 		return nil
 	}
-	out := make([]CapabilityAdmissionInfo, 0, len(r.rt.CapabilityAdmissions))
-	for _, admission := range r.rt.CapabilityAdmissions {
+	out := make([]CapabilityAdmissionInfo, 0, len(r.rt.AgentWorkspace().CapabilityAdmissions))
+	for _, admission := range r.rt.AgentWorkspace().CapabilityAdmissions {
 		out = append(out, CapabilityAdmissionInfo{
 			CapabilityID:   admission.CapabilityID,
 			CapabilityName: admission.CapabilityName,
@@ -275,7 +275,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		return res
 	}
 	workspace := r.rt.Config.Workspace
-	perm := r.rt.Registration.Permissions
+	perm := r.rt.AgentWorkspace().Registration.Permissions
 
 	for _, path := range paths {
 		abs := path
@@ -285,7 +285,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		abs = filepath.Clean(abs)
 
 		if perm != nil {
-			if err := perm.CheckFileAccess(ctx, r.rt.Registration.ID, contracts.FileSystemRead, abs); err != nil {
+			if err := perm.CheckFileAccess(ctx, r.rt.AgentWorkspace().Registration.ID, contracts.FileSystemRead, abs); err != nil {
 				res.Denied[path] = err.Error()
 				continue
 			}
@@ -339,8 +339,8 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	var models []string
-	if r.rt.Backend != nil {
-		backendModels, err := r.rt.Backend.ListModels(ctx)
+	if r.rt.AgentWorkspace().Backend != nil {
+		backendModels, err := r.rt.AgentWorkspace().Backend.ListModels(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -833,8 +833,8 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	d.ActiveProfile = info.Profile
 	d.ProfileReason = info.ProfileReason
 	d.ProfileSource = info.ProfileSource
-	if r.rt.Registration != nil && r.rt.Registration.ManifestSnapshot != nil {
-		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.Registration.ManifestSnapshot.Fingerprint)
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSnapshot != nil {
+		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
 	}
 	if r.rt.Config.Workspace != "" {
 		d.ProtectedPaths = manifest.New(r.rt.Config.Workspace).GovernanceRoots(
@@ -842,9 +842,9 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 			r.rt.Config.ConfigPath,
 		)
 	}
-	if r.rt.Registration != nil && r.rt.Registration.Manifest != nil {
-		d.ManifestPolicy = manifestPolicySummary(r.rt.Registration.Manifest)
-		d.DeprecationNotices = append([]string(nil), r.rt.Registration.Manifest.Spec.CompatibilityWarnings...)
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.Manifest != nil {
+		d.ManifestPolicy = manifestPolicySummary(r.rt.AgentWorkspace().Registration.Manifest)
+		d.DeprecationNotices = append([]string(nil), r.rt.AgentWorkspace().Registration.Manifest.Spec.CompatibilityWarnings...)
 	}
 
 	return d
@@ -889,10 +889,10 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 
 // Service management methods
 func (r *runtimeAdapter) ListServices() []ServiceInfo {
-	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return nil
 	}
-	ids := r.rt.ServiceManager.ListIDs()
+	ids := r.rt.AgentWorkspace().ServiceManager.ListIDs()
 	infos := make([]ServiceInfo, 0, len(ids))
 	for _, id := range ids {
 		infos = append(infos, ServiceInfo{
@@ -904,10 +904,10 @@ func (r *runtimeAdapter) ListServices() []ServiceInfo {
 }
 
 func (r *runtimeAdapter) StopService(id string) error {
-	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	svc := r.rt.ServiceManager.Get(id)
+	svc := r.rt.AgentWorkspace().ServiceManager.Get(id)
 	if svc == nil {
 		return fmt.Errorf("service %s not found", id)
 	}
@@ -915,10 +915,10 @@ func (r *runtimeAdapter) StopService(id string) error {
 }
 
 func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
-	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	svc := r.rt.ServiceManager.Get(id)
+	svc := r.rt.AgentWorkspace().ServiceManager.Get(id)
 	if svc == nil {
 		return fmt.Errorf("service %s not found", id)
 	}
@@ -929,13 +929,13 @@ func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
-	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if err := r.rt.ServiceManager.StopAll(); err != nil {
+	if err := r.rt.AgentWorkspace().ServiceManager.StopAll(); err != nil {
 		return fmt.Errorf("stop all: %w", err)
 	}
-	return r.rt.ServiceManager.StartAll(ctx)
+	return r.rt.AgentWorkspace().ServiceManager.StartAll(ctx)
 }
 
 // Context file management

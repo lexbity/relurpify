@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/agents/promptprovider"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -20,10 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
-	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
-	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
-	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -71,26 +67,28 @@ func (a *Agent) Initialize(config *core.Config) error {
 		return nil
 	}
 
-	// Register all relurpic capability handlers
-	if err := relurpicabilities.RegisterAll(a.env); err != nil {
-		return fmt.Errorf("failed to register relurpic capabilities: %w", err)
-	}
+	// Register capabilities and prompt providers using registration functions
+	regFuncs := GetRegistrationFuncs()
 
-	// Register prompt providers if the environment has a prompt registry
-	if a.env.PromptRegistry != nil {
-		if err := promptprovider.RegisterAll(a.env.PromptRegistry); err != nil {
-			return fmt.Errorf("register paradigm prompt providers: %w", err)
-		}
-		if err := eucloprovider.RegisterAll(a.env.PromptRegistry); err != nil {
-			return fmt.Errorf("register euclo prompt providers: %w", err)
+	if regFuncs.RegisterCapabilities != nil {
+		if err := regFuncs.RegisterCapabilities(a.env); err != nil {
+			return fmt.Errorf("failed to register capabilities: %w", err)
 		}
 	}
 
-	// Load all recipe templates
-	var err error
-	a.recipeRegistry, err = recipetemplates.LoadAll()
-	if err != nil {
-		return fmt.Errorf("failed to load recipe templates: %w", err)
+	if regFuncs.RegisterPromptProviders != nil {
+		if err := regFuncs.RegisterPromptProviders(a.env); err != nil {
+			return fmt.Errorf("failed to register prompt providers: %w", err)
+		}
+	}
+
+	// Load recipe templates
+	if regFuncs.LoadRecipes != nil {
+		registry, err := regFuncs.LoadRecipes()
+		if err != nil {
+			return fmt.Errorf("failed to load recipes: %w", err)
+		}
+		a.recipeRegistry = registry.(*recipe.RecipeRegistry)
 	}
 
 	a.initialized = true

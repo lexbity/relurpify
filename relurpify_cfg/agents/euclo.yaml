@@ -1,9 +1,9 @@
 apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
-    name: coding-node
+    name: euclo
     version: 1.0.0
-    description: Node-focused coding agent manifest
+    description: Euclo coding agent manifest
 spec:
     image: ghcr.io/lexcodex/relurpify/runtime:latest
     runtime: gvisor
@@ -11,23 +11,21 @@ spec:
         permissions:
             filesystem:
                 - action: fs:read
-                  path: ${workspace}/**
+                  path: /home/lex/Public/Relurpify/**
                   justification: Read workspace
                 - action: fs:list
-                  path: ${workspace}/**
+                  path: /home/lex/Public/Relurpify/**
                   justification: List workspace
                 - action: fs:write
-                  path: ${workspace}/**
+                  path: /home/lex/Public/Relurpify/**
                   justification: Modify workspace
                 - action: fs:execute
-                  path: ${workspace}/**
+                  path: /home/lex/Public/Relurpify/**
                   justification: Execute tooling inside workspace
             executables:
-                - binary: node
+                - binary: go
                   args: ["*"]
-                - binary: npm
-                  args: ["*"]
-                - binary: npx
+                - binary: golangci-lint
                   args: ["*"]
                 - binary: git
                   args: ["*"]
@@ -52,10 +50,10 @@ spec:
         level: verbose
         retention_days: 7
     agent:
-        implementation: coding
+        implementation: euclo
         mode: primary
         version: 1.0.0
-        prompt: You are coding. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
+        prompt: You are Euclo, a coding-specialized agent. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
         model:
             provider: ollama
             name: qwen2.5-coder:14b
@@ -88,4 +86,4 @@ spec:
     skills:
         - system
         - coding
-        - nodecoder
+        - gocoder

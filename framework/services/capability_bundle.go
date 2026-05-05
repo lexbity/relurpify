@@ -1,4 +1,4 @@
-package ayenitd
+package services
 
 import (
 	"context"
@@ -68,7 +68,7 @@ type CapabilityRegistryOptions struct {
 	SkipASTIndex      bool
 }
 
-// BuildBuiltinCapabilityBundle is extracted from runtime.BuildBuiltinCapabilityBundle.
+// BuildBuiltinCapabilityBundle constructs a complete capability bundle with platform tools and AST indexing.
 func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (bundle *CapabilityBundle, err error) {
 	if workspace == "" {
 		workspace = "."

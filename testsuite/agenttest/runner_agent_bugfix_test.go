@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -20,6 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/services"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -54,13 +54,13 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 
 	agentName := "testfu"
 	var capturedCfg *core.Config
-	namedfactory.RegisterNamedAgent(agentName, func(_ string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent(agentName, func(_ string, env agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 		capturedCfg = env.Config
 		return &stubNamedAgent{}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{
 			Name:              "bootstrapped",
@@ -68,7 +68,7 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 			MaxIterations:     17,
 			NativeToolCalling: true,
 		}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -117,8 +117,8 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 	manifestPath := writeCodingAgenttestManifest(t, workspace)
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
+		bundle, err := services.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), services.CapabilityRegistryOptions{
 			AgentID: "coding",
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Implementation: "coding",
@@ -131,7 +131,7 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 		}
 		registry := bundle.Registry
 		cfg := &core.Config{Name: "bootstrapped", MaxIterations: 3}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -189,11 +189,11 @@ func TestBuildAgentPropagatesSkipASTIndexToBootstrap(t *testing.T) {
 
 	var capturedSkipASTIndex bool
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		capturedSkipASTIndex = opts.SkipASTIndex
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "bootstrapped", MaxIterations: 3}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -347,7 +347,7 @@ func TestResolveExecutionAgentNameRoutesCodingArchitectAndWorkflowCases(t *testi
 
 func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 	workspace := t.TempDir()
-	bundle, err := ayenitd.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), ayenitd.CapabilityRegistryOptions{
+	bundle, err := services.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), services.CapabilityRegistryOptions{
 		AgentID: "coding",
 		AgentSpec: &agentspec.AgentRuntimeSpec{
 			Implementation: "coding",
@@ -471,7 +471,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 
 	agentName := "testfu"
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &retryCheckAgent{
 			workspace: workspace,
 			shared:    shared,
@@ -479,10 +479,10 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -561,15 +561,15 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &nonInfraRetryAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -624,15 +624,15 @@ func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &alwaysRetryAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{
@@ -694,16 +694,16 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &executionTimeoutShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return &executionTimeoutAgent{shared: shared}
 	})
 
 	origBootstrap := bootstrapAgentRuntime
-	bootstrapAgentRuntime = func(_ string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
+	bootstrapAgentRuntime = func(_ string, opts agentenv.AgentBootstrapOptions) (*agentenv.BootstrappedAgentRuntime, error) {
 		time.Sleep(30 * time.Millisecond)
 		registry := capability.NewRegistry()
 		cfg := &core.Config{Name: "timeout", MaxIterations: 3, NativeToolCalling: true}
-		return &ayenitd.BootstrappedAgentRuntime{
+		return &agentenv.BootstrappedAgentRuntime{
 			Registry:    registry,
 			AgentConfig: cfg,
 			Environment: agentenv.WorkspaceEnvironment{

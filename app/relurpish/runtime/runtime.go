@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,7 +15,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -26,21 +24,15 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-
-	// // memorydb "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist // TODO: package does not exist
-	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
-	platformgit "codeburg.org/lexbit/relurpify/platform/git"
-	"codeburg.org/lexbit/relurpify/platform/llm"
-	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
-	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
@@ -49,33 +41,21 @@ import (
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config               Config
-	Tools                *capability.Registry
-	Memory               *memory.WorkingMemoryStore
-	Agent                agentgraph.WorkflowExecutor
-	Model                contracts.LanguageModel
-	IndexManager         *ast.IndexManager
-	GraphDB              *graphdb.Engine
-	SearchEngine         *search.SearchEngine
-	AgentLifecycle       agentlifecycle.Repository
-	Registration         *fauthorization.AgentRegistration
-	Delegations          *fauthorization.DelegationManager
-	AgentSpec            *agentspec.AgentRuntimeSpec
-	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	CapabilityAdmissions []capability.AdmissionResult
-	EffectiveContract    *manifest.EffectiveAgentContract
-	CompiledPolicy       *manifest.CompiledPolicyBundle
-	Telemetry            core.Telemetry
-	Logger               *log.Logger
-	Workspace            WorkspaceConfig
-	Backend              llm.ManagedBackend
-	ProfileResolution    llm.ProfileResolution
-	ServiceManager       *ayenitd.ServiceManager
-	NexusNodeProvider    core.NodeProvider
-	NexusClient          *NexusClient
+	Config            Config
+	Workspace         *agentenv.Workspace
+	Tools             *capability.Registry
+	Memory            *memory.WorkingMemoryStore
+	Agent             agentgraph.WorkflowExecutor
+	Model             contracts.LanguageModel
+	IndexManager      *ast.IndexManager
+	GraphDB           *graphdb.Engine
+	SearchEngine      *search.SearchEngine
+	AgentLifecycle    agentlifecycle.Repository
+	Delegations       *fauthorization.DelegationManager
+	WorkspaceConfig   WorkspaceConfig
+	NexusNodeProvider core.NodeProvider
+	NexusClient       *NexusClient
 
-	logFile     io.Closer
-	eventLog    io.Closer
 	hitlCancel  func()
 	nexusCancel func()
 
@@ -87,6 +67,11 @@ type Runtime struct {
 	delegationBG *backgroundDelegationProvider
 	mcpMu        sync.Mutex
 	mcpElicit    MCPElicitationHandler
+}
+
+// AgentWorkspace returns the framework/agentenv Workspace for this Runtime.
+func (r *Runtime) AgentWorkspace() *agentenv.Workspace {
+	return r.Workspace
 }
 
 type MCPElicitationHandler interface {
@@ -124,8 +109,8 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
 
-	// Delegate all workspace initialization to ayenitd.Open().
-	ws, err := ayenitd.Open(ctx, ayenitd.WorkspaceConfig{
+	// Delegate all workspace initialization to framework/agentenv.Open().
+	ws, err := agentenv.Open(ctx, agentenv.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
 		InferenceProvider:          cfg.InferenceProvider,
@@ -144,22 +129,19 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		HITLTimeout:                cfg.HITLTimeout,
 		AuditLimit:                 cfg.AuditLimit,
 		SandboxBackend:             cfg.SandboxBackend,
-		Sandbox:                    cfg.Sandbox,
 		AllowedCapabilities:        allowedCapabilities,
-	})
+		EventLogFactory: func(path string) (event.Log, error) {
+			return nexusdb.NewSQLiteEventLog(path)
+		},
+	}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		return nil, err
 	}
-
-	// Transfer closer ownership from Workspace to Runtime so that rt.Close()
-	// manages the lifecycle directly. ws.Close() is not called.
-	logFile, _ := ws.StealClosers()
 
 	env := ws.Environment
 	registration := ws.Registration
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
-	profileResolution := ws.ProfileResolution
 	if registration != nil && registration.Permissions != nil {
 		var agentSpec *agentspec.AgentRuntimeSpec
 		if registration.Manifest != nil {
@@ -168,61 +150,56 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		cfg.CommandPolicy = fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, agentSpec, "runtime")
 	}
 
-	// Extend telemetry with an event log sink (uses app/nexus/db which ayenitd
-	// cannot import without a cycle).
+	// Extend telemetry with an event log sink. The event log is now created
+	// by framework/agentenv via EventLogFactory, so we just need to wire it into
+	// the telemetry chain.
 	var eventTelemetry telemetry.EventTelemetry
-	var eventLogCloser io.Closer
-	if cfg.EventsPath != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.EventsPath), 0o755); err == nil {
-			if eventLog, err := nexusdb.NewSQLiteEventLog(cfg.EventsPath); err == nil {
-				eventTelemetry = telemetry.EventTelemetry{
-					Log:       eventLog,
-					Partition: "local",
-					Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
-				}
-				eventLogCloser = eventLog
-				// Re-wire the permission event logger with full event log support.
-				if registration.Permissions != nil {
-					registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
-						payload := map[string]interface{}{
-							"permission_type": desc.Type,
-							"action":          desc.Action,
-							"resource":        desc.Resource,
-							"effect":          effect,
-							"reason":          reason,
-							"metadata":        fields,
-						}
-						if data, err := json.Marshal(payload); err == nil {
-							_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
-								Timestamp: time.Now().UTC(),
-								Type:      core.FrameworkEventPolicyEvaluated,
-								Payload:   data,
-								Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
-								Partition: "local",
-							}})
-						}
-					})
-				}
-				if registration.ManifestSnapshot != nil {
-					emitManifestReloadedEvent(ctx, eventLog, registration.ID, cfg.AgentLabel(), registration.ManifestSnapshot)
-				}
-			} else if logger != nil {
-				logger.Printf("warning: failed to init event log: %v", err)
+	if cfg.EventsPath != "" && registration != nil {
+		// The event log is now owned by Workspace and will be closed by Workspace.Close()
+		// We need to get it from the Workspace's Environment
+		if env.EventLog != nil {
+			eventTelemetry = telemetry.EventTelemetry{
+				Log:       env.EventLog,
+				Partition: "local",
+				Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 			}
+			// Re-wire the permission event logger with full event log support.
+			if registration.Permissions != nil {
+				registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+					payload := map[string]interface{}{
+						"permission_type": desc.Type,
+						"action":          desc.Action,
+						"resource":        desc.Resource,
+						"effect":          effect,
+						"reason":          reason,
+						"metadata":        fields,
+					}
+					if data, err := json.Marshal(payload); err == nil {
+						_, _ = env.EventLog.Append(ctx, "local", []core.FrameworkEvent{{
+							Timestamp: time.Now().UTC(),
+							Type:      core.FrameworkEventPolicyEvaluated,
+							Payload:   data,
+							Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+							Partition: "local",
+						}})
+					}
+				})
+			}
+			if registration.ManifestSnapshot != nil {
+				emitManifestReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), registration.ManifestSnapshot)
+			}
+		} else if logger != nil {
+			logger.Printf("warning: event log not available from workspace")
 		}
 	}
 
 	// Assemble the final telemetry (base + event log if available).
-	var combinedTelemetry core.Telemetry
 	if eventTelemetry.Log != nil {
 		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
 			mt.Sinks = append(mt.Sinks, eventTelemetry)
-			combinedTelemetry = mt
 		} else {
-			combinedTelemetry = telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{baseTelemetry, eventTelemetry}}
+			baseTelemetry = telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{baseTelemetry, eventTelemetry}}
 		}
-	} else {
-		combinedTelemetry = baseTelemetry
 	}
 
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
@@ -237,29 +214,17 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Use WorkflowStore interface directly
 	rt := &Runtime{
-		Config:               cfg,
-		Tools:                env.Registry,
-		Memory:               env.WorkingMemory,
-		Model:                env.Model,
-		IndexManager:         env.IndexManager,
-		GraphDB:              graphDBFromIndexManager(env.IndexManager),
-		SearchEngine:         env.SearchEngine,
-		AgentLifecycle:       env.AgentLifecycle,
-		Logger:               logger,
-		logFile:              logFile,
-		eventLog:             eventLogCloser,
-		Workspace:            workspaceCfg,
-		Backend:              ws.Backend,
-		ProfileResolution:    profileResolution,
-		ServiceManager:       ws.ServiceManager,
-		Registration:         registration,
-		Delegations:          fauthorization.NewDelegationManager(),
-		AgentSpec:            ws.AgentSpec,
-		AgentDefinitions:     ws.AgentDefinitions,
-		CapabilityAdmissions: ws.CapabilityAdmissions,
-		EffectiveContract:    ws.EffectiveContract,
-		CompiledPolicy:       ws.CompiledPolicy,
-		Telemetry:            combinedTelemetry,
+		Config:          cfg,
+		Workspace:       ws,
+		Tools:           env.Registry,
+		Memory:          env.WorkingMemory,
+		Model:           env.Model,
+		IndexManager:    env.IndexManager,
+		GraphDB:         graphDBFromIndexManager(env.IndexManager),
+		SearchEngine:    env.SearchEngine,
+		AgentLifecycle:  env.AgentLifecycle,
+		WorkspaceConfig: workspaceCfg,
+		Delegations:     fauthorization.NewDelegationManager(),
 	}
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)
@@ -318,29 +283,6 @@ func (r *Runtime) Close() error {
 		}
 	}
 
-	if r.AgentLifecycle != nil {
-		if err := r.AgentLifecycle.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		r.AgentLifecycle = nil
-	}
-	if r.Backend != nil {
-		if err := r.Backend.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		r.Backend = nil
-	}
-	if r.IndexManager != nil {
-		if err := r.IndexManager.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if r.logFile != nil {
-		if err := r.logFile.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		r.logFile = nil
-	}
 	if r.hitlCancel != nil {
 		r.hitlCancel()
 		r.hitlCancel = nil
@@ -349,12 +291,15 @@ func (r *Runtime) Close() error {
 		r.nexusCancel()
 		r.nexusCancel = nil
 	}
-	if r.eventLog != nil {
-		if err := r.eventLog.Close(); err != nil {
+
+	// Close workspace (handles backend, services, logs, etc.)
+	if r.Workspace != nil {
+		if err := r.Workspace.Close(); err != nil {
 			errs = append(errs, err)
 		}
-		r.eventLog = nil
+		r.Workspace = nil
 	}
+
 	return errors.Join(errs...)
 }
 
@@ -368,7 +313,7 @@ func (r *Runtime) AvailableAgents() []string {
 		"expert":     {},
 	}
 	if r != nil {
-		for name := range r.AgentDefinitions {
+		for name := range r.Workspace.AgentDefinitions {
 			if name == "" {
 				continue
 			}
@@ -391,7 +336,7 @@ func (r *Runtime) SwitchAgent(name string) error {
 	if name == "" {
 		return errors.New("agent name required")
 	}
-	if r.Registration == nil || r.Registration.Manifest == nil || r.Registration.Manifest.Spec.Agent == nil {
+	if r.Workspace.Registration == nil || r.Workspace.Registration.Manifest == nil || r.Workspace.Registration.Manifest.Spec.Agent == nil {
 		return errors.New("agent manifest missing")
 	}
 	effectiveContract, compiledPolicy, agentDefs, err := r.resolveEffectiveContractForAgent(name)
@@ -409,8 +354,8 @@ func (r *Runtime) ReloadEffectiveContract() error {
 		return errors.New("runtime unavailable")
 	}
 	name := strings.TrimSpace(r.Config.AgentName)
-	if name == "" && r.Registration != nil {
-		name = strings.TrimSpace(r.Registration.ID)
+	if name == "" && r.Workspace.Registration != nil {
+		name = strings.TrimSpace(r.Workspace.Registration.ID)
 	}
 	if name == "" {
 		return errors.New("agent name required")
@@ -437,7 +382,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.InferenceModel {
 		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
 	}
-	if err := ensureStableSkillCapabilityTopology(r.EffectiveContract, effectiveContract); err != nil {
+	if err := ensureStableSkillCapabilityTopology(r.Workspace.EffectiveContract, effectiveContract); err != nil {
 		return err
 	}
 	agentCfg := &core.Config{
@@ -446,7 +391,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 		MaxIterations:     8,
 		NativeToolCalling: effectiveContract.AgentSpec.NativeToolCallingEnabled(),
 		AgentSpec:         effectiveContract.AgentSpec,
-		Telemetry:         r.Telemetry,
+		Telemetry:         r.Workspace.Telemetry,
 	}
 	agent := instantiateAgent(cfg, agents.AgentEnvironment{
 		Model:        r.Model,
@@ -460,167 +405,17 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 		return fmt.Errorf("agent %s not available", name)
 	}
 	r.wireRuntimeAgentDependencies(agent)
-	r.Tools.UseAgentSpec(r.Registration.ID, effectiveContract.AgentSpec)
-	r.Registration.Policy = nil
+	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, effectiveContract.AgentSpec)
+	r.Workspace.Registration.Policy = nil
 	r.Agent = agent
-	r.AgentSpec = effectiveContract.AgentSpec
-	r.AgentDefinitions = agentDefs
-	r.EffectiveContract = effectiveContract
-	r.CompiledPolicy = compiledPolicy
-	r.CapabilityAdmissions = nil
+	r.Workspace.AgentSpec = effectiveContract.AgentSpec
+	r.Workspace.AgentDefinitions = agentDefs
+	r.Workspace.EffectiveContract = effectiveContract
+	r.Workspace.CompiledPolicy = compiledPolicy
+	r.Workspace.CapabilityAdmissions = nil
 	r.syncSkillContextPaths(effectiveContract.SkillResults)
 	r.Config.AgentName = name
 	return nil
-}
-
-// CapabilityRegistryOptions carries optional manifest/runtime policies into capability construction.
-type CapabilityRegistryOptions struct {
-	Context           context.Context
-	AgentID           string
-	PermissionManager *fauthorization.PermissionManager
-	AgentSpec         *agentspec.AgentRuntimeSpec
-	InferenceEndpoint string
-	InferenceModel    string
-	SkipASTIndex      bool
-}
-
-// CapabilityBundle groups the runtime-scoped capability registry and the
-// shared indexing/search services built alongside it.
-type CapabilityBundle struct {
-	Registry     *capability.Registry
-	IndexManager *ast.IndexManager
-	SearchEngine *search.SearchEngine
-}
-
-// Close releases bundle-owned resources.
-func (b *CapabilityBundle) Close() error {
-	if b == nil || b.IndexManager == nil {
-		return nil
-	}
-	return b.IndexManager.Close()
-}
-
-// BuildBuiltinCapabilityBundle registers builtin tool capabilities scoped to
-// the workspace without resolving a full runtime contract. It is intended for
-// tests and low-level tooling that only need the builtin capability bundle.
-func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (*CapabilityBundle, error) {
-	if workspace == "" {
-		workspace = "."
-	}
-	if runner == nil {
-		return nil, fmt.Errorf("command runner required")
-	}
-	var cfg CapabilityRegistryOptions
-	if len(opts) > 0 {
-		cfg = opts[0]
-	}
-	buildCtx := cfg.Context
-	if buildCtx == nil {
-		buildCtx = context.Background()
-	}
-	registry := capability.NewRegistry()
-	if cfg.PermissionManager != nil {
-		registry.UsePermissionManager(cfg.AgentID, cfg.PermissionManager)
-	}
-	if cfg.AgentSpec != nil {
-		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
-	}
-	paths := manifest.New(workspace)
-	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
-	register := func(tool contracts.Tool) error {
-		if err := registry.Register(tool); err != nil {
-			return err
-		}
-		return nil
-	}
-	for _, tool := range platformfs.FileOperations(workspace) {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range []contracts.Tool{
-		&platformsearch.SimilarityTool{BasePath: workspace},
-		&platformsearch.SemanticSearchTool{BasePath: workspace},
-	} {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range []contracts.Tool{
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: sandboxCommandRunnerAdapter{runner: runner}},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: sandboxCommandRunnerAdapter{runner: runner}},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: sandboxCommandRunnerAdapter{runner: runner}},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: sandboxCommandRunnerAdapter{runner: runner}},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: sandboxCommandRunnerAdapter{runner: runner}},
-	} {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range platformshell.CommandLineTools(workspace, sandboxCommandRunnerAdapter{runner: runner}) {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	paths = manifest.New(workspace)
-	indexDir := paths.ASTIndexDir()
-	if err := os.MkdirAll(indexDir, 0o755); err != nil {
-		return nil, err
-	}
-	store, err := ast.NewSQLiteStore(paths.ASTIndexDB())
-	if err != nil {
-		return nil, err
-	}
-	manager := ast.NewIndexManager(store, ast.IndexConfig{
-		WorkspacePath:   workspace,
-		ParallelWorkers: 4,
-	})
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(paths.MemoryDir(), "graphdb")))
-	if err != nil {
-		_ = store.Close()
-		return nil, err
-	}
-	manager.GraphDB = graphEngine
-	fileScope := fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots())
-	manager.SetFileScope(fileScope)
-	manager.SetPathFilter(func(path string, isDir bool) bool {
-		action := contracts.FileSystemRead
-		if isDir {
-			action = contracts.FileSystemList
-		}
-		if fileScope.Check(action, path) != nil {
-			return false
-		}
-		if cfg.PermissionManager == nil {
-			return true
-		}
-		return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
-	})
-	ast.AttachASTSymbolProvider(manager, registry)
-	if err := register(ast.NewASTTool(manager)); err != nil {
-		return nil, err
-	}
-	if err := manager.StartIndexing(buildCtx); err != nil {
-		return nil, err
-	}
-	searchEngine := search.NewSearchEngine(nil, nil)
-	if searchEngine == nil {
-		return nil, fmt.Errorf("search engine initialization failed")
-	}
-	return &CapabilityBundle{
-		Registry:     registry,
-		IndexManager: manager,
-		SearchEngine: searchEngine,
-	}, nil
-}
-
-func shouldIgnoreBootstrapIndexError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return errors.Is(err, context.Canceled) ||
-		errors.Is(err, context.DeadlineExceeded) ||
-		strings.Contains(err.Error(), "no parser for ")
 }
 
 func toCapabilityCandidates(input []frameworkskills.SkillCapabilityCandidate) []capability.Candidate {
@@ -713,7 +508,7 @@ func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env 
 }
 
 func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.EffectiveAgentContract, *manifest.CompiledPolicyBundle, map[string]*agentspec.AgentDefinition, error) {
-	agentDefs := r.AgentDefinitions
+	agentDefs := r.Workspace.AgentDefinitions
 	if r.Config.AgentsDir != "" {
 		loaded, err := LoadAgentDefinitions(r.Config.AgentsDir)
 		if err != nil && !os.IsNotExist(err) {
@@ -723,7 +518,7 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.Effec
 			agentDefs = loaded
 		}
 	}
-	effectiveContract, err := manifest.ResolveEffectiveAgentContract(r.Config.Workspace, r.Registration.Manifest, manifest.ResolveOptions{
+	effectiveContract, err := manifest.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, manifest.ResolveOptions{
 		AgentOverlays: selectedAgentDefinitionOverlays(name, agentDefs),
 	}, nil)
 	if err != nil {
@@ -840,13 +635,13 @@ func (r *Runtime) ServerRunning() bool {
 
 // PendingHITL exposes outstanding permission requests.
 func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
-	if r.Registration == nil || r.Registration.HITL == nil {
+	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
 		return nil
 	}
-	return r.Registration.HITL.PendingRequests()
+	return r.Workspace.Registration.HITL.PendingRequests()
 }
 
-func emitManifestReloadedEvent(ctx context.Context, eventLog *nexusdb.SQLiteEventLog, agentID, label string, snapshot *manifest.AgentManifestSnapshot) {
+func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *manifest.AgentManifestSnapshot) {
 	if eventLog == nil || snapshot == nil {
 		return
 	}
@@ -869,17 +664,17 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog *nexusdb.SQLiteEven
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).
 // The returned cancel function can be called to unsubscribe.
 func (r *Runtime) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
-	if r == nil || r.Registration == nil || r.Registration.HITL == nil {
+	if r == nil || r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
 		ch := make(chan fauthorization.HITLEvent)
 		close(ch)
 		return ch, func() {}
 	}
-	return r.Registration.HITL.Subscribe(32)
+	return r.Workspace.Registration.HITL.Subscribe(32)
 }
 
 // ApproveHITL approves a pending request with the supplied scope.
 func (r *Runtime) ApproveHITL(requestID, approver string, scope fauthorization.GrantScope, duration time.Duration) error {
-	if r.Registration == nil || r.Registration.HITL == nil {
+	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
 	if scope == "" {
@@ -896,15 +691,15 @@ func (r *Runtime) ApproveHITL(requestID, approver string, scope fauthorization.G
 		Scope:      scope,
 		ExpiresAt:  expiresAt,
 	}
-	return r.Registration.HITL.Approve(decision)
+	return r.Workspace.Registration.HITL.Approve(decision)
 }
 
 // DenyHITL rejects a pending request.
 func (r *Runtime) DenyHITL(requestID, reason string) error {
-	if r.Registration == nil || r.Registration.HITL == nil {
+	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
-	return r.Registration.HITL.Deny(requestID, reason)
+	return r.Workspace.Registration.HITL.Deny(requestID, reason)
 }
 
 func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {

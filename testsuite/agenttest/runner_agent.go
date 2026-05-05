@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -23,7 +22,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-var bootstrapAgentRuntime = ayenitd.BootstrapAgentRuntime
+var bootstrapAgentRuntime = agentenv.BootstrapAgentRuntime
 
 func shouldSkipCase(req RequiresSpec, agent graph.WorkflowExecutor) (reason string, ok bool) {
 	for _, bin := range req.Executables {
@@ -189,7 +188,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("test store init: %w", err)
 	}
-	boot, err := bootstrapAgentRuntime(workspace, ayenitd.AgentBootstrapOptions{
+	boot, err := bootstrapAgentRuntime(workspace, agentenv.AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             agentManifest.Metadata.Name,
 		AgentName:           executionAgentName,

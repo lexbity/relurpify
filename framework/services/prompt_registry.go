@@ -1,4 +1,4 @@
-package ayenitd
+package services
 
 import (
 	"fmt"

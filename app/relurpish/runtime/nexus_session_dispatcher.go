@@ -122,8 +122,8 @@ func (d *sessionDispatcher) runWorker(ctx context.Context, key string, w *sessio
 				}
 			}
 			idle.Reset(d.idleTimeout)
-			if err := d.process(ctx, item); err != nil && d.rt != nil && d.rt.Logger != nil {
-				d.rt.Logger.Printf("nexus session %s: event handling failed: %v", key, err)
+			if err := d.process(ctx, item); err != nil && d.rt != nil && d.rt.AgentWorkspace().Logger != nil {
+				d.rt.AgentWorkspace().Logger.Printf("nexus session %s: event handling failed: %v", key, err)
 			}
 		case <-idle.C:
 			return

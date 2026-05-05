@@ -179,7 +179,7 @@ func registerLocalNexusNodeProvider(ctx context.Context, rt *Runtime) error {
 	if rt == nil || rt.Tools == nil {
 		return nil
 	}
-	cfg := rt.Workspace.NodeRegistration
+	cfg := rt.WorkspaceConfig.NodeRegistration
 	if !cfg.Enabled {
 		return nil
 	}
@@ -187,9 +187,9 @@ func registerLocalNexusNodeProvider(ctx context.Context, rt *Runtime) error {
 	if err != nil {
 		return err
 	}
-	if rt.Workspace.Nexus.Address == "" && !cfg.LocalOnly {
-		if rt.Logger != nil {
-			rt.Logger.Printf("node registration enabled but nexus.address is empty; exposing local node provider only")
+	if rt.WorkspaceConfig.Nexus.Address == "" && !cfg.LocalOnly {
+		if rt.AgentWorkspace().Logger != nil {
+			rt.AgentWorkspace().Logger.Printf("node registration enabled but nexus.address is empty; exposing local node provider only")
 		}
 	}
 	return rt.RegisterProvider(ctx, &localNexusNodeRuntimeProvider{provider: provider})
