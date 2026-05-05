@@ -3,7 +3,9 @@ package state
 import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 )
 
 // --- Task and Intake ---
@@ -145,6 +147,21 @@ func SetAgentModeHint(env *contextdata.Envelope, hint string) {
 	env.SetWorkingValue(KeyAgentModeHint, hint, contextdata.MemoryClassTask)
 }
 
+// GetString retrieves a string value from the envelope working memory.
+func GetString(env *contextdata.Envelope, key string) string {
+	if env == nil {
+		return ""
+	}
+	v, ok := env.GetWorkingValue(key)
+	if !ok {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
 // --- Ingestion ---
 
 // GetUserSelectedFiles retrieves the user-selected files.
@@ -278,9 +295,39 @@ func GetHITLTriggered(env *contextdata.Envelope) (bool, bool) {
 	return b, ok
 }
 
+// GetHITLResponse retrieves the HITL response.
+func GetHITLResponse(env *contextdata.Envelope) (*interaction.HITLResponse, bool) {
+	v, ok := env.GetWorkingValue(KeyHITLResponse)
+	if !ok {
+		return nil, false
+	}
+	resp, ok := v.(*interaction.HITLResponse)
+	return resp, ok
+}
+
+// SetHITLResponse stores the HITL response.
+func SetHITLResponse(env *contextdata.Envelope, resp *interaction.HITLResponse) {
+	env.SetWorkingValue(KeyHITLResponse, resp, contextdata.MemoryClassTask)
+}
+
 // SetHITLTriggered stores whether HITL was triggered.
 func SetHITLTriggered(env *contextdata.Envelope, triggered bool) {
 	env.SetWorkingValue(KeyHITLTriggered, triggered, contextdata.MemoryClassTask)
+}
+
+// GetPolicyDecision retrieves the policy decision.
+func GetPolicyDecision(env *contextdata.Envelope) (*policy.PolicyDecision, bool) {
+	v, ok := env.GetWorkingValue(KeyPolicyDecision)
+	if !ok {
+		return nil, false
+	}
+	pd, ok := v.(*policy.PolicyDecision)
+	return pd, ok
+}
+
+// SetPolicyDecision stores the policy decision.
+func SetPolicyDecision(env *contextdata.Envelope, pd *policy.PolicyDecision) {
+	env.SetWorkingValue(KeyPolicyDecision, pd, contextdata.MemoryClassTask)
 }
 
 // --- Execution ---
@@ -392,6 +439,21 @@ func GetStreamTokenUsage(env *contextdata.Envelope) (int, bool) {
 // SetStreamTokenUsage stores stream token usage.
 func SetStreamTokenUsage(env *contextdata.Envelope, usage int) {
 	env.SetWorkingValue(KeyStreamTokenUsage, usage, contextdata.MemoryClassTask)
+}
+
+// GetDispatchRouteKind retrieves the dispatch route kind.
+func GetDispatchRouteKind(env *contextdata.Envelope) (string, bool) {
+	v, ok := env.GetWorkingValue(KeyDispatchRouteKind)
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+// SetDispatchRouteKind stores the dispatch route kind.
+func SetDispatchRouteKind(env *contextdata.Envelope, kind string) {
+	env.SetWorkingValue(KeyDispatchRouteKind, kind, contextdata.MemoryClassTask)
 }
 
 // --- Frame History ---

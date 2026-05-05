@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -12,20 +15,22 @@ import (
 )
 
 type resetMockBackend struct {
-	resetCalled bool
+	resetCalled   bool
 	resetStrategy string
 }
 
-func (m *resetMockBackend) Model() llm.LanguageModel { return nil }
-func (m *resetMockBackend) Embedder() llm.Embedder { return nil }
-func (m *resetMockBackend) Capabilities() llm.BackendCapabilities { return llm.BackendCapabilities{} }
+func (m *resetMockBackend) Model() llm.LanguageModel                      { return nil }
+func (m *resetMockBackend) Embedder() llm.Embedder                        { return nil }
+func (m *resetMockBackend) Capabilities() llm.BackendCapabilities         { return llm.BackendCapabilities{} }
 func (m *resetMockBackend) ModelContextSize(context.Context) (int, error) { return 0, nil }
-func (m *resetMockBackend) Health(ctx context.Context) (*llm.HealthReport, error) { return &llm.HealthReport{State: llm.BackendHealthReady}, nil }
+func (m *resetMockBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{State: llm.BackendHealthReady}, nil
+}
 func (m *resetMockBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) { return nil, nil }
-func (m *resetMockBackend) Warm(context.Context) error { return nil }
-func (m *resetMockBackend) Close() error { return nil }
-func (m *resetMockBackend) SetDebugLogging(enabled bool) {}
-func (m *resetMockBackend) SetProfile(profile *llm.ModelProfile) {}
+func (m *resetMockBackend) Warm(context.Context) error                              { return nil }
+func (m *resetMockBackend) Close() error                                            { return nil }
+func (m *resetMockBackend) SetDebugLogging(enabled bool)                            {}
+func (m *resetMockBackend) SetProfile(profile *llm.ModelProfile)                    {}
 func (m *resetMockBackend) Reset(ctx context.Context, strategy string) error {
 	m.resetCalled = true
 	m.resetStrategy = strategy

@@ -38,6 +38,16 @@ func TestRootGraphExecute(t *testing.T) {
 	}
 }
 
+func TestRootGraphValidate(t *testing.T) {
+	graph := NewRootGraph()
+	if graph == nil || graph.Graph() == nil {
+		t.Fatal("expected graph to be initialized")
+	}
+	if err := graph.Graph().Validate(); err != nil {
+		t.Fatalf("expected graph validation to succeed: %v", err)
+	}
+}
+
 func TestRootGraphRecipeRoute(t *testing.T) {
 	graph := NewRootGraph()
 

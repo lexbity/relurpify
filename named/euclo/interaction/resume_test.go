@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,10 +13,10 @@ func TestResumeFrame_FindsPendingFrame(t *testing.T) {
 	first := NewOutcomeFeedbackFrame("task-1", "session-1", "done")
 	second := NewOutcomeFeedbackFrame("task-1", "session-1", "done")
 
-	if err := EmitFrame(nil, first, env, nil); err != nil {
+	if err := EmitFrame(context.TODO(), first, env, nil); err != nil {
 		t.Fatalf("EmitFrame first failed: %v", err)
 	}
-	if err := EmitFrame(nil, second, env, nil); err != nil {
+	if err := EmitFrame(context.TODO(), second, env, nil); err != nil {
 		t.Fatalf("EmitFrame second failed: %v", err)
 	}
 

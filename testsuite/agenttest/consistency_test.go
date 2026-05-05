@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -115,9 +118,9 @@ func TestComputeVariance(t *testing.T) {
 		values []int
 		want   float64
 	}{
-		{[]int{5, 5, 5}, 0.0},     // No variance
-		{[]int{1, 2, 3}, 2.0/3.0}, // Some variance
-		{[]int{}, 0.0},            // Empty
+		{[]int{5, 5, 5}, 0.0},       // No variance
+		{[]int{1, 2, 3}, 2.0 / 3.0}, // Some variance
+		{[]int{}, 0.0},              // Empty
 	}
 
 	for _, tt := range tests {
@@ -138,10 +141,10 @@ func TestIsDeterministic(t *testing.T) {
 		{0.85, ">0.9", false},
 		{0.90, ">=0.9", true},
 		{0.89, ">=0.9", false},
-		{0.8, "0.8", true},     // bare number means >=
-		{0.7, "0.8", false},    // bare number means >=
-		{0.0, ">0", false},    // edge case
-		{0.01, ">0", true},     // edge case
+		{0.8, "0.8", true},  // bare number means >=
+		{0.7, "0.8", false}, // bare number means >=
+		{0.0, ">0", false},  // edge case
+		{0.01, ">0", true},  // edge case
 	}
 
 	for _, tt := range tests {

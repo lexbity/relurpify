@@ -305,3 +305,101 @@ func TestRecipeCompilerPlanPropagatesCapabilityID(t *testing.T) {
 		t.Fatalf("expected capability ID to propagate, got %q", plan.Steps[0].CapabilityID)
 	}
 }
+
+func TestRecipeCompilerPlanCompilesGroups(t *testing.T) {
+	compiler := NewCompiler()
+
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		ID:         "grouped-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Grouped Recipe",
+		},
+		Global: RecipeGlobal{
+			Context: RecipeContext{
+				Aliases: map[string]string{
+					"shared": "euclo.recipe.shared.value",
+				},
+			},
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:   "intro",
+					Type: "llm",
+				},
+			},
+			Parallel: []ParallelGroup{
+				{
+					ID:    "fanout",
+					Merge: MergePolicyAll,
+					Steps: []RecipeStep{
+						{
+							ID:   "left",
+							Type: "llm",
+							Captures: map[string]string{
+								"out": "",
+							},
+						},
+						{
+							ID:   "right",
+							Type: "retrieve",
+							Captures: map[string]string{
+								"out": "",
+							},
+						},
+					},
+				},
+			},
+			Conditional: []ConditionalGroup{
+				{
+					ID:        "branch",
+					Condition: "task.type == review",
+					If: []RecipeStep{
+						{
+							ID:   "if_step",
+							Type: "transform",
+						},
+					},
+					Else: []RecipeStep{
+						{
+							ID:   "else_step",
+							Type: "verify",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	plan, err := compiler.CompilePlan(recipe, nil)
+	if err != nil {
+		t.Fatalf("CompilePlan failed: %v", err)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("expected 1 top-level step, got %d", len(plan.Steps))
+	}
+	if len(plan.Parallel) != 1 {
+		t.Fatalf("expected 1 parallel group, got %d", len(plan.Parallel))
+	}
+	if len(plan.Conditional) != 1 {
+		t.Fatalf("expected 1 conditional group, got %d", len(plan.Conditional))
+	}
+
+	if got := plan.Parallel[0].Steps[0].Step.ID; got != "fanout.parallel.0.left" {
+		t.Fatalf("unexpected parallel step ID: %s", got)
+	}
+	if got := plan.Parallel[0].Steps[0].Captures["out"]; got != "euclo.recipe.grouped-recipe.fanout.parallel.0.out" {
+		t.Fatalf("unexpected parallel capture key: %s", got)
+	}
+	if got := plan.Parallel[0].Steps[1].Step.ID; got != "fanout.parallel.1.right" {
+		t.Fatalf("unexpected parallel step ID: %s", got)
+	}
+	if got := plan.Conditional[0].IfSteps[0].Step.ID; got != "branch.if.0.if_step" {
+		t.Fatalf("unexpected conditional if-step ID: %s", got)
+	}
+	if got := plan.Conditional[0].ElseSteps[0].Step.ID; got != "branch.else.0.else_step" {
+		t.Fatalf("unexpected conditional else-step ID: %s", got)
+	}
+}

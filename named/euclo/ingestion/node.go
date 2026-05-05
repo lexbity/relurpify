@@ -2,14 +2,27 @@ package ingestion
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
-// IngestionNode is an agentgraph.Node that runs the ingestion pipeline.
+// IngestionNode runs the framework ingestion pipeline for Euclo tasks.
 type IngestionNode struct {
 	id   string
 	spec IngestionSpec
@@ -17,10 +30,7 @@ type IngestionNode struct {
 
 // NewIngestionNode creates a new IngestionNode.
 func NewIngestionNode(id string, spec IngestionSpec) *IngestionNode {
-	return &IngestionNode{
-		id:   id,
-		spec: spec,
-	}
+	return &IngestionNode{id: id, spec: spec}
 }
 
 // ID returns the node ID.
@@ -41,122 +51,306 @@ func (n *IngestionNode) Contract() agentgraph.NodeContract {
 	}
 }
 
-// Execute runs the ingestion pipeline.
+// Execute runs the configured ingestion mode.
 func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	result := &IngestionResult{
-		Mode:        n.spec.Mode,
-		CompletedAt: 0, // Set after completion
+	if env == nil {
+		return nil, fmt.Errorf("ingestion node %q missing envelope", n.id)
 	}
 
-	// If no files to ingest and mode is files_only, skip
-	if n.spec.Mode == IngestionModeFilesOnly && len(n.spec.ExplicitFiles) == 0 {
-		return &core.Result{
-			NodeID:  n.id,
-			Success: true,
-			Data: map[string]any{
-				"ingestion_result": result,
-			},
-		}, nil
+	taskEnvelope := taskEnvelopeFromEnv(env)
+	if taskEnvelope == nil {
+		result := &core.Result{NodeID: n.id, Success: true, Data: map[string]any{"skipped": true}}
+		return result, nil
 	}
 
-	// Execute ingestion based on mode
-	switch n.spec.Mode {
+	mode := n.resolveMode(taskEnvelope)
+	store, cleanup, err := n.ensureStore()
+	if err != nil {
+		return nil, err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	summary := map[string]any{
+		"mode":                  mode,
+		"task_id":               taskEnvelope.TaskID,
+		"session_id":            taskEnvelope.SessionID,
+		"skipped":               false,
+		"user_files_ingested":   0,
+		"session_pins_ingested": 0,
+		"files_scanned":         0,
+		"chunks_created":        0,
+		"chunks_quarantined":    0,
+		"chunks_rejected":       0,
+	}
+	result := &IngestionResult{Mode: mode}
+
+	switch mode {
 	case IngestionModeFilesOnly:
-		if err := n.ingestFiles(ctx, env, result); err != nil {
+		if err := n.ingestExplicitFiles(ctx, env, taskEnvelope, store, result, summary); err != nil {
 			result.Error = err.Error()
-			return &core.Result{
-				NodeID:  n.id,
-				Success: false,
-				Data: map[string]any{
-					"ingestion_result": result,
-					"error":            err.Error(),
-				},
-			}, err
+			n.writeSummary(env, result, summary, err)
+			return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
 		}
-
-	case IngestionModeIncremental:
-		if err := n.ingestIncremental(ctx, env, result); err != nil {
+	case IngestionModeIncremental, IngestionModeFull:
+		if err := n.ingestWorkspace(ctx, env, taskEnvelope, store, result, summary, mode); err != nil {
 			result.Error = err.Error()
-			return &core.Result{
-				NodeID:  n.id,
-				Success: false,
-				Data: map[string]any{
-					"ingestion_result": result,
-					"error":            err.Error(),
-				},
-			}, err
+			n.writeSummary(env, result, summary, err)
+			return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
 		}
-
-	case IngestionModeFull:
-		if err := n.ingestFull(ctx, env, result); err != nil {
-			result.Error = err.Error()
-			return &core.Result{
-				NodeID:  n.id,
-				Success: false,
-				Data: map[string]any{
-					"ingestion_result": result,
-					"error":            err.Error(),
-				},
-			}, err
-		}
-
 	default:
-		err := fmt.Errorf("unknown ingestion mode: %s", n.spec.Mode)
-		return &core.Result{
-			NodeID:  n.id,
-			Success: false,
-			Data: map[string]any{
-				"error": err.Error(),
-			},
-		}, err
+		err := fmt.Errorf("unknown ingestion mode: %s", mode)
+		result.Error = err.Error()
+		n.writeSummary(env, result, summary, err)
+		return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
 	}
 
-	// Write result to envelope
-	env.SetWorkingValue("euclo.ingestion_result", result, contextdata.MemoryClassTask)
+	if mode == IngestionModeFilesOnly {
+		result.FileCount = len(result.Records)
+	} else {
+		result.FileCount = summaryInt(summary, "files_scanned")
+	}
+	result.ChunkCount = summaryInt(summary, "chunks_created")
+	result.CompletedAt = time.Now().UTC().Unix()
+	if since, ok := summary["since_ref"].(string); ok {
+		result.SinceRef = since
+	}
 
-	return &core.Result{
-		NodeID:  n.id,
-		Success: true,
-		Data: map[string]any{
-			"ingestion_result": result,
-		},
-	}, nil
+	n.writeSummary(env, result, summary, nil)
+	return &core.Result{NodeID: n.id, Success: true, Data: summary}, nil
 }
 
-// ingestFiles ingests explicit files using the ingestion pipeline.
-func (n *IngestionNode) ingestFiles(ctx context.Context, env *contextdata.Envelope, result *IngestionResult) error {
-	// Phase 9: Stub implementation
-	// Full implementation would:
-	// 1. For each file in n.spec.ExplicitFiles, call ingestion.PipelineFactory
-	// 2. Use ingestion.AcquireFromFile to build the pipeline
-	// 3. Run the pipeline and collect IngestResult
-	// 4. Write chunks to knowledge.ChunkStore
-	// 5. Track file records in result.Records
+func (n *IngestionNode) resolveMode(task *intake.TaskEnvelope) IngestionMode {
+	if task == nil {
+		return IngestionModeFilesOnly
+	}
+	mode := strings.TrimSpace(string(n.spec.Mode))
+	if mode == "" {
+		mode = strings.TrimSpace(task.IngestPolicy)
+	}
+	if mode == "" {
+		if len(task.ExplicitFiles)+len(task.UserFiles)+len(task.SessionPins) > 0 {
+			return IngestionModeFilesOnly
+		}
+		return IngestionModeFull
+	}
+	switch IngestionMode(mode) {
+	case IngestionModeFilesOnly, IngestionModeIncremental, IngestionModeFull:
+		return IngestionMode(mode)
+	default:
+		return IngestionModeFull
+	}
+}
 
-	for _, filePath := range n.spec.ExplicitFiles {
+func (n *IngestionNode) ingestExplicitFiles(ctx context.Context, env *contextdata.Envelope, task *intake.TaskEnvelope, store *knowledge.ChunkStore, result *IngestionResult, summary map[string]any) error {
+	files := append([]string(nil), task.ExplicitFiles...)
+	files = append(files, task.UserFiles...)
+	files = append(files, task.SessionPins...)
+	root := strings.TrimSpace(n.spec.WorkspaceRoot)
+	for _, filePath := range files {
+		absPath := n.resolvePath(root, filePath)
+		pipeline, err := frameworkingestion.AcquireFromFile(ctx, absPath, defaultPrincipal(task), n.policyBundle(), store, nil)
+		if err != nil {
+			return err
+		}
+		pipeline.SetQuarantineDir(filepath.Join(os.TempDir(), "euclo-ingestion-quarantine"))
+		ingestResult, err := pipeline.Run(ctx)
+		if err != nil {
+			return err
+		}
 		record := FileIngestionRecord{
-			Path:        filePath,
-			ChunkCount:  1, // Stub
-			SizeBytes:   0, // Stub
-			ContentHash: "stub_hash",
+			Path:        absPath,
+			ChunkCount:  ingestResult.ChunksCommitted,
+			SizeBytes:   fileSize(absPath),
+			IngestedAt:  time.Now().UTC().Unix(),
+			ContentHash: contentHash(absPath),
 		}
 		result.Records = append(result.Records, record)
 		result.ChunkCount += record.ChunkCount
+		if len(task.UserFiles) > 0 && containsPath(task.UserFiles, filePath) {
+			summary["user_files_ingested"] = summaryInt(summary, "user_files_ingested") + 1
+		}
+		if len(task.SessionPins) > 0 && containsPath(task.SessionPins, filePath) {
+			summary["session_pins_ingested"] = summaryInt(summary, "session_pins_ingested") + 1
+		}
+		n.storeFileSummary(env, filePath, ingestResult)
 	}
-	result.FileCount = len(result.Records)
+	summary["chunks_created"] = result.ChunkCount
 	return nil
 }
 
-// ingestIncremental performs incremental workspace scanning.
-func (n *IngestionNode) ingestIncremental(ctx context.Context, env *contextdata.Envelope, result *IngestionResult) error {
-	// Phase 9: Stub implementation
-	// Full implementation would use ingestion.WorkspaceScanner.ScanIncremental
-	return fmt.Errorf("incremental ingestion not yet implemented")
+func (n *IngestionNode) ingestWorkspace(ctx context.Context, env *contextdata.Envelope, task *intake.TaskEnvelope, store *knowledge.ChunkStore, result *IngestionResult, summary map[string]any, mode IngestionMode) error {
+	root := strings.TrimSpace(n.spec.WorkspaceRoot)
+	if root == "" {
+		return fmt.Errorf("%s ingestion requires workspace root", mode)
+	}
+
+	scanner := &frameworkingestion.WorkspaceScanner{
+		Store:         store,
+		Policy:        n.policyBundle(),
+		FileScope:     nil,
+		IncludeGlobs:  append([]string(nil), n.spec.IncludeGlobs...),
+		ExcludeGlobs:  append([]string(nil), n.spec.ExcludeGlobs...),
+		QuarantineDir: filepath.Join(os.TempDir(), "euclo-ingestion-quarantine"),
+	}
+	var scanReport *frameworkingestion.ScanReport
+	var err error
+	switch mode {
+	case IngestionModeIncremental:
+		since := strings.TrimSpace(n.spec.SinceRef)
+		if since == "" {
+			since = strings.TrimSpace(task.IncrementalSince)
+		}
+		if since == "" {
+			since = "HEAD~1"
+		}
+		scanReport, err = scanner.ScanIncremental(ctx, root, since)
+		if err == nil {
+			summary["since_ref"] = since
+		}
+	case IngestionModeFull:
+		scanReport, err = scanner.Scan(ctx, root)
+	}
+	if err != nil {
+		return err
+	}
+	if scanReport == nil {
+		scanReport = &frameworkingestion.ScanReport{}
+	}
+	summary["files_scanned"] = scanReport.FilesScanned
+	summary["chunks_created"] = scanReport.ChunksCreated
+	summary["chunks_quarantined"] = scanReport.ChunksQuarantined
+	summary["chunks_rejected"] = scanReport.ChunksRejected
+	result.CompletedAt = time.Now().UTC().Unix()
+	return nil
 }
 
-// ingestFull performs full workspace scanning.
-func (n *IngestionNode) ingestFull(ctx context.Context, env *contextdata.Envelope, result *IngestionResult) error {
-	// Phase 9: Stub implementation
-	// Full implementation would use ingestion.WorkspaceScanner.Scan
-	return fmt.Errorf("full ingestion not yet implemented")
+func (n *IngestionNode) ensureStore() (*knowledge.ChunkStore, func(), error) {
+	tempDir, err := os.MkdirTemp("", "euclo-ingestion-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	engine, err := graphdb.Open(graphdb.DefaultOptions(tempDir))
+	if err != nil {
+		_ = os.RemoveAll(tempDir)
+		return nil, nil, err
+	}
+	cleanup := func() {
+		_ = engine.Close()
+		_ = os.RemoveAll(tempDir)
+	}
+	return &knowledge.ChunkStore{Graph: engine}, cleanup, nil
+}
+
+func (n *IngestionNode) policyBundle() *contextpolicy.ContextPolicyBundle {
+	return &contextpolicy.ContextPolicyBundle{
+		DefaultTrustClass: agentspec.TrustClassBuiltinTrusted,
+	}
+}
+
+func (n *IngestionNode) resolvePath(root, filePath string) string {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return filePath
+	}
+	if filepath.IsAbs(filePath) || root == "" {
+		return filePath
+	}
+	return filepath.Join(root, filePath)
+}
+
+func (n *IngestionNode) writeSummary(env *contextdata.Envelope, result *IngestionResult, summary map[string]any, err error) {
+	if env == nil {
+		return
+	}
+	env.SetWorkingValue("euclo.ingestion_result", result, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.ingestion.summary", summary, contextdata.MemoryClassTask)
+	if err != nil {
+		env.SetWorkingValue("euclo.ingestion.error", err.Error(), contextdata.MemoryClassTask)
+	}
+}
+
+func (n *IngestionNode) storeFileSummary(env *contextdata.Envelope, path string, ingestResult *frameworkingestion.IngestResult) {
+	if env == nil {
+		return
+	}
+	key := "euclo.ingested.file." + sanitize(path)
+	env.SetWorkingValue(key, map[string]any{
+		"chunks_committed":   ingestResult.ChunksCommitted,
+		"chunks_quarantined": ingestResult.ChunksQuarantined,
+		"chunks_rejected":    ingestResult.ChunksRejected,
+	}, contextdata.MemoryClassTask)
+}
+
+func taskEnvelopeFromEnv(env *contextdata.Envelope) *intake.TaskEnvelope {
+	if env == nil {
+		return nil
+	}
+	if value, ok := env.GetWorkingValue("euclo.task.envelope"); ok {
+		if task, ok := value.(*intake.TaskEnvelope); ok {
+			return task
+		}
+	}
+	return nil
+}
+
+func defaultPrincipal(task *intake.TaskEnvelope) identity.SubjectRef {
+	if task == nil {
+		return identity.SubjectRef{ID: "euclo"}
+	}
+	if strings.TrimSpace(task.TaskID) == "" {
+		return identity.SubjectRef{ID: "euclo"}
+	}
+	return identity.SubjectRef{ID: task.TaskID}
+}
+
+func summaryInt(summary map[string]any, key string) int {
+	if summary == nil {
+		return 0
+	}
+	if value, ok := summary[key]; ok {
+		switch v := value.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case uint64:
+			return int(v)
+		}
+	}
+	return 0
+}
+
+func containsPath(paths []string, path string) bool {
+	for _, candidate := range paths {
+		if candidate == path {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitize(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, string(filepath.Separator), "_")
+	value = strings.ReplaceAll(value, ":", "_")
+	return value
+}
+
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+func contentHash(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
@@ -150,9 +151,12 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	registry := families.NewRegistry()
 	families.RegisterBuiltins(registry)
 
-	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBackground, nil)
+	trigger := &UniqueMockStreamTrigger{}
+	classifier := &UniqueMockCapabilityClassifier{}
+	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBackground, trigger, classifier)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze the codebase"}, contextdata.MemoryClassTask)
 	result, err := node.Execute(context.Background(), env)
 
 	if err != nil {
@@ -173,8 +177,8 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	}
 
 	// Check result
-	if result["winning_family"] != families.FamilyImplementation {
-		t.Errorf("Expected winning_family %q, got %q", families.FamilyImplementation, result["winning_family"])
+	if result.Data["winning_family"] != families.FamilyInvestigation {
+		t.Errorf("Expected winning_family %q, got %q", families.FamilyInvestigation, result.Data["winning_family"])
 	}
 }
 
@@ -194,4 +198,33 @@ func TestRootGraphSkipsStreamNodeWhenNoTemplate(t *testing.T) {
 	// Root graph wiring will be implemented in Phase 14
 	// This test will be added then
 	t.Skip("Root graph wiring will be implemented in Phase 14")
+}
+
+type UniqueMockStreamTrigger struct{}
+
+func (m *UniqueMockStreamTrigger) Request(ctx context.Context, req *contextstream.Request) (*contextstream.Result, error) {
+	return &contextstream.Result{}, nil
+}
+
+func (m *UniqueMockStreamTrigger) RequestBlocking(ctx context.Context, req contextstream.Request) (*contextstream.Result, error) {
+	return &contextstream.Result{}, nil
+}
+
+func (m *UniqueMockStreamTrigger) RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error) {
+	return &contextstream.Job{}, nil
+}
+
+type UniqueMockCapabilityClassifier struct{}
+
+func (m *UniqueMockCapabilityClassifier) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
+	return []string{}, "", nil
+}
+
+func TestSomeTest(t *testing.T) {
+	registry := families.NewRegistry()
+	trigger := &UniqueMockStreamTrigger{}
+	classifier := &UniqueMockCapabilityClassifier{}
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	// Test logic
+	_ = node
 }

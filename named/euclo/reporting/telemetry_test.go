@@ -2,6 +2,7 @@ package reporting
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -207,4 +208,130 @@ func TestEmitRouteFallback_BothIDs(t *testing.T) {
 
 func TestEmitRouteSelected_NilTelemetry_NoOp(t *testing.T) {
 	EmitRouteSelected(context.Background(), "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 1, false)
+}
+
+func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
+	sink := &captureTelemetry{}
+	telemetry := NewEucloTelemetry(sink)
+	ctx := context.Background()
+
+	telemetry.EmitIntakeComplete(ctx, EventIntakeComplete{
+		EventHeader:   EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 1},
+		WinningFamily: "analysis",
+		Confidence:    0.9,
+		Ambiguous:     false,
+	})
+	telemetry.EmitFamilySelected(ctx, EventFamilySelected{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 2},
+		FamilyID:    "analysis",
+		Confidence:  0.8,
+		Keywords:    []string{"explain"},
+	})
+	telemetry.EmitIngestionComplete(ctx, EventIngestionComplete{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 3},
+		Mode:        "files_only",
+		FileCount:   2,
+		ChunkCount:  5,
+	})
+	telemetry.EmitStreamRequested(ctx, EventStreamRequested{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 4},
+		Query:       "summarize",
+		MaxTokens:   1024,
+		Mode:        "analysis",
+	})
+	telemetry.EmitCapabilityClassified(ctx, EventCapabilityClassified{
+		EventHeader:  EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 5},
+		FamilyID:     "analysis",
+		Capabilities: []string{"query"},
+		Operator:     "llm",
+		LLMCalls:     1,
+	})
+	telemetry.EmitRouteSelected(ctx, EventRouteSelected{
+		EventHeader:    EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 6},
+		FamilyID:       "analysis",
+		RouteKind:      "capability",
+		RouteID:        "euclo:cap.ast_query",
+		CandidateCount: 2,
+		FallbackTaken:  false,
+	})
+	telemetry.EmitGateResult(ctx, EventGateResult{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 7},
+		GateID:      "gate-1",
+		Passed:      true,
+		Decision:    "allow",
+	})
+	telemetry.EmitFrameEmitted(ctx, EventFrameEmitted{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 8},
+		FrameID:     "frame-1",
+		FrameType:   "hitl_approval",
+		SlotCount:   2,
+	})
+	telemetry.EmitFrameResolved(ctx, EventFrameResolved{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 9},
+		FrameID:     "frame-1",
+		ChosenSlot:  "approve",
+		RespondedBy: "user-1",
+	})
+	telemetry.EmitJobSubmitted(ctx, EventJobSubmitted{
+		EventHeader:   EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 10},
+		JobID:         "job-1",
+		RouteID:       "euclo:cap.ast_query",
+		ExecutionMode: "background",
+	})
+	telemetry.EmitJobCompleted(ctx, EventJobCompleted{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 11},
+		JobID:       "job-1",
+		Status:      "completed",
+		DurationMs:  42,
+	})
+	telemetry.EmitStepCompleted(ctx, EventStepCompleted{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 12},
+		StepID:      "step-1",
+		RecipeID:    "recipe-1",
+		Paradigm:    "recipe",
+		Success:     true,
+		DurationMs:  17,
+	})
+	telemetry.EmitExecutionComplete(ctx, EventExecutionComplete{
+		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 13},
+		Outcome:     "success",
+		OutcomeKind: "execution completed successfully",
+		StepCount:   3,
+		LLMCalls:    1,
+		TokenUsage:  128,
+	})
+
+	if got := len(sink.events); got != 13 {
+		t.Fatalf("expected 13 events, got %d", got)
+	}
+	if sink.events[0].Type != core.EventType(EventTypeIntakeComplete) {
+		t.Fatalf("unexpected first event type %q", sink.events[0].Type)
+	}
+	if sink.events[12].Metadata["outcome"] != "success" {
+		t.Fatalf("expected final outcome metadata, got %#v", sink.events[12].Metadata["outcome"])
+	}
+}
+
+func TestEventStructs_JSONMarshal(t *testing.T) {
+	ev := EventExecutionComplete{
+		EventHeader: EventHeader{
+			TaskID:     "task-1",
+			SessionID:  "session-1",
+			Seq:        99,
+			OccurredAt: time.Unix(10, 0).UTC(),
+		},
+		Outcome:     "partial_success",
+		OutcomeKind: "partial",
+		StepCount:   4,
+		LLMCalls:    2,
+		TokenUsage:  512,
+	}
+
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	if !json.Valid(raw) {
+		t.Fatal("expected valid json")
+	}
 }

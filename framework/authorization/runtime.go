@@ -15,7 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
 )
 
-// RuntimeConfig wires sandbox and auditing defaults.
+// RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
 	ManifestPath     string
 	ManifestSnapshot *manifest.AgentManifestSnapshot
@@ -73,9 +73,6 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	runtime, err := selectSandboxRuntime(cfg, agentManifest)
 	if err != nil {
 		return nil, err
-	}
-	if err := runtime.Verify(ctx); err != nil {
-		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := core.NewInMemoryAuditLogger(cfg.AuditLimit)

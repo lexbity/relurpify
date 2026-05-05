@@ -120,14 +120,7 @@ func CollectSignals(envelope *TaskEnvelope, recipeKeywords map[string][]string, 
 // ScoreSignals sums weights per family and returns ranked candidates.
 func ScoreSignals(signals []ClassificationSignal, familyList []families.KeywordFamily, weightOverrides map[string]float64) []families.FamilyCandidate {
 	scores := make(map[string]float64)
-
-	// Build keyword lookup for signal matching
-	keywordToFamily := make(map[string]string)
-	for _, family := range familyList {
-		for _, kw := range family.Keywords {
-			keywordToFamily[strings.ToLower(kw)] = family.ID
-		}
-	}
+	_ = familyList
 
 	// Process keyword signals from instruction
 	// Note: We need the instruction text here, which should be passed separately
@@ -188,11 +181,17 @@ type ScoredClassification struct {
 
 // ClassifyTaskScored performs tier-1 classification using signal scoring.
 func ClassifyTaskScored(envelope *TaskEnvelope, registry *families.KeywordFamilyRegistry, recipeKeywords map[string][]string) *ScoredClassification {
+	if envelope == nil {
+		envelope = &TaskEnvelope{}
+	}
 	// Collect signals
 	signals := CollectSignals(envelope, recipeKeywords, registry)
 
 	// Score signals
-	allFamilies := registry.All()
+	var allFamilies []families.KeywordFamily
+	if registry != nil {
+		allFamilies = registry.All()
+	}
 	candidates := ScoreSignals(signals, allFamilies, nil)
 
 	// If no candidates, inject default baseline

@@ -1,10 +1,14 @@
 package intake
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
 // === Phase 3 Unit Tests ===
@@ -247,4 +251,54 @@ func TestHintParserEmptyMessage(t *testing.T) {
 	if result.SessionHint != "" {
 		t.Error("Empty message should produce empty session hint")
 	}
+}
+
+type MockCapabilityClassifier struct{}
+
+func (m *MockCapabilityClassifier) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
+	return []string{"mock_cap"}, "OR", nil
+}
+
+type MockStreamTrigger struct{}
+
+func (m *MockStreamTrigger) Request(ctx context.Context, req *contextstream.Request) (*contextstream.Result, error) {
+	return &contextstream.Result{}, nil
+}
+
+func (m *MockStreamTrigger) RequestBlocking(ctx context.Context, req contextstream.Request) (*contextstream.Result, error) {
+	return &contextstream.Result{}, nil
+}
+
+func (m *MockStreamTrigger) RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error) {
+	return &contextstream.Job{}, nil
+}
+
+func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
+	registry := families.NewRegistry()
+	trigger := &MockStreamTrigger{}
+	classifier := &MockCapabilityClassifier{}
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	env := contextdata.NewEnvelope("test-task", "test-session")
+	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze code"}, contextdata.MemoryClassTask)
+	result, err := node.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result == nil {
+		t.Error("Result is nil")
+	}
+	// Add more assertions using env and result
+}
+
+func TestIntakePipelineNodeExecute_EdgeCases(t *testing.T) {
+	registry := families.NewRegistry()
+	classifier := &MockCapabilityClassifier{}
+	trigger := &MockStreamTrigger{}
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	env := contextdata.NewEnvelope("test-task", "test-session")
+	_, err := node.Execute(context.Background(), env) // No task input
+	if err == nil {
+		t.Error("Expected error for no task input")
+	}
+	// Add more edge cases
 }

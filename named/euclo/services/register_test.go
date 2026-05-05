@@ -1,0 +1,175 @@
+package services
+
+import (
+	"io/fs"
+	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
+	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+)
+
+func TestNewRegistrationAppliesOverrides(t *testing.T) {
+	capReg := &stubCapabilityRegistrar{}
+	promptReg := &stubPromptRegistrar{}
+	recipeLoader := &stubRecipeLoader{registry: recipepkg.NewRecipeRegistry()}
+
+	reg := NewRegistration(
+		WithCapabilityRegistrar(capReg),
+		WithPromptRegistrar(promptReg),
+		WithRecipeLoader(recipeLoader),
+	)
+
+	funcs := reg.AgentRegistrationFuncs()
+
+	env := agentenv.WorkspaceEnvironment{}
+	if err := funcs.RegisterCapabilities(env); err != nil {
+		t.Fatalf("RegisterCapabilities returned error: %v", err)
+	}
+	if !capReg.called {
+		t.Fatal("expected custom capability registrar to be called")
+	}
+
+	if err := funcs.RegisterPromptProviders(env); err != nil {
+		t.Fatalf("RegisterPromptProviders returned error: %v", err)
+	}
+	if !promptReg.called {
+		t.Fatal("expected custom prompt registrar to be called")
+	}
+
+	registry, err := funcs.LoadRecipes()
+	if err != nil {
+		t.Fatalf("LoadRecipes returned error: %v", err)
+	}
+	if registry != recipeLoader.registry {
+		t.Fatal("expected custom recipe loader registry to be returned")
+	}
+}
+
+func TestDefaultCapabilityRegistrarNilRegistry(t *testing.T) {
+	var reg defaultCapabilityRegistrar
+	if err := reg.RegisterAll(agentenv.WorkspaceEnvironment{}); err != nil {
+		t.Fatalf("expected nil registry to be ignored, got error: %v", err)
+	}
+}
+
+func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
+	var reg defaultCapabilityRegistrar
+	env := agentenv.WorkspaceEnvironment{Registry: capability.NewRegistry()}
+
+	if err := reg.RegisterAll(env); err != nil {
+		t.Fatalf("RegisterAll returned error: %v", err)
+	}
+
+	if got := len(env.Registry.AllCapabilitySnapshots()); got == 0 {
+		t.Fatal("expected capability registration to populate the registry")
+	}
+}
+
+func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
+	var reg defaultPromptRegistrar
+	registry := &countingPromptRegistry{seen: make(map[string]bool)}
+	env := agentenv.WorkspaceEnvironment{PromptRegistry: registry}
+
+	if err := reg.RegisterAll(env); err != nil {
+		t.Fatalf("first RegisterAll returned error: %v", err)
+	}
+	if got := registry.count(); got != 19 {
+		t.Fatalf("expected 19 prompt providers, got %d", got)
+	}
+
+	if err := reg.RegisterAll(env); err != nil {
+		t.Fatalf("second RegisterAll returned error: %v", err)
+	}
+	if got := registry.count(); got != 19 {
+		t.Fatalf("expected duplicate registration to be skipped, got %d providers", got)
+	}
+}
+
+func TestDefaultRecipeLoaderLoadsRegistry(t *testing.T) {
+	var loader defaultRecipeLoader
+
+	registry, err := loader.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll returned error: %v", err)
+	}
+	if registry == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	if got := registry.Count(); got == 0 {
+		t.Fatal("expected built-in recipes to be loaded")
+	}
+}
+
+type stubCapabilityRegistrar struct {
+	called bool
+}
+
+func (s *stubCapabilityRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) error {
+	s.called = true
+	return nil
+}
+
+type stubPromptRegistrar struct {
+	called bool
+}
+
+func (s *stubPromptRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) error {
+	s.called = true
+	return nil
+}
+
+type stubRecipeLoader struct {
+	called   bool
+	registry *recipepkg.RecipeRegistry
+}
+
+func (s *stubRecipeLoader) LoadAll() (*recipepkg.RecipeRegistry, error) {
+	s.called = true
+	if s.registry == nil {
+		s.registry = recipepkg.NewRecipeRegistry()
+	}
+	return s.registry, nil
+}
+
+type countingPromptRegistry struct {
+	seen map[string]bool
+}
+
+func (r *countingPromptRegistry) RegisterProvider(name string, p prompt.ContextProvider) error {
+	if r.seen[name] {
+		return prompt.ErrAlreadyRegistered(name)
+	}
+	r.seen[name] = true
+	return nil
+}
+
+func (r *countingPromptRegistry) count() int {
+	return len(r.seen)
+}
+
+func (r *countingPromptRegistry) LoadDir(string) error                        { return nil }
+func (r *countingPromptRegistry) LoadFS(fs.FS, string) error                  { return nil }
+func (r *countingPromptRegistry) ValidateProviders() []prompt.ValidationIssue { return nil }
+func (r *countingPromptRegistry) Get(string) (*prompt.PromptConfig, bool)     { return nil, false }
+func (r *countingPromptRegistry) All() []*prompt.PromptConfig                 { return nil }
+func (r *countingPromptRegistry) Count() int                                  { return r.count() }
+func (r *countingPromptRegistry) Filter(prompt.FilterOptions) []*prompt.PromptConfig {
+	return nil
+}
+func (r *countingPromptRegistry) Resolve(string, prompt.RuntimeContext) (string, error) {
+	return "", nil
+}
+func (r *countingPromptRegistry) ResolveDryRun(string, prompt.RuntimeContext) (prompt.DryRunResult, error) {
+	return prompt.DryRunResult{}, nil
+}
+func (r *countingPromptRegistry) DependsOn(string) ([]string, error)    { return nil, nil }
+func (r *countingPromptRegistry) DependentsOf(string) ([]string, error) { return nil, nil }
+func (r *countingPromptRegistry) PromptVariables(string) (map[string]prompt.VariableDecl, error) {
+	return nil, nil
+}
+func (r *countingPromptRegistry) Validate(string) []prompt.ValidationIssue { return nil }
+func (r *countingPromptRegistry) ValidateAll() map[string][]prompt.ValidationIssue {
+	return nil
+}

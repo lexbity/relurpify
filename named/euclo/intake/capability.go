@@ -1,48 +1,60 @@
 package intake
 
 import (
+	"context"
+
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
 // CapabilityClassifier maps families to capability sequences.
-type CapabilityClassifier struct {
+type CapabilityClassifier interface {
+	Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error)
+	ClassifyCapability(sel families.FamilySelection, overrides map[string]families.FamilyOverride) ([]string, string)
+}
+
+// capabilityClassifierImpl implements CapabilityClassifier.
+type capabilityClassifierImpl struct {
 	registry *families.KeywordFamilyRegistry
 }
 
 // NewCapabilityClassifier creates a new capability classifier.
-func NewCapabilityClassifier(registry *families.KeywordFamilyRegistry) *CapabilityClassifier {
-	return &CapabilityClassifier{
+func NewCapabilityClassifier(registry *families.KeywordFamilyRegistry) CapabilityClassifier {
+	return &capabilityClassifierImpl{
 		registry: registry,
 	}
 }
 
-// ClassifyCapability determines the capability sequence for a family selection.
+// Classify determines the capability sequence for a family selection.
 // It uses the family's CapabilitySequence if available, otherwise falls back to FallbackCapability.
 // For mixed intent (multiple families), it returns the sequence from the winning family.
-func (c *CapabilityClassifier) ClassifyCapability(sel families.FamilySelection, overrides map[string]families.FamilyOverride) ([]string, string) {
-	// Check for override first
-	if override, ok := overrides[sel.WinningFamily]; ok && len(override.CapabilitySequence) > 0 {
-		return override.CapabilitySequence, "override"
+func (c *capabilityClassifierImpl) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
+	seq, source := c.ClassifyCapability(families.FamilySelection{WinningFamily: familyID}, nil)
+	return seq, source, nil
+}
+
+// ClassifyCapability resolves a family to a capability sequence using registry metadata
+// and optional overrides. This preserves the existing family-to-sequence tests while
+// sharing the same classifier interface used by the tier-2 pipeline.
+func (c *capabilityClassifierImpl) ClassifyCapability(sel families.FamilySelection, overrides map[string]families.FamilyOverride) ([]string, string) {
+	if len(overrides) > 0 {
+		if override, ok := overrides[sel.WinningFamily]; ok && len(override.CapabilitySequence) > 0 {
+			return append([]string(nil), override.CapabilitySequence...), "override"
+		}
+	}
+	if c == nil || c.registry == nil {
+		return nil, "registry_unavailable"
 	}
 
-	// Get the family to retrieve its capability sequence
 	family, ok := c.registry.Lookup(sel.WinningFamily)
 	if !ok {
-		// Family not found, return empty
 		return nil, "family_not_found"
 	}
-
-	// Use capability sequence if available
 	if len(family.CapabilitySequence) > 0 {
-		return family.CapabilitySequence, "family_metadata"
+		return append([]string(nil), family.CapabilitySequence...), "family_metadata"
 	}
-
-	// Fall back to fallback capability
 	if family.FallbackCapability != "" {
 		return []string{family.FallbackCapability}, "fallback"
 	}
-
-	// No capability available
 	return nil, "no_capability"
 }
 
@@ -50,6 +62,12 @@ func (c *CapabilityClassifier) ClassifyCapability(sel families.FamilySelection, 
 // It populates CapabilitySequence, CapabilityOperator, ClassificationSource, MixedIntent,
 // EditPermitted, RequiresVerification, Scope, RiskLevel, and ReasonCodes.
 func ResolveIntent(classification *ScoredClassification, envelope *TaskEnvelope, registry *families.KeywordFamilyRegistry, overrides map[string]families.FamilyOverride, classificationSource string) *IntentClassification {
+	if classification == nil {
+		classification = &ScoredClassification{}
+	}
+	if envelope == nil {
+		envelope = &TaskEnvelope{}
+	}
 	intent := &IntentClassification{
 		WinningFamily:        classification.WinningFamily,
 		FamilyCandidates:     classification.FamilyCandidates,
@@ -70,7 +88,13 @@ func ResolveIntent(classification *ScoredClassification, envelope *TaskEnvelope,
 	}
 
 	// Get the family to determine edit permission, verification, risk level
-	family, ok := registry.Lookup(classification.WinningFamily)
+	var (
+		family families.KeywordFamily
+		ok     bool
+	)
+	if registry != nil {
+		family, ok = registry.Lookup(classification.WinningFamily)
+	}
 	if !ok {
 		// Family not found, use defaults
 		intent.EditPermitted = true
@@ -96,9 +120,14 @@ func ResolveIntent(classification *ScoredClassification, envelope *TaskEnvelope,
 
 	// Capability sequence using classifier
 	classifier := NewCapabilityClassifier(registry)
-	intent.CapabilitySequence, _ = classifier.ClassifyCapability(families.FamilySelection{
-		WinningFamily: classification.WinningFamily,
-	}, overrides)
+	capabilitySequence, source := classifier.ClassifyCapability(families.FamilySelection{WinningFamily: classification.WinningFamily}, overrides)
+	if len(capabilitySequence) == 0 {
+		capabilitySequence, source, _ = classifier.Classify(context.Background(), "", classification.WinningFamily, "", nil)
+	}
+	if classificationSource == "" && source != "" {
+		classificationSource = source
+	}
+	intent.CapabilitySequence = capabilitySequence
 
 	// Reason codes
 	intent.ReasonCodes = generateReasonCodes(classification, envelope, classificationSource)

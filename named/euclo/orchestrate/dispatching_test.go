@@ -126,6 +126,37 @@ func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 	}
 }
 
+func TestRouteMatchesFamily_EmptyFamilyUsesAnalysisHints(t *testing.T) {
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
+	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, core.AvailabilitySpec{Available: true})
+
+	if !routeMatchesFamily(queryCap, "", "analyze the codebase and explain the flow") {
+		t.Fatal("expected analysis instruction to match query capability")
+	}
+	if routeMatchesFamily(refactorCap, "", "analyze the codebase and explain the flow") {
+		t.Fatal("expected analysis instruction not to match mutation capability")
+	}
+}
+
+func TestRouteMatchesFamily_EmptyFamilyUsesMutationHints(t *testing.T) {
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
+	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, core.AvailabilitySpec{Available: true})
+
+	if !routeMatchesFamily(refactorCap, "", "modify the handler to support retries") {
+		t.Fatal("expected mutation instruction to match mutation capability")
+	}
+	if routeMatchesFamily(queryCap, "", "modify the handler to support retries") {
+		t.Fatal("expected mutation instruction not to match query capability")
+	}
+}
+
+func TestRouteMatchesFamily_EmptyFamilyRejectsUnrelatedInstruction(t *testing.T) {
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
+	if routeMatchesFamily(queryCap, "", "write a release note") {
+		t.Fatal("expected unrelated instruction to not match query capability")
+	}
+}
+
 func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	reg := capability.NewCapabilityRegistry()
 	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, core.AvailabilitySpec{Available: true})

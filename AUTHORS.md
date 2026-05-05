@@ -14,4 +14,7 @@ Prestin Liu
 
 - Gemini 2/3 (Google) - via (Gemini Cli)[https://geminicli.com/]
 
-- Kimi K2.5  - via (Windsurf)[https://windsurf.com/]
+- Kimi K2.5/K2.6  - via (Windsurf)[https://windsurf.com/]
+- SWE 1.5/1.6  - via (Windsurf)[https://windsurf.com/]
+- GPT OSS 120B  - via (Windsurf)[https://windsurf.com/]
+- xAI Grok 3 mini  - via (Windsurf)[https://windsurf.com/]

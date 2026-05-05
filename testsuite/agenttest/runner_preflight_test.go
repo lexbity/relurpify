@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -11,27 +14,31 @@ import (
 )
 
 type mockBackend struct {
-	models      []llm.ModelInfo
-	health      *llm.HealthReport
-	healthErr   error
-	listErr     error
-	profile     *llm.ModelProfile
-	debug       bool
-	resetCalled bool
+	models        []llm.ModelInfo
+	health        *llm.HealthReport
+	healthErr     error
+	listErr       error
+	profile       *llm.ModelProfile
+	debug         bool
+	resetCalled   bool
 	resetStrategy string
 }
 
-func (m *mockBackend) Model() llm.LanguageModel { return nil }
-func (m *mockBackend) Embedder() llm.Embedder { return nil }
-func (m *mockBackend) Capabilities() llm.BackendCapabilities { return llm.BackendCapabilities{} }
+func (m *mockBackend) Model() llm.LanguageModel                      { return nil }
+func (m *mockBackend) Embedder() llm.Embedder                        { return nil }
+func (m *mockBackend) Capabilities() llm.BackendCapabilities         { return llm.BackendCapabilities{} }
 func (m *mockBackend) ModelContextSize(context.Context) (int, error) { return 0, nil }
-func (m *mockBackend) Health(ctx context.Context) (*llm.HealthReport, error) { return m.health, m.healthErr }
-func (m *mockBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) { return m.models, m.listErr }
-func (m *mockBackend) Warm(context.Context) error { return nil }
-func (m *mockBackend) Close() error { return nil }
-func (m *mockBackend) SetDebugLogging(enabled bool) { m.debug = enabled }
+func (m *mockBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
+	return m.health, m.healthErr
+}
+func (m *mockBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
+	return m.models, m.listErr
+}
+func (m *mockBackend) Warm(context.Context) error           { return nil }
+func (m *mockBackend) Close() error                         { return nil }
+func (m *mockBackend) SetDebugLogging(enabled bool)         { m.debug = enabled }
 func (m *mockBackend) SetProfile(profile *llm.ModelProfile) { m.profile = profile }
-func (m *mockBackend) Reset(ctx context.Context, strategy string) error { 
+func (m *mockBackend) Reset(ctx context.Context, strategy string) error {
 	m.resetCalled = true
 	m.resetStrategy = strategy
 	return nil
@@ -46,7 +53,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: &llm.HealthReport{State: llm.BackendHealthReady},
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, provenance)
 		require.Equal(t, "qwen2.5-coder:14b", provenance.RequestedModel)
@@ -61,7 +68,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: &llm.HealthReport{State: llm.BackendHealthReady},
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.Error(t, err)
 		require.Nil(t, provenance)
 		require.Contains(t, err.Error(), "not found")
@@ -73,7 +80,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: &llm.HealthReport{State: llm.BackendHealthReady},
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, provenance)
 		require.Equal(t, "qwen2.5-coder:14b", provenance.RequestedModel)
@@ -85,7 +92,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			healthErr: errors.New("health check failed"),
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.Error(t, err)
 		require.Nil(t, provenance)
 		require.Contains(t, err.Error(), "health check failed")
@@ -93,11 +100,11 @@ func TestPreflightCaseBackend(t *testing.T) {
 
 	t.Run("list models error", func(t *testing.T) {
 		backend := &mockBackend{
-			health: &llm.HealthReport{State: llm.BackendHealthReady},
+			health:  &llm.HealthReport{State: llm.BackendHealthReady},
 			listErr: errors.New("list failed"),
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.Error(t, err)
 		require.Nil(t, provenance)
 		require.Contains(t, err.Error(), "model list failed")
@@ -108,7 +115,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: nil,
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.Error(t, err)
 		require.Nil(t, provenance)
 		require.Contains(t, err.Error(), "nil report")
@@ -120,7 +127,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: &llm.HealthReport{State: llm.BackendHealthReady},
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "", nil, nil)
 		require.Error(t, err)
 		require.Nil(t, provenance)
 		require.Contains(t, err.Error(), "model name is empty")
@@ -134,7 +141,7 @@ func TestPreflightCaseBackend(t *testing.T) {
 			health: &llm.HealthReport{State: llm.BackendHealthReady},
 		}
 
-		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b")
+		provenance, err := preflightCaseBackend(context.Background(), backend, "qwen2.5-coder:14b", nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, provenance)
 		require.Equal(t, "QWEN2.5-CODER:14B", provenance.LoadedName)

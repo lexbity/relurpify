@@ -42,8 +42,6 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
-          \ users[id]\n}\n"
     prompt: "panic: runtime error: index out of range\ngoroutine 1 [running]:\neuclobaselinedebug.GetUser(...)\n  testsuite/fixtures/euclo_baseline_debug/server.go:4\n\
       Identify the likely root cause and where it is localized. Do not modify files.\n"
     context:
@@ -91,10 +89,7 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/counter.go
-        content: "package euclobaselinedebug\n\nfunc Increment(n int) int {\n  return n - 1\n}\n"
       - path: testsuite/fixtures/euclo_baseline_debug/counter_test.go
-        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestIncrement(t *testing.T) {\n  if Increment(3)\
-          \ != 4 {\n    t.Fatalf(\"got %d, want 4\", Increment(3))\n  }\n}\n"
     prompt: "Fix Increment in testsuite/fixtures/euclo_baseline_debug/counter.go \u2014 it subtracts instead of adding."
     context:
       extensions:
@@ -137,8 +132,6 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/server.go
-        content: "package euclobaselinedebug\n\nfunc GetUser(id string) string {\n  var users map[string]string\n  return\
-          \ users[id]\n}\n"
     prompt: 'The GetUser function has a nil map write issue - the users map is not initialized before use.
 
       Investigate and identify the flaw. Do not modify files.
@@ -191,10 +184,7 @@ spec:
     setup:
       files:
       - path: testsuite/fixtures/euclo_baseline_debug/abs.go
-        content: "package euclobaselinedebug\n\nfunc Abs(v int) int {\n  if v < 0 {\n    return v\n  }\n  return v\n}\n"
       - path: testsuite/fixtures/euclo_baseline_debug/abs_test.go
-        content: "package euclobaselinedebug\n\nimport \"testing\"\n\nfunc TestAbs(t *testing.T) {\n  if Abs(-3) != 3 {\n\
-          \    t.Fatalf(\"got %d, want 3\", Abs(-3))\n  }\n}\n"
     prompt: Fix testsuite/fixtures/euclo_baseline_debug/abs.go so Abs returns a positive value for negative inputs.
     context:
       context_file_contents:

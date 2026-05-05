@@ -1,0 +1,51 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.gemma4.smoke
+  description: Simple smoke test for euclo with gemma4 model
+  owner: agent-platform
+  tier: smoke
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agents/euclo.yaml
+  execution:
+    profile: live
+    strict: false
+    timeout: 90s
+  workspace:
+    strategy: derived
+    exclude:
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
+  models:
+  - name: gemma4:e4b
+    endpoint: http://localhost:11434
+  recording:
+    mode: 'off'
+  cases:
+  - name: simple_code_edit
+    description: Simple code edit test with gemma4
+    task_type: code_modification
+    tags:
+    - smoke
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    prompt: Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead of 'hello'.
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        files_contain:
+        - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+          contains:
+          - hello world

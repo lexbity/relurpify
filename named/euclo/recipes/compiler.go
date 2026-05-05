@@ -87,11 +87,13 @@ func (c *Compiler) CompilePlan(recipe *ThoughtRecipe, resolver *AliasResolver) (
 		recipeKey = recipe.EffectiveName()
 	}
 	plan := &ExecutionPlan{
-		Recipe: recipe,
-		Steps:  make([]ExecutionStep, 0, len(steps)),
+		Recipe:      recipe,
+		Steps:       make([]ExecutionStep, 0, len(steps)),
+		Parallel:    make([]CompiledParallelGroup, 0, len(recipe.Sequence.Parallel)),
+		Conditional: make([]CompiledConditionalGroup, 0, len(recipe.Sequence.Conditional)),
 	}
 	for _, step := range steps {
-		captures := resolveCaptures(step.Captures, resolver, recipeKey)
+		captures := resolveCaptures(step.Captures, resolver, recipeKey, "")
 		for _, alias := range step.Parent.Context.Capture {
 			alias = strings.TrimSpace(alias)
 			if alias == "" {
@@ -104,25 +106,47 @@ func (c *Compiler) CompilePlan(recipe *ThoughtRecipe, resolver *AliasResolver) (
 				captures[alias] = resolver.Resolve(alias)
 			}
 		}
-		executionStep := ExecutionStep{
-			ID:           step.ID,
-			Paradigm:     step.Parent.Paradigm,
-			CapabilityID: step.CapabilityID,
-			Prompt:       step.Prompt,
-			PromptID:     step.PromptID,
-			Mutation:     step.Mutation,
-			HITL:         step.HITL,
-			Stream:       cloneStreamSpec(step.Parent.Context.Stream),
-			Ingest:       cloneIngestSpec(step.Parent.Context.Ingest),
-			Fallback:     cloneStepAgent(step.Fallback),
-			Inherit:      append([]string(nil), step.Parent.Context.Inherit...),
-			Capture:      append([]string(nil), step.Parent.Context.Capture...),
-			Dependencies: append([]string(nil), step.Dependencies...),
-			Bindings:     resolveBindings(step.Bindings),
-			Captures:     captures,
-			Step:         step,
+		plan.Steps = append(plan.Steps, compileExecutionStep(step, resolver, recipeKey, "", "", captures))
+	}
+
+	for _, group := range recipe.Sequence.Parallel {
+		compiled := CompiledParallelGroup{
+			Group: &ParallelGroup{
+				ID:    group.ID,
+				Merge: group.Merge,
+			},
+			Steps: make([]CompiledStep, 0, len(group.Steps)),
+			Merge: group.Merge,
 		}
-		plan.Steps = append(plan.Steps, executionStep)
+		for idx, step := range group.Steps {
+			scope := scopedGroupPrefix(group.ID, "parallel", idx)
+			execStep := compileExecutionStep(step, resolver, recipeKey, scope, scope, nil)
+			compiled.Steps = append(compiled.Steps, compiledStepFromExecution(execStep))
+		}
+		plan.Parallel = append(plan.Parallel, compiled)
+	}
+
+	for _, group := range recipe.Sequence.Conditional {
+		compiled := CompiledConditionalGroup{
+			Group: &ConditionalGroup{
+				ID:        group.ID,
+				Condition: group.Condition,
+			},
+			Condition: group.Condition,
+			IfSteps:   make([]CompiledStep, 0, len(group.If)),
+			ElseSteps: make([]CompiledStep, 0, len(group.Else)),
+		}
+		for idx, step := range group.If {
+			scope := scopedGroupPrefix(group.ID, "if", idx)
+			execStep := compileExecutionStep(step, resolver, recipeKey, scope, scope, nil)
+			compiled.IfSteps = append(compiled.IfSteps, compiledStepFromExecution(execStep))
+		}
+		for idx, step := range group.Else {
+			scope := scopedGroupPrefix(group.ID, "else", idx)
+			execStep := compileExecutionStep(step, resolver, recipeKey, scope, scope, nil)
+			compiled.ElseSteps = append(compiled.ElseSteps, compiledStepFromExecution(execStep))
+		}
+		plan.Conditional = append(plan.Conditional, compiled)
 	}
 	return plan, nil
 }
@@ -143,7 +167,7 @@ func resolveBindings(bindings map[string]string) map[string]string {
 	return resolved
 }
 
-func resolveCaptures(captures map[string]string, resolver *AliasResolver, recipeName string) map[string]string {
+func resolveCaptures(captures map[string]string, resolver *AliasResolver, recipeName, scope string) map[string]string {
 	if len(captures) == 0 {
 		return nil
 	}
@@ -153,6 +177,10 @@ func resolveCaptures(captures map[string]string, resolver *AliasResolver, recipe
 			resolved[key] = trimmed
 			continue
 		}
+		if strings.TrimSpace(scope) != "" {
+			resolved[key] = fmt.Sprintf("euclo.recipe.%s.%s.%s", sanitizeAliasComponent(recipeName), sanitizeAliasComponent(scope), sanitizeAliasComponent(key))
+			continue
+		}
 		if resolver != nil {
 			resolved[key] = resolver.Resolve(key)
 			continue
@@ -160,6 +188,79 @@ func resolveCaptures(captures map[string]string, resolver *AliasResolver, recipe
 		resolved[key] = resolveCaptureKey(recipeName, key, value)
 	}
 	return resolved
+}
+
+func compileExecutionStep(step RecipeStep, resolver *AliasResolver, recipeKey, idPrefix, scope string, captures map[string]string) ExecutionStep {
+	executionID := step.ID
+	if strings.TrimSpace(idPrefix) != "" {
+		executionID = scopedStepID(idPrefix, step.ID)
+	}
+	resolvedStep := step
+	resolvedStep.ID = executionID
+	if captures == nil {
+		captures = resolveCaptures(step.Captures, resolver, recipeKey, scope)
+	}
+	return ExecutionStep{
+		ID:           executionID,
+		Paradigm:     step.Parent.Paradigm,
+		CapabilityID: step.CapabilityID,
+		Prompt:       step.Prompt,
+		PromptID:     step.PromptID,
+		Mutation:     step.Mutation,
+		HITL:         step.HITL,
+		Stream:       cloneStreamSpec(step.Parent.Context.Stream),
+		Ingest:       cloneIngestSpec(step.Parent.Context.Ingest),
+		Fallback:     cloneStepAgent(step.Fallback),
+		Inherit:      append([]string(nil), step.Parent.Context.Inherit...),
+		Capture:      append([]string(nil), step.Parent.Context.Capture...),
+		Dependencies: append([]string(nil), step.Dependencies...),
+		Bindings:     resolveBindings(step.Bindings),
+		Captures:     captures,
+		Step:         resolvedStep,
+	}
+}
+
+func compiledStepFromExecution(step ExecutionStep) CompiledStep {
+	return CompiledStep{
+		Step:     &step.Step,
+		Config:   cloneAnyMap(step.Step.Config),
+		Captures: step.Captures,
+		Bindings: step.Bindings,
+	}
+}
+
+func scopedGroupPrefix(groupID, kind string, index int) string {
+	base := sanitizeAliasComponent(groupID)
+	if strings.TrimSpace(base) == "" {
+		base = "group"
+	}
+	kind = sanitizeAliasComponent(kind)
+	if strings.TrimSpace(kind) == "" {
+		kind = "branch"
+	}
+	return fmt.Sprintf("%s.%s.%d", base, kind, index)
+}
+
+func scopedStepID(prefix, stepID string) string {
+	if strings.TrimSpace(prefix) == "" {
+		return stepID
+	}
+	stepID = sanitizeAliasComponent(stepID)
+	if strings.TrimSpace(stepID) == "" {
+		stepID = "step"
+	}
+	return prefix + "." + stepID
+}
+
+func cloneAnyMap(m map[string]any) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	cp := make(map[string]any, len(m))
+	for k, v := range m {
+		cp[k] = v
+	}
+	return cp
 }
 
 func cloneStreamSpec(spec *RecipeStreamSpec) *RecipeStreamSpec {

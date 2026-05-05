@@ -49,6 +49,9 @@ type RecipeExecutionContext struct {
 type ExecutionPlan struct {
 	Recipe *ThoughtRecipe
 	Steps  []ExecutionStep
+
+	Parallel    []CompiledParallelGroup
+	Conditional []CompiledConditionalGroup
 }
 
 // ExecutionStep carries the graph-time data for a single compiled recipe step.

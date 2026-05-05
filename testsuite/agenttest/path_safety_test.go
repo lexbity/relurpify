@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -15,7 +18,7 @@ func TestResolvePathWithinRejectsEscape(t *testing.T) {
 
 func TestApplySetupRejectsEscapingPath(t *testing.T) {
 	root := t.TempDir()
-	_, err := applySetup(root, SetupSpec{
+	_, err := applySetup(root, root, SetupSpec{
 		Files: []SetupFileSpec{{
 			Path:    "../escape.txt",
 			Content: "nope",
@@ -28,7 +31,7 @@ func TestApplySetupRejectsEscapingPath(t *testing.T) {
 
 func TestApplyWorkspaceFilesRejectsEscapingPath(t *testing.T) {
 	root := t.TempDir()
-	err := applyWorkspaceFiles(root, []SetupFileSpec{{
+	err := applyWorkspaceFiles(root, root, []SetupFileSpec{{
 		Path:    "../escape.txt",
 		Content: "nope",
 	}})

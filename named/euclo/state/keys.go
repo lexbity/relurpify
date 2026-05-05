@@ -45,6 +45,9 @@ const (
 	KeyResumeClassification = "euclo.resume.classification" // *intake.IntentClassification
 	KeyResumeRoute          = "euclo.resume.route"          // *orchestrate.RouteSelection
 
+	// Dispatch routing
+	KeyDispatchRouteKind = "euclo.dispatch.route_kind" // string ("recipe" or "capability")
+
 	// Stream
 	KeyStreamResult     = "euclo.stream_result"      // *contextstream.Result
 	KeyStreamTokenUsage = "euclo.stream_token_usage" // int

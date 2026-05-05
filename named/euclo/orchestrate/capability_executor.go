@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
@@ -57,14 +58,34 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		}
 	}
 
+	// Build task with capability arguments from envelope
+	task := &core.Task{
+		ID:          n.id,
+		Type:        "capability_execution",
+		Instruction: fmt.Sprintf("Execute capability: %s", capabilityID),
+		Data:        map[string]any{},
+		Context:     map[string]any{},
+	}
+
+	// Extract capability-specific arguments from envelope if present
+	if env != nil {
+		// Copy envelope working values that might be capability arguments
+		for key, value := range env.Snapshot() {
+			// Filter to relevant keys (e.g., file paths, query strings)
+			if isCapabilityArgument(key) {
+				task.Data[key] = value
+			}
+		}
+	}
+
 	var (
 		result *core.Result
 		err    error
 	)
 	if n.registry == nil {
-		result, err = capabilities.InvokeCapability(ctx, capabilityID, nil, env, nil)
+		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env, nil)
 	} else {
-		result, err = capabilities.InvokeCapability(ctx, capabilityID, nil, env, n.registry)
+		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env, n.registry)
 	}
 	if env != nil {
 		env.SetWorkingValue("euclo.execution.kind", "capability", contextdata.MemoryClassTask)
@@ -76,4 +97,16 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 	}
 	result.NodeID = n.id
 	return result, err
+}
+
+// isCapabilityArgument identifies envelope keys that are likely capability arguments.
+func isCapabilityArgument(key string) bool {
+	// Common capability argument prefixes
+	prefixes := []string{"file_", "path", "query", "pattern", "directory"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
 }

@@ -8,6 +8,7 @@ import (
 	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/services"
 )
 
 // GetRegistrationFuncs returns AgentRegistrationFuncs for Euclo.
@@ -15,11 +16,9 @@ import (
 // capabilities and prompt providers without creating a circular dependency
 // between named/euclo and ayenitd.
 func GetRegistrationFuncs() agentenv.AgentRegistrationFuncs {
-	return agentenv.AgentRegistrationFuncs{
-		RegisterCapabilities:    registerEucloCapabilities,
-		RegisterPromptProviders: registerEucloPromptProviders,
-		LoadRecipes:             loadEucloRecipes,
-	}
+	// Delegates to the new services package for registration functions.
+	// This maintains backward compatibility while centralizing service wiring.
+	return services.NewRegistration().AgentRegistrationFuncs()
 }
 
 // registerEucloCapabilities registers all relurpic capability handlers.
@@ -48,7 +47,8 @@ func registerEucloPromptProviders(env agentenv.WorkspaceEnvironment) error {
 }
 
 // loadEucloRecipes loads all Euclo recipe templates.
-// Returns a recipe.RecipeRegistry (TODO: move recipe registry into WorkspaceEnvironment).
+// Returns a recipe.RecipeRegistry. The registry is loaded from the Euclo
+// recipe templates package and returned to the caller for wiring.
 func loadEucloRecipes() (interface{}, error) {
 	registry, err := recipetemplates.LoadAll()
 	if err != nil {

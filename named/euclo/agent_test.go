@@ -2,6 +2,7 @@ package euclo
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
@@ -81,6 +82,75 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 	// Phase 1: The graph has minimal nodes, so execution may fail validation.
 	// We just verify no panic occurred.
 	_ = err
+}
+
+func TestExecuteSeedsTaskEnvelope(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-42",
+		Type:        "analysis",
+		Instruction: "inspect the graph",
+		Context:     map[string]any{"scope": "repo"},
+		Metadata:    map[string]any{"source": "test"},
+	}
+	envelope := contextdata.NewEnvelope("task-42", "session-99")
+
+	seedTaskEnvelope(envelope, task)
+
+	if got, ok := envelope.GetWorkingValue("task.input"); !ok || got != task {
+		t.Fatalf("expected task.input to be seeded with task pointer, got=%v ok=%v", got, ok)
+	}
+	if got, ok := envelope.GetWorkingValue("task.id"); !ok || got != task.ID {
+		t.Fatalf("expected task.id = %q, got=%v ok=%v", task.ID, got, ok)
+	}
+	if got, ok := envelope.GetWorkingValue("task.instruction"); !ok || got != task.Instruction {
+		t.Fatalf("expected task.instruction = %q, got=%v ok=%v", task.Instruction, got, ok)
+	}
+	if got, ok := envelope.GetWorkingValue("task.type"); !ok || got != task.Type {
+		t.Fatalf("expected task.type = %q, got=%v ok=%v", task.Type, got, ok)
+	}
+	if got, ok := envelope.GetWorkingValue("task.context"); !ok || !reflect.DeepEqual(got, task.Context) {
+		t.Fatalf("expected task.context to be seeded, got=%v ok=%v", got, ok)
+	}
+	if got, ok := envelope.GetWorkingValue("task.metadata"); !ok || !reflect.DeepEqual(got, task.Metadata) {
+		t.Fatalf("expected task.metadata to be seeded, got=%v ok=%v", got, ok)
+	}
+}
+
+func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
+	env := agentenv.WorkspaceEnvironment{
+		Registry: capability.NewCapabilityRegistry(),
+	}
+	agent := New(env)
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("Initialize returned error: %v", err)
+	}
+	agent.env.Registry = nil
+
+	task := &core.Task{
+		ID:          "task-43",
+		Type:        "analysis",
+		Instruction: "resume from classification",
+	}
+	envelope := contextdata.NewEnvelope("task-43", "session-100")
+	classification := &intake.IntentClassification{WinningFamily: "implementation", Confidence: 1.0}
+	state.SetIntentClassification(envelope, classification)
+	agent.captureResumeState(envelope)
+	agent.seedResumeState(envelope)
+
+	graph, err := agent.BuildGraph(task)
+	if err != nil {
+		t.Fatalf("BuildGraph returned error: %v", err)
+	}
+	if graph == nil {
+		t.Fatal("expected graph to be returned")
+	}
+	start := graphStartNodeID(graph)
+	if start != "euclo.dispatch" {
+		t.Fatalf("expected resume classification to start at dispatch, got %q", start)
+	}
+	if _, ok := envelope.GetWorkingValue(state.KeyResumeClassification); !ok {
+		t.Fatal("expected resume classification to be seeded before graph build")
+	}
 }
 
 // TestInitializeStoresConfig verifies that Initialize stores config and marks initialized.
@@ -176,6 +246,17 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 	if agent.resumeRouteSelection != nil {
 		t.Fatal("expected resumeRouteSelection to be cleared after Execute")
 	}
+}
+
+func graphStartNodeID(graph *agentgraph.Graph) string {
+	if graph == nil {
+		return ""
+	}
+	value := reflect.ValueOf(graph).Elem().FieldByName("startNodeID")
+	if !value.IsValid() || value.Kind() != reflect.String {
+		return ""
+	}
+	return value.String()
 }
 
 // TestCapabilitiesReturnsExpectedIDs verifies Capabilities() returns expected capability IDs.

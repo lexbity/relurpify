@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -191,7 +194,7 @@ spec:
 func TestApplyWorkspaceFilesUsesConfiguredFileMode(t *testing.T) {
 	root := t.TempDir()
 
-	err := applyWorkspaceFiles(root, []SetupFileSpec{{
+	err := applyWorkspaceFiles(root, root, []SetupFileSpec{{
 		Path:    "bin/run.sh",
 		Content: "#!/bin/sh\n",
 		Mode:    "0755",

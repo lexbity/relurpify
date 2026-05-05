@@ -155,6 +155,31 @@ func (g *Graph) SetStart(id string) error {
 	return nil
 }
 
+// HasNode reports whether the graph contains a node with the given ID.
+func (g *Graph) HasNode(id string) bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	_, ok := g.nodes[id]
+	return ok
+}
+
+// StartNodeID returns the configured start node ID.
+func (g *Graph) StartNodeID() string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.startNodeID
+}
+
+// OutgoingEdges returns a copy of the outgoing edges for the given node.
+func (g *Graph) OutgoingEdges(id string) []Edge {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	edges := g.edges[id]
+	out := make([]Edge, len(edges))
+	copy(out, edges)
+	return out
+}
+
 // AddNode registers a node.
 func (g *Graph) AddNode(node Node) error {
 	g.mu.Lock()

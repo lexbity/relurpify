@@ -195,7 +195,7 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the process if any non-skipped case fails; implied by ci-live and ci-replay profiles")
 	cmd.Flags().BoolVar(&includeQuarantined, "include-quarantined", false, "Include suites marked quarantined")
 	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts (default: workspace-local relurpify_cfg/test_runs/...)")
-	cmd.Flags().BoolVar(&sandbox, "sandbox", false, "Run tool execution via gVisor/docker (requires runsc + docker)")
+	cmd.Flags().BoolVar(&sandbox, "sandbox", true, "Run tool execution via gVisor/docker (requires runsc + docker)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout for agent/runtime setup before execution")
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for live agenttests: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")

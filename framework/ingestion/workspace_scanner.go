@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -247,8 +248,13 @@ func (s *WorkspaceScanner) shouldInclude(path string) bool {
 
 // processFile processes a single file.
 func (s *WorkspaceScanner) processFile(ctx context.Context, root string, file string, report *ScanReport, mu *sync.Mutex) error {
+	var policy *contextpolicy.ContextPolicyBundle
+	if typed, ok := s.Policy.(*contextpolicy.ContextPolicyBundle); ok {
+		policy = typed
+	}
+
 	// Create pipeline
-	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, nil, s.Store, s.FileScope)
+	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, policy, s.Store, s.FileScope)
 	if err != nil {
 		return err
 	}

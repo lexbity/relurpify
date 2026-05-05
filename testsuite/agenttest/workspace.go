@@ -168,12 +168,6 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 		return err
 	}
 
-	copyExclude := append([]string{}, exclude...)
-	copyExclude = append(copyExclude, manifest.DirName, filepath.ToSlash(filepath.Join(manifest.DirName, "**")))
-	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, uniqueStrings(copyExclude)); err != nil {
-		return err
-	}
-
 	paths := manifest.New(derivedWorkspace)
 	resolver := templates.NewResolver()
 	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
@@ -186,7 +180,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 	if err := ensureDerivedManifest(resolver, targetWorkspace, derivedWorkspace, manifestRef); err != nil {
 		return err
 	}
-	if err := applyWorkspaceFiles(derivedWorkspace, overlayFiles); err != nil {
+	if err := applyWorkspaceFiles(derivedWorkspace, targetWorkspace, overlayFiles); err != nil {
 		return err
 	}
 	if err := ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef); err != nil {
@@ -275,7 +269,7 @@ func renderWorkspaceContent(data []byte, workspace, sourceWorkspace string) []by
 	return []byte(rendered)
 }
 
-func applyWorkspaceFiles(workspace string, files []SetupFileSpec) error {
+func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpec) error {
 	for _, f := range files {
 		if f.Path == "" {
 			continue
@@ -288,10 +282,24 @@ func applyWorkspaceFiles(workspace string, files []SetupFileSpec) error {
 		if err != nil {
 			return err
 		}
+
+		var content []byte
+		if f.Content != "" {
+			// Inline content
+			content = []byte(f.Content)
+		} else {
+			// Copy from source fixtures
+			srcPath := filepath.Join(targetWorkspace, f.Path)
+			content, err = os.ReadFile(srcPath)
+			if err != nil {
+				return fmt.Errorf("read fixture from %s (targetWorkspace=%s): %w", srcPath, targetWorkspace, err)
+			}
+		}
+
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, []byte(f.Content), mode); err != nil {
+		if err := os.WriteFile(target, content, mode); err != nil {
 			return err
 		}
 	}

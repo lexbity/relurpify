@@ -17,8 +17,22 @@ type capabilityInvoker interface {
 // InvokeCapability invokes a capability through the capability registry.
 // It adapts the ToolResult to core.Result.
 func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *contextdata.Envelope, registry capabilityInvoker) (*core.Result, error) {
-	_ = task
+	// Extract args from task.Data or task.Context
 	args := map[string]any{}
+	if task != nil {
+		// Prioritize task.Data for capability arguments
+		if task.Data != nil {
+			for k, v := range task.Data {
+				args[k] = v
+			}
+		}
+		// Fall back to task.Context if Data is empty
+		if len(args) == 0 && task.Context != nil {
+			for k, v := range task.Context {
+				args[k] = v
+			}
+		}
+	}
 
 	if registry == nil {
 		return &core.Result{

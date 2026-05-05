@@ -160,14 +160,16 @@ func rankCapabilityCandidates(req RouteRequest, caps *capability.CapabilityRegis
 	}
 	snapshots := caps.AllCapabilitySnapshots()
 	candidates := make([]rankedRoute, 0, len(snapshots))
+	allowAllCandidates := strings.TrimSpace(req.SkillFilter) != "" || (strings.TrimSpace(req.FamilyID) == "" && strings.TrimSpace(req.Instruction) == "")
 	for _, snap := range snapshots {
-		if !routeMatchesFamily(snap.Descriptor, req.FamilyID, req.Instruction) {
+		explicitCapability := strings.TrimSpace(req.CapabilityID) != "" && req.CapabilityID == snap.Descriptor.ID
+		if !explicitCapability && !allowAllCandidates && !routeMatchesFamily(snap.Descriptor, req.FamilyID, req.Instruction) {
 			continue
 		}
 		availability, reason := routeAvailabilityFromSnapshot(snap)
 		score := 0
 		reasons := []string{}
-		if strings.TrimSpace(req.CapabilityID) != "" && req.CapabilityID == snap.Descriptor.ID {
+		if explicitCapability {
 			score += 100
 			reasons = append(reasons, "explicit capability")
 		}
@@ -399,13 +401,72 @@ func familyMatchBonus(desc core.CapabilityDescriptor, family string) bool {
 func routeMatchesFamily(desc core.CapabilityDescriptor, family, instruction string) bool {
 	family = strings.ToLower(strings.TrimSpace(family))
 	if family == "" {
-		return true
+		return instructionMatchesRouteFamily(desc, instruction)
 	}
 	if familyMatchBonus(desc, family) {
 		return true
 	}
 	instruction = strings.ToLower(instruction)
 	return strings.Contains(strings.ToLower(desc.ID), family) || strings.Contains(strings.ToLower(desc.Name), family) || strings.Contains(strings.ToLower(desc.Category), family) || strings.Contains(instruction, family)
+}
+
+func instructionMatchesRouteFamily(desc core.CapabilityDescriptor, instruction string) bool {
+	instruction = strings.ToLower(strings.TrimSpace(instruction))
+	if instruction == "" {
+		return false
+	}
+
+	if instructionLooksAnalytical(instruction) {
+		return familyMatchBonus(desc, "query")
+	}
+	if instructionLooksMutating(instruction) {
+		return familyMatchBonus(desc, "repair")
+	}
+
+	return false
+}
+
+func instructionLooksAnalytical(instruction string) bool {
+	analysisHints := []string{
+		"analysis",
+		"analyze",
+		"analyse",
+		"inspect",
+		"investigate",
+		"review",
+		"lookup",
+		"trace",
+		"query",
+		"debug",
+		"diagnose",
+	}
+	for _, hint := range analysisHints {
+		if strings.Contains(instruction, hint) {
+			return true
+		}
+	}
+	return false
+}
+
+func instructionLooksMutating(instruction string) bool {
+	mutationHints := []string{
+		"mutat",
+		"modify",
+		"edit",
+		"change",
+		"refactor",
+		"rename",
+		"implement",
+		"patch",
+		"fix",
+		"update",
+	}
+	for _, hint := range mutationHints {
+		if strings.Contains(instruction, hint) {
+			return true
+		}
+	}
+	return false
 }
 
 func capabilityPriorityScore(desc core.CapabilityDescriptor) int {

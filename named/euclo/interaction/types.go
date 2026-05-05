@@ -6,20 +6,20 @@ import "time"
 type FrameType string
 
 const (
-	FrameProposal             FrameType = "proposal"
-	FrameQuestion             FrameType = "question"
-	FrameCandidates           FrameType = "candidates"
-	FrameComparison           FrameType = "comparison"
-	FrameDraft                FrameType = "draft"
-	FrameResultType           FrameType = "result"
-	FrameStatus               FrameType = "status"
-	FrameSummary              FrameType = "summary"
-	FrameTransition           FrameType = "transition"
-	FrameHelp                 FrameType = "help"
-	FrameSessionList          FrameType = "session_list"
-	FrameSessionListEmpty     FrameType = "session_list_empty"
-	FrameSessionResuming      FrameType = "session_resuming"
-	FrameSessionResumeError   FrameType = "session_resume_error"
+	FrameProposal           FrameType = "proposal"
+	FrameQuestion           FrameType = "question"
+	FrameCandidates         FrameType = "candidates"
+	FrameComparison         FrameType = "comparison"
+	FrameDraft              FrameType = "draft"
+	FrameResultType         FrameType = "result"
+	FrameStatus             FrameType = "status"
+	FrameSummary            FrameType = "summary"
+	FrameTransition         FrameType = "transition"
+	FrameHelp               FrameType = "help"
+	FrameSessionList        FrameType = "session_list"
+	FrameSessionListEmpty   FrameType = "session_list_empty"
+	FrameSessionResuming    FrameType = "session_resuming"
+	FrameSessionResumeError FrameType = "session_resume_error"
 
 	FrameScopeConfirmation    FrameType = "scope_confirmation"
 	FrameIntentClarification  FrameType = "intent_clarification"
@@ -41,11 +41,11 @@ const (
 type ActionSlot struct {
 	ID       string // Slot identifier
 	Label    string // Human-readable label
-	Shortcut  string // Legacy shortcut key
-	Action    string // Action identifier
-	Kind      string // Legacy action kind
-	Risk      string // "low" | "medium" | "high"
-	Default   bool   // Whether this is the default slot
+	Shortcut string // Legacy shortcut key
+	Action   string // Action identifier
+	Kind     string // Legacy action kind
+	Risk     string // "low" | "medium" | "high"
+	Default  bool   // Whether this is the default slot
 }
 
 // ActionInfo is a legacy help renderer helper.
@@ -75,7 +75,7 @@ type FrameResult struct {
 // PhaseInfo is a legacy render helper used by the old euclotui renderer.
 type PhaseInfo struct {
 	ID      string
-	Label string
+	Label   string
 	Current bool
 }
 
@@ -104,13 +104,13 @@ type QuestionContent struct {
 type Candidate struct {
 	ID         string
 	Summary    string
-	Properties  map[string]string
+	Properties map[string]string
 }
 
 // CandidatesContent is the legacy candidate-selection payload.
 type CandidatesContent struct {
 	Candidates    []Candidate
-	RecommendedID  string
+	RecommendedID string
 }
 
 // ComparisonContent is the legacy comparison payload.
@@ -134,9 +134,9 @@ type DraftContent struct {
 
 // ResultContent is the legacy result payload.
 type ResultContent struct {
-	Status   string
-	Detail   string
-	Message  string
+	Status    string
+	Detail    string
+	Message   string
 	Artifacts []string
 	Evidence  []EvidenceItem
 }
@@ -145,6 +145,15 @@ type ResultContent struct {
 type EvidenceItem struct {
 	Kind   string
 	Detail string
+}
+
+// HITLResponse captures a human‑in‑the‑loop approval response.
+// It mirrors the essential fields of FrameResult for HITL frames.
+type HITLResponse struct {
+	ChosenSlot  string         // ID of the slot selected by the user (e.g., "approve" or "reject")
+	ExtraData   map[string]any // Optional additional data supplied with the response
+	RespondedBy string         // Identifier of the responder (e.g., user ID)
+	RespondedAt time.Time      // Timestamp when the response was recorded
 }
 
 // Finding is a legacy evidence/result finding.
@@ -232,16 +241,16 @@ type SessionListContent struct {
 
 // ContextFile is a legacy sidebar entry.
 type ContextFile struct {
-	Path           string
-	Source         string
-	Summary        string
+	Path            string
+	Source          string
+	Summary         string
 	InsertionAction string
 }
 
 // ContextProposalContent is the legacy context sidebar payload.
 type ContextProposalContent struct {
-	AnchoredFiles []ContextFile
-	ExpandedFiles []ContextFile
+	AnchoredFiles  []ContextFile
+	ExpandedFiles  []ContextFile
 	KnowledgeItems []KnowledgeItem
 	PipelineTrace  PipelineTrace
 }
@@ -255,15 +264,15 @@ type KnowledgeItem struct {
 
 // PipelineTrace is a legacy trace summary.
 type PipelineTrace struct {
-	AnchorsExtracted     int
-	AnchorsConfirmed     int
-	Stage1CodeResults    int
-	Stage1ArchaeoResults int
+	AnchorsExtracted      int
+	AnchorsConfirmed      int
+	Stage1CodeResults     int
+	Stage1ArchaeoResults  int
 	HypotheticalGenerated bool
-	HypotheticalTokens   int
-	Stage3ArchaeoResults int
-	FallbackUsed         bool
-	FallbackReason       string
+	HypotheticalTokens    int
+	Stage3ArchaeoResults  int
+	FallbackUsed          bool
+	FallbackReason        string
 }
 
 // ArchaeoFinding is a legacy explore entry.

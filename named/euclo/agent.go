@@ -20,7 +20,9 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	platformcontracts "codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
@@ -67,8 +69,11 @@ func (a *Agent) Initialize(config *core.Config) error {
 		return nil
 	}
 
-	// Register capabilities and prompt providers using registration functions
-	regFuncs := GetRegistrationFuncs()
+	if a.env.Registry == nil {
+		return fmt.Errorf("workspace capability registry is nil")
+	}
+
+	regFuncs := services.NewRegistration().AgentRegistrationFuncs()
 
 	if regFuncs.RegisterCapabilities != nil {
 		if err := regFuncs.RegisterCapabilities(a.env); err != nil {
@@ -106,6 +111,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 		ctx = contextstream.WithTrigger(ctx, a.env.StreamTrigger)
 	}
 
+	seedTaskEnvelope(env, task)
 	a.captureResumeState(env)
 	a.seedResumeState(env)
 	defer a.clearResumeState()
@@ -136,6 +142,10 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
 		orchestrate.WithCapabilityRegistry(a.env.Registry),
 		orchestrate.WithRecipeRegistry(a.recipeRegistry),
+		orchestrate.WithMaxStreamTokens(a.config.MaxStreamTokens),
+		orchestrate.WithDefaultStreamMode(a.config.DefaultStreamMode),
+		orchestrate.WithCapabilityClassifier(a.capabilityClassifier()),
+		orchestrate.WithStreamTrigger(a.env.StreamTrigger),
 	)
 	graph := rootGraph.Graph()
 	if graph == nil {
@@ -144,7 +154,7 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 
 	start := "euclo.intake"
 	switch {
-	case resumeClassification != nil && resumeRouteSelection != nil:
+	case resumeRouteSelection != nil:
 		start = "euclo.policy_gate"
 	case resumeClassification != nil:
 		start = "euclo.dispatch"
@@ -161,6 +171,52 @@ func workspaceRootPath(env agentenv.WorkspaceEnvironment) string {
 		return ""
 	}
 	return strings.TrimSpace(env.IndexManager.WorkspacePath())
+}
+
+func seedTaskEnvelope(env *contextdata.Envelope, task *core.Task) {
+	if env == nil || task == nil {
+		return
+	}
+	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValue("task.id", task.ID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("task.instruction", task.Instruction, contextdata.MemoryClassTask)
+	env.SetWorkingValue("task.type", task.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValue("task.context", task.Context, contextdata.MemoryClassTask)
+	if task.Metadata != nil {
+		env.SetWorkingValue("task.metadata", task.Metadata, contextdata.MemoryClassTask)
+	}
+}
+
+func (a *Agent) capabilityClassifier() intake.Tier2Classifier {
+	if a == nil {
+		return nil
+	}
+	model := a.config.CapabilityClassifierModel
+	if model == nil {
+		return nil
+	}
+	return intake.NewLLMCapabilityClassifier(&modelAdapter{model: model})
+}
+
+type modelAdapter struct {
+	model platformcontracts.LanguageModel
+}
+
+func (m *modelAdapter) Complete(ctx context.Context, req intake.CompletionRequest) (intake.CompletionResponse, error) {
+	if m == nil || m.model == nil {
+		return intake.CompletionResponse{}, fmt.Errorf("no language model configured")
+	}
+	resp, err := m.model.Generate(ctx, req.Prompt, &platformcontracts.LLMOptions{
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+	})
+	if err != nil {
+		return intake.CompletionResponse{}, err
+	}
+	if resp == nil {
+		return intake.CompletionResponse{}, fmt.Errorf("language model returned nil response")
+	}
+	return intake.CompletionResponse{Text: resp.Text}, nil
 }
 
 func (a *Agent) captureResumeState(env *contextdata.Envelope) {

@@ -329,10 +329,25 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 			if err != nil {
 				return fmt.Errorf("inference backend construction failed for preflight: %w", err)
 			}
-			// Preflight using provider-agnostic approach
-			_, err = preflightCaseBackend(context.Background(), backend, exec.Model)
+			// Preflight using provider-agnostic approach with timeout
+			preflightTimeout := 30 * time.Second
+			if opts.Timeout > 0 && opts.Timeout < preflightTimeout {
+				preflightTimeout = opts.Timeout / 2
+			}
+			if r.Logger != nil {
+				r.Logger.Printf("[preflight-suite] starting suite-level preflight timeout=%v model=%q endpoint=%q", preflightTimeout, exec.Model, exec.Endpoint)
+			}
+			preflightCtx, preflightCancel := context.WithTimeout(context.Background(), preflightTimeout)
+			_, err = preflightCaseBackend(preflightCtx, backend, exec.Model, nil, r.Logger)
+			preflightCancel()
 			if err != nil {
-				return fmt.Errorf("inference backend preflight failed for suite %s case %s: %w", filepath.Base(suite.SourcePath), c.Name, err)
+				if r.Logger != nil {
+					r.Logger.Printf("[preflight-suite] suite-level preflight failed model=%q: %v", exec.Model, err)
+				}
+				return fmt.Errorf("inference backend preflight failed for suite %s case %s (endpoint=%s): %w", filepath.Base(suite.SourcePath), c.Name, exec.Endpoint, err)
+			}
+			if r.Logger != nil {
+				r.Logger.Printf("[preflight-suite] suite-level preflight succeeded model=%q", exec.Model)
 			}
 		}
 	}

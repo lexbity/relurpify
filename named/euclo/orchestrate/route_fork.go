@@ -2,12 +2,15 @@ package orchestrate
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
+
+const dispatchRouteKindKey = "euclo.dispatch.route_kind"
 
 // RouteForkNode branches execution based on the route selected by the dispatcher.
 type RouteForkNode struct {
@@ -28,17 +31,26 @@ func (f *RouteForkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeC
 // Execute resolves the branch name and returns the next node identifier.
 func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
-	routeKind := "capability"
-	if env != nil {
-		if v, ok := env.GetWorkingValue("euclo.dispatch.route_kind"); ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				routeKind = strings.TrimSpace(s)
-			}
-		} else if v, ok := env.GetWorkingValue("euclo.route.kind"); ok {
+	if env == nil {
+		return nil, fmt.Errorf("route fork %q requires an envelope", f.id)
+	}
+
+	routeKind := ""
+	if v, ok := env.GetWorkingValue(dispatchRouteKindKey); ok {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			routeKind = strings.TrimSpace(s)
+		}
+	}
+	if strings.TrimSpace(routeKind) == "" {
+		if v, ok := env.GetWorkingValue("euclo.route.kind"); ok {
 			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
 				routeKind = strings.TrimSpace(s)
 			}
 		}
+	}
+	routeKind = strings.TrimSpace(routeKind)
+	if routeKind == "" {
+		return nil, fmt.Errorf("route fork %q missing dispatch route kind", f.id)
 	}
 
 	branch := "capability_execution"
@@ -47,9 +59,8 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		branch = "recipe_execution"
 		next = "euclo.execute_recipe"
 	}
-	if env != nil {
-		env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)
-	}
+	env.SetWorkingValue(dispatchRouteKindKey, routeKind, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)
 	return &core.Result{
 		NodeID:  f.id,
 		Success: true,
@@ -57,6 +68,7 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			"branch":     branch,
 			"route_kind": routeKind,
 			"next":       next,
+			"next_node":  next,
 		},
 	}, nil
 }

@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -391,7 +394,7 @@ func TestApplySetupGitInitCreatesCommittedBaseline(t *testing.T) {
 	}
 
 	workspace := t.TempDir()
-	cleanup, err := applySetup(workspace, SetupSpec{
+	cleanup, err := applySetup(workspace, workspace, SetupSpec{
 		GitInit: true,
 		Files: []SetupFileSpec{{
 			Path:    "testsuite/agenttest_fixtures/hello.txt",

@@ -134,9 +134,26 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	// Preflight the backend using the new provider-agnostic approach
 	if shouldPreflightBackend(execution.RecordingMode) {
-		modelProvenance, err = preflightCaseBackend(context.Background(), backend, execution.Model)
+		// Use a timeout context to prevent indefinite hangs during preflight
+		preflightTimeout := 30 * time.Second
+		if timeout > 0 && timeout < preflightTimeout {
+			// Use case timeout if it's shorter than default preflight timeout
+			preflightTimeout = timeout / 2 // Leave half the timeout for actual execution
+		}
+		if logger != nil {
+			logger.Printf("[runner] starting preflight with timeout=%v for model=%q endpoint=%q", preflightTimeout, execution.Model, execution.Endpoint)
+		}
+		preflightCtx, preflightCancel := context.WithTimeout(ctx, preflightTimeout)
+		modelProvenance, err = preflightCaseBackend(preflightCtx, backend, execution.Model, telemetryMux, logger)
+		preflightCancel()
 		if err != nil {
+			if logger != nil {
+				logger.Printf("[runner] preflight failed for model=%q: %v", execution.Model, err)
+			}
 			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		}
+		if logger != nil {
+			logger.Printf("[runner] preflight succeeded for model=%q provenance=%+v", execution.Model, modelProvenance)
 		}
 		if modelProvenance != nil {
 			if data, marshalErr := json.MarshalIndent(modelProvenance, "", "  "); marshalErr == nil {
@@ -568,7 +585,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 		return nil, err
 	}
 
-	cleanup, err := applySetup(workspace, c.Setup, opts.Sandbox, logger)
+	cleanup, err := applySetup(workspace, targetWorkspace, c.Setup, opts.Sandbox, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -834,7 +851,7 @@ func resolveWorkspaceFiles(suite *Suite, c CaseSpec) []SetupFileSpec {
 	return files
 }
 
-func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Logger) (cleanup func(), err error) {
+func applySetup(workspace, targetWorkspace string, setup SetupSpec, sandbox bool, logger *log.Logger) (cleanup func(), err error) {
 	type original struct {
 		path    string
 		existed bool
@@ -861,7 +878,23 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(target, []byte(f.Content), mode); err != nil {
+
+		var content []byte
+		if f.Content != "" {
+			content = []byte(f.Content)
+		} else {
+			// Copy from source fixtures
+			srcPath := filepath.Join(targetWorkspace, f.Path)
+			if _, err := os.Stat(srcPath); err != nil {
+				return nil, fmt.Errorf("fixture file not found at %s (targetWorkspace=%s): %w", srcPath, targetWorkspace, err)
+			}
+			content, err = os.ReadFile(srcPath)
+			if err != nil {
+				return nil, fmt.Errorf("read fixture from %s (targetWorkspace=%s): %w", srcPath, targetWorkspace, err)
+			}
+		}
+
+		if err := os.WriteFile(target, content, mode); err != nil {
 			return nil, err
 		}
 	}
