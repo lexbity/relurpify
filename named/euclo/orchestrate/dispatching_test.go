@@ -76,8 +76,16 @@ func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.
 	if result.RouteID != desc.ID {
 		t.Fatalf("expected route %q, got %q", desc.ID, result.RouteID)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.kind"); !ok || got != "capability" {
-		t.Fatalf("expected envelope route.kind capability, got %v (ok=%v)", got, ok)
+	selection, ok := env.GetWorkingValue("euclo.route_selection")
+	if !ok {
+		t.Fatal("expected route_selection in envelope")
+	}
+	routeSelection, ok := selection.(*RouteSelection)
+	if !ok || routeSelection == nil {
+		t.Fatalf("expected *RouteSelection, got %T", selection)
+	}
+	if routeSelection.RouteKind != "capability" || routeSelection.CapabilityID != desc.ID {
+		t.Fatalf("unexpected route selection: %+v", routeSelection)
 	}
 }
 

@@ -16,8 +16,6 @@ import (
 // capabilities and prompt providers without creating a circular dependency
 // between named/euclo and ayenitd.
 func GetRegistrationFuncs() agentenv.AgentRegistrationFuncs {
-	// Delegates to the new services package for registration functions.
-	// This maintains backward compatibility while centralizing service wiring.
 	return services.NewRegistration().AgentRegistrationFuncs()
 }
 

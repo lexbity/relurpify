@@ -51,11 +51,6 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 				}
 			}
 		}
-		if v, ok := env.GetWorkingValue("euclo.route.capability_id"); ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				capabilityID = strings.TrimSpace(s)
-			}
-		}
 	}
 
 	// Build task with capability arguments from envelope

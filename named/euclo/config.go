@@ -3,8 +3,10 @@ package euclo
 import (
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -46,6 +48,12 @@ type EucloConfig struct {
 	// TelemetrySink is the telemetry backend for execution events.
 	// When nil, a no-op sink is used.
 	TelemetrySink core.Telemetry
+
+	// CheckpointRepository stores materialized checkpoint artifacts.
+	CheckpointRepository agentlifecycle.Repository
+
+	// PersistenceWriter mirrors checkpoint payloads into the generic persistence layer.
+	PersistenceWriter *persistence.Writer
 
 	// DryRun indicates whether to execute in dry-run mode.
 	// When true, mutation-capable steps report intended actions without executing.

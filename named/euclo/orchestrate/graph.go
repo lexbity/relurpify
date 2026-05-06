@@ -8,11 +8,13 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
@@ -38,6 +40,8 @@ type RootGraphConfig struct {
 	CapabilityClassifier intake.Tier2Classifier
 	PermissionManager    policy.PermissionManager
 	HITLBroker           policy.HITLBroker
+	CheckpointRepository agentlifecycle.Repository
+	PersistenceWriter    *persistence.Writer
 }
 
 // RootGraphOption mutates RootGraphConfig.
@@ -119,6 +123,20 @@ func WithPermissionManager(pm policy.PermissionManager) RootGraphOption {
 func WithHITLBroker(broker policy.HITLBroker) RootGraphOption {
 	return func(opts *RootGraphConfig) {
 		opts.HITLBroker = broker
+	}
+}
+
+// WithCheckpointRepository wires the repository used for checkpoint persistence.
+func WithCheckpointRepository(repo agentlifecycle.Repository) RootGraphOption {
+	return func(opts *RootGraphConfig) {
+		opts.CheckpointRepository = repo
+	}
+}
+
+// WithPersistenceWriter wires the optional persistence writer for mirrored checkpoint writes.
+func WithPersistenceWriter(writer *persistence.Writer) RootGraphOption {
+	return func(opts *RootGraphConfig) {
+		opts.PersistenceWriter = writer
 	}
 }
 
@@ -240,6 +258,10 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		}, nil
 	})
 
+	checkpointNode := agentgraph.NewCheckpointNode("euclo.checkpoint").
+		WithRepository(cfg.CheckpointRepository).
+		WithWriter(cfg.PersistenceWriter)
+
 	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
 		sequence := []string{}
 		operator := ""
@@ -336,6 +358,13 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 
 	telemetryNode := reporting.NewTelemetryNode("euclo.report")
 	reportNode := newStageNode("euclo.report", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+		if env != nil {
+			if v, ok := env.GetWorkingValue("euclo.route.outcome"); ok {
+				if s, ok := v.(string); ok && strings.EqualFold(strings.TrimSpace(s), string(reporting.RouteOutcomeDryRun)) {
+					env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+				}
+			}
+		}
 		result, err := telemetryNode.Execute(ctx, env)
 		if err != nil {
 			return &core.Result{NodeID: "euclo.report", Success: false, Data: map[string]any{"error": err.Error()}}, err
@@ -354,6 +383,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		familySelectNode,
 		ingestionNode,
 		streamNode,
+		checkpointNode,
 		capClassifyNode,
 		interactionCheckNode,
 		interactionFrameNode,
@@ -377,7 +407,8 @@ func wireEdges(g *agentgraph.Graph) error {
 		{"euclo.intake", "euclo.family_select", nil},
 		{"euclo.family_select", "euclo.ingest", nil},
 		{"euclo.ingest", "euclo.stream", nil},
-		{"euclo.stream", "euclo.capability_classify", nil},
+		{"euclo.stream", "euclo.checkpoint", nil},
+		{"euclo.checkpoint", "euclo.capability_classify", nil},
 		{"euclo.capability_classify", "euclo.interaction_check", nil},
 		{"euclo.interaction_check", "euclo.interaction_frame", func(result *core.Result, _ *contextdata.Envelope) bool {
 			return result != nil && result.Data != nil && result.Data["needs_interaction"] == true
@@ -387,7 +418,38 @@ func wireEdges(g *agentgraph.Graph) error {
 		}},
 		{"euclo.interaction_frame", "euclo.policy_gate", nil},
 		{"euclo.policy_gate", "euclo.dispatch", nil},
-		{"euclo.dispatch", "euclo.route_fork", nil},
+		{"euclo.dispatch", "euclo.report", func(_ *core.Result, env *contextdata.Envelope) bool {
+			if env == nil {
+				return false
+			}
+			if v, ok := env.GetWorkingValue("euclo.route.outcome"); ok {
+				if s, ok := v.(string); ok && strings.EqualFold(strings.TrimSpace(s), string(reporting.RouteOutcomeDryRun)) {
+					return true
+				}
+			}
+			if v, ok := env.GetWorkingValue("euclo.dry_run_mode"); ok {
+				if dryRun, ok := v.(bool); ok && dryRun {
+					return true
+				}
+			}
+			return false
+		}},
+		{"euclo.dispatch", "euclo.route_fork", func(_ *core.Result, env *contextdata.Envelope) bool {
+			if env == nil {
+				return true
+			}
+			if v, ok := env.GetWorkingValue("euclo.route.outcome"); ok {
+				if s, ok := v.(string); ok && strings.EqualFold(strings.TrimSpace(s), string(reporting.RouteOutcomeDryRun)) {
+					return false
+				}
+			}
+			if v, ok := env.GetWorkingValue("euclo.dry_run_mode"); ok {
+				if dryRun, ok := v.(bool); ok && dryRun {
+					return false
+				}
+			}
+			return true
+		}},
 		{"euclo.route_fork", "euclo.execute_recipe", func(result *core.Result, _ *contextdata.Envelope) bool {
 			return result != nil && result.Data != nil && result.Data["next"] == "euclo.execute_recipe"
 		}},

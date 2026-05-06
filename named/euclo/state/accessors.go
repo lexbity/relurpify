@@ -241,16 +241,6 @@ func SetIntentSignals(env *contextdata.Envelope, scores map[string]float64) {
 	env.SetWorkingValue(KeyIntentSignals, scores, contextdata.MemoryClassTask)
 }
 
-// GetFamilyScores retrieves family scores (alias for GetIntentSignals).
-func GetFamilyScores(env *contextdata.Envelope) (map[string]float64, bool) {
-	return GetIntentSignals(env)
-}
-
-// SetFamilyScores stores family scores (alias for SetIntentSignals).
-func SetFamilyScores(env *contextdata.Envelope, scores map[string]float64) {
-	SetIntentSignals(env, scores)
-}
-
 // SetRecipeID stores the recipe ID.
 func SetRecipeID(env *contextdata.Envelope, id string) {
 	env.SetWorkingValue(KeyRecipeID, id, contextdata.MemoryClassTask)

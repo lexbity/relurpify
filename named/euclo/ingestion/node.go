@@ -287,7 +287,7 @@ func taskEnvelopeFromEnv(env *contextdata.Envelope) *intake.TaskEnvelope {
 	if env == nil {
 		return nil
 	}
-	if value, ok := env.GetWorkingValue("euclo.task.envelope"); ok {
+	if value, ok := env.GetWorkingValue("euclo.task_envelope"); ok {
 		if task, ok := value.(*intake.TaskEnvelope); ok {
 			return task
 		}

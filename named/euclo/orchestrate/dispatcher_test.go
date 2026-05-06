@@ -22,14 +22,16 @@ func TestDispatcherExecute(t *testing.T) {
 		t.Fatal("Expected result to be non-nil")
 	}
 
-	// Check that route selection was written to envelope
-	routeKind, ok := env.GetWorkingValue("euclo.route.kind")
+	selection, ok := env.GetWorkingValue("euclo.route_selection")
 	if !ok {
-		t.Error("Expected route.kind in envelope")
+		t.Fatal("Expected route_selection in envelope")
 	}
-
-	if routeKind != "capability" {
-		t.Errorf("Expected route.kind capability, got %v", routeKind)
+	routeSelection, ok := selection.(*RouteSelection)
+	if !ok || routeSelection == nil {
+		t.Fatalf("Expected *RouteSelection, got %T", selection)
+	}
+	if routeSelection.RouteKind != "capability" {
+		t.Errorf("Expected route selection capability, got %v", routeSelection.RouteKind)
 	}
 }
 

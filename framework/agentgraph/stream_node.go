@@ -89,6 +89,8 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		result, err := trigger.RequestBlocking(ctx, req)
 		if result != nil {
 			_ = contextstream.ApplyResult(env, result)
+			env.SetWorkingValue("contextstream.result", result, contextdata.MemoryClassTask)
+			env.SetWorkingValue("euclo.stream_result", result, contextdata.MemoryClassTask)
 		}
 		if err != nil {
 			return nil, err

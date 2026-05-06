@@ -121,14 +121,14 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		"ambiguous":      scoredClassification.Ambiguous,
 	}
 
-	setWorkingValueDual(env, "euclo.task_envelope", "euclo.task.envelope", taskEnvelope)
-	setWorkingValueDual(env, "euclo.intent_classification", "euclo.intent.classification", intent)
-	setWorkingValueDual(env, "euclo.family_selection", "euclo.family.selection", familySelection)
-	setWorkingValueDual(env, "euclo.capability_sequence", "euclo.capability.sequence", capabilitySequence)
-	setWorkingValueDual(env, "euclo.negative_constraints", "euclo.negative.constraints", taskEnvelope.NegativeConstraintSeeds)
-	setWorkingValueDual(env, "euclo.capability_operator", "euclo.capability.operator", capabilityOperator)
+	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.intent_classification", intent, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.family_selection", familySelection, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.capability_sequence", capabilitySequence, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.negative_constraints", taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.capability_operator", capabilityOperator, contextdata.MemoryClassTask)
 	if streamResult != nil {
-		setWorkingValueDual(env, "euclo.stream_result", "euclo.stream.result", streamResult)
+		env.SetWorkingValue("euclo.stream_result", streamResult, contextdata.MemoryClassTask)
 	}
 
 	return &core.Result{
@@ -209,16 +209,6 @@ func taskFromEnvelope(env *contextdata.Envelope) (*core.Task, error) {
 		}
 	}
 	return nil, fmt.Errorf("no task input in envelope")
-}
-
-func setWorkingValueDual(env *contextdata.Envelope, primary, alias string, value any) {
-	if env == nil {
-		return
-	}
-	env.SetWorkingValue(primary, value, contextdata.MemoryClassTask)
-	if alias != "" && alias != primary {
-		env.SetWorkingValue(alias, value, contextdata.MemoryClassTask)
-	}
 }
 
 func serializeStreamResult(result *contextstream.Result) string {

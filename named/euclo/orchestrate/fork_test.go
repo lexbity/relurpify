@@ -64,22 +64,6 @@ func TestForkNodeCapabilityBranch(t *testing.T) {
 	}
 }
 
-func TestForkNodeLegacyFallbackBranch(t *testing.T) {
-	fork := NewRouteForkNode("fork1")
-
-	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.kind", "recipe", contextdata.MemoryClassTask)
-
-	result, err := fork.Execute(context.Background(), env)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	if result.Data["branch"] != "recipe_execution" {
-		t.Errorf("Expected branch recipe_execution from legacy key, got %v", result.Data["branch"])
-	}
-}
-
 func TestForkNodeMissingRouteKind(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 

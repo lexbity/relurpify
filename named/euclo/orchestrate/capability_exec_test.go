@@ -13,7 +13,10 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.capability_id", "debug", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    "capability",
+		CapabilityID: "debug",
+	}, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -54,7 +57,10 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.capability_id", "debug", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    "capability",
+		CapabilityID: "debug",
+	}, contextdata.MemoryClassTask)
 
 	_, err := node.Execute(context.Background(), env)
 	if err != nil {

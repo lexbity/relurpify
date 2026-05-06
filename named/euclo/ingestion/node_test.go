@@ -22,7 +22,7 @@ func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.task.envelope", &intake.TaskEnvelope{
+	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
 		TaskID:        "task-1",
 		SessionID:     "session-1",
 		ExplicitFiles: []string{"note.txt"},
@@ -65,7 +65,7 @@ func TestIngestionNodeFullScanUsesWorkspaceScanner(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	env.SetWorkingValue("euclo.task.envelope", &intake.TaskEnvelope{
+	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
 		TaskID:    "task-2",
 		SessionID: "session-2",
 	}, contextdata.MemoryClassTask)
@@ -103,7 +103,7 @@ func TestIngestionNodeIncrementalScanUsesGitDiff(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-3", "session-3")
-	env.SetWorkingValue("euclo.task.envelope", &intake.TaskEnvelope{
+	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
 		TaskID:           "task-3",
 		SessionID:        "session-3",
 		IncrementalSince: strings.TrimSpace(base),

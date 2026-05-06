@@ -167,8 +167,8 @@ func TestRecipeCompilerContextHintBinding(t *testing.T) {
 		t.Error("Expected bindings to be resolved")
 	}
 
-	if nodes[0].Bindings["instruction"] != "euclo.task.envelope.instruction" {
-		t.Errorf("Expected binding euclo.task.envelope.instruction, got %s", nodes[0].Bindings["instruction"])
+	if nodes[0].Bindings["instruction"] != "euclo.task_envelope.instruction" {
+		t.Errorf("Expected binding euclo.task_envelope.instruction, got %s", nodes[0].Bindings["instruction"])
 	}
 }
 
@@ -202,8 +202,8 @@ func TestRecipeCompilerFamilyHintBinding(t *testing.T) {
 		t.Error("Expected bindings to be resolved")
 	}
 
-	if nodes[0].Bindings["family"] != "euclo.task.envelope.family_hint" {
-		t.Errorf("Expected binding euclo.task.envelope.family_hint, got %s", nodes[0].Bindings["family"])
+	if nodes[0].Bindings["family"] != "euclo.task_envelope.family_hint" {
+		t.Errorf("Expected binding euclo.task_envelope.family_hint, got %s", nodes[0].Bindings["family"])
 	}
 }
 
@@ -287,7 +287,7 @@ func TestRecipeCompilerPlanPropagatesCapabilityID(t *testing.T) {
 					ID:           "step1",
 					CapabilityID: "euclo:cap.ast_query",
 					Bindings: map[string]string{
-						"query": "euclo.task.envelope.instruction",
+						"query": "euclo.task_envelope.instruction",
 					},
 				},
 			},

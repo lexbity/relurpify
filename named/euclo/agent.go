@@ -14,9 +14,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
@@ -61,6 +63,20 @@ type Option func(*Agent)
 func WithConfig(config EucloConfig) Option {
 	return func(a *Agent) {
 		a.config = config
+	}
+}
+
+// WithCheckpointRepository wires the repository used for checkpoint materialization.
+func WithCheckpointRepository(repo agentlifecycle.Repository) Option {
+	return func(a *Agent) {
+		a.config.CheckpointRepository = repo
+	}
+}
+
+// WithPersistenceWriter wires the generic persistence writer used for mirrored checkpoint writes.
+func WithPersistenceWriter(writer *persistence.Writer) Option {
+	return func(a *Agent) {
+		a.config.PersistenceWriter = writer
 	}
 }
 
@@ -146,6 +162,8 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 		orchestrate.WithDefaultStreamMode(a.config.DefaultStreamMode),
 		orchestrate.WithCapabilityClassifier(a.capabilityClassifier()),
 		orchestrate.WithStreamTrigger(a.env.StreamTrigger),
+		orchestrate.WithCheckpointRepository(a.config.CheckpointRepository),
+		orchestrate.WithPersistenceWriter(a.config.PersistenceWriter),
 	)
 	graph := rootGraph.Graph()
 	if graph == nil {

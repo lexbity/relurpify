@@ -30,7 +30,10 @@ func TestRecipeExecutionNodeExecute(t *testing.T) {
 	node := NewRecipeExecutorNode("recipe-exec1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.recipe_id", "fix-bug", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind: "recipe",
+		RecipeID:  "fix-bug",
+	}, contextdata.MemoryClassTask)
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubRecipeModel{},
 		Registry:      capability.NewRegistry(),
@@ -98,7 +101,10 @@ func TestRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 	node := NewRecipeExecutorNode("recipe-exec1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.recipe_id", "fix-bug", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind: "recipe",
+		RecipeID:  "fix-bug",
+	}, contextdata.MemoryClassTask)
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubRecipeModel{},
 		Registry:      capability.NewRegistry(),

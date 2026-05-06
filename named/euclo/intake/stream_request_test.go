@@ -164,15 +164,15 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	}
 
 	// Check that envelope contains the expected keys
-	if _, ok := env.GetWorkingValue("euclo.task.envelope"); !ok {
+	if _, ok := env.GetWorkingValue("euclo.task_envelope"); !ok {
 		t.Error("Expected envelope to contain task envelope")
 	}
 
-	if _, ok := env.GetWorkingValue("euclo.intent.classification"); !ok {
+	if _, ok := env.GetWorkingValue("euclo.intent_classification"); !ok {
 		t.Error("Expected envelope to contain intent classification")
 	}
 
-	if _, ok := env.GetWorkingValue("euclo.family.selection"); !ok {
+	if _, ok := env.GetWorkingValue("euclo.family_selection"); !ok {
 		t.Error("Expected envelope to contain family selection")
 	}
 

@@ -204,7 +204,7 @@ func (e *Envelope) ClearWorkingData() {
 }
 
 // RequestCheckpoint sets a checkpoint request on the envelope.
-// The compiler will materialize the checkpoint when processing this envelope.
+// The graph runtime materializes the checkpoint when processing this envelope.
 func (e *Envelope) RequestCheckpoint(reason string, priority int, evictMemory bool) {
 	if e == nil {
 		return
@@ -251,6 +251,16 @@ func (e *Envelope) AddStreamedContextReference(ref ChunkReference) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.References.StreamedContext = append(e.References.StreamedContext, ref)
+}
+
+// AddCheckpointReference adds a checkpoint reference to the envelope.
+func (e *Envelope) AddCheckpointReference(ref CheckpointReference) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.References.Checkpoints = append(e.References.Checkpoints, ref)
 }
 
 // StreamedChunkIDs returns the IDs of all chunks in the streamed context.

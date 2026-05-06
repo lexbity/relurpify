@@ -51,14 +51,14 @@ func TestRecipeStepNodeExecuteCapability(t *testing.T) {
 	}
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.task.envelope.instruction", "find symbols", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.task.envelope.family_hint", "query", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope.instruction", "find symbols", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope.family_hint", "query", contextdata.MemoryClassTask)
 
 	step := ExecutionStep{
 		ID:           "step1",
 		CapabilityID: "euclo:cap.ast_query",
 		Bindings: map[string]string{
-			"query": "euclo.task.envelope.instruction",
+			"query": "euclo.task_envelope.instruction",
 		},
 		Step: RecipeStep{
 			ID:           "step1",
@@ -67,7 +67,7 @@ func TestRecipeStepNodeExecuteCapability(t *testing.T) {
 				"limit": 5,
 			},
 			Bindings: map[string]string{
-				"query": "euclo.task.envelope.instruction",
+				"query": "euclo.task_envelope.instruction",
 			},
 		},
 	}

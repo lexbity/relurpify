@@ -45,7 +45,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	// Get task envelope from working memory.
-	taskEnvelopeVal, ok := env.GetWorkingValue("euclo.task.envelope")
+	taskEnvelopeVal, ok := env.GetWorkingValue("euclo.task_envelope")
 	if !ok {
 		return result, nil
 	}

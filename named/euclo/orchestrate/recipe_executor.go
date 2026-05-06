@@ -132,10 +132,5 @@ func recipeIDFromEnvelope(env *contextdata.Envelope) string {
 			}
 		}
 	}
-	if v, ok := env.GetWorkingValue("euclo.route.recipe_id"); ok {
-		if s, ok := v.(string); ok {
-			return strings.TrimSpace(s)
-		}
-	}
 	return ""
 }

@@ -20,7 +20,7 @@ func TestIngestionNodeIngestsUserFiles(t *testing.T) {
 		UserFiles:   []string{"main.go", "utils.go"},
 	}
 
-	env.SetWorkingValue("euclo.task.envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -54,7 +54,7 @@ func TestIngestionNodeIngestsSessionPins(t *testing.T) {
 		SessionPins: []string{"config.yaml", "README.md"},
 	}
 
-	env.SetWorkingValue("euclo.task.envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -89,7 +89,7 @@ func TestIngestionNodeHandlesEmptyLists(t *testing.T) {
 		SessionPins: []string{},
 	}
 
-	env.SetWorkingValue("euclo.task.envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestIngestionNodeWritesToEnvelope(t *testing.T) {
 		SessionPins: []string{"config.yaml"},
 	}
 
-	env.SetWorkingValue("euclo.task.envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
 
 	_, err := node.Execute(context.Background(), env)
 	if err != nil {

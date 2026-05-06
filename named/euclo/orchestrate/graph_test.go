@@ -73,7 +73,10 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 	graph := NewRootGraph()
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route.kind", "capability", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    "capability",
+		CapabilityID: "euclo:cap.ast_query",
+	}, contextdata.MemoryClassTask)
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {

@@ -299,11 +299,11 @@ func cloneStepAgent(agent *RecipeStepAgent) *RecipeStepAgent {
 func resolveBinding(binding string) string {
 	switch binding {
 	case "{{instruction}}":
-		return "euclo.task.envelope.instruction"
+		return "euclo.task_envelope.instruction"
 	case "{{context_hint}}":
-		return "euclo.task.envelope.context_hint"
+		return "euclo.task_envelope.context_hint"
 	case "{{family_hint}}":
-		return "euclo.task.envelope.family_hint"
+		return "euclo.task_envelope.family_hint"
 	default:
 		return binding
 	}

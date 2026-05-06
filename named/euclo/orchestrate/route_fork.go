@@ -41,13 +41,6 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			routeKind = strings.TrimSpace(s)
 		}
 	}
-	if strings.TrimSpace(routeKind) == "" {
-		if v, ok := env.GetWorkingValue("euclo.route.kind"); ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				routeKind = strings.TrimSpace(s)
-			}
-		}
-	}
 	routeKind = strings.TrimSpace(routeKind)
 	if routeKind == "" {
 		return nil, fmt.Errorf("route fork %q missing dispatch route kind", f.id)
