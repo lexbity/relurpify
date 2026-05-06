@@ -26,10 +26,8 @@ func newServiceListCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = ws.Close() }()
-			if ws.ServiceManager != nil {
-				if err := ws.ServiceManager.StartAll(cmd.Context()); err != nil {
-					return err
-				}
+			if err := startPreparedRunServices(cmd.Context(), ws); err != nil {
+				return err
 			}
 			ids := ws.ListServices()
 			sort.Strings(ids)
@@ -56,20 +54,11 @@ func newServiceRestartCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = ws.Close() }()
-			if ws.ServiceManager != nil {
-				if err := ws.ServiceManager.StartAll(cmd.Context()); err != nil {
-					return err
-				}
+			if err := startPreparedRunServices(cmd.Context(), ws); err != nil {
+				return err
 			}
-			svc := ws.GetService(args[0])
-			if svc == nil {
-				return fmt.Errorf("service %s not found", args[0])
-			}
-			if err := svc.Stop(); err != nil {
-				return fmt.Errorf("stop service %s: %w", args[0], err)
-			}
-			if err := svc.Start(cmd.Context()); err != nil {
-				return fmt.Errorf("start service %s: %w", args[0], err)
+			if err := restartPreparedRunService(cmd.Context(), ws, args[0]); err != nil {
+				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Restarted service %s\n", args[0])
 			return nil

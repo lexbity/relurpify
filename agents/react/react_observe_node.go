@@ -386,7 +386,7 @@ func taskNeedsEditing(task *core.Task) bool {
 			return false
 		}
 	}
-	editPattern := regexp.MustCompile(`\b(implement|fix|modify|edit|write|refactor|update|create|append|add)\b`)
+	editPattern := regexp.MustCompile(`\b(change|implement|fix|modify|edit|write|refactor|update|create|append|add|replace)\b`)
 	if editPattern.MatchString(text) {
 		return true
 	}

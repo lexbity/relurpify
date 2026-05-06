@@ -10,7 +10,7 @@ same system:
 | `relurpish` | `app/relurpish` | End users — primary coding TUI |
 | `nexus` | `app/nexus` | Infrastructure — Nexus gateway server |
 | `nexusish` | `app/nexusish` | Administrators — Nexus dashboard TUI |
-| `dev-agent` | `app/dev-agent-cli` | Developers — scripted CLI for testing |
+| `dev-agent` | `app/dev-agent-cli` | Developers and CI — scripted CLI for testing and prepared-run handoff |
 
 ## App Guides
 
@@ -158,8 +158,8 @@ nexusish --nexus http://localhost:8080
 ## dev-agent (CLI)
 
 `app/dev-agent-cli` is a Cobra CLI for development, testing, and scripted
-automation. End-user coding is done via relurpish; this tool is for developers
-and CI pipelines.
+automation. End-user coding is done via relurpish; this tool is for developers,
+CI pipelines, and descriptor-driven live test handoff.
 
 ### Commands
 
@@ -174,10 +174,11 @@ dev-agent config       Display resolved workspace configuration
 
 ### Agent test suites
 
-`dev-agent agenttest run` executes YAML test suites from `testsuite/agenttests/`.
-Each suite specifies an instruction, expected file edits or tool calls, and a
-pass/fail predicate. Tape recording makes suites deterministic in CI without a
-live Ollama instance.
+`dev-agent agenttest run` prepares a descriptor-backed live run from YAML test
+suites in `testsuite/agenttests/`, then hands execution to the prepared-run
+flow. Each suite specifies an instruction, expected file edits or tool calls,
+and a pass/fail predicate. Tape recording makes suites deterministic in CI
+without a live Ollama instance.
 
 ```bash
 # Run all suites

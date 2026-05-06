@@ -109,7 +109,7 @@ spec:
 		t.Fatal(err)
 	}
 
-	runDir := filepath.Join(workspace, "relurpify_cfg", "test_runs", "euclo", "run-1")
+	runDir := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
 	artifactsDir := filepath.Join(runDir, "artifacts", "basic_edit_task__qwen2_5_coder_14b")
 	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -251,7 +251,7 @@ spec:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runDir := filepath.Join(workspace, "relurpify_cfg", "test_runs", "euclo", "run-1")
+	runDir := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
 	artifactsDir := filepath.Join(runDir, "artifacts", "basic_edit_task__qwen2_5_coder_14b")
 	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
 		t.Fatal(err)

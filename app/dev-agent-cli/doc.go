@@ -9,8 +9,8 @@
 //   - start: begin an agent session with a given instruction and agent type.
 //   - workspace: inspect workspace config, probes, and services.
 //   - service: manage workspace services.
-//   - agenttest: run integration test suites with optional tape recording and
-//     replay for deterministic CI.
+//   - agenttest: run integration test suites, including the descriptor-driven
+//     prepared-run handoff used for live execution and deterministic CI.
 //   - agents: list registered agent types.
 //   - skill: inspect and manage skill packages.
 //   - session: list and inspect past sessions.

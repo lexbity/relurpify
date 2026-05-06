@@ -114,6 +114,46 @@ func TestServiceManager_StartAllWithError(t *testing.T) {
 	}
 }
 
+func TestServiceScheduler_StartAndStop(t *testing.T) {
+	scheduler := NewServiceScheduler()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	started := make(chan struct{}, 1)
+	scheduler.Register(ScheduledJob{
+		ID:       "job-1",
+		Interval: time.Minute,
+		Action: func(context.Context) error {
+			started <- struct{}{}
+			return nil
+		},
+	})
+
+	startErr := make(chan error, 1)
+	go func() {
+		startErr <- scheduler.Start(ctx)
+	}()
+
+	select {
+	case err := <-startErr:
+		if err != nil {
+			t.Fatalf("Start returned %v", err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("scheduler Start blocked")
+	}
+
+	select {
+	case <-started:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("scheduler job did not run on start")
+	}
+
+	if err := scheduler.Stop(); err != nil {
+		t.Fatalf("Stop returned %v", err)
+	}
+}
+
 func TestServiceManager_StopAll(t *testing.T) {
 	sm := NewServiceManager()
 	svc1 := &mockService{}

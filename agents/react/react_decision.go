@@ -66,8 +66,6 @@ func parseDecision(raw string) (decisionPayload, error) {
 	switch {
 	case action == "complete":
 		payload.Complete = true
-	case action == "tool" && payload.Tool != "":
-		payload.Complete = false
 	case strings.Contains(action, "tool") && payload.Tool != "":
 		payload.Action = "tool"
 		payload.Complete = false

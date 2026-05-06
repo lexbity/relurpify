@@ -53,6 +53,10 @@ spec:
         must_succeed: true
         files_changed:
         - testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        files_contain:
+        - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+          contains:
+          - hello world
         verify:
           steps:
           - tool: go_test

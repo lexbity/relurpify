@@ -1,10 +1,12 @@
 package agenttest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -188,6 +190,15 @@ type Runner struct {
 	Logger *log.Logger
 }
 
+// PreparedRunExecutorFn executes a prepared run descriptor through the CLI
+// handoff path. App entrypoints install the real implementation.
+var PreparedRunExecutorFn = func(context.Context, string, string, string, io.Writer) error {
+	return fmt.Errorf("prepared run executor not configured")
+}
+
+// PreparedRunVerifierFn validates the prepared run artifacts after execution.
+var PreparedRunVerifierFn = VerifyPreparedRun
+
 type runCaseLayout struct {
 	ArtifactsDir        string
 	TmpDir              string
@@ -213,7 +224,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	runID := time.Now().UTC().Format("20060102-150405.000")
 	outDir := opts.OutputDir
 	if outDir == "" {
-		outDir = workspacePaths.TestRunDir(suite.Spec.AgentName, runID)
+		outDir = workspacePaths.TestRunsDir()
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, err
@@ -242,7 +253,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
-			cr := r.runCase(ctx, suite, c, model, opts, targetWorkspace, outDir)
+			cr := r.runPreparedCase(ctx, suite, c, model, opts, targetWorkspace, outDir, report.RunID)
 			report.Cases = append(report.Cases, cr)
 		}
 	}
@@ -293,6 +304,49 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	return report, nil
 }
 
+func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir, runID string) CaseReport {
+	caseStartedAt := time.Now().UTC()
+	layout := newRunCaseLayout(outDir, c.Name, model.Name)
+	_ = os.MkdirAll(layout.ArtifactsDir, 0o755)
+	_ = os.MkdirAll(layout.TmpDir, 0o755)
+
+	preparedRunID := preparedRunCaseID(runID, c.Name, model.Name)
+	caseRunRoot := filepath.Join(outDir, preparedRunID)
+	prepared, err := preparedRunFromSuiteCase(suite, c, model, opts, targetWorkspace, caseRunRoot, preparedRunID)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+
+	var output bytes.Buffer
+	if err := PreparedRunExecutorFn(ctx, prepared.Artifacts.DescriptorPath(), caseRunRoot, "", &output); err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 1)
+	}
+
+	verification, err := PreparedRunVerifierFn(ctx, prepared, CaseReport{Success: true, Output: output.String()}, suite, c, nil)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "assertion", 1)
+	}
+
+	caseFinishedAt := time.Now().UTC()
+	report := CaseReport{
+		Name:             c.Name,
+		Model:            model.Name,
+		Provider:         prepared.Descriptor.BackendProvider,
+		ManifestModel:    prepared.Descriptor.ModelName,
+		Endpoint:         prepared.Descriptor.BackendEndpoint,
+		Workspace:        layout.WorkspaceDir,
+		ArtifactsDir:     layout.ArtifactsDir,
+		StartedAt:        caseStartedAt,
+		FinishedAt:       caseFinishedAt,
+		DurationMS:       caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+		Success:          verification.Success,
+		Output:           output.String(),
+		AssertionResults: append([]AssertionResult{}, verification.Checks...),
+	}
+	report.AssertionResults = append(report.AssertionResults, verification.VerificationResults...)
+	return report
+}
+
 func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
 	manifestModel := ""
 	if suite != nil {
@@ -304,7 +358,7 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 		}
 	}
 	checked := map[string]struct{}{}
-	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_runs_preflight"), "preflight", "preflight")
+	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_run", "preflight"), "preflight", "preflight")
 	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	for _, c := range suite.Spec.Cases {
 		caseModels := matrixModels

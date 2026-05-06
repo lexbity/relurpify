@@ -664,19 +664,20 @@ Each case runs in a freshly derived isolated workspace:
 1. **Copy** — the target workspace is copied to a temp directory, excluding patterns in `spec.workspace.exclude`.
 2. **Overlay** — `setup.files` entries are written into the temp workspace.
 3. **Config** — a minimal `relurpify_cfg/` is materialized with the agent manifest.
-4. **Snapshot** — a SHA-256 hash of every file is recorded before execution starts.
-5. **Execute** — the agent runs against the isolated workspace.
-6. **Diff** — file hashes are recomputed; changed files are determined by hash delta.
+4. **Descriptor** — a prepared-run descriptor is written with workspace, telemetry, and verification paths.
+5. **Snapshot** — a SHA-256 hash of every file is recorded before execution starts.
+6. **Execute** — `dev-agent-cli` consumes the descriptor, composes the runtime, and runs the case against the isolated workspace.
+7. **Diff** — file hashes are recomputed; changed files are determined by hash delta.
 
 All assertions that reference file paths resolve against the isolated workspace.
 
-### 2. Agent bootstrap
+### 2. Prepared-run handoff
 
-The runner calls the standard bootstrap path (`BootstrapAgentRuntime`) with the manifest from `spec.manifest`. This:
-- Resolves the agent definition from the manifest
-- Registers capabilities (tools, relurpic, MCP)
-- Applies the effective capability policy
-- Connects to Ollama at the declared endpoint
+The runner now prepares a descriptor and hands execution to `dev-agent`, which:
+- resolves the agent definition from the manifest
+- registers capabilities (tools, relurpic, MCP)
+- applies the effective capability policy
+- composes the live workspace services through the real registration path
 
 `--skip-ast-index=true` (default) skips the AST/code-index warmup, making runs ~5–10s faster per case.
 

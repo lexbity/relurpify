@@ -1,0 +1,237 @@
+agentenv 2026/05/06 11:51:58.980442 [state_change] node= task= meta=map[capability:cli_yq capability_id:tool:cli_yq exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980485 [state_change] node= task= meta=map[capability:cli_paste capability_id:tool:cli_paste exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980500 [state_change] node= task= meta=map[capability:python_pytest capability_id:tool:python_pytest exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980513 [state_change] node= task= meta=map[capability:go_module_metadata capability_id:tool:go_module_metadata exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980524 [state_change] node= task= meta=map[capability:search_find_similar capability_id:tool:search_find_similar exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980544 [state_change] node= task= meta=map[capability:cli_ex capability_id:tool:cli_ex exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980556 [state_change] node= task= meta=map[capability:cli_ag capability_id:tool:cli_ag exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980568 [state_change] node= task= meta=map[capability:cli_du capability_id:tool:cli_du exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980579 [state_change] node= task= meta=map[capability:cli_go capability_id:tool:cli_go exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980591 [state_change] node= task= meta=map[capability:cli_python capability_id:tool:cli_python exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980602 [state_change] node= task= meta=map[capability:node_npm_test capability_id:tool:node_npm_test exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980614 [state_change] node= task= meta=map[capability:shell_tool_discover capability_id:tool:shell_tool_discover exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980627 [state_change] node= task= meta=map[capability:git_blame capability_id:tool:git_blame exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980642 [state_change] node= task= meta=map[capability:cli_find capability_id:tool:cli_find exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980655 [state_change] node= task= meta=map[capability:cli_uptime capability_id:tool:cli_uptime exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980668 [state_change] node= task= meta=map[capability:cli_node capability_id:tool:cli_node exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980683 [state_change] node= task= meta=map[capability:cli_dig capability_id:tool:cli_dig exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980695 [state_change] node= task= meta=map[capability:go_test capability_id:tool:go_test exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980707 [state_change] node= task= meta=map[capability:shell_tool_instantiate capability_id:tool:shell_tool_instantiate exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980719 [state_change] node= task= meta=map[capability:cli_sed capability_id:tool:cli_sed exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980731 [state_change] node= task= meta=map[capability:cli_cut capability_id:tool:cli_cut exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980743 [state_change] node= task= meta=map[capability:cli_fd capability_id:tool:cli_fd exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980755 [state_change] node= task= meta=map[capability:cli_stat capability_id:tool:cli_stat exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980766 [state_change] node= task= meta=map[capability:cli_df capability_id:tool:cli_df exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980778 [state_change] node= task= meta=map[capability:file_search capability_id:tool:file_search exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980789 [state_change] node= task= meta=map[capability:git_diff capability_id:tool:git_diff exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980804 [state_change] node= task= meta=map[capability:cli_wc capability_id:tool:cli_wc exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980815 [state_change] node= task= meta=map[capability:cli_top capability_id:tool:cli_top exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980827 [state_change] node= task= meta=map[capability:cli_objdump capability_id:tool:cli_objdump exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980839 [state_change] node= task= meta=map[capability:cli_wget capability_id:tool:cli_wget exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980851 [state_change] node= task= meta=map[capability:cli_ip capability_id:tool:cli_ip exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980866 [state_change] node= task= meta=map[capability:cli_crontab capability_id:tool:cli_crontab exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980878 [state_change] node= task= meta=map[capability:file_read capability_id:tool:file_read exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980890 [state_change] node= task= meta=map[capability:git_branch capability_id:tool:git_branch exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980902 [state_change] node= task= meta=map[capability:cli_echo capability_id:tool:cli_echo exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980914 [state_change] node= task= meta=map[capability:cli_touch capability_id:tool:cli_touch exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980926 [state_change] node= task= meta=map[capability:cli_bzip2 capability_id:tool:cli_bzip2 exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980938 [state_change] node= task= meta=map[capability:cli_xz capability_id:tool:cli_xz exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980950 [state_change] node= task= meta=map[capability:cli_curl capability_id:tool:cli_curl exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980964 [state_change] node= task= meta=map[capability:rust_workspace_detect capability_id:tool:rust_workspace_detect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980976 [state_change] node= task= meta=map[capability:cli_tr capability_id:tool:cli_tr exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980987 [state_change] node= task= meta=map[capability:cli_sort capability_id:tool:cli_sort exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.980999 [state_change] node= task= meta=map[capability:cli_lsof capability_id:tool:cli_lsof exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981011 [state_change] node= task= meta=map[capability:cli_systemctl capability_id:tool:cli_systemctl exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981023 [state_change] node= task= meta=map[capability:cli_cmake capability_id:tool:cli_cmake exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981042 [state_change] node= task= meta=map[capability:cli_gdb capability_id:tool:cli_gdb exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981057 [state_change] node= task= meta=map[capability:cli_valgrind capability_id:tool:cli_valgrind exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981069 [state_change] node= task= meta=map[capability:rust_cargo_test capability_id:tool:rust_cargo_test exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981081 [state_change] node= task= meta=map[capability:search_semantic capability_id:tool:search_semantic exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981092 [state_change] node= task= meta=map[capability:git_history capability_id:tool:git_history exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981103 [state_change] node= task= meta=map[capability:cli_git capability_id:tool:cli_git exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981113 [state_change] node= task= meta=map[capability:cli_tree capability_id:tool:cli_tree exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981127 [state_change] node= task= meta=map[capability:cli_pkg_config capability_id:tool:cli_pkg_config exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981138 [state_change] node= task= meta=map[capability:rust_cargo_check capability_id:tool:rust_cargo_check exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981150 [state_change] node= task= meta=map[capability:python_workspace_detect capability_id:tool:python_workspace_detect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981162 [state_change] node= task= meta=map[capability:python_compile_check capability_id:tool:python_compile_check exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981173 [state_change] node= task= meta=map[capability:file_list capability_id:tool:file_list exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981185 [state_change] node= task= meta=map[capability:file_create capability_id:tool:file_create exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981196 [state_change] node= task= meta=map[capability:cli_rev capability_id:tool:cli_rev exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981208 [state_change] node= task= meta=map[capability:cli_rg capability_id:tool:cli_rg exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981219 [state_change] node= task= meta=map[capability:cli_npm capability_id:tool:cli_npm exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981233 [state_change] node= task= meta=map[capability:cli_rustfmt capability_id:tool:cli_rustfmt exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981245 [state_change] node= task= meta=map[capability:cli_gzip capability_id:tool:cli_gzip exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981256 [state_change] node= task= meta=map[capability:node_syntax_check capability_id:tool:node_syntax_check exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981268 [state_change] node= task= meta=map[capability:cli_cargo capability_id:tool:cli_cargo exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981280 [state_change] node= task= meta=map[capability:cli_perf capability_id:tool:cli_perf exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981292 [state_change] node= task= meta=map[capability:file_delete capability_id:tool:file_delete exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981303 [state_change] node= task= meta=map[capability:cli_awk capability_id:tool:cli_awk exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981314 [state_change] node= task= meta=map[capability:cli_column capability_id:tool:cli_column exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981326 [state_change] node= task= meta=map[capability:cli_patch capability_id:tool:cli_patch exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981337 [state_change] node= task= meta=map[capability:cli_hexdump capability_id:tool:cli_hexdump exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981349 [state_change] node= task= meta=map[capability:cli_locate capability_id:tool:cli_locate exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981360 [state_change] node= task= meta=map[capability:cli_lsblk capability_id:tool:cli_lsblk exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981371 [state_change] node= task= meta=map[capability:cli_ps capability_id:tool:cli_ps exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981382 [state_change] node= task= meta=map[capability:cli_jq capability_id:tool:cli_jq exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981393 [state_change] node= task= meta=map[capability:cli_uniq capability_id:tool:cli_uniq exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981407 [state_change] node= task= meta=map[capability:cli_diff capability_id:tool:cli_diff exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981418 [state_change] node= task= meta=map[capability:cli_colordiff capability_id:tool:cli_colordiff exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981432 [state_change] node= task= meta=map[capability:cli_strace capability_id:tool:cli_strace exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981443 [state_change] node= task= meta=map[capability:cli_ldd capability_id:tool:cli_ldd exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981455 [state_change] node= task= meta=map[capability:cli_ping capability_id:tool:cli_ping exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981466 [state_change] node= task= meta=map[capability:python_unittest capability_id:tool:python_unittest exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981478 [state_change] node= task= meta=map[capability:file_write capability_id:tool:file_write exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981489 [state_change] node= task= meta=map[capability:cli_ed capability_id:tool:cli_ed exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981500 [state_change] node= task= meta=map[capability:cli_xxd capability_id:tool:cli_xxd exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981512 [state_change] node= task= meta=map[capability:cli_time capability_id:tool:cli_time exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981523 [state_change] node= task= meta=map[capability:cli_make capability_id:tool:cli_make exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981534 [state_change] node= task= meta=map[capability:cli_tar capability_id:tool:cli_tar exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981546 [state_change] node= task= meta=map[capability:cli_nslookup capability_id:tool:cli_nslookup exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981557 [state_change] node= task= meta=map[capability:sqlite_database_detect capability_id:tool:sqlite_database_detect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981578 [state_change] node= task= meta=map[capability:git_commit capability_id:tool:git_commit exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981594 [state_change] node= task= meta=map[capability:cli_file capability_id:tool:cli_file exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981606 [state_change] node= task= meta=map[capability:cli_sqlite3 capability_id:tool:cli_sqlite3 exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981617 [state_change] node= task= meta=map[capability:node_workspace_detect capability_id:tool:node_workspace_detect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981629 [state_change] node= task= meta=map[capability:node_project_metadata capability_id:tool:node_project_metadata exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981640 [state_change] node= task= meta=map[capability:go_workspace_detect capability_id:tool:go_workspace_detect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981652 [state_change] node= task= meta=map[capability:go_build capability_id:tool:go_build exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981663 [state_change] node= task= meta=map[capability:sqlite_schema_inspect capability_id:tool:sqlite_schema_inspect exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981675 [state_change] node= task= meta=map[capability:cli_perl capability_id:tool:cli_perl exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981686 [state_change] node= task= meta=map[capability:cli_comm capability_id:tool:cli_comm exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981698 [state_change] node= task= meta=map[capability:cli_htop capability_id:tool:cli_htop exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981709 [state_change] node= task= meta=map[capability:cli_nc capability_id:tool:cli_nc exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981720 [state_change] node= task= meta=map[capability:sqlite_integrity_check capability_id:tool:sqlite_integrity_check exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981732 [state_change] node= task= meta=map[capability:query_ast capability_id:tool:query_ast exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981745 [state_change] node= task= meta=map[capability:cli_mkdir capability_id:tool:cli_mkdir exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981757 [state_change] node= task= meta=map[capability:cli_ss capability_id:tool:cli_ss exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981770 [state_change] node= task= meta=map[capability:cli_at capability_id:tool:cli_at exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981782 [state_change] node= task= meta=map[capability:rust_cargo_metadata capability_id:tool:rust_cargo_metadata exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981793 [state_change] node= task= meta=map[capability:python_project_metadata capability_id:tool:python_project_metadata exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981804 [state_change] node= task= meta=map[capability:sqlite_query capability_id:tool:sqlite_query exposure:callable kind:tool scope:builtin security_event:capability_exposure_resolved trust_class:builtin-trusted] msg=capability exposure resolved
+agentenv 2026/05/06 11:51:58.981839 agentenv: prompt registry loaded: 0 prompts
+agentenv 2026/05/06 11:51:58.981869 [state_change] node= task= meta=map[capability:Test Runner capability_id:euclo:cap.test_run exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.981903 [state_change] node= task= meta=map[capability:AST Query capability_id:euclo:cap.ast_query exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.981931 [state_change] node= task= meta=map[capability:Symbol Trace capability_id:euclo:cap.symbol_trace exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.981949 [state_change] node= task= meta=map[capability:Call Graph capability_id:euclo:cap.call_graph exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.981964 [state_change] node= task= meta=map[capability:Blame Trace capability_id:euclo:cap.blame_trace exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.981981 [state_change] node= task= meta=map[capability:Bisect capability_id:euclo:cap.bisect exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982001 [state_change] node= task= meta=map[capability:Code Review capability_id:euclo:cap.code_review exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982046 [state_change] node= task= meta=map[capability:Diff Summary capability_id:euclo:cap.diff_summary exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982104 [state_change] node= task= meta=map[capability:Layer Check capability_id:euclo:cap.layer_check exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982134 [state_change] node= task= meta=map[capability:Targeted Refactor capability_id:euclo:cap.targeted_refactor exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982159 [state_change] node= task= meta=map[capability:Rename Symbol capability_id:euclo:cap.rename_symbol exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982186 [state_change] node= task= meta=map[capability:API Compatibility capability_id:euclo:cap.api_compat exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982209 [state_change] node= task= meta=map[capability:Boundary Report capability_id:euclo:cap.boundary_report exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982246 [state_change] node= task= meta=map[capability:Coverage Check capability_id:euclo:cap.coverage_check exposure:callable kind:tool scope:builtin security_event:capability_admitted trust_class:builtin-trusted] msg=capability admitted
+agentenv 2026/05/06 11:51:58.982267 agentenv: workspace opened successfully
+[agenttest-run] 2026/05/06 11:51:58.982300 execution starting run_id=20260506_185158_968__basic_edit_task__qwen2_5_coder_14b workspace=/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_185158_968__basic_edit_task__qwen2_5_coder_14b/execution/workspace
+agentenv 2026/05/06 11:51:58.982683 [graph_start] node= task=cli-1778093518982369750 meta=map[instruction:Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead of 'hello'. task_type:code-generation] msg=
+agentenv 2026/05/06 11:51:58.982709 [node_start] node=react_think task=cli-1778093518982369750 meta=map[] msg=
+agentenv 2026/05/06 11:51:58.984185 [prompt.resolve_failed] node= task=agent.react.default meta=map[duration_ms:0 error:prompt not found: agent.react.default paradigm:react] msg=prompt agent.react.default resolve failed: prompt not found: agent.react.default
+agentenv 2026/05/06 11:51:58.984287 [llm_prompt] node= task= meta=map[kind:chat_with_tools message_count:2 messages_preview:[map[content:You are a ReAct agent optimized for small local models.
+Think carefully, but keep reasoning short.
+Available tools:
+- cli_ag: Searches codebases with the silver searcher (ag).
+- cli_df: Reports disk usage statistics with df.
+- cli_du: Summarizes directory usage with du.
+- cli_fd: Performs fast file searches with fd.
+- cli_file: Detects file types using the file command.
+- cli_find: Searches the filesystem using find.
+- cli_htop: Runs htop for interactive process monitoring.
+- cli_locate: Queries the file da...(truncated) name: role:system] map[content:You are a ReAct agent optimized for a small-context local model.
+Work step-by-step. Prefer the smallest useful action. Do not restate the task.
+
+You have access to the following tools. To call a tool, return a JSON object with 'tool' (name) and 'arguments' (map).
+
+## cli_ag
+Searches codebases with the silver searcher (ag).
+Arguments:
+  - args (array, optional): Arguments passed to the CLI tool.
+  - stdin (string, optional): Optional standard input piped to the command.
+  - working_directory (string, optiona...(truncated) name: role:user]] model:qwen2.5-coder:14b roles:[system user] tool_count:38 tool_names:[cli_ag cli_df cli_du cli_fd cli_file cli_find cli_htop cli_locate cli_lsblk cli_lsof cli_mkdir cli_ps cli_rg cli_stat cli_strace cli_time cli_top cli_touch cli_tree cli_uptime file_list file_read file_search git_blame git_diff git_history go_workspace_detect node_project_metadata node_workspace_detect python_project_metadata python_workspace_detect query_ast rust_workspace_detect search_find_similar search_semantic shell_tool_discover shell_tool_instantiate sqlite_database_detect]] msg=llm chat_with_tools prompt
+agentenv 2026/05/06 11:52:02.440441 [llm_response] node= task= meta=map[finish_reason:stop kind:chat_with_tools text_preview:```json
+{
+  "thought": "To change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead of 'hello', I need to locate the file and edit it.",
+  "action": "tool",
+  "tool": "file_read",
+  "arguments": {
+    "path": "testsuite/agenttest_fixtures/gosuite/hello/hello.go"
+  },
+  "complete": false,
+  "summary": ""
+}
+``` usage:{3007 108 3115 false }] msg=llm chat_with_tools response
+agentenv 2026/05/06 11:52:02.440563 [node_finish] node=react_think task=cli-1778093518982369750 meta=map[success:true] msg=
+agentenv 2026/05/06 11:52:02.440579 [node_start] node=react_act task=cli-1778093518982369750 meta=map[] msg=
+agentenv 2026/05/06 11:52:02.440649 [tool_call] node= task= meta=map[agent_id:coding args:map[path:testsuite/agenttest_fixtures/gosuite/hello/hello.go] tool:file_read] msg=tool file_read invoked
+agentenv 2026/05/06 11:52:02.440750 [tool_result] node= task= meta=map[agent_id:coding duration_ms:0 success:true tool:file_read] msg=tool file_read completed
+agentenv 2026/05/06 11:52:02.440892 [state_change] node= task=cli-1778093518982369750 meta=map[capability:file_read capability_id:tool:file_read insertion:direct policy_snapshot_id:policy-1778093522440767160 security_event:insertion_decision] msg=insertion decision recorded
+agentenv 2026/05/06 11:52:02.440940 [node_finish] node=react_act task=cli-1778093518982369750 meta=map[success:true] msg=
+agentenv 2026/05/06 11:52:02.440953 [node_start] node=react_stream task=cli-1778093518982369750 meta=map[] msg=
+agentenv 2026/05/06 11:52:02.441073 [node_finish] node=react_stream task=cli-1778093518982369750 meta=map[success:true] msg=
+agentenv 2026/05/06 11:52:02.441094 [node_start] node=react_observe task=cli-1778093518982369750 meta=map[] msg=
+agentenv 2026/05/06 11:52:02.441271 [node_finish] node=react_observe task=cli-1778093518982369750 meta=map[success:true] msg=
+agentenv 2026/05/06 11:52:02.441294 [node_start] node=react_think task=cli-1778093518982369750 meta=map[] msg=
+agentenv 2026/05/06 11:52:02.446578 [prompt.resolve_failed] node= task=agent.react.default meta=map[duration_ms:0 error:prompt not found: agent.react.default paradigm:react] msg=prompt agent.react.default resolve failed: prompt not found: agent.react.default
+agentenv 2026/05/06 11:52:02.446742 [llm_prompt] node= task= meta=map[kind:chat_with_tools message_count:5 messages_preview:[map[content:You are a ReAct agent optimized for small local models.
+Think carefully, but keep reasoning short.
+Available tools:
+- cli_ag: Searches codebases with the silver searcher (ag).
+- cli_at: Schedules one-off jobs using at.
+- cli_awk: Runs awk for advanced text processing.
+- cli_bzip2: Compresses data using bzip2.
+- cli_cargo: Executes Rust cargo commands inside the workspace.
+- cli_cmake: Configures builds with cmake.
+- cli_colordiff: Shows colorized diffs using colordiff.
+- cli_column: Formats text into aligne...(truncated) name: role:system] map[content:You are a ReAct agent optimized for a small-context local model.
+Work step-by-step. Prefer the smallest useful action. Do not restate the task.
+
+You have access to the following tools. To call a tool, return a JSON object with 'tool' (name) and 'arguments' (map).
+
+## cli_ag
+Searches codebases with the silver searcher (ag).
+Arguments:
+  - args (array, optional): Arguments passed to the CLI tool.
+  - stdin (string, optional): Optional standard input piped to the command.
+  - working_directory (string, optiona...(truncated) name: role:user] map[content:```json
+{
+  "thought": "To change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead of 'hello', I need to locate the file and edit it.",
+  "action": "tool",
+  "tool": "file_read",
+  "arguments": {
+    "path": "testsuite/agenttest_fixtures/gosuite/hello/hello.go"
+  },
+  "complete": false,
+  "summary": ""
+}
+``` name: role:assistant] map[content:success=true map[content:package hello
+
+func Hello() string {
+  return "hello"
+}
+ mode:-rw-r--r-- size:56] name:file_read role:tool] map[content:You are a ReAct agent optimized for a small-context local model.
+Work step-by-step. Prefer the smallest useful action. Do not restate the task.
+
+You have access to the following tools. To call a tool, return a JSON object with 'tool' (name) and 'arguments' (map).
+
+## cli_ag
+Searches codebases with the silver searcher (ag).
+Arguments:
+  - args (array, optional): Arguments passed to the CLI tool.
+  - stdin (string, optional): Optional standard input piped to the command.
+  - working_directory (string, optiona...(truncated) name: role:user]] model:qwen2.5-coder:14b roles:[system user assistant tool user] tool_count:94 tool_names:[cli_ag cli_at cli_awk cli_bzip2 cli_cargo cli_cmake cli_colordiff cli_column cli_comm cli_crontab cli_curl cli_cut cli_df cli_diff cli_dig cli_du cli_echo cli_ed cli_ex cli_fd cli_file cli_find cli_gdb cli_git cli_go cli_gzip cli_hexdump cli_htop cli_ip cli_jq cli_ldd cli_locate cli_lsblk cli_lsof cli_make cli_mkdir cli_nc cli_node cli_npm cli_nslookup cli_objdump cli_paste cli_patch cli_perf cli_perl cli_ping cli_pkg_config cli_ps cli_python cli_rev cli_rg cli_sed cli_sort cli_sqlite3 cli_ss cli_stat cli_strace cli_systemctl cli_tar cli_time cli_top cli_touch cli_tr cli_tree cli_uniq cli_uptime cli_valgrind cli_wc cli_wget cli_xxd cli_xz cli_yq file_create file_delete file_list file_read file_search file_write git_branch git_commit go_build go_module_metadata go_test node_npm_test node_syntax_check python_compile_check python_pytest python_unittest rust_cargo_check rust_cargo_metadata rust_cargo_test sqlite_integrity_check sqlite_query sqlite_schema_inspect]] msg=llm chat_with_tools prompt
+agentenv 2026/05/06 11:52:08.257749 [llm_response] node= task= meta=map[finish_reason:stop kind:chat_with_tools text_preview:```json
+{
+  "thought": "To change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello world' instead of 'hello', I need to use a text editor or file manipulation tool to edit the file.",
+  "action": "tool|complete",
+  "tool": "file_write",
+  "arguments": {
+    "path": "testsuite/agenttest_fixtures/gosuite/hello/hello.go",
+    "content": "// Package hello provides a simple function to return a greeting.\npackage hello\n\n// Hello returns the string 'hello world'.\nfunc Hello() string {\n\treturn \"hello world\"\n}"
+  },
+  "complete": true,
+  "summary": "The Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go has been updated to return 'hello world' instead of 'hello'."
+}
+``` usage:{4096 196 4292 false }] msg=llm chat_with_tools response
+agentenv 2026/05/06 11:52:08.257882 [node_finish] node=react_think task=cli-1778093518982369750 meta=map[success:true] msg=
+agentenv 2026/05/06 11:52:08.257903 [node_start] node=react_act task=cli-1778093518982369750 meta=map[] msg=

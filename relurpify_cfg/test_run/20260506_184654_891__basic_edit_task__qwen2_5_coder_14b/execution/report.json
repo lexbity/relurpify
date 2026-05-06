@@ -1,0 +1,16 @@
+{
+  "descriptor_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/prepared_run.json",
+  "workspace": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/workspace",
+  "config_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/workspace/relurpify_cfg/config.yaml",
+  "manifest_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/workspace/relurpify_cfg/agent.manifest.yaml",
+  "setup_log_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/logs/agenttest.log",
+  "setup_telemetry_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/telemetry/agenttest.jsonl",
+  "execution_log_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/logs/agenttest.log",
+  "execution_telemetry_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/telemetry/agenttest.jsonl",
+  "backend_provider": "ollama",
+  "backend_family": "ollama",
+  "backend_endpoint": "http://localhost:11434",
+  "services": [
+    "scheduler"
+  ]
+}

@@ -221,22 +221,26 @@ func (s *ServiceScheduler) Start(ctx context.Context) error {
 	s.Cancel = cancel
 	s.Mu.Unlock()
 
-	defer s.Wg.Wait()
+	s.Wg.Add(1)
+	go func() {
+		defer s.Wg.Done()
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
 
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+		// Run immediately on start, then on ticker.
+		s.runJobs(ctx)
 
-	// Run immediately on start, then on ticker
-	s.runJobs(ctx)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			s.runJobs(ctx)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.runJobs(ctx)
+			}
 		}
-	}
+	}()
+
+	return nil
 }
 
 // Stop halts the scheduler.
@@ -249,6 +253,7 @@ func (s *ServiceScheduler) Stop() error {
 	if cancel != nil {
 		cancel()
 	}
+	s.Wg.Wait()
 	return nil
 }
 

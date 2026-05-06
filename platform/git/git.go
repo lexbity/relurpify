@@ -9,6 +9,11 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
+// SkipAvailabilityProbe disables the shell-based availability check. Prepared
+// live runs can enable this to avoid bootstrap-time command authorization
+// probes before the workspace is fully open.
+var SkipAvailabilityProbe bool
+
 // GitCommandTool executes predefined git commands.
 type GitCommandTool struct {
 	RepoPath string
@@ -167,6 +172,9 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*contracts.
 }
 
 func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
+	if SkipAvailabilityProbe {
+		return true
+	}
 	if t.Runner == nil {
 		return false
 	}

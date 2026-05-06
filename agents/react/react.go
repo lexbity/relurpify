@@ -29,6 +29,7 @@ type ReActAgent struct {
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+	StreamTrigger   *contextstream.Trigger
 	OutputIngester  *knowledge.OutputIngester
 	IngestOutputs   bool
 	PromptRegistry  prompt.Registry
@@ -46,6 +47,11 @@ func (a *ReActAgent) Initialize(cfg *core.Config) error {
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
 	}
+	if cfg != nil && cfg.MaxIterations > 0 {
+		a.maxIterations = cfg.MaxIterations
+	} else if a.maxIterations <= 0 {
+		a.maxIterations = 8
+	}
 	a.initialized = true
 	return nil
 }
@@ -61,6 +67,9 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, env *contextd
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
 		}
+	}
+	if a.StreamTrigger != nil {
+		ctx = contextstream.WithTrigger(ctx, a.StreamTrigger)
 	}
 	graph, err := a.BuildGraph(task)
 	if err != nil {

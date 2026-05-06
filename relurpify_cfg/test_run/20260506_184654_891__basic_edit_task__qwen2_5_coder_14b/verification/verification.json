@@ -1,0 +1,73 @@
+{
+  "descriptor_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/prepared_run.json",
+  "execution_report_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/report.json",
+  "setup_log_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/logs/agenttest.log",
+  "setup_telemetry_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/telemetry/agenttest.jsonl",
+  "execution_log_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/logs/agenttest.log",
+  "execution_telemetry_path": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/telemetry/agenttest.jsonl",
+  "checks": [
+    {
+      "assertion_id": "prepared_run.artifact[descriptor]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/prepared_run.json"
+    },
+    {
+      "assertion_id": "prepared_run.artifact[execution report]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/report.json"
+    },
+    {
+      "assertion_id": "prepared_run.artifact[setup log]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/logs/agenttest.log"
+    },
+    {
+      "assertion_id": "prepared_run.artifact[setup telemetry]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/telemetry/agenttest.jsonl"
+    },
+    {
+      "assertion_id": "prepared_run.artifact[execution log]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/logs/agenttest.log"
+    },
+    {
+      "assertion_id": "prepared_run.artifact[execution telemetry]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/execution/telemetry/agenttest.jsonl"
+    },
+    {
+      "assertion_id": "prepared_run.expected_artifact[testsuite/agenttest_fixtures/gosuite/hello/hello.go]",
+      "tier": "outcome",
+      "passed": true,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/workspace/testsuite/agenttest_fixtures/gosuite/hello/hello.go"
+    },
+    {
+      "assertion_id": "outcome.files_contain[testsuite/agenttest_fixtures/gosuite/hello/hello.go]",
+      "tier": "outcome",
+      "passed": false,
+      "message": "/home/lex/Public/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/workspace/testsuite/agenttest_fixtures/gosuite/hello/hello.go"
+    },
+    {
+      "assertion_id": "prepared_run.output_present",
+      "tier": "outcome",
+      "passed": true,
+      "message": "case output captured"
+    }
+  ],
+  "verification_results": [
+    {
+      "assertion_id": "verify.step[0].go_test",
+      "tier": "outcome",
+      "passed": true,
+      "message": "go test passed: 0 packages ok, 0 failed tests\n?   \tcodeburg.org/lexbit/relurpify/relurpify_cfg/test_run/20260506_184654_891__basic_edit_task__qwen2_5_coder_14b/setup/workspace/testsuite/agenttest_fixtures/gosuite/hello\t[no test files]"
+    }
+  ],
+  "success": false
+}

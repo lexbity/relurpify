@@ -65,9 +65,11 @@ spec:
 
 ### Test Runner (`runner.go`, `runner_case.go`)
 
-The test runner executes test cases against live agents:
+The test runner prepares live test cases, writes a prepared-run descriptor, and
+then verifies the resulting run artifacts:
 - Loads YAML test suites
-- Executes cases with configurable retries
+- Prepares the derived workspace and descriptor
+- Hands execution to `dev-agent-cli prepared-run`
 - Captures execution output, file changes, and tool transcripts
 - Produces structured `CaseReport` with OSB observations
 
@@ -126,16 +128,16 @@ The `dev-agent-cli` provides commands for working with test suites:
 
 ```bash
 # Run a specific test suite
-dev-agent-cli agenttest run --suite testsuite/agenttests/coding.testsuite.yaml
+dev-agent agenttest run --suite testsuite/agenttests/coding.testsuite.yaml
 
 # Run with specific model
-dev-agent-cli agenttest run --suite coding.testsuite.yaml --model qwen2.5-coder:14b
+dev-agent agenttest run --suite coding.testsuite.yaml --model qwen2.5-coder:14b
 
 # Run specific case
-dev-agent-cli agenttest run --suite coding.testsuite.yaml --case simple_file_edit
+dev-agent agenttest run --suite coding.testsuite.yaml --case simple_file_edit
 
 # Run by capability
-dev-agent-cli agenttest run --capability code-edit-v1
+dev-agent agenttest run --capability code-edit-v1
 ```
 
 ## Directory Structure

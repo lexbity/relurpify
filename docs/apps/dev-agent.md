@@ -1,7 +1,8 @@
 # dev-agent
 
 `dev-agent` is the developer-facing CLI in `app/dev-agent-cli`. It is used for
-manifest utilities, skill scaffolding, and YAML-driven agent tests.
+manifest utilities, skill scaffolding, and YAML-driven agent tests with a
+descriptor-driven prepared-run handoff.
 
 ## Common Commands
 
@@ -20,7 +21,7 @@ dev-agent start --instruction "Summarize this repository"
 |---------|---------|
 | `agents` | List, create, and validate manifests |
 | `skill` | Scaffold, validate, test, and inspect skills |
-| `agenttest` | Run, refresh, and promote agent tests |
+| `agenttest` | Prepare, run, refresh, and promote agent tests |
 | `start` | Start a development agent run directly |
 | `session` | Inspect saved session snapshots |
 | `config` | Read and update `config.yaml` |

@@ -28,6 +28,7 @@ func newAgentTestCmd() *cobra.Command {
 		Short: "Run YAML-driven agent test suites",
 	}
 	cmd.AddCommand(newAgentTestRunCmd())
+	cmd.AddCommand(newAgentTestPreparedRunCmd())
 	cmd.AddCommand(newAgentTestPromoteCmd())
 	cmd.AddCommand(newAgentTestRefreshCmd())
 	cmd.AddCommand(newAgentTestTapesCmd())
@@ -194,7 +195,7 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&profile, "profile", "", "Override execution profile (live|record|replay|developer-live|ci-live|ci-replay)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the process if any non-skipped case fails; implied by ci-live and ci-replay profiles")
 	cmd.Flags().BoolVar(&includeQuarantined, "include-quarantined", false, "Include suites marked quarantined")
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts (default: workspace-local relurpify_cfg/test_runs/...)")
+	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts (default: workspace-local relurpify_cfg/test_run/...)")
 	cmd.Flags().BoolVar(&sandbox, "sandbox", true, "Run tool execution via gVisor/docker (requires runsc + docker)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout for agent/runtime setup before execution")

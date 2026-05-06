@@ -127,11 +127,18 @@ func (p Paths) TestsuitesDir() string {
 }
 
 func (p Paths) TestRunsDir() string {
-	return filepath.Join(p.ConfigRoot(), "test_runs")
+	return filepath.Join(p.ConfigRoot(), "test_run")
+}
+
+func (p Paths) TestSetupDir(parts ...string) string {
+	segments := append([]string{p.TestRunsDir()}, parts...)
+	segments = append(segments, "setup")
+	return filepath.Join(segments...)
 }
 
 func (p Paths) TestRunDir(parts ...string) string {
 	segments := append([]string{p.TestRunsDir()}, parts...)
+	segments = append(segments, "execution")
 	return filepath.Join(segments...)
 }
 

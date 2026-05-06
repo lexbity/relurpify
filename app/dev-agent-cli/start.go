@@ -11,22 +11,21 @@ import (
 	"syscall"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/agents"
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"github.com/spf13/cobra"
 )
 
 var (
 	registerAgentFn            = fauthorization.RegisterAgent
 	registerBuiltinProvidersFn = appruntime.RegisterBuiltinProviders
-	buildFromSpecFn            = agents.BuildFromSpec
+	instantiateNamedAgentFn    = namedfactory.InstantiateByName
 )
 
 // newStartCmd constructs the development CLI command that runs an agent.
@@ -110,7 +109,7 @@ func newStartCmd() *cobra.Command {
 			if modelName == "" {
 				modelName = defaultModelName()
 			}
-			workspace, err := agentenv.Open(runCtx, agentenv.WorkspaceConfig{
+			workspace, err := workspaceOpenFn(runCtx, agentenv.WorkspaceConfig{
 				Workspace:         runtimeCfg.Workspace,
 				ManifestPath:      runtimeCfg.ManifestPath,
 				InferenceProvider: "ollama",
@@ -121,7 +120,7 @@ func newStartCmd() *cobra.Command {
 				AgentName:         agentName,
 				SandboxBackend:    sandboxBackend,
 				LogPath:           logPath,
-			}, agentenv.AgentRegistrationFuncs{})
+			}, workspaceRegistrationFuncsFn())
 			if err != nil {
 				return err
 			}
@@ -186,14 +185,6 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			agentEnv := agents.AgentEnvironment{
-				Config:       workspace.Environment.Config,
-				Model:        workspace.Environment.Model,
-				Registry:     workspace.Environment.Registry,
-				IndexManager: workspace.Environment.IndexManager,
-				SearchEngine: workspace.Environment.SearchEngine,
-				Memory:       workspace.Environment.WorkingMemory,
-			}
 			cfg := &core.Config{
 				Name:              agentName,
 				Model:             modelName,
@@ -215,15 +206,9 @@ func newStartCmd() *cobra.Command {
 				return err
 			}
 			workspace.Environment.Config = cfg
-			agentEnv.Config = cfg
-			var agent graph.WorkflowExecutor
-			var buildErr error
-			agent, buildErr = buildFromSpecFn(&workspace.Environment, *spec)
-			if buildErr != nil {
-				agent, buildErr = buildFromSpecFn(&workspace.Environment, agentspec.AgentRuntimeSpec{Implementation: "react"})
-			}
-			if buildErr != nil {
-				return buildErr
+			agent := instantiateNamedAgentFn(runtimeCfg.Workspace, agentName, workspace.Environment)
+			if agent == nil {
+				return fmt.Errorf("agent %s unavailable", agentName)
 			}
 			execCtx, stopSignals := signal.NotifyContext(runCtx, os.Interrupt, syscall.SIGTERM)
 			defer stopSignals()

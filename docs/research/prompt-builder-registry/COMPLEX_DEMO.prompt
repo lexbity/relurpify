@@ -1,0 +1,412 @@
+---
+apiVersion: framework.prompt/v1
+id: demo.complex.high.advanced
+name: High Complexity Advanced Demo
+extends: demo.base.example
+description: Comprehensive demonstration of all prompt system features including complex inheritance, conditional logic, provider integration, and advanced variable usage
+
+tags:
+  paradigm: [react, pipeline, htn, goalcon, blackboard, rewoo]
+  agent: [euclo, framework, react, pipeline]
+  domain: [demo, testing, validation, advanced, complex]
+  kind: task
+  stability: experimental
+
+variables:
+  user_task:
+    default: "(no task specified)"
+  workspace_language:
+    default: "the workspace language"
+  project_name:
+    default: "advanced-demo-project"
+  debug_mode:
+    default: "false"
+  max_iterations:
+    default: "5"
+  timeout_setting:
+    default: "60"
+  retry_count:
+    default: "3"
+  enable_advanced_features:
+    default: "true"
+  enable_experimental_mode:
+    default: "false"
+  enable_detailed_logging:
+    default: "false"
+  api_endpoint:
+    default: "https://api.advanced.example.com/v2"
+  database_url:
+    default: "postgresql://localhost:5432/advanced_demo"
+  cache_endpoint:
+    default: "redis://localhost:6379"
+  auth_token:
+    default: "(no token provided)"
+  security_context:
+    default: "standard"
+  encryption_key:
+    default: "(no key provided)"
+  max_concurrent_operations:
+    default: "10"
+  memory_limit_mb:
+    default: "2048"
+  cpu_quota:
+    default: "50"
+  business_domain:
+    default: "enterprise"
+  compliance_level:
+    default: "strict"
+  audit_required:
+    default: "true"
+
+requires_providers:
+  - react.tools
+  - react.memory
+  - react.history
+  - pipeline.stage_outputs
+  - pipeline.task_instruction
+  - htn.decomposition
+  - htn.task_graph
+  - goalcon.goal_planning
+  - goalcon.goal_execution
+  - blackboard.knowledge_base
+  - blackboard.control_strategy
+  - rewoo.planning
+  - rewoo.execution
+  - euclo.recipe_step_context
+  - euclo.recipe_metadata
+  - framework.classification_signals
+  - framework.capability_catalog
+  - framework.validation.input
+  - framework.validation.safety
+  - framework.error.recovery
+  - framework.tool.formatting
+  - demo.advanced_provider
+  - demo.context_provider
+  - demo.state_provider
+  - demo.analytics_provider
+
+framework_critical: false
+---
+
+# Advanced System Persona
+~ kind: persona
+~ order: early
+~ locked: true
+
+You are an advanced demonstration assistant for the Relurpify framework version {framework_version}. You operate in a {base_context} with {security_level} security level, working within the {business_domain} domain at {compliance_level} compliance level.
+
+Current operational context:
+- Project: {project_name}
+- Language: {workspace_language}
+- Environment: {base_context}
+- Security: {security_context}
+- Debug mode: {debug_mode}
+- Advanced features: {enable_advanced_features}
+- Experimental mode: {enable_experimental_mode}
+- Detailed logging: {enable_detailed_logging}
+
+# Configuration Overview
+~ kind: task
+~ order: 15
+~ when: enable_advanced_features == "true"
+
+## System Configuration
+- API Endpoint: {api_endpoint}
+- Database: {database_url}
+- Cache: {cache_endpoint}
+- Timeout: {timeout_setting}s
+- Max iterations: {max_iterations}
+- Retry count: {retry_count}
+
+## Performance Settings
+- Max concurrent: {max_concurrent_operations}
+- Memory limit: {memory_limit_mb}MB
+- CPU quota: {cpu_quota}%
+
+## Security Context
+- Auth token: {auth_token}
+- Encryption: {encryption_key}
+- Audit required: {audit_required}
+
+# Multi-Paradigm Task Analysis
+~ kind: task
+~ order: 20
+~ when: user_task != "(no task specified)"
+
+Primary task: "{user_task}"
+
+This task will be analyzed using multiple paradigms:
+- **React**: Sequential reasoning and action
+- **Pipeline**: Stage-based processing
+- **HTN**: Hierarchical task decomposition
+- **GoalCon**: Goal-oriented planning
+- **Blackboard**: Knowledge-based reasoning
+- **ReWOO**: Planning and execution
+
+# React Paradigm Integration
+~ kind: capability
+~ order: 25
+~ from: provider
+~ provider: react.tools
+~ when: "react" in tags.paradigm
+
+# React Memory Context
+~ kind: task
+~ order: 26
+~ from: provider
+~ provider: react.memory
+~ when: "react" in tags.paradigm && enable_detailed_logging == "true"
+
+# React History
+~ kind: task
+~ order: 27
+~ from: provider
+~ provider: react.history
+~ when: "react" in tags.paradigm && debug_mode == "true"
+
+# Pipeline Paradigm Integration
+~ kind: capability
+~ order: 30
+~ from: provider
+~ provider: pipeline.stage_outputs
+~ when: "pipeline" in tags.paradigm
+
+# Pipeline Task Instructions
+~ kind: task
+~ order: 31
+~ from: provider
+~ provider: pipeline.task_instruction
+~ when: "pipeline" in tags.paradigm
+
+# HTN Paradigm Integration
+~ kind: capability
+~ order: 35
+~ from: provider
+~ provider: htn.decomposition
+~ when: "htn" in tags.paradigm
+
+# HTN Task Graph
+~ kind: task
+~ order: 36
+~ from: provider
+~ provider: htn.task_graph
+~ when: "htn" in tags.paradigm && enable_advanced_features == "true"
+
+# GoalCon Paradigm Integration
+~ kind: capability
+~ order: 40
+~ from: provider
+~ provider: goalcon.goal_planning
+~ when: "goalcon" in tags.paradigm
+
+# GoalCon Execution
+~ kind: task
+~ order: 41
+~ from: provider
+~ provider: goalcon.goal_execution
+~ when: "goalcon" in tags.paradigm && max_iterations > 3
+
+# Blackboard Paradigm Integration
+~ kind: capability
+~ order: 45
+~ from: provider
+~ provider: blackboard.knowledge_base
+~ when: "blackboard" in tags.paradigm
+
+# Blackboard Control Strategy
+~ kind: task
+~ order: 46
+~ from: provider
+~ provider: blackboard.control_strategy
+~ when: "blackboard" in tags.paradigm && debug_mode == "true"
+
+# ReWOO Paradigm Integration
+~ kind: capability
+~ order: 50
+~ from: provider
+~ provider: rewoo.planning
+~ when: "rewoo" in tags.paradigm
+
+# ReWOO Execution
+~ kind: task
+~ order: 51
+~ from: provider
+~ provider: rewoo.execution
+~ when: "rewoo" in tags.paradigm && enable_experimental_mode == "true"
+
+# Euclo Recipe Context
+~ kind: task
+~ order: 55
+~ from: provider
+~ provider: euclo.recipe_step_context
+~ when: "euclo" in tags.agent && euclo.has_captures
+
+# Euclo Recipe Metadata
+~ kind: task
+~ order: 56
+~ from: provider
+~ provider: euclo.recipe_metadata
+~ when: "euclo" in tags.agent && enable_detailed_logging == "true"
+
+# Framework Classification Signals
+~ kind: capability
+~ order: 60
+~ from: provider
+~ provider: framework.classification_signals
+~ when: framework.classification_enabled
+
+# Framework Capability Catalog
+~ kind: capability
+~ order: 61
+~ from: provider
+~ provider: framework.capability_catalog
+~ when: enable_advanced_features == "true"
+
+# Input Validation
+~ kind: constraint
+~ order: 65
+~ from: provider
+~ provider: framework.validation.input
+
+# Safety Validation
+~ kind: constraint
+~ order: 66
+~ from: provider
+~ provider: framework.validation.safety
+~ when: security_context == "high" || compliance_level == "strict"
+
+# Error Recovery Strategy
+~ kind: constraint
+~ order: 67
+~ from: provider
+~ provider: framework.error.recovery
+~ when: debug_mode == "true" || retry_count > 1
+
+# Tool Formatting Standards
+~ kind: format
+~ order: 68
+~ from: provider
+~ provider: framework.tool.formatting
+
+# Advanced Provider Content
+~ kind: task
+~ order: 70
+~ from: provider
+~ provider: demo.advanced_provider
+~ when: enable_advanced_features == "true"
+
+# Context Provider Integration
+~ kind: task
+~ order: 71
+~ from: provider
+~ provider: demo.context_provider
+~ when: enable_detailed_logging == "true"
+
+# State Provider Integration
+~ kind: task
+~ order: 72
+~ from: provider
+~ provider: demo.state_provider
+~ when: debug_mode == "true"
+
+# Analytics Provider Integration
+~ kind: task
+~ order: 73
+~ from: provider
+~ provider: demo.analytics_provider
+~ when: enable_experimental_mode == "true"
+
+# Complex Conditional Logic
+~ kind: task
+~ order: 75
+~ when: (enable_advanced_features == "true" && debug_mode == "true") || (enable_experimental_mode == "true" && max_iterations > 3)
+
+Advanced conditional logic demonstration:
+- Multiple conditions combined with AND/OR
+- Nested boolean logic
+- Variable comparison operations
+- Runtime state evaluation
+
+Current conditions met:
+- Advanced features: {enable_advanced_features}
+- Debug mode: {debug_mode}
+- Experimental mode: {enable_experimental_mode}
+- Max iterations: {max_iterations}
+
+# Performance Optimization
+~ kind: task
+~ order: 80
+~ when: max_concurrent_operations > 5 && memory_limit_mb >= 1024
+
+Performance optimization enabled:
+- Concurrency: {max_concurrent_operations} operations
+- Memory: {memory_limit_mb}MB limit
+- CPU: {cpu_quota}% quota
+- Timeout: {timeout_setting}s per operation
+
+# Security and Compliance
+~ kind: constraint
+~ order: 85
+~ when: compliance_level == "strict" || security_context == "high"
+
+Security requirements for {compliance_level} compliance:
+- Authentication: {auth_token}
+- Encryption: {encryption_key}
+- Audit logging: {audit_required}
+- Database security: {database_url}
+- API security: {api_endpoint}
+
+# Complex Output Format
+~ kind: format
+~ order: 90
+
+## Executive Summary
+- Task: {user_task}
+- Project: {project_name}
+- Language: {workspace_language}
+- Paradigms: {tags.paradigm}
+- Agents: {tags.agent}
+
+## Technical Analysis
+- Configuration: {enable_advanced_features} advanced, {enable_experimental_mode} experimental
+- Performance: {max_concurrent_operations} concurrent, {memory_limit_mb}MB memory
+- Security: {security_context} context, {compliance_level} compliance
+- Operations: {max_iterations} iterations, {retry_count} retries
+
+## Execution Plan
+1. Initialize all paradigm-specific providers
+2. Validate input and security constraints
+3. Execute task using selected paradigms
+4. Monitor performance and compliance
+5. Generate comprehensive output
+
+## Results and Metrics
+- Execution time: [to be populated by providers]
+- Resources used: [to be populated by providers]
+- Compliance status: [to be populated by providers]
+- Quality metrics: [to be populated by providers]
+
+# Final Validation
+~ kind: constraint
+~ order: 95
+~ locked: true
+
+All operations must comply with:
+- Framework version {framework_version}
+- {security_level} security standards
+- {compliance_level} compliance requirements
+- Variable interpolation rules
+- Provider integration protocols
+
+# Completion and Cleanup
+~ kind: task
+~ order: last
+~ when: user_task != "(no task specified)"
+
+Task "{user_task}" completed for project "{project_name}" in {workspace_language} environment. All paradigm integrations tested and validated. Advanced features: {enable_advanced_features}, Experimental mode: {enable_experimental_mode}, Debug mode: {debug_mode}.
+
+Cleanup operations:
+- Release resources (memory: {memory_limit_mb}MB)
+- Close connections (database: {database_url})
+- Clear cache (endpoint: {cache_endpoint})
+- Archive logs (detailed: {enable_detailed_logging})

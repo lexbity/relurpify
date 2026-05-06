@@ -15,7 +15,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/named/euclo"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	workspaceOpenFn              = agentenv.Open
+	workspaceRegistrationFuncsFn = euclo.GetRegistrationFuncs
 )
 
 type inspectionTarget struct {
@@ -223,5 +229,5 @@ func openWorkspaceForInspection(ctx context.Context, ws string) (*agentenv.Works
 	if err != nil {
 		return nil, err
 	}
-	return agentenv.Open(ctx, target.cfg, agentenv.AgentRegistrationFuncs{})
+	return workspaceOpenFn(ctx, target.cfg, workspaceRegistrationFuncsFn())
 }

@@ -22,7 +22,6 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
-	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	platformcontracts "codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -89,7 +88,7 @@ func (a *Agent) Initialize(config *core.Config) error {
 		return fmt.Errorf("workspace capability registry is nil")
 	}
 
-	regFuncs := services.NewRegistration().AgentRegistrationFuncs()
+	regFuncs := GetRegistrationFuncs()
 
 	if regFuncs.RegisterCapabilities != nil {
 		if err := regFuncs.RegisterCapabilities(a.env); err != nil {
