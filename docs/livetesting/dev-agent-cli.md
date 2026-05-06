@@ -12,7 +12,7 @@ This package covers:
 
 - root CLI bootstrap and global config loading
 - Euclo capability, trigger, journey, benchmark, and baseline commands
-- `agenttest` live integration suite execution, promotion, and tape inspection
+- `agenttest` live integration suite execution, prepared-run handoff, promotion, and tape inspection
 - workspace, service, session, skill, config, and archaeology helpers
 - shared CLI utility code for YAML, workspace, and value handling
 
@@ -77,6 +77,7 @@ The package is now split by responsibility.
 ### Agent test harness
 
 - [app/dev-agent-cli/agenttest_cmd.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_cmd.go)
+- [app/dev-agent-cli/agenttest_run.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_run.go)
 - [app/dev-agent-cli/agenttest_promote.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_promote.go)
 - [app/dev-agent-cli/agenttest_tapes.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_tapes.go)
 - [app/dev-agent-cli/agenttest_lane.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_lane.go)
@@ -210,13 +211,18 @@ The `agenttest` command tree drives repository integration suites with real runt
 Implemented in:
 
 - [app/dev-agent-cli/agenttest_cmd.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_cmd.go)
+- [app/dev-agent-cli/agenttest_run.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_run.go)
 - [app/dev-agent-cli/agenttest_promote.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_promote.go)
 - [app/dev-agent-cli/agenttest_tapes.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_tapes.go)
 - [app/dev-agent-cli/agenttest_lane.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_lane.go)
+- [app/dev-agent-cli/agenttest_descriptor.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_descriptor.go)
+- [app/dev-agent-cli/agenttest_workspace.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_workspace.go)
+- [app/dev-agent-cli/agenttest_report.go](/home/lex/Public/Relurpify/app/dev-agent-cli/agenttest_report.go)
 
 ### Command groups
 
 - `agenttest run`
+- `agenttest prepared-run`
 - `agenttest promote`
 - `agenttest refresh`
 - `agenttest tapes`
@@ -236,12 +242,16 @@ It applies:
 - quarantined filtering
 - case name and tag filtering
 
-It then runs the selected suites through the real `testsuite/agenttest` runner and prints summary output plus performance/benchmark summaries when present.
+It then prepares a run descriptor, hands execution to the prepared-run path, and prints summary output plus performance/benchmark summaries when present.
 
 Model profile selection is applied during live runs using the checkout's
 `relurpify_cfg/model_profiles/` registry. The selected provider and model are
 resolved to a `platform/llm.ModelProfile`, then attached to the Ollama client
 before the case starts.
+
+`agenttest prepared-run` is the descriptor-driven handoff command. It loads a
+prepared-run descriptor, composes the workspace, starts or resets services as
+requested, and writes the run report plus run-scoped setup/execution artifacts.
 
 ### Promote
 
@@ -322,6 +332,8 @@ The catalog assembly itself is in [app/dev-agent-cli/euclo_catalog.go](/home/lex
 
 The CLI writes and reads a number of structured artifact files. Common ones include:
 
+- `relurpify_cfg/testsetup/{run_id}/...`
+- `relurpify_cfg/test_runs/{agent}/{run_id}/...`
 - `tape.jsonl`
 - `interaction.tape.jsonl`
 - `baseline.json`

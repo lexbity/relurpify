@@ -2,7 +2,7 @@
 
 ## Synopsis
 
-Relurpify has two testing layers. Unit tests cover framework internals deterministically and require no running services. Agent tests run full workflows from committed YAML suites and usually require Ollama, but they can be replayed from tape for reproducibility.
+Relurpify has two testing layers. Unit tests cover framework internals deterministically and require no running services. Agent tests run full workflows from committed YAML suites and usually require Ollama, but they can be replayed from tape for reproducibility. The live agenttest path now uses a prepared-run descriptor handoff so setup and execution artifacts stay split.
 
 ---
 
@@ -47,6 +47,8 @@ Agent tests are YAML-driven suites stored in `testsuite/agenttests/`. Run them w
 ```bash
 go run ./app/dev-agent-cli agenttest run
 ```
+
+Internally, the CLI prepares a run descriptor, composes the workspace runtime, and executes the case through `agenttest prepared-run`.
 
 ## Live Coverage Targets
 
@@ -245,7 +247,7 @@ spec:
 | `expect` | Structured expectations for output, files, and tool calls |
 | `overrides` | Per-case overrides for model, recording, memory backend, env, allowed tools, or control flow |
 
-`derived` is the required strategy. It copies the worktree into a temp run workspace, materializes a fresh `relurpify_cfg/` from a testsuite template profile, and then layers suite/case overrides on top.
+`derived` is the required strategy. It copies the worktree into a temp run workspace, materializes a fresh `relurpify_cfg/` from a testsuite template profile, and then layers suite/case overrides on top. The live case runner also writes a prepared-run descriptor under `relurpify_cfg/testsetup/{run_id}/` and writes execution artifacts under `relurpify_cfg/test_runs/{agent}/{run_id}/`.
 
 Browser-backed cases can define `browser_fixtures` with inline HTML or fixture
 files. The harness injects fixture URLs into `task.Context.browser_fixtures`.

@@ -1,6 +1,6 @@
 # Testsuite Package
 
-The `testsuite/` tree is the repository’s YAML-driven live integration and baseline harness for agents. It exercises complete agent workflows against the real runtime stack, then records structured artifacts that can be used for regression checks, performance baselines, and debugging.
+The `testsuite/` tree is the repository’s YAML-driven live integration and baseline harness for agents. It prepares a derived workspace, writes a prepared-run descriptor, hands execution to `dev-agent-cli`, and then records structured artifacts that can be used for regression checks, performance baselines, and debugging.
 
 This document explains:
 
@@ -20,7 +20,6 @@ The testsuite package exists to validate agent behavior through the real orchest
 
 It answers questions like:
 
-- does the agent choose the right mode or execution profile?
 - does it call the right tools in the right situations?
 - does it mutate the workspace when mutation is intended?
 - does it avoid mutation when the case is analysis-only?
@@ -45,20 +44,19 @@ Examples:
 - debug localization and patching
 - review and inspection
 - planning and staged execution
-- archaeology-style exploration and plan compilation
 
 ### 2. Capability selection and routing
 
 Many cases assert on the agent’s runtime selection state:
 
-- resolved mode
+- resolved intent
 - selected execution profile
 - behavior family
 - primary relurpic capability
 - supporting capabilities
 - recipe IDs
 
-This is especially important for Euclo, where a single top-level agent can route into different relurpic capabilities and execution families depending on mode, profile, and task signals.
+This is especially important for Euclo, where a single top-level agent can route into different relurpic capabilities and execution families from task signals.
 
 ### 3. Tool calling
 
@@ -156,11 +154,11 @@ At a high level, a case runs through the following pipeline:
 2. A derived workspace is created.
 3. Files from `setup.files` are materialized into the workspace.
 4. Optional memory, workflow, and git state seeds are applied.
-5. The agent is invoked against the selected model and endpoint.
-6. The agent calls tools through the real runtime surface.
+5. A prepared-run descriptor is written with workspace, manifest, telemetry, and verification paths.
+6. `dev-agent-cli` consumes the descriptor, composes the runtime, and executes the case through the live service stack.
 7. The runner records output, state, file changes, tool calls, and artifacts.
 8. Expectations are evaluated against the final result.
-9. A run directory is written under `relurpify_cfg/test_runs/{agent}/{run_id}/`.
+9. Setup artifacts are written under `relurpify_cfg/testsetup/{run_id}/` and execution artifacts under `relurpify_cfg/test_runs/{agent}/{run_id}/`.
 
 ### Workspace model
 
@@ -218,7 +216,13 @@ The rapid Euclo suites were tightened specifically to be a baseline for capabili
 
 ## Output Artifacts
 
-Each case writes a structured run directory under:
+Each case writes structured run directories under:
+
+`relurpify_cfg/testsetup/{run_id}/`
+
+- prepared-run descriptor
+- setup logs
+- setup telemetry
 
 `relurpify_cfg/test_runs/{agent}/{run_id}/`
 
@@ -244,6 +248,8 @@ These artifacts are the basis for debugging failed runs and for comparing curren
 ## Run Modes
 
 The suite supports live and replay-oriented execution through the dev-agent CLI.
+
+The user-facing entrypoint remains `agenttest run`. Internally, the CLI prepares a descriptor and then executes the handoff through `agenttest prepared-run` so setup and execution artifacts stay split by phase.
 
 Typical execution profiles:
 

@@ -8,11 +8,12 @@ testdata/
 relurpify/
 .relurpish/
 /relurpish
-/relurpify_cfg/test_runs/
+/relurpify_cfg/test_run/
 /relurpify_cfg/memory/
 /relurpify_cfg/logs/
 /relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
+/devdocs
 
 /REFERENCE_ONLY
 
