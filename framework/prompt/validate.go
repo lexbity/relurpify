@@ -1,5 +1,7 @@
 package prompt
 
+import "strings"
+
 // IssueSeverity classifies a validation finding.
 type IssueSeverity int
 
@@ -167,4 +169,32 @@ func scanVarRefs(s string, used map[string]bool) {
 			i = j
 		}
 	}
+}
+
+// ValidateStructuredMap checks that a structured prompt output contains the
+// required keys before state mutation proceeds.
+func ValidateStructuredMap(promptID, blockID string, value map[string]any, requiredKeys []string) []ValidationIssue {
+	issues := make([]ValidationIssue, 0)
+	add := func(message string) {
+		issues = append(issues, ValidationIssue{
+			PromptID: promptID,
+			BlockID:  blockID,
+			Severity: SeverityError,
+			Message:  message,
+		})
+	}
+	if value == nil {
+		add("structured output is missing")
+		return issues
+	}
+	for _, key := range requiredKeys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, ok := value[key]; !ok {
+			add("missing required field: " + key)
+		}
+	}
+	return issues
 }

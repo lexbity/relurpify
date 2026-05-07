@@ -19,6 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 )
 
@@ -201,6 +202,34 @@ func (g *RootGraph) SetStart(nodeID string) error {
 }
 
 func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
+	dispatchCapReg := cfg.CapabilityRegistry
+	builtinRecipes, err := recipetemplates.LoadAll()
+	if err != nil {
+		panic(err)
+	}
+	recipeReg := cfg.RecipeRegistry
+	if recipeReg == nil {
+		recipeReg = builtinRecipes
+	} else if builtinRecipes != nil {
+		for _, id := range builtinRecipes.List() {
+			if _, ok := recipeReg.Get(id); ok {
+				continue
+			}
+			if recipe, ok := builtinRecipes.Get(id); ok && recipe != nil {
+				if err := recipeReg.Register(recipe); err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+	recipeCapReg := cfg.Env.Registry
+	if recipeCapReg == nil {
+		recipeCapReg = capability.NewCapabilityRegistry()
+		cfg.Env.Registry = recipeCapReg
+	}
+	if err := registerClarificationCapability(recipeCapReg); err != nil {
+		panic(err)
+	}
 	intakePipeline := intake.NewIntakePipelineNode(
 		"euclo.intake",
 		cfg.FamilyRegistry,
@@ -337,21 +366,19 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 
 	dispatchNode := NewDispatcher("euclo.dispatch").
 		WithWorkspace(cfg.Workspace).
-		WithCapabilityRegistry(cfg.CapabilityRegistry).
-		WithRecipeRegistry(cfg.RecipeRegistry)
+		WithCapabilityRegistry(dispatchCapReg).
+		WithRecipeRegistry(recipeReg)
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
 	recipeExec := NewRecipeExecutorNode("euclo.execute_recipe").
 		WithWorkspaceEnvironment(cfg.Env).
 		WithIngestionPipeline(nil)
-	if cfg.RecipeRegistry != nil {
-		recipeExec.WithRecipeRegistry(cfg.RecipeRegistry)
-	}
+	recipeExec.WithRecipeRegistry(recipeReg)
 
 	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability")
-	if cfg.CapabilityRegistry != nil {
-		capabilityExec.WithCapabilityRegistry(cfg.CapabilityRegistry)
+	if dispatchCapReg != nil {
+		capabilityExec.WithCapabilityRegistry(dispatchCapReg)
 	}
 
 	mergeNode := NewMergeNode("euclo.merge")

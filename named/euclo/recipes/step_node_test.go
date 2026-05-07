@@ -8,6 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -106,5 +109,136 @@ func TestRecipeStepNodeExecuteCapability(t *testing.T) {
 		t.Fatal("expected step result in envelope")
 	} else if data, ok := got.(map[string]any); !ok || data["capability_id"] != "euclo:cap.ast_query" {
 		t.Fatalf("unexpected envelope step result: %#v", got)
+	}
+}
+
+func TestRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T) {
+	env := contextdata.NewEnvelope("task-clarify", "session-clarify")
+	state := intentcontext.NewState("task-clarify", "session-clarify")
+	state.StateVersion = 11
+	state.CurrentTurnID = "turn-11"
+	state.ActiveRecipeID = "recipe.intent.clarify"
+	state.GroundedAnchors = []retrieval.AnchorRef{
+		{AnchorID: "anchor-11", ChunkID: "chunk-11", Term: "Envelope", Definition: "type anchor", Class: "clarified_entity", Active: true},
+	}
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		t.Fatalf("write clarification state: %v", err)
+	}
+
+	step := ExecutionStep{
+		ID:       "clarify.step",
+		Paradigm: "euclo",
+		Prompt:   "Which module should be updated?",
+		Step: RecipeStep{
+			ID:     "clarify.step",
+			Prompt: "Which module should be updated?",
+		},
+	}
+	node := NewRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{}, step)
+
+	rctx := node.buildRuntimeContext(env)
+	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
+	if !ok {
+		t.Fatalf("expected clarification state in prompt runtime, got %#v", rctx.State[intentcontext.ClarificationStateKey])
+	}
+	if clarState.StateVersion != 11 {
+		t.Fatalf("expected state version 11, got %d", clarState.StateVersion)
+	}
+	if got := rctx.State["euclo.intent.clarification.current_turn_id"]; got != "turn-11" {
+		t.Fatalf("expected turn id in runtime state, got %#v", got)
+	}
+	if got := rctx.State["euclo.intent.clarification.grounded_anchor_ids"]; got == nil {
+		t.Fatal("expected grounded anchor ids in runtime state")
+	}
+	if got := rctx.Variables["instruction"]; got == "" {
+		t.Fatal("expected instruction variable to be populated")
+	}
+}
+
+func TestRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
+	registry := prompttest.New().With("euclo.intent.clarify.question.v1", "resolved prompt text")
+	env := contextdata.NewEnvelope("task-1", "session-1")
+	step := ExecutionStep{
+		ID:       "clarify.step",
+		Paradigm: "euclo",
+		PromptID: "euclo.intent.clarify.question.v1",
+		Prompt:   "inline fallback should not be used",
+		Step: RecipeStep{
+			ID:       "clarify.step",
+			PromptID: "euclo.intent.clarify.question.v1",
+			Prompt:   "inline fallback should not be used",
+		},
+	}
+	node := NewRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{PromptRegistry: registry}, step)
+
+	task, err := node.buildTask(env)
+	if err != nil {
+		t.Fatalf("buildTask: %v", err)
+	}
+	if task.Instruction != "resolved prompt text" {
+		t.Fatalf("expected registry-backed prompt content, got %q", task.Instruction)
+	}
+	if got := task.Context["prompt_id"]; got != "euclo.intent.clarify.question.v1" {
+		t.Fatalf("expected prompt_id in task context, got %#v", got)
+	}
+	if got := task.Metadata["recipe_step_type"]; got != "" {
+		t.Fatalf("expected step type metadata to be empty for ad hoc step, got %#v", got)
+	}
+	if got, ok := env.GetWorkingValue("euclo.recipe.step.clarify.step.type"); !ok || got != "" {
+		t.Fatalf("expected step type metadata in envelope, got %#v (ok=%v)", got, ok)
+	}
+	if got, ok := env.GetWorkingValue("euclo.recipe.step.clarify.step.prompt_id"); !ok || got != "euclo.intent.clarify.question.v1" {
+		t.Fatalf("expected prompt_id metadata in envelope, got %#v (ok=%v)", got, ok)
+	}
+}
+
+func TestRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
+	env := contextdata.NewEnvelope("task-meta", "session-meta")
+	step := ExecutionStep{
+		ID:   "extract.step",
+		Type: string(ClarificationStepTypeExtract),
+		ClarificationConfig: &ClarificationStepConfig{
+			OutputSchemaID:   "clarification.answer.v1",
+			ValidationMode:   "strict",
+			RequiredFields:   []string{"answer"},
+			AllowedStatuses:  []intentcontext.ClarificationStepStatus{intentcontext.ClarificationStepStatusSucceeded},
+			StateWriteKeys:   []string{"euclo.intent.clarification.confirmed_entities"},
+			ProjectionPolicy: "apply",
+		},
+		Step: RecipeStep{
+			ID:   "extract.step",
+			Type: string(ClarificationStepTypeExtract),
+			Config: map[string]any{
+				"output_schema_id": "clarification.answer.v1",
+			},
+		},
+	}
+
+	node := NewRecipeStepNode("extract.step", agentenv.WorkspaceEnvironment{}, step)
+	task, err := node.buildTask(env)
+	if err != nil {
+		t.Fatalf("buildTask failed: %v", err)
+	}
+	if got := task.Metadata["recipe_step_type"]; got != string(ClarificationStepTypeExtract) {
+		t.Fatalf("expected step type metadata, got %#v", got)
+	}
+	if got := task.Metadata["recipe_clarification_type"]; got != string(ClarificationStepTypeExtract) {
+		t.Fatalf("expected clarification type metadata, got %#v", got)
+	}
+	if got, ok := env.GetWorkingValue("euclo.recipe.step.extract.step.clarification_schema_id"); !ok || got != "clarification.answer.v1" {
+		t.Fatalf("expected clarification schema metadata in envelope, got %#v (ok=%v)", got, ok)
+	}
+	if got, ok := env.GetWorkingValue("euclo.recipe.step.extract.step.clarification_config"); !ok || got == nil {
+		t.Fatalf("expected clarification config in envelope, got %#v (ok=%v)", got, ok)
+	}
+	if got, ok := env.GetWorkingValue("euclo.recipe.step.extract.step.clarification_allowed_statuses"); !ok || got == nil {
+		t.Fatalf("expected allowed statuses in envelope, got %#v (ok=%v)", got, ok)
+	}
+	rctx := node.buildRuntimeContext(env)
+	if got := rctx.State["recipe_step_type"]; got != string(ClarificationStepTypeExtract) {
+		t.Fatalf("expected runtime step type metadata, got %#v", got)
+	}
+	if got := rctx.State["recipe_clarification_schema_id"]; got != "clarification.answer.v1" {
+		t.Fatalf("expected runtime clarification schema id, got %#v", got)
 	}
 }

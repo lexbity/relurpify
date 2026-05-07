@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
+	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
 
@@ -23,9 +24,13 @@ type RecipeExecutorNode struct {
 
 // NewRecipeExecutorNode creates a new recipe executor node.
 func NewRecipeExecutorNode(id string) *RecipeExecutorNode {
+	registry, err := recipetemplates.LoadAll()
+	if err != nil {
+		registry = recipepkg.NewRecipeRegistry()
+	}
 	return &RecipeExecutorNode{
 		id:       id,
-		registry: recipepkg.NewRecipeRegistry(),
+		registry: registry,
 	}
 }
 
@@ -66,7 +71,11 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 		return nil, fmt.Errorf("recipe executor missing envelope")
 	}
 	if n.registry == nil {
-		n.registry = recipepkg.NewRecipeRegistry()
+		if registry, err := recipetemplates.LoadAll(); err == nil {
+			n.registry = registry
+		} else {
+			n.registry = recipepkg.NewRecipeRegistry()
+		}
 	}
 
 	recipeID := recipeIDFromEnvelope(env)
@@ -109,6 +118,42 @@ func (n *RecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envel
 	}
 
 	subResult, err := graph.Execute(ctx, env)
+	if nextRecipeID := nextClarificationRecipeID(env, recipeID); nextRecipeID != "" {
+		if nextRecipe, ok := n.registry.Get(nextRecipeID); ok && nextRecipe != nil {
+			resolver := recipepkg.NewAliasResolver(nextRecipe)
+			nextPlan, nextErr := recipepkg.Compile(nextRecipe, resolver)
+			if nextErr != nil {
+				return &core.Result{
+					NodeID:  n.id,
+					Success: false,
+					Data: map[string]any{
+						"error": nextErr.Error(),
+					},
+				}, nextErr
+			}
+			nextGraph, nextErr := recipepkg.BuildRecipeGraph(nextPlan, n.env, n.ingestionPipeline)
+			if nextErr != nil {
+				return &core.Result{
+					NodeID:  n.id,
+					Success: false,
+					Data: map[string]any{
+						"error": nextErr.Error(),
+					},
+				}, nextErr
+			}
+			nextResult, nextErr := nextGraph.Execute(ctx, env)
+			if nextResult != nil {
+				subResult = nextResult
+			}
+			if nextErr != nil {
+				err = nextErr
+			}
+			if env != nil {
+				env.SetWorkingValue("euclo.clarification.next_recipe_id", "", contextdata.MemoryClassTask)
+				recipeID = nextRecipeID
+			}
+		}
+	}
 	if env != nil {
 		env.SetWorkingValue("euclo.execution.kind", "recipe", contextdata.MemoryClassTask)
 		env.SetWorkingValue("euclo.execution.recipe_id", recipeID, contextdata.MemoryClassTask)
@@ -130,6 +175,18 @@ func recipeIDFromEnvelope(env *contextdata.Envelope) string {
 			if strings.TrimSpace(selection.RecipeID) != "" {
 				return strings.TrimSpace(selection.RecipeID)
 			}
+		}
+	}
+	return ""
+}
+
+func nextClarificationRecipeID(env *contextdata.Envelope, currentRecipeID string) string {
+	if env == nil {
+		return ""
+	}
+	if v, ok := env.GetWorkingValue("euclo.clarification.next_recipe_id"); ok {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" && strings.TrimSpace(s) != strings.TrimSpace(currentRecipeID) {
+			return strings.TrimSpace(s)
 		}
 	}
 	return ""

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"gopkg.in/yaml.v3"
 )
 
@@ -111,6 +112,29 @@ type RecipeStep struct {
 
 	// Retry defines retry policy for this step.
 	Retry *StepRetryPolicy `yaml:"retry,omitempty"`
+}
+
+// ClarificationStepType identifies a clarification-specific recipe step.
+type ClarificationStepType string
+
+const (
+	ClarificationStepTypeClarify  ClarificationStepType = "intent_clarify"
+	ClarificationStepTypeExtract  ClarificationStepType = "intent_extract"
+	ClarificationStepTypeGround   ClarificationStepType = "intent_ground"
+	ClarificationStepTypeProject  ClarificationStepType = "intent_project"
+	ClarificationStepTypeRetrieve ClarificationStepType = "intent_retrieve"
+	ClarificationStepTypeHandoff  ClarificationStepType = "intent_handoff"
+)
+
+// ClarificationStepConfig is the typed clarification contract carried in step config.
+type ClarificationStepConfig struct {
+	OutputSchemaID   string                                  `yaml:"output_schema_id,omitempty"`
+	ValidationMode   intentcontext.ValidationMode            `yaml:"validation_mode,omitempty"`
+	RequiredFields   []string                                `yaml:"required_fields,omitempty"`
+	AllowedStatuses  []intentcontext.ClarificationStepStatus `yaml:"allowed_statuses,omitempty"`
+	StateWriteKeys   []string                                `yaml:"state_write_keys,omitempty"`
+	ProjectionPolicy string                                  `yaml:"projection_policy,omitempty"`
+	RequeryOnSuccess bool                                    `yaml:"requery_on_success,omitempty"`
 }
 
 // RecipeStepAgent describes the paradigm-specific agent invocation for a step.
@@ -345,6 +369,14 @@ func validateStep(step *RecipeStep, index int, seenStepIDs map[string]bool, spec
 		if err := validateStepParadigm(step.Parent.Paradigm); err != nil {
 			return fmt.Errorf("step %s: %w", step.ID, err)
 		}
+		if strings.TrimSpace(step.Type) != "" && !isValidStepType(step.Type) && !IsClarificationStepType(step.Type) {
+			return fmt.Errorf("step %s: invalid step type: %s", step.ID, step.Type)
+		}
+		if IsClarificationStepType(step.Type) {
+			if err := validateClarificationStepConfig(step); err != nil {
+				return fmt.Errorf("step %s: %w", step.ID, err)
+			}
+		}
 		return nil
 	}
 
@@ -355,6 +387,123 @@ func validateStep(step *RecipeStep, index int, seenStepIDs map[string]bool, spec
 		return fmt.Errorf("invalid step type: %s", step.Type)
 	}
 	return nil
+}
+
+// IsClarificationStepType reports whether stepType is one of the clarification-only types.
+func IsClarificationStepType(stepType string) bool {
+	switch strings.TrimSpace(stepType) {
+	case string(ClarificationStepTypeClarify), string(ClarificationStepTypeExtract), string(ClarificationStepTypeGround), string(ClarificationStepTypeProject), string(ClarificationStepTypeRetrieve), string(ClarificationStepTypeHandoff):
+		return true
+	default:
+		return false
+	}
+}
+
+// DecodeClarificationStepConfig converts a raw step config into the typed clarification config.
+func DecodeClarificationStepConfig(step RecipeStep) (*ClarificationStepConfig, error) {
+	if len(step.Config) == 0 {
+		return nil, nil
+	}
+	cfg := &ClarificationStepConfig{}
+	if value, ok := step.Config["output_schema_id"]; ok {
+		cfg.OutputSchemaID = strings.TrimSpace(fmt.Sprint(value))
+	}
+	if value, ok := step.Config["validation_mode"]; ok {
+		cfg.ValidationMode = intentcontext.ValidationMode(strings.TrimSpace(fmt.Sprint(value)))
+	}
+	if cfg.ValidationMode == "" {
+		cfg.ValidationMode = intentcontext.ValidationModePartial
+	}
+	if value, ok := step.Config["required_fields"]; ok {
+		cfg.RequiredFields = stringsFromAny(value)
+	}
+	if value, ok := step.Config["allowed_statuses"]; ok {
+		for _, status := range stringsFromAny(value) {
+			cfg.AllowedStatuses = append(cfg.AllowedStatuses, intentcontext.ClarificationStepStatus(strings.TrimSpace(status)))
+		}
+	}
+	if value, ok := step.Config["state_write_keys"]; ok {
+		cfg.StateWriteKeys = stringsFromAny(value)
+	}
+	if value, ok := step.Config["projection_policy"]; ok {
+		cfg.ProjectionPolicy = strings.TrimSpace(fmt.Sprint(value))
+	}
+	if value, ok := step.Config["requery_on_success"]; ok {
+		cfg.RequeryOnSuccess = truthyValue(value)
+	}
+	return cfg, validateClarificationStepConfigFields(step.Type, cfg)
+}
+
+func validateClarificationStepConfig(step *RecipeStep) error {
+	cfg, err := DecodeClarificationStepConfig(*step)
+	if err != nil {
+		return err
+	}
+	if cfg == nil {
+		return fmt.Errorf("clarification step config missing")
+	}
+	return nil
+}
+
+func validateClarificationStepConfigFields(stepType string, cfg *ClarificationStepConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	switch cfg.ValidationMode {
+	case "", intentcontext.ValidationModeStrict, intentcontext.ValidationModePartial, intentcontext.ValidationModeRepair:
+	default:
+		return fmt.Errorf("invalid validation_mode: %s", cfg.ValidationMode)
+	}
+	if len(cfg.RequiredFields) == 0 {
+		cfg.RequiredFields = nil
+	}
+	if len(cfg.StateWriteKeys) == 0 {
+		cfg.StateWriteKeys = nil
+	}
+	switch ClarificationStepType(strings.TrimSpace(stepType)) {
+	case ClarificationStepTypeClarify:
+		// No schema required; the step emits the turn/question itself.
+	case ClarificationStepTypeExtract, ClarificationStepTypeGround, ClarificationStepTypeProject, ClarificationStepTypeRetrieve:
+		if strings.TrimSpace(cfg.OutputSchemaID) == "" {
+			return fmt.Errorf("missing required field: config.output_schema_id")
+		}
+	case ClarificationStepTypeHandoff:
+		// Handoff selects a downstream normal recipe and does not require an output schema.
+	}
+	return nil
+}
+
+func truthyValue(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "", "0", "false", "no", "off", "nil", "null":
+			return false
+		default:
+			return true
+		}
+	default:
+		return strings.TrimSpace(fmt.Sprint(value)) != ""
+	}
+}
+
+func cloneClarificationStepConfig(cfg *ClarificationStepConfig) *ClarificationStepConfig {
+	if cfg == nil {
+		return nil
+	}
+	cp := *cfg
+	if len(cfg.RequiredFields) > 0 {
+		cp.RequiredFields = append([]string(nil), cfg.RequiredFields...)
+	}
+	if len(cfg.AllowedStatuses) > 0 {
+		cp.AllowedStatuses = append([]intentcontext.ClarificationStepStatus(nil), cfg.AllowedStatuses...)
+	}
+	if len(cfg.StateWriteKeys) > 0 {
+		cp.StateWriteKeys = append([]string(nil), cfg.StateWriteKeys...)
+	}
+	return &cp
 }
 
 func validateStepMutation(value string) error {
@@ -398,18 +547,33 @@ func validateStepDependencies(steps []RecipeStep, seen map[string]bool) error {
 // isValidStepType checks if a legacy step type is valid.
 func isValidStepType(stepType string) bool {
 	validTypes := map[string]bool{
-		"llm":          true,
-		"retrieve":     true,
-		"ingest":       true,
-		"transform":    true,
-		"emit":         true,
-		"gate":         true,
-		"branch":       true,
-		"capture":      true,
-		"verify":       true,
-		"policy_check": true,
-		"telemetry":    true,
-		"custom":       true,
+		"llm":                                 true,
+		"retrieve":                            true,
+		"ingest":                              true,
+		"transform":                           true,
+		"emit":                                true,
+		"gate":                                true,
+		"branch":                              true,
+		"capture":                             true,
+		"verify":                              true,
+		"policy_check":                        true,
+		"telemetry":                           true,
+		"custom":                              true,
+		"react":                               true,
+		"planner":                             true,
+		"htn":                                 true,
+		"reflection":                          true,
+		"blackboard":                          true,
+		"chainer":                             true,
+		"pipeline":                            true,
+		"rewoo":                               true,
+		"goalcon":                             true,
+		"euclo":                               true,
+		string(ClarificationStepTypeClarify):  true,
+		string(ClarificationStepTypeExtract):  true,
+		string(ClarificationStepTypeGround):   true,
+		string(ClarificationStepTypeProject):  true,
+		string(ClarificationStepTypeRetrieve): true,
 	}
 	return validTypes[stepType]
 }

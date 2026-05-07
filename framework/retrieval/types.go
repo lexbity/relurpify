@@ -127,8 +127,27 @@ type RetrievalQuery struct {
 	Scope       string
 	SourceTypes []knowledge.SourceOrigin
 	Anchors     []AnchorRef
+	Traversal   *TraversalSpec
 	Limit       int
 	AfterSeq    uint64 // event log sequence; for cache coherence
+}
+
+// TraversalDirection constrains how traversal moves through the graph.
+type TraversalDirection string
+
+const (
+	TraversalDirectionOut  TraversalDirection = "out"
+	TraversalDirectionIn   TraversalDirection = "in"
+	TraversalDirectionBoth TraversalDirection = "both"
+)
+
+// TraversalSpec requests graph-aware candidate generation.
+type TraversalSpec struct {
+	AnchorIDs    []string
+	EdgeKinds    []string
+	Direction    TraversalDirection
+	MaxDepth     int
+	PreferLatest bool
 }
 
 // RetrievalResult contains the retrieved chunks and metadata.

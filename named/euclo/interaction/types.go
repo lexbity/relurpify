@@ -6,8 +6,6 @@ import "time"
 type FrameType string
 
 const (
-	FrameProposal           FrameType = "proposal"
-	FrameQuestion           FrameType = "question"
 	FrameCandidates         FrameType = "candidates"
 	FrameComparison         FrameType = "comparison"
 	FrameDraft              FrameType = "draft"
@@ -15,7 +13,6 @@ const (
 	FrameStatus             FrameType = "status"
 	FrameSummary            FrameType = "summary"
 	FrameTransition         FrameType = "transition"
-	FrameHelp               FrameType = "help"
 	FrameSessionList        FrameType = "session_list"
 	FrameSessionListEmpty   FrameType = "session_list_empty"
 	FrameSessionResuming    FrameType = "session_resuming"
@@ -48,12 +45,6 @@ type ActionSlot struct {
 	Default  bool   // Whether this is the default slot
 }
 
-// ActionInfo is a legacy help renderer helper.
-type ActionInfo struct {
-	Phrase      string
-	Description string
-}
-
 const (
 	ActionConfirm  = "confirm"
 	ActionFreetext = "freetext"
@@ -70,34 +61,6 @@ type FrameResult struct {
 	ExtraData   map[string]any // Additional data provided by the user
 	RespondedBy string         // Identifier of who responded
 	RespondedAt time.Time      // When the response was received
-}
-
-// PhaseInfo is a legacy render helper used by the old euclotui renderer.
-type PhaseInfo struct {
-	ID      string
-	Label   string
-	Current bool
-}
-
-// ProposalContent is the legacy proposal payload.
-type ProposalContent struct {
-	Interpretation string
-	Scope          []string
-	Approach       string
-}
-
-// QuestionOption is a legacy multiple-choice option.
-type QuestionOption struct {
-	ID          string
-	Label       string
-	Description string
-}
-
-// QuestionContent is the legacy clarification payload.
-type QuestionContent struct {
-	Question    string
-	Description string
-	Options     []QuestionOption
 }
 
 // Candidate is a legacy candidate entry.
@@ -191,37 +154,6 @@ type TransitionContent struct {
 	ToMode   string
 	Reason   string
 }
-
-// HelpPhase describes a phase entry in help output.
-type HelpPhase struct {
-	ID      string
-	Label   string
-	Current bool
-}
-
-// HelpAction describes an available action in help output.
-type HelpAction struct {
-	Phrase      string
-	Description string
-}
-
-// HelpTransition describes an available transition in help output.
-type HelpTransition struct {
-	Phrase     string
-	TargetMode string
-}
-
-// HelpContent is the legacy help payload.
-type HelpContent struct {
-	Mode                 string
-	CurrentPhase         string
-	PhaseMap             []HelpPhase
-	AvailableActions     []ActionInfo
-	AvailableTransitions []TransitionInfo
-}
-
-// TransitionInfo is a legacy alias used by the old renderer tests.
-type TransitionInfo = HelpTransition
 
 // SessionListItem is a single resumable session entry.
 type SessionListItem struct {

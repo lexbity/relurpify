@@ -112,6 +112,48 @@ func TestReplayAndLastWriteWins(t *testing.T) {
 	require.False(t, out[0].IsActive())
 }
 
+func TestMutationResultRoundTrip(t *testing.T) {
+	engine, opts := newTestEngine(t)
+	result := MutationResult{
+		Scope:        MutationScopeProjection,
+		Status:       MutationStatusCreated,
+		Reason:       "projection pass completed",
+		TaskID:       "task-1",
+		SessionID:    "session-1",
+		TurnID:       "turn-7",
+		StateVersion: 3,
+		Details:      map[string]any{"plan_id": "plan-1"},
+	}
+	result.Normalize(result.TaskID, result.SessionID)
+	require.NoError(t, engine.RecordMutationResult(result))
+
+	got, ok := engine.MutationResult(result.StableID)
+	require.True(t, ok)
+	require.Equal(t, result.StableID, got.StableID)
+	require.Equal(t, result.Scope, got.Scope)
+	require.Equal(t, result.Status, got.Status)
+	require.Equal(t, "plan-1", got.Details["plan_id"])
+	require.NotEmpty(t, got.AppliedAt)
+
+	results := engine.MutationResults()
+	require.Len(t, results, 1)
+	require.Equal(t, result.StableID, results[0].StableID)
+
+	require.NoError(t, engine.Snapshot())
+	require.NoError(t, engine.Close())
+
+	reopened, err := Open(opts)
+	require.NoError(t, err)
+	defer reopened.Close()
+
+	reopenedResult, ok := reopened.MutationResult(result.StableID)
+	require.True(t, ok)
+	require.Equal(t, result.StableID, reopenedResult.StableID)
+	require.Equal(t, result.Scope, reopenedResult.Scope)
+	require.Equal(t, result.Status, reopenedResult.Status)
+	require.Equal(t, "plan-1", reopenedResult.Details["plan_id"])
+}
+
 func TestPartialFrameAtEOFIsDiscarded(t *testing.T) {
 	engine, opts := newTestEngine(t)
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
@@ -209,6 +251,116 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 	}
 	wg.Wait()
 	require.Len(t, engine.ListNodes("function"), workers)
+}
+
+func TestStableMutationIdentityAndProvenanceRoundTrip(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	nodeID := StableNodeID("task-1", "session-1", "turn-7", "node", "n1")
+	edgeID := StableEdgeID("task-1", "session-1", "turn-7", "edge", "n1", "n2")
+	node := NodeRecord{
+		ID:             "n1",
+		Kind:           "function",
+		StableID:       nodeID,
+		RevisionRootID: "root-1",
+		RevisionOf:     "rev-0",
+		IdempotencyKey: "idem-1",
+		TaskID:         "task-1",
+		SessionID:      "session-1",
+		TurnID:         "turn-7",
+		StateVersion:   11,
+		Props:          json.RawMessage(`{"kind":"node"}`),
+	}
+	require.NoError(t, engine.UpsertNode(node))
+	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
+	require.NoError(t, engine.LinkEdges([]EdgeRecord{{
+		SourceID:       "n1",
+		TargetID:       "n2",
+		Kind:           "calls",
+		StableID:       edgeID,
+		RevisionRootID: "root-1",
+		RevisionOf:     "rev-0",
+		IdempotencyKey: "idem-edge-1",
+		TaskID:         "task-1",
+		SessionID:      "session-1",
+		TurnID:         "turn-7",
+		StateVersion:   11,
+		Weight:         1,
+		Props:          json.RawMessage(`{"source":"clarification"}`),
+	}}))
+
+	gotNode, ok := engine.GetNode("n1")
+	require.True(t, ok)
+	require.Equal(t, nodeID, gotNode.StableID)
+	require.Equal(t, "root-1", gotNode.RevisionRootID)
+	require.Equal(t, "rev-0", gotNode.RevisionOf)
+	require.Equal(t, "idem-1", gotNode.IdempotencyKey)
+	require.Equal(t, uint64(11), gotNode.StateVersion)
+
+	out := engine.GetOutEdges("n1", "calls")
+	require.Len(t, out, 1)
+	require.Equal(t, edgeID, out[0].StableID)
+	require.Equal(t, "root-1", out[0].RevisionRootID)
+	require.Equal(t, "rev-0", out[0].RevisionOf)
+	require.Equal(t, "idem-edge-1", out[0].IdempotencyKey)
+	require.Equal(t, uint64(11), out[0].StateVersion)
+}
+
+func TestRevisionHistoryAndAnnotatedReplay(t *testing.T) {
+	engine, opts := newTestEngine(t)
+
+	require.NoError(t, engine.UpsertNode(NodeRecord{
+		ID:    "n1",
+		Kind:  "function",
+		Props: json.RawMessage(`{"a":1}`),
+	}))
+	require.NoError(t, engine.AnnotateNode("n1", map[string]any{"b": 2}))
+	require.NoError(t, engine.UpsertNode(NodeRecord{
+		ID:    "n1",
+		Kind:  "function",
+		Props: json.RawMessage(`{"c":3}`),
+	}))
+
+	nodeRevisions := engine.NodeRevisions("n1")
+	require.Len(t, nodeRevisions, 2)
+	require.JSONEq(t, `{"a":1}`, string(nodeRevisions[0].Props))
+	require.JSONEq(t, `{"a":1,"b":2}`, string(nodeRevisions[1].Props))
+
+	edgeProps := map[string]any{"site": "x"}
+	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
+	require.NoError(t, engine.Link("n1", "n2", "calls", "", 1, edgeProps))
+	require.NoError(t, engine.AnnotateEdge("n1", "n2", "calls", map[string]any{"note": "y"}))
+	require.NoError(t, engine.LinkEdges([]EdgeRecord{{
+		SourceID: "n1",
+		TargetID: "n2",
+		Kind:     "calls",
+		Weight:   2,
+		Props:    json.RawMessage(`{"site":"z"}`),
+	}}))
+
+	edgeRevisions := engine.EdgeRevisions("n1", "n2", "calls")
+	require.Len(t, edgeRevisions, 2)
+	require.JSONEq(t, `{"site":"x"}`, string(edgeRevisions[0].Props))
+	require.JSONEq(t, `{"note":"y","site":"x"}`, string(edgeRevisions[1].Props))
+	require.Equal(t, float32(2), engine.GetOutEdges("n1", "calls")[0].Weight)
+	require.JSONEq(t, `{"site":"z"}`, string(engine.GetOutEdges("n1", "calls")[0].Props))
+
+	require.NoError(t, engine.Snapshot())
+	require.NoError(t, engine.Close())
+
+	reopened, err := Open(opts)
+	require.NoError(t, err)
+	defer reopened.Close()
+
+	reopenedNodeRevisions := reopened.NodeRevisions("n1")
+	require.Len(t, reopenedNodeRevisions, 2)
+	require.JSONEq(t, `{"a":1}`, string(reopenedNodeRevisions[0].Props))
+	require.JSONEq(t, `{"a":1,"b":2}`, string(reopenedNodeRevisions[1].Props))
+
+	reopenedEdgeRevisions := reopened.EdgeRevisions("n1", "n2", "calls")
+	require.Len(t, reopenedEdgeRevisions, 2)
+	require.JSONEq(t, `{"site":"x"}`, string(reopenedEdgeRevisions[0].Props))
+	require.JSONEq(t, `{"note":"y","site":"x"}`, string(reopenedEdgeRevisions[1].Props))
+	require.JSONEq(t, `{"site":"z"}`, string(reopened.GetOutEdges("n1", "calls")[0].Props))
 }
 
 func mustJSON(t *testing.T, value any) []byte {

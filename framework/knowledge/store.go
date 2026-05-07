@@ -12,9 +12,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 )
 
-// nodeKindChunk keeps the legacy persisted node kind during the transition so
+// ChunkNodeKind keeps the legacy persisted node kind during the transition so
 // new framework-native readers can work against existing graph data.
-const nodeKindChunk graphdb.NodeKind = "bkc_chunk"
+const ChunkNodeKind graphdb.NodeKind = "bkc_chunk"
 
 type edgeEnvelope struct {
 	ID         EdgeID          `json:"id"`
@@ -61,7 +61,7 @@ func (s *ChunkStore) Save(chunk KnowledgeChunk) (*KnowledgeChunk, error) {
 	}
 	if err := s.Graph.UpsertNode(graphdb.NodeRecord{
 		ID:       string(chunk.ID),
-		Kind:     nodeKindChunk,
+		Kind:     ChunkNodeKind,
 		SourceID: chunk.WorkspaceID,
 		Labels:   chunkLabels(chunk),
 		Props:    props,
@@ -198,7 +198,7 @@ func (s *ChunkStore) FindByContentHash(hash string) ([]KnowledgeChunk, error) {
 	if s == nil || s.Graph == nil || hash == "" {
 		return nil, nil
 	}
-	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, contentHashLabel(hash))
+	nodes := s.Graph.ListNodesByLabel(ChunkNodeKind, contentHashLabel(hash))
 	return decodeChunks(nodes)
 }
 
@@ -206,7 +206,7 @@ func (s *ChunkStore) FindByCoverageHash(hash string) ([]KnowledgeChunk, error) {
 	if s == nil || s.Graph == nil || hash == "" {
 		return nil, nil
 	}
-	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, coverageHashLabel(hash))
+	nodes := s.Graph.ListNodesByLabel(ChunkNodeKind, coverageHashLabel(hash))
 	return decodeChunks(nodes)
 }
 
@@ -214,7 +214,7 @@ func (s *ChunkStore) FindByFilePath(path string) ([]KnowledgeChunk, error) {
 	if s == nil || s.Graph == nil || path == "" {
 		return nil, nil
 	}
-	nodes := s.Graph.ListNodesByLabel(nodeKindChunk, filePathLabel(path))
+	nodes := s.Graph.ListNodesByLabel(ChunkNodeKind, filePathLabel(path))
 	return decodeChunks(nodes)
 }
 
@@ -226,7 +226,7 @@ func (s *ChunkStore) FindByFilePathPrefix(prefix string) ([]KnowledgeChunk, erro
 	if normalized == "" {
 		return nil, nil
 	}
-	nodes := s.Graph.ListNodesByLabelPrefix(nodeKindChunk, filePathLabelPrefix(normalized))
+	nodes := s.Graph.ListNodesByLabelPrefix(ChunkNodeKind, filePathLabelPrefix(normalized))
 	return decodeChunks(nodes)
 }
 
@@ -253,7 +253,7 @@ func (s *ChunkStore) findMatching(match func(KnowledgeChunk) bool) ([]KnowledgeC
 	if s == nil || s.Graph == nil {
 		return nil, nil
 	}
-	nodes := s.Graph.ListNodes(nodeKindChunk)
+	nodes := s.Graph.ListNodes(ChunkNodeKind)
 	out := make([]KnowledgeChunk, 0, len(nodes))
 	for _, node := range nodes {
 		var chunk KnowledgeChunk

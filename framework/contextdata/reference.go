@@ -125,7 +125,9 @@ func (b *ReferenceBundle) Clone() ReferenceBundle {
 
 	copy(out.StreamedContext, b.StreamedContext)
 	copy(out.WorkingMemory, b.WorkingMemory)
-	copy(out.Checkpoints, b.Checkpoints)
+	for i, ref := range b.Checkpoints {
+		out.Checkpoints[i] = cloneCheckpointReference(ref)
+	}
 
 	// Deep copy retrieval references which contain slice fields
 	for i, ref := range b.Retrieval {
@@ -169,4 +171,11 @@ func (b *ReferenceBundle) GetWorkingMemoryRef(taskID, key string) (WorkingMemory
 		}
 	}
 	return WorkingMemoryReference{}, false
+}
+
+func cloneCheckpointReference(ref CheckpointReference) CheckpointReference {
+	if len(ref.WorkingMemoryKeys) > 0 {
+		ref.WorkingMemoryKeys = append([]string(nil), ref.WorkingMemoryKeys...)
+	}
+	return ref
 }

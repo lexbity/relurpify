@@ -2,9 +2,11 @@ package retrieval
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
@@ -32,6 +34,24 @@ func (r *Retriever) WithPolicy(policy *contextpolicy.ContextPolicyBundle) *Retri
 // Retrieve performs scatter-gather retrieval.
 func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*RetrievalResult, error) {
 	if r.registry == nil || r.store == nil {
+		traversal := r.traversalCandidates(query)
+		if len(traversal) == 0 {
+			return &RetrievalResult{
+				Query:      query,
+				Ranked:     nil,
+				TotalFound: 0,
+			}, nil
+		}
+		return &RetrievalResult{
+			Query:      query,
+			Ranked:     rankedChunksFromIDs(traversal, "traversal"),
+			TotalFound: len(traversal),
+		}, nil
+	}
+
+	traversal := r.traversalCandidates(query)
+	admitted := r.Admitted()
+	if len(admitted) == 0 && len(traversal) == 0 {
 		return &RetrievalResult{
 			Query:      query,
 			Ranked:     nil,
@@ -39,17 +59,23 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 		}, nil
 	}
 
-	admitted := r.Admitted()
-	if len(admitted) == 0 {
-		return &RetrievalResult{
-			Query:      query,
-			Ranked:     nil,
-			TotalFound: 0,
-		}, nil
-	}
+	rankedLists, weights := make([][]knowledge.ChunkID, 0, len(admitted)+1), make([]float64, 0, len(admitted)+1)
 
 	// Scatter: execute rankers in parallel
-	rankedLists, weights := r.scatter(ctx, query, admitted)
+	if len(admitted) > 0 {
+		scattered, scatteredWeights := r.scatter(ctx, query, admitted)
+		rankedLists = append(rankedLists, scattered...)
+		weights = append(weights, scatteredWeights...)
+	}
+
+	if len(traversal) > 0 {
+		rankedLists = append(rankedLists, traversal)
+		traversalWeight := 0.5
+		if query.Traversal != nil && query.Traversal.PreferLatest {
+			traversalWeight = 0.75
+		}
+		weights = append(weights, traversalWeight)
+	}
 
 	// Gather: merge results using RRF
 	merged := r.gather(rankedLists, weights)
@@ -64,6 +90,104 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 		Ranked:     merged,
 		TotalFound: len(merged),
 	}, nil
+}
+
+func (r *Retriever) traversalCandidates(query RetrievalQuery) []knowledge.ChunkID {
+	spec := query.Traversal
+	if r == nil || r.store == nil || r.store.Graph == nil || spec == nil {
+		return nil
+	}
+	anchorIDs := make([]string, 0, len(spec.AnchorIDs)+len(query.Anchors))
+	for _, id := range spec.AnchorIDs {
+		if id != "" {
+			anchorIDs = append(anchorIDs, id)
+		}
+	}
+	if len(anchorIDs) == 0 {
+		for _, anchor := range query.Anchors {
+			if anchor.ChunkID != "" {
+				anchorIDs = append(anchorIDs, anchor.ChunkID)
+			}
+		}
+	}
+	if len(anchorIDs) == 0 {
+		return nil
+	}
+
+	direction := graphdb.DirectionBoth
+	switch spec.Direction {
+	case TraversalDirectionOut:
+		direction = graphdb.DirectionOut
+	case TraversalDirectionIn:
+		direction = graphdb.DirectionIn
+	}
+	edgeKinds := make([]graphdb.EdgeKind, 0, len(spec.EdgeKinds))
+	for _, kind := range spec.EdgeKinds {
+		if kind != "" {
+			edgeKinds = append(edgeKinds, graphdb.EdgeKind(kind))
+		}
+	}
+
+	nodes, _ := r.store.Graph.Subgraph(graphdb.GraphQuery{
+		RootIDs:   anchorIDs,
+		EdgeKinds: edgeKinds,
+		Direction: direction,
+		MaxDepth:  spec.MaxDepth,
+	})
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	type scoredNode struct {
+		id        knowledge.ChunkID
+		updatedAt int64
+		seenIndex int
+	}
+	out := make([]scoredNode, 0, len(nodes))
+	seen := make(map[knowledge.ChunkID]struct{}, len(nodes))
+	for idx, node := range nodes {
+		if node.Kind != knowledge.ChunkNodeKind || node.ID == "" {
+			continue
+		}
+		id := knowledge.ChunkID(node.ID)
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, scoredNode{id: id, updatedAt: node.UpdatedAt, seenIndex: idx})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	if spec.PreferLatest {
+		sort.SliceStable(out, func(i, j int) bool {
+			if out[i].updatedAt == out[j].updatedAt {
+				return out[i].seenIndex < out[j].seenIndex
+			}
+			return out[i].updatedAt > out[j].updatedAt
+		})
+	}
+	ids := make([]knowledge.ChunkID, 0, len(out))
+	for _, item := range out {
+		ids = append(ids, item.id)
+	}
+	return ids
+}
+
+func rankedChunksFromIDs(ids []knowledge.ChunkID, source string) []RankedChunk {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]RankedChunk, 0, len(ids))
+	for i, id := range ids {
+		out = append(out, RankedChunk{
+			ChunkID: id,
+			Rank:    i + 1,
+			Score:   float64(len(ids)-i) / float64(len(ids)),
+			Source:  source,
+		})
+	}
+	return out
 }
 
 // Admitted returns the rankers admitted by the current policy.

@@ -1,6 +1,8 @@
 package prompt
 
 import (
+	"strings"
+
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -12,8 +14,8 @@ import (
 // to Envelope after their Provide call returns.
 type RuntimeContext struct {
 	// Core resolution inputs.
-	Variables  map[string]string  // runtime variable overrides
-	State      map[string]any     // evaluated by when-expressions
+	Variables  map[string]string // runtime variable overrides
+	State      map[string]any    // evaluated by when-expressions
 	Envelope   *contextdata.Envelope
 	Paradigm   string // consuming paradigm name, e.g. "react"
 	ConsumerID string // agent or capability id invoking resolve
@@ -59,4 +61,70 @@ type ProviderMetadata struct {
 	Description string
 	Paradigms   []string // empty = any paradigm
 	ReadsKeys   []string // envelope keys read (for static analysis tooling)
+}
+
+// NewRuntimeContext creates a runtime context with initialized maps.
+func NewRuntimeContext(env *contextdata.Envelope, paradigm, consumerID string) RuntimeContext {
+	return RuntimeContext{
+		Variables:  make(map[string]string),
+		State:      make(map[string]any),
+		Envelope:   env,
+		Paradigm:   strings.TrimSpace(paradigm),
+		ConsumerID: strings.TrimSpace(consumerID),
+	}
+}
+
+// Clone returns a deep copy of the runtime context maps while preserving the
+// envelope and extended references.
+func (ctx RuntimeContext) Clone() RuntimeContext {
+	out := ctx
+	if len(ctx.Variables) > 0 {
+		out.Variables = make(map[string]string, len(ctx.Variables))
+		for k, v := range ctx.Variables {
+			out.Variables[k] = v
+		}
+	} else if ctx.Variables != nil {
+		out.Variables = make(map[string]string)
+	}
+	if len(ctx.State) > 0 {
+		out.State = make(map[string]any, len(ctx.State))
+		for k, v := range ctx.State {
+			out.State[k] = v
+		}
+	} else if ctx.State != nil {
+		out.State = make(map[string]any)
+	}
+	return out
+}
+
+// WithVariable returns a copy of the runtime context with one variable set.
+func (ctx RuntimeContext) WithVariable(key, value string) RuntimeContext {
+	if ctx.Variables == nil {
+		ctx.Variables = make(map[string]string)
+	}
+	ctx.Variables[key] = value
+	return ctx
+}
+
+// WithStateValue returns a copy of the runtime context with one state value set.
+func (ctx RuntimeContext) WithStateValue(key string, value any) RuntimeContext {
+	if ctx.State == nil {
+		ctx.State = make(map[string]any)
+	}
+	ctx.State[key] = value
+	return ctx
+}
+
+// WithStateMap returns a copy of the runtime context with the provided state merged in.
+func (ctx RuntimeContext) WithStateMap(values map[string]any) RuntimeContext {
+	if len(values) == 0 {
+		return ctx
+	}
+	if ctx.State == nil {
+		ctx.State = make(map[string]any, len(values))
+	}
+	for k, v := range values {
+		ctx.State[k] = v
+	}
+	return ctx
 }

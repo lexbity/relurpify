@@ -9,6 +9,11 @@ import (
 	ollamabackend "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
+var (
+	execCommandContext = exec.CommandContext
+	sleepFn            = time.Sleep
+)
+
 type managedBackendAdapter struct {
 	inner     *ollamabackend.Backend
 	modelName string
@@ -109,22 +114,22 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 		if model == "" {
 			return nil
 		}
-		cmd := exec.CommandContext(ctx, "ollama", "stop", model)
+		cmd := execCommandContext(ctx, "ollama", "stop", model)
 		_ = cmd.Run()
-		time.Sleep(200 * time.Millisecond)
+		sleepFn(200 * time.Millisecond)
 		return nil
 	case "server":
 		// Restart the Ollama service
-		cmd := exec.CommandContext(ctx, "systemctl", "restart", "ollama")
+		cmd := execCommandContext(ctx, "systemctl", "restart", "ollama")
 		err := cmd.Run()
 		if err != nil {
 			// Fallback: try to stop the model if systemctl fails
 			model := strings.TrimSpace(a.modelName)
 			if model != "" {
-				_ = exec.CommandContext(ctx, "ollama", "stop", model).Run()
+				_ = execCommandContext(ctx, "ollama", "stop", model).Run()
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+		sleepFn(500 * time.Millisecond)
 		return nil
 	default:
 		// Unknown strategy - ignore safely

@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 )
 
@@ -109,6 +110,48 @@ func TestDispatch_ExplicitRecipeRoute_SelectsRequestedRecipe(t *testing.T) {
 	if result.RouteID != recipe.ID {
 		t.Fatalf("expected recipe %q, got %q", recipe.ID, result.RouteID)
 	}
+}
+
+func TestDispatch_AmbiguousClassificationRoutesToClarificationRecipe(t *testing.T) {
+	env := contextdata.NewEnvelope("task-1", "session-1")
+	env.SetWorkingValue("euclo.intent_classification", &intake.IntentClassification{
+		Ambiguous:  true,
+		Confidence: 0.2,
+	}, contextdata.MemoryClassTask)
+	req := routeRequestFromEnvelope(env)
+	if req.RecipeID != clarificationRecipeID {
+		t.Fatalf("route request recipe id = %q, want %q", req.RecipeID, clarificationRecipeID)
+	}
+
+	dispatcher := NewDispatcher("test-dispatch")
+	resultCore, err := dispatcher.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Dispatcher.Execute failed: %v", err)
+	}
+	if resultCore == nil {
+		t.Fatal("expected result")
+	}
+	if got, ok := env.GetWorkingValue("euclo.route_selection"); !ok {
+		t.Fatal("expected route selection in envelope")
+	} else if selection, ok := got.(*RouteSelection); !ok || selection == nil || selection.RecipeID != clarificationRecipeID {
+		t.Fatalf("unexpected route selection: %#v", got)
+	}
+	if got := mustStringRouteValue(t, env, "euclo.dispatch.route_kind"); got != "recipe" {
+		t.Fatalf("dispatch route kind = %q, want recipe", got)
+	}
+}
+
+func mustStringRouteValue(t *testing.T, env *contextdata.Envelope, key string) string {
+	t.Helper()
+	value, ok := env.GetWorkingValue(key)
+	if !ok {
+		t.Fatalf("missing envelope value %q", key)
+	}
+	s, ok := value.(string)
+	if !ok {
+		t.Fatalf("envelope value %q is %T, want string", key, value)
+	}
+	return s
 }
 
 func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {

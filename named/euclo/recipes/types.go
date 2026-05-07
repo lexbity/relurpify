@@ -15,11 +15,13 @@ type CompiledRecipe struct {
 
 // CompiledStep is a compiled recipe step with resolved configuration.
 type CompiledStep struct {
-	Step     *RecipeStep
-	Node     agentgraph.Node
-	Config   map[string]any
-	Captures map[string]string
-	Bindings map[string]string
+	Step                *RecipeStep
+	Node                agentgraph.Node
+	Type                string
+	ClarificationConfig *ClarificationStepConfig
+	Config              map[string]any
+	Captures            map[string]string
+	Bindings            map[string]string
 }
 
 // CompiledParallelGroup is a compiled parallel execution group.
@@ -56,20 +58,22 @@ type ExecutionPlan struct {
 
 // ExecutionStep carries the graph-time data for a single compiled recipe step.
 type ExecutionStep struct {
-	ID           string
-	Paradigm     string
-	CapabilityID string
-	Prompt       string
-	PromptID     string
-	Mutation     string
-	HITL         string
-	Stream       *RecipeStreamSpec
-	Ingest       *RecipeIngestSpec
-	Fallback     *RecipeStepAgent
-	Inherit      []string
-	Capture      []string
-	Dependencies []string
-	Bindings     map[string]string
-	Captures     map[string]string
-	Step         RecipeStep
+	ID                  string
+	Type                string
+	Paradigm            string
+	CapabilityID        string
+	Prompt              string
+	PromptID            string
+	Mutation            string
+	HITL                string
+	Stream              *RecipeStreamSpec
+	Ingest              *RecipeIngestSpec
+	Fallback            *RecipeStepAgent
+	Inherit             []string
+	Capture             []string
+	Dependencies        []string
+	Bindings            map[string]string
+	Captures            map[string]string
+	ClarificationConfig *ClarificationStepConfig
+	Step                RecipeStep
 }

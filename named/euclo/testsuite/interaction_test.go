@@ -23,7 +23,7 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	}
 	broker := authorization.NewHITLBroker(5 * time.Second)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithCapabilityClassifier(classifier),
 		orchestrate.WithHITLBroker(broker),

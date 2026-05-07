@@ -145,6 +145,9 @@ func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 		req.RecipeID = strings.TrimSpace(selection.RecipeID)
 		req.CapabilityID = strings.TrimSpace(selection.CapabilityID)
 	}
+	if needsClarificationRoute(env) {
+		req.RecipeID = clarificationRecipeID
+	}
 	kind := ""
 	if selection := routeSelectionFromEnvelope(env); selection != nil {
 		kind = strings.TrimSpace(selection.RouteKind)
@@ -234,6 +237,9 @@ func classifyRoute(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
+	if needsClarificationRoute(env) {
+		return "recipe"
+	}
 	if v, ok := env.GetWorkingValue("euclo.family_selection"); ok {
 		if family, ok := v.(string); ok {
 			switch strings.TrimSpace(family) {
@@ -257,6 +263,9 @@ func classifyRoute(env *contextdata.Envelope) string {
 func defaultRecipeID(env *contextdata.Envelope) string {
 	if env == nil {
 		return "euclo.recipe.default"
+	}
+	if needsClarificationRoute(env) {
+		return clarificationRecipeID
 	}
 	if v, ok := env.GetWorkingValue("euclo.recipe_id"); ok {
 		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {

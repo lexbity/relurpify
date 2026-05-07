@@ -3,6 +3,11 @@ package prompt
 import (
 	"strings"
 	"testing"
+	"testing/fstest"
+
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 // ---- expression evaluator tests --------------------------------------------
@@ -345,6 +350,115 @@ func TestRegistry_ValidateProviders(t *testing.T) {
 	}
 }
 
+func TestRegistry_ClarificationProviderRendering(t *testing.T) {
+	r := NewRegistry()
+	if err := r.RegisterProvider("test.clarification.runtime", funcProvider(func(ctx RuntimeContext) ContextChunk {
+		state, _ := ctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
+		if state == nil {
+			return ContextChunk{}
+		}
+		return ContextChunk{Content: strings.TrimSpace("Clarification Runtime:\n" +
+			"Clarification State Version: " + itoa(int(state.StateVersion)) + "\n" +
+			"Current Turn ID: " + state.CurrentTurnID + "\n" +
+			"Grounded Anchors: " + strings.Join(anchorIDsFromState(state.GroundedAnchors), ", "))}
+	})); err != nil {
+		t.Fatalf("RegisterProvider: %v", err)
+	}
+
+	src := `---
+apiVersion: framework.prompt/v1
+id: test.clarify.runtime
+name: Clarification Runtime
+requires_providers:
+  - test.clarification.runtime
+tags:
+  paradigm: [react]
+  agent: [framework]
+  domain: [clarification]
+  kind: task
+  stability: stable
+---
+
+# Context
+~ from: provider
+~ provider: test.clarification.runtime
+`
+	fsys := fstest.MapFS{
+		"clarify.prompt": {Data: []byte(src)},
+	}
+	if err := r.LoadFS(fsys, "testdata"); err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+
+	env := contextdata.NewEnvelope("task-clarify", "session-clarify")
+	state := intentcontext.NewState("task-clarify", "session-clarify")
+	state.StateVersion = 7
+	state.CurrentTurnID = "turn-7"
+	state.ActiveRecipeID = "recipe.intent.clarify"
+	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
+		Kind:       intentcontext.AmbiguityKindUnderspecified,
+		Confidence: 0.25,
+		Rationale:  "missing target module",
+	}
+	state.ConfirmedEntities = []intentcontext.ConfirmedEntity{
+		{StableID: "entity-1", Name: "Envelope", Kind: intentcontext.EntityKindType},
+	}
+	state.ConfirmedScopes = []intentcontext.ConfirmedScope{
+		{StableID: "scope-1", Name: "framework/contextdata", AnchorClass: intentcontext.AnchorClassClarifiedScope},
+	}
+	state.GroundedAnchors = []retrieval.AnchorRef{
+		{AnchorID: "anchor-1", ChunkID: "chunk-1", Term: "Envelope", Definition: "type anchor", Class: "clarified_entity", Active: true},
+	}
+	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
+		t.Fatalf("Write clarification state: %v", err)
+	}
+
+	ctx := NewRuntimeContext(env, "react", "recipe")
+	ctx = ctx.WithStateValue(intentcontext.ClarificationStateKey, state.Clone())
+	ctx = ctx.WithVariable("question", "Which module should be updated?")
+	ctx = ctx.WithVariable("prompt_id", "test.clarify.runtime")
+
+	assembled, err := r.Resolve("test.clarify.runtime", ctx)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !strings.Contains(assembled, "Clarification State Version: 7") {
+		t.Fatalf("expected state version in rendered prompt: %s", assembled)
+	}
+	if !strings.Contains(assembled, "Current Turn ID: turn-7") {
+		t.Fatalf("expected turn id in rendered prompt: %s", assembled)
+	}
+	if !strings.Contains(assembled, "Grounded Anchors:") {
+		t.Fatalf("expected grounded anchors in rendered prompt: %s", assembled)
+	}
+}
+
+func TestRegistry_ValidateProvidersMissingRequiredProvider(t *testing.T) {
+	r := NewRegistry()
+	src := `---
+apiVersion: framework.prompt/v1
+id: test.provider.missing
+name: Missing Provider Test
+requires_providers:
+  - euclo.recipe_step_context
+---
+
+# Context
+~ from: provider
+~ provider: euclo.recipe_step_context
+`
+	fsys := fstest.MapFS{
+		"missing.prompt": {Data: []byte(src)},
+	}
+	if err := r.LoadFS(fsys, "testdata"); err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+	issues := r.ValidateProviders()
+	if len(issues) == 0 {
+		t.Fatal("expected missing provider validation issue")
+	}
+}
+
 func TestRegistry_Filter(t *testing.T) {
 	r := NewRegistry()
 	dr := r.(*defaultRegistry)
@@ -669,4 +783,17 @@ func isAs(err error, target **NotFoundError) bool {
 		*target = nfe
 	}
 	return ok
+}
+
+func anchorIDsFromState(anchors []retrieval.AnchorRef) []string {
+	if len(anchors) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(anchors))
+	for _, anchor := range anchors {
+		if strings.TrimSpace(anchor.AnchorID) != "" {
+			out = append(out, strings.TrimSpace(anchor.AnchorID))
+		}
+	}
+	return out
 }

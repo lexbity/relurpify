@@ -7,6 +7,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 // EucloTelemetry wraps core.Telemetry with typed Emit helpers.
@@ -62,6 +64,30 @@ func (t *EucloTelemetry) EmitRouteSelected(ctx context.Context, ev EventRouteSel
 
 func (t *EucloTelemetry) EmitGateResult(ctx context.Context, ev EventGateResult) {
 	t.emit(ctx, EventTypeGateResult, ev)
+}
+
+func (t *EucloTelemetry) EmitProjectionCompleted(ctx context.Context, ev EventProjectionCompleted) {
+	t.emit(ctx, EventTypeProjectionCompleted, ev)
+}
+
+func (t *EucloTelemetry) EmitClarificationStarted(ctx context.Context, ev EventClarificationStarted) {
+	t.emit(ctx, EventTypeClarificationStarted, ev)
+}
+
+func (t *EucloTelemetry) EmitClarificationAnswered(ctx context.Context, ev EventClarificationAnswered) {
+	t.emit(ctx, EventTypeClarificationAnswered, ev)
+}
+
+func (t *EucloTelemetry) EmitClarificationGrounded(ctx context.Context, ev EventClarificationGrounded) {
+	t.emit(ctx, EventTypeClarificationGrounded, ev)
+}
+
+func (t *EucloTelemetry) EmitClarificationProjected(ctx context.Context, ev EventClarificationProjected) {
+	t.emit(ctx, EventTypeClarificationProjected, ev)
+}
+
+func (t *EucloTelemetry) EmitClarificationCompleted(ctx context.Context, ev EventClarificationCompleted) {
+	t.emit(ctx, EventTypeClarificationCompleted, ev)
 }
 
 func (t *EucloTelemetry) EmitFrameEmitted(ctx context.Context, ev EventFrameEmitted) {
@@ -147,11 +173,59 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		"blocked":     blocked,
 	}, contextdata.MemoryClassTask)
 
+	if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
+		if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
+			env.SetWorkingValue("euclo.outcome_telemetry.projection", map[string]any{
+				"stable_id":      mutation.StableID,
+				"scope":          string(mutation.Scope),
+				"status":         string(mutation.Status),
+				"reason":         mutation.Reason,
+				"created_ids":    append([]string(nil), mutation.CreatedIDs...),
+				"updated_ids":    append([]string(nil), mutation.UpdatedIDs...),
+				"annotated_ids":  append([]string(nil), mutation.AnnotatedIDs...),
+				"superseded_ids": append([]string(nil), mutation.SupersededIDs...),
+				"matched_ids":    append([]string(nil), mutation.MatchedIDs...),
+				"rejected_ids":   append([]string(nil), mutation.RejectedIDs...),
+				"conflict_ids":   append([]string(nil), mutation.ConflictIDs...),
+				"record_ids":     append([]string(nil), mutation.RecordIDs...),
+				"details":        mutation.Details,
+			}, contextdata.MemoryClassTask)
+		}
+	}
+
 	tel := n.telemetry
 	if tel == nil {
 		tel = NewEucloTelemetry(core.TelemetryFromContext(ctx))
 	}
+	planID, _ := env.GetWorkingValue("euclo.projection.plan_id")
+	planIDStr, _ := planID.(string)
 	if tel != nil {
+		if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
+			if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
+				tel.EmitProjectionCompleted(ctx, EventProjectionCompleted{
+					EventHeader: EventHeader{
+						TaskID:     env.TaskID,
+						SessionID:  env.SessionID,
+						Seq:        0,
+						OccurredAt: time.Now().UTC(),
+					},
+					PlanID:           planIDStr,
+					MutationStableID: mutation.StableID,
+					MutationScope:    string(mutation.Scope),
+					MutationStatus:   string(mutation.Status),
+					Reason:           mutation.Reason,
+					CreatedIDs:       append([]string(nil), mutation.CreatedIDs...),
+					UpdatedIDs:       append([]string(nil), mutation.UpdatedIDs...),
+					AnnotatedIDs:     append([]string(nil), mutation.AnnotatedIDs...),
+					SupersededIDs:    append([]string(nil), mutation.SupersededIDs...),
+					MatchedIDs:       append([]string(nil), mutation.MatchedIDs...),
+					RejectedIDs:      append([]string(nil), mutation.RejectedIDs...),
+					ConflictIDs:      append([]string(nil), mutation.ConflictIDs...),
+					RecordIDs:        append([]string(nil), mutation.RecordIDs...),
+					Details:          mutation.Details,
+				})
+			}
+		}
 		tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 			EventHeader: EventHeader{
 				TaskID:     env.TaskID,
@@ -165,13 +239,107 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			LLMCalls:    0,
 			TokenUsage:  0,
 		})
+		if shouldEmitClarificationCompletion(env) {
+			tel.EmitClarificationCompleted(ctx, EventClarificationCompleted{
+				EventHeader: EventHeader{
+					TaskID:     env.TaskID,
+					SessionID:  env.SessionID,
+					Seq:        0,
+					OccurredAt: time.Now().UTC(),
+				},
+				RecipeID:     clarificationRecipeIDFromEnv(env),
+				StateVersion: clarificationStateVersionFromEnv(env),
+				PlanID:       planIDStr,
+				Completion:   string(outcome.Category),
+			})
+		}
 	}
 
-	return map[string]any{
+	report := map[string]any{
 		"outcome_category": string(outcome.Category),
 		"outcome_reason":   outcome.Reason,
 		"completed":        outcome.Completed,
+	}
+	if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
+		if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
+			report["projection"] = map[string]any{
+				"plan_id":         planIDStr,
+				"stable_id":       mutation.StableID,
+				"scope":           string(mutation.Scope),
+				"status":          string(mutation.Status),
+				"reason":          mutation.Reason,
+				"created_ids":     append([]string(nil), mutation.CreatedIDs...),
+				"updated_ids":     append([]string(nil), mutation.UpdatedIDs...),
+				"annotated_ids":   append([]string(nil), mutation.AnnotatedIDs...),
+				"superseded_ids":  append([]string(nil), mutation.SupersededIDs...),
+				"matched_ids":     append([]string(nil), mutation.MatchedIDs...),
+				"rejected_ids":    append([]string(nil), mutation.RejectedIDs...),
+				"conflict_ids":    append([]string(nil), mutation.ConflictIDs...),
+				"record_ids":      append([]string(nil), mutation.RecordIDs...),
+				"state_version":   mutation.StateVersion,
+				"applied_at":      mutation.AppliedAt,
+				"idempotency_key": mutation.IdempotencyKey,
+				"details":         mutation.Details,
+			}
+		}
+	}
+
+	return map[string]any{
+		"outcome_category": report["outcome_category"],
+		"outcome_reason":   report["outcome_reason"],
+		"completed":        report["completed"],
+		"projection":       report["projection"],
 	}, nil
+}
+
+func shouldEmitClarificationCompletion(env *contextdata.Envelope) bool {
+	if env == nil {
+		return false
+	}
+	if _, ok := env.GetWorkingValue("euclo.clarification.request"); ok {
+		return true
+	}
+	if _, ok := env.GetWorkingValue("euclo.clarification.projection"); ok {
+		return true
+	}
+	if _, ok := env.GetWorkingValue(intentcontext.ClarificationActiveRecipeKey); ok {
+		return true
+	}
+	return false
+}
+
+func clarificationRecipeIDFromEnv(env *contextdata.Envelope) string {
+	if env == nil {
+		return ""
+	}
+	if v, ok := env.GetWorkingValue(intentcontext.ClarificationActiveRecipeKey); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
+	if env == nil {
+		return 0
+	}
+	if v, ok := env.GetWorkingValue("euclo.intent.clarification.state"); ok {
+		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
+			return state.StateVersion
+		}
+	}
+	if v, ok := env.GetWorkingValue("euclo.clarification.state_version"); ok {
+		switch n := v.(type) {
+		case uint64:
+			return n
+		case int:
+			if n > 0 {
+				return uint64(n)
+			}
+		}
+	}
+	return 0
 }
 
 // EmitRouteSelected reports the selected route and candidate metadata.

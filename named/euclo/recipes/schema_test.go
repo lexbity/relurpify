@@ -216,3 +216,79 @@ func TestRecipeSchemaCapabilityStepAndParadigmConflict(t *testing.T) {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
+
+func TestRecipeSchemaClarificationStepValidation(t *testing.T) {
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Clarification Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:   "clarify",
+					Type: string(ClarificationStepTypeClarify),
+					Config: map[string]any{
+						"validation_mode": "partial",
+						"required_fields": []string{"answer"},
+					},
+				},
+				{
+					ID:   "extract",
+					Type: string(ClarificationStepTypeExtract),
+					Config: map[string]any{
+						"output_schema_id": "clarification.answer.v1",
+					},
+				},
+			},
+		},
+	}
+
+	if err := recipe.Validate(); err != nil {
+		t.Fatalf("expected clarification recipe to validate, got %v", err)
+	}
+
+	cfg, err := DecodeClarificationStepConfig(recipe.Sequence.Steps[1])
+	if err != nil {
+		t.Fatalf("DecodeClarificationStepConfig failed: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected clarification config")
+	}
+	if cfg.OutputSchemaID != "clarification.answer.v1" {
+		t.Fatalf("unexpected output schema id: %q", cfg.OutputSchemaID)
+	}
+	if cfg.ValidationMode != "partial" {
+		t.Fatalf("unexpected validation mode: %q", cfg.ValidationMode)
+	}
+}
+
+func TestRecipeSchemaClarificationStepMissingSchemaFails(t *testing.T) {
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Clarification Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:   "extract",
+					Type: string(ClarificationStepTypeExtract),
+					Config: map[string]any{
+						"validation_mode": "strict",
+					},
+				},
+			},
+		},
+	}
+
+	err := recipe.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if got := err.Error(); got != "step extract: missing required field: config.output_schema_id" {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}

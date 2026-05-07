@@ -8,6 +8,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 type captureTelemetry struct {
@@ -309,6 +311,78 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 	}
 	if sink.events[12].Metadata["outcome"] != "success" {
 		t.Fatalf("expected final outcome metadata, got %#v", sink.events[12].Metadata["outcome"])
+	}
+}
+
+func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
+	sink := &captureTelemetry{}
+	node := NewTelemetryNode("telemetry1")
+	node.telemetry = NewEucloTelemetry(sink)
+
+	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.projection.plan_id", "plan-1", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.projection.mutation_result", &graphdb.MutationResult{
+		StableID:     "mutation-1",
+		Scope:        graphdb.MutationScopeProjection,
+		Status:       graphdb.MutationStatusCreated,
+		Reason:       "projection pass completed",
+		CreatedIDs:   []string{"node-1"},
+		RecordIDs:    []string{"node-1"},
+		StateVersion: 3,
+	}, contextdata.MemoryClassTask)
+
+	result, err := node.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Expected result to be non-nil")
+	}
+	if got := len(sink.events); got != 2 {
+		t.Fatalf("expected 2 events, got %d", got)
+	}
+	projection, ok := result["projection"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected projection summary in result, got %#v", result["projection"])
+	}
+	if projection["plan_id"] != "plan-1" {
+		t.Fatalf("unexpected projection plan id: %#v", projection["plan_id"])
+	}
+	if sink.events[0].Type != core.EventType(EventTypeProjectionCompleted) {
+		t.Fatalf("expected projection event first, got %q", sink.events[0].Type)
+	}
+	if sink.events[0].Metadata["mutation_stable_id"] != "mutation-1" {
+		t.Fatalf("unexpected mutation stable id: %#v", sink.events[0].Metadata["mutation_stable_id"])
+	}
+	if sink.events[0].Metadata["plan_id"] != "plan-1" {
+		t.Fatalf("unexpected plan id: %#v", sink.events[0].Metadata["plan_id"])
+	}
+	if sink.events[1].Type != core.EventType(EventTypeExecutionComplete) {
+		t.Fatalf("expected execution event second, got %q", sink.events[1].Type)
+	}
+}
+
+func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
+	sink := &captureTelemetry{}
+	node := NewTelemetryNode("telemetry1")
+	node.telemetry = NewEucloTelemetry(sink)
+
+	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+	env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, "euclo.recipe.intent.clarify", contextdata.MemoryClassTask)
+
+	if _, err := node.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if got := len(sink.events); got != 2 {
+		t.Fatalf("expected 2 events, got %d", got)
+	}
+	if sink.events[1].Type != core.EventType(EventTypeClarificationCompleted) {
+		t.Fatalf("expected clarification completion event, got %q", sink.events[1].Type)
+	}
+	if sink.events[1].Metadata["recipe_id"] != "euclo.recipe.intent.clarify" {
+		t.Fatalf("unexpected recipe id: %#v", sink.events[1].Metadata["recipe_id"])
 	}
 }
 

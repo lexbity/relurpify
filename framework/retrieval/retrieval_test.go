@@ -274,6 +274,83 @@ func TestRetriever_ParallelScatter(t *testing.T) {
 	}
 }
 
+func TestRetrieverTraversalCandidates(t *testing.T) {
+	store := newRetrievalTestStore(t)
+	for _, chunk := range []knowledge.KnowledgeChunk{
+		{ID: knowledge.ChunkID("chunk:root"), WorkspaceID: "ws", Provenance: knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: knowledge.ChunkBody{Raw: "root"}},
+		{ID: knowledge.ChunkID("chunk:child1"), WorkspaceID: "ws", Provenance: knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: knowledge.ChunkBody{Raw: "child1"}},
+		{ID: knowledge.ChunkID("chunk:child2"), WorkspaceID: "ws", Provenance: knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: knowledge.ChunkBody{Raw: "child2"}},
+	} {
+		_, err := store.Save(chunk)
+		if err != nil {
+			t.Fatalf("save chunk: %v", err)
+		}
+	}
+	if _, err := store.SaveEdge(knowledge.ChunkEdge{FromChunk: knowledge.ChunkID("chunk:root"), ToChunk: knowledge.ChunkID("chunk:child1"), Kind: knowledge.EdgeKindRequiresContext, Weight: 1}); err != nil {
+		t.Fatalf("save edge 1: %v", err)
+	}
+	if _, err := store.SaveEdge(knowledge.ChunkEdge{FromChunk: knowledge.ChunkID("chunk:child1"), ToChunk: knowledge.ChunkID("chunk:child2"), Kind: knowledge.EdgeKindRequiresContext, Weight: 1}); err != nil {
+		t.Fatalf("save edge 2: %v", err)
+	}
+
+	retriever := NewRetriever(nil, store)
+	result, err := retriever.Retrieve(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs: []string{"chunk:root"},
+			EdgeKinds: []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction: TraversalDirectionOut,
+			MaxDepth:  2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Ranked) != 3 {
+		t.Fatalf("expected 3 traversal results, got %d", len(result.Ranked))
+	}
+	if result.Ranked[0].ChunkID != knowledge.ChunkID("chunk:root") {
+		t.Fatalf("expected root first, got %s", result.Ranked[0].ChunkID)
+	}
+}
+
+func TestRetrieverTraversalDoesNotOverrideTextRanker(t *testing.T) {
+	store := newRetrievalTestStore(t)
+	for _, chunk := range []knowledge.KnowledgeChunk{
+		{ID: knowledge.ChunkID("chunk:root"), WorkspaceID: "ws", Provenance: knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: knowledge.ChunkBody{Raw: "root text"}},
+		{ID: knowledge.ChunkID("chunk:text"), WorkspaceID: "ws", Provenance: knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: knowledge.ChunkBody{Raw: "detailed text match"}},
+	} {
+		if _, err := store.Save(chunk); err != nil {
+			t.Fatalf("save chunk: %v", err)
+		}
+	}
+	if _, err := store.SaveEdge(knowledge.ChunkEdge{FromChunk: knowledge.ChunkID("chunk:root"), ToChunk: knowledge.ChunkID("chunk:text"), Kind: knowledge.EdgeKindRequiresContext, Weight: 1}); err != nil {
+		t.Fatalf("save edge: %v", err)
+	}
+
+	registry := NewRankerRegistry()
+	registry.Register(&mockRanker{name: "keyword", results: []knowledge.ChunkID{"chunk:text"}})
+
+	retriever := NewRetriever(registry, store)
+	result, err := retriever.Retrieve(context.Background(), RetrievalQuery{
+		Text: "detailed text match",
+		Traversal: &TraversalSpec{
+			AnchorIDs: []string{"chunk:root"},
+			EdgeKinds: []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction: TraversalDirectionOut,
+			MaxDepth:  1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Ranked) < 2 {
+		t.Fatalf("expected fused results, got %#v", result.Ranked)
+	}
+	if result.Ranked[0].ChunkID != knowledge.ChunkID("chunk:text") {
+		t.Fatalf("expected text ranker to win over traversal, got %s", result.Ranked[0].ChunkID)
+	}
+}
+
 func TestRRF_WeightedFusion(t *testing.T) {
 	lists := [][]knowledge.ChunkID{
 		{"a", "b"},

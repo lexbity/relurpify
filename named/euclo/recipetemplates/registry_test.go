@@ -125,6 +125,7 @@ func TestLoadAllParsesAllTemplates(t *testing.T) {
 		"euclo.recipe.extract_func",
 		"euclo.recipe.test_synthesis",
 		"euclo.recipe.dep_upgrade",
+		"euclo.recipe.intent.clarify",
 	}
 
 	for _, id := range expectedIDs {
@@ -214,5 +215,23 @@ func TestDepUpgradeHasHITLOnMigrate(t *testing.T) {
 
 	if migrateStep.HITL != "ask" {
 		t.Errorf("migrate step HITL = %q, want %q", migrateStep.HITL, "ask")
+	}
+}
+
+func TestIntentClarificationTemplateLoads(t *testing.T) {
+	registry, err := LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll returned error: %v", err)
+	}
+
+	recipe, ok := registry.Get("euclo.recipe.intent.clarify")
+	if !ok {
+		t.Fatal("recipe 'euclo.recipe.intent.clarify' not found in registry")
+	}
+	if recipe == nil {
+		t.Fatal("clarification recipe is nil")
+	}
+	if got := recipe.StepList(); len(got) != 5 {
+		t.Fatalf("clarification recipe has %d steps, want 5", len(got))
 	}
 }

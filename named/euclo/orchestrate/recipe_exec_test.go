@@ -12,7 +12,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -177,6 +179,71 @@ func TestRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 
 	if recipeID != "fix-bug" {
 		t.Errorf("Expected execution.recipe_id fix-bug, got %v", recipeID)
+	}
+}
+
+func TestRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
+	node := NewRecipeExecutorNode("recipe-exec-handoff")
+
+	env := contextdata.NewEnvelope("task-handoff", "session-handoff")
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind: "recipe",
+		RecipeID:  clarificationRecipeID,
+	}, contextdata.MemoryClassTask)
+
+	state := intentcontext.NewState("task-handoff", "session-handoff")
+	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
+		Kind:              intentcontext.AmbiguityKindMultiMatch,
+		Confidence:        0.2,
+		Rationale:         "review target unclear",
+		CandidateFamilies: []string{"review"},
+	}
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		t.Fatalf("write clarification state: %v", err)
+	}
+
+	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
+		Model:         stubRecipeModel{},
+		Registry:      capability.NewRegistry(),
+		WorkingMemory: memory.NewWorkingMemoryStore(),
+		Config: &core.Config{
+			Name:  "recipe-exec-handoff-test",
+			Model: "stub",
+		},
+	})
+	registry, err := recipetemplates.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	node.WithRecipeRegistry(registry)
+	if err := node.registry.Register(&recipepkg.ThoughtRecipe{
+		ID:         "euclo.recipe.code_review.custom",
+		APIVersion: "euclo.recipe/v1",
+		Kind:       "ThoughtRecipe",
+		Metadata:   recipepkg.RecipeMetadata{Name: "code review custom"},
+		Sequence: recipepkg.RecipeSequence{
+			Steps: []recipepkg.RecipeStep{
+				{
+					ID:     "review",
+					Type:   "react",
+					Parent: recipepkg.RecipeStepAgent{Paradigm: "react", Prompt: "return a completion summary"},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Register custom recipe failed: %v", err)
+	}
+	env.SetWorkingValue("euclo.clarification.next_recipe_id", "euclo.recipe.code_review.custom", contextdata.MemoryClassTask)
+
+	result, err := node.Execute(ctxWithTrigger(context.Background()), env)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected successful recipe execution, got %+v", result)
+	}
+	if got, ok := env.GetWorkingValue("euclo.execution.recipe_id"); !ok || got != "euclo.recipe.code_review.custom" {
+		t.Fatalf("expected nested recipe execution to set recipe_id, got %#v (ok=%v)", got, ok)
 	}
 }
 

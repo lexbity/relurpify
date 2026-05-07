@@ -18,6 +18,8 @@
 // Handoff helpers support two common transfer modes:
 //   - HandoffClone for the default cloned-envelope behavior
 //   - HandoffSnapshot for paradigm-specific filtered envelopes
+//   - task-scoped clarification state when it is stored in working memory
+//     under explicit Euclo-owned keys
 //
 // Key invariants:
 //   - Streamed context is read-only outside the compiler

@@ -23,6 +23,9 @@ const (
 	opCodeLinkEdge
 	opCodeLinkEdges
 	opCodeUnlinkEdge
+	opCodeAnnotateNode
+	opCodeAnnotateEdge
+	opCodeRecordMutationResult
 )
 
 type nodeOp struct {
@@ -54,6 +57,22 @@ type unlinkOp struct {
 	TargetID string   `json:"target_id"`
 	Kind     EdgeKind `json:"kind"`
 	Hard     bool     `json:"hard"`
+}
+
+type annotateNodeOp struct {
+	ID    string         `json:"id"`
+	Props map[string]any `json:"props"`
+}
+
+type annotateEdgeOp struct {
+	SourceID string         `json:"source_id"`
+	TargetID string         `json:"target_id"`
+	Kind     EdgeKind       `json:"kind"`
+	Props    map[string]any `json:"props"`
+}
+
+type mutationResultOp struct {
+	Result MutationResult `json:"result"`
 }
 
 type binaryOp struct {
@@ -313,6 +332,46 @@ func encodeBinaryOp(kind string, payload any) (binaryOp, error) {
 		enc.writeString(string(op.Kind))
 		enc.writeBool(op.Hard)
 		return binaryOp{code: opCodeUnlinkEdge, data: enc.Bytes()}, nil
+	case "annotate_node":
+		op, ok := payload.(annotateNodeOp)
+		if !ok {
+			return binaryOp{}, errors.New("graphdb: invalid annotate_node payload")
+		}
+		raw, err := json.Marshal(op.Props)
+		if err != nil {
+			return binaryOp{}, err
+		}
+		var enc binaryEncoder
+		enc.writeString(op.ID)
+		enc.writeBytes(raw)
+		return binaryOp{code: opCodeAnnotateNode, data: enc.Bytes()}, nil
+	case "annotate_edge":
+		op, ok := payload.(annotateEdgeOp)
+		if !ok {
+			return binaryOp{}, errors.New("graphdb: invalid annotate_edge payload")
+		}
+		raw, err := json.Marshal(op.Props)
+		if err != nil {
+			return binaryOp{}, err
+		}
+		var enc binaryEncoder
+		enc.writeString(op.SourceID)
+		enc.writeString(op.TargetID)
+		enc.writeString(string(op.Kind))
+		enc.writeBytes(raw)
+		return binaryOp{code: opCodeAnnotateEdge, data: enc.Bytes()}, nil
+	case "record_mutation_result":
+		op, ok := payload.(mutationResultOp)
+		if !ok {
+			return binaryOp{}, errors.New("graphdb: invalid record_mutation_result payload")
+		}
+		raw, err := json.Marshal(op.Result)
+		if err != nil {
+			return binaryOp{}, err
+		}
+		var enc binaryEncoder
+		enc.writeBytes(raw)
+		return binaryOp{code: opCodeRecordMutationResult, data: enc.Bytes()}, nil
 	default:
 		return binaryOp{}, errors.New("graphdb: unsupported persisted op kind")
 	}
@@ -364,6 +423,12 @@ func (e *binaryEncoder) writeInt64(v int64) {
 	e.buf.Write(buf[:])
 }
 
+func (e *binaryEncoder) writeUint64(v uint64) {
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], v)
+	e.buf.Write(buf[:])
+}
+
 func (e *binaryEncoder) writeFloat32(v float32) {
 	var buf [4]byte
 	binary.LittleEndian.PutUint32(buf[:], math.Float32bits(v))
@@ -390,6 +455,14 @@ func (e *binaryEncoder) writeNodeRecord(node NodeRecord) {
 	e.writeString(node.ID)
 	e.writeString(string(node.Kind))
 	e.writeString(node.SourceID)
+	e.writeString(node.StableID)
+	e.writeString(node.RevisionRootID)
+	e.writeString(node.RevisionOf)
+	e.writeString(node.IdempotencyKey)
+	e.writeString(node.TaskID)
+	e.writeString(node.SessionID)
+	e.writeString(node.TurnID)
+	e.writeUint64(node.StateVersion)
 	e.writeStrings(node.Labels)
 	e.writeBytes(node.Props)
 	e.writeInt64(node.CreatedAt)
@@ -408,6 +481,14 @@ func (e *binaryEncoder) writeEdgeRecord(edge EdgeRecord) {
 	e.writeString(edge.SourceID)
 	e.writeString(edge.TargetID)
 	e.writeString(string(edge.Kind))
+	e.writeString(edge.StableID)
+	e.writeString(edge.RevisionRootID)
+	e.writeString(edge.RevisionOf)
+	e.writeString(edge.IdempotencyKey)
+	e.writeString(edge.TaskID)
+	e.writeString(edge.SessionID)
+	e.writeString(edge.TurnID)
+	e.writeUint64(edge.StateVersion)
 	e.writeFloat32(edge.Weight)
 	e.writeBytes(edge.Props)
 	e.writeInt64(edge.CreatedAt)
@@ -458,6 +539,14 @@ func (d *binaryDecoder) readInt64() (int64, error) {
 		return 0, err
 	}
 	return int64(binary.LittleEndian.Uint64(buf[:])), nil
+}
+
+func (d *binaryDecoder) readUint64() (uint64, error) {
+	var buf [8]byte
+	if _, err := io.ReadFull(d.r, buf[:]); err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(buf[:]), nil
 }
 
 func (d *binaryDecoder) readFloat32() (float32, error) {
@@ -517,6 +606,38 @@ func (d *binaryDecoder) readNodeRecord() (NodeRecord, error) {
 	if err != nil {
 		return NodeRecord{}, err
 	}
+	stableID, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	revisionRootID, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	revisionOf, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	idempotencyKey, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	taskID, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	sessionID, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	turnID, err := d.readString()
+	if err != nil {
+		return NodeRecord{}, err
+	}
+	stateVersion, err := d.readUint64()
+	if err != nil {
+		return NodeRecord{}, err
+	}
 	labels, err := d.readStrings()
 	if err != nil {
 		return NodeRecord{}, err
@@ -538,14 +659,22 @@ func (d *binaryDecoder) readNodeRecord() (NodeRecord, error) {
 		return NodeRecord{}, err
 	}
 	return NodeRecord{
-		ID:        id,
-		Kind:      NodeKind(kind),
-		SourceID:  sourceID,
-		Labels:    labels,
-		Props:     props,
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
-		DeletedAt: deletedAt,
+		ID:             id,
+		Kind:           NodeKind(kind),
+		SourceID:       sourceID,
+		StableID:       stableID,
+		RevisionRootID: revisionRootID,
+		RevisionOf:     revisionOf,
+		IdempotencyKey: idempotencyKey,
+		TaskID:         taskID,
+		SessionID:      sessionID,
+		TurnID:         turnID,
+		StateVersion:   stateVersion,
+		Labels:         labels,
+		Props:          props,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
+		DeletedAt:      deletedAt,
 	}, nil
 }
 
@@ -578,6 +707,38 @@ func (d *binaryDecoder) readEdgeRecord() (EdgeRecord, error) {
 	if err != nil {
 		return EdgeRecord{}, err
 	}
+	stableID, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	revisionRootID, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	revisionOf, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	idempotencyKey, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	taskID, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	sessionID, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	turnID, err := d.readString()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
+	stateVersion, err := d.readUint64()
+	if err != nil {
+		return EdgeRecord{}, err
+	}
 	weight, err := d.readFloat32()
 	if err != nil {
 		return EdgeRecord{}, err
@@ -595,13 +756,21 @@ func (d *binaryDecoder) readEdgeRecord() (EdgeRecord, error) {
 		return EdgeRecord{}, err
 	}
 	return EdgeRecord{
-		SourceID:  sourceID,
-		TargetID:  targetID,
-		Kind:      EdgeKind(kind),
-		Weight:    weight,
-		Props:     props,
-		CreatedAt: createdAt,
-		DeletedAt: deletedAt,
+		SourceID:       sourceID,
+		TargetID:       targetID,
+		Kind:           EdgeKind(kind),
+		StableID:       stableID,
+		RevisionRootID: revisionRootID,
+		RevisionOf:     revisionOf,
+		IdempotencyKey: idempotencyKey,
+		TaskID:         taskID,
+		SessionID:      sessionID,
+		TurnID:         turnID,
+		StateVersion:   stateVersion,
+		Weight:         weight,
+		Props:          props,
+		CreatedAt:      createdAt,
+		DeletedAt:      deletedAt,
 	}, nil
 }
 
@@ -649,6 +818,12 @@ func opKindForPayload(payload []byte) (string, error) {
 		return "link_edges", nil
 	case opCodeUnlinkEdge:
 		return "unlink_edge", nil
+	case opCodeAnnotateNode:
+		return "annotate_node", nil
+	case opCodeAnnotateEdge:
+		return "annotate_edge", nil
+	case opCodeRecordMutationResult:
+		return "record_mutation_result", nil
 	default:
 		return "", errors.New("graphdb: unknown binary op code")
 	}

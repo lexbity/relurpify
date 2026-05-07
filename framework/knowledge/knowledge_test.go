@@ -124,8 +124,8 @@ func TestChunkStoreSaveAddsIndexLabels(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "src/indexed.go", loaded.Body.Fields["file_path"])
 
-	require.Len(t, store.Graph.ListNodesByLabel(nodeKindChunk, "coverage_hash:hash-1"), 1)
-	require.Len(t, store.Graph.ListNodesByLabel(nodeKindChunk, "file_path:src/indexed.go"), 1)
+	require.Len(t, store.Graph.ListNodesByLabel(ChunkNodeKind, "coverage_hash:hash-1"), 1)
+	require.Len(t, store.Graph.ListNodesByLabel(ChunkNodeKind, "file_path:src/indexed.go"), 1)
 }
 
 func TestChunkGraphTraversalAndAmplification(t *testing.T) {

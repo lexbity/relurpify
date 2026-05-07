@@ -1,6 +1,11 @@
 package graphdb
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"slices"
+)
 
 // UpsertNode inserts or updates a node.
 func (e *Engine) UpsertNode(node NodeRecord) error {
@@ -150,6 +155,12 @@ func (e *Engine) applyUpsertNode(node NodeRecord) {
 	if ok && node.CreatedAt == 0 {
 		node.CreatedAt = existing.CreatedAt
 	}
+	if ok && existing != nil && existing.DeletedAt == 0 && nodeRecordEqual(*existing, node) {
+		return
+	}
+	if ok && existing != nil {
+		e.store.nodeHistory[node.ID] = append(e.store.nodeHistory[node.ID], cloneNode(existing))
+	}
 	if ok && existing != nil && existing.SourceID != "" && existing.SourceID != node.SourceID {
 		e.store.removeNodeSourceIndex(existing.ID, existing.SourceID)
 	}
@@ -168,6 +179,7 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 	}
 	node, ok := e.store.nodes[id]
 	if ok {
+		e.store.nodeHistory[id] = append(e.store.nodeHistory[id], cloneNode(node))
 		e.store.removeNodeLabels(*node)
 		node.DeletedAt = deletedAt
 		node.UpdatedAt = deletedAt
@@ -183,6 +195,47 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 	for _, edge := range inbound {
 		e.store.forward[edge.SourceID] = markSpecificEdgeDeleted(e.store.forward[edge.SourceID], edge.SourceID, edge.TargetID, edge.Kind, deletedAt)
 	}
+}
+
+// AnnotateNode merges JSON-encoded properties into a node while preserving history.
+func (e *Engine) AnnotateNode(id string, props map[string]any) error {
+	if id == "" || len(props) == 0 {
+		return nil
+	}
+	if err := e.persist("annotate_node", annotateNodeOp{ID: id, Props: props}); err != nil {
+		return err
+	}
+	e.store.mu.Lock()
+	defer e.store.mu.Unlock()
+	return e.annotateNodeLocked(id, props, time.Now().UnixNano())
+}
+
+func (e *Engine) annotateNodeLocked(id string, props map[string]any, updatedAt int64) error {
+	node, ok := e.store.nodes[id]
+	if !ok || node == nil || node.DeletedAt != 0 {
+		return nil
+	}
+	merged, err := mergeJSONProps(node.Props, props)
+	if err != nil {
+		return err
+	}
+	if slices.Equal(node.Props, merged) {
+		return nil
+	}
+	e.store.nodeHistory[id] = append(e.store.nodeHistory[id], cloneNode(node))
+	node.Props = merged
+	if updatedAt == 0 {
+		updatedAt = time.Now().UnixNano()
+	}
+	node.UpdatedAt = updatedAt
+	return nil
+}
+
+// NodeRevisions returns the revision history for a node ID, oldest first.
+func (e *Engine) NodeRevisions(id string) []NodeRecord {
+	e.store.mu.RLock()
+	defer e.store.mu.RUnlock()
+	return cloneNodeHistory(e.store.nodeHistory[id])
 }
 
 func markEdgesDeleted(edges []EdgeRecord, deletedAt int64) []EdgeRecord {
@@ -209,4 +262,17 @@ func markSpecificEdgeDeleted(edges []EdgeRecord, sourceID, targetID string, kind
 		out = append(out, edge)
 	}
 	return out
+}
+
+func mergeJSONProps(existing json.RawMessage, props map[string]any) (json.RawMessage, error) {
+	merged := make(map[string]any)
+	if len(existing) > 0 {
+		if err := json.Unmarshal(existing, &merged); err != nil {
+			return nil, err
+		}
+	}
+	for k, v := range props {
+		merged[k] = v
+	}
+	return json.Marshal(merged)
 }

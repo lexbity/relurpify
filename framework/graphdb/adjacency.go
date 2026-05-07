@@ -6,21 +6,27 @@ import (
 )
 
 type adjacencyStore struct {
-	mu       sync.RWMutex
-	nodes    map[string]*NodeRecord
-	bySource map[string]map[string]struct{}
-	forward  map[string][]EdgeRecord
-	reverse  map[string][]EdgeRecord
-	labels   *LabelIndex
+	mu              sync.RWMutex
+	nodes           map[string]*NodeRecord
+	nodeHistory     map[string][]NodeRecord
+	bySource        map[string]map[string]struct{}
+	forward         map[string][]EdgeRecord
+	reverse         map[string][]EdgeRecord
+	edgeHistory     map[string][]EdgeRecord
+	mutationResults map[string]MutationResult
+	labels          *LabelIndex
 }
 
 func newAdjacencyStore() *adjacencyStore {
 	return &adjacencyStore{
-		nodes:    make(map[string]*NodeRecord),
-		bySource: make(map[string]map[string]struct{}),
-		forward:  make(map[string][]EdgeRecord),
-		reverse:  make(map[string][]EdgeRecord),
-		labels:   NewLabelIndex(),
+		nodes:           make(map[string]*NodeRecord),
+		nodeHistory:     make(map[string][]NodeRecord),
+		bySource:        make(map[string]map[string]struct{}),
+		forward:         make(map[string][]EdgeRecord),
+		reverse:         make(map[string][]EdgeRecord),
+		edgeHistory:     make(map[string][]EdgeRecord),
+		mutationResults: make(map[string]MutationResult),
+		labels:          NewLabelIndex(),
 	}
 }
 
@@ -48,6 +54,93 @@ func cloneEdges(edges []EdgeRecord) []EdgeRecord {
 		out = append(out, cloneEdge(edge))
 	}
 	return out
+}
+
+func cloneNodeHistory(nodes []NodeRecord) []NodeRecord {
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]NodeRecord, len(nodes))
+	for i := range nodes {
+		out[i] = cloneNode(&nodes[i])
+	}
+	return out
+}
+
+func cloneEdgeHistory(edges []EdgeRecord) []EdgeRecord {
+	if len(edges) == 0 {
+		return nil
+	}
+	out := make([]EdgeRecord, len(edges))
+	for i := range edges {
+		out[i] = cloneEdge(edges[i])
+	}
+	return out
+}
+
+func cloneMutationResult(result MutationResult) MutationResult {
+	out := result
+	out.RecordIDs = slices.Clone(result.RecordIDs)
+	out.CreatedIDs = slices.Clone(result.CreatedIDs)
+	out.UpdatedIDs = slices.Clone(result.UpdatedIDs)
+	out.AnnotatedIDs = slices.Clone(result.AnnotatedIDs)
+	out.SupersededIDs = slices.Clone(result.SupersededIDs)
+	out.MatchedIDs = slices.Clone(result.MatchedIDs)
+	out.RejectedIDs = slices.Clone(result.RejectedIDs)
+	out.ConflictIDs = slices.Clone(result.ConflictIDs)
+	if result.Details != nil {
+		out.Details = make(map[string]any, len(result.Details))
+		for k, v := range result.Details {
+			out.Details[k] = v
+		}
+	}
+	return out
+}
+
+func cloneMutationResults(results map[string]MutationResult) map[string]MutationResult {
+	if len(results) == 0 {
+		return nil
+	}
+	out := make(map[string]MutationResult, len(results))
+	for key, result := range results {
+		out[key] = cloneMutationResult(result)
+	}
+	return out
+}
+
+func nodeRecordEqual(a, b NodeRecord) bool {
+	return a.Kind == b.Kind &&
+		a.SourceID == b.SourceID &&
+		a.StableID == b.StableID &&
+		a.RevisionRootID == b.RevisionRootID &&
+		a.RevisionOf == b.RevisionOf &&
+		a.IdempotencyKey == b.IdempotencyKey &&
+		a.TaskID == b.TaskID &&
+		a.SessionID == b.SessionID &&
+		a.TurnID == b.TurnID &&
+		a.StateVersion == b.StateVersion &&
+		slices.Equal(a.Labels, b.Labels) &&
+		slices.Equal(a.Props, b.Props)
+}
+
+func edgeRecordEqual(a, b EdgeRecord) bool {
+	return a.SourceID == b.SourceID &&
+		a.TargetID == b.TargetID &&
+		a.Kind == b.Kind &&
+		a.StableID == b.StableID &&
+		a.RevisionRootID == b.RevisionRootID &&
+		a.RevisionOf == b.RevisionOf &&
+		a.IdempotencyKey == b.IdempotencyKey &&
+		a.TaskID == b.TaskID &&
+		a.SessionID == b.SessionID &&
+		a.TurnID == b.TurnID &&
+		a.StateVersion == b.StateVersion &&
+		a.Weight == b.Weight &&
+		slices.Equal(a.Props, b.Props)
+}
+
+func edgeHistoryKey(sourceID, targetID string, kind EdgeKind) string {
+	return string(kind) + "|" + sourceID + "|" + targetID
 }
 
 func (s *adjacencyStore) addNodeSourceIndex(node NodeRecord) {

@@ -27,6 +27,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -67,7 +69,10 @@ func (n *RecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return n.executeCapability(ctx, env)
 	}
 
-	task := n.buildTask(env)
+	task, err := n.buildTask(env)
+	if err != nil {
+		return nil, err
+	}
 	agent, err := n.buildAgent(task)
 	if err != nil {
 		return nil, err
@@ -114,6 +119,7 @@ func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata
 	if env == nil {
 		return nil, fmt.Errorf("recipe step node %q missing envelope", n.id)
 	}
+	n.writeStepMetadata(env)
 
 	reg := n.env.Registry
 	if reg == nil {
@@ -174,21 +180,22 @@ func (n *RecipeStepNode) executeCapability(ctx context.Context, env *contextdata
 	return result, nil
 }
 
-func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
+func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) (*core.Task, error) {
 	data := recipeTemplateData(env, n.step)
+	n.writeStepMetadata(env)
 
-	// Check for registry-based resolution first
 	var instruction string
-	var err error
-	if n.step.PromptID != "" && n.env.PromptRegistry != nil {
+	if n.step.PromptID != "" {
+		if n.env.PromptRegistry == nil {
+			return nil, fmt.Errorf("recipe step %q: prompt_id requires a registry", n.step.ID)
+		}
+		var err error
 		instruction, err = n.resolveFromRegistry(env)
 		if err != nil {
-			// Fall through to inline prompt on error
-			instruction = ""
+			return nil, err
 		}
 	}
 
-	// Use inline prompt path if registry resolution failed or wasn't available
 	if instruction == "" {
 		instruction = n.renderTemplate(n.step.Prompt, data)
 		if instruction == "" {
@@ -202,12 +209,7 @@ func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 		Instruction: instruction,
 		Data:        make(map[string]interface{}),
 		Context:     data,
-		Metadata: map[string]interface{}{
-			"recipe_step_id":  n.step.ID,
-			"recipe_paradigm": n.step.Paradigm,
-			"recipe_mutation": n.step.Mutation,
-			"recipe_hitl":     n.step.HITL,
-		},
+		Metadata:    n.stepMetadata(),
 	}
 	if len(n.step.Bindings) > 0 {
 		for key, ref := range n.step.Bindings {
@@ -222,7 +224,7 @@ func (n *RecipeStepNode) buildTask(env *contextdata.Envelope) *core.Task {
 		task.Context["prompt_id"] = n.step.PromptID
 	}
 
-	return task
+	return task, nil
 }
 
 // resolveFromRegistry resolves the prompt from the registry using the PromptID.
@@ -241,25 +243,181 @@ func (n *RecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (string,
 // buildRuntimeContext creates a prompt.RuntimeContext for recipe step resolution.
 func (n *RecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) prompt.RuntimeContext {
 	data := recipeTemplateData(env, n.step)
+	runtime := prompt.NewRuntimeContext(env, n.step.Paradigm, "euclo").
+		WithVariable("instruction", n.renderTemplate(n.step.Prompt, data)).
+		WithVariable("question", n.step.Prompt).
+		WithVariable("prompt_id", n.step.PromptID).
+		WithStateMap(clarificationRuntimeState(env)).
+		WithStateMap(n.stepRuntimeState(data))
 
-	return prompt.RuntimeContext{
-		Variables: map[string]string{
-			"instruction": n.renderTemplate(n.step.Prompt, data),
-		},
-		State:      map[string]interface{}{},
-		Envelope:   env,
-		Paradigm:   n.step.Paradigm,
-		ConsumerID: "euclo",
-		Task: &core.Task{
-			ID:          n.id,
-			Type:        n.step.Paradigm,
-			Instruction: n.renderTemplate(n.step.Prompt, data),
-			Context:     data,
-		},
-		Tools:        []contracts.Tool{},            // Tools not available at build time
-		Capabilities: []core.CapabilityDescriptor{}, // Capabilities not available at build time
-		AgentSpec:    nil,                           // AgentSpec not available at build time
+	runtime.Task = &core.Task{
+		ID:          n.id,
+		Type:        n.step.Paradigm,
+		Instruction: n.renderTemplate(n.step.Prompt, data),
+		Context:     data,
 	}
+	runtime.Tools = []contracts.Tool{}
+	runtime.Capabilities = []core.CapabilityDescriptor{}
+	runtime.AgentSpec = nil
+	return runtime
+}
+
+func (n *RecipeStepNode) stepMetadata() map[string]interface{} {
+	metadata := map[string]interface{}{
+		"recipe_step_id":   n.step.ID,
+		"recipe_step_type": n.step.Type,
+		"recipe_paradigm":  n.step.Paradigm,
+		"recipe_mutation":  n.step.Mutation,
+		"recipe_hitl":      n.step.HITL,
+	}
+	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
+		metadata["recipe_clarification_type"] = n.step.Type
+		metadata["recipe_clarification_config"] = cfg
+	}
+	return metadata
+}
+
+func (n *RecipeStepNode) stepRuntimeState(data map[string]any) map[string]any {
+	state := map[string]any{
+		"recipe_step_id":     n.step.ID,
+		"recipe_step_type":   n.step.Type,
+		"recipe_paradigm":    n.step.Paradigm,
+		"recipe_prompt_id":   n.step.PromptID,
+		"recipe_instruction": n.renderTemplate(n.step.Prompt, data),
+	}
+	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
+		state["recipe_clarification_type"] = n.step.Type
+		state["recipe_clarification_config"] = cfg
+		state["recipe_clarification_schema_id"] = cfg.OutputSchemaID
+		state["recipe_clarification_validation_mode"] = cfg.ValidationMode
+		state["recipe_clarification_required_fields"] = append([]string(nil), cfg.RequiredFields...)
+		state["recipe_clarification_allowed_statuses"] = append([]intentcontext.ClarificationStepStatus(nil), cfg.AllowedStatuses...)
+		state["recipe_clarification_state_write_keys"] = append([]string(nil), cfg.StateWriteKeys...)
+		state["recipe_clarification_projection_policy"] = cfg.ProjectionPolicy
+		state["recipe_clarification_requery_on_success"] = cfg.RequeryOnSuccess
+	}
+	return state
+}
+
+func (n *RecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
+	if env == nil {
+		return
+	}
+	base := "euclo.recipe.step." + n.step.ID
+	env.SetWorkingValue(base+".id", n.step.ID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(base+".type", n.step.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValue(base+".paradigm", n.step.Paradigm, contextdata.MemoryClassTask)
+	env.SetWorkingValue(base+".prompt_id", n.step.PromptID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(base+".mutation", n.step.Mutation, contextdata.MemoryClassTask)
+	env.SetWorkingValue(base+".hitl", n.step.HITL, contextdata.MemoryClassTask)
+	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
+		env.SetWorkingValue(base+".clarification_type", n.step.Type, contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_config", cfg, contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_schema_id", cfg.OutputSchemaID, contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_validation_mode", cfg.ValidationMode, contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_required_fields", append([]string(nil), cfg.RequiredFields...), contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_allowed_statuses", append([]intentcontext.ClarificationStepStatus(nil), cfg.AllowedStatuses...), contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_state_write_keys", append([]string(nil), cfg.StateWriteKeys...), contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_projection_policy", cfg.ProjectionPolicy, contextdata.MemoryClassTask)
+		env.SetWorkingValue(base+".clarification_requery_on_success", cfg.RequeryOnSuccess, contextdata.MemoryClassTask)
+	}
+}
+
+func clarificationRuntimeState(env *contextdata.Envelope) map[string]any {
+	if env == nil {
+		return map[string]any{}
+	}
+
+	state := make(map[string]any)
+	if current, err := intentcontext.NewStateStore().Read(context.Background(), env); err == nil && current != nil {
+		state[intentcontext.ClarificationStateKey] = current.Clone()
+		state["euclo.intent.clarification.state_version"] = current.StateVersion
+		state["euclo.intent.clarification.current_turn_id"] = current.CurrentTurnID
+		state["euclo.intent.clarification.active_recipe_id"] = current.ActiveRecipeID
+		state["euclo.intent.clarification.last_checkpoint_id"] = current.LastCheckpointID
+		state["euclo.intent.clarification.last_checkpoint_seq"] = current.LastCheckpointSeq
+		state["euclo.intent.clarification.confirmed_entity_ids"] = stableEntityIDs(current.ConfirmedEntities)
+		state["euclo.intent.clarification.confirmed_scope_ids"] = stableScopeIDs(current.ConfirmedScopes)
+		state["euclo.intent.clarification.pending_projection_ids"] = stableProjectionIDs(current.PendingProjection)
+		state["euclo.intent.clarification.grounded_anchor_ids"] = anchorIDs(current.GroundedAnchors)
+		if current.Ambiguity != nil {
+			state["euclo.intent.clarification.ambiguity_kind"] = string(current.Ambiguity.Kind)
+			state["euclo.intent.clarification.ambiguity_confidence"] = current.Ambiguity.Confidence
+			state["euclo.intent.clarification.ambiguity_rationale"] = current.Ambiguity.Rationale
+		}
+		if len(current.PendingQuestions) > 0 {
+			state["euclo.intent.clarification.pending_questions"] = append([]intentcontext.ClarificationQuestion(nil), current.PendingQuestions...)
+		}
+		if len(current.Turns) > 0 {
+			state["euclo.intent.clarification.turn_ids"] = turnIDs(current.Turns)
+		}
+	}
+	return state
+}
+
+func anchorIDs(anchors []retrieval.AnchorRef) []string {
+	if len(anchors) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(anchors))
+	for _, anchor := range anchors {
+		if strings.TrimSpace(anchor.AnchorID) != "" {
+			ids = append(ids, strings.TrimSpace(anchor.AnchorID))
+		}
+	}
+	return ids
+}
+
+func stableEntityIDs(entities []intentcontext.ConfirmedEntity) []string {
+	if len(entities) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(entities))
+	for _, entity := range entities {
+		if strings.TrimSpace(entity.StableID) != "" {
+			ids = append(ids, strings.TrimSpace(entity.StableID))
+		}
+	}
+	return ids
+}
+
+func stableScopeIDs(scopes []intentcontext.ConfirmedScope) []string {
+	if len(scopes) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		if strings.TrimSpace(scope.StableID) != "" {
+			ids = append(ids, strings.TrimSpace(scope.StableID))
+		}
+	}
+	return ids
+}
+
+func stableProjectionIDs(intents []intentcontext.ProjectionIntent) []string {
+	if len(intents) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(intents))
+	for _, intent := range intents {
+		if strings.TrimSpace(intent.StableID) != "" {
+			ids = append(ids, strings.TrimSpace(intent.StableID))
+		}
+	}
+	return ids
+}
+
+func turnIDs(turns []intentcontext.ClarificationTurn) []string {
+	if len(turns) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		if strings.TrimSpace(turn.TurnID) != "" {
+			ids = append(ids, strings.TrimSpace(turn.TurnID))
+		}
+	}
+	return ids
 }
 
 func (n *RecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) map[string]any {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -157,9 +158,18 @@ func (e *Engine) loadSnapshot() error {
 		e.store.addNodeSourceIndex(node)
 		e.store.addNodeLabels(node)
 	}
+	for key, history := range state.NodeHistory {
+		e.store.nodeHistory[key] = cloneNodeHistory(history)
+	}
 	for _, edge := range state.Forward {
 		e.store.forward[edge.SourceID] = append(e.store.forward[edge.SourceID], cloneEdge(edge))
 		e.store.reverse[edge.TargetID] = append(e.store.reverse[edge.TargetID], cloneEdge(edge))
+	}
+	for key, history := range state.EdgeHistory {
+		e.store.edgeHistory[key] = cloneEdgeHistory(history)
+	}
+	for key, result := range state.MutationResults {
+		e.store.mutationResults[key] = cloneMutationResult(result)
 	}
 	return nil
 }
@@ -169,17 +179,26 @@ func (e *Engine) snapshotState() snapshotState {
 	defer e.store.mu.RUnlock()
 
 	state := snapshotState{
-		Nodes:   make([]NodeRecord, 0, len(e.store.nodes)),
-		Forward: make([]EdgeRecord, 0),
+		Nodes:       make([]NodeRecord, 0, len(e.store.nodes)),
+		Forward:     make([]EdgeRecord, 0),
+		NodeHistory: make(map[string][]NodeRecord, len(e.store.nodeHistory)),
+		EdgeHistory: make(map[string][]EdgeRecord, len(e.store.edgeHistory)),
 	}
 	for _, node := range e.store.nodes {
 		state.Nodes = append(state.Nodes, cloneNode(node))
+	}
+	for key, history := range e.store.nodeHistory {
+		state.NodeHistory[key] = cloneNodeHistory(history)
 	}
 	for _, edges := range e.store.forward {
 		for _, edge := range edges {
 			state.Forward = append(state.Forward, cloneEdge(edge))
 		}
 	}
+	for key, history := range e.store.edgeHistory {
+		state.EdgeHistory[key] = cloneEdgeHistory(history)
+	}
+	state.MutationResults = cloneMutationResults(e.store.mutationResults)
 	return state
 }
 
@@ -201,6 +220,65 @@ func (e *Engine) persist(kind string, payload any) error {
 		}
 	}
 	return nil
+}
+
+// RecordMutationResult stores a projection or mutation audit result durably.
+func (e *Engine) RecordMutationResult(result MutationResult) error {
+	if e == nil {
+		return nil
+	}
+	if result.AppliedAt.IsZero() {
+		result.AppliedAt = time.Now().UTC()
+	}
+	result.Normalize(result.TaskID, result.SessionID)
+	if err := e.persist("record_mutation_result", mutationResultOp{Result: result}); err != nil {
+		return err
+	}
+	e.store.mu.Lock()
+	defer e.store.mu.Unlock()
+	e.applyMutationResult(result)
+	return nil
+}
+
+// MutationResult returns a stored mutation result by stable ID.
+func (e *Engine) MutationResult(stableID string) (MutationResult, bool) {
+	e.store.mu.RLock()
+	defer e.store.mu.RUnlock()
+	result, ok := e.store.mutationResults[stableID]
+	if !ok {
+		return MutationResult{}, false
+	}
+	return cloneMutationResult(result), true
+}
+
+// MutationResults returns all stored mutation results in stable-ID order.
+func (e *Engine) MutationResults() []MutationResult {
+	e.store.mu.RLock()
+	defer e.store.mu.RUnlock()
+	if len(e.store.mutationResults) == 0 {
+		return nil
+	}
+	results := make([]MutationResult, 0, len(e.store.mutationResults))
+	for _, result := range e.store.mutationResults {
+		results = append(results, cloneMutationResult(result))
+	}
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].StableID < results[j].StableID
+	})
+	return results
+}
+
+func (e *Engine) applyMutationResult(result MutationResult) {
+	if e == nil {
+		return
+	}
+	if result.StableID == "" {
+		result.Normalize(result.TaskID, result.SessionID)
+	}
+	if e.store.mutationResults == nil {
+		e.store.mutationResults = make(map[string]MutationResult)
+	}
+	e.store.mutationResults[result.StableID] = cloneMutationResult(result)
 }
 
 func (e *Engine) applyBinaryOp(op binaryOp) error {
@@ -293,6 +371,74 @@ func (e *Engine) applyBinaryOp(op binaryOp) error {
 			return err
 		}
 		e.applyUnlink(sourceID, targetID, EdgeKind(kind), hard, 0)
+	case opCodeAnnotateNode:
+		dec := binaryDecoderFromBytes(op.data)
+		id, err := dec.readString()
+		if err != nil {
+			return err
+		}
+		raw, err := dec.readBytes()
+		if err != nil {
+			return err
+		}
+		if err := dec.finish(); err != nil {
+			return err
+		}
+		var props map[string]any
+		if err := json.Unmarshal(raw, &props); err != nil {
+			return err
+		}
+		e.store.mu.Lock()
+		if err := e.annotateNodeLocked(id, props, 0); err != nil {
+			e.store.mu.Unlock()
+			return err
+		}
+		e.store.mu.Unlock()
+	case opCodeAnnotateEdge:
+		dec := binaryDecoderFromBytes(op.data)
+		sourceID, err := dec.readString()
+		if err != nil {
+			return err
+		}
+		targetID, err := dec.readString()
+		if err != nil {
+			return err
+		}
+		kind, err := dec.readString()
+		if err != nil {
+			return err
+		}
+		raw, err := dec.readBytes()
+		if err != nil {
+			return err
+		}
+		if err := dec.finish(); err != nil {
+			return err
+		}
+		var props map[string]any
+		if err := json.Unmarshal(raw, &props); err != nil {
+			return err
+		}
+		e.store.mu.Lock()
+		if err := e.annotateEdgeLocked(sourceID, targetID, EdgeKind(kind), props); err != nil {
+			e.store.mu.Unlock()
+			return err
+		}
+		e.store.mu.Unlock()
+	case opCodeRecordMutationResult:
+		dec := binaryDecoderFromBytes(op.data)
+		raw, err := dec.readBytes()
+		if err != nil {
+			return err
+		}
+		if err := dec.finish(); err != nil {
+			return err
+		}
+		var result MutationResult
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return err
+		}
+		e.applyMutationResult(result)
 	default:
 		return errors.New("graphdb: unknown binary op code")
 	}
@@ -356,6 +502,34 @@ func (e *Engine) applyLegacyJSONOp(payload []byte) error {
 			return err
 		}
 		e.applyUnlink(payload.SourceID, payload.TargetID, payload.Kind, payload.Hard, 0)
+	case "annotate_node":
+		var payload annotateNodeOp
+		if err := json.Unmarshal(op.Data, &payload); err != nil {
+			return err
+		}
+		e.store.mu.Lock()
+		if err := e.annotateNodeLocked(payload.ID, payload.Props, 0); err != nil {
+			e.store.mu.Unlock()
+			return err
+		}
+		e.store.mu.Unlock()
+	case "annotate_edge":
+		var payload annotateEdgeOp
+		if err := json.Unmarshal(op.Data, &payload); err != nil {
+			return err
+		}
+		e.store.mu.Lock()
+		if err := e.annotateEdgeLocked(payload.SourceID, payload.TargetID, payload.Kind, payload.Props); err != nil {
+			e.store.mu.Unlock()
+			return err
+		}
+		e.store.mu.Unlock()
+	case "record_mutation_result":
+		var payload mutationResultOp
+		if err := json.Unmarshal(op.Data, &payload); err != nil {
+			return err
+		}
+		e.applyMutationResult(payload.Result)
 	}
 	return nil
 }

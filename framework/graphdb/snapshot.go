@@ -7,8 +7,11 @@ import (
 )
 
 type snapshotState struct {
-	Nodes   []NodeRecord `json:"nodes"`
-	Forward []EdgeRecord `json:"forward"`
+	Nodes           []NodeRecord              `json:"nodes"`
+	Forward         []EdgeRecord              `json:"forward"`
+	NodeHistory     map[string][]NodeRecord   `json:"node_history,omitempty"`
+	EdgeHistory     map[string][]EdgeRecord   `json:"edge_history,omitempty"`
+	MutationResults map[string]MutationResult `json:"mutation_results,omitempty"`
 }
 
 func writeSnapshot(path string, state snapshotState) error {

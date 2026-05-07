@@ -306,6 +306,51 @@ func TestRecipeCompilerPlanPropagatesCapabilityID(t *testing.T) {
 	}
 }
 
+func TestRecipeCompilerPlanPreservesClarificationMetadata(t *testing.T) {
+	compiler := NewCompiler()
+
+	recipe := &ThoughtRecipe{
+		APIVersion: "euclo.v1",
+		Kind:       "thought-recipe",
+		Metadata: RecipeMetadata{
+			Name: "Clarification Recipe",
+		},
+		Sequence: RecipeSequence{
+			Steps: []RecipeStep{
+				{
+					ID:   "extract",
+					Type: string(ClarificationStepTypeExtract),
+					Config: map[string]any{
+						"output_schema_id": "clarification.answer.v1",
+						"validation_mode":  "strict",
+						"required_fields":  []string{"answer"},
+					},
+				},
+			},
+		},
+	}
+
+	plan, err := compiler.CompilePlan(recipe, nil)
+	if err != nil {
+		t.Fatalf("CompilePlan failed: %v", err)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(plan.Steps))
+	}
+	if plan.Steps[0].Type != string(ClarificationStepTypeExtract) {
+		t.Fatalf("expected clarification step type to propagate, got %q", plan.Steps[0].Type)
+	}
+	if plan.Steps[0].ClarificationConfig == nil {
+		t.Fatal("expected clarification config to propagate")
+	}
+	if got := plan.Steps[0].ClarificationConfig.OutputSchemaID; got != "clarification.answer.v1" {
+		t.Fatalf("unexpected output schema id: %q", got)
+	}
+	if got := plan.Steps[0].ClarificationConfig.ValidationMode; got != "strict" {
+		t.Fatalf("unexpected validation mode: %q", got)
+	}
+}
+
 func TestRecipeCompilerPlanCompilesGroups(t *testing.T) {
 	compiler := NewCompiler()
 
@@ -337,9 +382,12 @@ func TestRecipeCompilerPlanCompilesGroups(t *testing.T) {
 					Steps: []RecipeStep{
 						{
 							ID:   "left",
-							Type: "llm",
+							Type: string(ClarificationStepTypeProject),
 							Captures: map[string]string{
 								"out": "",
+							},
+							Config: map[string]any{
+								"output_schema_id": "clarification.project.v1",
 							},
 						},
 						{
@@ -389,6 +437,12 @@ func TestRecipeCompilerPlanCompilesGroups(t *testing.T) {
 
 	if got := plan.Parallel[0].Steps[0].Step.ID; got != "fanout.parallel.0.left" {
 		t.Fatalf("unexpected parallel step ID: %s", got)
+	}
+	if got := plan.Parallel[0].Steps[0].Type; got != string(ClarificationStepTypeProject) {
+		t.Fatalf("unexpected parallel step type: %s", got)
+	}
+	if plan.Parallel[0].Steps[0].ClarificationConfig == nil {
+		t.Fatal("expected clarification config on parallel step")
 	}
 	if got := plan.Parallel[0].Steps[0].Captures["out"]; got != "euclo.recipe.grouped-recipe.fanout.parallel.0.out" {
 		t.Fatalf("unexpected parallel capture key: %s", got)

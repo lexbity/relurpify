@@ -3,6 +3,7 @@ package contextdata
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -84,7 +85,7 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 	seenWorkingKeys := make(map[string]struct{})
 	seenChunkIDs := make(map[ChunkID]struct{})
 	seenRetrievalIDs := make(map[string]struct{})
-	seenCheckpointIDs := make(map[string]struct{})
+	checkpointIndex := make(map[string]int)
 
 	// Collect all working memory keys and their values
 	// Use last-write-wins ordering (later envelopes override earlier ones)
@@ -132,11 +133,16 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 
 		// Merge checkpoint references (deduplicate by checkpoint ID)
 		for _, ref := range refs.Checkpoints {
-			if _, seen := seenCheckpointIDs[ref.CheckpointID]; !seen {
-				seenCheckpointIDs[ref.CheckpointID] = struct{}{}
-				merged.References.Checkpoints = append(
-					merged.References.Checkpoints, ref)
+			if idx, seen := checkpointIndex[ref.CheckpointID]; seen {
+				merged.References.Checkpoints[idx].WorkingMemoryKeys = mergeStringSets(
+					merged.References.Checkpoints[idx].WorkingMemoryKeys,
+					ref.WorkingMemoryKeys,
+				)
+				continue
 			}
+			checkpointIndex[ref.CheckpointID] = len(merged.References.Checkpoints)
+			merged.References.Checkpoints = append(
+				merged.References.Checkpoints, cloneCheckpointReference(ref))
 		}
 	}
 
@@ -148,6 +154,12 @@ func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Env
 
 	// Set the unioned working data
 	merged.WorkingData = workingMemoryUnion
+
+	for i := range merged.References.Checkpoints {
+		merged.References.Checkpoints[i].WorkingMemoryKeys = dedupeStrings(
+			merged.References.Checkpoints[i].WorkingMemoryKeys,
+		)
+	}
 
 	return merged, nil
 }
@@ -244,6 +256,37 @@ func ValidateBranchMerge(envelopes []*Envelope) error {
 	// - Ensure retrieval references don't have circular dependencies
 
 	return nil
+}
+
+func mergeStringSets(base, extra []string) []string {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]string, 0, len(base)+len(extra))
+	add := func(values []string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+	add(base)
+	add(extra)
+	return out
+}
+
+func dedupeStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	return mergeStringSets(nil, values)
 }
 
 // DeduplicateChunkReferences removes duplicate chunk references, keeping

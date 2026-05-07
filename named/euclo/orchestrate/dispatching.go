@@ -163,6 +163,9 @@ func rankCapabilityCandidates(req RouteRequest, caps *capability.CapabilityRegis
 	allowAllCandidates := strings.TrimSpace(req.SkillFilter) != "" || (strings.TrimSpace(req.FamilyID) == "" && strings.TrimSpace(req.Instruction) == "")
 	for _, snap := range snapshots {
 		explicitCapability := strings.TrimSpace(req.CapabilityID) != "" && req.CapabilityID == snap.Descriptor.ID
+		if snap.Descriptor.ID == clarificationCapabilityID && !explicitCapability {
+			continue
+		}
 		if !explicitCapability && !allowAllCandidates && !routeMatchesFamily(snap.Descriptor, req.FamilyID, req.Instruction) {
 			continue
 		}
@@ -208,6 +211,9 @@ func rankRecipeCandidates(req RouteRequest, recipes *recipepkg.RecipeRegistry) [
 	sort.Strings(ids)
 	candidates := make([]rankedRoute, 0, len(ids))
 	for _, id := range ids {
+		if id == clarificationRecipeID && strings.TrimSpace(req.RecipeID) != clarificationRecipeID {
+			continue
+		}
 		score := 0
 		reasons := []string{}
 		if req.RecipeID != "" && req.RecipeID == id {
@@ -217,6 +223,9 @@ func rankRecipeCandidates(req RouteRequest, recipes *recipepkg.RecipeRegistry) [
 		if strings.EqualFold(req.FamilyID, "review") || strings.EqualFold(req.FamilyID, "investigation") || strings.EqualFold(req.FamilyID, "architecture") {
 			score += 10
 			reasons = append(reasons, "family recipe")
+		}
+		if score <= 0 && strings.TrimSpace(req.RecipeID) != id {
+			continue
 		}
 		candidates = append(candidates, rankedRoute{
 			RouteID:      RouteID(id),
@@ -309,7 +318,7 @@ func candidateByIDKind(candidates []CandidateRouteInfo, kind, id string) (Candid
 func resolveRoute(req RouteRequest, caps *capability.CapabilityRegistry, recipes *recipepkg.RecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
 	report.Candidates = rankCandidates(req, caps, recipes)
-	if len(report.Candidates) == 0 && caps == nil && recipes == nil {
+	if len(report.Candidates) == 0 {
 		synth := syntheticCandidate(req)
 		report.Candidates = []CandidateRouteInfo{synth}
 		return report, synth, false, true

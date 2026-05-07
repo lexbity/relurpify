@@ -197,35 +197,50 @@ func compileExecutionStep(step RecipeStep, resolver *AliasResolver, recipeKey, i
 	}
 	resolvedStep := step
 	resolvedStep.ID = executionID
+	clarificationConfig, _ := DecodeClarificationStepConfig(step)
 	if captures == nil {
 		captures = resolveCaptures(step.Captures, resolver, recipeKey, scope)
 	}
 	return ExecutionStep{
-		ID:           executionID,
-		Paradigm:     step.Parent.Paradigm,
-		CapabilityID: step.CapabilityID,
-		Prompt:       step.Prompt,
-		PromptID:     step.PromptID,
-		Mutation:     step.Mutation,
-		HITL:         step.HITL,
-		Stream:       cloneStreamSpec(step.Parent.Context.Stream),
-		Ingest:       cloneIngestSpec(step.Parent.Context.Ingest),
-		Fallback:     cloneStepAgent(step.Fallback),
-		Inherit:      append([]string(nil), step.Parent.Context.Inherit...),
-		Capture:      append([]string(nil), step.Parent.Context.Capture...),
-		Dependencies: append([]string(nil), step.Dependencies...),
-		Bindings:     resolveBindings(step.Bindings),
-		Captures:     captures,
-		Step:         resolvedStep,
+		ID:                  executionID,
+		Type:                step.Type,
+		Paradigm:            executionParadigmForStep(step),
+		CapabilityID:        step.CapabilityID,
+		Prompt:              step.Prompt,
+		PromptID:            step.PromptID,
+		Mutation:            step.Mutation,
+		HITL:                step.HITL,
+		Stream:              cloneStreamSpec(step.Parent.Context.Stream),
+		Ingest:              cloneIngestSpec(step.Parent.Context.Ingest),
+		Fallback:            cloneStepAgent(step.Fallback),
+		Inherit:             append([]string(nil), step.Parent.Context.Inherit...),
+		Capture:             append([]string(nil), step.Parent.Context.Capture...),
+		Dependencies:        append([]string(nil), step.Dependencies...),
+		Bindings:            resolveBindings(step.Bindings),
+		Captures:            captures,
+		ClarificationConfig: clarificationConfig,
+		Step:                resolvedStep,
 	}
+}
+
+func executionParadigmForStep(step RecipeStep) string {
+	if paradigm := strings.TrimSpace(step.Parent.Paradigm); paradigm != "" {
+		return paradigm
+	}
+	if paradigm := strings.TrimSpace(step.Type); paradigm != "" && validateStepParadigm(paradigm) == nil {
+		return paradigm
+	}
+	return ""
 }
 
 func compiledStepFromExecution(step ExecutionStep) CompiledStep {
 	return CompiledStep{
-		Step:     &step.Step,
-		Config:   cloneAnyMap(step.Step.Config),
-		Captures: step.Captures,
-		Bindings: step.Bindings,
+		Step:                &step.Step,
+		Type:                step.Type,
+		ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
+		Config:              cloneAnyMap(step.Step.Config),
+		Captures:            step.Captures,
+		Bindings:            step.Bindings,
 	}
 }
 

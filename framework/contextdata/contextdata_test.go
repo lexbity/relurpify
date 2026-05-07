@@ -299,6 +299,44 @@ func TestMergeBranchEnvelopesDeduplicatesChunks(t *testing.T) {
 	}
 }
 
+func TestMergeBranchEnvelopesPreservesCheckpointWorkingMemoryKeys(t *testing.T) {
+	env1 := NewEnvelope("task-1", "session-1")
+	env1.AddCheckpointReference(CheckpointReference{
+		CheckpointID:      "cp-1",
+		RequestedBy:       "node-1",
+		WorkingMemoryKeys: []string{"euclo.intent.clarification.state", "euclo.intent.clarification.turns"},
+	})
+
+	env2 := NewEnvelope("task-1", "session-1")
+	env2.AddCheckpointReference(CheckpointReference{
+		CheckpointID:      "cp-1",
+		RequestedBy:       "node-1",
+		WorkingMemoryKeys: []string{"euclo.intent.clarification.confirmed_entities"},
+	})
+
+	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(merged.References.Checkpoints) != 1 {
+		t.Fatalf("expected 1 merged checkpoint, got %d", len(merged.References.Checkpoints))
+	}
+	got := merged.References.Checkpoints[0].WorkingMemoryKeys
+	if len(got) != 3 {
+		t.Fatalf("expected 3 checkpoint working-memory keys, got %v", got)
+	}
+	want := []string{
+		"euclo.intent.clarification.state",
+		"euclo.intent.clarification.turns",
+		"euclo.intent.clarification.confirmed_entities",
+	}
+	for i, key := range want {
+		if got[i] != key {
+			t.Fatalf("checkpoint key %d = %q, want %q (keys=%v)", i, got[i], key, got)
+		}
+	}
+}
+
 func TestReferenceBundleIsEmpty(t *testing.T) {
 	empty := ReferenceBundle{}
 	if !empty.IsEmpty() {
@@ -330,7 +368,7 @@ func TestReferenceBundleClone(t *testing.T) {
 			{QueryID: "query-1", ChunkIDs: []ChunkID{"chunk-1", "chunk-2"}},
 		},
 		Checkpoints: []CheckpointReference{
-			{CheckpointID: "cp-1", RequestedBy: "node-1"},
+			{CheckpointID: "cp-1", RequestedBy: "node-1", WorkingMemoryKeys: []string{"euclo.intent.clarification.state"}},
 		},
 	}
 
@@ -338,10 +376,43 @@ func TestReferenceBundleClone(t *testing.T) {
 
 	// Modify original retrieval chunk IDs
 	original.Retrieval[0].ChunkIDs = append(original.Retrieval[0].ChunkIDs, ChunkID("chunk-3"))
+	original.Checkpoints[0].WorkingMemoryKeys[0] = "mutated-key"
 
 	// Clone should not be affected
 	if len(clone.Retrieval[0].ChunkIDs) != 2 {
 		t.Errorf("expected clone to have 2 chunk IDs, got %d", len(clone.Retrieval[0].ChunkIDs))
+	}
+	if clone.Checkpoints[0].WorkingMemoryKeys[0] != "euclo.intent.clarification.state" {
+		t.Fatalf("expected checkpoint keys to be deep copied, got %v", clone.Checkpoints[0].WorkingMemoryKeys)
+	}
+}
+
+func TestCheckpointReferenceKeysSurviveHandoffClone(t *testing.T) {
+	env := NewEnvelope("task-1", "session-1")
+	env.AddCheckpointReference(CheckpointReference{
+		CheckpointID:      "cp-1",
+		RequestedBy:       "node-1",
+		WorkingMemoryKeys: []string{"euclo.intent.clarification.state", "euclo.intent.clarification.turns"},
+	})
+
+	clone := env.HandoffClone()
+	if clone == nil {
+		t.Fatal("expected handoff clone to be created")
+	}
+	if len(clone.References.Checkpoints) != 1 {
+		t.Fatalf("expected 1 checkpoint reference, got %d", len(clone.References.Checkpoints))
+	}
+	got := clone.References.Checkpoints[0].WorkingMemoryKeys
+	if len(got) != 2 {
+		t.Fatalf("expected 2 checkpoint working-memory keys, got %d", len(got))
+	}
+	if got[0] != "euclo.intent.clarification.state" || got[1] != "euclo.intent.clarification.turns" {
+		t.Fatalf("unexpected checkpoint working-memory keys: %v", got)
+	}
+
+	env.References.Checkpoints[0].WorkingMemoryKeys[0] = "changed"
+	if clone.References.Checkpoints[0].WorkingMemoryKeys[0] != "euclo.intent.clarification.state" {
+		t.Fatal("expected checkpoint keys in clone to remain unchanged after source mutation")
 	}
 }
 

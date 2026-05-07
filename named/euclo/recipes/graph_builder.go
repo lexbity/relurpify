@@ -135,22 +135,24 @@ func buildParallelSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnviron
 
 	for _, step := range group.Steps {
 		artifact, err := addExecutionStep(graph, env, ExecutionStep{
-			ID:           step.Step.ID,
-			Paradigm:     step.Step.Parent.Paradigm,
-			CapabilityID: step.Step.CapabilityID,
-			Prompt:       step.Step.Prompt,
-			PromptID:     step.Step.PromptID,
-			Mutation:     step.Step.Mutation,
-			HITL:         step.Step.HITL,
-			Stream:       cloneStreamSpec(step.Step.Parent.Context.Stream),
-			Ingest:       cloneIngestSpec(step.Step.Parent.Context.Ingest),
-			Fallback:     cloneStepAgent(step.Step.Fallback),
-			Inherit:      append([]string(nil), step.Step.Parent.Context.Inherit...),
-			Capture:      append([]string(nil), step.Step.Parent.Context.Capture...),
-			Dependencies: append([]string(nil), step.Step.Dependencies...),
-			Bindings:     step.Bindings,
-			Captures:     step.Captures,
-			Step:         *step.Step,
+			ID:                  step.Step.ID,
+			Type:                step.Type,
+			Paradigm:            executionParadigmForStep(*step.Step),
+			CapabilityID:        step.Step.CapabilityID,
+			Prompt:              step.Step.Prompt,
+			PromptID:            step.Step.PromptID,
+			Mutation:            step.Step.Mutation,
+			HITL:                step.Step.HITL,
+			Stream:              cloneStreamSpec(step.Step.Parent.Context.Stream),
+			Ingest:              cloneIngestSpec(step.Step.Parent.Context.Ingest),
+			Fallback:            cloneStepAgent(step.Step.Fallback),
+			Inherit:             append([]string(nil), step.Step.Parent.Context.Inherit...),
+			Capture:             append([]string(nil), step.Step.Parent.Context.Capture...),
+			Dependencies:        append([]string(nil), step.Step.Dependencies...),
+			Bindings:            step.Bindings,
+			Captures:            step.Captures,
+			ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
+			Step:                *step.Step,
 		})
 		if err != nil {
 			return graphSection{}, err
@@ -220,22 +222,24 @@ func buildBranchSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironm
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
 		execStep := ExecutionStep{
-			ID:           step.Step.ID,
-			Paradigm:     step.Step.Parent.Paradigm,
-			CapabilityID: step.Step.CapabilityID,
-			Prompt:       step.Step.Prompt,
-			PromptID:     step.Step.PromptID,
-			Mutation:     step.Step.Mutation,
-			HITL:         step.Step.HITL,
-			Stream:       cloneStreamSpec(step.Step.Parent.Context.Stream),
-			Ingest:       cloneIngestSpec(step.Step.Parent.Context.Ingest),
-			Fallback:     cloneStepAgent(step.Step.Fallback),
-			Inherit:      append([]string(nil), step.Step.Parent.Context.Inherit...),
-			Capture:      append([]string(nil), step.Step.Parent.Context.Capture...),
-			Dependencies: append([]string(nil), step.Step.Dependencies...),
-			Bindings:     step.Bindings,
-			Captures:     step.Captures,
-			Step:         *step.Step,
+			ID:                  step.Step.ID,
+			Type:                step.Type,
+			Paradigm:            executionParadigmForStep(*step.Step),
+			CapabilityID:        step.Step.CapabilityID,
+			Prompt:              step.Step.Prompt,
+			PromptID:            step.Step.PromptID,
+			Mutation:            step.Step.Mutation,
+			HITL:                step.Step.HITL,
+			Stream:              cloneStreamSpec(step.Step.Parent.Context.Stream),
+			Ingest:              cloneIngestSpec(step.Step.Parent.Context.Ingest),
+			Fallback:            cloneStepAgent(step.Step.Fallback),
+			Inherit:             append([]string(nil), step.Step.Parent.Context.Inherit...),
+			Capture:             append([]string(nil), step.Step.Parent.Context.Capture...),
+			Dependencies:        append([]string(nil), step.Step.Dependencies...),
+			Bindings:            step.Bindings,
+			Captures:            step.Captures,
+			ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
+			Step:                *step.Step,
 		}
 		artifact, err := addExecutionStep(graph, env, execStep)
 		if err != nil {
@@ -305,7 +309,14 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment
 		streamNode := agentgraph.NewContextStreamNode(nodeID, retrieval.RetrievalQuery{Text: step.Stream.QueryTemplate}, step.Stream.MaxTokens)
 		streamNode.Mode = contextstream.Mode(step.Stream.Mode)
 		streamNode.BudgetShortfallPolicy = "emit_partial"
-		streamNode.Metadata = map[string]any{"recipe_step_id": step.ID}
+		streamNode.Metadata = map[string]any{
+			"recipe_step_id":   step.ID,
+			"recipe_step_type": step.Type,
+		}
+		if cfg := cloneClarificationStepConfig(step.ClarificationConfig); cfg != nil {
+			streamNode.Metadata["recipe_clarification_type"] = step.Type
+			streamNode.Metadata["recipe_clarification_schema_id"] = cfg.OutputSchemaID
+		}
 		if err := graph.AddNode(streamNode); err != nil {
 			return stepArtifacts{}, err
 		}
@@ -320,8 +331,17 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment
 	if step.CapabilityID == "" && (step.Mutation == "required" || (step.HITL != "" && step.HITL != "never")) {
 		nodeID := step.ID + ".gate"
 		if err := graph.AddNode(newRecipeStageNode(nodeID, agentgraph.NodeTypeSystem, "gate", map[string]any{
-			"mutation": step.Mutation,
-			"hitl":     step.HITL,
+			"step_id":            step.ID,
+			"step_type":          step.Type,
+			"mutation":           step.Mutation,
+			"hitl":               step.HITL,
+			"clarification_type": step.Type,
+			"clarification_schema_id": func() string {
+				if step.ClarificationConfig != nil {
+					return step.ClarificationConfig.OutputSchemaID
+				}
+				return ""
+			}(),
 		})); err != nil {
 			return stepArtifacts{}, err
 		}

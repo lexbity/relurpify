@@ -21,6 +21,26 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
+type stubLanguageModel struct{}
+
+func (stubLanguageModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+}
+
+func (stubLanguageModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
+
+func (stubLanguageModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+}
+
+func (stubLanguageModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+}
+
 type recordingTelemetry struct {
 	mu     sync.Mutex
 	events []core.Event
@@ -222,6 +242,14 @@ func assertEventOrder(t *testing.T, got []core.EventType, want []core.EventType)
 
 func workspaceEnv(reg *capability.CapabilityRegistry) agentenv.WorkspaceEnvironment {
 	return agentenv.WorkspaceEnvironment{Registry: reg}
+}
+
+func workspaceEnvWithModel(reg *capability.CapabilityRegistry, model contracts.LanguageModel) agentenv.WorkspaceEnvironment {
+	return agentenv.WorkspaceEnvironment{
+		Registry: reg,
+		Model:    model,
+		Config:   &core.Config{Name: "testsuite", Model: "stub"},
+	}
 }
 
 func writeWorkspaceFile(t *testing.T, dir, name, contents string) {

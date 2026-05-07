@@ -260,7 +260,7 @@ func (e *Envelope) AddCheckpointReference(ref CheckpointReference) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.References.Checkpoints = append(e.References.Checkpoints, ref)
+	e.References.Checkpoints = append(e.References.Checkpoints, cloneCheckpointReference(ref))
 }
 
 // StreamedChunkIDs returns the IDs of all chunks in the streamed context.
@@ -498,7 +498,10 @@ func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
 		snapshot.References.Retrieval = append([]RetrievalReference(nil), refs.Retrieval...)
 	}
 	if policy.PreserveCheckpoints {
-		snapshot.References.Checkpoints = append([]CheckpointReference(nil), refs.Checkpoints...)
+		snapshot.References.Checkpoints = make([]CheckpointReference, len(refs.Checkpoints))
+		for i, ref := range refs.Checkpoints {
+			snapshot.References.Checkpoints[i] = cloneCheckpointReference(ref)
+		}
 	}
 	return snapshot
 }

@@ -21,26 +21,32 @@ const (
 )
 
 const (
-	EventTypeIntakeComplete       EventType = "euclo.intake.complete"
-	EventTypeFamilySelected       EventType = "euclo.family.selected"
-	EventTypeIngestionComplete    EventType = "euclo.ingestion.complete"
-	EventTypeStreamRequested      EventType = "euclo.stream.requested"
-	EventTypeCapabilityClassified EventType = "euclo.capability.classified"
-	EventTypeRouteSelected        EventType = "euclo.route.selected"
-	EventTypeRouteCompleted       EventType = "euclo.route.completed"
-	EventTypeRouteUnavailable     EventType = "euclo.route.unavailable"
-	EventTypeRouteDryRun          EventType = "euclo.route.dry_run"
-	EventTypeRouteFallback        EventType = "euclo.route.fallback"
-	EventTypeGateResult           EventType = "euclo.gate.result"
-	EventTypeFrameEmittedEuclo    EventType = "euclo.frame.emitted"
-	EventTypeFrameResolvedEuclo   EventType = "euclo.frame.resolved"
-	EventTypeJobSubmitted         EventType = "euclo.job.submitted"
-	EventTypeJobCompleted         EventType = "euclo.job.completed"
-	EventTypeStepCompletedEuclo   EventType = "euclo.step.completed"
-	EventTypeExecutionComplete    EventType = "euclo.execution.complete"
-	EventTypeTaskStartedEuclo     EventType = "euclo.task.started"
-	EventTypeTaskCompletedEuclo   EventType = "euclo.task.completed"
-	EventTypeTaskFailedEuclo      EventType = "euclo.task.failed"
+	EventTypeIntakeComplete         EventType = "euclo.intake.complete"
+	EventTypeFamilySelected         EventType = "euclo.family.selected"
+	EventTypeIngestionComplete      EventType = "euclo.ingestion.complete"
+	EventTypeStreamRequested        EventType = "euclo.stream.requested"
+	EventTypeCapabilityClassified   EventType = "euclo.capability.classified"
+	EventTypeRouteSelected          EventType = "euclo.route.selected"
+	EventTypeRouteCompleted         EventType = "euclo.route.completed"
+	EventTypeRouteUnavailable       EventType = "euclo.route.unavailable"
+	EventTypeRouteDryRun            EventType = "euclo.route.dry_run"
+	EventTypeRouteFallback          EventType = "euclo.route.fallback"
+	EventTypeGateResult             EventType = "euclo.gate.result"
+	EventTypeProjectionCompleted    EventType = "euclo.projection.completed"
+	EventTypeClarificationStarted   EventType = "euclo.clarification.started"
+	EventTypeClarificationAnswered  EventType = "euclo.clarification.answered"
+	EventTypeClarificationGrounded  EventType = "euclo.clarification.grounded"
+	EventTypeClarificationProjected EventType = "euclo.clarification.projected"
+	EventTypeClarificationCompleted EventType = "euclo.clarification.completed"
+	EventTypeFrameEmittedEuclo      EventType = "euclo.frame.emitted"
+	EventTypeFrameResolvedEuclo     EventType = "euclo.frame.resolved"
+	EventTypeJobSubmitted           EventType = "euclo.job.submitted"
+	EventTypeJobCompleted           EventType = "euclo.job.completed"
+	EventTypeStepCompletedEuclo     EventType = "euclo.step.completed"
+	EventTypeExecutionComplete      EventType = "euclo.execution.complete"
+	EventTypeTaskStartedEuclo       EventType = "euclo.task.started"
+	EventTypeTaskCompletedEuclo     EventType = "euclo.task.completed"
+	EventTypeTaskFailedEuclo        EventType = "euclo.task.failed"
 )
 
 // Event represents a reporting event.
@@ -123,6 +129,76 @@ type EventGateResult struct {
 	GateID   string `json:"gate_id"`
 	Passed   bool   `json:"passed"`
 	Decision string `json:"decision"`
+}
+
+// EventProjectionCompleted signals a clarification projection result.
+type EventProjectionCompleted struct {
+	EventHeader
+	PlanID           string         `json:"plan_id"`
+	MutationStableID string         `json:"mutation_stable_id,omitempty"`
+	MutationScope    string         `json:"mutation_scope,omitempty"`
+	MutationStatus   string         `json:"mutation_status,omitempty"`
+	Reason           string         `json:"reason,omitempty"`
+	CreatedIDs       []string       `json:"created_ids,omitempty"`
+	UpdatedIDs       []string       `json:"updated_ids,omitempty"`
+	AnnotatedIDs     []string       `json:"annotated_ids,omitempty"`
+	SupersededIDs    []string       `json:"superseded_ids,omitempty"`
+	MatchedIDs       []string       `json:"matched_ids,omitempty"`
+	RejectedIDs      []string       `json:"rejected_ids,omitempty"`
+	ConflictIDs      []string       `json:"conflict_ids,omitempty"`
+	RecordIDs        []string       `json:"record_ids,omitempty"`
+	Details          map[string]any `json:"details,omitempty"`
+}
+
+// EventClarificationStarted signals the start of a clarification turn.
+type EventClarificationStarted struct {
+	EventHeader
+	RecipeID          string   `json:"recipe_id"`
+	StateVersion      uint64   `json:"state_version"`
+	AmbiguityKind     string   `json:"ambiguity_kind,omitempty"`
+	CandidateFamilies []string `json:"candidate_families,omitempty"`
+	PromptID          string   `json:"prompt_id,omitempty"`
+	Question          string   `json:"question,omitempty"`
+}
+
+// EventClarificationAnswered signals that a clarification answer was captured.
+type EventClarificationAnswered struct {
+	EventHeader
+	TurnID         string   `json:"turn_id,omitempty"`
+	PromptID       string   `json:"prompt_id,omitempty"`
+	AnswerText     string   `json:"answer_text,omitempty"`
+	ResponseKind   string   `json:"response_kind,omitempty"`
+	StateVersion   uint64   `json:"state_version"`
+	ValidationErrs []string `json:"validation_errors,omitempty"`
+}
+
+// EventClarificationGrounded signals that clarification grounding completed.
+type EventClarificationGrounded struct {
+	EventHeader
+	StateVersion      uint64   `json:"state_version"`
+	GroundedAnchorIDs []string `json:"grounded_anchor_ids,omitempty"`
+	ConfirmedEntities int      `json:"confirmed_entities,omitempty"`
+	ConfirmedScopes   int      `json:"confirmed_scopes,omitempty"`
+}
+
+// EventClarificationProjected signals that projection planning or application completed.
+type EventClarificationProjected struct {
+	EventHeader
+	PlanID           string         `json:"plan_id,omitempty"`
+	StateVersion     uint64         `json:"state_version"`
+	MutationStableID string         `json:"mutation_stable_id,omitempty"`
+	MutationStatus   string         `json:"mutation_status,omitempty"`
+	Reason           string         `json:"reason,omitempty"`
+	Details          map[string]any `json:"details,omitempty"`
+}
+
+// EventClarificationCompleted signals completion of the clarification loop.
+type EventClarificationCompleted struct {
+	EventHeader
+	RecipeID     string `json:"recipe_id,omitempty"`
+	StateVersion uint64 `json:"state_version"`
+	PlanID       string `json:"plan_id,omitempty"`
+	Completion   string `json:"completion,omitempty"`
 }
 
 // EventFrameEmitted signals interaction frame emission.
