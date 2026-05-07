@@ -67,14 +67,14 @@ func (s *EucloSurface) RenderNotification(item tui.NotificationItem) string {
 	return RenderInteractionNotification(item)
 }
 
-func (s *EucloSurface) HandleFrame(_ context.Context, m *tui.RootModel, msg tui.SurfaceFrameMsg) {
+func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tui.SurfaceFrameMsg) {
 	if m == nil {
 		return
 	}
 	frame, ok := msg.Frame.(interaction.InteractionFrame)
 	if !ok {
 		if s.base != nil {
-			s.base.HandleFrame(context.Background(), m, msg)
+			s.base.HandleFrame(ctx, m, msg)
 		}
 		return
 	}

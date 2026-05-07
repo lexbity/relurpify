@@ -164,7 +164,7 @@ func executePreparedRunToWriter(ctx context.Context, descriptorPath string, outp
 	executionLogger.Printf("execution completed run_id=%s node=%s services=%s", target.Descriptor.RunID, executionResult.NodeID, strings.Join(services, ","))
 	executionMetadata["node_id"] = executionResult.NodeID
 	emitPreparedRunTelemetryEvent(executionTelemetry, "prepared_run.execution_finish", "prepared run execution complete", executionMetadata)
-	report := reportFromPreparedRun(target.Descriptor, target.Config.Workspace, services)
+	report := reportFromPreparedRun(target.Descriptor, target.Config.Workspace, services, executionResult)
 	reportPath := filepath.Join(target.Descriptor.ExecutionDir, "report.json")
 	if err := writePreparedRunReport(reportPath, report); err != nil {
 		return err

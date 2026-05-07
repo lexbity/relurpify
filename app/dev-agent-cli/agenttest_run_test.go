@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -102,7 +103,17 @@ spec:
 		if out != nil {
 			_, _ = out.Write([]byte("prepared execution complete"))
 		}
-		return &core.Result{Success: true, NodeID: "node-1"}, nil
+		return &core.Result{
+			Success: true,
+			NodeID:  "node-1",
+			Data: map[string]any{
+				"projection": map[string]any{
+					"plan_id":   "plan-1",
+					"stable_id": "mutation-1",
+					"status":    "updated",
+				},
+			},
+		}, nil
 	}
 
 	var out bytes.Buffer
@@ -165,6 +176,21 @@ spec:
 	reportPath := filepath.Join(runRoot, "execution", "report.json")
 	if _, err := os.Stat(reportPath); err != nil {
 		t.Fatalf("expected report at %s: %v", reportPath, err)
+	}
+	reportBytes, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	var report map[string]any
+	if err := json.Unmarshal(reportBytes, &report); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	projection, ok := report["projection"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected projection in report, got %#v", report["projection"])
+	}
+	if projection["plan_id"] != "plan-1" || projection["stable_id"] != "mutation-1" {
+		t.Fatalf("unexpected projection summary: %#v", projection)
 	}
 }
 

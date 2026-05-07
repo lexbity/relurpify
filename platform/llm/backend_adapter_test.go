@@ -2,12 +2,25 @@ package llm
 
 import (
 	"context"
+	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestManagedBackendAdapter_Reset(t *testing.T) {
+	originalExec := execCommandContext
+	originalSleep := sleepFn
+	t.Cleanup(func() {
+		execCommandContext = originalExec
+		sleepFn = originalSleep
+	})
+	execCommandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "true")
+	}
+	sleepFn = func(time.Duration) {}
+
 	t.Run("none strategy returns nil", func(t *testing.T) {
 		adapter := managedBackendAdapter{}
 		err := adapter.Reset(context.Background(), "none")

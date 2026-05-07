@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
@@ -22,6 +23,7 @@ type preparedRunReport struct {
 	BackendFamily          string   `json:"backend_family,omitempty"`
 	BackendEndpoint        string   `json:"backend_endpoint,omitempty"`
 	Services               []string `json:"services,omitempty"`
+	Projection             any      `json:"projection,omitempty"`
 }
 
 func writePreparedRunReport(path string, report preparedRunReport) error {
@@ -35,7 +37,7 @@ func writePreparedRunReport(path string, report preparedRunReport) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace string, serviceIDs []string) preparedRunReport {
+func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace string, serviceIDs []string, result *core.Result) preparedRunReport {
 	if desc == nil {
 		return preparedRunReport{}
 	}
@@ -48,7 +50,7 @@ func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace stri
 		configPath = filepath.Join(workspace, "relurpify_cfg", "config.yaml")
 		manifestPath = filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
 	}
-	return preparedRunReport{
+	report := preparedRunReport{
 		DescriptorPath:         filepath.Join(desc.SetupDir, "prepared_run.json"),
 		Workspace:              workspace,
 		ConfigPath:             configPath,
@@ -62,4 +64,10 @@ func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace stri
 		BackendEndpoint:        desc.BackendEndpoint,
 		Services:               serviceIDs,
 	}
+	if result != nil && len(result.Data) > 0 {
+		if projection, ok := result.Data["projection"]; ok {
+			report.Projection = projection
+		}
+	}
+	return report
 }
