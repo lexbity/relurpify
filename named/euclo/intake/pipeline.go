@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 // StreamTrigger captures the subset of contextstream.Trigger behavior required by the intake node.
@@ -18,31 +19,24 @@ type StreamTrigger interface {
 	RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error)
 }
 
-// Tier2Classifier performs capability sequencing for the winning family.
-type Tier2Classifier interface {
-	Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error)
-}
-
-// IntakePipelineNode performs the full intake pipeline: normalize, tier-1 scoring,
-// context stream seeding, and tier-2 capability selection.
+// IntakePipelineNode coordinates normalization, evidence extraction,
+// interpretation, stream seeding, and clarification gating.
 type IntakePipelineNode struct {
 	id                string
 	registry          *families.KeywordFamilyRegistry
 	maxStreamTokens   int
 	defaultStreamMode contextstream.Mode
 	streamTrigger     StreamTrigger
-	classifier        Tier2Classifier
 }
 
 // NewIntakePipelineNode creates a new intake pipeline node.
-func NewIntakePipelineNode(id string, registry *families.KeywordFamilyRegistry, maxStreamTokens int, defaultStreamMode contextstream.Mode, trigger StreamTrigger, classifier Tier2Classifier) *IntakePipelineNode {
+func NewIntakePipelineNode(id string, registry *families.KeywordFamilyRegistry, maxStreamTokens int, defaultStreamMode contextstream.Mode, trigger StreamTrigger) *IntakePipelineNode {
 	return &IntakePipelineNode{
 		id:                id,
 		registry:          registry,
 		maxStreamTokens:   maxStreamTokens,
 		defaultStreamMode: defaultStreamMode,
 		streamTrigger:     trigger,
-		classifier:        classifier,
 	}
 }
 
@@ -62,7 +56,7 @@ func (n *IntakePipelineNode) Contract() agentgraph.NodeContract {
 	}
 }
 
-// Execute performs the intake pipeline as per the phase-4 specification.
+// Execute performs the intake pipeline as a coordinator-only stage.
 func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if env == nil {
 		return nil, fmt.Errorf("intake pipeline %q requires an envelope", n.id)
@@ -80,53 +74,58 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	if taskEnvelope == nil {
 		return nil, fmt.Errorf("normalize task returned nil envelope")
 	}
+	intentEvidence := taskEnvelope.Evidence
+	if intentEvidence == nil {
+		intentEvidence = BuildIntentEvidence(taskEnvelope)
+		taskEnvelope.Evidence = intentEvidence
+	}
 
 	scoredClassification := ClassifyTaskScored(taskEnvelope, n.registry, nil)
+	interpretation := BuildIntentInterpretation(intentEvidence, scoredClassification)
+	taskEnvelope.Interpretation = interpretation
 
 	family, _ := n.lookupFamily(scoredClassification.WinningFamily)
 	streamResult := n.maybeStreamContext(ctx, family.RetrievalTemplate, taskEnvelope)
-	streamedContext := serializeStreamResult(streamResult)
-
-	intent := ResolveIntent(scoredClassification, taskEnvelope, n.registry, nil, "tier1")
-	intent.ClassificationSource = "tier1"
-	capabilitySequence := append([]string(nil), intent.CapabilitySequence...)
-	capabilityOperator := intent.CapabilityOperator
-
-	if n.classifier != nil {
-		seq, op, classifyErr := n.classifier.Classify(ctx, taskEnvelope.Instruction, scoredClassification.WinningFamily, streamedContext, taskEnvelope.NegativeConstraintSeeds)
-		if classifyErr == nil && len(seq) > 0 {
-			capabilitySequence = append([]string(nil), seq...)
-			capabilityOperator = normalizeCapabilityOperator(op, len(seq))
-			intent.ClassificationSource = "tier1+tier2"
-		}
+	intent := &IntentClassification{
+		WinningFamily:        scoredClassification.WinningFamily,
+		FamilyCandidates:     append([]families.FamilyCandidate(nil), scoredClassification.FamilyCandidates...),
+		Confidence:           scoredClassification.Confidence,
+		Ambiguous:            scoredClassification.Ambiguous,
+		Signals:              append([]ClassificationSignal(nil), scoredClassification.Signals...),
+		NegativeConstraints:  append([]string(nil), taskEnvelope.NegativeConstraintSeeds...),
+		ClassificationSource: "deterministic",
+		MixedIntent:          len(scoredClassification.FamilyCandidates) > 1,
+		ReasonCodes:          generateReasonCodes(scoredClassification, taskEnvelope, "deterministic"),
 	}
-
-	if len(capabilitySequence) == 0 {
-		capabilitySequence = append([]string(nil), scoredClassification.WinningFamily)
-		if family.FallbackCapability != "" {
-			capabilitySequence = []string{family.FallbackCapability}
-		}
+	if family.ID != "" {
+		intent.EditPermitted = family.DefaultHITLPolicy != families.HITLPolicyAlways
+		intent.RequiresVerification = family.DefaultVerification == families.VerificationRequired
+		intent.RiskLevel = getRiskLevelForFamily(family.ID)
+	} else {
+		intent.EditPermitted = true
+		intent.RiskLevel = "unknown"
 	}
-	if capabilityOperator == "" {
-		capabilityOperator = defaultCapabilityOperator(capabilitySequence)
+	if len(taskEnvelope.WorkspaceScopes) > 0 {
+		intent.Scope = strings.TrimSpace(taskEnvelope.WorkspaceScopes[0])
+	} else {
+		intent.Scope = "workspace"
 	}
-
-	intent.CapabilitySequence = capabilitySequence
-	intent.CapabilityOperator = capabilityOperator
-	intent.NegativeConstraints = append([]string(nil), taskEnvelope.NegativeConstraintSeeds...)
 
 	familySelection := map[string]any{
 		"winning_family": scoredClassification.WinningFamily,
 		"confidence":     scoredClassification.Confidence,
 		"ambiguous":      scoredClassification.Ambiguous,
+		"source":         intent.ClassificationSource,
+		"mixed_intent":   intent.MixedIntent,
 	}
 
 	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.intent_evidence", intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValue(intentcontext.IntentEvidenceKey, intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValue(intentcontext.IntentInterpretationKey, interpretation, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.intent_classification", intent, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.family_selection", familySelection, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.capability_sequence", capabilitySequence, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.negative_constraints", taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.capability_operator", capabilityOperator, contextdata.MemoryClassTask)
 	if streamResult != nil {
 		env.SetWorkingValue("euclo.stream_result", streamResult, contextdata.MemoryClassTask)
 	}
@@ -135,12 +134,18 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{
-			"winning_family":    scoredClassification.WinningFamily,
-			"confidence":        scoredClassification.Confidence,
-			"ambiguous":         scoredClassification.Ambiguous,
-			"capability_count":  len(capabilitySequence),
-			"has_stream_result": streamResult != nil,
-			"stream_mode":       string(n.effectiveStreamMode()),
+			"winning_family":         scoredClassification.WinningFamily,
+			"confidence":             scoredClassification.Confidence,
+			"ambiguous":              scoredClassification.Ambiguous,
+			"has_stream_result":      streamResult != nil,
+			"stream_result":          streamResult,
+			"stream_mode":            string(n.effectiveStreamMode()),
+			"intent_evidence":        intentEvidence,
+			"interpretation":         interpretation,
+			"requires_clarification": intentEvidence != nil && intentEvidence.RequiresClarification,
+			"missing_fields":         missingFields(intentEvidence),
+			"classification_source":  intent.ClassificationSource,
+			"family_selection":       familySelection,
 		},
 	}, nil
 }
@@ -154,9 +159,6 @@ func (n *IntakePipelineNode) lookupFamily(familyID string) (families.KeywordFami
 
 func (n *IntakePipelineNode) effectiveStreamMode() contextstream.Mode {
 	mode := n.defaultStreamMode
-	if n.classifier != nil && mode == contextstream.ModeBackground {
-		return contextstream.ModeBlocking
-	}
 	if mode == "" {
 		return contextstream.ModeBlocking
 	}
@@ -235,22 +237,9 @@ func serializeStreamResult(result *contextstream.Result) string {
 	return strings.TrimSpace(b.String())
 }
 
-func normalizeCapabilityOperator(op string, seqLen int) string {
-	switch strings.ToUpper(strings.TrimSpace(op)) {
-	case "AND":
-		return "AND"
-	case "OR":
-		return "OR"
+func missingFields(evidence *intentcontext.IntentEvidence) []string {
+	if evidence == nil || len(evidence.MissingFields) == 0 {
+		return nil
 	}
-	if seqLen > 1 {
-		return "AND"
-	}
-	return "OR"
-}
-
-func defaultCapabilityOperator(seq []string) string {
-	if len(seq) > 1 {
-		return "AND"
-	}
-	return "OR"
+	return append([]string(nil), evidence.MissingFields...)
 }

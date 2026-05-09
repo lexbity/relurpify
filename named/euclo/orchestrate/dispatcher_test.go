@@ -30,8 +30,11 @@ func TestDispatcherExecute(t *testing.T) {
 	if !ok || routeSelection == nil {
 		t.Fatalf("Expected *RouteSelection, got %T", selection)
 	}
-	if routeSelection.RouteKind != "capability" {
-		t.Errorf("Expected route selection capability, got %v", routeSelection.RouteKind)
+	if routeSelection.RouteKind != RouteKindIntent {
+		t.Errorf("Expected route selection intent, got %v", routeSelection.RouteKind)
+	}
+	if routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {
+		t.Errorf("Expected clarification thoughtrecipe, got %v", routeSelection.ThoughtRecipeID)
 	}
 }
 

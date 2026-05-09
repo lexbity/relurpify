@@ -19,17 +19,11 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	writeWorkspaceFile(t, dir, "resume.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"implementation": {Sequence: []string{"euclo:cap.targeted_refactor"}, Operator: "OR"},
-		},
-	}
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCapabilityClassifier(classifier),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),
 	)
@@ -75,20 +69,6 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 		}
 		euclostate.SetIntentClassification(rehydrated, &classification)
 	}
-	if raw, ok := snapshot.WorkingData["euclo.capability_sequence"]; ok {
-		var sequence []string
-		if err := json.Unmarshal(raw, &sequence); err != nil {
-			t.Fatalf("rehydrate capability sequence: %v", err)
-		}
-		rehydrated.SetWorkingValue("euclo.capability_sequence", sequence, contextdata.MemoryClassTask)
-	}
-	if raw, ok := snapshot.WorkingData["euclo.capability_operator"]; ok {
-		var operator string
-		if err := json.Unmarshal(raw, &operator); err != nil {
-			t.Fatalf("rehydrate capability operator: %v", err)
-		}
-		rehydrated.SetWorkingValue("euclo.capability_operator", operator, contextdata.MemoryClassTask)
-	}
 
 	if err := graph.SetStart("euclo.capability_classify"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
@@ -96,11 +76,8 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
-	if classifier.callCount() != 1 {
-		t.Fatalf("expected resume to skip reclassification, call count=%d", classifier.callCount())
-	}
-	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "capability" {
-		t.Fatalf("resume execution kind = %q, want capability", got)
+	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "thoughtrecipe" {
+		t.Fatalf("resume execution kind = %q, want thoughtrecipe", got)
 	}
 	if !mustBoolValue(t, rehydrated, "euclo.execution.completed") {
 		t.Fatal("expected resume execution to complete")
@@ -112,11 +89,6 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	writeWorkspaceFile(t, dir, "thoughtrecipe.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.code_review", "euclo:cap.capture")
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"review": {Sequence: []string{"euclo:cap.code_review"}, Operator: "OR"},
-		},
-	}
 	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
 		ID:       "euclo.thoughtrecipe.review",
 		Name:     "review",
@@ -128,7 +100,6 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-		orchestrate.WithCapabilityClassifier(classifier),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),
 	)
@@ -174,20 +145,6 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		}
 		euclostate.SetIntentClassification(rehydrated, &classification)
 	}
-	if raw, ok := snapshot.WorkingData["euclo.capability_sequence"]; ok {
-		var sequence []string
-		if err := json.Unmarshal(raw, &sequence); err != nil {
-			t.Fatalf("rehydrate capability sequence: %v", err)
-		}
-		rehydrated.SetWorkingValue("euclo.capability_sequence", sequence, contextdata.MemoryClassTask)
-	}
-	if raw, ok := snapshot.WorkingData["euclo.capability_operator"]; ok {
-		var operator string
-		if err := json.Unmarshal(raw, &operator); err != nil {
-			t.Fatalf("rehydrate capability operator: %v", err)
-		}
-		rehydrated.SetWorkingValue("euclo.capability_operator", operator, contextdata.MemoryClassTask)
-	}
 	if raw, ok := snapshot.WorkingData["euclo.thoughtrecipe_id"]; ok {
 		var thoughtrecipeID string
 		if err := json.Unmarshal(raw, &thoughtrecipeID); err != nil {
@@ -201,9 +158,6 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	}
 	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
-	}
-	if classifier.callCount() != 1 {
-		t.Fatalf("expected resume to skip reclassification, call count=%d", classifier.callCount())
 	}
 	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "thoughtrecipe" {
 		t.Fatalf("resume execution kind = %q, want thoughtrecipe", got)

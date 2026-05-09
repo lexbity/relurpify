@@ -29,7 +29,6 @@ type KeywordFamily struct {
 	RetrievalTemplate   string
 	FallbackCapability  string
 	DefaultBackground   bool
-	CapabilitySequence  []string // Tier-2: ordered list of capability IDs
 }
 
 // FamilyOverride allows project-specific customization of a family.
@@ -39,7 +38,6 @@ type FamilyOverride struct {
 	AddIntentKeywords   []string
 	ReplaceHITLPolicy   *HITLPolicy
 	ReplaceVerification *VerificationReq
-	CapabilitySequence  []string // Override for capability sequence
 	// SignalWeights maps signal kind names to multipliers applied during scoring.
 	// Keys are signal kind names: "keyword:debug", "error_text", "task_structure", etc.
 	// Values are multipliers (1.0 = unchanged, 2.0 = double weight, 0.0 = suppress).

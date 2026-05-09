@@ -1,12 +1,18 @@
 package thoughtrecipe
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseSourceParsesCoreThoughtRecipeConstructs(t *testing.T) {
 	src := `thoughtrecipe code_assistant
 "Route code requests."
 
 trigger as capability:
+  family ["debug"]
+  keyword ["fix", "diagnose", "trace"]
+  handoff ["reviewer", "executor"]
   may read workspace
   may write workspace
 
@@ -94,6 +100,24 @@ pipeline:
 	if got := trigger.RouteKind; got != TriggerRouteKindCapability {
 		t.Fatalf("trigger route kind = %q, want %q", got, TriggerRouteKindCapability)
 	}
+	if got := len(trigger.Associations); got != 3 {
+		t.Fatalf("trigger associations = %d, want 3", got)
+	}
+	if got := trigger.Associations[0].Name.Value; got != "family" {
+		t.Fatalf("association 0 name = %q, want family", got)
+	}
+	if got := trigger.Associations[0].Values.Raw; got != `["debug"]` {
+		t.Fatalf("association 0 raw = %q, want %q", got, `["debug"]`)
+	}
+	if got := trigger.Associations[1].Values.Raw; got != `["fix", "diagnose", "trace"]` {
+		t.Fatalf("association 1 raw = %q, want %q", got, `["fix", "diagnose", "trace"]`)
+	}
+	if got := trigger.Associations[2].Name.Value; got != "handoff" {
+		t.Fatalf("association 2 name = %q, want handoff", got)
+	}
+	if got := trigger.Associations[2].Values.Raw; got != `["reviewer", "executor"]` {
+		t.Fatalf("association 2 raw = %q, want %q", got, `["reviewer", "executor"]`)
+	}
 
 	run := doc.Declarations[6].(*RunDecl)
 	if run.Agent.Value != "router" {
@@ -158,6 +182,9 @@ func TestParseSourceParsesIntentTriggerKind(t *testing.T) {
 "Clarify a request."
 
 trigger as intent:
+  family ["clarification"]
+  keyword ["clarify"]
+  handoff ["intent_clarify", "route_intent"]
   may read workspace
   may ask user
 `)
@@ -167,5 +194,56 @@ trigger as intent:
 	trigger := doc.Declarations[0].(*TriggerDecl)
 	if got := trigger.RouteKind; got != TriggerRouteKindIntent {
 		t.Fatalf("trigger route kind = %q, want %q", got, TriggerRouteKindIntent)
+	}
+	if got := len(trigger.Associations); got != 3 {
+		t.Fatalf("trigger associations = %d, want 3", got)
+	}
+}
+
+func TestParseSourceRejectsTriggerAssociationWithoutList(t *testing.T) {
+	_, err := ParseSource("bad.euclo", `thoughtrecipe demo
+
+trigger as capability:
+  family debug
+`)
+	if err == nil {
+		t.Fatal("expected trigger association parse error")
+	}
+}
+
+func TestParseSourceHandlesDeepNestedTypeExpressionsIteratively(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("thoughtrecipe deep_types\n")
+	b.WriteString("\"Deep nesting.\"\n\n")
+	b.WriteString("trigger as capability:\n  may read workspace\n\n")
+	b.WriteString("type Deep:\n  value: ")
+	depth := 600
+	for i := 0; i < depth; i++ {
+		b.WriteString("list<")
+	}
+	b.WriteString("Text")
+	for i := 0; i < depth; i++ {
+		b.WriteString(">")
+	}
+	b.WriteString("\n")
+
+	doc, err := ParseSource("deep.euclo", b.String())
+	if err != nil {
+		t.Fatalf("ParseSource failed: %v", err)
+	}
+	typeDecl := doc.Declarations[1].(*TypeDecl)
+	field := typeDecl.Body.(*RecordTypeDefinition).Fields[0]
+	current := field.Type
+	count := 0
+	for {
+		list, ok := current.(*ListTypeExpr)
+		if !ok {
+			break
+		}
+		count++
+		current = list.Element
+	}
+	if count != depth {
+		t.Fatalf("nested list depth = %d, want %d", count, depth)
 	}
 }

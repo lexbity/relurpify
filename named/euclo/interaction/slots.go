@@ -7,9 +7,9 @@ func DefaultAction(frame *InteractionFrame) string {
 
 // LookupSlot finds an action slot by ID.
 func LookupSlot(frame *InteractionFrame, slotID string) (*ActionSlot, bool) {
-	for _, slot := range frame.Slots {
-		if slot.ID == slotID {
-			return &slot, true
+	for i := range frame.Slots {
+		if frame.Slots[i].ID == slotID {
+			return &frame.Slots[i], true
 		}
 	}
 	return nil, false

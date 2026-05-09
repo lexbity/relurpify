@@ -9,12 +9,12 @@ import (
 func TestLLMCapabilityClassifierClassifyUsesPromptAndParsesResponse(t *testing.T) {
 	model := &recordingLanguageModel{
 		response: CompletionResponse{
-			Text: "prefix {\"capabilities\":[\"euclo:cap.bisect\",\"euclo:cap.symbol_trace\"],\"operator\":\"and\"} suffix",
+			Text: "prefix {\"capability_id\":\"euclo:cap.bisect\"} suffix",
 		},
 	}
 
 	classifier := NewLLMCapabilityClassifier(model)
-	seq, op, err := classifier.Classify(
+	capabilityID, source, err := classifier.Classify(
 		context.Background(),
 		"fix the failing test",
 		"debug",
@@ -25,11 +25,11 @@ func TestLLMCapabilityClassifierClassifyUsesPromptAndParsesResponse(t *testing.T
 		t.Fatalf("Classify returned error: %v", err)
 	}
 
-	if op != "AND" {
-		t.Fatalf("expected AND operator, got %q", op)
+	if source != "llm" {
+		t.Fatalf("expected llm source, got %q", source)
 	}
-	if len(seq) != 2 || seq[0] != "euclo:cap.bisect" || seq[1] != "euclo:cap.symbol_trace" {
-		t.Fatalf("unexpected capability sequence: %#v", seq)
+	if capabilityID != "euclo:cap.bisect" {
+		t.Fatalf("unexpected capability id: %q", capabilityID)
 	}
 
 	if model.lastRequest.Prompt == "" {
@@ -42,6 +42,7 @@ func TestLLMCapabilityClassifierClassifyUsesPromptAndParsesResponse(t *testing.T
 		"streamed context",
 		"Constraints (DO NOT use capabilities that violate these):",
 		"do not modify the API",
+		`{"capability_id": "cap_id"}`,
 	} {
 		if !strings.Contains(model.lastRequest.Prompt, want) {
 			t.Fatalf("prompt missing %q: %s", want, model.lastRequest.Prompt)
@@ -56,8 +57,8 @@ func TestLLMCapabilityClassifierParseResponseErrors(t *testing.T) {
 		t.Fatal("expected error for missing JSON")
 	}
 
-	if _, _, err := classifier.parseResponse("{\"capabilities\":[],\"operator\":\"or\"}"); err == nil {
-		t.Fatal("expected error for empty capabilities")
+	if _, _, err := classifier.parseResponse("{\"capability_id\":\"\"}"); err == nil {
+		t.Fatal("expected error for empty capability id")
 	}
 
 	if _, _, err := classifier.parseResponse("{bad json}"); err == nil {
@@ -72,13 +73,13 @@ func TestLLMCapabilityClassifierClassifyWithoutModel(t *testing.T) {
 	}
 }
 
-func TestClassifyCapabilitiesWithLLMNoModel(t *testing.T) {
-	seq, op, err := ClassifyCapabilitiesWithLLM(context.Background(), nil, "instruction", "debug", "", nil)
+func TestClassifyCapabilityWithLLMNoModel(t *testing.T) {
+	capabilityID, source, err := ClassifyCapabilityWithLLM(context.Background(), nil, "instruction", "debug", "", nil)
 	if err != nil {
 		t.Fatalf("expected nil error when model is nil, got %v", err)
 	}
-	if seq != nil || op != "" {
-		t.Fatalf("expected nil sequence and empty operator, got %v %q", seq, op)
+	if capabilityID != "" || source != "" {
+		t.Fatalf("expected empty capability and source, got %q %q", capabilityID, source)
 	}
 }
 
@@ -94,7 +95,7 @@ func (m *recordingLanguageModel) Complete(ctx context.Context, req CompletionReq
 		return CompletionResponse{}, m.err
 	}
 	if m.response.Text == "" {
-		return CompletionResponse{Text: "{\"capabilities\":[\"fallback\"],\"operator\":\"OR\"}"}, nil
+		return CompletionResponse{Text: "{\"capability_id\":\"fallback\"}"}, nil
 	}
 	return m.response, nil
 }

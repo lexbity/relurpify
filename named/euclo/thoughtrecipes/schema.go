@@ -44,13 +44,16 @@ type ClarificationStepConfig struct {
 
 // ThoughtRecipeMetadata contains optional metadata about a thoughtrecipe.
 type ThoughtRecipeMetadata struct {
-	Name      string
-	Version   string
-	Author    string
-	Tags      []string
-	Category  string
-	CreatedAt string
-	UpdatedAt string
+	Name           string
+	Version        string
+	Author         string
+	Tags           []string
+	Families       []string
+	Keywords       []string
+	HandoffTargets []string
+	Category       string
+	CreatedAt      string
+	UpdatedAt      string
 }
 
 // ThoughtRecipeStep represents a single step in the thoughtrecipe sequence (minimal DSL-native).

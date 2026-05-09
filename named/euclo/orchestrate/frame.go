@@ -1,118 +1,95 @@
 package orchestrate
 
 import (
+	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-// MessageRole represents the role of a message sender.
-type MessageRole string
-
-const (
-	MessageRoleUser      MessageRole = "user"
-	MessageRoleAssistant MessageRole = "assistant"
-	MessageRoleSystem    MessageRole = "system"
-)
-
-// Message represents a single message in the interaction frame.
-type Message struct {
-	Role      MessageRole
-	Content   string
-	Timestamp time.Time
-	Metadata  map[string]string
+// ClarificationFrame captures a clarification request lifecycle in orchestrate.
+type ClarificationFrame struct {
+	ID              string
+	TaskID          string
+	SessionID       string
+	ThoughtRecipeID string
+	Question        string
+	Choices         []string
+	DefaultChoice   string
+	MissingFields   []string
+	Resume          *interaction.ClarificationResumeMetadata
+	Response        *interaction.FrameResult
+	CreatedAt       time.Time
+	RespondedAt     *time.Time
+	Skipped         bool
+	SkippedReason   string
 }
 
-// InteractionFrame holds the conversation state, messages, and interaction metadata.
-type InteractionFrame struct {
-	SessionID    string
-	TaskID       string
-	Messages     []Message
-	Metadata     map[string]string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Active       bool
-}
-
-// NewInteractionFrame creates a new interaction frame.
-func NewInteractionFrame(sessionID, taskID string) *InteractionFrame {
-	now := time.Now()
-	return &InteractionFrame{
-		SessionID: sessionID,
-		TaskID:    taskID,
-		Messages:  []Message{},
-		Metadata:  map[string]string{},
-		CreatedAt: now,
-		UpdatedAt: now,
-		Active:    true,
+// NewClarificationFrame creates a clarification frame with explicit question and choices.
+func NewClarificationFrame(taskID, sessionID, thoughtRecipeID, question string, choices []string, missingFields []string, resume *interaction.ClarificationResumeMetadata) *ClarificationFrame {
+	cleanChoices := interaction.NormalizeChoices(choices)
+	defaultChoice := ""
+	if len(cleanChoices) > 0 {
+		defaultChoice = cleanChoices[0]
+	}
+	return &ClarificationFrame{
+		ID:              interaction.NewClarificationFrame(taskID, sessionID, question, cleanChoices, resume).ID,
+		TaskID:          strings.TrimSpace(taskID),
+		SessionID:       strings.TrimSpace(sessionID),
+		ThoughtRecipeID: strings.TrimSpace(thoughtRecipeID),
+		Question:        strings.TrimSpace(question),
+		Choices:         cleanChoices,
+		DefaultChoice:   defaultChoice,
+		MissingFields:   interaction.NormalizeChoices(missingFields),
+		Resume:          interaction.CloneClarificationResumeMetadata(resume),
+		CreatedAt:       time.Now().UTC(),
 	}
 }
 
-// AddMessage adds a message to the frame.
-func (f *InteractionFrame) AddMessage(role MessageRole, content string, metadata map[string]string) {
-	now := time.Now()
-	message := Message{
-		Role:      role,
-		Content:   content,
-		Timestamp: now,
-		Metadata:  metadata,
-	}
-	f.Messages = append(f.Messages, message)
-	f.UpdatedAt = now
-}
-
-// GetHistory returns the message history.
-func (f *InteractionFrame) GetHistory() []Message {
-	return f.Messages
-}
-
-// GetLastMessage returns the last message in the frame.
-func (f *InteractionFrame) GetLastMessage() *Message {
-	if len(f.Messages) == 0 {
+// ToInteractionFrame converts the orchestrate frame into the interaction package frame.
+func (f *ClarificationFrame) ToInteractionFrame() *interaction.InteractionFrame {
+	if f == nil {
 		return nil
 	}
-	return &f.Messages[len(f.Messages)-1]
+	if frame := interaction.NewClarificationFrame(f.TaskID, f.SessionID, f.Question, f.Choices, interaction.CloneClarificationResumeMetadata(f.Resume)); frame != nil {
+		frame.ID = f.ID
+		frame.DefaultChoice = strings.TrimSpace(f.DefaultChoice)
+		if frame.DefaultChoice == "" && len(frame.Choices) > 0 {
+			frame.DefaultChoice = frame.Choices[0]
+		}
+		frame.Payload["thoughtrecipe_id"] = strings.TrimSpace(f.ThoughtRecipeID)
+		frame.Payload["missing_fields"] = append([]string(nil), f.MissingFields...)
+		frame.Payload["clarification_kind"] = interaction.FrameIntentClarification
+		frame.Payload["skipped"] = f.Skipped
+		if strings.TrimSpace(f.SkippedReason) != "" {
+			frame.Payload["skipped_reason"] = strings.TrimSpace(f.SkippedReason)
+		}
+		if f.Response != nil {
+			frame.Response = f.Response
+			respondedAt := f.Response.RespondedAt
+			frame.RespondedAt = &respondedAt
+		}
+		if !f.CreatedAt.IsZero() {
+			frame.CreatedAt = f.CreatedAt
+			frame.Metadata.Timestamp = f.CreatedAt
+		}
+		return frame
+	}
+	return nil
 }
 
-// SetMetadata sets a metadata key-value pair.
-func (f *InteractionFrame) SetMetadata(key, value string) {
-	f.Metadata[key] = value
-	f.UpdatedAt = time.Now()
+// Pending reports whether the frame is waiting on a response.
+func (f *ClarificationFrame) Pending() bool {
+	return f != nil && !f.Skipped && f.Response == nil && f.RespondedAt == nil
 }
 
-// GetMetadata retrieves a metadata value by key.
-func (f *InteractionFrame) GetMetadata(key string) (string, bool) {
-	value, ok := f.Metadata[key]
-	return value, ok
-}
-
-// GetAllMetadata returns all metadata.
-func (f *InteractionFrame) GetAllMetadata() map[string]string {
-	return f.Metadata
-}
-
-// Clear clears all messages from the frame.
-func (f *InteractionFrame) Clear() {
-	f.Messages = []Message{}
-	f.UpdatedAt = time.Now()
-}
-
-// Deactivate marks the frame as inactive.
-func (f *InteractionFrame) Deactivate() {
-	f.Active = false
-	f.UpdatedAt = time.Now()
-}
-
-// Activate marks the frame as active.
-func (f *InteractionFrame) Activate() {
-	f.Active = true
-	f.UpdatedAt = time.Now()
-}
-
-// IsActive returns whether the frame is active.
-func (f *InteractionFrame) IsActive() bool {
-	return f.Active
-}
-
-// MessageCount returns the number of messages in the frame.
-func (f *InteractionFrame) MessageCount() int {
-	return len(f.Messages)
+// MarkSkipped marks the frame as skipped after an immediate clarification resolution.
+func (f *ClarificationFrame) MarkSkipped(reason string) {
+	if f == nil {
+		return
+	}
+	f.Skipped = true
+	f.SkippedReason = strings.TrimSpace(reason)
+	now := time.Now().UTC()
+	f.RespondedAt = &now
 }

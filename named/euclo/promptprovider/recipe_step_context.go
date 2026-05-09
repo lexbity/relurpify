@@ -44,6 +44,55 @@ func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) pr
 	if promptID := strings.TrimSpace(ctx.Variables["prompt_id"]); promptID != "" {
 		lines = append(lines, fmt.Sprintf("Prompt ID: %s", promptID))
 	}
+	if evidence := intentEvidenceFromRuntime(ctx); evidence != nil {
+		if action := strings.TrimSpace(evidence.ActionType); action != "" {
+			lines = append(lines, fmt.Sprintf("Evidence Action Type: %s", action))
+		}
+		if target := strings.TrimSpace(evidence.Target); target != "" {
+			lines = append(lines, fmt.Sprintf("Evidence Target: %s", target))
+		}
+		if scope := strings.TrimSpace(evidence.Scope); scope != "" {
+			lines = append(lines, fmt.Sprintf("Evidence Scope: %s", scope))
+		}
+		if risk := strings.TrimSpace(evidence.RiskLevel); risk != "" {
+			lines = append(lines, fmt.Sprintf("Evidence Risk Level: %s", risk))
+		}
+		if verb := strings.TrimSpace(evidence.ExpectedVerb); verb != "" {
+			lines = append(lines, fmt.Sprintf("Evidence Expected Verb: %s", verb))
+		}
+		if len(evidence.MissingFields) > 0 {
+			lines = append(lines, "Evidence Missing Fields: "+strings.Join(evidence.MissingFields, ", "))
+		}
+		if len(evidence.ReasonCodes) > 0 {
+			lines = append(lines, "Evidence Reason Codes: "+strings.Join(evidence.ReasonCodes, ", "))
+		}
+	}
+	if interpretation := intentInterpretationFromRuntime(ctx); interpretation != nil {
+		if action := strings.TrimSpace(interpretation.ActionType); action != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Action Type: %s", action))
+		}
+		if target := strings.TrimSpace(interpretation.Target); target != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Target: %s", target))
+		}
+		if scope := strings.TrimSpace(interpretation.Scope); scope != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Scope: %s", scope))
+		}
+		if risk := strings.TrimSpace(interpretation.RiskLevel); risk != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Risk Level: %s", risk))
+		}
+		if len(interpretation.MissingInfo) > 0 {
+			lines = append(lines, "Interpretation Missing Info: "+strings.Join(interpretation.MissingInfo, ", "))
+		}
+		if rationale := strings.TrimSpace(interpretation.Rationale); rationale != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Rationale: %s", rationale))
+		}
+		if note := strings.TrimSpace(interpretation.ConfidenceNote); note != "" {
+			lines = append(lines, fmt.Sprintf("Interpretation Confidence Note: %s", note))
+		}
+		if len(interpretation.ReasonCodes) > 0 {
+			lines = append(lines, "Interpretation Reason Codes: "+strings.Join(interpretation.ReasonCodes, ", "))
+		}
+	}
 	if state.Ambiguity != nil {
 		lines = append(lines, fmt.Sprintf("Ambiguity Kind: %s", state.Ambiguity.Kind))
 		lines = append(lines, fmt.Sprintf("Ambiguity Confidence: %.2f", state.Ambiguity.Confidence))
@@ -86,6 +135,8 @@ func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
 		Paradigms:   []string{"euclo"},
 		ReadsKeys: []string{
 			intentcontext.ClarificationStateKey,
+			intentcontext.IntentEvidenceKey,
+			intentcontext.IntentInterpretationKey,
 			intentcontext.ClarificationAmbiguityKey,
 			intentcontext.ClarificationTurnsKey,
 			intentcontext.ClarificationConfirmedEntitiesKey,
@@ -97,23 +148,44 @@ func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
 			intentcontext.ClarificationActiveThoughtRecipeKey,
 			intentcontext.ClarificationLastCheckpointIDKey,
 			intentcontext.ClarificationLastCheckpointSeqKey,
-			"euclo.intent.clarification.state_version",
-			"euclo.intent.clarification.current_turn_id",
-			"euclo.intent.clarification.active_thoughtrecipe_id",
-			"euclo.intent.clarification.last_checkpoint_id",
-			"euclo.intent.clarification.last_checkpoint_seq",
-			"euclo.intent.clarification.ambiguity_kind",
-			"euclo.intent.clarification.ambiguity_confidence",
-			"euclo.intent.clarification.ambiguity_rationale",
-			"euclo.intent.clarification.grounded_anchor_ids",
-			"euclo.intent.clarification.confirmed_entity_ids",
-			"euclo.intent.clarification.confirmed_scope_ids",
-			"euclo.intent.clarification.pending_relation_intents",
-			"euclo.intent.clarification.pending_questions",
-			"euclo.intent.clarification.pending_projection_ids",
-			"euclo.intent.clarification.applied_mutations",
 		},
 	}
+}
+
+func intentEvidenceFromRuntime(ctx prompt.RuntimeContext) *intentcontext.IntentEvidence {
+	if ctx.State != nil {
+		if value, ok := ctx.State[intentcontext.IntentEvidenceKey]; ok && value != nil {
+			if evidence, ok := value.(*intentcontext.IntentEvidence); ok {
+				return evidence
+			}
+		}
+	}
+	if ctx.Envelope != nil {
+		if value, ok := ctx.Envelope.GetWorkingValue(intentcontext.IntentEvidenceKey); ok && value != nil {
+			if evidence, ok := value.(*intentcontext.IntentEvidence); ok {
+				return evidence
+			}
+		}
+	}
+	return nil
+}
+
+func intentInterpretationFromRuntime(ctx prompt.RuntimeContext) *intentcontext.IntentInterpretation {
+	if ctx.State != nil {
+		if value, ok := ctx.State[intentcontext.IntentInterpretationKey]; ok && value != nil {
+			if interpretation, ok := value.(*intentcontext.IntentInterpretation); ok {
+				return interpretation
+			}
+		}
+	}
+	if ctx.Envelope != nil {
+		if value, ok := ctx.Envelope.GetWorkingValue(intentcontext.IntentInterpretationKey); ok && value != nil {
+			if interpretation, ok := value.(*intentcontext.IntentInterpretation); ok {
+				return interpretation
+			}
+		}
+	}
+	return nil
 }
 
 func clarificationStateFromRuntime(ctx prompt.RuntimeContext) *intentcontext.ClarificationState {

@@ -27,7 +27,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationRequired,
 			RetrievalTemplate:   "error context and related code for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.bisect",
-			CapabilitySequence:  []string{"euclo:cap.bisect", "euclo:cap.symbol_trace"},
 		},
 		{
 			ID:                  FamilyRepair,
@@ -38,7 +37,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationRequired,
 			RetrievalTemplate:   "bug context and related code for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.targeted_refactor",
-			CapabilitySequence:  []string{"euclo:cap.targeted_refactor"},
 		},
 		{
 			ID:                  FamilyReview,
@@ -49,7 +47,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "code to review for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.code_review",
-			CapabilitySequence:  []string{"euclo:cap.code_review"},
 		},
 		{
 			ID:                  FamilyPlanning,
@@ -60,7 +57,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "project context for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.layer_check",
-			CapabilitySequence:  []string{"euclo:cap.layer_check"},
 		},
 		{
 			ID:                  FamilyImplementation,
@@ -71,7 +67,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationConfigurable,
 			RetrievalTemplate:   "implementation context for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.targeted_refactor",
-			CapabilitySequence:  []string{"euclo:cap.targeted_refactor"},
 		},
 		{
 			ID:                  FamilyRefactor,
@@ -82,7 +77,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationConfigurable,
 			RetrievalTemplate:   "code to refactor for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.extract_func",
-			CapabilitySequence:  []string{"euclo:cap.extract_func", "euclo:cap.rename"},
 		},
 		{
 			ID:                  FamilyMigration,
@@ -93,7 +87,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationRequired,
 			RetrievalTemplate:   "migration context for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.api_compat",
-			CapabilitySequence:  []string{"euclo:cap.api_compat"},
 		},
 		{
 			ID:                  FamilyInvestigation,
@@ -104,7 +97,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "investigation context for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.symbol_trace",
-			CapabilitySequence:  []string{"euclo:cap.symbol_trace"},
 		},
 		{
 			ID:                  FamilyArchitecture,
@@ -115,7 +107,6 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "architecture context for: {{.Instruction}}",
 			FallbackCapability:  "euclo:cap.boundary_report",
-			CapabilitySequence:  []string{"euclo:cap.boundary_report"},
 		},
 	}
 

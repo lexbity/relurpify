@@ -48,15 +48,9 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"implementation": {Sequence: []string{handler.id}, Operator: "OR"},
-		},
-	}
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCapabilityClassifier(classifier),
 	)
 
 	env := contextdata.NewEnvelope("task-dryrun", "session-dryrun")
@@ -98,16 +92,10 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 		Name:     "review",
 		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
 	})
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"review": {Sequence: []string{"euclo:cap.code_review"}, Operator: "OR"},
-		},
-	}
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-		orchestrate.WithCapabilityClassifier(classifier),
 	)
 
 	env := contextdata.NewEnvelope("task-dryrun-thoughtrecipe", "session-dryrun-thoughtrecipe")

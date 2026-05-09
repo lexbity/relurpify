@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -52,6 +53,16 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	if _, ok := env.GetWorkingValue(clarificationRequestKey); !ok {
 		t.Fatal("expected clarification request in envelope")
 	}
+	if got, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); !ok {
+		t.Fatal("expected clarification frame in envelope")
+	} else if frame, ok := got.(*ClarificationFrame); !ok || frame == nil || !frame.Pending() {
+		t.Fatalf("unexpected clarification frame: %#v", got)
+	}
+	if got, ok := env.GetWorkingValue("euclo.clarification.gate_result"); !ok {
+		t.Fatal("expected clarification gate result in envelope")
+	} else if result, ok := got.(map[string]any); !ok || result["decision"] != "clarify" {
+		t.Fatalf("unexpected gate result: %#v", got)
+	}
 	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != clarificationThoughtRecipeID {
 		t.Fatalf("active thoughtrecipe id = %q, want %q", got, clarificationThoughtRecipeID)
 	}
@@ -65,6 +76,13 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	}
 	if routeSelection.RouteKind != RouteKindIntent || routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {
 		t.Fatalf("unexpected route selection: %+v", routeSelection)
+	}
+	if frameValue, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); !ok {
+		t.Fatal("expected clarification frame in envelope")
+	} else if clarificationFrame, ok := frameValue.(*ClarificationFrame); !ok || clarificationFrame == nil {
+		t.Fatalf("expected *ClarificationFrame, got %T", frameValue)
+	} else if interactionFrame := clarificationFrame.ToInteractionFrame(); interactionFrame == nil || interactionFrame.Type != interaction.FrameIntentClarification {
+		t.Fatalf("unexpected interaction frame: %#v", interactionFrame)
 	}
 	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
 		t.Fatal("expected route continuation metadata in envelope")
@@ -144,6 +162,31 @@ func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T)
 	}
 	if !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review" || meta.TargetRouteKind != RouteKindThoughtRecipe {
 		t.Fatalf("unexpected continuation metadata: %+v", meta)
+	}
+}
+
+func TestClarificationCapability_HandoffWithoutTargetRemainsUnresolved(t *testing.T) {
+	env := contextdata.NewEnvelope("task-unresolved", "session-unresolved")
+	state := intentcontext.NewState("task-unresolved", "session-unresolved")
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	handler := &clarificationCapabilityHandler{}
+	result, err := handler.Invoke(context.Background(), env, map[string]any{
+		clarificationActionKey: clarificationActionHandoff,
+	})
+	if err == nil {
+		t.Fatal("expected unresolved clarification handoff error")
+	}
+	if result == nil || result.Success {
+		t.Fatalf("expected unsuccessful unresolved handoff, got %+v", result)
+	}
+	if got := mustEnvelopeString(t, env, "euclo.clarification.unresolved_reason"); got != "missing handoff target" {
+		t.Fatalf("unresolved reason = %q", got)
+	}
+	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != clarificationThoughtRecipeID {
+		t.Fatalf("active thoughtrecipe id = %q, want %q", got, clarificationThoughtRecipeID)
 	}
 }
 

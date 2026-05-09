@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -71,6 +72,9 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 				req.DryRun = dryRun
 			}
 		}
+	}
+	if needsClarificationRoute(env) && strings.TrimSpace(req.ThoughtRecipeID) == "" && strings.TrimSpace(req.CapabilityID) == "" {
+		emitClarificationGateResult(ctx, env, nil, false, "clarify", "clarification lifecycle required")
 	}
 
 	caps := d.capabilityRegistry
@@ -145,45 +149,23 @@ func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 		req.ThoughtRecipeID = strings.TrimSpace(selection.ThoughtRecipeID)
 		req.CapabilityID = strings.TrimSpace(selection.CapabilityID)
 	}
-	if needsClarificationRoute(env) {
-		req.ThoughtRecipeID = clarificationThoughtRecipeID
-	}
-	kind := ""
-	if req.ThoughtRecipeID != "" {
-		kind = RouteKindForThoughtRecipeID(req.ThoughtRecipeID)
-	} else if req.CapabilityID != "" {
-		kind = RouteKindCapability
-	} else if v, ok := env.GetWorkingValue("euclo.thoughtrecipe_id"); ok {
-		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-			req.ThoughtRecipeID = strings.TrimSpace(s)
-			kind = RouteKindForThoughtRecipeID(req.ThoughtRecipeID)
+	if resolution := routeResolutionFromEnvelope(env); resolution != nil && req.ThoughtRecipeID == "" && req.CapabilityID == "" {
+		switch strings.ToLower(strings.TrimSpace(resolution.RouteKind)) {
+		case RouteKindThoughtRecipe, RouteKindIntent:
+			req.ThoughtRecipeID = strings.TrimSpace(resolution.ThoughtRecipeID)
+		case RouteKindCapability:
+			req.CapabilityID = strings.TrimSpace(resolution.CapabilityID)
 		}
 	}
-	if kind == "" {
-		if v, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
-			if seq, ok := v.([]string); ok && len(seq) > 0 && strings.TrimSpace(seq[0]) != "" {
-				req.CapabilityID = strings.TrimSpace(seq[0])
-				kind = RouteKindCapability
+	if req.ThoughtRecipeID == "" && req.CapabilityID == "" {
+		if v, ok := env.GetWorkingValue("euclo.thoughtrecipe_id"); ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				req.ThoughtRecipeID = strings.TrimSpace(s)
 			}
 		}
 	}
-	if kind == "" {
-		kind = classifyRoute(env)
-	}
-	switch kind {
-	case RouteKindThoughtRecipe, RouteKindIntent:
-		if req.ThoughtRecipeID == "" && req.FamilyID == "" {
-			req.ThoughtRecipeID = defaultThoughtRecipeID(env)
-		}
-	case RouteKindCapability:
-		if req.CapabilityID == "" && req.FamilyID == "" {
-			req.CapabilityID = defaultCapabilityID(env)
-		}
-	default:
-		if req.FamilyID == "" {
-			req.CapabilityID = defaultCapabilityID(env)
-			kind = RouteKindCapability
-		}
+	if req.ThoughtRecipeID == "" && req.CapabilityID == "" && (classificationRequiresClarification(env) || !hasIntentGrounding(env)) {
+		req.ThoughtRecipeID = clarificationThoughtRecipeID
 	}
 	if v, ok := env.GetWorkingValue("euclo.route.fallback_id"); ok {
 		if s, ok := v.(string); ok {
@@ -209,21 +191,53 @@ func applyRouteResultToEnvelope(env *contextdata.Envelope, result *RouteResult) 
 	default:
 		selection.CapabilityID = result.RouteID
 	}
-	env.SetWorkingValue("euclo.route_selection", selection, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.continuation", &RouteContinuation{
-		SharedContext:         true,
-		SourceRouteKind:       result.RouteKind,
-		SourceRouteID:         result.RouteID,
-		TargetRouteKind:       result.RouteKind,
-		TargetRouteID:         result.RouteID,
-		ActiveThoughtRecipeID: selection.ThoughtRecipeID,
-	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.dispatch.route_kind", result.RouteKind, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.candidate_count", result.CandidateCount, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.fallback_taken", result.FallbackTaken, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.fallback_id", result.FallbackID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.skill_filter", result.SkillFilterName, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.outcome", result.Outcome, contextdata.MemoryClassTask)
+	applyRouteSelectionToEnvelope(env, selection, result)
+}
+
+func applyRouteSelectionToEnvelope(env *contextdata.Envelope, selection *RouteSelection, result *RouteResult) {
+	if env == nil {
+		return
+	}
+	if selection != nil {
+		env.SetWorkingValue("euclo.route_selection", selection, contextdata.MemoryClassTask)
+		routeID := selection.ThoughtRecipeID
+		if routeID == "" {
+			routeID = selection.CapabilityID
+		}
+		env.SetWorkingValue("euclo.route.continuation", &RouteContinuation{
+			SharedContext:         true,
+			SourceRouteKind:       selection.RouteKind,
+			SourceRouteID:         routeID,
+			TargetRouteKind:       selection.RouteKind,
+			TargetRouteID:         routeID,
+			ActiveThoughtRecipeID: selection.ThoughtRecipeID,
+		}, contextdata.MemoryClassTask)
+	} else {
+		env.SetWorkingValue("euclo.route_selection", nil, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.continuation", nil, contextdata.MemoryClassTask)
+	}
+	if result != nil {
+		env.SetWorkingValue("euclo.dispatch.route_kind", result.RouteKind, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.candidate_count", result.CandidateCount, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.fallback_taken", result.FallbackTaken, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.fallback_id", result.FallbackID, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.skill_filter", result.SkillFilterName, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route.outcome", result.Outcome, contextdata.MemoryClassTask)
+	}
+}
+
+func applyRouteResolutionToEnvelope(env *contextdata.Envelope, resolution *RouteResolution) {
+	if env == nil {
+		return
+	}
+	if resolution == nil {
+		env.SetWorkingValue(intentcontext.RouteResolutionKey, nil, contextdata.MemoryClassTask)
+		env.SetWorkingValue("euclo.route_resolution", nil, contextdata.MemoryClassTask)
+		return
+	}
+	resolution.Normalize()
+	env.SetWorkingValue(intentcontext.RouteResolutionKey, resolution, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_resolution", resolution, contextdata.MemoryClassTask)
 }
 
 func routeSelectionFromEnvelope(env *contextdata.Envelope) *RouteSelection {
@@ -236,6 +250,80 @@ func routeSelectionFromEnvelope(env *contextdata.Envelope) *RouteSelection {
 		}
 	}
 	return nil
+}
+
+func routeResolutionFromEnvelope(env *contextdata.Envelope) *RouteResolution {
+	if env == nil {
+		return nil
+	}
+	if v, ok := env.GetWorkingValue(intentcontext.RouteResolutionKey); ok {
+		if res, ok := v.(*RouteResolution); ok && res != nil {
+			return res
+		}
+	}
+	if v, ok := env.GetWorkingValue("euclo.route_resolution"); ok {
+		if res, ok := v.(*RouteResolution); ok && res != nil {
+			return res
+		}
+	}
+	return nil
+}
+
+func hasIntentGrounding(env *contextdata.Envelope) bool {
+	if env == nil {
+		return false
+	}
+	if v, ok := env.GetWorkingValue(intentcontext.IntentEvidenceKey); ok {
+		if evidence, ok := v.(*intentcontext.IntentEvidence); ok && evidence != nil {
+			return true
+		}
+	}
+	if v, ok := env.GetWorkingValue(intentcontext.IntentInterpretationKey); ok {
+		if interpretation, ok := v.(*intentcontext.IntentInterpretation); ok && interpretation != nil {
+			return true
+		}
+	}
+	if v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); ok {
+		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
+			return true
+		}
+	}
+	if v, ok := env.GetWorkingValue("euclo.family_selection"); ok {
+		switch value := v.(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				return true
+			}
+		case map[string]any:
+			if _, ok := value["winning_family"]; ok {
+				return true
+			}
+		}
+	}
+	if v, ok := env.GetWorkingValue("euclo.skill_filter"); ok {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			return true
+		}
+	}
+	if routeSelectionFromEnvelope(env) != nil {
+		return true
+	}
+	if resolution := routeResolutionFromEnvelope(env); resolution != nil {
+		return strings.TrimSpace(resolution.RouteID()) != ""
+	}
+	return false
+}
+
+func classificationRequiresClarification(env *contextdata.Envelope) bool {
+	if env == nil {
+		return false
+	}
+	if v, ok := env.GetWorkingValue("euclo.intent_classification"); ok {
+		if cls, ok := v.(*intake.IntentClassification); ok && cls != nil {
+			return cls.Ambiguous
+		}
+	}
+	return false
 }
 
 func classifyRoute(env *contextdata.Envelope) string {
@@ -267,7 +355,7 @@ func classifyRoute(env *contextdata.Envelope) string {
 
 func defaultThoughtRecipeID(env *contextdata.Envelope) string {
 	if env == nil {
-		return "euclo.thoughtrecipe.default"
+		return clarificationThoughtRecipeID
 	}
 	if needsClarificationRoute(env) {
 		return clarificationThoughtRecipeID
@@ -277,16 +365,15 @@ func defaultThoughtRecipeID(env *contextdata.Envelope) string {
 			return s
 		}
 	}
-	return "euclo.thoughtrecipe.default"
+	return clarificationThoughtRecipeID
 }
 
 func defaultCapabilityID(env *contextdata.Envelope) string {
-	if env == nil {
-		return "euclo:cap.ast_query"
-	}
-	if v, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
-		if seq, ok := v.([]string); ok && len(seq) > 0 && strings.TrimSpace(seq[0]) != "" {
-			return strings.TrimSpace(seq[0])
+	if env != nil {
+		if v, ok := env.GetWorkingValue("euclo.capability_id"); ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
 		}
 	}
 	return "euclo:cap.ast_query"

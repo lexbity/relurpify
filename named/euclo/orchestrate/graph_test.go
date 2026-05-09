@@ -4,13 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestRootGraphExecute(t *testing.T) {
-	graph := NewRootGraph()
+	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    RouteKindCapability,
+		CapabilityID: "euclo:cap.ast_query",
+	}, contextdata.MemoryClassTask)
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -49,9 +56,13 @@ func TestRootGraphValidate(t *testing.T) {
 }
 
 func TestRootGraphThoughtRecipeRoute(t *testing.T) {
-	graph := NewRootGraph()
+	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    RouteKindCapability,
+		CapabilityID: "euclo:cap.ast_query",
+	}, contextdata.MemoryClassTask)
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -70,7 +81,7 @@ func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 }
 
 func TestRootGraphCapabilityRoute(t *testing.T) {
-	graph := NewRootGraph()
+	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
@@ -95,9 +106,13 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 }
 
 func TestRootGraphPolicyDecision(t *testing.T) {
-	graph := NewRootGraph()
+	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    RouteKindCapability,
+		CapabilityID: "euclo:cap.ast_query",
+	}, contextdata.MemoryClassTask)
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -113,4 +128,32 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 	if permitted == nil {
 		t.Error("Expected non-nil policy.mutation_permitted")
 	}
+}
+
+func testGraphCapabilityRegistry(t *testing.T) *capability.CapabilityRegistry {
+	t.Helper()
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterInvocableCapability(testGraphCapability{}); err != nil {
+		t.Fatalf("register capability: %v", err)
+	}
+	return reg
+}
+
+type testGraphCapability struct{}
+
+func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
+	return core.CapabilityDescriptor{
+		ID:            "euclo:cap.ast_query",
+		Name:          "ast_query",
+		Kind:          core.CapabilityKindTool,
+		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Availability:  core.AvailabilitySpec{Available: true},
+	}
+}
+
+func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+	return &contracts.CapabilityExecutionResult{
+		Success: true,
+		Data:    map[string]any{"executed": true},
+	}, nil
 }

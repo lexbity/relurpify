@@ -299,6 +299,147 @@ type ClarificationState struct {
 	LastUpdatedAt          time.Time
 }
 
+// IntentEvidence captures the structured semantic evidence extracted from a request.
+type IntentEvidence struct {
+	ActionType            string
+	Target                string
+	Scope                 string
+	RiskLevel             string
+	ExpectedVerb          string
+	ExplicitFiles         []string
+	UserFiles             []string
+	WorkspaceScopes       []string
+	SessionPins           []string
+	ContextHints          []string
+	SessionContinuation   string
+	FollowUp              string
+	NegativeConstraints   []string
+	RequiresClarification bool
+	MissingFields         []string
+	ReasonCodes           []string
+}
+
+// Clone returns a deep copy of the evidence record.
+func (e *IntentEvidence) Clone() *IntentEvidence {
+	if e == nil {
+		return nil
+	}
+	out := *e
+	out.ExplicitFiles = cloneStrings(e.ExplicitFiles)
+	out.UserFiles = cloneStrings(e.UserFiles)
+	out.WorkspaceScopes = cloneStrings(e.WorkspaceScopes)
+	out.SessionPins = cloneStrings(e.SessionPins)
+	out.ContextHints = cloneStrings(e.ContextHints)
+	out.NegativeConstraints = cloneStrings(e.NegativeConstraints)
+	out.MissingFields = cloneStrings(e.MissingFields)
+	out.ReasonCodes = cloneStrings(e.ReasonCodes)
+	return &out
+}
+
+// Normalize trims whitespace and removes empty list entries.
+func (e *IntentEvidence) Normalize() {
+	if e == nil {
+		return
+	}
+	e.ActionType = strings.TrimSpace(e.ActionType)
+	e.Target = strings.TrimSpace(e.Target)
+	e.Scope = strings.TrimSpace(e.Scope)
+	e.RiskLevel = strings.TrimSpace(e.RiskLevel)
+	e.ExpectedVerb = strings.TrimSpace(e.ExpectedVerb)
+	e.SessionContinuation = strings.TrimSpace(e.SessionContinuation)
+	e.FollowUp = strings.TrimSpace(e.FollowUp)
+	e.ExplicitFiles = normalizeStrings(e.ExplicitFiles)
+	e.UserFiles = normalizeStrings(e.UserFiles)
+	e.WorkspaceScopes = normalizeStrings(e.WorkspaceScopes)
+	e.SessionPins = normalizeStrings(e.SessionPins)
+	e.ContextHints = normalizeStrings(e.ContextHints)
+	e.NegativeConstraints = normalizeStrings(e.NegativeConstraints)
+	e.MissingFields = normalizeStrings(e.MissingFields)
+	e.ReasonCodes = normalizeStrings(e.ReasonCodes)
+}
+
+// IntentInterpretation is the structured interpretation of the evidence set.
+type IntentInterpretation struct {
+	ActionType     string
+	Target         string
+	Scope          string
+	RiskLevel      string
+	MissingInfo    []string
+	Rationale      string
+	ConfidenceNote string
+	ReasonCodes    []string
+}
+
+// Clone returns a deep copy of the interpretation record.
+func (i *IntentInterpretation) Clone() *IntentInterpretation {
+	if i == nil {
+		return nil
+	}
+	out := *i
+	out.MissingInfo = cloneStrings(i.MissingInfo)
+	out.ReasonCodes = cloneStrings(i.ReasonCodes)
+	return &out
+}
+
+// Normalize trims whitespace and removes empty list entries.
+func (i *IntentInterpretation) Normalize() {
+	if i == nil {
+		return
+	}
+	i.ActionType = strings.TrimSpace(i.ActionType)
+	i.Target = strings.TrimSpace(i.Target)
+	i.Scope = strings.TrimSpace(i.Scope)
+	i.RiskLevel = strings.TrimSpace(i.RiskLevel)
+	i.Rationale = strings.TrimSpace(i.Rationale)
+	i.ConfidenceNote = strings.TrimSpace(i.ConfidenceNote)
+	i.MissingInfo = normalizeStrings(i.MissingInfo)
+	i.ReasonCodes = normalizeStrings(i.ReasonCodes)
+}
+
+// RouteResolution records the final route selected for execution.
+type RouteResolution struct {
+	RouteKind                 string
+	ThoughtRecipeID           string
+	CapabilityID              string
+	ResolutionSource          string
+	FallbackTaken             bool
+	ClarificationStateVersion uint64
+	ReasonCodes               []string
+}
+
+// Clone returns a deep copy of the route resolution record.
+func (r *RouteResolution) Clone() *RouteResolution {
+	if r == nil {
+		return nil
+	}
+	out := *r
+	out.ReasonCodes = cloneStrings(r.ReasonCodes)
+	return &out
+}
+
+// Normalize trims whitespace and removes empty list entries.
+func (r *RouteResolution) Normalize() {
+	if r == nil {
+		return
+	}
+	r.RouteKind = strings.TrimSpace(r.RouteKind)
+	r.ThoughtRecipeID = strings.TrimSpace(r.ThoughtRecipeID)
+	r.CapabilityID = strings.TrimSpace(r.CapabilityID)
+	r.ResolutionSource = strings.TrimSpace(r.ResolutionSource)
+	r.ReasonCodes = normalizeStrings(r.ReasonCodes)
+}
+
+// RouteID returns the selected route identifier if one is present.
+func (r *RouteResolution) RouteID() string {
+	if r == nil {
+		return ""
+	}
+	if trimmed := strings.TrimSpace(r.ThoughtRecipeID); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.CapabilityID)
+}
+
 // Validate checks that the clarification state is internally consistent enough
 // to be safely persisted or replayed.
 func (s *ClarificationState) Validate() error {
@@ -891,6 +1032,31 @@ func normalizeTime(t time.Time) time.Time {
 		return time.Time{}
 	}
 	return t.UTC()
+}
+
+func cloneStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
+func normalizeStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func cloneAnchors(in []retrieval.AnchorRef) []retrieval.AnchorRef {

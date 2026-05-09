@@ -304,7 +304,7 @@ func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestDispatch_UnavailableCapability_TriesFallback(t *testing.T) {
+func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 	reg := capability.NewCapabilityRegistry()
 	primary := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
 		Available: false,
@@ -323,16 +323,16 @@ func TestDispatch_UnavailableCapability_TriesFallback(t *testing.T) {
 
 	result, err := Dispatch(context.Background(), env, req, reg, nil)
 	if err != nil {
-		t.Fatalf("Dispatch failed: %v", err)
+		if _, ok := err.(*RouteResolutionError); !ok {
+			t.Fatalf("expected RouteResolutionError, got %T", err)
+		}
+	} else {
+		t.Fatalf("expected unresolved dispatch, got result %+v", result)
 	}
-	if result.RouteID != fallback.ID {
-		t.Fatalf("expected fallback route %q, got %q", fallback.ID, result.RouteID)
-	}
-	if !result.FallbackTaken {
-		t.Fatal("expected fallback to be reported as taken")
-	}
-	if result.FallbackID != fallback.ID {
-		t.Fatalf("expected fallback ID %q, got %q", fallback.ID, result.FallbackID)
+	if got, ok := env.GetWorkingValue("euclo.route_resolution"); !ok {
+		t.Fatal("expected route resolution in envelope")
+	} else if resolution, ok := got.(*RouteResolution); !ok || resolution == nil || resolution.RouteID() != primary.ID {
+		t.Fatalf("expected unresolved route resolution for %q, got %#v", primary.ID, got)
 	}
 }
 

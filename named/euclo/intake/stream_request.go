@@ -1,6 +1,7 @@
 package intake
 
 import (
+	"fmt"
 	"strings"
 	"text/template"
 
@@ -10,14 +11,53 @@ import (
 )
 
 // BuildStreamRequest creates a contextstream.Request from family selection.
-// It accepts only family selection, instruction, max tokens, and mode — no file parameters.
-// File context arrives via prior ingestion only.
+// It preserves a structured request and uses the family as a retrieval anchor.
 func BuildStreamRequest(sel families.FamilySelection, instruction string, maxTokens int, mode contextstream.Mode) *contextstream.Request {
-	// Get the family to retrieve its retrieval template
-	// For now, we'll need the family registry to look up the template
-	// This is a limitation - we'll need to pass the family or template directly
-	// For Phase 5, we'll accept the template as a parameter instead
-	return nil
+	instruction = strings.TrimSpace(instruction)
+	familyID := strings.TrimSpace(sel.WinningFamily)
+	if instruction == "" && familyID == "" {
+		return nil
+	}
+
+	queryText := instruction
+	if queryText == "" {
+		queryText = familyID
+	}
+	if queryText == "" {
+		return nil
+	}
+
+	anchors := make([]retrieval.AnchorRef, 0, 1)
+	if familyID != "" {
+		anchors = append(anchors, retrieval.AnchorRef{
+			AnchorID:   "family:" + familyID,
+			Term:       familyID,
+			Definition: "winning family selection",
+			Class:      "family",
+			Active:     true,
+		})
+	}
+
+	req := &contextstream.Request{
+		Query: retrieval.RetrievalQuery{
+			Text:    queryText,
+			Anchors: anchors,
+		},
+		MaxTokens: maxTokens,
+		Mode:      mode,
+	}
+	if familyID != "" {
+		req.Metadata = map[string]any{
+			"winning_family": familyID,
+		}
+	}
+	if req.MaxTokens < 0 {
+		req.MaxTokens = 0
+	}
+	if req.Metadata != nil && familyID != "" && req.Metadata["winning_family"] == "" {
+		req.Metadata["winning_family"] = fmt.Sprint(familyID)
+	}
+	return req
 }
 
 // BuildStreamRequestWithTemplate creates a contextstream.Request with an explicit template.

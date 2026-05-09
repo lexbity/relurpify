@@ -28,9 +28,20 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 		plan.ThoughtRecipe.Metadata.Name = doc.Header.Name.Value
 		plan.ThoughtRecipe.ID = doc.Header.Name.Value
 	}
+	if doc.Header.Description != nil {
+		plan.ThoughtRecipe.Description = strings.TrimSpace(doc.Header.Description.Value)
+	}
 	if trigger := firstTriggerDecl(doc); trigger != nil {
 		plan.ThoughtRecipe.RouteKind = TriggerRouteKindFromDecl(trigger)
 		plan.RouteKind = plan.ThoughtRecipe.RouteKind
+		meta, err := TriggerAssociationsFromDecl(trigger)
+		if err != nil {
+			return nil, err
+		}
+		plan.ThoughtRecipe.Metadata.Families = meta.Families
+		plan.ThoughtRecipe.Metadata.Keywords = meta.Keywords
+		plan.ThoughtRecipe.Metadata.HandoffTargets = meta.HandoffTargets
+		plan.ThoughtRecipe.Metadata.Tags = meta.Tags
 	}
 
 	for _, decl := range doc.Declarations {

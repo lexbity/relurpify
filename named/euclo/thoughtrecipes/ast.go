@@ -89,9 +89,10 @@ type ThoughtRecipeHeader struct {
 // TriggerDecl describes the trigger declaration.
 type TriggerDecl struct {
 	positioned
-	Policy    Identifier
-	RouteKind TriggerRouteKind
-	Lines     []TriggerLine
+	Policy       Identifier
+	RouteKind    TriggerRouteKind
+	Lines        []TriggerLine
+	Associations []TriggerAssociationDecl
 }
 
 func (TriggerDecl) declarationNode() {}
@@ -111,6 +112,14 @@ type TriggerLine struct {
 	Effect   Identifier
 	Resource ValueExpr
 	Raw      string
+}
+
+// TriggerAssociationDecl preserves trigger-local family/keyword metadata.
+type TriggerAssociationDecl struct {
+	positioned
+	Name   Identifier
+	Values *ListLiteral
+	Raw    string
 }
 
 // InputDecl describes an input binding.

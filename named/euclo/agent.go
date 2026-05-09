@@ -169,7 +169,6 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 		orchestrate.WithThoughtRecipeRegistry(a.thoughtrecipeRegistry),
 		orchestrate.WithMaxStreamTokens(a.config.MaxStreamTokens),
 		orchestrate.WithDefaultStreamMode(a.config.DefaultStreamMode),
-		orchestrate.WithCapabilityClassifier(a.capabilityClassifier()),
 		orchestrate.WithStreamTrigger(a.env.StreamTrigger),
 		orchestrate.WithCheckpointRepository(a.config.CheckpointRepository),
 		orchestrate.WithPersistenceWriter(a.config.PersistenceWriter),
@@ -212,17 +211,6 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *core.Task) {
 	if task.Metadata != nil {
 		env.SetWorkingValue("task.metadata", task.Metadata, contextdata.MemoryClassTask)
 	}
-}
-
-func (a *Agent) capabilityClassifier() intake.Tier2Classifier {
-	if a == nil {
-		return nil
-	}
-	model := a.config.CapabilityClassifierModel
-	if model == nil {
-		return nil
-	}
-	return intake.NewLLMCapabilityClassifier(&modelAdapter{model: model})
 }
 
 type modelAdapter struct {

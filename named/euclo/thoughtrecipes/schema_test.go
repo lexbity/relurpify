@@ -5,7 +5,10 @@ import "testing"
 func TestThoughtRecipeSchemaValidation(t *testing.T) {
 	thoughtrecipe := &ThoughtRecipe{
 		Metadata: ThoughtRecipeMetadata{
-			Name: "Test ThoughtRecipe",
+			Name:           "Test ThoughtRecipe",
+			Families:       []string{"debug"},
+			Keywords:       []string{"panic"},
+			HandoffTargets: []string{"debug_followup"},
 		},
 	}
 

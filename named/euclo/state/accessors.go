@@ -3,6 +3,7 @@ package state
 import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
@@ -40,6 +41,42 @@ func SetIntentClassification(env *contextdata.Envelope, ic *intake.IntentClassif
 	env.SetWorkingValue(KeyIntentClassification, ic, contextdata.MemoryClassTask)
 }
 
+// GetIntentEvidence retrieves the structured evidence record.
+func GetIntentEvidence(env *contextdata.Envelope) (*intentcontext.IntentEvidence, bool) {
+	if env == nil {
+		return nil, false
+	}
+	v, ok := env.GetWorkingValue(KeyIntentEvidence)
+	if !ok {
+		return nil, false
+	}
+	evidence, ok := v.(*intentcontext.IntentEvidence)
+	return evidence, ok
+}
+
+// SetIntentEvidence stores the structured evidence record.
+func SetIntentEvidence(env *contextdata.Envelope, evidence *intentcontext.IntentEvidence) {
+	env.SetWorkingValue(KeyIntentEvidence, evidence, contextdata.MemoryClassTask)
+}
+
+// GetIntentInterpretation retrieves the structured interpretation record.
+func GetIntentInterpretation(env *contextdata.Envelope) (*intentcontext.IntentInterpretation, bool) {
+	if env == nil {
+		return nil, false
+	}
+	v, ok := env.GetWorkingValue(KeyIntentInterpretation)
+	if !ok {
+		return nil, false
+	}
+	interpretation, ok := v.(*intentcontext.IntentInterpretation)
+	return interpretation, ok
+}
+
+// SetIntentInterpretation stores the structured interpretation record.
+func SetIntentInterpretation(env *contextdata.Envelope, interpretation *intentcontext.IntentInterpretation) {
+	env.SetWorkingValue(KeyIntentInterpretation, interpretation, contextdata.MemoryClassTask)
+}
+
 // GetRouteSelection retrieves the resolved route.
 func GetRouteSelection(env *contextdata.Envelope) (*orchestrate.RouteSelection, bool) {
 	v, ok := env.GetWorkingValue(KeyRouteSelection)
@@ -55,19 +92,22 @@ func SetRouteSelection(env *contextdata.Envelope, rs *orchestrate.RouteSelection
 	env.SetWorkingValue(KeyRouteSelection, rs, contextdata.MemoryClassTask)
 }
 
-// GetClassificationMetadata retrieves classification metadata.
-func GetClassificationMetadata(env *contextdata.Envelope) (map[string]any, bool) {
-	v, ok := env.GetWorkingValue(KeyClassificationMetadata)
+// GetRouteResolution retrieves the selected route resolution record.
+func GetRouteResolution(env *contextdata.Envelope) (*orchestrate.RouteResolution, bool) {
+	if env == nil {
+		return nil, false
+	}
+	v, ok := env.GetWorkingValue(KeyRouteResolution)
 	if !ok {
 		return nil, false
 	}
-	m, ok := v.(map[string]any)
-	return m, ok
+	resolution, ok := v.(*orchestrate.RouteResolution)
+	return resolution, ok
 }
 
-// SetClassificationMetadata stores classification metadata.
-func SetClassificationMetadata(env *contextdata.Envelope, m map[string]any) {
-	env.SetWorkingValue(KeyClassificationMetadata, m, contextdata.MemoryClassTask)
+// SetRouteResolution stores the selected route resolution record.
+func SetRouteResolution(env *contextdata.Envelope, resolution *orchestrate.RouteResolution) {
+	env.SetWorkingValue(KeyRouteResolution, resolution, contextdata.MemoryClassTask)
 }
 
 // --- User Hints ---
@@ -526,21 +566,4 @@ func GetFamilySelection(env *contextdata.Envelope) (string, bool) {
 // SetFamilySelection stores the selected family.
 func SetFamilySelection(env *contextdata.Envelope, family string) {
 	env.SetWorkingValue(KeyFamilySelection, family, contextdata.MemoryClassTask)
-}
-
-// --- Capability Sequence ---
-
-// GetCapabilitySequence retrieves the capability sequence.
-func GetCapabilitySequence(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyCapabilitySequence)
-	if !ok {
-		return nil, false
-	}
-	seq, ok := v.([]string)
-	return seq, ok
-}
-
-// SetCapabilitySequence stores the capability sequence.
-func SetCapabilitySequence(env *contextdata.Envelope, sequence []string) {
-	env.SetWorkingValue(KeyCapabilitySequence, sequence, contextdata.MemoryClassTask)
 }

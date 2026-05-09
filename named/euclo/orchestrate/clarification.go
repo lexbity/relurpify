@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -38,12 +39,28 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 	if env == nil {
 		return false
 	}
-	if v, ok := env.GetWorkingValue("euclo.intent_classification"); ok {
-		if cls, ok := v.(*intake.IntentClassification); ok && cls != nil {
-			return cls.Ambiguous || cls.Confidence < 0.7
+	if v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); ok {
+		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
+			if strings.TrimSpace(state.ActiveThoughtRecipeID) != "" {
+				return true
+			}
+			if len(state.PendingQuestions) > 0 || len(state.PendingProjection) > 0 {
+				return true
+			}
 		}
-		if ambiguous, confidence, ok := ambiguityFromValue(v); ok {
-			return ambiguous || confidence < 0.7
+	}
+	if v, ok := env.GetWorkingValue("euclo.intent_evidence"); ok {
+		if evidence, ok := v.(*intentcontext.IntentEvidence); ok && evidence != nil {
+			if evidence.RequiresClarification || len(evidence.MissingFields) > 0 {
+				return true
+			}
+		}
+	}
+	if v, ok := env.GetWorkingValue("euclo.intent_interpretation"); ok {
+		if interpretation, ok := v.(*intentcontext.IntentInterpretation); ok && interpretation != nil {
+			if len(interpretation.MissingInfo) > 0 {
+				return true
+			}
 		}
 	}
 	return false
@@ -52,6 +69,9 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	if env == nil {
 		return false
+	}
+	if _, ok := env.GetWorkingValue(clarificationRequestKey); ok {
+		return true
 	}
 	if needsClarificationRoute(env) {
 		return true
@@ -137,7 +157,15 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			env.SetWorkingValue(clarificationRequestKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			frame := clarificationFrameFromState(state, req, nil)
+			if frame != nil {
+				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+				}
+			}
 		}
+		emitClarificationGateResult(ctx, env, state, false, "clarify", "follow-up clarification required")
 		emitClarificationStarted(ctx, env, state, req)
 		result["request"] = req
 	case clarificationActionGround:
@@ -164,6 +192,13 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			frame := clarificationFrameFromState(state, req, grounding)
+			if frame != nil {
+				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+				}
+			}
 		}
 		result["grounding"] = grounding
 		result["requery"] = req
@@ -195,6 +230,13 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			frame := clarificationFrameFromState(state, req, nil)
+			if frame != nil {
+				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+				}
+			}
 		}
 		result["requery"] = req
 	case clarificationActionHandoff:
@@ -213,7 +255,20 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		}
 		if env != nil && nextThoughtRecipeID == "" {
 			env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", "", contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+			env.SetWorkingValue("euclo.clarification.unresolved", true, contextdata.MemoryClassTask)
+			env.SetWorkingValue("euclo.clarification.unresolved_reason", "missing handoff target", contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+		}
+		if nextThoughtRecipeID == "" {
+			emitClarificationGateResult(ctx, env, state, false, "unresolved", "missing handoff target")
+			result["next_thoughtrecipe_id"] = ""
+			result["unresolved"] = true
+			return &contracts.CapabilityExecutionResult{
+				Success: false,
+				Error:   "clarification handoff requires a next thoughtrecipe id",
+				Data:    result,
+			}, fmt.Errorf("clarification handoff requires a next thoughtrecipe id")
 		}
 		emitClarificationCompleted(ctx, env, state, nextThoughtRecipeID)
 		result["next_thoughtrecipe_id"] = nextThoughtRecipeID
@@ -388,6 +443,35 @@ func setRouteSelectionContinuation(env *contextdata.Envelope, targetRouteKind, t
 		TargetRouteID:         routeID,
 		ActiveThoughtRecipeID: routeID,
 	}, contextdata.MemoryClassTask)
+}
+
+func clarificationFrameFromState(state *intentcontext.ClarificationState, req *contextstream.Request, grounding map[string]any) *ClarificationFrame {
+	if state == nil || req == nil {
+		return nil
+	}
+	choices := clarificationFrameChoicesFromState(state)
+	missingFields := []string{}
+	if grounding != nil {
+		if grounded, ok := grounding["grounded_anchor_ids"].([]string); ok && len(grounded) == 0 {
+			missingFields = append(missingFields, "grounding")
+		}
+	}
+	resume := &interaction.ClarificationResumeMetadata{
+		ActiveThoughtRecipeID: clarificationThoughtRecipeID,
+		RouteKind:             RouteKindIntent,
+		RouteID:               clarificationThoughtRecipeID,
+		StateVersion:          state.StateVersion,
+		Unresolved:            len(choices) == 0 || len(missingFields) > 0,
+		MissingFields:         append([]string(nil), missingFields...),
+	}
+	return NewClarificationFrame(state.TaskID, state.SessionID, clarificationThoughtRecipeID, strings.TrimSpace(req.Query.Text), choices, resume.MissingFields, resume)
+}
+
+func clarificationFrameChoicesFromState(state *intentcontext.ClarificationState) []string {
+	if state == nil || state.Ambiguity == nil {
+		return nil
+	}
+	return interaction.NormalizeChoices(state.Ambiguity.CandidateFamilies)
 }
 
 func seedClarificationAmbiguityFromEnvelope(state *intentcontext.ClarificationState, env *contextdata.Envelope) {
@@ -611,6 +695,43 @@ func validateStructuredGrounding(value map[string]any) []string {
 		errs = append(errs, issue.Error())
 	}
 	return errs
+}
+
+func emitClarificationGateResult(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, passed bool, decision, reason string) {
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	if tel == nil {
+		return
+	}
+	taskID := ""
+	sessionID := ""
+	if state != nil {
+		taskID = state.TaskID
+		sessionID = state.SessionID
+	} else if env != nil {
+		taskID = env.TaskID
+		sessionID = env.SessionID
+	}
+	tel.EmitGateResult(ctx, reporting.EventGateResult{
+		EventHeader: reporting.EventHeader{
+			TaskID:     taskID,
+			SessionID:  sessionID,
+			Seq:        0,
+			OccurredAt: time.Now().UTC(),
+		},
+		GateID:   clarificationCapabilityID,
+		Passed:   passed,
+		Decision: strings.TrimSpace(decision),
+	})
+	if env != nil {
+		env.SetWorkingValue("euclo.clarification.gate_result", map[string]any{
+			"gate_id":    clarificationCapabilityID,
+			"passed":     passed,
+			"decision":   strings.TrimSpace(decision),
+			"reason":     strings.TrimSpace(reason),
+			"task_id":    taskID,
+			"session_id": sessionID,
+		}, contextdata.MemoryClassTask)
+	}
 }
 
 func emitClarificationStarted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, req *contextstream.Request) {

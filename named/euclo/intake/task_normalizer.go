@@ -3,6 +3,8 @@ package intake
 import (
 	"strings"
 	"unicode"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 // TaskNormalizer normalizes user instructions for downstream processing.
@@ -19,8 +21,10 @@ func NewTaskNormalizer() *TaskNormalizer {
 
 // NormalizeResult holds the fully normalized task data.
 type NormalizeResult struct {
-	TaskEnvelope *TaskEnvelope
-	Hints        *ParseResult
+	TaskEnvelope   *TaskEnvelope
+	Hints          *ParseResult
+	Evidence       *intentcontext.IntentEvidence
+	Interpretation *intentcontext.IntentInterpretation
 }
 
 // Normalize processes a raw user message into a normalized form.
@@ -53,10 +57,14 @@ func (n *TaskNormalizer) Normalize(taskID, sessionID, message string) *Normalize
 		RawMessage:       message,
 		Metadata:         make(map[string]any),
 	}
+	envelope.Evidence = BuildIntentEvidence(envelope)
+	envelope.Interpretation = BuildIntentInterpretation(envelope.Evidence, nil)
 
 	return &NormalizeResult{
-		TaskEnvelope: envelope,
-		Hints:        hints,
+		TaskEnvelope:   envelope,
+		Hints:          hints,
+		Evidence:       envelope.Evidence,
+		Interpretation: envelope.Interpretation,
 	}
 }
 
@@ -82,6 +90,10 @@ func (n *TaskNormalizer) NormalizeWithDefaults(taskID, sessionID, message string
 			}
 		}
 	}
+	result.TaskEnvelope.Evidence = BuildIntentEvidence(result.TaskEnvelope)
+	result.TaskEnvelope.Interpretation = BuildIntentInterpretation(result.TaskEnvelope.Evidence, nil)
+	result.Evidence = result.TaskEnvelope.Evidence
+	result.Interpretation = result.TaskEnvelope.Interpretation
 
 	return result
 }

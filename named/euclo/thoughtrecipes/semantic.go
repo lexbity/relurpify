@@ -164,6 +164,9 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 	if _, err := TriggerPolicyFromDecl(decl); err != nil {
 		return err
 	}
+	if _, err := TriggerAssociationsFromDecl(decl); err != nil {
+		return err
+	}
 	switch TriggerRouteKindFromDecl(decl) {
 	case TriggerRouteKindCapability, TriggerRouteKindIntent:
 	default:

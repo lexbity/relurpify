@@ -38,6 +38,12 @@ func TestNormalizeBasicInstruction(t *testing.T) {
 	if envelope.Instruction != "Please implement user authentication" {
 		t.Errorf("Instruction = %q, want %q", envelope.Instruction, "Please implement user authentication")
 	}
+	if envelope.Evidence == nil {
+		t.Fatal("expected evidence to be populated")
+	}
+	if envelope.Evidence.ActionType != "implement" {
+		t.Fatalf("ActionType = %q, want implement", envelope.Evidence.ActionType)
+	}
 }
 
 func TestNormalizeFamilyHintFromContext(t *testing.T) {
@@ -79,6 +85,12 @@ func TestNormalizeUserFilesFromContext(t *testing.T) {
 	if envelope.UserFiles[0] != "src/main.go" {
 		t.Errorf("UserFiles[0] = %q, want %q", envelope.UserFiles[0], "src/main.go")
 	}
+	if envelope.Evidence == nil {
+		t.Fatal("expected evidence to be populated")
+	}
+	if envelope.Evidence.Target == "" {
+		t.Fatal("expected evidence target to be populated")
+	}
 }
 
 func TestNormalizeSessionPins(t *testing.T) {
@@ -100,6 +112,9 @@ func TestNormalizeSessionPins(t *testing.T) {
 	}
 	if envelope.SessionPins[0] != "important_file.go" {
 		t.Errorf("SessionPins[0] = %q, want %q", envelope.SessionPins[0], "important_file.go")
+	}
+	if envelope.Evidence == nil {
+		t.Fatal("expected evidence to be populated")
 	}
 }
 
@@ -145,29 +160,6 @@ func TestNormalizeResumedFamilyFromEnvelope(t *testing.T) {
 
 	if envelope.ResumedFamily != "debug" {
 		t.Errorf("ResumedFamily = %q, want %q", envelope.ResumedFamily, "debug")
-	}
-}
-
-func TestNormalizeCapabilitySequenceFromEnvelope(t *testing.T) {
-	task := &core.Task{
-		ID:          "task-7",
-		Instruction: "Continue the workflow",
-	}
-
-	resume := &ResumeState{
-		CapabilitySequence: []string{"analyze", "implement", "test"},
-	}
-
-	envelope, err := NormalizeTaskEnvelope(task, resume)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if len(envelope.CapabilitySequence) != 3 {
-		t.Errorf("CapabilitySequence length = %d, want 3", len(envelope.CapabilitySequence))
-	}
-	if envelope.CapabilitySequence[0] != "analyze" {
-		t.Errorf("CapabilitySequence[0] = %q, want %q", envelope.CapabilitySequence[0], "analyze")
 	}
 }
 
@@ -217,6 +209,9 @@ func TestNormalizeWhitespaceTrimming(t *testing.T) {
 	if envelope.Instruction != "Please implement user authentication" {
 		t.Errorf("Whitespace not normalized: got %q", envelope.Instruction)
 	}
+	if envelope.Evidence == nil {
+		t.Fatal("expected evidence to be populated")
+	}
 }
 
 func TestNormalizeNegativeConstraintSeeds(t *testing.T) {
@@ -244,5 +239,33 @@ func TestNormalizeNegativeConstraintSeeds(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("Expected to find 'don't change the API' or 'don't break existing tests' in seeds: %v", envelope.NegativeConstraintSeeds)
+	}
+}
+
+func TestBuildIntentEvidenceRequiresClarificationWhenTargetMissing(t *testing.T) {
+	envelope := &TaskEnvelope{
+		Instruction:  "help me with this",
+		CleanMessage: "help me with this",
+	}
+
+	evidence := BuildIntentEvidence(envelope)
+	if evidence == nil {
+		t.Fatal("expected evidence record")
+	}
+	if !evidence.RequiresClarification {
+		t.Fatal("expected clarification to be required")
+	}
+	if len(evidence.MissingFields) == 0 {
+		t.Fatal("expected missing fields")
+	}
+	foundTarget := false
+	for _, field := range evidence.MissingFields {
+		if field == "target" {
+			foundTarget = true
+			break
+		}
+	}
+	if !foundTarget {
+		t.Fatalf("expected target to be missing, got %#v", evidence.MissingFields)
 	}
 }

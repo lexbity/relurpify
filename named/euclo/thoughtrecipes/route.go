@@ -79,8 +79,24 @@ func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *i
 }
 
 func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan) ([]ExecutionStep, error) {
+	type executionFrame struct {
+		items []ExecutionItem
+		index int
+	}
+
 	steps := make([]ExecutionStep, 0)
-	for _, item := range items {
+	stack := []executionFrame{{items: items}}
+
+	for len(stack) > 0 {
+		frame := &stack[len(stack)-1]
+		if frame.index >= len(frame.items) {
+			stack = stack[:len(stack)-1]
+			continue
+		}
+
+		item := frame.items[frame.index]
+		frame.index++
+
 		switch node := item.(type) {
 		case *RunDecl:
 			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex)
@@ -101,19 +117,14 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 			}
 			plan.Routes = append(plan.Routes, *group)
 		case *PipelineDecl:
-			for _, stage := range node.Stages {
-				nested, err := lowerRouteExecutionItems(stage.Body, agents, runIndex, plan)
-				if err != nil {
-					return nil, err
-				}
-				steps = append(steps, nested...)
+			for i := len(node.Stages) - 1; i >= 0; i-- {
+				stage := node.Stages[i]
+				stack = append(stack, executionFrame{items: stage.Body})
 			}
 		case *DirectiveBlock:
-			nested, err := lowerRouteExecutionItems(node.Body, agents, runIndex, plan)
-			if err != nil {
-				return nil, err
+			if len(node.Body) > 0 {
+				stack = append(stack, executionFrame{items: node.Body})
 			}
-			steps = append(steps, nested...)
 		case *AskDecl:
 			step, err := lowerAskDecl(node, runIndex)
 			if err != nil {

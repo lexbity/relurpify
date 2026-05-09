@@ -55,3 +55,18 @@ func TestResumeFrame_FrameKeyFormat(t *testing.T) {
 		t.Fatal("expected frame stored under numeric key")
 	}
 }
+
+func TestResumeClarificationFrame(t *testing.T) {
+	env := contextdata.NewEnvelope("task-1", "session-1")
+	frame := NewClarificationFrame("task-1", "session-1", "Question?", []string{"yes", "no"}, nil)
+	if err := EmitFrame(context.TODO(), frame, env, nil); err != nil {
+		t.Fatalf("EmitFrame failed: %v", err)
+	}
+	got, ok := ResumeClarificationFrame(env)
+	if !ok {
+		t.Fatal("expected clarification frame to resume")
+	}
+	if got != frame {
+		t.Fatal("expected clarification frame instance")
+	}
+}

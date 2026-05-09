@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"fmt"
+	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
@@ -40,4 +41,36 @@ func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
 	}
 
 	return nil, false
+}
+
+// ResumeClarificationFrame returns the most recent pending clarification frame.
+func ResumeClarificationFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
+	frame, ok := ResumeFrame(env)
+	if !ok || frame == nil {
+		return nil, false
+	}
+	if frame.Type != FrameIntentClarification {
+		return nil, false
+	}
+	return frame, true
+}
+
+// ClarificationResumeMetadataFromFrame extracts resume metadata from a clarification frame.
+func ClarificationResumeMetadataFromFrame(frame *InteractionFrame) *ClarificationResumeMetadata {
+	if frame == nil {
+		return nil
+	}
+	resume := CloneClarificationResumeMetadata(frame.Resume)
+	if resume == nil {
+		resume = &ClarificationResumeMetadata{}
+	}
+	if strings.TrimSpace(resume.ResumeNodeID) == "" && strings.TrimSpace(frame.ID) != "" {
+		resume.ResumeNodeID = strings.TrimSpace(frame.ID)
+	}
+	return resume
+}
+
+// ClarificationResponseValue reads the structured answer captured on a clarification frame.
+func ClarificationResponseValue(frame *InteractionFrame) (string, bool) {
+	return ResponseValue(frame)
 }

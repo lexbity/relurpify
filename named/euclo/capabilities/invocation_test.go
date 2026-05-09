@@ -137,16 +137,16 @@ func TestInvokeCapability_NilRegistry(t *testing.T) {
 
 	result, err := InvokeCapability(context.Background(), "test_cap", task, nil, nil)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	if result == nil {
 		t.Fatal("expected result, got nil")
 	}
-	if result.Success != true {
-		t.Fatalf("expected success=true, got %v", result.Success)
+	if err == nil {
+		t.Fatal("expected error")
 	}
-	if result.Data["stub"] != true {
-		t.Fatalf("expected stub=true, got %v", result.Data["stub"])
+	if result.Success != false {
+		t.Fatalf("expected success=false, got %v", result.Success)
+	}
+	if result.Data["error"] != "capability registry unavailable" {
+		t.Fatalf("expected registry error, got %v", result.Data["error"])
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Local minimal LLM definitions to avoid external dependency
+// Local minimal LLM definitions to avoid external dependency.
 
 // LanguageModel abstracts an LLM capable of completing prompts.
 type LanguageModel interface {
@@ -26,7 +26,7 @@ type CompletionResponse struct {
 	Text string
 }
 
-// LLMCapabilityClassifier implements LLM‑backed tier‑2 capability selection using a language model.
+// LLMCapabilityClassifier asks a model to select a single capability route target.
 type LLMCapabilityClassifier struct {
 	model       LanguageModel
 	maxTokens   int
@@ -37,20 +37,20 @@ type LLMCapabilityClassifier struct {
 func NewLLMCapabilityClassifier(model LanguageModel) *LLMCapabilityClassifier {
 	return &LLMCapabilityClassifier{
 		model:       model,
-		maxTokens:   512,
-		temperature: 0.1, // low temperature for deterministic output
+		maxTokens:   256,
+		temperature: 0.1,
 	}
 }
 
-// Classify performs LLM‑based capability selection.
-func (c *LLMCapabilityClassifier) Classify(ctx context.Context, instruction string, familyID string, streamedContext string, negativeConstraints []string) ([]string, string, error) {
+// Classify performs LLM-based capability selection and returns one capability ID.
+func (c *LLMCapabilityClassifier) Classify(ctx context.Context, instruction string, familyID string, streamedContext string, negativeConstraints []string) (string, string, error) {
 	if c.model == nil {
-		return nil, "", fmt.Errorf("no language model provided for capability classification")
+		return "", "", fmt.Errorf("no language model provided for capability classification")
 	}
 	prompt := c.buildPrompt(instruction, familyID, streamedContext, negativeConstraints)
 	resp, err := c.model.Complete(ctx, CompletionRequest{Prompt: prompt, MaxTokens: c.maxTokens, Temperature: c.temperature})
 	if err != nil {
-		return nil, "", fmt.Errorf("LLM completion failed: %w", err)
+		return "", "", fmt.Errorf("LLM completion failed: %w", err)
 	}
 	return c.parseResponse(resp.Text)
 }
@@ -58,7 +58,7 @@ func (c *LLMCapabilityClassifier) Classify(ctx context.Context, instruction stri
 // buildPrompt constructs the prompt sent to the LLM.
 func (c *LLMCapabilityClassifier) buildPrompt(instruction, familyID, streamedContext string, negativeConstraints []string) string {
 	var b strings.Builder
-	b.WriteString("You are a task classifier for a coding assistant. Select the most appropriate capabilities from the provided list.\n\n")
+	b.WriteString("You are a task classifier for a coding assistant. Select one capability ID.\n\n")
 	b.WriteString("Task: ")
 	b.WriteString(instruction)
 	b.WriteString("\n\n")
@@ -82,33 +82,28 @@ func (c *LLMCapabilityClassifier) buildPrompt(instruction, familyID, streamedCon
 		b.WriteString("\n")
 	}
 	b.WriteString("Respond with ONLY a JSON object in this format:\n")
-	b.WriteString(`{"capabilities": ["cap_id_1", "cap_id_2"], "operator": "AND"}`)
-	b.WriteString("\n\nUse operator \"AND\" if all capabilities must execute in sequence, otherwise use \"OR\".\n")
+	b.WriteString(`{"capability_id": "cap_id"}`)
+	b.WriteString("\n")
 	return b.String()
 }
 
 // parseResponse extracts the JSON payload from the LLM response.
-func (c *LLMCapabilityClassifier) parseResponse(text string) ([]string, string, error) {
+func (c *LLMCapabilityClassifier) parseResponse(text string) (string, string, error) {
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start == -1 || end == -1 || end <= start {
-		return nil, "", fmt.Errorf("no JSON object found in LLM response")
+		return "", "", fmt.Errorf("no JSON object found in LLM response")
 	}
 	jsonStr := text[start : end+1]
 	var payload struct {
-		Capabilities []string `json:"capabilities"`
-		Operator     string   `json:"operator"`
+		CapabilityID string `json:"capability_id"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &payload); err != nil {
-		return nil, "", fmt.Errorf("failed to parse JSON response: %w", err)
+		return "", "", fmt.Errorf("failed to parse JSON response: %w", err)
 	}
-	// Normalize operator
-	op := strings.ToUpper(strings.TrimSpace(payload.Operator))
-	if op != "AND" {
-		op = "OR"
+	capabilityID := strings.TrimSpace(payload.CapabilityID)
+	if capabilityID == "" {
+		return "", "", fmt.Errorf("no capability id returned by LLM")
 	}
-	if len(payload.Capabilities) == 0 {
-		return nil, "", fmt.Errorf("no capabilities returned by LLM")
-	}
-	return payload.Capabilities, op, nil
+	return capabilityID, "llm", nil
 }

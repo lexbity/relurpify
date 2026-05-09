@@ -1,6 +1,9 @@
 package thoughtrecipe
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTypeSystemValidatesTypedCapturesAndStructuralTypes(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe review
@@ -132,4 +135,44 @@ func TestTypeSystemCompatibility(t *testing.T) {
 			t.Fatalf("%s: compatibility = %v (%s), want %v", tc.name, got.OK, got.Reason, tc.ok)
 		}
 	}
+}
+
+func TestTypeSystemHandlesDeepNestingIteratively(t *testing.T) {
+	ts := NewTypeSystem(&ThoughtRecipeDocument{})
+
+	deepType := nestedListType(2000)
+	if err := ts.validateTypeExpr(deepType, false); err != nil {
+		t.Fatalf("validateTypeExpr failed: %v", err)
+	}
+	sig, err := ts.typeSignature(deepType, false)
+	if err != nil {
+		t.Fatalf("typeSignature failed: %v", err)
+	}
+	if got := strings.Count(sig, "list<"); got != 2000 {
+		t.Fatalf("list nesting count = %d, want 2000", got)
+	}
+	if got := strings.Count(sig, ">"); got != 2000 {
+		t.Fatalf("closing bracket count = %d, want 2000", got)
+	}
+
+	deepValue := nestedListValue(2000)
+	if err := ts.validateValueExpr(deepValue); err != nil {
+		t.Fatalf("validateValueExpr failed: %v", err)
+	}
+}
+
+func nestedListType(depth int) TypeExpr {
+	var expr TypeExpr = &NamedTypeExpr{Name: PathExpr{Raw: "Text"}}
+	for i := 0; i < depth; i++ {
+		expr = &ListTypeExpr{Element: expr}
+	}
+	return expr
+}
+
+func nestedListValue(depth int) ValueExpr {
+	var expr ValueExpr = &StringLiteral{Raw: `"leaf"`, Value: "leaf"}
+	for i := 0; i < depth; i++ {
+		expr = &ListLiteral{Entries: []ValueExpr{expr}}
+	}
+	return expr
 }

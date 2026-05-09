@@ -174,6 +174,9 @@ func TestThoughtRecipeLoaderCapturesIntentRouteKind(t *testing.T) {
 "Clarify."
 
 trigger as intent:
+  family ["clarification"]
+  keyword ["clarify", "route"]
+  handoff ["intent_clarify"]
   may read workspace
 `), 0o644); err != nil {
 		t.Fatalf("write intent thoughtrecipe: %v", err)
@@ -189,6 +192,15 @@ trigger as intent:
 	}
 	if thoughtrecipe.RouteKind != TriggerRouteKindIntent {
 		t.Fatalf("thoughtrecipe route kind = %q, want %q", thoughtrecipe.RouteKind, TriggerRouteKindIntent)
+	}
+	if got := thoughtrecipe.Metadata.Families; len(got) != 1 || got[0] != "clarification" {
+		t.Fatalf("thoughtrecipe families = %#v, want [clarification]", got)
+	}
+	if got := thoughtrecipe.Metadata.Keywords; len(got) != 2 || got[0] != "clarify" || got[1] != "route" {
+		t.Fatalf("thoughtrecipe keywords = %#v, want [clarify route]", got)
+	}
+	if got := thoughtrecipe.Metadata.HandoffTargets; len(got) != 1 || got[0] != "intent_clarify" {
+		t.Fatalf("thoughtrecipe handoff targets = %#v, want [intent_clarify]", got)
 	}
 	if plan, ok := result.Registry.GetPlan("intent_route"); !ok || plan == nil {
 		t.Fatal("expected compiled plan for intent thoughtrecipe")

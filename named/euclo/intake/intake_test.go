@@ -249,12 +249,6 @@ func TestHintParserEmptyMessage(t *testing.T) {
 	}
 }
 
-type MockCapabilityClassifier struct{}
-
-func (m *MockCapabilityClassifier) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
-	return []string{"mock_cap"}, "OR", nil
-}
-
 type MockStreamTrigger struct{}
 
 func (m *MockStreamTrigger) Request(ctx context.Context, req *contextstream.Request) (*contextstream.Result, error) {
@@ -272,8 +266,7 @@ func (m *MockStreamTrigger) RequestBackground(ctx context.Context, req contextst
 func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	registry := families.NewRegistry()
 	trigger := &MockStreamTrigger{}
-	classifier := &MockCapabilityClassifier{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
 	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze code"}, contextdata.MemoryClassTask)
 	result, err := node.Execute(context.Background(), env)
@@ -283,14 +276,21 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	if result == nil {
 		t.Error("Result is nil")
 	}
-	// Add more assertions using env and result
+	if _, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
+		t.Fatal("did not expect capability sequence to be written by intake")
+	}
+	if got, ok := env.GetWorkingValue("euclo.intent_classification"); !ok || got == nil {
+		t.Fatal("expected intent classification to be written")
+	}
+	if got := result.Data["stream_result"]; got == nil {
+		t.Fatal("expected structured stream result in result data")
+	}
 }
 
 func TestIntakePipelineNodeExecute_EdgeCases(t *testing.T) {
 	registry := families.NewRegistry()
-	classifier := &MockCapabilityClassifier{}
 	trigger := &MockStreamTrigger{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
 	_, err := node.Execute(context.Background(), env) // No task input
 	if err == nil {

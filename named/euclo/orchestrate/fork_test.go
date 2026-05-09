@@ -12,7 +12,10 @@ func TestForkNodeThoughtRecipeBranch(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.dispatch.route_kind", "thoughtrecipe", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:       RouteKindThoughtRecipe,
+		ThoughtRecipeID: "thoughtrecipe.intent.review",
+	}, contextdata.MemoryClassTask)
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {
@@ -40,7 +43,10 @@ func TestForkNodeCapabilityBranch(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.dispatch.route_kind", "capability", contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:    RouteKindCapability,
+		CapabilityID: "euclo:cap.review",
+	}, contextdata.MemoryClassTask)
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {
@@ -68,7 +74,10 @@ func TestForkNodeIntentBranchUsesThoughtRecipeExecution(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.dispatch.route_kind", RouteKindIntent, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:       RouteKindIntent,
+		ThoughtRecipeID: clarificationThoughtRecipeID,
+	}, contextdata.MemoryClassTask)
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {

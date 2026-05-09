@@ -8,13 +8,23 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // Dispatch resolves a route request and records route telemetry.
 func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(req, caps, thoughtrecipes)
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
+	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
+	if env != nil {
+		applyRouteResolutionToEnvelope(env, resolution)
+		if ok {
+			applyRouteSelectionToEnvelope(env, routeSelectionFromCandidate(selected), nil)
+		} else {
+			applyRouteSelectionToEnvelope(env, nil, nil)
+		}
+	}
 	if !ok {
 		if !req.TelemetryOff {
 			for _, candidate := range report.Candidates {
@@ -23,7 +33,7 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 				}
 			}
 		}
-		return nil, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: "no eligible route candidates"}
+		return nil, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: unresolvedRouteReason(report, selected, resolution)}
 	}
 
 	if fallbackTaken {
@@ -55,7 +65,16 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 }
 
 func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(req, caps, thoughtrecipes)
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
+	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
+	if env != nil {
+		applyRouteResolutionToEnvelope(env, resolution)
+		if ok {
+			applyRouteSelectionToEnvelope(env, routeSelectionFromCandidate(selected), nil)
+		} else {
+			applyRouteSelectionToEnvelope(env, nil, nil)
+		}
+	}
 	report.SkillFilterName = strings.TrimSpace(req.SkillFilter)
 	if ok {
 		report.SelectedRoute = selected.RouteID
@@ -71,7 +90,7 @@ func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, ca
 		}
 	} else {
 		report.ExecutionClass = "blocked"
-		report.PreflightErrors = append(report.PreflightErrors, "no eligible route candidates")
+		report.PreflightErrors = append(report.PreflightErrors, unresolvedRouteReason(report, selected, resolution))
 	}
 
 	if !req.TelemetryOff {
@@ -84,7 +103,7 @@ func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, ca
 	}
 
 	if !ok {
-		return report, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: "no eligible route candidates"}
+		return report, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: unresolvedRouteReason(report, selected, resolution)}
 	}
 	if env != nil {
 		if result := routeResultFromSelection(report, selected, fallbackTaken, true, req.TelemetryOff); result != nil {
@@ -323,38 +342,471 @@ func candidateByIDKind(candidates []CandidateRouteInfo, kind, id string) (Candid
 	return CandidateRouteInfo{}, false
 }
 
-func resolveRoute(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
+func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
-	report.Candidates = rankCandidates(req, caps, thoughtrecipes)
-	if len(report.Candidates) == 0 {
-		synth := syntheticCandidate(req)
-		report.Candidates = []CandidateRouteInfo{synth}
-		return report, synth, false, true
-	}
-	selected, fallbackTaken, ok := selectCandidate(req, report.Candidates)
-	return report, selected, fallbackTaken, ok
+	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes)
+	selected, ok := selectDeterministicCandidate(req, report.Candidates)
+	return report, selected, false, ok
 }
 
-func syntheticCandidate(req RouteRequest) CandidateRouteInfo {
-	kind := routeKindFromRequest(req)
-	id := strings.TrimSpace(req.CapabilityID)
-	if IsThoughtRecipeRouteKind(kind) || IsIntentRouteKind(kind) {
-		id = strings.TrimSpace(req.ThoughtRecipeID)
+func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+	clarificationCandidate := clarificationRouteCandidate(env, req)
+	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
+		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
+			return []CandidateRouteInfo{*explicit}
+		}
+		return []CandidateRouteInfo{*explicit}
+	}
+
+	candidates := make([]CandidateRouteInfo, 0, 8)
+	if clarificationCandidate != nil {
+		candidates = append(candidates, *clarificationCandidate)
+	}
+	candidates = append(candidates, metadataThoughtRecipeCandidates(env, req, thoughtrecipes)...)
+	candidates = append(candidates, metadataCapabilityCandidates(env, req, caps)...)
+	return dedupeAndSortRouteCandidates(candidates)
+}
+
+func explicitRouteCandidate(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
+	switch {
+	case strings.TrimSpace(req.ThoughtRecipeID) != "":
+		id := strings.TrimSpace(req.ThoughtRecipeID)
+		if id == clarificationThoughtRecipeID {
+			return &CandidateRouteInfo{
+				RouteID:      RouteID(id),
+				RouteKind:    RouteKindIntent,
+				Availability: RouteAvailable,
+				RankScore:    1000,
+				RankReasons:  []string{"explicit clarification route"},
+			}
+		}
+		if thoughtrecipes != nil {
+			if recipe, ok := thoughtrecipes.Get(id); ok && recipe != nil {
+				return &CandidateRouteInfo{
+					RouteID:      RouteID(recipe.ID),
+					RouteKind:    RouteKindForThoughtRecipeID(recipe.ID),
+					Availability: RouteAvailable,
+					RankScore:    1000,
+					RankReasons:  []string{"explicit thoughtrecipe"},
+				}
+			}
+		}
+		return &CandidateRouteInfo{
+			RouteID:      RouteID(id),
+			RouteKind:    RouteKindForThoughtRecipeID(id),
+			Availability: RouteUnavailableUnsupported,
+			RankScore:    1000,
+			RankReasons:  []string{"explicit thoughtrecipe not found"},
+			SuppressReason: "explicit thoughtrecipe not found",
+		}
+	case strings.TrimSpace(req.CapabilityID) != "":
+		id := strings.TrimSpace(req.CapabilityID)
+		if caps != nil {
+			if snapshot, ok := capabilitySnapshotByID(caps, id); ok {
+				availability, reason := routeAvailabilityFromSnapshot(snapshot)
+				return &CandidateRouteInfo{
+					RouteID:        RouteID(snapshot.Descriptor.ID),
+					RouteKind:      RouteKindCapability,
+					Availability:   availability,
+					RankScore:      1000,
+					RankReasons:    []string{"explicit capability"},
+					Suppressed:     availability == RouteUnavailablePolicyDenied,
+					SuppressReason: reason,
+				}
+			}
+		}
+		return &CandidateRouteInfo{
+			RouteID:      RouteID(id),
+			RouteKind:    RouteKindCapability,
+			Availability: RouteUnavailableUnsupported,
+			RankScore:    1000,
+			RankReasons:  []string{"explicit capability not found"},
+			SuppressReason: "explicit capability not found",
+		}
+	default:
+		return nil
+	}
+}
+
+func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest) *CandidateRouteInfo {
+	needsClarify := needsClarificationRoute(env)
+	hasDirectGrounding := strings.TrimSpace(req.Instruction) != "" || strings.TrimSpace(req.FamilyID) != "" || strings.TrimSpace(req.SkillFilter) != ""
+	if !needsClarify && !hasDirectGrounding && strings.TrimSpace(req.ThoughtRecipeID) != clarificationThoughtRecipeID {
+		if !hasIntentGrounding(env) {
+			needsClarify = true
+		}
+	}
+	if !needsClarify && strings.TrimSpace(req.ThoughtRecipeID) != clarificationThoughtRecipeID {
+		return nil
+	}
+	return &CandidateRouteInfo{
+		RouteID:      RouteID(clarificationThoughtRecipeID),
+		RouteKind:    RouteKindIntent,
+		Availability: RouteAvailable,
+		RankScore:    900,
+		RankReasons:  []string{"clarification route"},
+	}
+}
+
+func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+	if thoughtrecipes == nil {
+		return nil
+	}
+	tokens := routeSearchTokens(env, req)
+	if len(tokens) == 0 {
+		return nil
+	}
+	candidates := make([]CandidateRouteInfo, 0)
+	for _, entry := range thoughtrecipes.Entries() {
+		routeID := routeIDForThoughtRecipeEntry(entry)
+		if routeID == "" {
+			continue
+		}
+		score, reasons := scoreThoughtRecipeCandidate(entry, tokens)
+		if score <= 0 {
+			continue
+		}
+		candidates = append(candidates, CandidateRouteInfo{
+			RouteID:      RouteID(routeID),
+			RouteKind:    RouteKindForThoughtRecipeID(routeID),
+			Availability: RouteAvailable,
+			RankScore:    score,
+			RankReasons:  reasons,
+		})
+	}
+	return candidates
+}
+
+func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry) []CandidateRouteInfo {
+	if caps == nil {
+		return nil
+	}
+	tokens := routeSearchTokens(env, req)
+	snapshots := caps.AllCapabilitySnapshots()
+	if len(tokens) == 0 {
+		if strings.TrimSpace(req.SkillFilter) == "" {
+			return nil
+		}
+		candidates := make([]CandidateRouteInfo, 0, len(snapshots))
+		for _, snapshot := range snapshots {
+			availability, reason := routeAvailabilityFromSnapshot(snapshot)
+			candidates = append(candidates, CandidateRouteInfo{
+				RouteID:        RouteID(snapshot.Descriptor.ID),
+				RouteKind:      RouteKindCapability,
+				Availability:   availability,
+				RankScore:      capabilityPriorityScore(snapshot.Descriptor) + availabilityScore(availability),
+				Suppressed:     availability == RouteUnavailablePolicyDenied,
+				SuppressReason: reason,
+			})
+		}
+		return dedupeAndSortRouteCandidates(candidates)
+	}
+	candidates := make([]CandidateRouteInfo, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		score, reasons := scoreCapabilityCandidate(snapshot.Descriptor, tokens)
+		if score <= 0 {
+			continue
+		}
+		availability, reason := routeAvailabilityFromSnapshot(snapshot)
+		candidates = append(candidates, CandidateRouteInfo{
+			RouteID:        RouteID(snapshot.Descriptor.ID),
+			RouteKind:      RouteKindCapability,
+			Availability:   availability,
+			RankScore:      score,
+			RankReasons:    reasons,
+			Suppressed:     availability == RouteUnavailablePolicyDenied,
+			SuppressReason: reason,
+		})
+	}
+	return candidates
+}
+
+func selectDeterministicCandidate(req RouteRequest, candidates []CandidateRouteInfo) (CandidateRouteInfo, bool) {
+	if len(candidates) == 0 {
+		return CandidateRouteInfo{}, false
+	}
+	if strings.TrimSpace(req.ThoughtRecipeID) != "" || strings.TrimSpace(req.CapabilityID) != "" {
+		for _, candidate := range candidates {
+			if candidateMatchesRequest(candidate, req) {
+				return candidate, candidate.Availability == RouteAvailable
+			}
+		}
+		return CandidateRouteInfo{}, false
+	}
+	bestScore := -1
+	var best CandidateRouteInfo
+	for _, candidate := range candidates {
+		if candidate.Availability != RouteAvailable {
+			continue
+		}
+		if candidate.RankScore > bestScore {
+			bestScore = candidate.RankScore
+			best = candidate
+			continue
+		}
+		if candidate.RankScore == bestScore {
+			if best.RouteID == "" || candidate.RouteID < best.RouteID {
+				best = candidate
+			}
+		}
+	}
+	if bestScore < 0 {
+		return CandidateRouteInfo{}, false
+	}
+	return best, true
+}
+
+func candidateMatchesRequest(candidate CandidateRouteInfo, req RouteRequest) bool {
+	if candidate.RouteKind == RouteKindCapability && strings.TrimSpace(req.CapabilityID) != "" {
+		return string(candidate.RouteID) == strings.TrimSpace(req.CapabilityID)
+	}
+	if strings.TrimSpace(req.ThoughtRecipeID) == "" {
+		return false
+	}
+	return string(candidate.RouteID) == strings.TrimSpace(req.ThoughtRecipeID) || string(candidate.RouteID) == strings.TrimSpace(clarificationThoughtRecipeID)
+}
+
+func dedupeAndSortRouteCandidates(candidates []CandidateRouteInfo) []CandidateRouteInfo {
+	if len(candidates) == 0 {
+		return nil
+	}
+	byID := make(map[string]CandidateRouteInfo, len(candidates))
+	for _, candidate := range candidates {
+		id := candidateRouteID(candidate)
 		if id == "" {
-			id = "euclo.thoughtrecipe.default"
+			continue
+		}
+		if existing, ok := byID[id]; ok {
+			if candidate.RankScore > existing.RankScore {
+				byID[id] = candidate
+			}
+			continue
+		}
+		byID[id] = candidate
+	}
+	out := make([]CandidateRouteInfo, 0, len(byID))
+	for _, candidate := range byID {
+		out = append(out, candidate)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].RankScore == out[j].RankScore {
+			if out[i].RouteKind == out[j].RouteKind {
+				return out[i].RouteID < out[j].RouteID
+			}
+			return out[i].RouteKind < out[j].RouteKind
+		}
+		return out[i].RankScore > out[j].RankScore
+	})
+	return out
+}
+
+func routeSearchTokens(env *contextdata.Envelope, req RouteRequest) []string {
+	tokens := make([]string, 0, 16)
+	add := func(value string) {
+		trimmed := strings.ToLower(strings.TrimSpace(value))
+		if trimmed != "" {
+			tokens = append(tokens, trimmed)
+		}
+		for _, token := range splitRouteTokens(value) {
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+	}
+	add(req.FamilyID)
+	add(req.Instruction)
+	if v, ok := envRouteEvidence(env); ok && v != nil {
+		add(v.ActionType)
+		add(v.Target)
+		add(v.Scope)
+		add(v.RiskLevel)
+		add(v.ExpectedVerb)
+		add(v.SessionContinuation)
+		add(v.FollowUp)
+		for _, item := range v.ContextHints {
+			add(item)
+		}
+		for _, item := range v.MissingFields {
+			add(item)
+		}
+		for _, item := range v.ReasonCodes {
+			add(item)
+		}
+	}
+	if v, ok := envRouteInterpretation(env); ok && v != nil {
+		add(v.ActionType)
+		add(v.Target)
+		add(v.Scope)
+		add(v.RiskLevel)
+		add(v.Rationale)
+		add(v.ConfidenceNote)
+		for _, item := range v.MissingInfo {
+			add(item)
+		}
+		for _, item := range v.ReasonCodes {
+			add(item)
+		}
+	}
+	if state := routeClarificationState(env); state != nil {
+		add(state.ActiveThoughtRecipeID)
+		if state.Ambiguity != nil {
+			add(state.Ambiguity.Rationale)
+			for _, family := range state.Ambiguity.CandidateFamilies {
+				add(family)
+			}
+		}
+		for _, question := range state.PendingQuestions {
+			add(question.PromptFamily)
+			add(question.Text)
+		}
+	}
+	return uniqueStrings(tokens)
+}
+
+func splitRouteTokens(value string) []string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return nil
+	}
+	tokens := strings.FieldsFunc(value, func(r rune) bool {
+		switch {
+		case r == '_', r == '-', r == ':', r == '.', r == '/', r == '\\':
+			return true
+		case 'a' <= r && r <= 'z':
+			return false
+		case '0' <= r && r <= '9':
+			return false
+		default:
+			return true
+		}
+	})
+	out := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		if trimmed := strings.TrimSpace(token); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(strings.ToLower(value))
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+func envRouteEvidence(env *contextdata.Envelope) (*intentcontext.IntentEvidence, bool) {
+	if env == nil {
+		return nil, false
+	}
+	v, ok := env.GetWorkingValue(intentcontext.IntentEvidenceKey)
+	if !ok {
+		return nil, false
+	}
+	evidence, ok := v.(*intentcontext.IntentEvidence)
+	return evidence, ok
+}
+
+func envRouteInterpretation(env *contextdata.Envelope) (*intentcontext.IntentInterpretation, bool) {
+	if env == nil {
+		return nil, false
+	}
+	v, ok := env.GetWorkingValue(intentcontext.IntentInterpretationKey)
+	if !ok {
+		return nil, false
+	}
+	interpretation, ok := v.(*intentcontext.IntentInterpretation)
+	return interpretation, ok
+}
+
+func routeClarificationState(env *contextdata.Envelope) *intentcontext.ClarificationState {
+	if env == nil {
+		return nil
+	}
+	v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey)
+	if !ok {
+		return nil
+	}
+	state, _ := v.(*intentcontext.ClarificationState)
+	return state
+}
+
+func routeSelectionFromCandidate(candidate CandidateRouteInfo) *RouteSelection {
+	if candidate.RouteID == "" {
+		return nil
+	}
+	selection := &RouteSelection{RouteKind: candidate.RouteKind}
+	if IsCapabilityRouteKind(candidate.RouteKind) {
+		selection.CapabilityID = string(candidate.RouteID)
+	} else {
+		selection.ThoughtRecipeID = string(candidate.RouteID)
+	}
+	return selection
+}
+
+func buildRouteResolution(env *contextdata.Envelope, req RouteRequest, report *DryRunReport, selected CandidateRouteInfo, ok bool, fallbackTaken bool) *RouteResolution {
+	resolution := &RouteResolution{
+		RouteKind:       selected.RouteKind,
+		ThoughtRecipeID:  "",
+		CapabilityID:     "",
+		ResolutionSource: "registry",
+		FallbackTaken:    fallbackTaken,
+		ReasonCodes:      nil,
+	}
+	if state := routeClarificationState(env); state != nil {
+		resolution.ClarificationStateVersion = state.StateVersion
+	}
+	if ok {
+		if IsCapabilityRouteKind(selected.RouteKind) {
+			resolution.CapabilityID = string(selected.RouteID)
+		} else {
+			resolution.ThoughtRecipeID = string(selected.RouteID)
+		}
+		if string(selected.RouteID) == clarificationThoughtRecipeID {
+			resolution.ResolutionSource = "clarification"
+		}
+		if len(selected.RankReasons) > 0 {
+			resolution.ReasonCodes = append(resolution.ReasonCodes, selected.RankReasons...)
 		}
 	} else {
-		if id == "" {
-			id = "euclo:cap.ast_query"
+		resolution.ResolutionSource = "unresolved"
+		if strings.TrimSpace(req.ThoughtRecipeID) != "" {
+			resolution.RouteKind = RouteKindForThoughtRecipeID(req.ThoughtRecipeID)
+			resolution.ThoughtRecipeID = strings.TrimSpace(req.ThoughtRecipeID)
+		} else if strings.TrimSpace(req.CapabilityID) != "" {
+			resolution.RouteKind = RouteKindCapability
+			resolution.CapabilityID = strings.TrimSpace(req.CapabilityID)
 		}
-		kind = RouteKindCapability
+		if selected.RouteID != "" {
+			if IsCapabilityRouteKind(selected.RouteKind) {
+				resolution.CapabilityID = string(selected.RouteID)
+			} else {
+				resolution.ThoughtRecipeID = string(selected.RouteID)
+			}
+		}
+		if report != nil {
+			resolution.ReasonCodes = append(resolution.ReasonCodes, report.PreflightErrors...)
+		}
+		if len(selected.RankReasons) > 0 {
+			resolution.ReasonCodes = append(resolution.ReasonCodes, selected.RankReasons...)
+		}
 	}
-	return CandidateRouteInfo{
-		RouteID:      RouteID(id),
-		RouteKind:    kind,
-		Availability: RouteAvailable,
-		RankScore:    0,
-	}
+	resolution.Normalize()
+	return resolution
 }
 
 func routeKindFromRequest(req RouteRequest) string {
@@ -364,12 +816,173 @@ func routeKindFromRequest(req RouteRequest) string {
 	if strings.TrimSpace(req.CapabilityID) != "" {
 		return RouteKindCapability
 	}
-	switch strings.ToLower(strings.TrimSpace(req.FamilyID)) {
-	case "review", "investigation", "architecture":
-		return RouteKindThoughtRecipe
-	default:
-		return RouteKindCapability
+	return ""
+}
+
+func unresolvedRouteReason(report *DryRunReport, selected CandidateRouteInfo, resolution *RouteResolution) string {
+	reasons := make([]string, 0, 4)
+	if resolution != nil {
+		reasons = append(reasons, resolution.ReasonCodes...)
 	}
+	if report != nil {
+		reasons = append(reasons, report.PreflightErrors...)
+	}
+	if selected.SuppressReason != "" {
+		reasons = append(reasons, selected.SuppressReason)
+	}
+	if len(reasons) == 0 {
+		return "no eligible route candidates"
+	}
+	return strings.Join(uniqueStrings(reasons), "; ")
+}
+
+func candidateRouteID(candidate CandidateRouteInfo) string {
+	return strings.TrimSpace(string(candidate.RouteID))
+}
+
+func routeIDForThoughtRecipeEntry(entry thoughtrecipepkg.ThoughtRecipeEntry) string {
+	if entry.ThoughtRecipe == nil {
+		return strings.TrimSpace(entry.Name)
+	}
+	if id := strings.TrimSpace(entry.ThoughtRecipe.ID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(entry.Name)
+}
+
+func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, tokens []string) (int, []string) {
+	if entry.ThoughtRecipe == nil {
+		return 0, nil
+	}
+	score := 0
+	reasons := make([]string, 0, 4)
+	if exactTokenMatch(tokens, entry.ThoughtRecipe.ID, entry.Name) {
+		score += 100
+		reasons = append(reasons, "explicit thoughtrecipe")
+	}
+	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Families...); ok {
+		score += 30
+		reasons = append(reasons, "family")
+		_ = matched
+	}
+	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Keywords...); ok {
+		score += 20
+		reasons = append(reasons, "keyword")
+		_ = matched
+	}
+	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.HandoffTargets...); ok {
+		score += 40
+		reasons = append(reasons, "handoff")
+		_ = matched
+	}
+	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Tags...); ok {
+		score += 10
+		reasons = append(reasons, "tag")
+		_ = matched
+	}
+	return score, reasons
+}
+
+func scoreCapabilityCandidate(desc core.CapabilityDescriptor, tokens []string) (int, []string) {
+	score := 0
+	reasons := make([]string, 0, 4)
+	if exactTokenMatch(tokens, desc.ID, desc.Name) {
+		score += 100
+		reasons = append(reasons, "explicit capability")
+	}
+	if _, ok := tokenMatchesAny(tokens, desc.Category); ok {
+		score += 20
+		reasons = append(reasons, "category")
+	}
+	if _, ok := tokenMatchesAny(tokens, desc.Tags...); ok {
+		score += 30
+		reasons = append(reasons, "tag")
+	}
+	for _, family := range []string{"query", "review", "repair", "test", "architecture", "migration", "debug"} {
+		if _, ok := tokenMatchesAny(tokens, family); ok && familyMatchBonus(desc, family) {
+			score += 20
+			reasons = append(reasons, "family")
+			break
+		}
+	}
+	score += capabilityPriorityScore(desc)
+	if _, ok := tokenMatchesAny(tokens, capabilityRiskTokens(desc)...); ok {
+		score += 5
+		reasons = append(reasons, "risk")
+	}
+	return score, reasons
+}
+
+func capabilityRiskTokens(desc core.CapabilityDescriptor) []string {
+	if len(desc.RiskClasses) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(desc.RiskClasses))
+	for _, risk := range desc.RiskClasses {
+		out = append(out, strings.TrimSpace(string(risk)))
+	}
+	return out
+}
+
+func capabilitySnapshotByID(caps *capability.CapabilityRegistry, id string) (capability.CapabilitySnapshot, bool) {
+	if caps == nil {
+		return capability.CapabilitySnapshot{}, false
+	}
+	for _, snapshot := range caps.AllCapabilitySnapshots() {
+		if strings.TrimSpace(snapshot.Descriptor.ID) == strings.TrimSpace(id) {
+			return snapshot, true
+		}
+	}
+	return capability.CapabilitySnapshot{}, false
+}
+
+func tokenMatchesAny(tokens []string, values ...string) (string, bool) {
+	normalized := make(map[string]struct{}, len(tokens))
+	for _, token := range tokens {
+		if trimmed := strings.TrimSpace(strings.ToLower(token)); trimmed != "" {
+			normalized[trimmed] = struct{}{}
+		}
+		for _, split := range splitRouteTokens(token) {
+			if split != "" {
+				normalized[split] = struct{}{}
+			}
+		}
+	}
+	for _, value := range values {
+		candidates := append([]string{value}, splitRouteTokens(value)...)
+		for _, candidate := range candidates {
+			trimmed := strings.TrimSpace(strings.ToLower(candidate))
+			if trimmed == "" {
+				continue
+			}
+			if _, ok := normalized[trimmed]; ok {
+				return trimmed, true
+			}
+		}
+	}
+	return "", false
+}
+
+func exactTokenMatch(tokens []string, values ...string) bool {
+	if len(tokens) == 0 || len(values) == 0 {
+		return false
+	}
+	normalized := make(map[string]struct{}, len(tokens))
+	for _, token := range tokens {
+		if trimmed := strings.TrimSpace(strings.ToLower(token)); trimmed != "" {
+			normalized[trimmed] = struct{}{}
+		}
+	}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(strings.ToLower(value))
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := normalized[trimmed]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func routeAvailabilityFromSnapshot(snapshot capability.CapabilitySnapshot) (RouteAvailability, string) {

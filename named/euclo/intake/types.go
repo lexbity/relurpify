@@ -1,6 +1,7 @@
 package intake
 
 import "codeburg.org/lexbit/relurpify/named/euclo/families"
+import "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 
 // IntentClassification holds the result of tier-1 and tier-2 classification.
 // To be fully implemented in Phase 4 and 6.
@@ -11,8 +12,6 @@ type IntentClassification struct {
 	Ambiguous            bool
 	Signals              []ClassificationSignal
 	NegativeConstraints  []string
-	CapabilitySequence   []string
-	CapabilityOperator   string
 	ClassificationSource string
 	MixedIntent          bool
 	EditPermitted        bool
@@ -46,7 +45,6 @@ type TaskEnvelope struct {
 
 	// Resume state (from envelope)
 	ResumedFamily           string   // From KeyFamilySelection
-	CapabilitySequence      []string // From KeyCapabilitySequence
 	NegativeConstraintSeeds []string // Extracted from instruction
 
 	// File and ingestion directives
@@ -56,6 +54,12 @@ type TaskEnvelope struct {
 
 	// Normalized message (instruction with hints removed)
 	CleanMessage string
+
+	// Evidence is the canonical structured interpretation boundary for this request.
+	Evidence *intentcontext.IntentEvidence
+
+	// Interpretation is the canonical prompt-facing semantic summary for this request.
+	Interpretation *intentcontext.IntentInterpretation
 
 	// Metadata
 	RawMessage string

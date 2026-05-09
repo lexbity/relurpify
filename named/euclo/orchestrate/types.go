@@ -16,6 +16,54 @@ type RouteSelection struct {
 	CapabilityID    string
 }
 
+// RouteResolution records how a route was selected.
+type RouteResolution struct {
+	RouteKind                 string
+	ThoughtRecipeID           string
+	CapabilityID              string
+	ResolutionSource          string
+	FallbackTaken             bool
+	ClarificationStateVersion uint64
+	ReasonCodes               []string
+}
+
+// Normalize trims route-resolution fields and preserves stable reason ordering.
+func (r *RouteResolution) Normalize() {
+	if r == nil {
+		return
+	}
+	r.RouteKind = strings.TrimSpace(r.RouteKind)
+	r.ThoughtRecipeID = strings.TrimSpace(r.ThoughtRecipeID)
+	r.CapabilityID = strings.TrimSpace(r.CapabilityID)
+	r.ResolutionSource = strings.TrimSpace(r.ResolutionSource)
+	if len(r.ReasonCodes) == 0 {
+		r.ReasonCodes = nil
+		return
+	}
+	out := make([]string, 0, len(r.ReasonCodes))
+	for _, reason := range r.ReasonCodes {
+		if trimmed := strings.TrimSpace(reason); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		r.ReasonCodes = nil
+		return
+	}
+	r.ReasonCodes = out
+}
+
+// RouteID returns the selected route identifier.
+func (r *RouteResolution) RouteID() string {
+	if r == nil {
+		return ""
+	}
+	if trimmed := strings.TrimSpace(r.ThoughtRecipeID); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.CapabilityID)
+}
+
 // RouteContinuation records how the selected route continues the shared runtime context.
 type RouteContinuation struct {
 	SharedContext         bool

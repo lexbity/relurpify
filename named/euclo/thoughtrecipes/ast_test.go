@@ -12,7 +12,16 @@ func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
 			Description: &StringLiteral{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 2, 1, 2, 16)}, Raw: `"Review."`, Value: "Review."},
 		},
 		Declarations: []Declaration{
-			&TriggerDecl{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 4, 1, 6, 1)}},
+			&TriggerDecl{
+				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 4, 1, 6, 1)},
+				Associations: []TriggerAssociationDecl{
+					{
+						positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 5, 3, 5, 20)},
+						Name:       Identifier{Value: "family"},
+						Values:     &ListLiteral{Raw: `["debug"]`},
+					},
+				},
+			},
 			&InputDecl{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 8, 1, 8, 24)}},
 			&AgentDecl{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 10, 1, 10, 28)}},
 		},

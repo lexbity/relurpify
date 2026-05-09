@@ -53,6 +53,25 @@ func TestBuildStreamRequestNoTemplate(t *testing.T) {
 	}
 }
 
+func TestBuildStreamRequestUsesFamilyAnchor(t *testing.T) {
+	req := BuildStreamRequest(families.FamilySelection{WinningFamily: families.FamilyDebug}, "inspect the crash", 64, contextstream.ModeBlocking)
+	if req == nil {
+		t.Fatal("expected non-nil request")
+	}
+	if req.Query.Text != "inspect the crash" {
+		t.Fatalf("unexpected query text: %q", req.Query.Text)
+	}
+	if len(req.Query.Anchors) != 1 {
+		t.Fatalf("expected one anchor, got %d", len(req.Query.Anchors))
+	}
+	if req.Query.Anchors[0].AnchorID != "family:"+families.FamilyDebug {
+		t.Fatalf("unexpected anchor id: %q", req.Query.Anchors[0].AnchorID)
+	}
+	if got, ok := req.Metadata["winning_family"]; !ok || got != families.FamilyDebug {
+		t.Fatalf("unexpected metadata: %#v", req.Metadata)
+	}
+}
+
 func TestBuildStreamRequestMode(t *testing.T) {
 	templateStr := "context for: {{.Instruction}}"
 	instruction := "review code"
@@ -152,8 +171,7 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	families.RegisterBuiltins(registry)
 
 	trigger := &UniqueMockStreamTrigger{}
-	classifier := &UniqueMockCapabilityClassifier{}
-	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBackground, trigger, classifier)
+	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze the codebase"}, contextdata.MemoryClassTask)
@@ -167,6 +185,9 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	if _, ok := env.GetWorkingValue("euclo.task_envelope"); !ok {
 		t.Error("Expected envelope to contain task envelope")
 	}
+	if evidence, ok := env.GetWorkingValue("euclo.intent_evidence"); !ok || evidence == nil {
+		t.Fatal("Expected envelope to contain intent evidence")
+	}
 
 	if _, ok := env.GetWorkingValue("euclo.intent_classification"); !ok {
 		t.Error("Expected envelope to contain intent classification")
@@ -176,9 +197,19 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 		t.Error("Expected envelope to contain family selection")
 	}
 
+	if _, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
+		t.Fatal("did not expect capability sequence in envelope")
+	}
+
 	// Check result
-	if result.Data["winning_family"] != families.FamilyInvestigation {
-		t.Errorf("Expected winning_family %q, got %q", families.FamilyInvestigation, result.Data["winning_family"])
+	if result.Data["intent_evidence"] == nil {
+		t.Fatal("Expected result data to include intent evidence")
+	}
+	if result.Data["missing_fields"] == nil {
+		t.Fatal("Expected result data to include missing fields")
+	}
+	if result.Data["stream_result"] == nil {
+		t.Fatal("Expected result data to include structured stream result")
 	}
 }
 
@@ -214,17 +245,10 @@ func (m *UniqueMockStreamTrigger) RequestBackground(ctx context.Context, req con
 	return &contextstream.Job{}, nil
 }
 
-type UniqueMockCapabilityClassifier struct{}
-
-func (m *UniqueMockCapabilityClassifier) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
-	return []string{}, "", nil
-}
-
 func TestSomeTest(t *testing.T) {
 	registry := families.NewRegistry()
 	trigger := &UniqueMockStreamTrigger{}
-	classifier := &UniqueMockCapabilityClassifier{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger, classifier)
+	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	// Test logic
 	_ = node
 }

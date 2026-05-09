@@ -132,17 +132,11 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	writeWorkspaceFile(t, dir, "checkpoint.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"implementation": {Sequence: []string{"euclo:cap.targeted_refactor"}, Operator: "OR"},
-		},
-	}
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCapabilityClassifier(classifier),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),
 	)
@@ -190,11 +184,8 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	if got := len(writer.GetAuditLog()); got == 0 {
 		t.Fatal("expected mirrored persistence write to record an audit entry")
 	}
-	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "capability" {
-		t.Fatalf("execution kind = %q, want capability", got)
-	}
-	if classifier.callCount() == 0 {
-		t.Fatal("expected tier-2 classifier to be invoked")
+	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "thoughtrecipe" {
+		t.Fatalf("execution kind = %q, want thoughtrecipe", got)
 	}
 }
 

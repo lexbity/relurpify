@@ -2,212 +2,65 @@ package orchestrate
 
 import (
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-func TestInteractionFrameAddMessage(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.AddMessage(MessageRoleUser, "Hello, world", nil)
-
-	if frame.MessageCount() != 1 {
-		t.Errorf("Expected 1 message, got %d", frame.MessageCount())
+func TestClarificationFrameToInteractionFrame(t *testing.T) {
+	resume := &interaction.ClarificationResumeMetadata{
+		ActiveThoughtRecipeID: clarificationThoughtRecipeID,
+		ResumeNodeID:          "resume-node-1",
+		RouteKind:             RouteKindIntent,
+		RouteID:               clarificationThoughtRecipeID,
+		StateVersion:          4,
+		Unresolved:            true,
+		MissingFields:         []string{"target"},
+	}
+	frame := NewClarificationFrame("task-1", "session-1", clarificationThoughtRecipeID, "What is the target?", []string{"review", "implementation"}, []string{"target"}, resume)
+	if frame == nil {
+		t.Fatal("expected clarification frame")
+	}
+	if !frame.Pending() {
+		t.Fatal("expected clarification frame to be pending")
 	}
 
-	message := frame.GetLastMessage()
-	if message == nil {
-		t.Fatal("Expected last message to be non-nil")
+	interactionFrame := frame.ToInteractionFrame()
+	if interactionFrame == nil {
+		t.Fatal("expected interaction frame")
 	}
-
-	if message.Role != MessageRoleUser {
-		t.Errorf("Expected role user, got %s", message.Role)
+	if interactionFrame.Type != interaction.FrameIntentClarification {
+		t.Fatalf("frame type = %q, want %q", interactionFrame.Type, interaction.FrameIntentClarification)
 	}
-
-	if message.Content != "Hello, world" {
-		t.Errorf("Expected content Hello, world, got %s", message.Content)
+	if interactionFrame.Question != "What is the target?" {
+		t.Fatalf("question = %q", interactionFrame.Question)
 	}
-}
-
-func TestInteractionFrameGetHistory(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.AddMessage(MessageRoleUser, "Hello", nil)
-	frame.AddMessage(MessageRoleAssistant, "Hi there", nil)
-	frame.AddMessage(MessageRoleUser, "How are you?", nil)
-
-	history := frame.GetHistory()
-	if len(history) != 3 {
-		t.Errorf("Expected 3 messages in history, got %d", len(history))
+	if len(interactionFrame.Choices) != 2 || interactionFrame.Choices[0] != "review" {
+		t.Fatalf("choices = %#v", interactionFrame.Choices)
 	}
-
-	if history[0].Content != "Hello" {
-		t.Errorf("Expected first message content Hello, got %s", history[0].Content)
+	if interactionFrame.DefaultChoice != "review" || interactionFrame.DefaultSlot != "review" {
+		t.Fatalf("default choice/slot = %q/%q", interactionFrame.DefaultChoice, interactionFrame.DefaultSlot)
 	}
-
-	if history[1].Content != "Hi there" {
-		t.Errorf("Expected second message content Hi there, got %s", history[1].Content)
+	if interactionFrame.Resume == nil || !interactionFrame.Resume.Unresolved {
+		t.Fatalf("expected resume metadata, got %#v", interactionFrame.Resume)
 	}
-
-	if history[2].Content != "How are you?" {
-		t.Errorf("Expected third message content How are you?, got %s", history[2].Content)
+	if got := interactionFrame.Payload["thoughtrecipe_id"]; got != clarificationThoughtRecipeID {
+		t.Fatalf("thoughtrecipe id payload = %#v", got)
 	}
 }
 
-func TestInteractionFrameSetMetadata(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.SetMetadata("key1", "value1")
-	frame.SetMetadata("key2", "value2")
-
-	value1, ok := frame.GetMetadata("key1")
-	if !ok {
-		t.Error("Expected key1 to exist")
+func TestClarificationFrameMarkSkipped(t *testing.T) {
+	frame := NewClarificationFrame("task-1", "session-1", clarificationThoughtRecipeID, "Question?", nil, nil, nil)
+	frame.MarkSkipped("resolved immediately")
+	if frame.Pending() {
+		t.Fatal("expected skipped clarification frame to not be pending")
 	}
-
-	if value1 != "value1" {
-		t.Errorf("Expected value1, got %s", value1)
+	if !frame.Skipped {
+		t.Fatal("expected skipped clarification frame")
 	}
-
-	value2, ok := frame.GetMetadata("key2")
-	if !ok {
-		t.Error("Expected key2 to exist")
+	if frame.SkippedReason != "resolved immediately" {
+		t.Fatalf("skipped reason = %q", frame.SkippedReason)
 	}
-
-	if value2 != "value2" {
-		t.Errorf("Expected value2, got %s", value2)
-	}
-}
-
-func TestInteractionFrameClear(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.AddMessage(MessageRoleUser, "Hello", nil)
-	frame.AddMessage(MessageRoleAssistant, "Hi", nil)
-
-	if frame.MessageCount() != 2 {
-		t.Errorf("Expected 2 messages before clear, got %d", frame.MessageCount())
-	}
-
-	frame.Clear()
-
-	if frame.MessageCount() != 0 {
-		t.Errorf("Expected 0 messages after clear, got %d", frame.MessageCount())
-	}
-}
-
-func TestInteractionFrameGetLastMessage(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.AddMessage(MessageRoleUser, "First", nil)
-	frame.AddMessage(MessageRoleAssistant, "Second", nil)
-
-	lastMessage := frame.GetLastMessage()
-	if lastMessage == nil {
-		t.Fatal("Expected last message to be non-nil")
-	}
-
-	if lastMessage.Content != "Second" {
-		t.Errorf("Expected last message content Second, got %s", lastMessage.Content)
-	}
-}
-
-func TestInteractionFrameGetLastMessageEmpty(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	lastMessage := frame.GetLastMessage()
-	if lastMessage != nil {
-		t.Error("Expected last message to be nil when frame is empty")
-	}
-}
-
-func TestInteractionFrameGetAllMetadata(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.SetMetadata("key1", "value1")
-	frame.SetMetadata("key2", "value2")
-
-	allMetadata := frame.GetAllMetadata()
-	if len(allMetadata) != 2 {
-		t.Errorf("Expected 2 metadata entries, got %d", len(allMetadata))
-	}
-
-	if allMetadata["key1"] != "value1" {
-		t.Errorf("Expected key1 value1, got %s", allMetadata["key1"])
-	}
-
-	if allMetadata["key2"] != "value2" {
-		t.Errorf("Expected key2 value2, got %s", allMetadata["key2"])
-	}
-}
-
-func TestInteractionFrameDeactivate(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	if !frame.IsActive() {
-		t.Error("Expected frame to be active initially")
-	}
-
-	frame.Deactivate()
-
-	if frame.IsActive() {
-		t.Error("Expected frame to be inactive after deactivate")
-	}
-}
-
-func TestInteractionFrameActivate(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	frame.Deactivate()
-	frame.Activate()
-
-	if !frame.IsActive() {
-		t.Error("Expected frame to be active after activate")
-	}
-}
-
-func TestInteractionFrameSessionID(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	if frame.SessionID != "session-123" {
-		t.Errorf("Expected session ID session-123, got %s", frame.SessionID)
-	}
-}
-
-func TestInteractionFrameTaskID(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	if frame.TaskID != "task-456" {
-		t.Errorf("Expected task ID task-456, got %s", frame.TaskID)
-	}
-}
-
-func TestInteractionFrameMessageWithMetadata(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	metadata := map[string]string{
-		"source": "test",
-		"priority": "high",
-	}
-	frame.AddMessage(MessageRoleUser, "Hello", metadata)
-
-	message := frame.GetLastMessage()
-	if message == nil {
-		t.Fatal("Expected last message to be non-nil")
-	}
-
-	if message.Metadata["source"] != "test" {
-		t.Errorf("Expected metadata source test, got %s", message.Metadata["source"])
-	}
-
-	if message.Metadata["priority"] != "high" {
-		t.Errorf("Expected metadata priority high, got %s", message.Metadata["priority"])
-	}
-}
-
-func TestInteractionFrameGetMetadataMissing(t *testing.T) {
-	frame := NewInteractionFrame("session-123", "task-456")
-
-	_, ok := frame.GetMetadata("nonexistent")
-	if ok {
-		t.Error("Expected ok to be false for missing metadata key")
+	if frame.RespondedAt == nil {
+		t.Fatal("expected responded at")
 	}
 }

@@ -2,104 +2,94 @@ package testsuite
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	eucloagent "codeburg.org/lexbit/relurpify/named/euclo"
-	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
-	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-func TestDryRunEndToEndSessionResumePreservesRoute(t *testing.T) {
-	caps := capability.NewCapabilityRegistry()
-	env := agentenv.WorkspaceEnvironment{
-		Registry: caps,
+func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkspaceFile(t, dir, "resume.go", "package demo\n")
+
+	const capabilityID = "euclo:cap.resume_route"
+
+	missingCaps := capability.NewCapabilityRegistry()
+	missingGraph := orchestrate.NewRootGraph(
+		orchestrate.WithWorkspaceEnvironment(workspaceEnv(missingCaps)),
+		orchestrate.WithCapabilityRegistry(missingCaps),
+	)
+
+	env := contextdata.NewEnvelope("task-resume", "session-resume")
+	seedTask(env, "add a cache to the handler", "resume.go")
+	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
+		RouteKind:    orchestrate.RouteKindCapability,
+		CapabilityID: capabilityID,
+	}, contextdata.MemoryClassTask)
+
+	firstTelemetry := &recordingTelemetry{}
+	if err := missingGraph.Execute(core.WithTelemetry(context.Background(), firstTelemetry), env); err == nil {
+		t.Fatal("expected unresolved route failure on first pass")
 	}
-	agent := eucloagent.New(env)
-	if err := agent.Initialize(nil); err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	if err := caps.RegisterInvocableCapability(&testCapabilityHandler{
-		descriptor: core.CapabilityDescriptor{
-			ID:            "euclo:cap.resume_route",
-			Name:          "euclo:cap.resume_route",
-			Kind:          core.CapabilityKindTool,
-			RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
-			Availability:  core.AvailabilitySpec{Available: true},
-		},
-		invoke: func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {
-			return &contracts.CapabilityExecutionResult{
-				Success: true,
-				Data: map[string]any{
-					"capability_id": "euclo:cap.resume_route",
-					"result":        "resume:ok",
-				},
-			}, nil
-		},
-	}); err != nil {
-		t.Fatalf("register resume capability: %v", err)
+	if !hasEventType(firstTelemetry.types(), core.EventType("euclo.route.unavailable")) {
+		t.Fatalf("expected route unavailable warning, got %v", firstTelemetry.types())
 	}
 
-	task := &core.Task{
-		ID:          "task-resume",
-		Type:        "euclo",
-		Instruction: "resume execution without reclassification",
-		Data:        map[string]any{},
-		Context:     map[string]any{},
-		Metadata:    map[string]any{},
+	resolutionValue, ok := env.GetWorkingValue("euclo.route_resolution")
+	if !ok {
+		t.Fatal("expected route_resolution in envelope")
 	}
-	envelope := contextdata.NewEnvelope("task-resume", "session-resume")
-	seedTask(envelope, task.Instruction)
-	euclostate.SetIntentClassification(envelope, &intake.IntentClassification{
-		WinningFamily: "implementation",
-		Confidence:    1.0,
-	})
-	euclostate.SetRouteSelection(envelope, &orchestrate.RouteSelection{
-		RouteKind:    "capability",
-		CapabilityID: "euclo:cap.resume_route",
-	})
+	resolution, ok := resolutionValue.(*orchestrate.RouteResolution)
+	if !ok || resolution == nil {
+		t.Fatalf("expected *RouteResolution, got %T", resolutionValue)
+	}
+	if resolution.ResolutionSource != "unresolved" {
+		t.Fatalf("resolution source = %q, want unresolved", resolution.ResolutionSource)
+	}
+	if resolution.CapabilityID != capabilityID {
+		t.Fatalf("resolution capability = %q, want %q", resolution.CapabilityID, capabilityID)
+	}
 
-	result, err := agent.Execute(context.Background(), task, envelope)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+	handler := &countingCapabilityHandler{id: capabilityID}
+	resolvedCaps := capabilityRegistryWithHandler(t, handler)
+	resolvedGraph := orchestrate.NewRootGraph(
+		orchestrate.WithWorkspaceEnvironment(workspaceEnv(resolvedCaps)),
+		orchestrate.WithCapabilityRegistry(resolvedCaps),
+	)
+
+	secondTelemetry := &recordingTelemetry{}
+	if err := resolvedGraph.Execute(core.WithTelemetry(context.Background(), secondTelemetry), env); err != nil {
+		t.Fatalf("resume execute failed: %v", err)
 	}
-	if result == nil || !result.Success {
-		t.Fatalf("expected successful execution, got %#v", result)
-	}
-	if got := mustStringValue(t, envelope, "euclo.execution.kind"); got != "capability" {
+	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "capability" {
 		t.Fatalf("execution kind = %q, want capability", got)
 	}
-	selection, ok := envelope.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
+	if got := mustStringValue(t, env, "euclo.execution.capability_id"); got != capabilityID {
+		t.Fatalf("execution capability id = %q, want %q", got, capabilityID)
 	}
-	routeSelection, ok := selection.(*orchestrate.RouteSelection)
-	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+	if got := mustStringValue(t, env, "euclo.fork.branch"); got != "capability_execution" {
+		t.Fatalf("fork branch = %q, want capability_execution", got)
 	}
-	if routeSelection.CapabilityID != "euclo:cap.resume_route" {
-		t.Fatalf("route capability = %q, want euclo:cap.resume_route", routeSelection.CapabilityID)
+	if handler.Count() != 1 {
+		t.Fatalf("expected capability to execute once after resume, got %d", handler.Count())
 	}
-	if !mustBoolValue(t, envelope, "euclo.execution.completed") {
-		t.Fatal("expected execution to complete")
+	if !mustBoolValue(t, env, "euclo.execution.completed") {
+		t.Fatal("expected execution to complete after resume")
 	}
-	if hasResumeState(agent) {
-		t.Fatal("expected agent resume state to be cleared after Execute")
+	if resolutionValue, ok := env.GetWorkingValue("euclo.route_resolution"); !ok {
+		t.Fatal("expected route_resolution to remain available after resume")
+	} else if resumedResolution, ok := resolutionValue.(*orchestrate.RouteResolution); !ok || resumedResolution == nil || resumedResolution.ResolutionSource != "registry" {
+		t.Fatalf("unexpected resumed route resolution: %#v", resolutionValue)
 	}
 }
 
-func hasResumeState(agent *eucloagent.Agent) bool {
-	if agent == nil {
-		return false
+func hasEventType(got []core.EventType, want core.EventType) bool {
+	for _, eventType := range got {
+		if eventType == want {
+			return true
+		}
 	}
-	value := reflect.ValueOf(agent).Elem()
-	classification := value.FieldByName("resumeClassification")
-	route := value.FieldByName("resumeRouteSelection")
-	return (!classification.IsNil()) || (!route.IsNil())
+	return false
 }

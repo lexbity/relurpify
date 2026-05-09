@@ -160,6 +160,227 @@ func (r *ThoughtRecipeRegistry) Entries() []ThoughtRecipeEntry {
 	return out
 }
 
+// FindByTag returns entries whose trigger metadata includes the provided tag.
+func (r *ThoughtRecipeRegistry) FindByTag(tag string) []ThoughtRecipeEntry {
+	return r.findByTags([]string{tag})
+}
+
+// FindByFamily returns entries whose trigger family metadata includes the provided family.
+func (r *ThoughtRecipeRegistry) FindByFamily(family string) []ThoughtRecipeEntry {
+	return r.findByTags([]string{family})
+}
+
+// FindByKeyword returns entries whose trigger keyword metadata includes the provided keyword.
+func (r *ThoughtRecipeRegistry) FindByKeyword(keyword string) []ThoughtRecipeEntry {
+	return r.findByTags([]string{keyword})
+}
+
+// FindByHandoffTarget returns entries whose declared handoff targets include the provided target.
+func (r *ThoughtRecipeRegistry) FindByHandoffTarget(target string) []ThoughtRecipeEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	normalized := normalizeTriggerTag(target)
+	if normalized == "" {
+		return nil
+	}
+
+	out := make([]ThoughtRecipeEntry, 0)
+	for _, key := range r.order {
+		entry, ok := r.thoughtrecipes[key]
+		if !ok || entry == nil || entry.ThoughtRecipe == nil {
+			continue
+		}
+		if recipeEntryMatchesHandoffTarget(entry.ThoughtRecipe, normalized) {
+			out = append(out, *entry)
+		}
+	}
+	return out
+}
+
+// FindMatchingTags returns entries matching any of the provided tags.
+func (r *ThoughtRecipeRegistry) FindMatchingTags(tags ...string) []ThoughtRecipeEntry {
+	return r.findByTags(tags)
+}
+
+// ResolveBestMatch returns the highest-scoring thoughtrecipe match for the
+// provided explicit identifier and normalized search tokens.
+func (r *ThoughtRecipeRegistry) ResolveBestMatch(explicitID string, tokens ...string) (ThoughtRecipeEntry, bool, []string) {
+	if r == nil {
+		return ThoughtRecipeEntry{}, false, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if normalizedID := normalizeTriggerTag(explicitID); normalizedID != "" {
+		if entry, ok := r.lookupEntryLocked(normalizedID); ok && entry != nil {
+			return *entry, true, []string{"explicit_thoughtrecipe"}
+		}
+	}
+
+	normalizedTokens := normalizeSearchTokens(tokens...)
+	if len(normalizedTokens) == 0 {
+		return ThoughtRecipeEntry{}, false, nil
+	}
+
+	var (
+		bestEntry ThoughtRecipeEntry
+		bestScore int
+		bestReasons []string
+		tied bool
+	)
+	for _, key := range r.order {
+		entry, ok := r.thoughtrecipes[key]
+		if !ok || entry == nil || entry.ThoughtRecipe == nil {
+			continue
+		}
+		score, reasons := scoreThoughtRecipeEntry(entry.ThoughtRecipe, normalizedTokens)
+		if score <= 0 {
+			continue
+		}
+		if score > bestScore {
+			bestEntry = *entry
+			bestScore = score
+			bestReasons = append([]string(nil), reasons...)
+			tied = false
+			continue
+		}
+		if score == bestScore {
+			tied = true
+		}
+	}
+	if bestScore == 0 || tied {
+		return ThoughtRecipeEntry{}, false, nil
+	}
+	return bestEntry, true, bestReasons
+}
+
+func (r *ThoughtRecipeRegistry) findByTags(tags []string) []ThoughtRecipeEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	normalized := make(map[string]struct{})
+	for _, tag := range tags {
+		if normalizedTag := normalizeTriggerTag(tag); normalizedTag != "" {
+			normalized[normalizedTag] = struct{}{}
+		}
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	out := make([]ThoughtRecipeEntry, 0)
+	for _, key := range r.order {
+		entry, ok := r.thoughtrecipes[key]
+		if !ok || entry == nil || entry.ThoughtRecipe == nil {
+			continue
+		}
+		if recipeEntryMatchesTags(entry.ThoughtRecipe, normalized) {
+			out = append(out, *entry)
+		}
+	}
+	return out
+}
+
+func recipeEntryMatchesTags(recipe *ThoughtRecipe, tags map[string]struct{}) bool {
+	if recipe == nil {
+		return false
+	}
+	for _, tag := range recipe.Metadata.Families {
+		if _, ok := tags[normalizeTriggerTag(tag)]; ok {
+			return true
+		}
+	}
+	for _, tag := range recipe.Metadata.Keywords {
+		if _, ok := tags[normalizeTriggerTag(tag)]; ok {
+			return true
+		}
+	}
+	for _, tag := range recipe.Metadata.Tags {
+		if _, ok := tags[normalizeTriggerTag(tag)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func recipeEntryMatchesHandoffTarget(recipe *ThoughtRecipe, target string) bool {
+	if recipe == nil {
+		return false
+	}
+	for _, candidate := range recipe.Metadata.HandoffTargets {
+		if normalizeTriggerTag(candidate) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func scoreThoughtRecipeEntry(recipe *ThoughtRecipe, tokens map[string]struct{}) (int, []string) {
+	if recipe == nil {
+		return 0, nil
+	}
+	score := 0
+	reasons := make([]string, 0, 4)
+	id := normalizeTriggerTag(recipe.ID)
+	name := normalizeTriggerTag(recipe.EffectiveName())
+	if id != "" {
+		if _, ok := tokens[id]; ok {
+			score += 100
+			reasons = append(reasons, "thoughtrecipe_id")
+		}
+	}
+	if name != "" {
+		if _, ok := tokens[name]; ok {
+			score += 90
+			reasons = append(reasons, "thoughtrecipe_name")
+		}
+	}
+	for _, tag := range recipe.Metadata.HandoffTargets {
+		if _, ok := tokens[normalizeTriggerTag(tag)]; ok {
+			score += 80
+			reasons = append(reasons, "handoff_target")
+			break
+		}
+	}
+	for _, tag := range recipe.Metadata.Families {
+		if _, ok := tokens[normalizeTriggerTag(tag)]; ok {
+			score += 40
+			reasons = append(reasons, "family")
+			break
+		}
+	}
+	for _, tag := range recipe.Metadata.Keywords {
+		if _, ok := tokens[normalizeTriggerTag(tag)]; ok {
+			score += 30
+			reasons = append(reasons, "keyword")
+			break
+		}
+	}
+	for _, tag := range recipe.Metadata.Tags {
+		if _, ok := tokens[normalizeTriggerTag(tag)]; ok {
+			score += 20
+			reasons = append(reasons, "tag")
+			break
+		}
+	}
+	return score, reasons
+}
+
+func normalizeSearchTokens(tokens ...string) map[string]struct{} {
+	normalized := make(map[string]struct{})
+	for _, token := range tokens {
+		for _, part := range strings.FieldsFunc(strings.ToLower(strings.TrimSpace(token)), func(r rune) bool {
+			return !(r == '_' || r == '-' || r == ':' || r == '.' || r == '/' || r == '\\' || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9'))
+		}) {
+			if normalizedToken := normalizeTriggerTag(part); normalizedToken != "" {
+				normalized[normalizedToken] = struct{}{}
+			}
+		}
+	}
+	return normalized
+}
+
 func registryKeyForThoughtRecipe(thoughtrecipe *ThoughtRecipe) string {
 	if thoughtrecipe == nil {
 		return ""

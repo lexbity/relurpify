@@ -2,13 +2,14 @@ package families
 
 import (
 	"sort"
+	"strings"
 )
 
 // SelectionRequest defines a request for family selection.
 type SelectionRequest struct {
-	Keywords      []string
+	Keywords       []string
 	IntentKeywords []string
-	MaxFamilies   int
+	MaxFamilies    int
 }
 
 // SelectionResult contains selected families with scores.
@@ -41,8 +42,11 @@ func SelectFamilies(registry *KeywordFamilyRegistry, req SelectionRequest) Selec
 		}
 	}
 
-	// Sort by score descending
-	sort.Slice(scored, func(i, j int) bool {
+	// Sort by score descending, then family ID for deterministic ties.
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Score == scored[j].Score {
+			return strings.TrimSpace(scored[i].Family.ID) < strings.TrimSpace(scored[j].Family.ID)
+		}
 		return scored[i].Score > scored[j].Score
 	})
 

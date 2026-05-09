@@ -258,3 +258,18 @@ func TestStateStoreWriteRejectsCorruptState(t *testing.T) {
 		t.Fatal("expected write to reject duplicate stable ids")
 	}
 }
+
+func TestCanonicalWorkingMemoryKeysIncludeRouteState(t *testing.T) {
+	keys := CanonicalWorkingMemoryKeys()
+	want := map[string]bool{
+		IntentEvidenceKey:       true,
+		IntentInterpretationKey: true,
+		RouteResolutionKey:      true,
+	}
+	for _, key := range keys {
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing canonical working-memory keys: %#v", want)
+	}
+}

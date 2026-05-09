@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 )
 
@@ -14,8 +15,10 @@ func TestAllKeysUnique(t *testing.T) {
 	keys := []string{
 		KeyTaskEnvelope,
 		KeyIntentClassification,
+		KeyIntentEvidence,
+		KeyIntentInterpretation,
 		KeyRouteSelection,
-		KeyClassificationMetadata,
+		KeyRouteResolution,
 		KeyContextHint,
 		KeyWorkspaceScopes,
 		KeySessionHint,
@@ -45,7 +48,6 @@ func TestAllKeysUnique(t *testing.T) {
 		KeyIngestionResult,
 		KeyNegativeConstraints,
 		KeyFamilySelection,
-		KeyCapabilitySequence,
 	}
 
 	seen := make(map[string]bool)
@@ -54,6 +56,22 @@ func TestAllKeysUnique(t *testing.T) {
 			t.Errorf("Duplicate key: %s", key)
 		}
 		seen[key] = true
+	}
+}
+
+func TestCanonicalWorkingMemoryKeysIncludeClarificationAndRouteState(t *testing.T) {
+	keys := intentcontext.CanonicalWorkingMemoryKeys()
+	want := map[string]bool{
+		intentcontext.ClarificationStateKey:   true,
+		intentcontext.IntentEvidenceKey:       true,
+		intentcontext.IntentInterpretationKey: true,
+		intentcontext.RouteResolutionKey:      true,
+	}
+	for _, key := range keys {
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("canonical keys missing entries: %#v", want)
 	}
 }
 
@@ -125,33 +143,95 @@ func TestSetGetRouteSelection(t *testing.T) {
 	}
 }
 
-func TestSetGetJobRecords(t *testing.T) {
+func TestSetGetIntentEvidence(t *testing.T) {
 	env := contextdata.NewEnvelope("test-task", "test-session")
 
-	records := []JobRecord{
-		{ID: "job-1", Type: "analysis", Status: "completed"},
-		{ID: "job-2", Type: "execution", Status: "pending"},
+	evidence := &intentcontext.IntentEvidence{
+		ActionType:            "implement",
+		Target:                "named/euclo",
+		Scope:                 "package",
+		RiskLevel:             "medium",
+		ExpectedVerb:          "change",
+		ExplicitFiles:         []string{"named/euclo/state/accessors.go"},
+		WorkspaceScopes:       []string{"named/euclo"},
+		SessionPins:           []string{"checkpoint-1"},
+		ContextHints:          []string{"clarify"},
+		SessionContinuation:   "continue",
+		FollowUp:              "update state keys",
+		NegativeConstraints:   []string{"no stubs"},
+		RequiresClarification: true,
+		MissingFields:         []string{"route"},
+		ReasonCodes:           []string{"missing_route"},
 	}
 
-	SetJobRecords(env, records)
+	SetIntentEvidence(env, evidence)
 
-	retrieved, ok := GetJobRecords(env)
+	retrieved, ok := GetIntentEvidence(env)
 	if !ok {
-		t.Fatal("Failed to retrieve JobRecords")
+		t.Fatal("Failed to retrieve IntentEvidence")
 	}
-	if len(retrieved) != 2 {
-		t.Errorf("Expected 2 records, got %d", len(retrieved))
+	if retrieved.ActionType != evidence.ActionType {
+		t.Fatalf("ActionType = %q, want %q", retrieved.ActionType, evidence.ActionType)
+	}
+	if len(retrieved.ExplicitFiles) != 1 || retrieved.ExplicitFiles[0] != evidence.ExplicitFiles[0] {
+		t.Fatalf("unexpected explicit files: %#v", retrieved.ExplicitFiles)
+	}
+}
+
+func TestSetGetIntentInterpretation(t *testing.T) {
+	env := contextdata.NewEnvelope("test-task", "test-session")
+
+	interpretation := &intentcontext.IntentInterpretation{
+		ActionType:     "review",
+		Target:         "orchestrate",
+		Scope:          "package",
+		RiskLevel:      "low",
+		MissingInfo:    []string{"route"},
+		Rationale:      "route state should be typed",
+		ConfidenceNote: "high confidence",
+		ReasonCodes:    []string{"typed_route_state"},
 	}
 
-	// Test append
-	AppendJobRecord(env, JobRecord{ID: "job-3", Type: "reporting", Status: "running"})
+	SetIntentInterpretation(env, interpretation)
 
-	retrieved, ok = GetJobRecords(env)
+	retrieved, ok := GetIntentInterpretation(env)
 	if !ok {
-		t.Fatal("Failed to retrieve JobRecords after append")
+		t.Fatal("Failed to retrieve IntentInterpretation")
 	}
-	if len(retrieved) != 3 {
-		t.Errorf("Expected 3 records after append, got %d", len(retrieved))
+	if retrieved.Target != interpretation.Target {
+		t.Fatalf("Target = %q, want %q", retrieved.Target, interpretation.Target)
+	}
+	if len(retrieved.MissingInfo) != 1 || retrieved.MissingInfo[0] != "route" {
+		t.Fatalf("unexpected missing info: %#v", retrieved.MissingInfo)
+	}
+}
+
+func TestSetGetRouteResolution(t *testing.T) {
+	env := contextdata.NewEnvelope("test-task", "test-session")
+
+	resolution := &orchestrate.RouteResolution{
+		RouteKind:                 orchestrate.RouteKindCapability,
+		CapabilityID:              "euclo:cap.ast_query",
+		ResolutionSource:          "deterministic",
+		FallbackTaken:             true,
+		ClarificationStateVersion: 7,
+		ReasonCodes:               []string{"explicit_route", "registry_match"},
+	}
+
+	SetRouteResolution(env, resolution)
+
+	retrieved, ok := GetRouteResolution(env)
+	if !ok {
+		t.Fatal("Failed to retrieve RouteResolution")
+	}
+	if retrieved.CapabilityID != resolution.CapabilityID {
+		t.Fatalf("CapabilityID = %q, want %q", retrieved.CapabilityID, resolution.CapabilityID)
+	}
+	if !retrieved.FallbackTaken {
+		t.Fatal("expected fallback flag to round-trip")
+	}
+	if got := retrieved.RouteID(); got != resolution.CapabilityID {
+		t.Fatalf("RouteID = %q, want %q", got, resolution.CapabilityID)
 	}
 }
 
@@ -179,29 +259,6 @@ func TestThoughtRecipeCaptureKeyConstruction(t *testing.T) {
 	expected := "euclo.thoughtrecipe.tdd.test_output"
 	if key != expected {
 		t.Errorf("ThoughtRecipeCaptureKey = %q, want %q", key, expected)
-	}
-}
-
-func TestSetGetClassificationMetadata(t *testing.T) {
-	env := contextdata.NewEnvelope("test-task", "test-session")
-
-	metadata := map[string]any{
-		"family":    "debug",
-		"score":     0.85,
-		"ambiguous": false,
-	}
-
-	SetClassificationMetadata(env, metadata)
-
-	retrieved, ok := GetClassificationMetadata(env)
-	if !ok {
-		t.Fatal("Failed to retrieve ClassificationMetadata")
-	}
-	if len(retrieved) != 3 {
-		t.Errorf("Expected 3 metadata entries, got %d", len(retrieved))
-	}
-	if retrieved["family"] != "debug" {
-		t.Errorf("family = %v, want debug", retrieved["family"])
 	}
 }
 
@@ -256,5 +313,17 @@ func TestMissingKeyReturnsZero(t *testing.T) {
 	_, ok = GetRouteSelection(env)
 	if ok {
 		t.Error("Expected GetRouteSelection to return false for empty envelope")
+	}
+	_, ok = GetIntentEvidence(env)
+	if ok {
+		t.Error("Expected GetIntentEvidence to return false for empty envelope")
+	}
+	_, ok = GetIntentInterpretation(env)
+	if ok {
+		t.Error("Expected GetIntentInterpretation to return false for empty envelope")
+	}
+	_, ok = GetRouteResolution(env)
+	if ok {
+		t.Error("Expected GetRouteResolution to return false for empty envelope")
 	}
 }

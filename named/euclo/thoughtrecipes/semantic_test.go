@@ -232,6 +232,9 @@ func TestSymbolTableAcceptsIntentTriggerWithAskUserBlock(t *testing.T) {
 "Clarify the request."
 
 trigger as intent:
+  family ["clarification"]
+  keyword ["clarify", "question"]
+  handoff ["intent_clarify"]
   may read workspace
 
 input workspace: "**/*"
@@ -243,6 +246,22 @@ ask user:
 
 	if err := NewSymbolTable(doc).Resolve(); err != nil {
 		t.Fatalf("expected intent trigger to validate without ask-user policy, got %v", err)
+	}
+}
+
+func TestSymbolTableAcceptsTriggerAssociationsOnCapabilityRoute(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  family ["debug"]
+  keyword ["panic", "trace"]
+  handoff ["debug_followup"]
+  may read workspace
+`)
+
+	if err := NewSymbolTable(doc).Resolve(); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
 	}
 }
 

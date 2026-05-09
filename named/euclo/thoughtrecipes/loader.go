@@ -145,29 +145,13 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 		return err
 	}
 
-	thoughtrecipe := &ThoughtRecipe{
-		RouteKind:   TriggerRouteKindFromDecl(firstTriggerDecl(doc)),
-		ID:          doc.Name,
-		Name:        doc.Name,
-		Description: thoughtrecipeDescription(doc),
-		Metadata: ThoughtRecipeMetadata{
-			Name: doc.Name,
-		},
-	}
-	if ok, err := result.Registry.RegisterCompiledFirstWins(thoughtrecipe, plan, source.Path); err != nil {
+	if ok, err := result.Registry.RegisterCompiledFirstWins(plan.ThoughtRecipe, plan, source.Path); err != nil {
 		return err
 	} else if !ok {
 		result.Warnings = append(result.Warnings, LoadWarning{
 			Path:    source.Path,
-			Message: fmt.Sprintf("duplicate thoughtrecipe name %q ignored; first registration wins", doc.Name),
+			Message: fmt.Sprintf("duplicate thoughtrecipe name %q ignored; first registration wins", plan.ThoughtRecipe.Name),
 		})
 	}
 	return nil
-}
-
-func thoughtrecipeDescription(doc *ThoughtRecipeDocument) string {
-	if doc == nil || doc.Header.Description == nil {
-		return ""
-	}
-	return strings.TrimSpace(doc.Header.Description.Value)
 }

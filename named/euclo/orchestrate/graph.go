@@ -37,7 +37,6 @@ type RootGraphConfig struct {
 	StreamTrigger         *contextstream.Trigger
 	MaxStreamTokens       int
 	DefaultStreamMode     contextstream.Mode
-	CapabilityClassifier  intake.Tier2Classifier
 	PermissionManager     policy.PermissionManager
 	HITLBroker            policy.HITLBroker
 	CheckpointRepository  agentlifecycle.Repository
@@ -102,13 +101,6 @@ func WithMaxStreamTokens(tokens int) RootGraphOption {
 func WithDefaultStreamMode(mode contextstream.Mode) RootGraphOption {
 	return func(opts *RootGraphConfig) {
 		opts.DefaultStreamMode = mode
-	}
-}
-
-// WithCapabilityClassifier sets the LLM-based classifier.
-func WithCapabilityClassifier(classifier intake.Tier2Classifier) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.CapabilityClassifier = classifier
 	}
 }
 
@@ -206,6 +198,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	if thoughtrecipeReg == nil {
 		thoughtrecipeReg = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
+	ensureClarificationThoughtRecipe(thoughtrecipeReg)
 	thoughtrecipeCapReg := cfg.Env.Registry
 	if thoughtrecipeCapReg == nil {
 		thoughtrecipeCapReg = capability.NewCapabilityRegistry()
@@ -220,7 +213,6 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		cfg.MaxStreamTokens,
 		cfg.DefaultStreamMode,
 		cfg.StreamTrigger,
-		cfg.CapabilityClassifier,
 	)
 	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 		seedDefaultTask(env)
@@ -276,27 +268,14 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		WithWriter(cfg.PersistenceWriter)
 
 	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
-		sequence := []string{}
-		operator := ""
 		if env != nil {
-			if v, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
-				if seq, ok := v.([]string); ok {
-					sequence = append([]string(nil), seq...)
-				}
-			}
-			if v, ok := env.GetWorkingValue("euclo.capability_operator"); ok {
-				if s, ok := v.(string); ok {
-					operator = strings.TrimSpace(s)
-				}
-			}
 			env.SetWorkingValue("euclo.capability.classified", true, contextdata.MemoryClassTask)
 		}
 		return &core.Result{
 			NodeID:  "euclo.capability_classify",
 			Success: true,
 			Data: map[string]any{
-				"capability_sequence": sequence,
-				"operator":            operator,
+				"classified": true,
 			},
 		}, nil
 	})
@@ -479,6 +458,42 @@ func wireEdges(g *agentgraph.Graph) error {
 		}
 	}
 	return nil
+}
+
+func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
+	if reg == nil {
+		return
+	}
+	if _, ok := reg.Get(clarificationThoughtRecipeID); ok {
+		return
+	}
+	thoughtrecipe := &thoughtrecipepkg.ThoughtRecipe{
+		ID:   clarificationThoughtRecipeID,
+		Name: "intent clarification",
+		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+			Name: "intent clarification",
+		},
+	}
+	plan := &thoughtrecipepkg.ExecutionPlan{
+		ThoughtRecipe: thoughtrecipe,
+		Steps: []thoughtrecipepkg.ExecutionStep{{
+			ID:           clarificationThoughtRecipeID + ".step0",
+			Type:         "run",
+			Paradigm:     "goalcon",
+			CapabilityID: clarificationCapabilityID,
+			Prompt:       "Clarify the user's request.",
+			Goal:         "Clarify the user's request.",
+			Step: thoughtrecipepkg.ThoughtRecipeStep{
+				ID:      clarificationThoughtRecipeID + ".step0",
+				Type:    "run",
+				Prompt:  "Clarify the user's request.",
+				Parent:  thoughtrecipepkg.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Config:  map[string]any{},
+				Context: thoughtrecipepkg.ThoughtRecipeStepContext{},
+			},
+		}},
+	}
+	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")
 }
 
 func seedPolicyDefaults(env *contextdata.Envelope) {

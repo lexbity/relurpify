@@ -12,6 +12,9 @@ func TestLowerDocumentPreservesAgentBindingsAndRunStructure(t *testing.T) {
 "Route code requests."
 
 trigger as capability:
+  family ["debug", "debug"]
+  keyword ["fix", "panic"]
+  handoff ["reviewer", "executor", "reviewer"]
   may read workspace
   may write workspace
 
@@ -57,6 +60,18 @@ run reviewer:
 	}
 	if got := plan.ThoughtRecipe.RouteKind; got != TriggerRouteKindCapability {
 		t.Fatalf("thoughtrecipe route kind = %q, want %q", got, TriggerRouteKindCapability)
+	}
+	if got := plan.ThoughtRecipe.Metadata.Families; len(got) != 1 || got[0] != "debug" {
+		t.Fatalf("families = %#v, want [debug]", got)
+	}
+	if got := plan.ThoughtRecipe.Metadata.Keywords; len(got) != 2 || got[0] != "fix" || got[1] != "panic" {
+		t.Fatalf("keywords = %#v, want [fix panic]", got)
+	}
+	if got := plan.ThoughtRecipe.Metadata.HandoffTargets; len(got) != 2 || got[0] != "reviewer" || got[1] != "executor" {
+		t.Fatalf("handoff targets = %#v, want [reviewer executor]", got)
+	}
+	if got := plan.ThoughtRecipe.Metadata.Tags; len(got) != 5 {
+		t.Fatalf("tags = %#v, want 5 unique entries", got)
 	}
 
 	first := plan.Steps[0]

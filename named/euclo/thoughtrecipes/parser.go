@@ -131,24 +131,35 @@ func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
 	}
 
 	for !p.atEOF() && p.peek().Kind != TokenDedent {
-		mayTok, err := p.expectKeyword("may")
-		if err != nil {
-			return nil, err
+		switch p.peek().Lexeme {
+		case "may":
+			mayTok, err := p.expectKeyword("may")
+			if err != nil {
+				return nil, err
+			}
+			effectTok, err := p.expectName("trigger effect")
+			if err != nil {
+				return nil, err
+			}
+			resource, err := p.parseValueExpr()
+			if err != nil {
+				return nil, err
+			}
+			decl.Lines = append(decl.Lines, TriggerLine{
+				positioned: positioned{Span: spanFromTokens(mayTok, endToken(resource))},
+				Effect:     Identifier{positioned: positioned{Span: spanFromToken(effectTok)}, Value: effectTok.Lexeme},
+				Resource:   resource,
+				Raw:        joinTokens(mayTok, effectTok, resource),
+			})
+		case TriggerAssociationFamily, TriggerAssociationKeyword, TriggerAssociationHandoff:
+			assoc, err := p.parseTriggerAssociationDecl()
+			if err != nil {
+				return nil, err
+			}
+			decl.Associations = append(decl.Associations, *assoc)
+		default:
+			return nil, p.unexpectedToken(p.peek(), "expected trigger policy, family, keyword, or handoff line")
 		}
-		effectTok, err := p.expectName("trigger effect")
-		if err != nil {
-			return nil, err
-		}
-		resource, err := p.parseValueExpr()
-		if err != nil {
-			return nil, err
-		}
-		decl.Lines = append(decl.Lines, TriggerLine{
-			positioned: positioned{Span: spanFromTokens(mayTok, endToken(resource))},
-			Effect:     Identifier{positioned: positioned{Span: spanFromToken(effectTok)}, Value: effectTok.Lexeme},
-			Resource:   resource,
-			Raw:        joinTokens(mayTok, effectTok, resource),
-		})
 	}
 
 	if _, err := p.expectKind(TokenDedent, "end trigger block"); err != nil {
@@ -156,6 +167,20 @@ func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
 	}
 
 	return decl, nil
+}
+
+func (p *Parser) parseTriggerAssociationDecl() (*TriggerAssociationDecl, error) {
+	start := p.next()
+	list, err := p.parseInlineList()
+	if err != nil {
+		return nil, err
+	}
+	return &TriggerAssociationDecl{
+		positioned: positioned{Span: spanFromTokens(start, endToken(list))},
+		Name:       Identifier{positioned: positioned{Span: spanFromToken(start)}, Value: start.Lexeme},
+		Values:     list,
+		Raw:        strings.TrimSpace(start.Lexeme + " " + list.Raw),
+	}, nil
 }
 
 func (p *Parser) parseInputDecl() (*InputDecl, error) {
@@ -865,13 +890,16 @@ func (p *Parser) parseValueExprOnLine(line int) (ValueExpr, bool, error) {
 }
 
 func (p *Parser) parseInlineList() (*ListLiteral, error) {
-	start := p.next()
+	start, err := p.expectPunctuation("[")
+	if err != nil {
+		return nil, err
+	}
 	list := &ListLiteral{positioned: positioned{Span: spanFromToken(start)}, Raw: start.Lexeme}
 	for !p.atEOF() {
 		if p.peekKind(TokenPunctuation, "]") {
 			end := p.next()
 			list.Span = spanFromTokens(start, end)
-			list.Raw = list.Raw + "..."
+			list.Raw = formatListRaw(list.Entries)
 			return list, nil
 		}
 		if p.peekKind(TokenPunctuation, ",") {
@@ -910,6 +938,7 @@ func (p *Parser) parseBlockList() (*ListLiteral, error) {
 			list.Span = spanFromTokens(start, endToken(value))
 		}
 	}
+	list.Raw = formatListRaw(list.Entries)
 	return list, nil
 }
 
@@ -937,85 +966,178 @@ func (p *Parser) parsePathExpr() (PathExpr, error) {
 }
 
 func (p *Parser) parseTypeExpr() (TypeExpr, error) {
-	left, err := p.parseTypePrimary()
-	if err != nil {
-		return nil, err
-	}
-	opts := []TypeExpr{left}
-	for p.peekKind(TokenPunctuation, "|") {
-		p.next()
-		next, err := p.parseTypePrimary()
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, next)
-	}
-	if len(opts) == 1 {
-		return left, nil
-	}
-	start := opts[0].GetSpan().Start
-	end := opts[len(opts)-1].GetSpan().End
-	return &UnionTypeExpr{
-		positioned: positioned{Span: SourceSpan{Start: start, End: end}},
-		Options:    opts,
-	}, nil
-}
+	type typeFrameKind int
 
-func (p *Parser) parseTypePrimary() (TypeExpr, error) {
-	tok := p.peek()
-	switch tok.Lexeme {
-	case "list":
-		start := p.next()
-		if _, err := p.expectPunctuation("<"); err != nil {
-			return nil, err
+	const (
+		typeFrameRoot typeFrameKind = iota
+		typeFrameList
+		typeFrameOptional
+		typeFrameMap
+	)
+
+	type typeFrame struct {
+		kind  typeFrameKind
+		start Token
+		ops   []TypeExpr
+		key   TypeExpr
+		phase int
+	}
+
+	collapseOps := func(ops []TypeExpr) (TypeExpr, error) {
+		if len(ops) == 0 {
+			return nil, p.unexpectedToken(p.peek(), "expected type expression")
 		}
-		elem, err := p.parseTypeExpr()
-		if err != nil {
-			return nil, err
+		if len(ops) == 1 {
+			return ops[0], nil
 		}
-		if _, err := p.expectPunctuation(">"); err != nil {
-			return nil, err
+		start := tokenFromSpan(ops[0].GetSpan())
+		end := tokenFromSpan(ops[len(ops)-1].GetSpan())
+		return &UnionTypeExpr{
+			positioned: positioned{Span: spanFromTokens(start, end)},
+			Options:    append([]TypeExpr(nil), ops...),
+		}, nil
+	}
+
+	finalizeFrame := func(frame *typeFrame, expr TypeExpr) (TypeExpr, error) {
+		switch frame.kind {
+		case typeFrameList:
+			return &ListTypeExpr{
+				positioned: positioned{Span: spanFromTokens(frame.start, tokenFromSpan(expr.GetSpan()))},
+				Element:    expr,
+			}, nil
+		case typeFrameOptional:
+			return &OptionalTypeExpr{
+				positioned: positioned{Span: spanFromTokens(frame.start, tokenFromSpan(expr.GetSpan()))},
+				Element:    expr,
+			}, nil
+		case typeFrameMap:
+			if frame.key == nil {
+				return nil, p.unexpectedToken(p.peek(), "expected map key expression")
+			}
+			return &MapTypeExpr{
+				positioned: positioned{Span: spanFromTokens(frame.start, tokenFromSpan(expr.GetSpan()))},
+				Key:        frame.key,
+				Value:      expr,
+			}, nil
+		default:
+			return expr, nil
 		}
-		return &ListTypeExpr{positioned: positioned{Span: spanFromTokens(start, endToken(elem))}, Element: elem}, nil
-	case "map":
-		start := p.next()
-		if _, err := p.expectPunctuation("<"); err != nil {
-			return nil, err
+	}
+
+	frames := []typeFrame{{kind: typeFrameRoot}}
+	var result TypeExpr
+
+	for {
+		if result == nil {
+			tok := p.peek()
+			switch tok.Lexeme {
+			case "list", "map", "optional":
+				start := p.next()
+				if _, err := p.expectPunctuation("<"); err != nil {
+					return nil, err
+				}
+				switch start.Lexeme {
+				case "list":
+					frames = append(frames, typeFrame{kind: typeFrameList, start: start})
+				case "optional":
+					frames = append(frames, typeFrame{kind: typeFrameOptional, start: start})
+				case "map":
+					frames = append(frames, typeFrame{kind: typeFrameMap, start: start, phase: 0})
+				}
+				continue
+			default:
+				path, err := p.parsePathExpr()
+				if err != nil {
+					return nil, err
+				}
+				result = &NamedTypeExpr{positioned: positioned{Span: path.Span}, Name: path}
+				continue
+			}
 		}
-		key, err := p.parseTypeExpr()
-		if err != nil {
-			return nil, err
+
+		frame := &frames[len(frames)-1]
+		switch frame.kind {
+		case typeFrameRoot:
+			frame.ops = append(frame.ops, result)
+			result = nil
+			if p.peekKind(TokenPunctuation, "|") {
+				p.next()
+				continue
+			}
+			return collapseOps(frame.ops)
+		case typeFrameList, typeFrameOptional:
+			frame.ops = append(frame.ops, result)
+			result = nil
+			if p.peekKind(TokenPunctuation, "|") {
+				p.next()
+				continue
+			}
+			if !p.peekKind(TokenPunctuation, ">") {
+				return nil, p.unexpectedToken(p.peek(), "expected \">\"")
+			}
+			p.next()
+			expr, err := collapseOps(frame.ops)
+			if err != nil {
+				return nil, err
+			}
+			wrapped, err := finalizeFrame(frame, expr)
+			if err != nil {
+				return nil, err
+			}
+			frames = frames[:len(frames)-1]
+			result = wrapped
+		case typeFrameMap:
+			switch frame.phase {
+			case 0:
+				frame.ops = append(frame.ops, result)
+				result = nil
+				if p.peekKind(TokenPunctuation, "|") {
+					p.next()
+					continue
+				}
+				if !p.peekKind(TokenPunctuation, ",") {
+					return nil, p.unexpectedToken(p.peek(), "expected \",\"")
+				}
+				key, err := collapseOps(frame.ops)
+				if err != nil {
+					return nil, err
+				}
+				frame.key = key
+				frame.ops = nil
+				frame.phase = 1
+				p.next()
+			case 1:
+				frame.phase = 2
+				continue
+			case 2:
+				frame.ops = append(frame.ops, result)
+				result = nil
+				if p.peekKind(TokenPunctuation, "|") {
+					p.next()
+					continue
+				}
+				if !p.peekKind(TokenPunctuation, ">") {
+					return nil, p.unexpectedToken(p.peek(), "expected \">\"")
+				}
+				p.next()
+				value, err := collapseOps(frame.ops)
+				if err != nil {
+					return nil, err
+				}
+				mapped, err := finalizeFrame(frame, value)
+				if err != nil {
+					return nil, err
+				}
+				frames = frames[:len(frames)-1]
+				result = mapped
+			default:
+				return nil, p.unexpectedToken(p.peek(), "invalid map type state")
+			}
 		}
-		if _, err := p.expectPunctuation(","); err != nil {
-			return nil, err
+
+		if len(frames) == 0 {
+			return nil, p.unexpectedToken(p.peek(), "type parser exhausted frames")
 		}
-		val, err := p.parseTypeExpr()
-		if err != nil {
-			return nil, err
-		}
-		if _, err := p.expectPunctuation(">"); err != nil {
-			return nil, err
-		}
-		return &MapTypeExpr{positioned: positioned{Span: spanFromTokens(start, endToken(val))}, Key: key, Value: val}, nil
-	case "optional":
-		start := p.next()
-		if _, err := p.expectPunctuation("<"); err != nil {
-			return nil, err
-		}
-		elem, err := p.parseTypeExpr()
-		if err != nil {
-			return nil, err
-		}
-		if _, err := p.expectPunctuation(">"); err != nil {
-			return nil, err
-		}
-		return &OptionalTypeExpr{positioned: positioned{Span: spanFromTokens(start, endToken(elem))}, Element: elem}, nil
-	default:
-		path, err := p.parsePathExpr()
-		if err != nil {
-			return nil, err
-		}
-		return &NamedTypeExpr{positioned: positioned{Span: path.Span}, Name: path}, nil
 	}
 }
 
@@ -1261,6 +1383,19 @@ func collectRaw(tokens []Token) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func formatListRaw(values []ValueExpr) string {
+	if len(values) == 0 {
+		return "[]"
+	}
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if raw := strings.TrimSpace(valueExprRaw(value)); raw != "" {
+			parts = append(parts, raw)
+		}
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 func joinTokens(tokens ...any) string {

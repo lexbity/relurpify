@@ -47,6 +47,26 @@ func TestThoughtRecipeStepContextProviderRendersClarificationState(t *testing.T)
 	state.GroundedAnchors = []retrieval.AnchorRef{
 		{AnchorID: "anchor-9", ChunkID: "chunk-9", Term: "Envelope", Definition: "type anchor", Class: "clarified_entity", Active: true},
 	}
+	evidence := &intentcontext.IntentEvidence{
+		ActionType:            "review",
+		Target:                "named/euclo/promptprovider",
+		Scope:                 "single_file",
+		RiskLevel:             "low",
+		ExpectedVerb:          "review",
+		ExplicitFiles:         []string{"named/euclo/promptprovider/recipe_step_context.go"},
+		ContextHints:          []string{"clarify"},
+		RequiresClarification: false,
+		ReasonCodes:           []string{"action:review"},
+	}
+	interpretation := &intentcontext.IntentInterpretation{
+		ActionType:     "review",
+		Target:         "named/euclo/promptprovider",
+		Scope:          "single_file",
+		RiskLevel:      "low",
+		Rationale:      "deterministic interpretation from request evidence",
+		ConfidenceNote: "deterministic interpretation from request evidence",
+		ReasonCodes:    []string{"action:review"},
+	}
 	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
@@ -54,6 +74,8 @@ func TestThoughtRecipeStepContextProviderRendersClarificationState(t *testing.T)
 	provider := &thoughtrecipeStepContextProvider{}
 	out := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
 		WithStateValue(intentcontext.ClarificationStateKey, state.Clone()).
+		WithStateValue(intentcontext.IntentEvidenceKey, evidence).
+		WithStateValue(intentcontext.IntentInterpretationKey, interpretation).
 		WithVariable("question", "Which module should be updated?"))
 
 	if !strings.Contains(out.Content, "Clarification State Version: 9") {
@@ -80,12 +102,23 @@ func TestThoughtRecipeStepContextProviderRendersClarificationState(t *testing.T)
 	if !strings.Contains(out.Content, "Applied Mutations: mutation-9") {
 		t.Fatalf("expected applied mutations in provider output, got %q", out.Content)
 	}
+	if !strings.Contains(out.Content, "Evidence Action Type: review") {
+		t.Fatalf("expected evidence action type in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Interpretation Confidence Note: deterministic interpretation from request evidence") {
+		t.Fatalf("expected interpretation confidence note in provider output, got %q", out.Content)
+	}
 	if !strings.Contains(out.Content, "Grounded Anchors:") {
 		t.Fatalf("expected grounded anchors in provider output, got %q", out.Content)
+	}
+	if strings.Contains(out.Content, "Route Kind:") || strings.Contains(out.Content, "Capability Sequence:") {
+		t.Fatalf("expected clarification provider to avoid route-policy fields, got %q", out.Content)
 	}
 	metadata := provider.Describe()
 	for _, key := range []string{
 		intentcontext.ClarificationStateKey,
+		intentcontext.IntentEvidenceKey,
+		intentcontext.IntentInterpretationKey,
 		intentcontext.ClarificationActiveThoughtRecipeKey,
 		intentcontext.ClarificationPendingProjectionKey,
 		intentcontext.ClarificationProjectedMutationsKey,
@@ -106,18 +139,30 @@ func TestThoughtRecipeStepContextProviderReadsClarificationStateFromEnvelope(t *
 	state.StateVersion = 3
 	state.CurrentTurnID = "turn-3"
 	state.ActiveThoughtRecipeID = "thoughtrecipe.intent.resume"
+	interpretation := &intentcontext.IntentInterpretation{
+		ActionType:     "continue",
+		Target:         "shared clarification state",
+		Scope:          "session",
+		RiskLevel:      "low",
+		Rationale:      "deterministic interpretation from request evidence",
+		ConfidenceNote: "deterministic interpretation from request evidence",
+	}
 	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
 	provider := &thoughtrecipeStepContextProvider{}
 	out := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
+		WithStateValue(intentcontext.IntentInterpretationKey, interpretation).
 		WithVariable("instruction", "Continue from the shared clarification state."))
 	if !strings.Contains(out.Content, "Active ThoughtRecipe ID: thoughtrecipe.intent.resume") {
 		t.Fatalf("expected provider to read clarification state from envelope, got %q", out.Content)
 	}
 	if !strings.Contains(out.Content, "Current Question: Continue from the shared clarification state.") {
 		t.Fatalf("expected instruction fallback in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Interpretation Action Type: continue") {
+		t.Fatalf("expected interpretation output, got %q", out.Content)
 	}
 }
 

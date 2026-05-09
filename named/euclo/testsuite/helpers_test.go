@@ -70,44 +70,6 @@ func (r *recordingTelemetry) types() []core.EventType {
 	return out
 }
 
-type mockTier2Classifier struct {
-	mu        sync.Mutex
-	responses map[string]tier2Response
-	calls     []tier2Call
-}
-
-type tier2Call struct {
-	Instruction string
-	FamilyID    string
-}
-
-type tier2Response struct {
-	Sequence []string
-	Operator string
-}
-
-func (m *mockTier2Classifier) Classify(ctx context.Context, instruction, familyID, streamedContext string, negativeConstraints []string) ([]string, string, error) {
-	_ = ctx
-	_ = streamedContext
-	_ = negativeConstraints
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, tier2Call{Instruction: instruction, FamilyID: familyID})
-	if resp, ok := m.responses[familyID]; ok {
-		return append([]string(nil), resp.Sequence...), resp.Operator, nil
-	}
-	if resp, ok := m.responses["*"]; ok {
-		return append([]string(nil), resp.Sequence...), resp.Operator, nil
-	}
-	return []string{"euclo:cap.ast_query"}, "OR", nil
-}
-
-func (m *mockTier2Classifier) callCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.calls)
-}
-
 type testCapabilityHandler struct {
 	descriptor core.CapabilityDescriptor
 	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error)

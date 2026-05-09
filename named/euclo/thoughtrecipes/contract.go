@@ -33,6 +33,33 @@ var SupportedNamespaces = []string{
 	"output.*",
 }
 
+// Trigger association names are the only recipe-local association keys allowed
+// on a trigger declaration.
+const (
+	TriggerAssociationFamily  = "family"
+	TriggerAssociationKeyword = "keyword"
+	TriggerAssociationHandoff = "handoff"
+)
+
+// SupportedTriggerAssociations lists the deterministic trigger-local association
+// keys that may appear under a trigger declaration.
+var SupportedTriggerAssociations = []string{
+	TriggerAssociationFamily,
+	TriggerAssociationKeyword,
+	TriggerAssociationHandoff,
+}
+
+// IsSupportedTriggerAssociation reports whether the provided association name
+// is allowed in the trigger surface.
+func IsSupportedTriggerAssociation(name string) bool {
+	for _, accepted := range SupportedTriggerAssociations {
+		if name == accepted {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAcceptedThoughtRecipeExtension reports whether the extension is supported.
 func IsAcceptedThoughtRecipeExtension(ext string) bool {
 	for _, accepted := range AcceptedThoughtRecipeExtensions {

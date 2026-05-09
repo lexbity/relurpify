@@ -19,20 +19,17 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	}, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
 	if result == nil {
 		t.Fatal("Expected result to be non-nil")
 	}
-
-	if result.Data["capability_id"] != "debug" {
-		t.Errorf("Expected capability_id debug, got %v", result.Data["capability_id"])
+	if err == nil {
+		t.Fatal("Expected error")
 	}
-
-	if result.Data["stub"] != true {
-		t.Errorf("Expected stub execution result, got %v", result.Data["stub"])
+	if result.Success {
+		t.Fatalf("Expected failure, got success result: %+v", result)
+	}
+	if got := result.Data["error"]; got != "capability registry unavailable" {
+		t.Fatalf("Expected registry error, got %v", got)
 	}
 }
 
@@ -63,8 +60,8 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 	}, contextdata.MemoryClassTask)
 
 	_, err := node.Execute(context.Background(), env)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+	if err == nil {
+		t.Fatal("Expected error")
 	}
 
 	kind, ok := env.GetWorkingValue("euclo.execution.kind")
@@ -81,8 +78,8 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Error("Expected execution.completed in envelope")
 	}
 
-	if completed != true {
-		t.Errorf("Expected execution.completed true, got %v", completed)
+	if completed != false {
+		t.Errorf("Expected execution.completed false, got %v", completed)
 	}
 
 }

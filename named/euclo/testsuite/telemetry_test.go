@@ -12,15 +12,9 @@ import (
 
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"implementation": {Sequence: []string{"euclo:cap.targeted_refactor"}, Operator: "OR"},
-		},
-	}
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCapabilityClassifier(classifier),
 	)
 
 	env := contextdata.NewEnvelope("task-telemetry", "session-telemetry")

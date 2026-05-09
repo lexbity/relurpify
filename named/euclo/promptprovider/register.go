@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 )
 
-// RegisterAll registers all euclo-specific prompt providers with the registry.
+// RegisterAll registers Euclo's state-view prompt providers with the registry.
 // Safe to call multiple times - duplicate registrations are skipped.
 func RegisterAll(registry prompt.Registry) error {
 	if registry == nil {

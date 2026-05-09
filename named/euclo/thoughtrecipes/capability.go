@@ -14,6 +14,14 @@ type TriggerPolicyRequirements struct {
 	AskUser        bool
 }
 
+// TriggerAssociationMetadata captures trigger-local search tags.
+type TriggerAssociationMetadata struct {
+	Families       []string
+	Keywords       []string
+	HandoffTargets []string
+	Tags           []string
+}
+
 // CapabilityInvocationPlan lowers a source-level capability invocation into a
 // runtime-oriented call shape without resolving execution.
 type CapabilityInvocationPlan struct {
@@ -108,6 +116,61 @@ func TriggerPolicyFromDecl(decl *TriggerDecl) (TriggerPolicyRequirements, error)
 	return req, nil
 }
 
+// TriggerAssociationsFromDecl converts trigger metadata lines into canonical tags.
+func TriggerAssociationsFromDecl(decl *TriggerDecl) (TriggerAssociationMetadata, error) {
+	if decl == nil {
+		return TriggerAssociationMetadata{}, nil
+	}
+
+	meta := TriggerAssociationMetadata{}
+	seenFamilies := make(map[string]struct{})
+	seenKeywords := make(map[string]struct{})
+	seenHandoffs := make(map[string]struct{})
+	seenTags := make(map[string]struct{})
+
+	for _, assoc := range decl.Associations {
+		kind := strings.ToLower(strings.TrimSpace(assoc.Name.Value))
+		if !IsSupportedTriggerAssociation(kind) {
+			return TriggerAssociationMetadata{}, fmt.Errorf("%s:%d:%d: unsupported trigger association %q", assoc.GetSpan().Start.File, assoc.GetSpan().Start.Line, assoc.GetSpan().Start.Column, assoc.Name.Value)
+		}
+		if assoc.Values == nil {
+			return TriggerAssociationMetadata{}, fmt.Errorf("%s:%d:%d: trigger %s requires a list", assoc.GetSpan().Start.File, assoc.GetSpan().Start.Line, assoc.GetSpan().Start.Column, kind)
+		}
+		for _, value := range assoc.Values.Entries {
+			tag := normalizeTriggerTag(valueExprRaw(value))
+			if tag == "" {
+				return TriggerAssociationMetadata{}, fmt.Errorf("%s:%d:%d: trigger %s contains an empty tag", assoc.GetSpan().Start.File, assoc.GetSpan().Start.Line, assoc.GetSpan().Start.Column, kind)
+			}
+			switch kind {
+			case TriggerAssociationFamily:
+				if _, ok := seenFamilies[tag]; ok {
+					continue
+				}
+				seenFamilies[tag] = struct{}{}
+				meta.Families = append(meta.Families, tag)
+			case TriggerAssociationKeyword:
+				if _, ok := seenKeywords[tag]; ok {
+					continue
+				}
+				seenKeywords[tag] = struct{}{}
+				meta.Keywords = append(meta.Keywords, tag)
+			case TriggerAssociationHandoff:
+				if _, ok := seenHandoffs[tag]; ok {
+					continue
+				}
+				seenHandoffs[tag] = struct{}{}
+				meta.HandoffTargets = append(meta.HandoffTargets, tag)
+			}
+			if _, ok := seenTags[tag]; !ok {
+				seenTags[tag] = struct{}{}
+				meta.Tags = append(meta.Tags, tag)
+			}
+		}
+	}
+
+	return meta, nil
+}
+
 // TriggerRouteKindFromDecl returns the declared route kind for a trigger.
 func TriggerRouteKindFromDecl(decl *TriggerDecl) TriggerRouteKind {
 	if decl == nil {
@@ -123,6 +186,15 @@ func TriggerRouteKindFromDecl(decl *TriggerDecl) TriggerRouteKind {
 	default:
 		return TriggerRouteKindUnknown
 	}
+}
+
+func normalizeTriggerTag(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = unquoteString(value)
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 // CapabilityRequirementsFromDescriptor derives the requested effect envelope for a capability.

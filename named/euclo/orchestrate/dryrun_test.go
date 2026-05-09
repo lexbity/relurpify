@@ -98,9 +98,12 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 		Access:   core.CapabilityExposureHidden,
 	}})
 
-	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{DryRun: true}, reg, nil)
-	if err != nil {
-		t.Fatalf("DryRun failed: %v", err)
+	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{
+		Instruction: "review the code",
+		DryRun:      true,
+	}, reg, nil)
+	if report == nil {
+		t.Fatal("expected dry-run report")
 	}
 	var found bool
 	for _, candidate := range report.Candidates {
@@ -116,6 +119,9 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected hidden candidate in report: %+v", report.Candidates)
+	}
+	if err == nil {
+		t.Fatal("expected dry-run error for unavailable candidate")
 	}
 }
 

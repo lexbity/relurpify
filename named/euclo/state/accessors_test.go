@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 )
 
@@ -57,5 +59,53 @@ func TestAccessorsHandleNilEnvelope(t *testing.T) {
 	}
 	if got, ok := GetDispatchRouteKind(nil); ok || got != "" {
 		t.Fatalf("expected empty dispatch route kind on nil envelope, got %q ok=%v", got, ok)
+	}
+	if got, ok := GetIntentEvidence(nil); ok || got != nil {
+		t.Fatalf("expected nil intent evidence on nil envelope, got %v ok=%v", got, ok)
+	}
+	if got, ok := GetIntentInterpretation(nil); ok || got != nil {
+		t.Fatalf("expected nil intent interpretation on nil envelope, got %v ok=%v", got, ok)
+	}
+	if got, ok := GetRouteResolution(nil); ok || got != nil {
+		t.Fatalf("expected nil route resolution on nil envelope, got %v ok=%v", got, ok)
+	}
+}
+
+func TestIntentEvidenceAccessorsRoundTrip(t *testing.T) {
+	env := contextdata.NewEnvelope("task", "session")
+	evidence := &intentcontext.IntentEvidence{
+		ActionType:            "review",
+		Target:                "named/euclo",
+		ExplicitFiles:         []string{"named/euclo/state/keys.go"},
+		MissingFields:         []string{"route"},
+		RequiresClarification: true,
+	}
+
+	SetIntentEvidence(env, evidence)
+	got, ok := GetIntentEvidence(env)
+	if !ok {
+		t.Fatal("expected intent evidence to round-trip")
+	}
+	if got.Target != evidence.Target {
+		t.Fatalf("Target = %q, want %q", got.Target, evidence.Target)
+	}
+}
+
+func TestRouteResolutionAccessorRoundTrip(t *testing.T) {
+	env := contextdata.NewEnvelope("task", "session")
+	resolution := &orchestrate.RouteResolution{
+		RouteKind:                 orchestrate.RouteKindIntent,
+		ThoughtRecipeID:           "euclo.thoughtrecipe.intent.clarify",
+		ResolutionSource:          "registry",
+		ClarificationStateVersion: 11,
+	}
+
+	SetRouteResolution(env, resolution)
+	got, ok := GetRouteResolution(env)
+	if !ok {
+		t.Fatal("expected route resolution to round-trip")
+	}
+	if got.RouteID() != resolution.RouteID() {
+		t.Fatalf("RouteID = %q, want %q", got.RouteID(), resolution.RouteID())
 	}
 }

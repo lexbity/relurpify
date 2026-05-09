@@ -5,46 +5,87 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-func TestDryRunEndToEndPreIngestionAndFinalResponse(t *testing.T) {
+func TestEndToEndFileSelectionGrounding(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkspaceFile(t, dir, "preingest.go", "package demo\n\nfunc PreIngest() {}\n")
+	writeWorkspaceFile(t, dir, "review.go", "package demo\n\nfunc Review() {}\n")
 
-	caps := newCapabilityRegistry(t, "euclo:cap.ast_query")
-	classifier := &mockTier2Classifier{
-		responses: map[string]tier2Response{
-			"investigation": {Sequence: []string{"euclo:cap.ast_query"}, Operator: "OR"},
+	caps := newCapabilityRegistry(t)
+	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+		ID:   "euclo.thoughtrecipe.review",
+		Name: "review",
+		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+			Name: "review",
 		},
-	}
+	})
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
-		orchestrate.WithCapabilityClassifier(classifier),
+		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
+		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 	)
 
-	env := contextdata.NewEnvelope("task-preingest", "session-preingest")
-	seedTask(env, "investigate the handler", "preingest.go")
-	runPreIngestion(t, env, dir, []string{"preingest.go"})
-	if got, ok := env.GetWorkingValue("euclo.ingestion_result"); !ok || got == nil {
-		t.Fatal("expected ingestion result to be recorded")
-	}
+	env := contextdata.NewEnvelope("task-file-grounding", "session-file-grounding")
+	seedTask(env, "review the auth package", "review.go")
+	env.SetWorkingValue("task.input", &core.Task{
+		ID:          "task-file-grounding",
+		Type:        "euclo",
+		Instruction: "review the auth package",
+		Context: map[string]any{
+			"euclo.user_files": []string{"review.go"},
+		},
+		Metadata: map[string]any{},
+	}, contextdata.MemoryClassTask)
+	runPreIngestion(t, env, dir, []string{"review.go"})
 
 	if err := graph.Execute(context.Background(), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
-	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "capability" {
-		t.Fatalf("execution kind = %q, want capability", got)
+	evidenceValue, ok := env.GetWorkingValue("euclo.intent_evidence")
+	if !ok {
+		t.Fatal("expected intent evidence in envelope")
 	}
-	if got := mustStringValue(t, env, "euclo.outcome.category"); got != "success" {
-		t.Fatalf("outcome category = %q, want success", got)
+	evidence, ok := evidenceValue.(*intentcontext.IntentEvidence)
+	if !ok || evidence == nil {
+		t.Fatalf("expected *IntentEvidence, got %T", evidenceValue)
 	}
-	if !mustBoolValue(t, env, "euclo.execution.completed") {
-		t.Fatal("expected execution to complete")
+	if len(evidence.UserFiles) == 0 || evidence.UserFiles[0] != "review.go" {
+		t.Fatalf("user files = %#v, want review.go", evidence.UserFiles)
 	}
-	if classifier.callCount() == 0 {
-		t.Fatal("expected tier-2 classifier to be invoked")
+	interpretationValue, ok := env.GetWorkingValue(intentcontext.IntentInterpretationKey)
+	if !ok {
+		t.Fatal("expected intent interpretation in envelope")
+	}
+	interpretation, ok := interpretationValue.(*intentcontext.IntentInterpretation)
+	if !ok || interpretation == nil {
+		t.Fatalf("expected *IntentInterpretation, got %T", interpretationValue)
+	}
+	if interpretation.Target == "" {
+		t.Fatal("expected grounded interpretation target")
+	}
+	selectionValue, ok := env.GetWorkingValue("euclo.route_selection")
+	if !ok {
+		t.Fatal("expected route_selection in envelope")
+	}
+	routeSelection, ok := selectionValue.(*orchestrate.RouteSelection)
+	if !ok || routeSelection == nil {
+		t.Fatalf("expected *RouteSelection, got %T", selectionValue)
+	}
+	if routeSelection.RouteKind != orchestrate.RouteKindThoughtRecipe || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.review" {
+		t.Fatalf("unexpected route selection: %+v", routeSelection)
+	}
+	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "thoughtrecipe" {
+		t.Fatalf("execution kind = %q, want thoughtrecipe", got)
+	}
+	if got := mustStringValue(t, env, "euclo.execution.thoughtrecipe_id"); got != "euclo.thoughtrecipe.review" {
+		t.Fatalf("execution thoughtrecipe id = %q, want euclo.thoughtrecipe.review", got)
+	}
+	if frameValue, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); ok && frameValue != nil {
+		t.Fatalf("expected grounding to avoid clarification frame, got %#v", frameValue)
 	}
 }

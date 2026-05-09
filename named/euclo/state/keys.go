@@ -4,10 +4,12 @@ package state
 // All keys are prefixed with "euclo." for namespacing.
 const (
 	// Task and Intake
-	KeyTaskEnvelope           = "euclo.task_envelope"           // *intake.TaskEnvelope
-	KeyIntentClassification   = "euclo.intent_classification"   // *intake.IntentClassification
-	KeyRouteSelection         = "euclo.route_selection"         // *orchestrate.RouteSelection
-	KeyClassificationMetadata = "euclo.classification_metadata" // map[string]any
+	KeyTaskEnvelope         = "euclo.task_envelope"         // *intake.TaskEnvelope
+	KeyIntentClassification = "euclo.intent_classification" // *intake.IntentClassification
+	KeyIntentEvidence       = "euclo.intent_evidence"       // *intentcontext.IntentEvidence
+	KeyIntentInterpretation = "euclo.intent_interpretation" // *intentcontext.IntentInterpretation
+	KeyRouteSelection       = "euclo.route_selection"       // *orchestrate.RouteSelection
+	KeyRouteResolution      = "euclo.route_resolution"      // *orchestrate.RouteResolution
 
 	// User Hints
 	KeyContextHint     = "euclo.context_hint"     // string
@@ -67,7 +69,4 @@ const (
 
 	// Family selection (for resume)
 	KeyFamilySelection = "euclo.family_selection" // string
-
-	// Capability sequence
-	KeyCapabilitySequence = "euclo.capability_sequence" // []string
 )

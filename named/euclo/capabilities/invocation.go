@@ -37,12 +37,11 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 	if registry == nil {
 		return &core.Result{
 			NodeID:  capID,
-			Success: true,
+			Success: false,
 			Data: map[string]any{
-				"capability_id": capID,
-				"stub":          true,
+				"error": "capability registry unavailable",
 			},
-		}, nil
+		}, fmt.Errorf("capability registry unavailable")
 	}
 
 	toolResult, err := registry.InvokeCapability(ctx, env, capID, args)

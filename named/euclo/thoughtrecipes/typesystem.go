@@ -227,36 +227,40 @@ func (ts *TypeSystem) validatePredicate(pred *PredicateExpr) error {
 }
 
 func (ts *TypeSystem) validateValueExpr(expr ValueExpr) error {
-	switch v := expr.(type) {
-	case nil:
-		return nil
-	case PathExpr:
-		return ts.validateReferencePath(v)
-	case *PathExpr:
-		return ts.validateReferencePath(*v)
-	case Identifier:
-		return nil
-	case *Identifier:
-		return nil
-	case StringLiteral, *StringLiteral, NumberLiteral, *NumberLiteral:
-		return nil
-	case ListLiteral:
-		for _, entry := range v.Entries {
-			if err := ts.validateValueExpr(entry); err != nil {
+	stack := []ValueExpr{expr}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		switch v := current.(type) {
+		case nil:
+			continue
+		case PathExpr:
+			if err := ts.validateReferencePath(v); err != nil {
 				return err
 			}
-		}
-		return nil
-	case *ListLiteral:
-		for _, entry := range v.Entries {
-			if err := ts.validateValueExpr(entry); err != nil {
+		case *PathExpr:
+			if err := ts.validateReferencePath(*v); err != nil {
 				return err
 			}
+		case Identifier, *Identifier, StringLiteral, *StringLiteral, NumberLiteral, *NumberLiteral:
+			continue
+		case ListLiteral:
+			for i := len(v.Entries) - 1; i >= 0; i-- {
+				stack = append(stack, v.Entries[i])
+			}
+		case *ListLiteral:
+			for i := len(v.Entries) - 1; i >= 0; i-- {
+				stack = append(stack, v.Entries[i])
+			}
+		default:
+			if current == nil {
+				continue
+			}
+			return fmt.Errorf("%s:%d:%d: unsupported value expression %T", current.GetSpan().Start.File, current.GetSpan().Start.Line, current.GetSpan().Start.Column, current)
 		}
-		return nil
-	default:
-		return fmt.Errorf("%s:%d:%d: unsupported value expression %T", expr.GetSpan().Start.File, expr.GetSpan().Start.Line, expr.GetSpan().Start.Column, expr)
 	}
+	return nil
 }
 
 func (ts *TypeSystem) validateReferencePath(path PathExpr) error {
@@ -272,117 +276,160 @@ func (ts *TypeSystem) validateReferencePath(path PathExpr) error {
 }
 
 func (ts *TypeSystem) validateTypeExpr(expr TypeExpr, enumContext bool) error {
-	switch v := expr.(type) {
-	case nil:
-		return nil
-	case *NamedTypeExpr:
-		name := strings.TrimSpace(v.Name.Raw)
-		if name == "" {
-			return fmt.Errorf("%s:%d:%d: empty type reference", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
-		}
-		if isBuiltInType(name) || ts.hasDeclaredType(name) {
-			return nil
-		}
-		if enumContext && isEnumLiteralName(name) {
-			return nil
-		}
-		return fmt.Errorf("%s:%d:%d: unknown type %q", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column, name)
-	case NamedTypeExpr:
-		return ts.validateTypeExpr(&v, enumContext)
-	case *ListTypeExpr:
-		return ts.validateTypeExpr(v.Element, false)
-	case ListTypeExpr:
-		return ts.validateTypeExpr(v.Element, false)
-	case *OptionalTypeExpr:
-		return ts.validateTypeExpr(v.Element, false)
-	case OptionalTypeExpr:
-		return ts.validateTypeExpr(v.Element, false)
-	case *MapTypeExpr:
-		if err := ts.validateTypeExpr(v.Key, false); err != nil {
-			return err
-		}
-		return ts.validateTypeExpr(v.Value, false)
-	case MapTypeExpr:
-		if err := ts.validateTypeExpr(v.Key, false); err != nil {
-			return err
-		}
-		return ts.validateTypeExpr(v.Value, false)
-	case *UnionTypeExpr:
-		if len(v.Options) == 0 {
-			return fmt.Errorf("%s:%d:%d: empty union type", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
-		}
-		for _, opt := range v.Options {
-			if err := ts.validateTypeExpr(opt, true); err != nil {
-				return err
-			}
-		}
-		return nil
-	case UnionTypeExpr:
-		return ts.validateTypeExpr(&v, enumContext)
-	default:
-		return fmt.Errorf("%s:%d:%d: unsupported type expression %T", expr.GetSpan().Start.File, expr.GetSpan().Start.Line, expr.GetSpan().Start.Column, expr)
+	type typeExprFrame struct {
+		expr        TypeExpr
+		enumContext bool
 	}
+
+	stack := []typeExprFrame{{expr: expr, enumContext: enumContext}}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		switch v := current.expr.(type) {
+		case nil:
+			continue
+		case *NamedTypeExpr:
+			name := strings.TrimSpace(v.Name.Raw)
+			if name == "" {
+				return fmt.Errorf("%s:%d:%d: empty type reference", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
+			}
+			if isBuiltInType(name) || ts.hasDeclaredType(name) {
+				continue
+			}
+			if current.enumContext && isEnumLiteralName(name) {
+				continue
+			}
+			return fmt.Errorf("%s:%d:%d: unknown type %q", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column, name)
+		case NamedTypeExpr:
+			stack = append(stack, typeExprFrame{expr: &v, enumContext: current.enumContext})
+		case *ListTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Element, enumContext: false})
+		case ListTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Element, enumContext: false})
+		case *OptionalTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Element, enumContext: false})
+		case OptionalTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Element, enumContext: false})
+		case *MapTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Value, enumContext: false})
+			stack = append(stack, typeExprFrame{expr: v.Key, enumContext: false})
+		case MapTypeExpr:
+			stack = append(stack, typeExprFrame{expr: v.Value, enumContext: false})
+			stack = append(stack, typeExprFrame{expr: v.Key, enumContext: false})
+		case *UnionTypeExpr:
+			if len(v.Options) == 0 {
+				return fmt.Errorf("%s:%d:%d: empty union type", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
+			}
+			for i := len(v.Options) - 1; i >= 0; i-- {
+				stack = append(stack, typeExprFrame{expr: v.Options[i], enumContext: true})
+			}
+		case UnionTypeExpr:
+			stack = append(stack, typeExprFrame{expr: &v, enumContext: current.enumContext})
+		default:
+			return fmt.Errorf("%s:%d:%d: unsupported type expression %T", current.expr.GetSpan().Start.File, current.expr.GetSpan().Start.Line, current.expr.GetSpan().Start.Column, current.expr)
+		}
+	}
+	return nil
 }
 
 func (ts *TypeSystem) typeSignature(expr TypeExpr, enumContext bool) (string, error) {
-	switch v := expr.(type) {
-	case *NamedTypeExpr:
-		name := strings.TrimSpace(v.Name.Raw)
-		if name == "" {
-			return "", fmt.Errorf("%s:%d:%d: empty type reference", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
-		}
-		if enumContext && isEnumLiteralName(name) {
-			return "enum:" + name, nil
-		}
-		return name, nil
-	case NamedTypeExpr:
-		return ts.typeSignature(&v, enumContext)
-	case *ListTypeExpr:
-		elem, err := ts.typeSignature(v.Element, false)
-		if err != nil {
-			return "", err
-		}
-		return "list<" + elem + ">", nil
-	case ListTypeExpr:
-		return ts.typeSignature(&v, enumContext)
-	case *OptionalTypeExpr:
-		elem, err := ts.typeSignature(v.Element, false)
-		if err != nil {
-			return "", err
-		}
-		return "optional<" + elem + ">", nil
-	case OptionalTypeExpr:
-		return ts.typeSignature(&v, enumContext)
-	case *MapTypeExpr:
-		key, err := ts.typeSignature(v.Key, false)
-		if err != nil {
-			return "", err
-		}
-		val, err := ts.typeSignature(v.Value, false)
-		if err != nil {
-			return "", err
-		}
-		return "map<" + key + "," + val + ">", nil
-	case MapTypeExpr:
-		return ts.typeSignature(&v, enumContext)
-	case *UnionTypeExpr:
-		if len(v.Options) == 0 {
-			return "", fmt.Errorf("%s:%d:%d: empty union type", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
-		}
-		parts := make([]string, 0, len(v.Options))
-		for _, opt := range v.Options {
-			sig, err := ts.typeSignature(opt, true)
-			if err != nil {
-				return "", err
-			}
-			parts = append(parts, sig)
-		}
-		return "union<" + strings.Join(parts, "|") + ">", nil
-	case UnionTypeExpr:
-		return ts.typeSignature(&v, enumContext)
-	default:
-		return "", fmt.Errorf("%s:%d:%d: unsupported type expression %T", expr.GetSpan().Start.File, expr.GetSpan().Start.Line, expr.GetSpan().Start.Column, expr)
+	type typeSigFrame struct {
+		expr        TypeExpr
+		enumContext bool
+		phase       int
+		childCount  int
 	}
+
+	popResult := func(results *[]string, count int) []string {
+		if count == 0 {
+			return nil
+		}
+		start := len(*results) - count
+		out := make([]string, count)
+		copy(out, (*results)[start:])
+		*results = (*results)[:start]
+		return out
+	}
+
+	frameStack := []typeSigFrame{{expr: expr, enumContext: enumContext}}
+	results := make([]string, 0, 8)
+	for len(frameStack) > 0 {
+		current := frameStack[len(frameStack)-1]
+		frameStack = frameStack[:len(frameStack)-1]
+
+		switch v := current.expr.(type) {
+		case nil:
+			return "", fmt.Errorf("type expression is nil")
+		case *NamedTypeExpr:
+			name := strings.TrimSpace(v.Name.Raw)
+			if name == "" {
+				return "", fmt.Errorf("%s:%d:%d: empty type reference", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
+			}
+			if current.enumContext && isEnumLiteralName(name) {
+				results = append(results, "enum:"+name)
+			} else {
+				results = append(results, name)
+			}
+		case NamedTypeExpr:
+			frameStack = append(frameStack, typeSigFrame{expr: &v, enumContext: current.enumContext})
+		case *ListTypeExpr:
+			if current.phase == 0 {
+				frameStack = append(frameStack, typeSigFrame{expr: v, enumContext: current.enumContext, phase: 1, childCount: 1})
+				frameStack = append(frameStack, typeSigFrame{expr: v.Element, enumContext: false})
+				continue
+			}
+			children := popResult(&results, current.childCount)
+			results = append(results, "list<"+children[0]+">")
+		case ListTypeExpr:
+			frameStack = append(frameStack, typeSigFrame{expr: &v, enumContext: current.enumContext})
+		case *OptionalTypeExpr:
+			if current.phase == 0 {
+				frameStack = append(frameStack, typeSigFrame{expr: v, enumContext: current.enumContext, phase: 1, childCount: 1})
+				frameStack = append(frameStack, typeSigFrame{expr: v.Element, enumContext: false})
+				continue
+			}
+			children := popResult(&results, current.childCount)
+			results = append(results, "optional<"+children[0]+">")
+		case OptionalTypeExpr:
+			frameStack = append(frameStack, typeSigFrame{expr: &v, enumContext: current.enumContext})
+		case *MapTypeExpr:
+			if current.phase == 0 {
+				frameStack = append(frameStack, typeSigFrame{expr: v, enumContext: current.enumContext, phase: 1, childCount: 2})
+				frameStack = append(frameStack, typeSigFrame{expr: v.Value, enumContext: false})
+				frameStack = append(frameStack, typeSigFrame{expr: v.Key, enumContext: false})
+				continue
+			}
+			children := popResult(&results, current.childCount)
+			results = append(results, "map<"+children[0]+","+children[1]+">")
+		case MapTypeExpr:
+			frameStack = append(frameStack, typeSigFrame{expr: &v, enumContext: current.enumContext})
+		case *UnionTypeExpr:
+			if len(v.Options) == 0 {
+				return "", fmt.Errorf("%s:%d:%d: empty union type", v.GetSpan().Start.File, v.GetSpan().Start.Line, v.GetSpan().Start.Column)
+			}
+			if current.phase == 0 {
+				frameStack = append(frameStack, typeSigFrame{expr: v, enumContext: current.enumContext, phase: 1, childCount: len(v.Options)})
+				for i := len(v.Options) - 1; i >= 0; i-- {
+					frameStack = append(frameStack, typeSigFrame{expr: v.Options[i], enumContext: true})
+				}
+				continue
+			}
+			children := popResult(&results, current.childCount)
+			results = append(results, "union<"+strings.Join(children, "|")+">")
+		case UnionTypeExpr:
+			frameStack = append(frameStack, typeSigFrame{expr: &v, enumContext: current.enumContext})
+		default:
+			return "", fmt.Errorf("%s:%d:%d: unsupported type expression %T", current.expr.GetSpan().Start.File, current.expr.GetSpan().Start.Line, current.expr.GetSpan().Start.Column, current.expr)
+		}
+	}
+	if len(results) != 1 {
+		if len(results) == 0 {
+			return "", fmt.Errorf("type signature produced no result")
+		}
+		return strings.Join(results, ","), nil
+	}
+	return results[0], nil
 }
 
 func (ts *TypeSystem) hasDeclaredType(name string) bool {
