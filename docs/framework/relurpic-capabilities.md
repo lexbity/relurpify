@@ -205,7 +205,7 @@ A top-level agent owns:
 A relurpic capability owns:
 
 - a reusable opinionated behavior
-- the internal execution recipe for that behavior
+- the internal execution thoughtrecipe for that behavior
 
 A top-level agent may select and run relurpic capabilities as part of its
 runtime.

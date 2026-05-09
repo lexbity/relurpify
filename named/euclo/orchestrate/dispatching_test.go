@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 type telemetrySink struct {
@@ -44,13 +44,10 @@ func testCapabilityDescriptor(id string, priority int, availability core.Availab
 	}
 }
 
-func testRecipe(id string) *recipepkg.ThoughtRecipe {
-	return &recipepkg.ThoughtRecipe{
+func testThoughtRecipe(id string) *thoughtrecipepkg.ThoughtRecipe {
+	return &thoughtrecipepkg.ThoughtRecipe{
 		ID:   id,
 		Name: id,
-		Steps: []recipepkg.RecipeStep{
-			{ID: "step-1", Type: "verify"},
-		},
 	}
 }
 
@@ -90,37 +87,47 @@ func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.
 	}
 }
 
-func TestDispatch_ExplicitRecipeRoute_SelectsRequestedRecipe(t *testing.T) {
-	recipes := recipepkg.NewRecipeRegistry()
-	recipe := testRecipe("euclo:recipe.review")
-	if err := recipes.Register(recipe); err != nil {
-		t.Fatalf("register recipe: %v", err)
+func TestDispatch_ExplicitThoughtRecipeRoute_SelectsRequestedThoughtRecipe(t *testing.T) {
+	thoughtrecipes := thoughtrecipepkg.NewThoughtRecipeRegistry()
+	thoughtrecipe := testThoughtRecipe("euclo:thoughtrecipe.review")
+	if err := thoughtrecipes.Register(thoughtrecipe); err != nil {
+		t.Fatalf("register thoughtrecipe: %v", err)
 	}
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	req := RouteRequest{RecipeID: recipe.ID}
+	req := RouteRequest{ThoughtRecipeID: thoughtrecipe.ID}
 
-	result, err := Dispatch(context.Background(), env, req, nil, recipes)
+	result, err := Dispatch(context.Background(), env, req, nil, thoughtrecipes)
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
-	if result.RouteKind != "recipe" {
-		t.Fatalf("expected recipe route, got %q", result.RouteKind)
+	if result.RouteKind != "thoughtrecipe" {
+		t.Fatalf("expected thoughtrecipe route, got %q", result.RouteKind)
 	}
-	if result.RouteID != recipe.ID {
-		t.Fatalf("expected recipe %q, got %q", recipe.ID, result.RouteID)
+	if result.RouteID != thoughtrecipe.ID {
+		t.Fatalf("expected thoughtrecipe %q, got %q", thoughtrecipe.ID, result.RouteID)
 	}
 }
 
-func TestDispatch_AmbiguousClassificationRoutesToClarificationRecipe(t *testing.T) {
+func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.SetWorkingValue("euclo.intent_classification", &intake.IntentClassification{
 		Ambiguous:  true,
 		Confidence: 0.2,
 	}, contextdata.MemoryClassTask)
 	req := routeRequestFromEnvelope(env)
-	if req.RecipeID != clarificationRecipeID {
-		t.Fatalf("route request recipe id = %q, want %q", req.RecipeID, clarificationRecipeID)
+	if req.ThoughtRecipeID != clarificationThoughtRecipeID {
+		t.Fatalf("route request thoughtrecipe id = %q, want %q", req.ThoughtRecipeID, clarificationThoughtRecipeID)
+	}
+	if got := routeKindFromRequest(req); got != RouteKindIntent {
+		t.Fatalf("route kind from request = %q, want intent; request=%+v", got, req)
+	}
+	directResult, directErr := Dispatch(context.Background(), env, req, nil, nil)
+	if directErr != nil {
+		t.Fatalf("direct Dispatch failed: %v", directErr)
+	}
+	if directResult.RouteKind != RouteKindIntent {
+		t.Fatalf("direct dispatch route kind = %q, want intent", directResult.RouteKind)
 	}
 
 	dispatcher := NewDispatcher("test-dispatch")
@@ -133,11 +140,16 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationRecipe(t *testing.
 	}
 	if got, ok := env.GetWorkingValue("euclo.route_selection"); !ok {
 		t.Fatal("expected route selection in envelope")
-	} else if selection, ok := got.(*RouteSelection); !ok || selection == nil || selection.RecipeID != clarificationRecipeID {
+	} else if selection, ok := got.(*RouteSelection); !ok || selection == nil || selection.RouteKind != RouteKindIntent || selection.ThoughtRecipeID != clarificationThoughtRecipeID {
 		t.Fatalf("unexpected route selection: %#v", got)
 	}
-	if got := mustStringRouteValue(t, env, "euclo.dispatch.route_kind"); got != "recipe" {
-		t.Fatalf("dispatch route kind = %q, want recipe", got)
+	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
+		t.Fatal("expected route continuation in envelope")
+	} else if meta, ok := got.(*RouteContinuation); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route continuation: %#v", got)
+	}
+	if got := mustStringRouteValue(t, env, "euclo.dispatch.route_kind"); got != RouteKindIntent {
+		t.Fatalf("dispatch route kind = %q, want intent", got)
 	}
 }
 

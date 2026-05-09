@@ -5,10 +5,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // DryRun resolves a route request without executing it and returns the ranked candidate set.
-func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, recipes *recipepkg.RecipeRegistry) (*DryRunReport, error) {
-	return dryRun(ctx, env, req, caps, recipes)
+func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
+	return dryRun(ctx, env, req, caps, thoughtrecipes)
 }

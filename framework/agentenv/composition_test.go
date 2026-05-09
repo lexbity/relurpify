@@ -124,7 +124,7 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 			return nil
 		},
 		RegisterPromptProviders: nil,
-		LoadRecipes:             nil,
+		LoadThoughtRecipes:      nil,
 	}
 
 	env, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
@@ -158,7 +158,7 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 			return fmt.Errorf("registration failed")
 		},
 		RegisterPromptProviders: nil,
-		LoadRecipes:             nil,
+		LoadThoughtRecipes:      nil,
 	}
 
 	_, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)

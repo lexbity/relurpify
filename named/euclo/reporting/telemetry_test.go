@@ -130,7 +130,7 @@ func TestEmitRouteCompleted_IncludesElapsed(t *testing.T) {
 	sink := &captureTelemetry{}
 	ctx := core.WithTelemetry(context.Background(), sink)
 
-	EmitRouteCompleted(ctx, "task-1", "session-1", "recipe", "euclo:recipe.default", RouteOutcomeSuccess, []string{"artifact"}, 125*time.Millisecond)
+	EmitRouteCompleted(ctx, "task-1", "session-1", "thoughtrecipe", "euclo:thoughtrecipe.default", RouteOutcomeSuccess, []string{"artifact"}, 125*time.Millisecond)
 
 	if len(sink.events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
@@ -287,12 +287,12 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		DurationMs:  42,
 	})
 	telemetry.EmitStepCompleted(ctx, EventStepCompleted{
-		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 12},
-		StepID:      "step-1",
-		RecipeID:    "recipe-1",
-		Paradigm:    "recipe",
-		Success:     true,
-		DurationMs:  17,
+		EventHeader:     EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 12},
+		StepID:          "step-1",
+		ThoughtRecipeID: "thoughtrecipe-1",
+		Paradigm:        "thoughtrecipe",
+		Success:         true,
+		DurationMs:      17,
 	})
 	telemetry.EmitExecutionComplete(ctx, EventExecutionComplete{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 13},
@@ -370,7 +370,7 @@ func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, "euclo.recipe.intent.clarify", contextdata.MemoryClassTask)
+	env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, "euclo.thoughtrecipe.intent.clarify", contextdata.MemoryClassTask)
 
 	if _, err := node.Execute(context.Background(), env); err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -381,8 +381,8 @@ func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
 	if sink.events[1].Type != core.EventType(EventTypeClarificationCompleted) {
 		t.Fatalf("expected clarification completion event, got %q", sink.events[1].Type)
 	}
-	if sink.events[1].Metadata["recipe_id"] != "euclo.recipe.intent.clarify" {
-		t.Fatalf("unexpected recipe id: %#v", sink.events[1].Metadata["recipe_id"])
+	if sink.events[1].Metadata["thoughtrecipe_id"] != "euclo.thoughtrecipe.intent.clarify" {
+		t.Fatalf("unexpected thoughtrecipe id: %#v", sink.events[1].Metadata["thoughtrecipe_id"])
 	}
 }
 

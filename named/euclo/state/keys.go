@@ -26,9 +26,9 @@ const (
 	KeyIntentSignals = "euclo.intent_signals" // map[string]float64 (family scores)
 	KeyFamilyScores  = "euclo.family_scores"  // map[string]float64
 
-	// Thought Recipe
-	KeyRecipeID      = "euclo.recipe_id"      // string
-	KeyRecipeVersion = "euclo.recipe_version" // string
+	// Thought ThoughtRecipe
+	KeyThoughtRecipeID      = "euclo.thoughtrecipe_id"      // string
+	KeyThoughtRecipeVersion = "euclo.thoughtrecipe_version" // string
 
 	// Policy
 	KeyPolicyDecision = "euclo.policy_decision" // *policy.PolicyDecision
@@ -46,7 +46,7 @@ const (
 	KeyResumeRoute          = "euclo.resume.route"          // *orchestrate.RouteSelection
 
 	// Dispatch routing
-	KeyDispatchRouteKind = "euclo.dispatch.route_kind" // string ("recipe" or "capability")
+	KeyDispatchRouteKind = "euclo.dispatch.route_kind" // string ("thoughtrecipe" or "capability")
 
 	// Stream
 	KeyStreamResult     = "euclo.stream_result"      // *contextstream.Result
@@ -59,8 +59,8 @@ const (
 	KeyJobRecords      = "euclo.job_records"      // []JobRecord
 	KeyIngestionResult = "euclo.ingestion_result" // *ingestion.Result
 
-	// Recipe capture keys (dynamic pattern: euclo.recipe.{recipeID}.{captureName})
-	KeyRecipePrefix = "euclo.recipe."
+	// ThoughtRecipe capture keys (dynamic pattern: euclo.thoughtrecipe.{thoughtrecipeID}.{captureName})
+	KeyThoughtRecipePrefix = "euclo.thoughtrecipe."
 
 	// Negative constraints
 	KeyNegativeConstraints = "euclo.negative_constraints" // []string

@@ -33,9 +33,9 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 		t.Fatal("agent should be initialized after Initialize call")
 	}
 
-	// Verify recipeRegistry is set
-	if agent.recipeRegistry == nil {
-		t.Fatal("recipeRegistry should be set after Initialize")
+	// Verify thoughtrecipeRegistry is set
+	if agent.thoughtrecipeRegistry == nil {
+		t.Fatal("thoughtrecipeRegistry should be set after Initialize")
 	}
 }
 

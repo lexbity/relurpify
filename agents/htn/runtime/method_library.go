@@ -115,7 +115,7 @@ func (ml *MethodLibrary) FindResolved(task *core.Task) *ResolvedMethod {
 	return &resolved
 }
 
-// registerDefaults installs the built-in method recipes.
+// registerDefaults installs the built-in method thoughtrecipes.
 func (ml *MethodLibrary) registerDefaults() {
 	ml.methods = []Method{
 		{

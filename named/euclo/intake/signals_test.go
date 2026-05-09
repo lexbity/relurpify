@@ -58,26 +58,26 @@ func TestCollectSignalsContextHint(t *testing.T) {
 	}
 }
 
-func TestCollectSignalsUserRecipe(t *testing.T) {
+func TestCollectSignalsUserThoughtRecipe(t *testing.T) {
 	envelope := &TaskEnvelope{
 		Instruction: "failing test needs fixing",
 	}
 
-	recipeKeywords := map[string][]string{
+	thoughtrecipeKeywords := map[string][]string{
 		"debug": {"failing test"},
 	}
 
-	signals := CollectSignals(envelope, recipeKeywords, nil)
+	signals := CollectSignals(envelope, thoughtrecipeKeywords, nil)
 
 	found := false
 	for _, sig := range signals {
-		if sig.Kind == SignalKindUserRecipe && sig.FamilyID == "debug" {
+		if sig.Kind == SignalKindUserThoughtRecipe && sig.FamilyID == "debug" {
 			found = true
 		}
 	}
 
 	if !found {
-		t.Error("Expected user_recipe signal for matching recipe keyword")
+		t.Error("Expected user_thoughtrecipe signal for matching thoughtrecipe keyword")
 	}
 }
 

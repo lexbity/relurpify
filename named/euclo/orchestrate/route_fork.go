@@ -48,9 +48,9 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	branch := "capability_execution"
 	next := "euclo.execute_capability"
-	if routeKind == "recipe" {
-		branch = "recipe_execution"
-		next = "euclo.execute_recipe"
+	if IsThoughtRecipeRouteKind(routeKind) || IsIntentRouteKind(routeKind) {
+		branch = "thoughtrecipe_execution"
+		next = "euclo.execute_thoughtrecipe"
 	}
 	env.SetWorkingValue(dispatchRouteKindKey, routeKind, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)

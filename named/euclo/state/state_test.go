@@ -27,8 +27,8 @@ func TestAllKeysUnique(t *testing.T) {
 		KeyIngestPolicy,
 		KeyIntentSignals,
 		KeyFamilyScores,
-		KeyRecipeID,
-		KeyRecipeVersion,
+		KeyThoughtRecipeID,
+		KeyThoughtRecipeVersion,
 		KeyPolicyDecision,
 		KeyHITLTriggered,
 		KeyHITLResponse,
@@ -106,9 +106,9 @@ func TestSetGetRouteSelection(t *testing.T) {
 	env := contextdata.NewEnvelope("test-task", "test-session")
 
 	rs := &orchestrate.RouteSelection{
-		RouteKind:    "recipe",
-		RecipeID:     "recipe-123",
-		CapabilityID: "",
+		RouteKind:       "thoughtrecipe",
+		ThoughtRecipeID: "thoughtrecipe-123",
+		CapabilityID:    "",
 	}
 
 	SetRouteSelection(env, rs)
@@ -120,8 +120,8 @@ func TestSetGetRouteSelection(t *testing.T) {
 	if retrieved.RouteKind != rs.RouteKind {
 		t.Errorf("RouteKind mismatch: got %q, want %q", retrieved.RouteKind, rs.RouteKind)
 	}
-	if retrieved.RecipeID != rs.RecipeID {
-		t.Errorf("RecipeID mismatch: got %q, want %q", retrieved.RecipeID, rs.RecipeID)
+	if retrieved.ThoughtRecipeID != rs.ThoughtRecipeID {
+		t.Errorf("ThoughtRecipeID mismatch: got %q, want %q", retrieved.ThoughtRecipeID, rs.ThoughtRecipeID)
 	}
 }
 
@@ -174,11 +174,11 @@ func TestSetGetNegativeConstraints(t *testing.T) {
 	}
 }
 
-func TestRecipeCaptureKeyConstruction(t *testing.T) {
-	key := RecipeCaptureKey("tdd", "test_output")
-	expected := "euclo.recipe.tdd.test_output"
+func TestThoughtRecipeCaptureKeyConstruction(t *testing.T) {
+	key := ThoughtRecipeCaptureKey("tdd", "test_output")
+	expected := "euclo.thoughtrecipe.tdd.test_output"
 	if key != expected {
-		t.Errorf("RecipeCaptureKey = %q, want %q", key, expected)
+		t.Errorf("ThoughtRecipeCaptureKey = %q, want %q", key, expected)
 	}
 }
 

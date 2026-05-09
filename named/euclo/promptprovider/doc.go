@@ -1,6 +1,6 @@
 // Package promptprovider provides euclo-specific prompt context providers.
 //
-// These providers supply runtime context for recipe step prompts, exposing
+// These providers supply runtime context for thoughtrecipe step prompts, exposing
 // euclo's internal state (captures, plan goals, step summaries) to the
 // prompt registry system.
 //

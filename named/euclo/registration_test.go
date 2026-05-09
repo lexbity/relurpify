@@ -14,8 +14,8 @@ func TestGetRegistrationFuncs(t *testing.T) {
 	if regFuncs.RegisterPromptProviders == nil {
 		t.Error("RegisterPromptProviders should not be nil")
 	}
-	if regFuncs.LoadRecipes == nil {
-		t.Error("LoadRecipes should not be nil")
+	if regFuncs.LoadThoughtRecipes == nil {
+		t.Error("LoadThoughtRecipes should not be nil")
 	}
 }
 
@@ -43,18 +43,18 @@ func TestRegisterPromptProviders(t *testing.T) {
 	// with a PromptRegistry to test properly
 }
 
-func TestLoadRecipes(t *testing.T) {
+func TestLoadThoughtRecipes(t *testing.T) {
 	regFuncs := GetRegistrationFuncs()
-	if regFuncs.LoadRecipes == nil {
-		t.Fatal("LoadRecipes should not be nil")
+	if regFuncs.LoadThoughtRecipes == nil {
+		t.Fatal("LoadThoughtRecipes should not be nil")
 	}
 
-	// Test that LoadRecipes can be called
-	recipes, err := regFuncs.LoadRecipes()
+	// Test that LoadThoughtRecipes can be called
+	thoughtrecipes, err := regFuncs.LoadThoughtRecipes()
 	if err != nil {
-		t.Errorf("LoadRecipes returned error: %v", err)
+		t.Errorf("LoadThoughtRecipes returned error: %v", err)
 	}
-	if recipes == nil {
-		t.Error("LoadRecipes should not return nil")
+	if thoughtrecipes == nil {
+		t.Error("LoadThoughtRecipes should not return nil")
 	}
 }

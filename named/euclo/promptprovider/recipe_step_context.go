@@ -10,9 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
-type recipeStepContextProvider struct{}
+type thoughtrecipeStepContextProvider struct{}
 
-func (p *recipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
+func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
 	state := clarificationStateFromRuntime(ctx)
 	if state == nil {
 		return prompt.ContextChunk{Content: ""}
@@ -29,8 +29,14 @@ func (p *recipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.Co
 	if turnID := strings.TrimSpace(state.CurrentTurnID); turnID != "" {
 		lines = append(lines, fmt.Sprintf("Current Turn ID: %s", turnID))
 	}
-	if recipeID := strings.TrimSpace(state.ActiveRecipeID); recipeID != "" {
-		lines = append(lines, fmt.Sprintf("Active Recipe ID: %s", recipeID))
+	if thoughtrecipeID := strings.TrimSpace(state.ActiveThoughtRecipeID); thoughtrecipeID != "" {
+		lines = append(lines, fmt.Sprintf("Active ThoughtRecipe ID: %s", thoughtrecipeID))
+	}
+	if checkpointID := strings.TrimSpace(state.LastCheckpointID); checkpointID != "" {
+		lines = append(lines, fmt.Sprintf("Last Checkpoint ID: %s", checkpointID))
+	}
+	if checkpointSeq := state.LastCheckpointSeq; checkpointSeq > 0 {
+		lines = append(lines, fmt.Sprintf("Last Checkpoint Seq: %d", checkpointSeq))
 	}
 	if question := firstNonEmpty(ctx.Variables["question"], ctx.Variables["instruction"]); question != "" {
 		lines = append(lines, fmt.Sprintf("Current Question: %s", question))
@@ -54,11 +60,17 @@ func (p *recipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.Co
 	if scopes := scopeSummaries(state.ConfirmedScopes); len(scopes) > 0 {
 		lines = append(lines, "Confirmed Scopes: "+strings.Join(scopes, ", "))
 	}
+	if relationIntents := relationIntentSummaries(state.PendingRelationIntents); len(relationIntents) > 0 {
+		lines = append(lines, "Pending Relation Intents: "+strings.Join(relationIntents, ", "))
+	}
 	if questions := questionSummaries(state.PendingQuestions); len(questions) > 0 {
 		lines = append(lines, "Pending Questions: "+strings.Join(questions, ", "))
 	}
 	if projections := projectionSummaries(state.PendingProjection); len(projections) > 0 {
 		lines = append(lines, "Pending Projection: "+strings.Join(projections, ", "))
+	}
+	if mutations := projectionRecordSummaries(state.AppliedMutations); len(mutations) > 0 {
+		lines = append(lines, "Applied Mutations: "+strings.Join(mutations, ", "))
 	}
 
 	if len(lines) == 0 {
@@ -67,20 +79,39 @@ func (p *recipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.Co
 	return prompt.ContextChunk{Content: "Clarification Runtime:\n" + strings.Join(lines, "\n")}
 }
 
-func (p *recipeStepContextProvider) Describe() prompt.ProviderMetadata {
+func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
 	return prompt.ProviderMetadata{
-		Name:        "euclo.recipe_step_context",
-		Description: "Provides clarification runtime context for recipe step prompts",
+		Name:        "euclo.thoughtrecipe_step_context",
+		Description: "Provides clarification runtime context for thoughtrecipe step prompts",
 		Paradigms:   []string{"euclo"},
 		ReadsKeys: []string{
 			intentcontext.ClarificationStateKey,
+			intentcontext.ClarificationAmbiguityKey,
+			intentcontext.ClarificationTurnsKey,
+			intentcontext.ClarificationConfirmedEntitiesKey,
+			intentcontext.ClarificationConfirmedScopesKey,
+			intentcontext.ClarificationRelationIntentsKey,
+			intentcontext.ClarificationGroundedAnchorsKey,
+			intentcontext.ClarificationPendingProjectionKey,
+			intentcontext.ClarificationProjectedMutationsKey,
+			intentcontext.ClarificationActiveThoughtRecipeKey,
+			intentcontext.ClarificationLastCheckpointIDKey,
+			intentcontext.ClarificationLastCheckpointSeqKey,
 			"euclo.intent.clarification.state_version",
 			"euclo.intent.clarification.current_turn_id",
-			"euclo.intent.clarification.active_recipe_id",
+			"euclo.intent.clarification.active_thoughtrecipe_id",
+			"euclo.intent.clarification.last_checkpoint_id",
+			"euclo.intent.clarification.last_checkpoint_seq",
+			"euclo.intent.clarification.ambiguity_kind",
+			"euclo.intent.clarification.ambiguity_confidence",
+			"euclo.intent.clarification.ambiguity_rationale",
 			"euclo.intent.clarification.grounded_anchor_ids",
 			"euclo.intent.clarification.confirmed_entity_ids",
 			"euclo.intent.clarification.confirmed_scope_ids",
+			"euclo.intent.clarification.pending_relation_intents",
+			"euclo.intent.clarification.pending_questions",
 			"euclo.intent.clarification.pending_projection_ids",
+			"euclo.intent.clarification.applied_mutations",
 		},
 	}
 }
@@ -204,12 +235,87 @@ func projectionSummaries(intents []intentcontext.ProjectionIntent) []string {
 	out := make([]string, 0, len(intents))
 	for _, intent := range intents {
 		label := strings.TrimSpace(intent.StableID)
-		if label == "" {
-			label = strings.TrimSpace(intent.IdempotencyKey)
-		}
 		if label != "" {
-			out = append(out, label)
+			parts := []string{label}
+			if kind := strings.TrimSpace(intent.MutationKind); kind != "" {
+				parts = append(parts, kind)
+			}
+			if root := strings.TrimSpace(intent.RevisionRootID); root != "" {
+				parts = append(parts, "root="+root)
+			}
+			if key := strings.TrimSpace(intent.IdempotencyKey); key != "" {
+				parts = append(parts, "key="+key)
+			}
+			if len(intent.SubjectIDs) > 0 {
+				parts = append(parts, "subjects="+strings.Join(intent.SubjectIDs, "/"))
+			}
+			if len(intent.ObjectIDs) > 0 {
+				parts = append(parts, "objects="+strings.Join(intent.ObjectIDs, "/"))
+			}
+			out = append(out, strings.Join(parts, " "))
+			continue
 		}
+		if key := strings.TrimSpace(intent.IdempotencyKey); key != "" {
+			out = append(out, key)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func relationIntentSummaries(intents []intentcontext.RelationIntent) []string {
+	if len(intents) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(intents))
+	for _, intent := range intents {
+		label := strings.TrimSpace(intent.StableID)
+		if label == "" {
+			continue
+		}
+		parts := []string{label}
+		if source := strings.TrimSpace(intent.SourceEntityID); source != "" {
+			parts = append(parts, "source="+source)
+		}
+		if target := strings.TrimSpace(intent.TargetEntityID); target != "" {
+			parts = append(parts, "target="+target)
+		}
+		if relation := strings.TrimSpace(intent.RelationKind); relation != "" {
+			parts = append(parts, "kind="+relation)
+		}
+		if direction := strings.TrimSpace(intent.Direction); direction != "" {
+			parts = append(parts, "direction="+direction)
+		}
+		out = append(out, strings.Join(parts, " "))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func projectionRecordSummaries(records []intentcontext.ProjectionRecord) []string {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(records))
+	for _, record := range records {
+		label := strings.TrimSpace(record.StableID)
+		if label == "" {
+			continue
+		}
+		parts := []string{label}
+		if root := strings.TrimSpace(record.RevisionRootID); root != "" {
+			parts = append(parts, "root="+root)
+		}
+		if key := strings.TrimSpace(record.IdempotencyKey); key != "" {
+			parts = append(parts, "key="+key)
+		}
+		if result := strings.TrimSpace(string(record.Result)); result != "" {
+			parts = append(parts, "result="+result)
+		}
+		if by := strings.TrimSpace(record.AppliedBy); by != "" {
+			parts = append(parts, "by="+by)
+		}
+		out = append(out, strings.Join(parts, " "))
 	}
 	sort.Strings(out)
 	return out

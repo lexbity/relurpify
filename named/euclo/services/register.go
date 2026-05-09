@@ -2,7 +2,7 @@ package services
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // Registration provides Euclo's service registration functions.
@@ -10,7 +10,7 @@ import (
 type Registration struct {
 	capabilityRegistrar CapabilityRegistrar
 	promptRegistrar     PromptRegistrar
-	recipeLoader        RecipeLoader
+	thoughtrecipeLoader ThoughtRecipeLoader
 }
 
 // NewRegistration creates a new Registration with default implementations.
@@ -19,7 +19,7 @@ func NewRegistration(opts ...Option) *Registration {
 	r := &Registration{
 		capabilityRegistrar: &defaultCapabilityRegistrar{},
 		promptRegistrar:     &defaultPromptRegistrar{},
-		recipeLoader:        &defaultRecipeLoader{},
+		thoughtrecipeLoader: &defaultThoughtRecipeLoader{},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -34,7 +34,7 @@ func (r *Registration) AgentRegistrationFuncs() agentenv.AgentRegistrationFuncs 
 	return agentenv.AgentRegistrationFuncs{
 		RegisterCapabilities:    r.registerCapabilities,
 		RegisterPromptProviders: r.registerPromptProviders,
-		LoadRecipes:             r.loadRecipes,
+		LoadThoughtRecipes:      r.loadThoughtRecipes,
 	}
 }
 
@@ -46,8 +46,8 @@ func (r *Registration) registerPromptProviders(env agentenv.WorkspaceEnvironment
 	return r.promptRegistrar.RegisterAll(env)
 }
 
-func (r *Registration) loadRecipes() (interface{}, error) {
-	return r.recipeLoader.LoadAll()
+func (r *Registration) loadThoughtRecipes() (interface{}, error) {
+	return r.thoughtrecipeLoader.LoadAll()
 }
 
 // Option configures the Registration.
@@ -67,10 +67,10 @@ func WithPromptRegistrar(pr PromptRegistrar) Option {
 	}
 }
 
-// WithRecipeLoader sets a custom recipe loader.
-func WithRecipeLoader(rl RecipeLoader) Option {
+// WithThoughtRecipeLoader sets a custom thoughtrecipe loader.
+func WithThoughtRecipeLoader(rl ThoughtRecipeLoader) Option {
 	return func(r *Registration) {
-		r.recipeLoader = rl
+		r.thoughtrecipeLoader = rl
 	}
 }
 
@@ -84,7 +84,7 @@ type PromptRegistrar interface {
 	RegisterAll(env agentenv.WorkspaceEnvironment) error
 }
 
-// RecipeLoader abstracts recipe loading.
-type RecipeLoader interface {
-	LoadAll() (*recipe.RecipeRegistry, error)
+// ThoughtRecipeLoader abstracts thoughtrecipe loading.
+type ThoughtRecipeLoader interface {
+	LoadAll() (*thoughtrecipe.LoadResult, error)
 }

@@ -11,7 +11,7 @@ import (
 
 // FilteredRegistry wraps a Registry and restricts visible capabilities to a
 // declared allowed set. An empty allowed set means pass-through (all capabilities
-// visible). This is the mechanism through which thought recipe capability scoping
+// visible). This is the mechanism through which thought thoughtrecipe capability scoping
 // is enforced — the LLM can only call tools it can see.
 type FilteredRegistry struct {
 	base    *CapabilityRegistry

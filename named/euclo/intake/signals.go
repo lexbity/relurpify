@@ -10,13 +10,13 @@ import (
 type SignalKind string
 
 const (
-	SignalKindKeyword       SignalKind = "keyword"
-	SignalKindTaskStructure SignalKind = "task_structure"
-	SignalKindErrorText     SignalKind = "error_text"
-	SignalKindContextHint   SignalKind = "context_hint"
-	SignalKindUserRecipe    SignalKind = "user_recipe"
-	SignalKindNegative      SignalKind = "negative"
-	SignalKindDefault       SignalKind = "default"
+	SignalKindKeyword           SignalKind = "keyword"
+	SignalKindTaskStructure     SignalKind = "task_structure"
+	SignalKindErrorText         SignalKind = "error_text"
+	SignalKindContextHint       SignalKind = "context_hint"
+	SignalKindUserThoughtRecipe SignalKind = "user_thoughtrecipe"
+	SignalKindNegative          SignalKind = "negative"
+	SignalKindDefault           SignalKind = "default"
 )
 
 // ClassificationSignal represents a detected signal for family classification.
@@ -29,13 +29,13 @@ type ClassificationSignal struct {
 
 // Signal weight constants
 const (
-	WeightKeyword       = 1.0
-	WeightTaskStructure = 0.8
-	WeightErrorText     = 1.5
-	WeightContextHint   = 2.0
-	WeightUserRecipe    = 1.8
-	WeightNegative      = 0.0 // Negative signals don't contribute to scoring
-	WeightDefault       = 0.5
+	WeightKeyword           = 1.0
+	WeightTaskStructure     = 0.8
+	WeightErrorText         = 1.5
+	WeightContextHint       = 2.0
+	WeightUserThoughtRecipe = 1.8
+	WeightNegative          = 0.0 // Negative signals don't contribute to scoring
+	WeightDefault           = 0.5
 )
 
 // Error text patterns
@@ -46,7 +46,7 @@ var errorPatterns = []string{
 }
 
 // CollectSignals scans the instruction and context for classification signals.
-func CollectSignals(envelope *TaskEnvelope, recipeKeywords map[string][]string, registry *families.KeywordFamilyRegistry) []ClassificationSignal {
+func CollectSignals(envelope *TaskEnvelope, thoughtrecipeKeywords map[string][]string, registry *families.KeywordFamilyRegistry) []ClassificationSignal {
 	var signals []ClassificationSignal
 	lowerInstruction := strings.ToLower(envelope.Instruction)
 
@@ -89,15 +89,15 @@ func CollectSignals(envelope *TaskEnvelope, recipeKeywords map[string][]string, 
 		})
 	}
 
-	// 4. User recipe signal
-	for familyID, keywords := range recipeKeywords {
+	// 4. User thoughtrecipe signal
+	for familyID, keywords := range thoughtrecipeKeywords {
 		for _, kw := range keywords {
 			if strings.Contains(lowerInstruction, strings.ToLower(kw)) {
 				signals = append(signals, ClassificationSignal{
-					Kind:     SignalKindUserRecipe,
+					Kind:     SignalKindUserThoughtRecipe,
 					FamilyID: familyID,
-					Weight:   WeightUserRecipe,
-					Source:   "user_recipe:" + kw,
+					Weight:   WeightUserThoughtRecipe,
+					Source:   "user_thoughtrecipe:" + kw,
 				})
 				break
 			}
@@ -180,12 +180,12 @@ type ScoredClassification struct {
 }
 
 // ClassifyTaskScored performs tier-1 classification using signal scoring.
-func ClassifyTaskScored(envelope *TaskEnvelope, registry *families.KeywordFamilyRegistry, recipeKeywords map[string][]string) *ScoredClassification {
+func ClassifyTaskScored(envelope *TaskEnvelope, registry *families.KeywordFamilyRegistry, thoughtrecipeKeywords map[string][]string) *ScoredClassification {
 	if envelope == nil {
 		envelope = &TaskEnvelope{}
 	}
 	// Collect signals
-	signals := CollectSignals(envelope, recipeKeywords, registry)
+	signals := CollectSignals(envelope, thoughtrecipeKeywords, registry)
 
 	// Score signals
 	var allFamilies []families.KeywordFamily

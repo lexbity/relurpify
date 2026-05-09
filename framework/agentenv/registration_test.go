@@ -7,9 +7,9 @@ import (
 func TestAgentRegistrationFuncs(t *testing.T) {
 	// Test that AgentRegistrationFuncs can be created with nil functions
 	regFuncs := AgentRegistrationFuncs{
-		RegisterCapabilities:     nil,
+		RegisterCapabilities:    nil,
 		RegisterPromptProviders: nil,
-		LoadRecipes:             nil,
+		LoadThoughtRecipes:      nil,
 	}
 
 	if regFuncs.RegisterCapabilities != nil {
@@ -18,8 +18,8 @@ func TestAgentRegistrationFuncs(t *testing.T) {
 	if regFuncs.RegisterPromptProviders != nil {
 		t.Error("RegisterPromptProviders should be nil")
 	}
-	if regFuncs.LoadRecipes != nil {
-		t.Error("LoadRecipes should be nil")
+	if regFuncs.LoadThoughtRecipes != nil {
+		t.Error("LoadThoughtRecipes should be nil")
 	}
 }
 
@@ -32,7 +32,7 @@ func TestAgentRegistrationFuncsWithFunctions(t *testing.T) {
 			return nil
 		},
 		RegisterPromptProviders: nil,
-		LoadRecipes:             nil,
+		LoadThoughtRecipes:      nil,
 	}
 
 	if regFuncs.RegisterCapabilities == nil {

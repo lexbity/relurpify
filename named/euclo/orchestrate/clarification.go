@@ -20,18 +20,18 @@ import (
 )
 
 const (
-	clarificationRecipeID      = "euclo.recipe.intent.clarify"
-	clarificationCapabilityID  = "euclo:cap.intent.clarify"
-	clarificationRequestKey    = "euclo.clarification.request"
-	clarificationGroundingKey  = "euclo.clarification.grounding"
-	clarificationProjectionKey = "euclo.clarification.projection"
-	clarificationRequeryKey    = "euclo.clarification.requery_request"
-	clarificationActionKey     = "action"
-	clarificationActionRequest = "request"
-	clarificationActionGround  = "ground"
-	clarificationActionProject = "project"
-	clarificationActionRequery = "requery"
-	clarificationActionHandoff = "handoff"
+	clarificationThoughtRecipeID = "euclo.thoughtrecipe.intent.clarify"
+	clarificationCapabilityID    = "euclo:cap.intent.clarify"
+	clarificationRequestKey      = "euclo.clarification.request"
+	clarificationGroundingKey    = "euclo.clarification.grounding"
+	clarificationProjectionKey   = "euclo.clarification.projection"
+	clarificationRequeryKey      = "euclo.clarification.requery_request"
+	clarificationActionKey       = "action"
+	clarificationActionRequest   = "request"
+	clarificationActionGround    = "ground"
+	clarificationActionProject   = "project"
+	clarificationActionRequery   = "requery"
+	clarificationActionHandoff   = "handoff"
 )
 
 func needsClarificationRoute(env *contextdata.Envelope) bool {
@@ -58,7 +58,7 @@ func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	}
 	if v, ok := env.GetWorkingValue("euclo.route_selection"); ok {
 		if selection, ok := v.(*RouteSelection); ok && selection != nil {
-			return strings.TrimSpace(selection.RecipeID) == clarificationRecipeID
+			return strings.TrimSpace(selection.ThoughtRecipeID) == clarificationThoughtRecipeID
 		}
 	}
 	return false
@@ -127,7 +127,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 	case clarificationActionRequest:
 		seedClarificationAmbiguityFromEnvelope(state, env)
 		req := buildClarificationRequestFromState(state, taskInstruction, maxTokens, mode)
-		state.ActiveRecipeID = clarificationRecipeID
+		state.ActiveThoughtRecipeID = clarificationThoughtRecipeID
 		state.LastUpdatedAt = time.Now().UTC()
 		state.Normalize()
 		if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
@@ -135,7 +135,8 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		}
 		if env != nil {
 			env.SetWorkingValue(clarificationRequestKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, clarificationRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		emitClarificationStarted(ctx, env, state, req)
 		result["request"] = req
@@ -161,7 +162,8 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		if env != nil {
 			env.SetWorkingValue(clarificationGroundingKey, grounding, contextdata.MemoryClassTask)
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, clarificationRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		result["grounding"] = grounding
 		result["requery"] = req
@@ -174,7 +176,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 				Data:    result,
 			}, planErr
 		}
-		state.ActiveRecipeID = clarificationRecipeID
+		state.ActiveThoughtRecipeID = clarificationThoughtRecipeID
 		state.LastUpdatedAt = time.Now().UTC()
 		state.Normalize()
 		if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
@@ -182,7 +184,8 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		}
 		if env != nil {
 			env.SetWorkingValue(clarificationProjectionKey, plan, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, clarificationRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		emitClarificationProjected(ctx, env, state, plan)
 		result["projection_plan"] = plan
@@ -190,22 +193,30 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		req := buildClarificationRequestFromState(state, taskInstruction, maxTokens, mode)
 		if env != nil {
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, clarificationRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		result["requery"] = req
 	case clarificationActionHandoff:
-		nextRecipeID := clarificationRecipeForState(state, args)
-		if nextRecipeID != "" && env != nil {
-			env.SetWorkingValue("euclo.clarification.next_recipe_id", nextRecipeID, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveRecipeKey, nextRecipeID, contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.route_selection", &RouteSelection{RouteKind: "recipe", RecipeID: nextRecipeID}, contextdata.MemoryClassTask)
+		nextThoughtRecipeID := clarificationThoughtRecipeForState(state, args)
+		if nextThoughtRecipeID != "" && env != nil {
+			state.ActiveThoughtRecipeID = nextThoughtRecipeID
+			state.LastUpdatedAt = time.Now().UTC()
+			state.Normalize()
+			if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+				return nil, err
+			}
+			env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", nextThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
+			routeKind := RouteKindForThoughtRecipeID(nextThoughtRecipeID)
+			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
 		}
-		if env != nil && nextRecipeID == "" {
-			env.SetWorkingValue("euclo.clarification.next_recipe_id", "", contextdata.MemoryClassTask)
+		if env != nil && nextThoughtRecipeID == "" {
+			env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", "", contextdata.MemoryClassTask)
 			env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
 		}
-		emitClarificationCompleted(ctx, env, state, nextRecipeID)
-		result["next_recipe_id"] = nextRecipeID
+		emitClarificationCompleted(ctx, env, state, nextThoughtRecipeID)
+		result["next_thoughtrecipe_id"] = nextThoughtRecipeID
 	default:
 		return &contracts.CapabilityExecutionResult{
 			Success: false,
@@ -245,10 +256,10 @@ func buildClarificationRequestFromState(state *intentcontext.ClarificationState,
 		Mode:        mode,
 		RequestedAt: time.Now().UTC(),
 		Metadata: map[string]any{
-			"task_id":          state.TaskID,
-			"session_id":       state.SessionID,
-			"state_version":    state.StateVersion,
-			"active_recipe_id": state.ActiveRecipeID,
+			"task_id":                 state.TaskID,
+			"session_id":              state.SessionID,
+			"state_version":           state.StateVersion,
+			"active_thoughtrecipe_id": state.ActiveThoughtRecipeID,
 		},
 	}
 	if state.Ambiguity != nil {
@@ -345,16 +356,38 @@ func confidenceFromAny(value any) float64 {
 	}
 }
 
-func clarificationRecipeForState(state *intentcontext.ClarificationState, args map[string]interface{}) string {
-	if recipeID := strings.TrimSpace(stringArg(args, "recipe_id")); recipeID != "" {
-		return recipeID
+func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]interface{}) string {
+	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
+		return thoughtrecipeID
 	}
 	if familyID := strings.TrimSpace(stringArg(args, "family_id")); familyID != "" {
-		if recipeID := clarificationRecipeForFamily(familyID); recipeID != "" {
-			return recipeID
+		if thoughtrecipeID := clarificationThoughtRecipeForFamily(familyID); thoughtrecipeID != "" {
+			return thoughtrecipeID
 		}
 	}
 	return ""
+}
+
+func setRouteSelectionContinuation(env *contextdata.Envelope, targetRouteKind, targetRouteID, sourceRouteKind, sourceRouteID string) {
+	if env == nil {
+		return
+	}
+	routeKind := strings.TrimSpace(targetRouteKind)
+	routeID := strings.TrimSpace(targetRouteID)
+	sourceKind := strings.TrimSpace(sourceRouteKind)
+	sourceID := strings.TrimSpace(sourceRouteID)
+	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+		RouteKind:       routeKind,
+		ThoughtRecipeID: routeID,
+	}, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route.continuation", &RouteContinuation{
+		SharedContext:         true,
+		SourceRouteKind:       sourceKind,
+		SourceRouteID:         sourceID,
+		TargetRouteKind:       routeKind,
+		TargetRouteID:         routeID,
+		ActiveThoughtRecipeID: routeID,
+	}, contextdata.MemoryClassTask)
 }
 
 func seedClarificationAmbiguityFromEnvelope(state *intentcontext.ClarificationState, env *contextdata.Envelope) {
@@ -444,22 +477,22 @@ func stringArg(args map[string]interface{}, key string) string {
 	}
 }
 
-func clarificationRecipeForFamily(family string) string {
+func clarificationThoughtRecipeForFamily(family string) string {
 	switch strings.ToLower(strings.TrimSpace(family)) {
 	case "review":
-		return "euclo.recipe.code_review"
+		return "euclo.thoughtrecipe.code_review"
 	case "investigation":
-		return "euclo.recipe.investigation"
+		return "euclo.thoughtrecipe.investigation"
 	case "debug":
-		return "euclo.recipe.debug_tdd_repair"
+		return "euclo.thoughtrecipe.debug_tdd_repair"
 	case "migration":
-		return "euclo.recipe.dep_upgrade"
+		return "euclo.thoughtrecipe.dep_upgrade"
 	case "implementation":
-		return "euclo.recipe.test_synthesis"
+		return "euclo.thoughtrecipe.test_synthesis"
 	case "refactor":
-		return "euclo.recipe.extract_func"
+		return "euclo.thoughtrecipe.extract_func"
 	case "architecture":
-		return "euclo.recipe.investigation"
+		return "euclo.thoughtrecipe.investigation"
 	default:
 		return ""
 	}
@@ -565,7 +598,7 @@ func buildProjectionPlanFromState(state *intentcontext.ClarificationState) (*int
 
 func validateStructuredGrounding(value map[string]any) []string {
 	issues := prompt.ValidateStructuredMap(
-		"euclo.recipe.intent.clarify",
+		"euclo.thoughtrecipe.intent.clarify",
 		"grounding",
 		value,
 		[]string{"grounded_anchor_ids", "confirmed_entities", "confirmed_scopes"},
@@ -603,7 +636,7 @@ func emitClarificationStarted(ctx context.Context, env *contextdata.Envelope, st
 			Seq:        0,
 			OccurredAt: time.Now().UTC(),
 		},
-		RecipeID:          clarificationRecipeID,
+		ThoughtRecipeID:   clarificationThoughtRecipeID,
 		StateVersion:      state.StateVersion,
 		AmbiguityKind:     ambiguityKind,
 		CandidateFamilies: candidateFamilies,
@@ -699,15 +732,15 @@ func emitClarificationProjected(ctx context.Context, env *contextdata.Envelope, 
 	})
 }
 
-func emitClarificationCompleted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, nextRecipeID string) {
+func emitClarificationCompleted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, nextThoughtRecipeID string) {
 	_ = env
 	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
 	if tel == nil || state == nil {
 		return
 	}
 	completion := "completed"
-	if strings.TrimSpace(nextRecipeID) != "" {
-		completion = "handoff:" + strings.TrimSpace(nextRecipeID)
+	if strings.TrimSpace(nextThoughtRecipeID) != "" {
+		completion = "handoff:" + strings.TrimSpace(nextThoughtRecipeID)
 	}
 	tel.EmitClarificationCompleted(ctx, reporting.EventClarificationCompleted{
 		EventHeader: reporting.EventHeader{
@@ -716,9 +749,9 @@ func emitClarificationCompleted(ctx context.Context, env *contextdata.Envelope, 
 			Seq:        0,
 			OccurredAt: time.Now().UTC(),
 		},
-		RecipeID:     clarificationRecipeID,
-		StateVersion: state.StateVersion,
-		PlanID:       "",
-		Completion:   completion,
+		ThoughtRecipeID: clarificationThoughtRecipeID,
+		StateVersion:    state.StateVersion,
+		PlanID:          "",
+		Completion:      completion,
 	})
 }

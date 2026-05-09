@@ -10,8 +10,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
@@ -48,7 +48,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	runPreIngestion(t, firstEnv, dir, []string{"resume.go"})
 	firstEnv.RequestCheckpoint("materialize for resume", 5, true)
 	firstEnv.SetWorkingValue("euclo.stream_result", nil, contextdata.MemoryClassTask)
-	if err := graph.Execute(context.Background(), firstEnv); err != nil {
+	if err := graph.Execute(ctxWithTrigger(context.Background()), firstEnv); err != nil {
 		t.Fatalf("first execute failed: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	if err := graph.SetStart("euclo.capability_classify"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
-	if err := graph.Execute(context.Background(), rehydrated); err != nil {
+	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
 	if classifier.callCount() != 1 {
@@ -107,9 +107,9 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	}
 }
 
-func TestEndToEndCheckpointResumeRecipePath(t *testing.T) {
+func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkspaceFile(t, dir, "recipe.go", "package demo\n")
+	writeWorkspaceFile(t, dir, "thoughtrecipe.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.code_review", "euclo:cap.capture")
 	classifier := &mockTier2Classifier{
@@ -117,33 +117,24 @@ func TestEndToEndCheckpointResumeRecipePath(t *testing.T) {
 			"review": {Sequence: []string{"euclo:cap.code_review"}, Operator: "OR"},
 		},
 	}
-	recipes := newRecipeRegistry(t, &recipepkg.ThoughtRecipe{
-		ID:         "euclo.recipe.review",
-		APIVersion: "euclo/v1",
-		Metadata:   recipepkg.RecipeMetadata{Name: "review"},
-		Sequence: recipepkg.RecipeSequence{
-			Steps: []recipepkg.RecipeStep{
-				{
-					ID:           "step-1",
-					CapabilityID: "euclo:cap.capture",
-					Captures:     map[string]string{"output": "first_output"},
-				},
-			},
-		},
+	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+		ID:       "euclo.thoughtrecipe.review",
+		Name:     "review",
+		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
 	})
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithRecipeRegistry(recipes),
+		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 		orchestrate.WithCapabilityClassifier(classifier),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),
 	)
 
 	task := &core.Task{
-		ID:          "task-resume-recipe",
+		ID:          "task-resume-thoughtrecipe",
 		Type:        "euclo",
 		Instruction: "review the auth package",
 		Data:        map[string]any{},
@@ -151,16 +142,16 @@ func TestEndToEndCheckpointResumeRecipePath(t *testing.T) {
 		Metadata:    map[string]any{},
 	}
 
-	firstEnv := contextdata.NewEnvelope(task.ID, "session-resume-recipe")
-	seedTask(firstEnv, task.Instruction, "recipe.go")
-	firstEnv.SetWorkingValue("euclo.recipe_id", "euclo.recipe.review", contextdata.MemoryClassTask)
-	runPreIngestion(t, firstEnv, dir, []string{"recipe.go"})
-	firstEnv.RequestCheckpoint("materialize recipe resume", 7, true)
-	if err := graph.Execute(context.Background(), firstEnv); err != nil {
+	firstEnv := contextdata.NewEnvelope(task.ID, "session-resume-thoughtrecipe")
+	seedTask(firstEnv, task.Instruction, "thoughtrecipe.go")
+	firstEnv.SetWorkingValue("euclo.thoughtrecipe_id", "euclo.thoughtrecipe.review", contextdata.MemoryClassTask)
+	runPreIngestion(t, firstEnv, dir, []string{"thoughtrecipe.go"})
+	firstEnv.RequestCheckpoint("materialize thoughtrecipe resume", 7, true)
+	if err := graph.Execute(ctxWithTrigger(context.Background()), firstEnv); err != nil {
 		t.Fatalf("first execute failed: %v", err)
 	}
 
-	artifact, err := persistence.LoadLatestCheckpointArtifact(context.Background(), repo, "session-resume-recipe", "checkpoint")
+	artifact, err := persistence.LoadLatestCheckpointArtifact(context.Background(), repo, "session-resume-thoughtrecipe", "checkpoint")
 	if err != nil {
 		t.Fatalf("load latest checkpoint: %v", err)
 	}
@@ -168,8 +159,8 @@ func TestEndToEndCheckpointResumeRecipePath(t *testing.T) {
 		t.Fatal("expected checkpoint artifact to be loaded")
 	}
 
-	rehydrated := contextdata.NewEnvelope(task.ID, "session-resume-recipe")
-	seedTask(rehydrated, task.Instruction, "recipe.go")
+	rehydrated := contextdata.NewEnvelope(task.ID, "session-resume-thoughtrecipe")
+	seedTask(rehydrated, task.Instruction, "thoughtrecipe.go")
 	var snapshot struct {
 		WorkingData map[string]json.RawMessage `json:"working_data"`
 	}
@@ -197,28 +188,28 @@ func TestEndToEndCheckpointResumeRecipePath(t *testing.T) {
 		}
 		rehydrated.SetWorkingValue("euclo.capability_operator", operator, contextdata.MemoryClassTask)
 	}
-	if raw, ok := snapshot.WorkingData["euclo.recipe_id"]; ok {
-		var recipeID string
-		if err := json.Unmarshal(raw, &recipeID); err != nil {
-			t.Fatalf("rehydrate recipe id: %v", err)
+	if raw, ok := snapshot.WorkingData["euclo.thoughtrecipe_id"]; ok {
+		var thoughtrecipeID string
+		if err := json.Unmarshal(raw, &thoughtrecipeID); err != nil {
+			t.Fatalf("rehydrate thoughtrecipe id: %v", err)
 		}
-		rehydrated.SetWorkingValue("euclo.recipe_id", recipeID, contextdata.MemoryClassTask)
+		rehydrated.SetWorkingValue("euclo.thoughtrecipe_id", thoughtrecipeID, contextdata.MemoryClassTask)
 	}
 
 	if err := graph.SetStart("euclo.capability_classify"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
-	if err := graph.Execute(context.Background(), rehydrated); err != nil {
+	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
 	if classifier.callCount() != 1 {
 		t.Fatalf("expected resume to skip reclassification, call count=%d", classifier.callCount())
 	}
-	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "recipe" {
-		t.Fatalf("resume execution kind = %q, want recipe", got)
+	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "thoughtrecipe" {
+		t.Fatalf("resume execution kind = %q, want thoughtrecipe", got)
 	}
-	if got := mustStringValue(t, rehydrated, "euclo.execution.recipe_id"); got != "euclo.recipe.review" {
-		t.Fatalf("resume recipe id = %q, want euclo.recipe.review", got)
+	if got := mustStringValue(t, rehydrated, "euclo.execution.thoughtrecipe_id"); got != "euclo.thoughtrecipe.review" {
+		t.Fatalf("resume thoughtrecipe id = %q, want euclo.thoughtrecipe.review", got)
 	}
 	if !mustBoolValue(t, rehydrated, "euclo.execution.completed") {
 		t.Fatal("expected resume execution to complete")

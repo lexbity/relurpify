@@ -62,11 +62,11 @@ func (c *IntentCore) BuildClarificationRequest(ctx context.Context, env *context
 		MaxTokens: maxTokens,
 		Mode:      mode,
 		Metadata: map[string]any{
-			"task_id":          state.TaskID,
-			"session_id":       state.SessionID,
-			"state_version":    state.StateVersion,
-			"current_turn_id":  state.CurrentTurnID,
-			"active_recipe_id": state.ActiveRecipeID,
+			"task_id":                 state.TaskID,
+			"session_id":              state.SessionID,
+			"state_version":           state.StateVersion,
+			"current_turn_id":         state.CurrentTurnID,
+			"active_thoughtrecipe_id": state.ActiveThoughtRecipeID,
 		},
 		RequestedAt: time.Now().UTC(),
 	}

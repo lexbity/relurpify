@@ -87,7 +87,7 @@ func NewCapabilityRegistry() *CapabilityRegistry {
 // ModelCallableTools, CaptureExecutionCatalogSnapshot, and InvokeCapability
 // to the given capability IDs. All other operations delegate to the base registry.
 // An empty allowedIDs slice returns the receiver unchanged.
-// Used by the thought recipe executor to enforce per-step capability scoping.
+// Used by the thought thoughtrecipe executor to enforce per-step capability scoping.
 func (r *CapabilityRegistry) WithAllowlist(allowedIDs []string) *CapabilityRegistry {
 	if r == nil || len(allowedIDs) == 0 {
 		return r

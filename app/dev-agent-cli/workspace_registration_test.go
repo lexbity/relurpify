@@ -51,7 +51,7 @@ spec:
 		return agentenv.AgentRegistrationFuncs{
 			RegisterCapabilities:    func(env agentenv.WorkspaceEnvironment) error { return nil },
 			RegisterPromptProviders: func(env agentenv.WorkspaceEnvironment) error { return nil },
-			LoadRecipes:             func() (interface{}, error) { return nil, nil },
+			LoadThoughtRecipes:      func() (interface{}, error) { return nil, nil },
 		}
 	}
 	workspaceOpenFn = func(ctx context.Context, cfg agentenv.WorkspaceConfig, funcs agentenv.AgentRegistrationFuncs) (*agentenv.Workspace, error) {
@@ -62,7 +62,7 @@ spec:
 	if _, err := openWorkspaceForInspection(context.Background(), workspace); err != nil {
 		t.Fatal(err)
 	}
-	if gotFuncs.RegisterCapabilities == nil || gotFuncs.RegisterPromptProviders == nil || gotFuncs.LoadRecipes == nil {
+	if gotFuncs.RegisterCapabilities == nil || gotFuncs.RegisterPromptProviders == nil || gotFuncs.LoadThoughtRecipes == nil {
 		t.Fatalf("expected euclo registration funcs to be supplied, got %+v", gotFuncs)
 	}
 }

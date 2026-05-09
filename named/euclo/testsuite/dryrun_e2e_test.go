@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -87,24 +87,16 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	})
 }
 
-func TestDryRunEndToEndSimulatedDryRunRecipeRoute(t *testing.T) {
+func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	dir := t.TempDir()
 	writeWorkspaceFile(t, dir, "review.go", "package demo\n")
 
-	recipeID := "euclo.recipe.review"
+	thoughtrecipeID := "euclo.thoughtrecipe.review"
 	caps := capability.NewCapabilityRegistry()
-	recipes := newRecipeRegistry(t, &recipepkg.ThoughtRecipe{
-		ID:         recipeID,
-		APIVersion: "euclo/v1",
-		Metadata:   recipepkg.RecipeMetadata{Name: "review"},
-		Sequence: recipepkg.RecipeSequence{
-			Steps: []recipepkg.RecipeStep{
-				{
-					ID:           "step-1",
-					CapabilityID: "euclo:cap.code_review",
-				},
-			},
-		},
+	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+		ID:       thoughtrecipeID,
+		Name:     "review",
+		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
 	})
 	classifier := &mockTier2Classifier{
 		responses: map[string]tier2Response{
@@ -114,15 +106,15 @@ func TestDryRunEndToEndSimulatedDryRunRecipeRoute(t *testing.T) {
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithRecipeRegistry(recipes),
+		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 		orchestrate.WithCapabilityClassifier(classifier),
 	)
 
-	env := contextdata.NewEnvelope("task-dryrun-recipe", "session-dryrun-recipe")
+	env := contextdata.NewEnvelope("task-dryrun-thoughtrecipe", "session-dryrun-thoughtrecipe")
 	seedTask(env, "review the auth package", "review.go")
 	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
-		RouteKind: "recipe",
-		RecipeID:  recipeID,
+		RouteKind:       "thoughtrecipe",
+		ThoughtRecipeID: thoughtrecipeID,
 	}, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.dry_run_mode", true, contextdata.MemoryClassTask)
 	runPreIngestion(t, env, dir, []string{"review.go"})
@@ -143,8 +135,8 @@ func TestDryRunEndToEndSimulatedDryRunRecipeRoute(t *testing.T) {
 	if !ok || routeSelection == nil {
 		t.Fatalf("expected *RouteSelection, got %T", selection)
 	}
-	if routeSelection.RouteKind != "recipe" || routeSelection.RecipeID != recipeID {
-		t.Fatalf("route selection = %+v, want recipe %s", routeSelection, recipeID)
+	if routeSelection.RouteKind != "thoughtrecipe" || routeSelection.ThoughtRecipeID != thoughtrecipeID {
+		t.Fatalf("route selection = %+v, want thoughtrecipe %s", routeSelection, thoughtrecipeID)
 	}
 	if got, ok := env.GetWorkingValue("euclo.execution.kind"); ok {
 		t.Fatalf("expected no execution.kind during dry run, got %v", got)

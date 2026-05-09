@@ -54,7 +54,7 @@ Many cases assert on the agent’s runtime selection state:
 - behavior family
 - primary relurpic capability
 - supporting capabilities
-- recipe IDs
+- thoughtrecipe IDs
 
 This is especially important for Euclo, where a single top-level agent can route into different relurpic capabilities and execution families from task signals.
 
@@ -200,7 +200,7 @@ Euclo cases typically assert that the agent selected the right:
 - behavior family
 - primary relurpic capability
 - supporting relurpic capabilities
-- recipe IDs
+- thoughtrecipe IDs
 
 For example:
 

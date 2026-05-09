@@ -2,7 +2,7 @@
 //
 // Euclo integrates with the framework through the agentenv.AgentRegistrationFuncs
 // pattern defined in framework/agentenv. This package implements the registration
-// functions that wire Euclo's capabilities, prompt providers, and recipes into the
+// functions that wire Euclo's capabilities, prompt providers, and thoughtrecipes into the
 // workspace environment.
 //
 // The registrations are called by the composition root (ayenitd) during workspace

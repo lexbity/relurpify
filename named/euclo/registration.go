@@ -6,9 +6,9 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/promptprovider"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
-	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // GetRegistrationFuncs returns AgentRegistrationFuncs for Euclo.
@@ -44,13 +44,15 @@ func registerEucloPromptProviders(env agentenv.WorkspaceEnvironment) error {
 	return nil
 }
 
-// loadEucloRecipes loads all Euclo recipe templates.
-// Returns a recipe.RecipeRegistry. The registry is loaded from the Euclo
-// recipe templates package and returned to the caller for wiring.
-func loadEucloRecipes() (interface{}, error) {
-	registry, err := recipetemplates.LoadAll()
-	if err != nil {
-		return nil, fmt.Errorf("load euclo recipe templates: %w", err)
+// loadEucloThoughtRecipes scans the Euclo DSL source tree and falls back to an empty
+// registry if the workspace does not currently contain thoughtrecipe sources.
+func loadEucloThoughtRecipes() (interface{}, error) {
+	loader := thoughtrecipepkg.NewLoader()
+	result, err := loader.LoadWorkspace(".")
+	if err == nil && result != nil {
+		return result, nil
 	}
-	return registry, nil
+	return &thoughtrecipepkg.LoadResult{
+		Registry: thoughtrecipepkg.NewThoughtRecipeRegistry(),
+	}, nil
 }

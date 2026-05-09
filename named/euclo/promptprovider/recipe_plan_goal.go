@@ -8,22 +8,22 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
-// recipePlanGoalProvider provides the current recipe plan or goal context.
-type recipePlanGoalProvider struct{}
+// thoughtrecipePlanGoalProvider provides the current thoughtrecipe plan or goal context.
+type thoughtrecipePlanGoalProvider struct{}
 
-func (p *recipePlanGoalProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
+func (p *thoughtrecipePlanGoalProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
 	if ctx.Envelope == nil {
 		return prompt.ContextChunk{Content: ""}
 	}
 
 	var goalParts []string
 
-	// Try to get recipe information
-	if recipeID, hasRecipe := state.GetRecipeID(ctx.Envelope); hasRecipe {
-		goalParts = append(goalParts, fmt.Sprintf("Recipe ID: %s", recipeID))
+	// Try to get thoughtrecipe information
+	if thoughtrecipeID, hasThoughtRecipe := state.GetThoughtRecipeID(ctx.Envelope); hasThoughtRecipe {
+		goalParts = append(goalParts, fmt.Sprintf("ThoughtRecipe ID: %s", thoughtrecipeID))
 
-		if version, hasVersion := state.GetRecipeVersion(ctx.Envelope); hasVersion {
-			goalParts = append(goalParts, fmt.Sprintf("Recipe Version: %s", version))
+		if version, hasVersion := state.GetThoughtRecipeVersion(ctx.Envelope); hasVersion {
+			goalParts = append(goalParts, fmt.Sprintf("ThoughtRecipe Version: %s", version))
 		}
 	}
 
@@ -35,8 +35,8 @@ func (p *recipePlanGoalProvider) Provide(ctx prompt.RuntimeContext) prompt.Conte
 	// Try to get route selection (which may contain plan information)
 	if route, hasRoute := state.GetRouteSelection(ctx.Envelope); hasRoute && route != nil {
 		goalParts = append(goalParts, fmt.Sprintf("Route Kind: %s", route.RouteKind))
-		if route.RecipeID != "" {
-			goalParts = append(goalParts, fmt.Sprintf("Recipe ID: %s", route.RecipeID))
+		if route.ThoughtRecipeID != "" {
+			goalParts = append(goalParts, fmt.Sprintf("ThoughtRecipe ID: %s", route.ThoughtRecipeID))
 		}
 		if route.CapabilityID != "" {
 			goalParts = append(goalParts, fmt.Sprintf("Capability ID: %s", route.CapabilityID))
@@ -58,17 +58,17 @@ func (p *recipePlanGoalProvider) Provide(ctx prompt.RuntimeContext) prompt.Conte
 	}
 
 	// Format as a structured context block
-	return prompt.ContextChunk{Content: "Recipe Plan Goal:\n" + strings.Join(goalParts, "\n")}
+	return prompt.ContextChunk{Content: "ThoughtRecipe Plan Goal:\n" + strings.Join(goalParts, "\n")}
 }
 
-func (p *recipePlanGoalProvider) Describe() prompt.ProviderMetadata {
+func (p *thoughtrecipePlanGoalProvider) Describe() prompt.ProviderMetadata {
 	return prompt.ProviderMetadata{
-		Name:        "euclo.recipe_plan_goal",
-		Description: "Provides the current recipe plan goal and execution context",
+		Name:        "euclo.thoughtrecipe_plan_goal",
+		Description: "Provides the current thoughtrecipe plan goal and execution context",
 		Paradigms:   []string{"euclo"},
 		ReadsKeys: []string{
-			"euclo.recipe_id",
-			"euclo.recipe_version",
+			"euclo.thoughtrecipe_id",
+			"euclo.thoughtrecipe_version",
 			"euclo.route_selection",
 			"euclo.intent_classification",
 		},

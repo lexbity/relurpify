@@ -79,8 +79,8 @@ func frameLabel(frame interaction.InteractionFrame) string {
 		return "intent clarification"
 	case interaction.FrameCandidateSelection:
 		return "candidate selection"
-	case interaction.FrameRecipeSelection:
-		return "recipe selection"
+	case interaction.FrameThoughtRecipeSelection:
+		return "thoughtrecipe selection"
 	case interaction.FrameCapabilitySelection:
 		return "capability selection"
 	case interaction.FrameHITLApproval:

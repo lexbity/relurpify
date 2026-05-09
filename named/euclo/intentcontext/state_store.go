@@ -43,6 +43,9 @@ func (s *EnvelopeStateStore) Read(ctx context.Context, env *contextdata.Envelope
 	}
 	clone := state.Clone()
 	clone.Normalize()
+	if err := clone.Validate(); err != nil {
+		return nil, err
+	}
 	return clone, nil
 }
 
@@ -84,6 +87,9 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 
 	clone := state.Clone()
 	clone.Normalize()
+	if err := clone.Validate(); err != nil {
+		return err
+	}
 	clone.LastUpdatedAt = time.Now().UTC()
 
 	for _, key := range ClarificationWorkingMemoryKeys() {
@@ -98,7 +104,7 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 	env.SetWorkingValue(ClarificationGroundedAnchorsKey, append([]retrieval.AnchorRef(nil), clone.GroundedAnchors...), contextdata.MemoryClassTask)
 	env.SetWorkingValue(ClarificationPendingProjectionKey, append([]ProjectionIntent(nil), clone.PendingProjection...), contextdata.MemoryClassTask)
 	env.SetWorkingValue(ClarificationProjectedMutationsKey, append([]ProjectionRecord(nil), clone.AppliedMutations...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationActiveRecipeKey, clone.ActiveRecipeID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(ClarificationActiveThoughtRecipeKey, clone.ActiveThoughtRecipeID, contextdata.MemoryClassTask)
 	env.SetWorkingValue(ClarificationLastCheckpointIDKey, clone.LastCheckpointID, contextdata.MemoryClassTask)
 	env.SetWorkingValue(ClarificationLastCheckpointSeqKey, clone.LastCheckpointSeq, contextdata.MemoryClassTask)
 	return nil

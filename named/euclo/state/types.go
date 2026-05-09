@@ -13,10 +13,10 @@ type JobRecord struct {
 	Metadata  map[string]any
 }
 
-// RecipeCaptureKey constructs the working memory key for a recipe capture.
-// Format: euclo.recipe.{recipeID}.{captureName}
-func RecipeCaptureKey(recipeID, captureName string) string {
-	return fmt.Sprintf("%s%s.%s", KeyRecipePrefix, recipeID, captureName)
+// ThoughtRecipeCaptureKey constructs the working memory key for a thoughtrecipe capture.
+// Format: euclo.thoughtrecipe.{thoughtrecipeID}.{captureName}
+func ThoughtRecipeCaptureKey(thoughtrecipeID, captureName string) string {
+	return fmt.Sprintf("%s%s.%s", KeyThoughtRecipePrefix, thoughtrecipeID, captureName)
 }
 
 // IngestionPolicy values for KeyIngestPolicy.

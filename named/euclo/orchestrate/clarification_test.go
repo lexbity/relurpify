@@ -52,8 +52,24 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	if _, ok := env.GetWorkingValue(clarificationRequestKey); !ok {
 		t.Fatal("expected clarification request in envelope")
 	}
-	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveRecipeKey); got != clarificationRecipeID {
-		t.Fatalf("active recipe id = %q, want %q", got, clarificationRecipeID)
+	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != clarificationThoughtRecipeID {
+		t.Fatalf("active thoughtrecipe id = %q, want %q", got, clarificationThoughtRecipeID)
+	}
+	selection, ok := env.GetWorkingValue("euclo.route_selection")
+	if !ok {
+		t.Fatal("expected route_selection in envelope")
+	}
+	routeSelection, ok := selection.(*RouteSelection)
+	if !ok || routeSelection == nil {
+		t.Fatalf("expected *RouteSelection, got %T", selection)
+	}
+	if routeSelection.RouteKind != RouteKindIntent || routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route selection: %+v", routeSelection)
+	}
+	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
+		t.Fatal("expected route continuation metadata in envelope")
+	} else if meta, ok := got.(*RouteContinuation); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route continuation metadata: %#v", got)
 	}
 	updated, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
@@ -70,7 +86,7 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	}
 }
 
-func TestClarificationCapability_HandoffSelectsNormalRecipe(t *testing.T) {
+func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T) {
 	env := contextdata.NewEnvelope("task-handoff", "session-handoff")
 	state := intentcontext.NewState("task-handoff", "session-handoff")
 	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
@@ -94,11 +110,18 @@ func TestClarificationCapability_HandoffSelectsNormalRecipe(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected successful handoff, got %+v", result)
 	}
-	if got := mustEnvelopeString(t, env, "euclo.clarification.next_recipe_id"); got != "euclo.recipe.code_review" {
-		t.Fatalf("next recipe id = %q, want euclo.recipe.code_review", got)
+	if got := mustEnvelopeString(t, env, "euclo.clarification.next_thoughtrecipe_id"); got != "euclo.thoughtrecipe.code_review" {
+		t.Fatalf("next thoughtrecipe id = %q, want euclo.thoughtrecipe.code_review", got)
 	}
-	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveRecipeKey); got != "euclo.recipe.code_review" {
-		t.Fatalf("active recipe id = %q, want euclo.recipe.code_review", got)
+	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != "euclo.thoughtrecipe.code_review" {
+		t.Fatalf("active thoughtrecipe id = %q, want euclo.thoughtrecipe.code_review", got)
+	}
+	updated, err := intentcontext.NewStateStore().Read(context.Background(), env)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if updated == nil || updated.ActiveThoughtRecipeID != "euclo.thoughtrecipe.code_review" {
+		t.Fatalf("expected persisted active thoughtrecipe id, got %#v", updated)
 	}
 	selection, ok := env.GetWorkingValue("euclo.route_selection")
 	if !ok {
@@ -108,8 +131,19 @@ func TestClarificationCapability_HandoffSelectsNormalRecipe(t *testing.T) {
 	if !ok || routeSelection == nil {
 		t.Fatalf("expected *RouteSelection, got %T", selection)
 	}
-	if routeSelection.RecipeID != "euclo.recipe.code_review" {
-		t.Fatalf("route selection recipe id = %q, want euclo.recipe.code_review", routeSelection.RecipeID)
+	if routeSelection.RouteKind != RouteKindThoughtRecipe || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.code_review" {
+		t.Fatalf("route selection = %+v, want thoughtrecipe handoff", routeSelection)
+	}
+	continuation, ok := env.GetWorkingValue("euclo.route.continuation")
+	if !ok {
+		t.Fatal("expected route continuation metadata in envelope")
+	}
+	meta, ok := continuation.(*RouteContinuation)
+	if !ok || meta == nil {
+		t.Fatalf("expected *RouteContinuation, got %T", continuation)
+	}
+	if !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review" || meta.TargetRouteKind != RouteKindThoughtRecipe {
+		t.Fatalf("unexpected continuation metadata: %+v", meta)
 	}
 }
 

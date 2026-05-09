@@ -14,12 +14,12 @@ func RegisterAll(registry prompt.Registry) error {
 	}
 
 	providers := []struct {
-		name string
+		name     string
 		provider prompt.ContextProvider
 	}{
-		{"euclo.recipe_step_context", &recipeStepContextProvider{}},
-		{"euclo.recipe_plan_goal", &recipePlanGoalProvider{}},
-		{"euclo.recipe_prior_step_result", &recipePriorStepProvider{}},
+		{"euclo.thoughtrecipe_step_context", &thoughtrecipeStepContextProvider{}},
+		{"euclo.thoughtrecipe_plan_goal", &thoughtrecipePlanGoalProvider{}},
+		{"euclo.thoughtrecipe_prior_step_result", &thoughtrecipePriorStepProvider{}},
 	}
 
 	for _, p := range providers {

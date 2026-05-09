@@ -9,7 +9,7 @@
 // state publication.
 //
 // HTN planning decomposes complex tasks into networks of primitive subtasks
-// according to a method library (declared recipes). The language model never
+// according to a method library (declared thoughtrecipes). The language model never
 // decides how to structure work — it only executes focused leaf tasks, making
 // this pattern maximally small-model-friendly.
 //

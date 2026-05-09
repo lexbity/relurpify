@@ -153,7 +153,7 @@ type EventProjectionCompleted struct {
 // EventClarificationStarted signals the start of a clarification turn.
 type EventClarificationStarted struct {
 	EventHeader
-	RecipeID          string   `json:"recipe_id"`
+	ThoughtRecipeID   string   `json:"thoughtrecipe_id"`
 	StateVersion      uint64   `json:"state_version"`
 	AmbiguityKind     string   `json:"ambiguity_kind,omitempty"`
 	CandidateFamilies []string `json:"candidate_families,omitempty"`
@@ -195,10 +195,10 @@ type EventClarificationProjected struct {
 // EventClarificationCompleted signals completion of the clarification loop.
 type EventClarificationCompleted struct {
 	EventHeader
-	RecipeID     string `json:"recipe_id,omitempty"`
-	StateVersion uint64 `json:"state_version"`
-	PlanID       string `json:"plan_id,omitempty"`
-	Completion   string `json:"completion,omitempty"`
+	ThoughtRecipeID string `json:"thoughtrecipe_id,omitempty"`
+	StateVersion    uint64 `json:"state_version"`
+	PlanID          string `json:"plan_id,omitempty"`
+	Completion      string `json:"completion,omitempty"`
 }
 
 // EventFrameEmitted signals interaction frame emission.
@@ -234,14 +234,14 @@ type EventJobCompleted struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
-// EventStepCompleted signals recipe step completion.
+// EventStepCompleted signals thoughtrecipe step completion.
 type EventStepCompleted struct {
 	EventHeader
-	StepID     string `json:"step_id"`
-	RecipeID   string `json:"recipe_id"`
-	Paradigm   string `json:"paradigm"`
-	Success    bool   `json:"success"`
-	DurationMs int64  `json:"duration_ms"`
+	StepID          string `json:"step_id"`
+	ThoughtRecipeID string `json:"thoughtrecipe_id"`
+	Paradigm        string `json:"paradigm"`
+	Success         bool   `json:"success"`
+	DurationMs      int64  `json:"duration_ms"`
 }
 
 // EventExecutionComplete signals overall execution completion.

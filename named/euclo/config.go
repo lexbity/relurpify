@@ -12,8 +12,8 @@ import (
 
 // EucloConfig configures the Euclo agent behavior.
 type EucloConfig struct {
-	// RecipeDirs are filesystem directories scanned for .yaml thought recipe files.
-	RecipeDirs []string
+	// ThoughtRecipeDirs is reserved for future Euclo DSL thoughtrecipe directories.
+	ThoughtRecipeDirs []string
 
 	// BuiltinFamilies controls whether the standard keyword family set is registered.
 	BuiltinFamilies bool
@@ -66,7 +66,7 @@ type EucloConfig struct {
 // DefaultConfig returns the default Euclo configuration.
 func DefaultConfig() EucloConfig {
 	return EucloConfig{
-		RecipeDirs:              []string{},
+		ThoughtRecipeDirs:       []string{},
 		BuiltinFamilies:         true,
 		MaxStreamTokens:         8192,
 		DefaultStreamMode:       contextstream.ModeBlocking,

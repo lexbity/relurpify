@@ -328,6 +328,11 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 				"success": result.Success,
 			},
 		})
+		if result.Metadata != nil {
+			if pause, _ := result.Metadata["euclo.interaction.pause"].(bool); pause {
+				return lastResult, nil
+			}
+		}
 		next, _, err := g.nextNodes(ctx, env, node, result)
 		if err != nil {
 			return nil, err

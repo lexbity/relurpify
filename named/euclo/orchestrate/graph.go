@@ -18,9 +18,8 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
-	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -30,19 +29,19 @@ type RootGraph struct {
 
 // RootGraphConfig configures dependency wiring for the root graph.
 type RootGraphConfig struct {
-	Env                  agentenv.WorkspaceEnvironment
-	CapabilityRegistry   *capability.CapabilityRegistry
-	RecipeRegistry       *recipepkg.RecipeRegistry
-	FamilyRegistry       *families.KeywordFamilyRegistry
-	Workspace            string
-	StreamTrigger        *contextstream.Trigger
-	MaxStreamTokens      int
-	DefaultStreamMode    contextstream.Mode
-	CapabilityClassifier intake.Tier2Classifier
-	PermissionManager    policy.PermissionManager
-	HITLBroker           policy.HITLBroker
-	CheckpointRepository agentlifecycle.Repository
-	PersistenceWriter    *persistence.Writer
+	Env                   agentenv.WorkspaceEnvironment
+	CapabilityRegistry    *capability.CapabilityRegistry
+	ThoughtRecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
+	FamilyRegistry        *families.KeywordFamilyRegistry
+	Workspace             string
+	StreamTrigger         *contextstream.Trigger
+	MaxStreamTokens       int
+	DefaultStreamMode     contextstream.Mode
+	CapabilityClassifier  intake.Tier2Classifier
+	PermissionManager     policy.PermissionManager
+	HITLBroker            policy.HITLBroker
+	CheckpointRepository  agentlifecycle.Repository
+	PersistenceWriter     *persistence.Writer
 }
 
 // RootGraphOption mutates RootGraphConfig.
@@ -62,10 +61,10 @@ func WithCapabilityRegistry(reg *capability.CapabilityRegistry) RootGraphOption 
 	}
 }
 
-// WithRecipeRegistry wires the recipe registry.
-func WithRecipeRegistry(reg *recipepkg.RecipeRegistry) RootGraphOption {
+// WithThoughtRecipeRegistry wires the thoughtrecipe registry.
+func WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) RootGraphOption {
 	return func(opts *RootGraphConfig) {
-		opts.RecipeRegistry = reg
+		opts.ThoughtRecipeRegistry = reg
 	}
 }
 
@@ -203,31 +202,16 @@ func (g *RootGraph) SetStart(nodeID string) error {
 
 func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	dispatchCapReg := cfg.CapabilityRegistry
-	builtinRecipes, err := recipetemplates.LoadAll()
-	if err != nil {
-		panic(err)
+	thoughtrecipeReg := cfg.ThoughtRecipeRegistry
+	if thoughtrecipeReg == nil {
+		thoughtrecipeReg = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
-	recipeReg := cfg.RecipeRegistry
-	if recipeReg == nil {
-		recipeReg = builtinRecipes
-	} else if builtinRecipes != nil {
-		for _, id := range builtinRecipes.List() {
-			if _, ok := recipeReg.Get(id); ok {
-				continue
-			}
-			if recipe, ok := builtinRecipes.Get(id); ok && recipe != nil {
-				if err := recipeReg.Register(recipe); err != nil {
-					panic(err)
-				}
-			}
-		}
+	thoughtrecipeCapReg := cfg.Env.Registry
+	if thoughtrecipeCapReg == nil {
+		thoughtrecipeCapReg = capability.NewCapabilityRegistry()
+		cfg.Env.Registry = thoughtrecipeCapReg
 	}
-	recipeCapReg := cfg.Env.Registry
-	if recipeCapReg == nil {
-		recipeCapReg = capability.NewCapabilityRegistry()
-		cfg.Env.Registry = recipeCapReg
-	}
-	if err := registerClarificationCapability(recipeCapReg); err != nil {
+	if err := registerClarificationCapability(thoughtrecipeCapReg); err != nil {
 		panic(err)
 	}
 	intakePipeline := intake.NewIntakePipelineNode(
@@ -367,14 +351,14 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	dispatchNode := NewDispatcher("euclo.dispatch").
 		WithWorkspace(cfg.Workspace).
 		WithCapabilityRegistry(dispatchCapReg).
-		WithRecipeRegistry(recipeReg)
+		WithThoughtRecipeRegistry(thoughtrecipeReg)
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
-	recipeExec := NewRecipeExecutorNode("euclo.execute_recipe").
+	thoughtrecipeExec := NewThoughtRecipeExecutorNode("euclo.execute_thoughtrecipe").
 		WithWorkspaceEnvironment(cfg.Env).
 		WithIngestionPipeline(nil)
-	recipeExec.WithRecipeRegistry(recipeReg)
+	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 
 	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability")
 	if dispatchCapReg != nil {
@@ -417,7 +401,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		policyGateNode,
 		dispatchNode,
 		routeForkNode,
-		recipeExec,
+		thoughtrecipeExec,
 		capabilityExec,
 		mergeNode,
 		reportNode,
@@ -477,13 +461,13 @@ func wireEdges(g *agentgraph.Graph) error {
 			}
 			return true
 		}},
-		{"euclo.route_fork", "euclo.execute_recipe", func(result *core.Result, _ *contextdata.Envelope) bool {
-			return result != nil && result.Data != nil && result.Data["next"] == "euclo.execute_recipe"
+		{"euclo.route_fork", "euclo.execute_thoughtrecipe", func(result *core.Result, _ *contextdata.Envelope) bool {
+			return result != nil && result.Data != nil && result.Data["next"] == "euclo.execute_thoughtrecipe"
 		}},
 		{"euclo.route_fork", "euclo.execute_capability", func(result *core.Result, _ *contextdata.Envelope) bool {
 			return result != nil && result.Data != nil && result.Data["next"] == "euclo.execute_capability"
 		}},
-		{"euclo.execute_recipe", "euclo.merge", nil},
+		{"euclo.execute_thoughtrecipe", "euclo.merge", nil},
 		{"euclo.execute_capability", "euclo.merge", nil},
 		{"euclo.merge", "euclo.report", nil},
 		{"euclo.report", "euclo.done", nil},

@@ -394,7 +394,7 @@ tags:
 	state := intentcontext.NewState("task-clarify", "session-clarify")
 	state.StateVersion = 7
 	state.CurrentTurnID = "turn-7"
-	state.ActiveRecipeID = "recipe.intent.clarify"
+	state.ActiveThoughtRecipeID = "thoughtrecipe.intent.clarify"
 	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
 		Kind:       intentcontext.AmbiguityKindUnderspecified,
 		Confidence: 0.25,
@@ -413,7 +413,7 @@ tags:
 		t.Fatalf("Write clarification state: %v", err)
 	}
 
-	ctx := NewRuntimeContext(env, "react", "recipe")
+	ctx := NewRuntimeContext(env, "react", "thoughtrecipe")
 	ctx = ctx.WithStateValue(intentcontext.ClarificationStateKey, state.Clone())
 	ctx = ctx.WithVariable("question", "Which module should be updated?")
 	ctx = ctx.WithVariable("prompt_id", "test.clarify.runtime")
@@ -440,12 +440,12 @@ apiVersion: framework.prompt/v1
 id: test.provider.missing
 name: Missing Provider Test
 requires_providers:
-  - euclo.recipe_step_context
+  - euclo.thoughtrecipe_step_context
 ---
 
 # Context
 ~ from: provider
-~ provider: euclo.recipe_step_context
+~ provider: euclo.thoughtrecipe_step_context
 `
 	fsys := fstest.MapFS{
 		"missing.prompt": {Data: []byte(src)},

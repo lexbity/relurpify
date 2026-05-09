@@ -241,16 +241,16 @@ func SetIntentSignals(env *contextdata.Envelope, scores map[string]float64) {
 	env.SetWorkingValue(KeyIntentSignals, scores, contextdata.MemoryClassTask)
 }
 
-// SetRecipeID stores the recipe ID.
-func SetRecipeID(env *contextdata.Envelope, id string) {
-	env.SetWorkingValue(KeyRecipeID, id, contextdata.MemoryClassTask)
+// SetThoughtRecipeID stores the thoughtrecipe ID.
+func SetThoughtRecipeID(env *contextdata.Envelope, id string) {
+	env.SetWorkingValue(KeyThoughtRecipeID, id, contextdata.MemoryClassTask)
 }
 
-// --- Thought Recipe ---
+// --- Thought ThoughtRecipe ---
 
-// GetRecipeID retrieves the recipe ID.
-func GetRecipeID(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyRecipeID)
+// GetThoughtRecipeID retrieves the thoughtrecipe ID.
+func GetThoughtRecipeID(env *contextdata.Envelope) (string, bool) {
+	v, ok := env.GetWorkingValue(KeyThoughtRecipeID)
 	if !ok {
 		return "", false
 	}
@@ -258,9 +258,9 @@ func GetRecipeID(env *contextdata.Envelope) (string, bool) {
 	return s, ok
 }
 
-// GetRecipeVersion retrieves the recipe version.
-func GetRecipeVersion(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyRecipeVersion)
+// GetThoughtRecipeVersion retrieves the thoughtrecipe version.
+func GetThoughtRecipeVersion(env *contextdata.Envelope) (string, bool) {
+	v, ok := env.GetWorkingValue(KeyThoughtRecipeVersion)
 	if !ok {
 		return "", false
 	}
@@ -268,9 +268,9 @@ func GetRecipeVersion(env *contextdata.Envelope) (string, bool) {
 	return s, ok
 }
 
-// SetRecipeVersion stores the recipe version.
-func SetRecipeVersion(env *contextdata.Envelope, version string) {
-	env.SetWorkingValue(KeyRecipeVersion, version, contextdata.MemoryClassTask)
+// SetThoughtRecipeVersion stores the thoughtrecipe version.
+func SetThoughtRecipeVersion(env *contextdata.Envelope, version string) {
+	env.SetWorkingValue(KeyThoughtRecipeVersion, version, contextdata.MemoryClassTask)
 }
 
 // --- Policy ---

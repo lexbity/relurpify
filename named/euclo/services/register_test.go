@@ -7,18 +7,18 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 func TestNewRegistrationAppliesOverrides(t *testing.T) {
 	capReg := &stubCapabilityRegistrar{}
 	promptReg := &stubPromptRegistrar{}
-	recipeLoader := &stubRecipeLoader{registry: recipepkg.NewRecipeRegistry()}
+	thoughtrecipeLoader := &stubThoughtRecipeLoader{result: &thoughtrecipepkg.LoadResult{Registry: thoughtrecipepkg.NewThoughtRecipeRegistry()}}
 
 	reg := NewRegistration(
 		WithCapabilityRegistrar(capReg),
 		WithPromptRegistrar(promptReg),
-		WithRecipeLoader(recipeLoader),
+		WithThoughtRecipeLoader(thoughtrecipeLoader),
 	)
 
 	funcs := reg.AgentRegistrationFuncs()
@@ -38,12 +38,16 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 		t.Fatal("expected custom prompt registrar to be called")
 	}
 
-	registry, err := funcs.LoadRecipes()
+	loaded, err := funcs.LoadThoughtRecipes()
 	if err != nil {
-		t.Fatalf("LoadRecipes returned error: %v", err)
+		t.Fatalf("LoadThoughtRecipes returned error: %v", err)
 	}
-	if registry != recipeLoader.registry {
-		t.Fatal("expected custom recipe loader registry to be returned")
+	result, ok := loaded.(*thoughtrecipepkg.LoadResult)
+	if !ok {
+		t.Fatalf("expected LoadThoughtRecipes to return *thoughtrecipe.LoadResult, got %T", loaded)
+	}
+	if result != thoughtrecipeLoader.result {
+		t.Fatal("expected custom thoughtrecipe loader result to be returned")
 	}
 }
 
@@ -87,18 +91,21 @@ func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 	}
 }
 
-func TestDefaultRecipeLoaderLoadsRegistry(t *testing.T) {
-	var loader defaultRecipeLoader
+func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
+	var loader defaultThoughtRecipeLoader
 
-	registry, err := loader.LoadAll()
+	result, err := loader.LoadAll()
 	if err != nil {
 		t.Fatalf("LoadAll returned error: %v", err)
 	}
-	if registry == nil {
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Registry == nil {
 		t.Fatal("expected non-nil registry")
 	}
-	if got := registry.Count(); got == 0 {
-		t.Fatal("expected built-in recipes to be loaded")
+	if got := result.Registry.Count(); got != 0 {
+		t.Fatalf("expected empty registry, got %d thoughtrecipes", got)
 	}
 }
 
@@ -120,17 +127,17 @@ func (s *stubPromptRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) err
 	return nil
 }
 
-type stubRecipeLoader struct {
-	called   bool
-	registry *recipepkg.RecipeRegistry
+type stubThoughtRecipeLoader struct {
+	called bool
+	result *thoughtrecipepkg.LoadResult
 }
 
-func (s *stubRecipeLoader) LoadAll() (*recipepkg.RecipeRegistry, error) {
+func (s *stubThoughtRecipeLoader) LoadAll() (*thoughtrecipepkg.LoadResult, error) {
 	s.called = true
-	if s.registry == nil {
-		s.registry = recipepkg.NewRecipeRegistry()
+	if s.result == nil {
+		s.result = &thoughtrecipepkg.LoadResult{Registry: thoughtrecipepkg.NewThoughtRecipeRegistry()}
 	}
-	return s.registry, nil
+	return s.result, nil
 }
 
 type countingPromptRegistry struct {

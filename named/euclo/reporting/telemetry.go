@@ -247,10 +247,10 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 					Seq:        0,
 					OccurredAt: time.Now().UTC(),
 				},
-				RecipeID:     clarificationRecipeIDFromEnv(env),
-				StateVersion: clarificationStateVersionFromEnv(env),
-				PlanID:       planIDStr,
-				Completion:   string(outcome.Category),
+				ThoughtRecipeID: clarificationThoughtRecipeIDFromEnv(env),
+				StateVersion:    clarificationStateVersionFromEnv(env),
+				PlanID:          planIDStr,
+				Completion:      string(outcome.Category),
 			})
 		}
 	}
@@ -302,17 +302,17 @@ func shouldEmitClarificationCompletion(env *contextdata.Envelope) bool {
 	if _, ok := env.GetWorkingValue("euclo.clarification.projection"); ok {
 		return true
 	}
-	if _, ok := env.GetWorkingValue(intentcontext.ClarificationActiveRecipeKey); ok {
+	if _, ok := env.GetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey); ok {
 		return true
 	}
 	return false
 }
 
-func clarificationRecipeIDFromEnv(env *contextdata.Envelope) string {
+func clarificationThoughtRecipeIDFromEnv(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	if v, ok := env.GetWorkingValue(intentcontext.ClarificationActiveRecipeKey); ok {
+	if v, ok := env.GetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey); ok {
 		if s, ok := v.(string); ok {
 			return s
 		}

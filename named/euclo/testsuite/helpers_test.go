@@ -9,15 +9,17 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -39,6 +41,12 @@ func (stubLanguageModel) Chat(context.Context, []contracts.Message, *contracts.L
 
 func (stubLanguageModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+}
+
+type noopCompiler struct{}
+
+func (noopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
 }
 
 type recordingTelemetry struct {
@@ -151,11 +159,33 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRe
 	return reg
 }
 
-func newRecipeRegistry(t *testing.T, recipe *recipepkg.ThoughtRecipe) *recipepkg.RecipeRegistry {
+func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *thoughtrecipepkg.ThoughtRecipe) *thoughtrecipepkg.ThoughtRecipeRegistry {
 	t.Helper()
-	reg := recipepkg.NewRecipeRegistry()
-	if err := reg.Register(recipe); err != nil {
-		t.Fatalf("register recipe: %v", err)
+	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
+	if thoughtrecipe == nil {
+		t.Fatal("thoughtrecipe is nil")
+	}
+	stepID := thoughtrecipe.ID + ".step0"
+	plan := &thoughtrecipepkg.ExecutionPlan{
+		ThoughtRecipe: thoughtrecipe,
+		Steps: []thoughtrecipepkg.ExecutionStep{{
+			ID:       stepID,
+			Type:     "run",
+			Paradigm: "goalcon",
+			Goal:     "Continue the thoughtrecipe.",
+			Prompt:   "Continue the thoughtrecipe.",
+			Step: thoughtrecipepkg.ThoughtRecipeStep{
+				ID:      stepID,
+				Type:    "run",
+				Prompt:  "Continue the thoughtrecipe.",
+				Parent:  thoughtrecipepkg.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Config:  map[string]any{},
+				Context: thoughtrecipepkg.ThoughtRecipeStepContext{},
+			},
+		}},
+	}
+	if err := reg.RegisterCompiled(thoughtrecipe, plan, "test"); err != nil {
+		t.Fatalf("register compiled thoughtrecipe: %v", err)
 	}
 	return reg
 }
@@ -270,4 +300,8 @@ func newPersistenceWriter(t *testing.T) *persistence.Writer {
 		_ = engine.Close()
 	})
 	return persistence.NewWriter(&knowledge.ChunkStore{Graph: engine}, nil, nil)
+}
+
+func ctxWithTrigger(ctx context.Context) context.Context {
+	return contextstream.WithTrigger(ctx, contextstream.NewTrigger(noopCompiler{}))
 }

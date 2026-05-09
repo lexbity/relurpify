@@ -17,7 +17,7 @@ func TestStateStoreWriteReadRoundTrip(t *testing.T) {
 	state := NewState("task-1", "session-1")
 	state.StateVersion = 4
 	state.CurrentTurnID = "turn-1"
-	state.ActiveRecipeID = "recipe-clarify"
+	state.ActiveThoughtRecipeID = "thoughtrecipe-clarify"
 	state.Ambiguity = &AmbiguityCharacterization{
 		Kind:               AmbiguityKindUnderspecified,
 		Confidence:         0.33,
@@ -205,5 +205,56 @@ func TestStateStoreSurvivesCloneAndCheckpointKeys(t *testing.T) {
 	}
 	if readBack.GroundedAnchors[0].CreatedAt != "2026-05-07T12:00:00Z" {
 		t.Fatalf("expected created-at string to survive round-trip, got %q", readBack.GroundedAnchors[0].CreatedAt)
+	}
+}
+
+func TestClarificationStateValidateRejectsMissingIdentity(t *testing.T) {
+	state := NewState("task-3", "session-3")
+	state.TaskID = ""
+	if err := state.Validate(); err == nil {
+		t.Fatal("expected validation error for missing task id")
+	}
+
+	state = NewState("task-3", "session-3")
+	state.SessionID = ""
+	if err := state.Validate(); err == nil {
+		t.Fatal("expected validation error for missing session id")
+	}
+
+	state = NewState("task-3", "session-3")
+	state.StateVersion = 0
+	if err := state.Validate(); err == nil {
+		t.Fatal("expected validation error for missing version")
+	}
+}
+
+func TestStateStoreReadRejectsCorruptState(t *testing.T) {
+	env := contextdata.NewEnvelope("task-4", "session-4")
+	env.SetWorkingValue(ClarificationStateKey, &ClarificationState{
+		TaskID:       "task-4",
+		SessionID:    "session-4",
+		StateVersion: 1,
+		Turns: []ClarificationTurn{
+			{StableID: "dup"},
+			{StableID: "dup"},
+		},
+	}, contextdata.MemoryClassTask)
+
+	_, err := NewStateStore().Read(context.Background(), env)
+	if err == nil {
+		t.Fatal("expected read to reject duplicate stable ids")
+	}
+}
+
+func TestStateStoreWriteRejectsCorruptState(t *testing.T) {
+	env := contextdata.NewEnvelope("task-5", "session-5")
+	state := NewState("task-5", "session-5")
+	state.Turns = []ClarificationTurn{
+		{StableID: "turn-1"},
+		{StableID: "turn-1"},
+	}
+
+	if err := NewStateStore().Write(context.Background(), env, state); err == nil {
+		t.Fatal("expected write to reject duplicate stable ids")
 	}
 }

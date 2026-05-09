@@ -21,8 +21,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
-	recipe "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	platformcontracts "codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -34,7 +34,7 @@ type Agent struct {
 	config      EucloConfig
 	initialized bool
 
-	recipeRegistry *recipe.RecipeRegistry
+	thoughtrecipeRegistry *thoughtrecipe.ThoughtRecipeRegistry
 
 	// resume state: populated by Execute before calling BuildGraph
 	resumeClassification *intake.IntentClassification
@@ -102,13 +102,23 @@ func (a *Agent) Initialize(config *core.Config) error {
 		}
 	}
 
-	// Load recipe templates
-	if regFuncs.LoadRecipes != nil {
-		registry, err := regFuncs.LoadRecipes()
+	// Load the thoughtrecipe registry from the DSL source tree.
+	if regFuncs.LoadThoughtRecipes != nil {
+		loaded, err := regFuncs.LoadThoughtRecipes()
 		if err != nil {
-			return fmt.Errorf("failed to load recipes: %w", err)
+			return fmt.Errorf("failed to load thoughtrecipes: %w", err)
 		}
-		a.recipeRegistry = registry.(*recipe.RecipeRegistry)
+		switch v := loaded.(type) {
+		case *thoughtrecipe.LoadResult:
+			if v != nil {
+				a.thoughtrecipeRegistry = v.Registry
+			}
+		case *thoughtrecipe.ThoughtRecipeRegistry:
+			a.thoughtrecipeRegistry = v
+		}
+		if a.thoughtrecipeRegistry == nil {
+			a.thoughtrecipeRegistry = thoughtrecipe.NewThoughtRecipeRegistry()
+		}
 	}
 
 	a.initialized = true
@@ -156,7 +166,7 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 		orchestrate.WithWorkspaceEnvironment(a.env),
 		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
 		orchestrate.WithCapabilityRegistry(a.env.Registry),
-		orchestrate.WithRecipeRegistry(a.recipeRegistry),
+		orchestrate.WithThoughtRecipeRegistry(a.thoughtrecipeRegistry),
 		orchestrate.WithMaxStreamTokens(a.config.MaxStreamTokens),
 		orchestrate.WithDefaultStreamMode(a.config.DefaultStreamMode),
 		orchestrate.WithCapabilityClassifier(a.capabilityClassifier()),

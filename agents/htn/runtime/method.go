@@ -2,7 +2,7 @@ package runtime
 
 import "codeburg.org/lexbit/relurpify/framework/core"
 
-// SubtaskSpec describes a single primitive step in a decomposition recipe.
+// SubtaskSpec describes a single primitive step in a decomposition thoughtrecipe.
 type SubtaskSpec struct {
 	// Name is a short identifier used in the generated plan step ID.
 	Name string
@@ -28,7 +28,7 @@ type Method struct {
 	// Precondition is an optional additional guard. When non-nil the method is
 	// only chosen when Precondition(task) returns true.
 	Precondition func(*core.Task) bool
-	// Subtasks is the ordered decomposition recipe executed by this method.
+	// Subtasks is the ordered decomposition thoughtrecipe executed by this method.
 	Subtasks []SubtaskSpec
 	// Priority breaks ties when multiple methods match the same task type.
 	// Higher value wins.

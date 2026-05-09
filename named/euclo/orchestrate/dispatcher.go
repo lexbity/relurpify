@@ -9,17 +9,17 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // Dispatcher resolves the execution route from the envelope and persists the
 // selected route for downstream nodes.
 type Dispatcher struct {
-	id                 string
-	capabilityRegistry *capability.CapabilityRegistry
-	recipeRegistry     *recipepkg.RecipeRegistry
-	workspace          string
+	id                    string
+	capabilityRegistry    *capability.CapabilityRegistry
+	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
+	workspace             string
 }
 
 // NewDispatcher creates a new dispatcher.
@@ -35,10 +35,10 @@ func (d *Dispatcher) WithCapabilityRegistry(reg *capability.CapabilityRegistry) 
 	return d
 }
 
-// WithRecipeRegistry wires the recipe registry used for route selection.
-func (d *Dispatcher) WithRecipeRegistry(reg *recipepkg.RecipeRegistry) *Dispatcher {
+// WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route selection.
+func (d *Dispatcher) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) *Dispatcher {
 	if d != nil && reg != nil {
-		d.recipeRegistry = reg
+		d.thoughtrecipeRegistry = reg
 	}
 	return d
 }
@@ -57,7 +57,7 @@ func (d *Dispatcher) ID() string { return d.id }
 // Type implements agentgraph.Node.
 func (d *Dispatcher) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
-// Execute selects recipe or capability execution and writes the route to the envelope.
+// Execute selects thoughtrecipe or capability execution and writes the route to the envelope.
 func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	req := routeRequestFromEnvelope(env)
 	if env != nil {
@@ -88,7 +88,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 		err    error
 	)
 	if req.DryRun {
-		report, dryRunErr := DryRun(ctx, env, req, caps, d.recipeRegistry)
+		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry)
 		err = dryRunErr
 		if err != nil {
 			return &core.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
@@ -105,7 +105,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 			TelemetrySuppressed: req.TelemetryOff,
 		}
 	} else {
-		result, err = Dispatch(ctx, env, req, caps, d.recipeRegistry)
+		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry)
 		if err != nil {
 			return &core.Result{NodeID: d.id, Success: false, Data: map[string]any{"error": err.Error()}}, err
 		}
@@ -142,31 +142,28 @@ func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 		}
 	}
 	if selection := routeSelectionFromEnvelope(env); selection != nil {
-		req.RecipeID = strings.TrimSpace(selection.RecipeID)
+		req.ThoughtRecipeID = strings.TrimSpace(selection.ThoughtRecipeID)
 		req.CapabilityID = strings.TrimSpace(selection.CapabilityID)
 	}
 	if needsClarificationRoute(env) {
-		req.RecipeID = clarificationRecipeID
+		req.ThoughtRecipeID = clarificationThoughtRecipeID
 	}
 	kind := ""
-	if selection := routeSelectionFromEnvelope(env); selection != nil {
-		kind = strings.TrimSpace(selection.RouteKind)
-	}
-	if req.RecipeID != "" {
-		kind = "recipe"
+	if req.ThoughtRecipeID != "" {
+		kind = RouteKindForThoughtRecipeID(req.ThoughtRecipeID)
 	} else if req.CapabilityID != "" {
-		kind = "capability"
-	} else if v, ok := env.GetWorkingValue("euclo.recipe_id"); ok {
+		kind = RouteKindCapability
+	} else if v, ok := env.GetWorkingValue("euclo.thoughtrecipe_id"); ok {
 		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-			req.RecipeID = strings.TrimSpace(s)
-			kind = "recipe"
+			req.ThoughtRecipeID = strings.TrimSpace(s)
+			kind = RouteKindForThoughtRecipeID(req.ThoughtRecipeID)
 		}
 	}
 	if kind == "" {
 		if v, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
 			if seq, ok := v.([]string); ok && len(seq) > 0 && strings.TrimSpace(seq[0]) != "" {
 				req.CapabilityID = strings.TrimSpace(seq[0])
-				kind = "capability"
+				kind = RouteKindCapability
 			}
 		}
 	}
@@ -174,18 +171,18 @@ func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 		kind = classifyRoute(env)
 	}
 	switch kind {
-	case "recipe":
-		if req.RecipeID == "" && req.FamilyID == "" {
-			req.RecipeID = defaultRecipeID(env)
+	case RouteKindThoughtRecipe, RouteKindIntent:
+		if req.ThoughtRecipeID == "" && req.FamilyID == "" {
+			req.ThoughtRecipeID = defaultThoughtRecipeID(env)
 		}
-	case "capability":
+	case RouteKindCapability:
 		if req.CapabilityID == "" && req.FamilyID == "" {
 			req.CapabilityID = defaultCapabilityID(env)
 		}
 	default:
 		if req.FamilyID == "" {
 			req.CapabilityID = defaultCapabilityID(env)
-			kind = "capability"
+			kind = RouteKindCapability
 		}
 	}
 	if v, ok := env.GetWorkingValue("euclo.route.fallback_id"); ok {
@@ -207,12 +204,20 @@ func applyRouteResultToEnvelope(env *contextdata.Envelope, result *RouteResult) 
 	}
 	selection := &RouteSelection{RouteKind: result.RouteKind}
 	switch result.RouteKind {
-	case "recipe":
-		selection.RecipeID = result.RouteID
+	case RouteKindThoughtRecipe, RouteKindIntent:
+		selection.ThoughtRecipeID = result.RouteID
 	default:
 		selection.CapabilityID = result.RouteID
 	}
 	env.SetWorkingValue("euclo.route_selection", selection, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.route.continuation", &RouteContinuation{
+		SharedContext:         true,
+		SourceRouteKind:       result.RouteKind,
+		SourceRouteID:         result.RouteID,
+		TargetRouteKind:       result.RouteKind,
+		TargetRouteID:         result.RouteID,
+		ActiveThoughtRecipeID: selection.ThoughtRecipeID,
+	}, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.dispatch.route_kind", result.RouteKind, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.route.candidate_count", result.CandidateCount, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.route.fallback_taken", result.FallbackTaken, contextdata.MemoryClassTask)
@@ -238,41 +243,41 @@ func classifyRoute(env *contextdata.Envelope) string {
 		return ""
 	}
 	if needsClarificationRoute(env) {
-		return "recipe"
+		return RouteKindIntent
 	}
 	if v, ok := env.GetWorkingValue("euclo.family_selection"); ok {
 		if family, ok := v.(string); ok {
 			switch strings.TrimSpace(family) {
 			case "review", "investigation", "architecture":
-				return "recipe"
+				return RouteKindThoughtRecipe
 			case "repair", "migration", "implementation":
-				return "capability"
+				return RouteKindCapability
 			}
 		}
 	}
 	if v, ok := env.GetWorkingValue("euclo.intent_classification"); ok {
 		if cls, ok := v.(*intake.IntentClassification); ok && cls != nil {
 			if strings.TrimSpace(cls.WinningFamily) == "review" || strings.TrimSpace(cls.WinningFamily) == "investigation" {
-				return "recipe"
+				return RouteKindThoughtRecipe
 			}
 		}
 	}
 	return ""
 }
 
-func defaultRecipeID(env *contextdata.Envelope) string {
+func defaultThoughtRecipeID(env *contextdata.Envelope) string {
 	if env == nil {
-		return "euclo.recipe.default"
+		return "euclo.thoughtrecipe.default"
 	}
 	if needsClarificationRoute(env) {
-		return clarificationRecipeID
+		return clarificationThoughtRecipeID
 	}
-	if v, ok := env.GetWorkingValue("euclo.recipe_id"); ok {
+	if v, ok := env.GetWorkingValue("euclo.thoughtrecipe_id"); ok {
 		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
 			return s
 		}
 	}
-	return "euclo.recipe.default"
+	return "euclo.thoughtrecipe.default"
 }
 
 func defaultCapabilityID(env *contextdata.Envelope) string {

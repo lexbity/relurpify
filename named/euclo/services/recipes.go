@@ -1,13 +1,19 @@
 package services
 
 import (
-	recipepkg "codeburg.org/lexbit/relurpify/named/euclo/recipes"
-	"codeburg.org/lexbit/relurpify/named/euclo/recipetemplates"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-// defaultRecipeLoader implements RecipeLoader using Euclo's built‑in recipe templates.
-type defaultRecipeLoader struct{}
+// defaultThoughtRecipeLoader implements ThoughtRecipeLoader using the Euclo DSL source scan.
+type defaultThoughtRecipeLoader struct{}
 
-func (r *defaultRecipeLoader) LoadAll() (*recipepkg.RecipeRegistry, error) {
-	return recipetemplates.LoadAll()
+func (r *defaultThoughtRecipeLoader) LoadAll() (*thoughtrecipepkg.LoadResult, error) {
+	loader := thoughtrecipepkg.NewLoader()
+	result, err := loader.LoadWorkspace(".")
+	if err == nil && result != nil {
+		return result, nil
+	}
+	return &thoughtrecipepkg.LoadResult{
+		Registry: thoughtrecipepkg.NewThoughtRecipeRegistry(),
+	}, nil
 }

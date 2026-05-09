@@ -284,7 +284,7 @@ type ClarificationState struct {
 	SessionID              string
 	StateVersion           uint64
 	CurrentTurnID          string
-	ActiveRecipeID         string
+	ActiveThoughtRecipeID  string
 	Turns                  []ClarificationTurn
 	Ambiguity              *AmbiguityCharacterization
 	ConfirmedEntities      []ConfirmedEntity
@@ -297,6 +297,48 @@ type ClarificationState struct {
 	LastCheckpointID       string
 	LastCheckpointSeq      uint64
 	LastUpdatedAt          time.Time
+}
+
+// Validate checks that the clarification state is internally consistent enough
+// to be safely persisted or replayed.
+func (s *ClarificationState) Validate() error {
+	if s == nil {
+		return fmt.Errorf("clarification state is nil")
+	}
+	if strings.TrimSpace(s.TaskID) == "" {
+		return fmt.Errorf("clarification state missing task id")
+	}
+	if strings.TrimSpace(s.SessionID) == "" {
+		return fmt.Errorf("clarification state missing session id")
+	}
+	if s.StateVersion == 0 {
+		return fmt.Errorf("clarification state missing state version")
+	}
+	if err := validateStableIDs("turn", stableIDsFromTurns(s.Turns)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("entity", stableIDsFromEntities(s.ConfirmedEntities)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("scope", stableIDsFromScopes(s.ConfirmedScopes)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("question", stableIDsFromQuestions(s.PendingQuestions)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("relation intent", stableIDsFromRelations(s.PendingRelationIntents)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("projection intent", stableIDsFromProjectionIntents(s.PendingProjection)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("projection record", stableIDsFromProjectionRecords(s.AppliedMutations)); err != nil {
+		return err
+	}
+	if err := validateStableIDs("anchor", stableIDsFromAnchors(s.GroundedAnchors)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewState creates a normalized clarification state for the task/session pair.
@@ -343,7 +385,7 @@ func (s *ClarificationState) Normalize() {
 	s.TaskID = strings.TrimSpace(s.TaskID)
 	s.SessionID = strings.TrimSpace(s.SessionID)
 	s.CurrentTurnID = strings.TrimSpace(s.CurrentTurnID)
-	s.ActiveRecipeID = strings.TrimSpace(s.ActiveRecipeID)
+	s.ActiveThoughtRecipeID = strings.TrimSpace(s.ActiveThoughtRecipeID)
 	s.LastCheckpointID = strings.TrimSpace(s.LastCheckpointID)
 	for i := range s.Turns {
 		s.Turns[i].Normalize(s.TaskID, s.SessionID)
@@ -378,6 +420,85 @@ func (s *ClarificationState) Normalize() {
 		s.GroundedAnchors[i].CreatedAt = strings.TrimSpace(s.GroundedAnchors[i].CreatedAt)
 	}
 	s.LastUpdatedAt = normalizeTime(s.LastUpdatedAt)
+}
+
+func validateStableIDs(label string, ids []string) error {
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return fmt.Errorf("clarification state has empty %s stable id", label)
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("clarification state has duplicate %s stable id: %s", label, id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+func stableIDsFromTurns(turns []ClarificationTurn) []string {
+	out := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		out = append(out, turn.StableID)
+	}
+	return out
+}
+
+func stableIDsFromEntities(entities []ConfirmedEntity) []string {
+	out := make([]string, 0, len(entities))
+	for _, entity := range entities {
+		out = append(out, entity.StableID)
+	}
+	return out
+}
+
+func stableIDsFromScopes(scopes []ConfirmedScope) []string {
+	out := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		out = append(out, scope.StableID)
+	}
+	return out
+}
+
+func stableIDsFromQuestions(questions []ClarificationQuestion) []string {
+	out := make([]string, 0, len(questions))
+	for _, question := range questions {
+		out = append(out, question.StableID)
+	}
+	return out
+}
+
+func stableIDsFromRelations(relations []RelationIntent) []string {
+	out := make([]string, 0, len(relations))
+	for _, relation := range relations {
+		out = append(out, relation.StableID)
+	}
+	return out
+}
+
+func stableIDsFromProjectionIntents(intents []ProjectionIntent) []string {
+	out := make([]string, 0, len(intents))
+	for _, intent := range intents {
+		out = append(out, intent.StableID)
+	}
+	return out
+}
+
+func stableIDsFromProjectionRecords(records []ProjectionRecord) []string {
+	out := make([]string, 0, len(records))
+	for _, record := range records {
+		out = append(out, record.StableID)
+	}
+	return out
+}
+
+func stableIDsFromAnchors(anchors []retrieval.AnchorRef) []string {
+	out := make([]string, 0, len(anchors))
+	for _, anchor := range anchors {
+		out = append(out, anchor.AnchorID)
+	}
+	return out
 }
 
 // NextStateVersion returns the next monotonic state version.

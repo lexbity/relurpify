@@ -16,8 +16,8 @@ type AgentRegistrationFuncs struct {
 	// Agents register their prompt providers (e.g., paradigm and euclo providers for euclo).
 	RegisterPromptProviders func(WorkspaceEnvironment) error
 
-	// LoadRecipes is called during initialization.
-	// Agents load and return their recipe registries.
-	// TODO: Move recipe registry into WorkspaceEnvironment in future iteration.
-	LoadRecipes func() (interface{}, error)
+	// LoadThoughtRecipes is called during initialization.
+	// Agents load and return their thoughtrecipe registries.
+	// TODO: Move thoughtrecipe registry into WorkspaceEnvironment in future iteration.
+	LoadThoughtRecipes func() (interface{}, error)
 }

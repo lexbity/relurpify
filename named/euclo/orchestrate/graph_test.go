@@ -48,7 +48,7 @@ func TestRootGraphValidate(t *testing.T) {
 	}
 }
 
-func TestRootGraphRecipeRoute(t *testing.T) {
+func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 	graph := NewRootGraph()
 
 	env := contextdata.NewEnvelope("task-123", "session-456")

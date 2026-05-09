@@ -41,13 +41,13 @@ func TestPolicyDecisionRoundTrip(t *testing.T) {
 func TestDispatchRouteKindRoundTrip(t *testing.T) {
 	env := contextdata.NewEnvelope("task", "session")
 
-	SetDispatchRouteKind(env, "recipe")
+	SetDispatchRouteKind(env, "thoughtrecipe")
 	got, ok := GetDispatchRouteKind(env)
 	if !ok {
 		t.Fatal("expected dispatch route kind to round-trip")
 	}
-	if got != "recipe" {
-		t.Fatalf("expected route kind recipe, got %q", got)
+	if got != "thoughtrecipe" {
+		t.Fatalf("expected route kind thoughtrecipe, got %q", got)
 	}
 }
 

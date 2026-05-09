@@ -8,10 +8,10 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
-// recipePriorStepProvider provides context from the last executed recipe step.
-type recipePriorStepProvider struct{}
+// thoughtrecipePriorStepProvider provides context from the last executed thoughtrecipe step.
+type thoughtrecipePriorStepProvider struct{}
 
-func (p *recipePriorStepProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
+func (p *thoughtrecipePriorStepProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
 	if ctx.Envelope == nil {
 		return prompt.ContextChunk{Content: ""}
 	}
@@ -61,10 +61,10 @@ func (p *recipePriorStepProvider) Provide(ctx prompt.RuntimeContext) prompt.Cont
 	return prompt.ContextChunk{Content: "Previous Step Summary:\n" + strings.Join(priorInfo, "\n")}
 }
 
-func (p *recipePriorStepProvider) Describe() prompt.ProviderMetadata {
+func (p *thoughtrecipePriorStepProvider) Describe() prompt.ProviderMetadata {
 	return prompt.ProviderMetadata{
-		Name:        "euclo.recipe_prior_step_result",
-		Description: "Provides summary and results from the previously executed recipe step",
+		Name:        "euclo.thoughtrecipe_prior_step_result",
+		Description: "Provides summary and results from the previously executed thoughtrecipe step",
 		Paradigms:   []string{"euclo"},
 		ReadsKeys: []string{
 			"euclo.frame_history",
