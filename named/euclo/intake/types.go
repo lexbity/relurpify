@@ -35,7 +35,6 @@ type TaskEnvelope struct {
 	ContextHint     string   // e.g., "context-hint: typescript-react"
 	SessionHint     string   // e.g., "session-hint: continue-refactoring"
 	FollowUpHint    string   // e.g., "follow-up: implement-tests"
-	AgentModeHint   string   // e.g., "mode: architect"
 	WorkspaceScopes []string // e.g., "workspace-scope: backend, frontend"
 
 	// Context-derived fields (from task.Context)

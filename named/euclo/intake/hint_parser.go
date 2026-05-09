@@ -8,24 +8,24 @@ import (
 // HintParser extracts structured hints from user messages.
 type HintParser struct {
 	// patterns for hint detection
-	contextHintPattern  *regexp.Regexp
-	sessionHintPattern  *regexp.Regexp
-	followUpHintPattern *regexp.Regexp
-	agentModePattern    *regexp.Regexp
+	contextHintPattern    *regexp.Regexp
+	sessionHintPattern    *regexp.Regexp
+	followUpHintPattern   *regexp.Regexp
+	agentModePattern      *regexp.Regexp
 	workspaceScopePattern *regexp.Regexp
-	filePathPattern     *regexp.Regexp
-	ingestPolicyPattern *regexp.Regexp
-	incrementalPattern  *regexp.Regexp
+	filePathPattern       *regexp.Regexp
+	ingestPolicyPattern   *regexp.Regexp
+	incrementalPattern    *regexp.Regexp
 }
 
 // NewHintParser creates a new hint parser with compiled regex patterns.
 func NewHintParser() *HintParser {
 	return &HintParser{
 		// Match patterns like "context-hint: value" or "@context-hint: value"
-		contextHintPattern:  regexp.MustCompile(`(?i)(?:@?context-hint[:\s]+)([^\n]+)`),
-		sessionHintPattern:  regexp.MustCompile(`(?i)(?:@?session-hint[:\s]+)([^\n]+)`),
-		followUpHintPattern: regexp.MustCompile(`(?i)(?:@?follow-up[:\s]+)([^\n]+)`),
-		agentModePattern:    regexp.MustCompile(`(?i)(?:@?mode[:\s]+)([^\n]+)`),
+		contextHintPattern:    regexp.MustCompile(`(?i)(?:@?context-hint[:\s]+)([^\n]+)`),
+		sessionHintPattern:    regexp.MustCompile(`(?i)(?:@?session-hint[:\s]+)([^\n]+)`),
+		followUpHintPattern:   regexp.MustCompile(`(?i)(?:@?follow-up[:\s]+)([^\n]+)`),
+		agentModePattern:      regexp.MustCompile(`(?i)(?:@?mode[:\s]+)([^\n]+)`),
 		workspaceScopePattern: regexp.MustCompile(`(?i)(?:@?workspace-scope[:\s]+)([^\n]+)`),
 		// Match file paths (simplified - matches common patterns)
 		filePathPattern: regexp.MustCompile(`(?i)(?:file[:\s]+|path[:\s]+)?([a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+)`),
@@ -38,13 +38,12 @@ func NewHintParser() *HintParser {
 
 // ParseResult holds the extracted hints from a message.
 type ParseResult struct {
-	ContextHint     string
-	SessionHint     string
-	FollowUpHint    string
-	AgentModeHint   string
-	WorkspaceScopes []string
-	ExplicitFiles   []string
-	IngestPolicy    string
+	ContextHint      string
+	SessionHint      string
+	FollowUpHint     string
+	WorkspaceScopes  []string
+	ExplicitFiles    []string
+	IngestPolicy     string
 	IncrementalSince string
 }
 
@@ -65,11 +64,6 @@ func (p *HintParser) Parse(message string) *ParseResult {
 	// Extract follow-up hint
 	if matches := p.followUpHintPattern.FindStringSubmatch(message); len(matches) > 1 {
 		result.FollowUpHint = strings.TrimSpace(matches[1])
-	}
-
-	// Extract agent mode hint
-	if matches := p.agentModePattern.FindStringSubmatch(message); len(matches) > 1 {
-		result.AgentModeHint = strings.TrimSpace(matches[1])
 	}
 
 	// Extract workspace scopes

@@ -37,9 +37,6 @@ Also check file: src/auth/service.ts and path: src/utils/helpers.ts
 	if result.FollowUpHint != "add-tests" {
 		t.Errorf("FollowUpHint = %q, want %q", result.FollowUpHint, "add-tests")
 	}
-	if result.AgentModeHint != "architect" {
-		t.Errorf("AgentModeHint = %q, want %q", result.AgentModeHint, "architect")
-	}
 	if len(result.WorkspaceScopes) != 2 {
 		t.Errorf("WorkspaceScopes length = %d, want 2", len(result.WorkspaceScopes))
 	}
@@ -120,7 +117,6 @@ func TestEnvelopeBuilderBuild(t *testing.T) {
 		WithSessionID("session-abc").
 		WithInstruction("Implement user authentication").
 		WithContextHint("go-backend").
-		WithAgentModeHint("implementer").
 		WithExplicitFiles([]string{"src/auth.go"}).
 		WithIngestPolicy("files_only").
 		Build()

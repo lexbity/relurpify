@@ -75,12 +75,6 @@ func (b *EnvelopeBuilder) WithFollowUpHint(hint string) *EnvelopeBuilder {
 	return b
 }
 
-// WithAgentModeHint sets the agent mode hint.
-func (b *EnvelopeBuilder) WithAgentModeHint(hint string) *EnvelopeBuilder {
-	b.envelope.AgentModeHint = hint
-	return b
-}
-
 // WithWorkspaceScopes sets the workspace scopes.
 func (b *EnvelopeBuilder) WithWorkspaceScopes(scopes []string) *EnvelopeBuilder {
 	b.envelope.WorkspaceScopes = scopes

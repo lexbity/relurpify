@@ -45,7 +45,6 @@ func (n *TaskNormalizer) Normalize(taskID, sessionID, message string) *Normalize
 		ContextHint:      hints.ContextHint,
 		SessionHint:      hints.SessionHint,
 		FollowUpHint:     hints.FollowUpHint,
-		AgentModeHint:    hints.AgentModeHint,
 		WorkspaceScopes:  hints.WorkspaceScopes,
 		ExplicitFiles:    hints.ExplicitFiles,
 		IngestPolicy:     ingestPolicy,
@@ -75,11 +74,6 @@ func (n *TaskNormalizer) NormalizeWithDefaults(taskID, sessionID, message string
 		if result.TaskEnvelope.SessionHint == "" {
 			if v, ok := defaults["session_hint"].(string); ok {
 				result.TaskEnvelope.SessionHint = v
-			}
-		}
-		if result.TaskEnvelope.AgentModeHint == "" {
-			if v, ok := defaults["agent_mode"].(string); ok {
-				result.TaskEnvelope.AgentModeHint = v
 			}
 		}
 		if len(result.TaskEnvelope.WorkspaceScopes) == 0 {
