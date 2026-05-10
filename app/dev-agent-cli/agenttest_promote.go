@@ -142,7 +142,7 @@ func writePromotionLineage(destDir string, suite *agenttest.Suite, cr agenttest.
 		Provider:          cr.Provider,
 		Layer:             strings.TrimSpace(suite.Metadata.Classification),
 		PromotedArtifacts: agentTestSurface.PromotedArtifacts(suite.Metadata.Classification, cr),
-		SourceRunDir:      filepath.Dir(cr.ArtifactsDir),
+		SourceRunDir:      filepath.Dir(filepath.Dir(cr.ArtifactsDir)),
 		SourceArtifacts:   cr.ArtifactsDir,
 		DestinationTape:   destTape,
 		CreatedAt:         time.Now().UTC(),

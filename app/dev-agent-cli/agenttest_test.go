@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,86 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
+
+func TestRunCapabilityTargetedForwardsRunOptions(t *testing.T) {
+	workspace := t.TempDir()
+	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
+	if err := os.MkdirAll(filepath.Dir(suitePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(suitePath, []byte(`apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.code
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  cases:
+    - name: capability_case
+      prompt: hello
+      capability_direct_run:
+        capability_id: euclo:cap.targeted_refactor
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loadedSuite, err := agenttest.LoadSuite(suitePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loadedSuite.Spec.Cases) != 1 || loadedSuite.Spec.Cases[0].CapabilityDirectRun == nil || loadedSuite.Spec.Cases[0].CapabilityDirectRun.CapabilityID != "euclo:cap.targeted_refactor" {
+		t.Fatalf("suite did not load capability direct run as expected: %+v", loadedSuite.Spec.Cases)
+	}
+
+	originalRunner := newAgentTestRunnerFn
+	t.Cleanup(func() { newAgentTestRunnerFn = originalRunner })
+
+	var gotSuite *agenttest.Suite
+	var gotOpts agenttest.RunOptions
+	newAgentTestRunnerFn = func() agentTestRunner {
+		return agentTestRunnerFunc(func(_ context.Context, suite *agenttest.Suite, opts agenttest.RunOptions) (*agenttest.SuiteReport, error) {
+			gotSuite = suite
+			gotOpts = opts
+			return &agenttest.SuiteReport{
+				Cases:  []agenttest.CaseReport{{Name: "capability_case", Success: true}},
+				Strict: true,
+			}, nil
+		})
+	}
+
+	opts := agenttest.RunOptions{
+		TargetWorkspace:     workspace,
+		OutputDir:           filepath.Join(workspace, "out"),
+		Sandbox:             false,
+		Timeout:             12 * time.Second,
+		BootstrapTimeout:    4 * time.Second,
+		SkipASTIndex:        false,
+		Profile:             "live",
+		Strict:              true,
+		MaxRetries:          2,
+		ModelOverride:       "qwen2.5-coder:14b",
+		EndpointOverride:    "http://127.0.0.1:11434",
+		MaxIterations:       9,
+		DebugLLM:            true,
+		DebugAgent:          true,
+		BackendReset:        "restart",
+		BackendBinary:       "ollama-custom",
+		BackendService:      "ollama-custom",
+		BackendResetBetween: true,
+		BackendResetOn:      []string{"EOF"},
+	}
+	if err := runCapabilityTargeted(context.Background(), "euclo:cap.targeted_refactor", []string{suitePath}, "", opts, "stable", "live", true, false); err != nil {
+		t.Fatal(err)
+	}
+	if gotSuite == nil {
+		t.Fatal("expected runner to receive suite")
+	}
+	if len(gotSuite.Spec.Cases) != 1 || gotSuite.Spec.Cases[0].Name != "capability_case" {
+		t.Fatalf("unexpected suite cases: %+v", gotSuite.Spec.Cases)
+	}
+	if gotOpts.TargetWorkspace != workspace || gotOpts.OutputDir != opts.OutputDir || gotOpts.Timeout != opts.Timeout || gotOpts.BootstrapTimeout != opts.BootstrapTimeout || gotOpts.SkipASTIndex != opts.SkipASTIndex || gotOpts.Profile != opts.Profile || gotOpts.Strict != opts.Strict || gotOpts.MaxRetries != opts.MaxRetries || gotOpts.ModelOverride != opts.ModelOverride || gotOpts.EndpointOverride != opts.EndpointOverride || gotOpts.MaxIterations != opts.MaxIterations || gotOpts.DebugLLM != opts.DebugLLM || gotOpts.DebugAgent != opts.DebugAgent || gotOpts.BackendReset != opts.BackendReset || gotOpts.BackendBinary != opts.BackendBinary || gotOpts.BackendService != opts.BackendService || gotOpts.BackendResetBetween != opts.BackendResetBetween || len(gotOpts.BackendResetOn) != 1 || gotOpts.BackendResetOn[0] != "EOF" {
+		t.Fatalf("unexpected forwarded options: %+v", gotOpts)
+	}
+}
 
 func TestAgentTestRunDefaultsSkipASTIndex(t *testing.T) {
 	cmd := newAgentTestRunCmd()
@@ -179,6 +260,19 @@ func TestFormatTapeStatusReportsMissingHeader(t *testing.T) {
 	}
 }
 
+func TestAgentTestSurfaceRunRootReturnsRunDirectory(t *testing.T) {
+	report := &agenttest.SuiteReport{
+		Cases: []agenttest.CaseReport{{
+			ArtifactsDir: filepath.Join("/tmp", "relurpify_cfg", "test_run", "run-1", "artifacts", "basic_edit_task__qwen2_5_coder_14b"),
+		}},
+	}
+	got := agentTestSurface.RunRoot(report)
+	want := filepath.Join("/tmp", "relurpify_cfg", "test_run", "run-1")
+	if got != want {
+		t.Fatalf("RunRoot = %q, want %q", got, want)
+	}
+}
+
 func TestReportAgentTestTapesShowsAgeAndMissingCoverage(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
@@ -287,4 +381,23 @@ spec:
 	if _, err := os.Stat(lineage); err != nil {
 		t.Fatalf("expected promotion lineage at %s: %v", lineage, err)
 	}
+	data, err = os.ReadFile(lineage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record struct {
+		SourceRunDir string `json:"source_run_dir"`
+	}
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.SourceRunDir != runDir {
+		t.Fatalf("source run dir = %q, want %q", record.SourceRunDir, runDir)
+	}
+}
+
+type agentTestRunnerFunc func(context.Context, *agenttest.Suite, agenttest.RunOptions) (*agenttest.SuiteReport, error)
+
+func (f agentTestRunnerFunc) RunSuite(ctx context.Context, suite *agenttest.Suite, opts agenttest.RunOptions) (*agenttest.SuiteReport, error) {
+	return f(ctx, suite, opts)
 }

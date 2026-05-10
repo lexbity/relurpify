@@ -132,7 +132,7 @@ func (eucloAgentTestSurfaceAdapter) RunRoot(report *agenttest.SuiteReport) strin
 	if report == nil || len(report.Cases) == 0 {
 		return ""
 	}
-	return filepath.Dir(report.Cases[0].ArtifactsDir)
+	return filepath.Dir(filepath.Dir(report.Cases[0].ArtifactsDir))
 }
 
 func sanitizeAgentTestTapeName(s string) string {

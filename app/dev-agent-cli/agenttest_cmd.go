@@ -68,10 +68,6 @@ func newAgentTestRunCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Run one or more agent testsuites",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if capability != "" {
-				// Phase 4: capability-targeted scan - filter to cases that match the capability
-				return runCapabilityTargeted(cmd.Context(), capability, suites, agentName)
-			}
 			preset, err := resolveAgentTestLane(lane)
 			if err != nil {
 				return err
@@ -87,6 +83,30 @@ func newAgentTestRunCmd() *cobra.Command {
 			}
 			if !includeQuarantined {
 				includeQuarantined = preset.IncludeQuarantined
+			}
+			opts := agenttest.RunOptions{
+				TargetWorkspace:     ensureWorkspace(),
+				OutputDir:           outDir,
+				Sandbox:             sandbox,
+				Timeout:             timeout,
+				BootstrapTimeout:    bootstrapTimeout,
+				SkipASTIndex:        skipASTIndex,
+				Profile:             profile,
+				Strict:              strict,
+				MaxRetries:          maxRetries,
+				ModelOverride:       model,
+				EndpointOverride:    endpoint,
+				MaxIterations:       maxIterations,
+				DebugLLM:            debugLLM,
+				DebugAgent:          debugAgent,
+				BackendReset:        backendReset,
+				BackendBinary:       backendBin,
+				BackendService:      backendService,
+				BackendResetBetween: backendResetBetween,
+				BackendResetOn:      backendResetOn,
+			}
+			if capability != "" {
+				return runCapabilityTargeted(cmd.Context(), capability, suites, agentName, opts, tier, profile, strict, includeQuarantined)
 			}
 			ws := ensureWorkspace()
 			selectedSuites := suites
@@ -115,27 +135,7 @@ func newAgentTestRunCmd() *cobra.Command {
 				return fmt.Errorf("no testsuites matched the requested filters")
 			}
 			r := newAgentTestRunnerFn()
-			opts := agenttest.RunOptions{
-				TargetWorkspace:     ws,
-				OutputDir:           outDir,
-				Sandbox:             sandbox,
-				Timeout:             timeout,
-				BootstrapTimeout:    bootstrapTimeout,
-				SkipASTIndex:        skipASTIndex,
-				Profile:             profile,
-				Strict:              strict,
-				MaxRetries:          maxRetries,
-				ModelOverride:       model,
-				EndpointOverride:    endpoint,
-				MaxIterations:       maxIterations,
-				DebugLLM:            debugLLM,
-				DebugAgent:          debugAgent,
-				BackendReset:        backendReset,
-				BackendBinary:       backendBin,
-				BackendService:      backendService,
-				BackendResetBetween: backendResetBetween,
-				BackendResetOn:      backendResetOn,
-			}
+			opts.TargetWorkspace = ws
 			hadFailures := false
 			totalInfraFailures := 0
 			totalAssertFailures := 0
@@ -222,8 +222,18 @@ func newAgentTestRunCmd() *cobra.Command {
 
 // runCapabilityTargeted scans all suites and runs only cases matching the specified capability.
 // Phase 4: Implements capability-targeted test discovery.
-func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []string, agentName string) error {
-	ws := ensureWorkspace()
+func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []string, agentName string, opts agenttest.RunOptions, tier, profile string, strict, includeQuarantined bool) error {
+	ws := opts.TargetWorkspace
+	if strings.TrimSpace(ws) == "" {
+		ws = ensureWorkspace()
+	}
+	if strings.TrimSpace(profile) != "" {
+		opts.Profile = profile
+	}
+	opts.Strict = strict || opts.Strict
+	if includeQuarantined {
+		// no-op: capability-targeted run reuses the same suite visibility contract
+	}
 	selectedSuites := suites
 	if len(selectedSuites) == 0 {
 		selectedSuites = discoverSuites(ws, agentName)
@@ -237,6 +247,9 @@ func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []st
 		suite, err := agenttest.LoadSuite(suitePath)
 		if err != nil {
 			return err
+		}
+		if !shouldRunAgentTestSuite(suite, tier, profile, includeQuarantined) {
+			continue
 		}
 		var filteredCases []agenttest.CaseSpec
 		for _, c := range suite.Spec.Cases {
@@ -257,10 +270,6 @@ func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []st
 	}
 
 	r := newAgentTestRunnerFn()
-	opts := agenttest.RunOptions{
-		TargetWorkspace: ws,
-	}
-
 	hadFailures := false
 	for _, suite := range matchingCases {
 		rep, err := r.RunSuite(ctx, suite, opts)
