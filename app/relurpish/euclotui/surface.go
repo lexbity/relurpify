@@ -81,7 +81,11 @@ func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tu
 	if msg.Notification.Kind == "" {
 		msg.Notification = notificationItemFromFrame(tui.GenerateID(), NotifKindInteraction, frame, nil)
 	}
+	m.TrackInteractionFrame(msg.Notification.ID, frame)
 	m.PushNotification(msg.Notification)
 	m.AppendSurfaceMessage(msg.Message)
 	m.ApplyInteractionFrame(frame)
+	if notificationAllowsFreetext(msg.Notification) {
+		m.OpenInteractionGuidance(msg.Notification.ID, frame)
+	}
 }

@@ -28,8 +28,8 @@ const (
 	// Chat subtabs — map to euclo capability/edit policy.
 	SubTabChatLocalRead  SubTabID = "local-read-only"
 	SubTabChatLocalEdit  SubTabID = "local-edit-on"
-	SubTabChatOnlineRead SubTabID = "online-read-on" // TODO: wire to Nexus MCP runtime
-	SubTabChatOnlineEdit SubTabID = "online-edit-on" // TODO: wire to Nexus MCP runtime
+	SubTabChatOnlineRead SubTabID = "online-read-on"
+	SubTabChatOnlineEdit SubTabID = "online-edit-on"
 
 	// Session subtabs — universal.
 	SubTabSessionLive     SubTabID = "live"

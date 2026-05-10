@@ -34,10 +34,6 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 		opts.Background = true
 		opts.BackgroundRunner = runner
 	}
-	if opts.LifecycleRepo == nil && strings.TrimSpace(request.WorkflowID) != "" {
-		// TODO: Wire up lifecycle repository from environment
-		return r.Delegations.ExecuteDelegation(ctx, request, opts)
-	}
 	return r.Delegations.ExecuteDelegation(ctx, request, opts)
 }
 

@@ -1,7 +1,6 @@
 package ayenitd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -14,7 +13,7 @@ import (
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
-func registerBrowserWorkspaceService(ctx context.Context, cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *agentenv.ServiceManager, tel core.Telemetry) error {
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *agentenv.ServiceManager, tel core.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil
@@ -36,10 +35,11 @@ func registerBrowserWorkspaceService(ctx context.Context, cfg WorkspaceConfig, r
 		Telemetry:         tel,
 	})
 	if sm != nil {
-		sm.Register("browser", browserService)
-	}
-	if err := browserService.Start(ctx); err != nil {
-		return fmt.Errorf("start browser service: %w", err)
+		sm.RegisterWithInfo("browser", browserService, agentenv.ServiceRegistrationInfo{
+			Source: "ayenitd/browser_service.go",
+			Owner:  "workspace",
+			Notes:  []string{"registered by ayenitd", "browser.enabled=true"},
+		})
 	}
 	return nil
 }

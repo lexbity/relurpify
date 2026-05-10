@@ -124,6 +124,9 @@ type RuntimeAdapter interface {
 	DropFileFromContext(path string) error
 	// ActiveWorkflowID returns the current active workflow ID (empty if none).
 	ActiveWorkflowID() string
+	// ResolveInteractionFrame writes a resolved interaction response back into
+	// the live runtime envelope for the given task.
+	ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error
 }
 
 type runtimeAdapter struct {
@@ -408,20 +411,14 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 }
 
 func (r *runtimeAdapter) ListWorkflows(limit int) ([]WorkflowInfo, error) {
-	// TODO: Reimplement without SQLiteWorkflowStateStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return nil, nil
 }
 
 func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error) {
-	// TODO: Reimplement without SQLiteWorkflowStateStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return nil, fmt.Errorf("workflow details not available during migration")
 }
 
 func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
-	// TODO: Reimplement without SQLiteWorkflowStateStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return fmt.Errorf("workflow cancellation not available during migration")
 }
 
@@ -434,8 +431,6 @@ func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args
 }
 
 func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail, error) {
-	// TODO: Reimplement without SQLiteWorkflowStateStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return nil, fmt.Errorf("workflow resource details not available during migration")
 }
 
@@ -542,12 +537,10 @@ func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, err
 }
 
 func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
-	// TODO: Implement tool info listing
 	return nil
 }
 
 func (r *runtimeAdapter) ListLiveProviders() []LiveProviderInfo {
-	// TODO: Implement live provider listing
 	return nil
 }
 
@@ -560,7 +553,6 @@ func (r *runtimeAdapter) GetLiveSessionDetail(sessionID string) (*LiveProviderSe
 }
 
 func (r *runtimeAdapter) ListLiveSessions() []LiveProviderSessionInfo {
-	// TODO: Implement live session listing
 	return nil
 }
 
@@ -823,10 +815,6 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	d.PendingApprovals = len(r.ListApprovals())
 	d.LiveProviders = len(r.ListLiveProviders())
 
-	// Active workflows from store.
-	// TODO: Reimplement without WorkflowStore dependency
-	// per the agentlifecycle workflow-store removal plan
-
 	// Agent mode and profile from session info.
 	info := r.SessionInfo()
 	d.ActiveMode = info.Mode
@@ -892,12 +880,24 @@ func (r *runtimeAdapter) ListServices() []ServiceInfo {
 	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return nil
 	}
-	ids := r.rt.AgentWorkspace().ServiceManager.ListIDs()
-	infos := make([]ServiceInfo, 0, len(ids))
-	for _, id := range ids {
+	snapshots := r.rt.AgentWorkspace().ServiceManager.Snapshot()
+	infos := make([]ServiceInfo, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		status := ServiceStatusStopped
+		switch snapshot.Status {
+		case "running":
+			status = ServiceStatusRunning
+		case "stopped":
+			status = ServiceStatusStopped
+		case "error":
+			status = ServiceStatusError
+		}
 		infos = append(infos, ServiceInfo{
-			ID:     id,
-			Status: ServiceStatusRunning, // registered services are considered running
+			ID:     snapshot.ID,
+			Status: status,
+			Source: snapshot.Source,
+			Owner:  snapshot.Owner,
+			Notes:  append([]string(nil), snapshot.Notes...),
 		})
 	}
 	return infos
@@ -907,25 +907,14 @@ func (r *runtimeAdapter) StopService(id string) error {
 	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	svc := r.rt.AgentWorkspace().ServiceManager.Get(id)
-	if svc == nil {
-		return fmt.Errorf("service %s not found", id)
-	}
-	return svc.Stop()
+	return r.rt.AgentWorkspace().ServiceManager.Stop(id)
 }
 
 func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
 	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	svc := r.rt.AgentWorkspace().ServiceManager.Get(id)
-	if svc == nil {
-		return fmt.Errorf("service %s not found", id)
-	}
-	if err := svc.Stop(); err != nil {
-		return fmt.Errorf("stop: %w", err)
-	}
-	return svc.Start(ctx)
+	return r.rt.AgentWorkspace().ServiceManager.Restart(id, ctx)
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
@@ -967,9 +956,6 @@ func (r *runtimeAdapter) QueryIntentGaps(filePath, scope string) ([]IntentGapInf
 	if r == nil || r.rt == nil {
 		return nil, nil
 	}
-	// TODO: Reimplement retrieval drift/anchor queries without DB() dependency
-	// These operations previously used WorkflowStore.DB() which is being removed
-	// per the agentlifecycle workflow-store removal plan
 	return nil, nil
 }
 
@@ -977,8 +963,6 @@ func (r *runtimeAdapter) QueryTensions(scope string) ([]TensionInfo, error) {
 	if r == nil || r.rt == nil {
 		return nil, nil
 	}
-	// TODO: Reimplement without WorkflowStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return nil, nil
 }
 
@@ -1001,9 +985,6 @@ func (r *runtimeAdapter) GetPlanDiff(workflowID string) (PlanDiffInfo, error) {
 	}
 	info.WorkflowID = plan.WorkflowID
 	info.Steps = append([]PlanStepInfo(nil), plan.Steps...)
-	// TODO: Reimplement retrieval drift queries without DB() dependency
-	// These operations previously used WorkflowStore.DB() which is being removed
-	// per the agentlifecycle workflow-store removal plan
 	return info, nil
 }
 
@@ -1013,6 +994,13 @@ func (r *runtimeAdapter) GetLatestTrace() (TraceInfo, error) {
 
 // ActiveWorkflowID satisfies RuntimeAdapter.
 func (r *runtimeAdapter) ActiveWorkflowID() string { return r.activeWorkflowID() }
+
+func (r *runtimeAdapter) ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	return r.rt.ResolveInteractionFrame(ctx, taskID, frameID, choice, freetext)
+}
 
 func (r *runtimeAdapter) activeWorkflowID() string {
 	return ""
@@ -1067,8 +1055,6 @@ func (r *runtimeAdapter) planNotes(workflowID string) map[string][]string {
 	if r == nil || r.rt == nil || workflowID == "" {
 		return out
 	}
-	// TODO: Reimplement without WorkflowStore dependency
-	// per the agentlifecycle workflow-store removal plan
 	return out
 }
 

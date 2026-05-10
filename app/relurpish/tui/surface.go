@@ -130,6 +130,9 @@ func (genericSurface) HandleFrame(_ context.Context, m *RootModel, msg SurfaceFr
 	if m == nil {
 		return
 	}
+	if frame, ok := msg.Frame.(interaction.InteractionFrame); ok {
+		m.TrackInteractionFrame(msg.Notification.ID, frame)
+	}
 	m.PushNotification(msg.Notification)
 	m.AppendSurfaceMessage(msg.Message)
 	if frame, ok := msg.Frame.(interaction.InteractionFrame); ok {

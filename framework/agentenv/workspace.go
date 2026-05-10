@@ -557,7 +557,11 @@ func Open(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFu
 	env := boot.Environment
 	sm := NewServiceManager()
 	bkcEvents := &knowledge.EventBus{}
-	sm.Register("scheduler", scheduler)
+	sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
+		Source: "framework/agentenv/workspace.go",
+		Owner:  "framework",
+		Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
+	})
 
 	// Initialize KnowledgeStore now that GraphDB is available
 	knowledgeStore, err := openKnowledgeStore(env.IndexManager.GraphDB)

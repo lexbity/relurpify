@@ -8,6 +8,7 @@ import (
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -85,6 +86,10 @@ type RootModel struct {
 	hitlCh    <-chan fauthorization.HITLEvent
 	hitlUnsub func()
 
+	// Interaction frames keyed by notification ID and frame ID so the host can
+	// resolve slot selections and freetext answers back into the pending frame.
+	interactionFrames map[string]*interaction.InteractionFrame
+
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
 
@@ -150,26 +155,27 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	tabBar.SetRegistry(state.tabs)
 
 	m := RootModel{
-		tabs:           state.tabs,
-		subTabBar:      NewSubTabBar(state.tabs.ActiveTab()),
-		hitlPanel:      newGuidancePanel(),
-		titleBar:       NewTitleBar(info),
-		tabBar:         tabBar,
-		notifBar:       NewNotificationBar(notifQ),
-		inputBar:       inputBar,
-		cmdPalette:     NewCommandPalette(),
-		notifQ:         notifQ,
-		activeTab:      state.tabs.ActiveTab().ID,
-		titleVisible:   true,
-		sharedSess:     sess,
-		sharedCtx:      ctx,
-		runtime:        rt,
-		taskRunIDs:     make(map[string]bool),
-		cmdReg:         state.cmdReg,
-		scope:          info.Workspace,
-		surfaceFactory: factory,
-		surfaceCache:   map[string]*surfaceState{normalizeSurfaceKey(info.Agent): state},
-		activeSurface:  state.surface,
+		tabs:              state.tabs,
+		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
+		hitlPanel:         newGuidancePanel(),
+		titleBar:          NewTitleBar(info),
+		tabBar:            tabBar,
+		notifBar:          NewNotificationBar(notifQ),
+		inputBar:          inputBar,
+		cmdPalette:        NewCommandPalette(),
+		notifQ:            notifQ,
+		activeTab:         state.tabs.ActiveTab().ID,
+		titleVisible:      true,
+		sharedSess:        sess,
+		sharedCtx:         ctx,
+		runtime:           rt,
+		interactionFrames: make(map[string]*interaction.InteractionFrame),
+		taskRunIDs:        make(map[string]bool),
+		cmdReg:            state.cmdReg,
+		scope:             info.Workspace,
+		surfaceFactory:    factory,
+		surfaceCache:      map[string]*surfaceState{normalizeSurfaceKey(info.Agent): state},
+		activeSurface:     state.surface,
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 
@@ -501,9 +507,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Guidance panel responses.
 	case GuidancePanelSubmitMsg:
+		if m.resolvePendingInteraction(msg.RequestID, msg.Response, "") {
+			return m, nil
+		}
 		m.syncCommandPalette()
 		return m, nil
 	case GuidancePanelDeferMsg:
+		if m.deferPendingInteraction(msg.RequestID) {
+			return m, nil
+		}
 		m.syncCommandPalette()
 		return m, nil
 	case GuidancePanelAnnotateMsg:
@@ -511,6 +523,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case GuidancePanelJumpExploreMsg:
 		m.addSystemMessage("expanded view is no longer available")
+		return m, nil
+
+	case NotifInteractionResolveMsg:
+		if m.resolvePendingInteraction(msg.NotificationID, msg.ChoiceID, msg.Freetext) {
+			return m, nil
+		}
 		return m, nil
 
 	// Surface interaction frame handling.
@@ -707,7 +725,6 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 // layoutHeights computes component heights for the current terminal size.
-// It remains as a small compatibility wrapper around ChromeLayout.
 func (m RootModel) layoutHeights() (title, pane, input, tab int) {
 	title = 0
 	if m.titleVisible {
@@ -915,6 +932,194 @@ func (m *RootModel) addSystemMessage(text string) {
 	if m.chat != nil {
 		m.chat.AddSystemMessage(text)
 	}
+}
+
+func (m *RootModel) trackInteractionFrame(notificationID string, frame interaction.InteractionFrame) {
+	if m == nil {
+		return
+	}
+	if m.interactionFrames == nil {
+		m.interactionFrames = make(map[string]*interaction.InteractionFrame)
+	}
+	frameCopy := frame
+	if notificationID = strings.TrimSpace(notificationID); notificationID != "" {
+		m.interactionFrames[notificationID] = &frameCopy
+	}
+	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
+		m.interactionFrames[frameID] = &frameCopy
+	}
+}
+
+func (m *RootModel) openInteractionGuidance(notificationID string, frame interaction.InteractionFrame) {
+	if m == nil {
+		return
+	}
+	if m.hitlPanel.IsOpen() {
+		return
+	}
+	body := strings.TrimSpace(frame.Question)
+	if body == "" {
+		body = frameLabelFromInteraction(frame)
+	}
+	if len(frame.Choices) > 0 {
+		var choiceLines []string
+		for i, choice := range frame.Choices {
+			choiceLines = append(choiceLines, fmt.Sprintf("[%d] %s", i+1, choice))
+		}
+		if body != "" {
+			body += "\n\n"
+		}
+		body += "Choices: " + strings.Join(choiceLines, "  ")
+	}
+	if len(frame.Slots) > 0 && len(frame.Choices) == 0 {
+		var slotLines []string
+		for i, slot := range frame.Slots {
+			label := strings.TrimSpace(slot.Label)
+			if label == "" {
+				label = slot.ID
+			}
+			slotLines = append(slotLines, fmt.Sprintf("[%d] %s", i+1, label))
+		}
+		if body != "" {
+			body += "\n\n"
+		}
+		body += "Actions: " + strings.Join(slotLines, "  ")
+	}
+	m.hitlPanel.Open(
+		GuidanceTriggerAmbiguity,
+		strings.TrimSpace(notificationID),
+		strings.TrimSpace(frameLabelFromInteraction(frame)),
+		body,
+		nil,
+		"",
+		"",
+	)
+}
+
+func (m *RootModel) resolvePendingInteraction(notificationID, choiceID, freetext string) bool {
+	if m == nil {
+		return false
+	}
+	if m.interactionFrames == nil {
+		m.interactionFrames = make(map[string]*interaction.InteractionFrame)
+	}
+	requestID := strings.TrimSpace(notificationID)
+	if requestID == "" {
+		return false
+	}
+	frame, ok := m.interactionFrames[requestID]
+	if !ok || frame == nil {
+		return false
+	}
+	answer := strings.TrimSpace(choiceID)
+	if answer == "" {
+		answer = strings.TrimSpace(freetext)
+	}
+	if answer == "" {
+		answer = defaultInteractionAnswer(frame)
+	}
+	extra := map[string]any{
+		"notification_id": requestID,
+		"frame_id":        strings.TrimSpace(frame.ID),
+		"frame_type":      string(frame.Type),
+	}
+	if strings.TrimSpace(frame.TaskID) != "" {
+		extra["task_id"] = strings.TrimSpace(frame.TaskID)
+	}
+	if strings.TrimSpace(freetext) != "" {
+		extra["freetext"] = strings.TrimSpace(freetext)
+	}
+	frame.SetResponse(answer, extra, "relurpish", time.Now().UTC())
+	delete(m.interactionFrames, requestID)
+	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
+		delete(m.interactionFrames, frameID)
+	}
+	if m.notifQ != nil {
+		m.notifQ.Resolve(requestID)
+	}
+	if m.runtime != nil {
+		if err := m.runtime.ResolveInteractionFrame(context.Background(), frame.TaskID, frame.ID, answer, freetext); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Interaction persistence failed: %v", err))
+		}
+	}
+	if answer != "" {
+		m.addSystemMessage(fmt.Sprintf("Resolved %s: %s", frameLabelFromInteraction(*frame), answer))
+	} else {
+		m.addSystemMessage(fmt.Sprintf("Resolved %s", frameLabelFromInteraction(*frame)))
+	}
+	return true
+}
+
+func defaultInteractionAnswer(frame *interaction.InteractionFrame) string {
+	if frame == nil {
+		return ""
+	}
+	if slot := strings.TrimSpace(frame.DefaultChoice); slot != "" {
+		return slot
+	}
+	for _, slot := range frame.Slots {
+		if slot.Default {
+			if id := strings.TrimSpace(slot.ID); id != "" {
+				return id
+			}
+		}
+	}
+	if len(frame.Slots) > 0 {
+		return strings.TrimSpace(frame.Slots[0].ID)
+	}
+	if len(frame.Choices) > 0 {
+		return strings.TrimSpace(frame.Choices[0])
+	}
+	return ""
+}
+
+func (m *RootModel) deferPendingInteraction(notificationID string) bool {
+	if m == nil {
+		return false
+	}
+	requestID := strings.TrimSpace(notificationID)
+	if requestID == "" {
+		return false
+	}
+	frame, ok := m.interactionFrames[requestID]
+	if !ok || frame == nil {
+		return false
+	}
+	delete(m.interactionFrames, requestID)
+	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
+		delete(m.interactionFrames, frameID)
+	}
+	if m.notifQ != nil {
+		m.notifQ.Resolve(requestID)
+	}
+	m.addSystemMessage(fmt.Sprintf("Deferred %s", frameLabelFromInteraction(*frame)))
+	return true
+}
+
+func frameLabelFromInteraction(frame interaction.InteractionFrame) string {
+	frameType := strings.TrimSpace(string(frame.Type))
+	if frameType == "" {
+		frameType = strings.TrimSpace(string(frame.Kind))
+	}
+	if frameType == "" {
+		frameType = "interaction"
+	}
+	return prettyFrameLabel(frameType)
+}
+
+func prettyFrameLabel(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parts := strings.Fields(strings.ReplaceAll(value, "_", " "))
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+	}
+	return strings.Join(parts, " ")
 }
 
 // autoSave persists the current session after each completed run.

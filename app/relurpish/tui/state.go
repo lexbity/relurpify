@@ -445,6 +445,9 @@ type ContextSidebarEntry struct {
 type ServiceInfo struct {
 	ID     string
 	Status ServiceStatus // Running | Stopped | Error
+	Source string
+	Owner  string
+	Notes  []string
 }
 
 type ServiceStatus string

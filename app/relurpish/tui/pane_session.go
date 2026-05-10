@@ -280,7 +280,6 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 }
 
 // HandleFilterInput updates the file filter from the input bar.
-// Only has effect when the tasks subtab (or legacy no-subtab mode) is active.
 func (p *SessionPane) HandleFilterInput(query string) {
 	if p.activeSubTab != "" && p.activeSubTab != SubTabSessionTasks {
 		return
@@ -304,7 +303,7 @@ func (p *SessionPane) applyFilter() {
 	}
 }
 
-// View renders the active subtab (or section for backward compat).
+// View renders the active session subtab.
 func (p *SessionPane) View() string {
 	switch p.activeSubTab {
 	case SubTabSessionLive:
@@ -840,11 +839,39 @@ func (p *SessionPane) viewServices() string {
 				line = panelItemStyle.Render(line)
 			}
 			b.WriteString(line + "\n")
+			if i == p.serviceSel {
+				if detail := serviceSummaryLines(svc); len(detail) > 0 {
+					for _, line := range detail {
+						b.WriteString(dimStyle.Render("  ") + line + "\n")
+					}
+					b.WriteString("\n")
+				}
+			}
 		}
 	}
 
 	b.WriteString("\n" + dimStyle.Render("[s] stop  [r] restart  [R] restart-all  ↑↓ navigate"))
 	return b.String()
+}
+
+func serviceSummaryLines(svc ServiceInfo) []string {
+	if strings.TrimSpace(svc.Source) == "" && strings.TrimSpace(svc.Owner) == "" && len(svc.Notes) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, 3+len(svc.Notes))
+	if strings.TrimSpace(svc.Source) != "" {
+		lines = append(lines, dimStyle.Render("source")+"  "+textStyle.Render(svc.Source))
+	}
+	if strings.TrimSpace(svc.Owner) != "" {
+		lines = append(lines, dimStyle.Render("owner")+"  "+textStyle.Render(svc.Owner))
+	}
+	if len(svc.Notes) > 0 {
+		lines = append(lines, dimStyle.Render("notes"))
+		for _, note := range svc.Notes {
+			lines = append(lines, "    "+textStyle.Render(note))
+		}
+	}
+	return lines
 }
 
 func changeStatusDisplay(s ChangeStatus) (string, func(string) string) {

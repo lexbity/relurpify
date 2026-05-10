@@ -35,6 +35,18 @@ func (m *RootModel) ApplyInteractionFrame(frame interaction.InteractionFrame) {
 	}
 }
 
+// TrackInteractionFrame records a pending interaction frame so the host can
+// resolve it later from the notification or guidance surfaces.
+func (m *RootModel) TrackInteractionFrame(notificationID string, frame interaction.InteractionFrame) {
+	m.trackInteractionFrame(notificationID, frame)
+}
+
+// OpenInteractionGuidance opens the guidance panel for a freetext interaction
+// frame.
+func (m *RootModel) OpenInteractionGuidance(notificationID string, frame interaction.InteractionFrame) {
+	m.openInteractionGuidance(notificationID, frame)
+}
+
 // HandleSurfaceFrame is a convenience helper for surfaces that want to apply a
 // rendered frame without duplicating the host-side bookkeeping.
 func (m *RootModel) HandleSurfaceFrame(_ context.Context, msg SurfaceFrameMsg) {

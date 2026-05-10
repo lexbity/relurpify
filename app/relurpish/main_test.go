@@ -18,7 +18,6 @@ func TestNewRootCmdRegistersCoreEntryPoints(t *testing.T) {
 		"doctor": true,
 		"status": true,
 		"chat":   true,
-		"serve":  true,
 	}
 	for _, cmd := range root.Commands() {
 		delete(want, cmd.Name())
@@ -28,10 +27,8 @@ func TestNewRootCmdRegistersCoreEntryPoints(t *testing.T) {
 
 func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	originalCfg := cfg
-	originalStartServer := startServer
 	t.Cleanup(func() {
 		cfg = originalCfg
-		startServer = originalStartServer
 	})
 
 	workspace := t.TempDir()
@@ -45,7 +42,6 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 		EventsPath:    "events.db",
 		ConfigPath:    "manifest.yaml",
 		AgentName:     "",
-		ServerAddr:    "",
 		AuditLimit:    0,
 		HITLTimeout:   0,
 	}
@@ -57,7 +53,6 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	require.Equal(t, "coding", cfg.AgentName)
 	require.Equal(t, "ollama", cfg.InferenceProvider)
 	require.Equal(t, "http://localhost:11434", cfg.InferenceEndpoint)
-	require.Equal(t, ":8080", cfg.ServerAddr)
 	require.Equal(t, 256, cfg.AuditLimit)
 	require.Equal(t, 30*time.Second, cfg.HITLTimeout)
 	require.True(t, filepath.IsAbs(cfg.ManifestPath))

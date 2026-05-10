@@ -2,6 +2,7 @@ package euclotui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
@@ -42,6 +43,28 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 		msg.Content.Text = renderSessionResuming(frame)
 	case interaction.FrameSessionResumeError:
 		msg.Content.Text = renderSessionResumeError(frame)
+	case interaction.FrameScopeConfirmation:
+		msg.Content.Text = renderSelectionFrame(frame, "Scope Confirmation")
+	case interaction.FrameIntentClarification:
+		msg.Content.Text = renderSelectionFrame(frame, "Clarification")
+	case interaction.FrameCandidateSelection:
+		msg.Content.Text = renderSelectionFrame(frame, "Candidate Selection")
+	case interaction.FrameThoughtRecipeSelection:
+		msg.Content.Text = renderSelectionFrame(frame, "Thoughtrecipe Selection")
+	case interaction.FrameCapabilitySelection:
+		msg.Content.Text = renderSelectionFrame(frame, "Capability Selection")
+	case interaction.FrameHITLApproval:
+		msg.Content.Text = renderSelectionFrame(frame, "Approval Required")
+	case interaction.FrameSessionResume:
+		msg.Content.Text = renderSelectionFrame(frame, "Session Resume")
+	case interaction.FrameBackgroundJobStatus:
+		msg.Content.Text = renderSelectionFrame(frame, "Background Job Status")
+	case interaction.FrameExecutionSummary:
+		msg.Content.Text = renderSelectionFrame(frame, "Execution Summary")
+	case interaction.FrameVerificationEvidence:
+		msg.Content.Text = renderSelectionFrame(frame, "Verification Evidence")
+	case interaction.FrameOutcomeFeedback:
+		msg.Content.Text = renderSelectionFrame(frame, "Outcome Feedback")
 	default:
 		msg.Content.Text = fmt.Sprintf("[%s] %s/%s", frame.Kind, frame.Mode, frame.Phase)
 	}
@@ -68,6 +91,62 @@ func renderCandidates(frame interaction.InteractionFrame) string {
 		b.WriteString(dimStyle.Render("\nRecommended: ") + content.RecommendedID + "\n")
 	}
 	return eucloFrameStyle.Render(b.String())
+}
+
+func renderSelectionFrame(frame interaction.InteractionFrame, title string) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render(title) + "\n")
+	if q := strings.TrimSpace(frame.Question); q != "" {
+		b.WriteString(q + "\n")
+	}
+	if len(frame.Slots) > 0 {
+		b.WriteString("\n")
+		for i, slot := range frame.Slots {
+			label := strings.TrimSpace(slot.Label)
+			if label == "" {
+				label = slot.ID
+			}
+			prefix := fmt.Sprintf("[%d]", i+1)
+			if slot.Default {
+				prefix = headerStyle.Render(prefix + "*")
+			} else {
+				prefix = headerStyle.Render(prefix)
+			}
+			line := fmt.Sprintf("  %s %s", prefix, label)
+			if slot.Risk != "" {
+				line += fmt.Sprintf(" %s", dimStyle.Render("risk:"+slot.Risk))
+			}
+			b.WriteString(line + "\n")
+		}
+	} else if len(frame.Choices) > 0 {
+		b.WriteString("\n")
+		for i, choice := range frame.Choices {
+			prefix := fmt.Sprintf("[%d]", i+1)
+			if choice == frame.DefaultChoice {
+				prefix = headerStyle.Render(prefix + "*")
+			} else {
+				prefix = headerStyle.Render(prefix)
+			}
+			b.WriteString(fmt.Sprintf("  %s %s\n", prefix, choice))
+		}
+	}
+	if frame.DefaultChoice != "" {
+		b.WriteString("\n" + dimStyle.Render("default: ") + frame.DefaultChoice + "\n")
+	}
+	if frame.Resume != nil {
+		b.WriteString("\n" + dimStyle.Render("resume: ") + renderResumeMetadata(*frame.Resume) + "\n")
+	}
+	if frame.Response != nil {
+		if choice := strings.TrimSpace(frame.Response.ChosenSlot); choice != "" {
+			b.WriteString(dimStyle.Render("response: ") + choice + "\n")
+		}
+	}
+	if len(frame.Payload) > 0 {
+		if payload := renderFramePayload(frame.Payload); payload != "" {
+			b.WriteString("\n" + payload)
+		}
+	}
+	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
 }
 
 func renderComparison(frame interaction.InteractionFrame) string {
@@ -283,4 +362,50 @@ func renderSessionResumeError(frame interaction.InteractionFrame) string {
 	b.WriteString(sectionHeaderStyle.Render("Session Resume") + "\n")
 	b.WriteString(diffRemoveStyle.Render("✗ ") + content + "\n")
 	return eucloFrameStyle.Render(b.String())
+}
+
+func renderResumeMetadata(resume interaction.ClarificationResumeMetadata) string {
+	parts := make([]string, 0, 5)
+	if resume.ActiveThoughtRecipeID != "" {
+		parts = append(parts, "thoughtrecipe="+resume.ActiveThoughtRecipeID)
+	}
+	if resume.RouteKind != "" {
+		parts = append(parts, "route_kind="+resume.RouteKind)
+	}
+	if resume.RouteID != "" {
+		parts = append(parts, "route_id="+resume.RouteID)
+	}
+	if resume.ResumeNodeID != "" {
+		parts = append(parts, "resume_node="+resume.ResumeNodeID)
+	}
+	if resume.Unresolved {
+		parts = append(parts, "unresolved=true")
+	}
+	if len(resume.MissingFields) > 0 {
+		parts = append(parts, "missing="+strings.Join(resume.MissingFields, ","))
+	}
+	return strings.Join(parts, " ")
+}
+
+func renderFramePayload(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		switch key {
+		case "question", "choices", "default_choice", "resume", "response", "response_extra":
+			continue
+		}
+		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, key := range keys {
+		b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(key+":"), fmt.Sprint(payload[key])))
+	}
+	return b.String()
 }

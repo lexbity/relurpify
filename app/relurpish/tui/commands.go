@@ -18,7 +18,6 @@ type CommandHandler func(m *RootModel, args []string) (*RootModel, tea.Cmd)
 // Command describes a slash command.
 type Command struct {
 	Name        string
-	Aliases     []string
 	Description string
 	Usage       string
 	Handler     CommandHandler
@@ -88,7 +87,7 @@ func (r *CommandRegistry) eligible(cmd Command, tabID TabID, subTabID SubTabID) 
 	return true
 }
 
-// Lookup finds a command by name or alias (ignores tab context).
+// Lookup finds a command by name (ignores tab context).
 func (r *CommandRegistry) Lookup(name string) (Command, bool) {
 	for _, cmd := range r.cmds {
 		if cmd.Name == name {
@@ -152,7 +151,6 @@ func registerChatCommands(r *CommandRegistry) {
 func registerSurfaceCommands(reg *CommandRegistry) {
 	// Default surface commands preserve the current chat-oriented workflow.
 	// Agent-specific surfaces can replace or extend these commands.
-	// Keep the command surface free of aliases.
 	for _, cmd := range []Command{
 		{Name: "add", Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
 		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
@@ -186,7 +184,7 @@ func init() {
 	registerPlannerCommands(rootCommandRegistry)
 }
 
-// executeCommand dispatches a command by name (with alias fallback).
+// executeCommand dispatches a command by name.
 func executeCommand(m *RootModel, name string, args []string) (*RootModel, tea.Cmd) {
 	if name == "" {
 		return m, nil

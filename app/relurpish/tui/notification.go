@@ -142,10 +142,40 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 	if !isKey {
 		return nb, nil
 	}
-	// Interaction notifications are display-only. Guidance still handles its
-	// own freetext flow in model.go.
+	// Interaction notifications resolve numbered slots directly. Freetext
+	// clarification frames open the guidance panel and resolve there.
 	if current.Kind == NotifKindInteraction {
 		switch kMsg.String() {
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			slotID, ok := interactionSlotID(current, kMsg.String())
+			if !ok {
+				return nb, nil
+			}
+			id := current.ID
+			nb.queue.Resolve(id)
+			return nb, func() tea.Msg {
+				return NotifInteractionResolveMsg{
+					NotificationID: id,
+					FrameID:        current.Extra["frame_id"],
+					TaskID:         current.Extra["task_id"],
+					ChoiceID:       slotID,
+				}
+			}
+		case "enter":
+			slotID, ok := interactionDefaultSlotID(current)
+			if !ok {
+				return nb, nil
+			}
+			id := current.ID
+			nb.queue.Resolve(id)
+			return nb, func() tea.Msg {
+				return NotifInteractionResolveMsg{
+					NotificationID: id,
+					FrameID:        current.Extra["frame_id"],
+					TaskID:         current.Extra["task_id"],
+					ChoiceID:       slotID,
+				}
+			}
 		case "d", "esc":
 			id := current.ID
 			nb.queue.Resolve(id)
@@ -289,6 +319,38 @@ func renderApprovalNotification(item NotificationItem) string {
 		parts = append(parts, "why="+reason)
 	}
 	return strings.Join(parts, " | ")
+}
+
+func interactionDefaultSlotID(item NotificationItem) (string, bool) {
+	if item.Extra == nil {
+		return "", false
+	}
+	if slot := strings.TrimSpace(item.Extra["default_slot"]); slot != "" {
+		return slot, true
+	}
+	if slot := strings.TrimSpace(item.Extra["slot_0_id"]); slot != "" {
+		return slot, true
+	}
+	return "", false
+}
+
+func interactionSlotID(item NotificationItem, key string) (string, bool) {
+	if item.Extra == nil {
+		return "", false
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", false
+	}
+	index := int(key[0] - '1')
+	if index < 0 {
+		return "", false
+	}
+	slotKey := fmt.Sprintf("slot_%d_id", index)
+	if slotID := strings.TrimSpace(item.Extra[slotKey]); slotID != "" {
+		return slotID, true
+	}
+	return "", false
 }
 
 func approvalKindFromRequest(req *fauthorization.PermissionRequest) string {

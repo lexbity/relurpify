@@ -15,6 +15,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
@@ -32,6 +33,8 @@ import (
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
@@ -59,14 +62,14 @@ type Runtime struct {
 	hitlCancel  func()
 	nexusCancel func()
 
-	serverMu     sync.Mutex
-	serverCancel context.CancelFunc
-	providersMu  sync.Mutex
-	providers    []runtimeProviderRecord
-	delegationMu sync.Mutex
-	delegationBG *backgroundDelegationProvider
-	mcpMu        sync.Mutex
-	mcpElicit    MCPElicitationHandler
+	providersMu          sync.Mutex
+	providers            []runtimeProviderRecord
+	interactionMu        sync.Mutex
+	interactionEnvelopes map[string]*contextdata.Envelope
+	delegationMu         sync.Mutex
+	delegationBG         *backgroundDelegationProvider
+	mcpMu                sync.Mutex
+	mcpElicit            MCPElicitationHandler
 }
 
 // AgentWorkspace returns the framework/agentenv Workspace for this Runtime.
@@ -214,17 +217,18 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Use WorkflowStore interface directly
 	rt := &Runtime{
-		Config:          cfg,
-		Workspace:       ws,
-		Tools:           env.Registry,
-		Memory:          env.WorkingMemory,
-		Model:           env.Model,
-		IndexManager:    env.IndexManager,
-		GraphDB:         graphDBFromIndexManager(env.IndexManager),
-		SearchEngine:    env.SearchEngine,
-		AgentLifecycle:  env.AgentLifecycle,
-		WorkspaceConfig: workspaceCfg,
-		Delegations:     fauthorization.NewDelegationManager(),
+		Config:               cfg,
+		Workspace:            ws,
+		Tools:                env.Registry,
+		Memory:               env.WorkingMemory,
+		Model:                env.Model,
+		IndexManager:         env.IndexManager,
+		GraphDB:              graphDBFromIndexManager(env.IndexManager),
+		SearchEngine:         env.SearchEngine,
+		AgentLifecycle:       env.AgentLifecycle,
+		WorkspaceConfig:      workspaceCfg,
+		Delegations:          fauthorization.NewDelegationManager(),
+		interactionEnvelopes: make(map[string]*contextdata.Envelope),
 	}
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)
@@ -258,6 +262,14 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	rt.Agent = agent
+	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, rt.Workspace); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("register workspace services: %w", err)
+	}
+	if err := ayenitd.StartWorkspaceServices(ctx, rt.Workspace); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("start workspace services: %w", err)
+	}
 	return rt, nil
 }
 
@@ -267,14 +279,6 @@ func (r *Runtime) Close() error {
 		return nil
 	}
 	var errs []error
-
-	r.serverMu.Lock()
-	cancel := r.serverCancel
-	r.serverCancel = nil
-	r.serverMu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
 
 	providers := r.registeredProviders()
 	for i := len(providers) - 1; i >= 0; i-- {
@@ -299,6 +303,9 @@ func (r *Runtime) Close() error {
 		}
 		r.Workspace = nil
 	}
+	r.interactionMu.Lock()
+	r.interactionEnvelopes = make(map[string]*contextdata.Envelope)
+	r.interactionMu.Unlock()
 
 	return errors.Join(errs...)
 }
@@ -573,7 +580,51 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 			env.SetWorkingValue("meta."+key, value, contextdata.MemoryClassTask)
 		}
 	}
+	r.trackInteractionEnvelope(task.ID, env)
 	return r.Agent.Execute(ctx, task, env)
+}
+
+// ResolveInteractionFrame writes a UI response back into the live envelope for
+// the given task and frame, then persists Euclo clarification state when the
+// frame is clarification-scoped.
+func (r *Runtime) ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error {
+	if r == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	env := r.interactionEnvelope(taskID)
+	if env == nil {
+		return fmt.Errorf("interaction envelope for task %q not available", taskID)
+	}
+	frame, ok := findInteractionFrame(env, frameID)
+	if !ok || frame == nil {
+		return fmt.Errorf("interaction frame %q not found", frameID)
+	}
+	answer := strings.TrimSpace(choice)
+	if answer == "" {
+		answer = strings.TrimSpace(freetext)
+	}
+	if answer == "" {
+		answer = defaultInteractionAnswer(frame)
+	}
+	extra := map[string]any{
+		"task_id":      strings.TrimSpace(taskID),
+		"frame_id":     strings.TrimSpace(frame.ID),
+		"frame_type":   string(frame.Type),
+		"resolved_via": "relurpish",
+	}
+	if strings.TrimSpace(freetext) != "" {
+		extra["freetext"] = strings.TrimSpace(freetext)
+	}
+	frame.SetResponse(answer, extra, "relurpish", time.Now().UTC())
+	if err := r.persistInteractionResolution(ctx, env, frame); err != nil {
+		return err
+	}
+	if interaction.ShouldResumeExecution(frame.Type) {
+		if _, err := r.resumeInteractionTask(ctx, env); err != nil {
+			return fmt.Errorf("resume interaction task: %w", err)
+		}
+	}
+	return nil
 }
 
 // ExecuteInstruction convenience helper.
@@ -606,31 +657,134 @@ func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction stri
 	return r.ExecuteInstruction(ctx, instruction, taskType, metadata)
 }
 
-// StartServer is a no-op stub. The inline HTTP API server was removed as part
-// of the nexus gateway migration; API access now goes through the nexus server.
-// The returned stop function is a no-op.
-func (r *Runtime) StartServer(_ context.Context, _ string) (func(context.Context) error, error) {
-	r.serverMu.Lock()
-	defer r.serverMu.Unlock()
-	if r.serverCancel != nil {
-		return nil, errors.New("server already running")
+func (r *Runtime) trackInteractionEnvelope(taskID string, env *contextdata.Envelope) {
+	if r == nil || env == nil {
+		return
 	}
-	noop := context.CancelFunc(func() {})
-	r.serverCancel = noop
-	stopFn := func(_ context.Context) error {
-		r.serverMu.Lock()
-		r.serverCancel = nil
-		r.serverMu.Unlock()
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return
+	}
+	r.interactionMu.Lock()
+	if r.interactionEnvelopes == nil {
+		r.interactionEnvelopes = make(map[string]*contextdata.Envelope)
+	}
+	r.interactionEnvelopes[taskID] = env
+	r.interactionMu.Unlock()
+}
+
+func (r *Runtime) interactionEnvelope(taskID string) *contextdata.Envelope {
+	if r == nil {
 		return nil
 	}
-	return stopFn, nil
+	r.interactionMu.Lock()
+	defer r.interactionMu.Unlock()
+	return r.interactionEnvelopes[strings.TrimSpace(taskID)]
+}
+
+func (r *Runtime) persistInteractionResolution(ctx context.Context, env *contextdata.Envelope, frame *interaction.InteractionFrame) error {
+	if env == nil || frame == nil {
+		return nil
+	}
+	if frame.Type != interaction.FrameIntentClarification {
+		env.SetWorkingValue("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
+		return nil
+	}
+	store := intentcontext.NewStateStore()
+	state, err := store.Read(ctx, env)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		state = intentcontext.NewState(env.TaskID, env.SessionID)
+	}
+	turn := interaction.ClarificationTurnFromFrame(frame, state.StateVersion)
+	if turn != nil {
+		state.Turns = append(state.Turns, *turn)
+		state.CurrentTurnID = turn.TurnID
+		state.StateVersion = intentcontext.NextStateVersion(state.StateVersion)
+		state.LastUpdatedAt = time.Now().UTC()
+		if frame.Resume != nil && strings.TrimSpace(frame.Resume.ActiveThoughtRecipeID) != "" {
+			state.ActiveThoughtRecipeID = strings.TrimSpace(frame.Resume.ActiveThoughtRecipeID)
+		}
+	}
+	if err := store.Write(ctx, env, state); err != nil {
+		return err
+	}
+	env.SetWorkingValue("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
+	return nil
+}
+
+func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	if r == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	if env == nil {
+		return nil, fmt.Errorf("interaction envelope unavailable")
+	}
+	value, ok := env.GetWorkingValue("task.input")
+	if !ok || value == nil {
+		return nil, fmt.Errorf("task input unavailable for resume")
+	}
+	task, ok := value.(*core.Task)
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task input has unexpected type %T", value)
+	}
+	if r.Agent == nil {
+		return nil, fmt.Errorf("agent unavailable for resume")
+	}
+	return r.Agent.Execute(ctx, task, env)
+}
+
+func findInteractionFrame(env *contextdata.Envelope, frameID string) (*interaction.InteractionFrame, bool) {
+	if env == nil {
+		return nil, false
+	}
+	frameID = strings.TrimSpace(frameID)
+	if frameID == "" {
+		return nil, false
+	}
+	for _, key := range env.WorkingMemoryKeys() {
+		value, ok := env.GetWorkingValue(key)
+		if !ok {
+			continue
+		}
+		frame, ok := value.(*interaction.InteractionFrame)
+		if !ok || frame == nil {
+			continue
+		}
+		if strings.TrimSpace(frame.ID) == frameID {
+			return frame, true
+		}
+	}
+	return nil, false
+}
+
+func defaultInteractionAnswer(frame *interaction.InteractionFrame) string {
+	if frame == nil {
+		return ""
+	}
+	if slot := strings.TrimSpace(frame.DefaultChoice); slot != "" {
+		return slot
+	}
+	for _, slot := range frame.Slots {
+		if slot.Default && strings.TrimSpace(slot.ID) != "" {
+			return strings.TrimSpace(slot.ID)
+		}
+	}
+	if len(frame.Slots) > 0 {
+		return strings.TrimSpace(frame.Slots[0].ID)
+	}
+	if len(frame.Choices) > 0 {
+		return strings.TrimSpace(frame.Choices[0])
+	}
+	return ""
 }
 
 // ServerRunning reports whether the HTTP server is active.
 func (r *Runtime) ServerRunning() bool {
-	r.serverMu.Lock()
-	defer r.serverMu.Unlock()
-	return r.serverCancel != nil
+	_ = r
+	return false
 }
 
 // PendingHITL exposes outstanding permission requests.

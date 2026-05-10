@@ -83,7 +83,15 @@ func (m RootModel) statusBarText() string {
 	case m.hitlPanel.IsOpen():
 		return "guidance: enter submit | a annotate | d defer | v explore | esc close"
 	case m.notifBar != nil && m.notifBar.Active():
-		return "notification: y approve | n deny | d dismiss"
+		if current, ok := m.notifBar.queue.Current(); ok {
+			switch current.Kind {
+			case NotifKindHITL:
+				return "notification: y approve | n deny | d dismiss"
+			case NotifKindInteraction, NotifKindGuidance:
+				return "notification: 1-9 select | enter default | d dismiss"
+			}
+		}
+		return "notification: d dismiss"
 	case m.cmdPalette != nil && m.cmdPalette.IsOpen():
 		return "commands: ↑↓ select | tab complete | enter run | esc cancel"
 	case m.inputBar != nil && m.inputBar.IsFilePickerActive():

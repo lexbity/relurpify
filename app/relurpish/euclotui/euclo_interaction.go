@@ -44,6 +44,8 @@ func serializeFrameSlots(frame interaction.InteractionFrame) map[string]string {
 	}
 	extra := map[string]string{
 		"frame_id":   frame.ID,
+		"task_id":    frame.TaskID,
+		"session_id": frame.SessionID,
 		"frame_type": string(frameType),
 	}
 	for i, slot := range slots {
@@ -101,7 +103,19 @@ func frameLabel(frame interaction.InteractionFrame) string {
 }
 
 func notificationAllowsFreetext(item tui.NotificationItem) bool {
-	_ = item
+	if item.Kind != tui.NotifKindInteraction || item.Extra == nil {
+		return false
+	}
+	if item.Extra["frame_type"] != string(interaction.FrameIntentClarification) {
+		return false
+	}
+	count, _ := strconv.Atoi(strings.TrimSpace(item.Extra["slot_count"]))
+	if count == 0 {
+		return true
+	}
+	if count == 1 && strings.TrimSpace(item.Extra["slot_0_id"]) == "answer" {
+		return true
+	}
 	return false
 }
 
@@ -114,7 +128,7 @@ func RenderInteractionNotification(item tui.NotificationItem) string {
 	countStr := item.Extra["slot_count"]
 	count, _ := strconv.Atoi(countStr)
 	if count == 0 {
-		return rendered
+		return rendered + dimStyle.Render("  [d] dismiss")
 	}
 
 	var actions []interaction.ActionSlot
@@ -128,7 +142,7 @@ func RenderInteractionNotification(item tui.NotificationItem) string {
 			Default: item.Extra[prefix+"_default"] == "true",
 		})
 	}
-	return rendered + RenderActionSlots(actions)
+	return rendered + RenderActionSlots(actions) + dimStyle.Render("  [enter] default  [d] dismiss")
 }
 
 func RenderActionSlots(actions []interaction.ActionSlot) string {

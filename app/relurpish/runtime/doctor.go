@@ -160,7 +160,6 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		Blocking:  false,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
 	})
-	// Inference backend check is already covered by ayenitd, but keep for compatibility.
 	deps = append(deps, DependencyStatus{
 		Name:      "inference",
 		Required:  true,

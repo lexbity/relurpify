@@ -50,6 +50,23 @@ const (
 	ActionFreetext = "freetext"
 )
 
+// ShouldResumeExecution reports whether a resolved frame should immediately
+// re-enter the live Euclo task execution path.
+func ShouldResumeExecution(frameType FrameType) bool {
+	switch frameType {
+	case FrameScopeConfirmation,
+		FrameIntentClarification,
+		FrameCandidateSelection,
+		FrameThoughtRecipeSelection,
+		FrameCapabilitySelection,
+		FrameHITLApproval,
+		FrameSessionResume:
+		return true
+	default:
+		return false
+	}
+}
+
 // FrameMetadata preserves the timestamp field used by the legacy renderers.
 type FrameMetadata struct {
 	Timestamp time.Time
@@ -235,26 +252,26 @@ type ArchaeoFindingsContent struct {
 
 // InteractionFrame is a structured, durable interaction frame.
 type InteractionFrame struct {
-	ID             string                     // UUID-based frame ID
-	Type           FrameType                  // Frame type
-	Kind           FrameType                  // Legacy alias for Type
-	Mode           string                     // Legacy renderer field
-	Phase          string                     // Legacy renderer field
-	TaskID         string                     // Associated task ID
-	SessionID      string                     // Associated session ID
-	Seq            int                        // Frame sequence number
-	Slots          []ActionSlot               // Available action slots
-	Actions        []ActionSlot               // Legacy alias for Slots
-	DefaultSlot    string                     // ID of the default slot
-	Question       string                     // Clarification question text
-	Choices        []string                   // Clarification choices
-	DefaultChoice  string                     // Clarification default choice
-	Resume         *ClarificationResumeMetadata // Resume metadata for pending clarification
-	Payload        map[string]any             // Frame-specific payload data
-	Content        any                        // Legacy payload field used by older renderers
-	Metadata       FrameMetadata              // Legacy metadata field used by older renderers
-	CreatedAt      time.Time                  // When the frame was created
-	RespondedAt    *time.Time                 // When the frame was responded to (nil if pending)
-	Response       *FrameResult               // The user's response (nil if pending)
-	Timeout        time.Duration              // Maximum time to wait for response
+	ID            string                       // UUID-based frame ID
+	Type          FrameType                    // Frame type
+	Kind          FrameType                    // Legacy alias for Type
+	Mode          string                       // Legacy renderer field
+	Phase         string                       // Legacy renderer field
+	TaskID        string                       // Associated task ID
+	SessionID     string                       // Associated session ID
+	Seq           int                          // Frame sequence number
+	Slots         []ActionSlot                 // Available action slots
+	Actions       []ActionSlot                 // Legacy alias for Slots
+	DefaultSlot   string                       // ID of the default slot
+	Question      string                       // Clarification question text
+	Choices       []string                     // Clarification choices
+	DefaultChoice string                       // Clarification default choice
+	Resume        *ClarificationResumeMetadata // Resume metadata for pending clarification
+	Payload       map[string]any               // Frame-specific payload data
+	Content       any                          // Legacy payload field used by older renderers
+	Metadata      FrameMetadata                // Legacy metadata field used by older renderers
+	CreatedAt     time.Time                    // When the frame was created
+	RespondedAt   *time.Time                   // When the frame was responded to (nil if pending)
+	Response      *FrameResult                 // The user's response (nil if pending)
+	Timeout       time.Duration                // Maximum time to wait for response
 }

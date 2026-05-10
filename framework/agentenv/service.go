@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,11 +20,35 @@ type Service interface {
 	Stop() error
 }
 
+const (
+	serviceStatusRunning = "running"
+	serviceStatusStopped = "stopped"
+	serviceStatusError   = "error"
+)
+
+// ServiceSnapshot captures the current registry status for a service.
+type ServiceSnapshot struct {
+	ID     string
+	Status string
+	Source string
+	Owner  string
+	Notes  []string
+}
+
+// ServiceRegistrationInfo captures provenance for a registered service.
+type ServiceRegistrationInfo struct {
+	Source string
+	Owner  string
+	Notes  []string
+}
+
 // ServiceManager handles registration and lifecycle orchestration for all
 // services within a workspace session. It supports dynamic registration,
 // batch start/stop operations, and clean resource cleanup.
 type ServiceManager struct {
 	Registry map[string]Service
+	Statuses map[string]string
+	Info     map[string]ServiceRegistrationInfo
 	Cancel   context.CancelFunc
 	Wg       sync.WaitGroup
 	Mu       sync.Mutex
@@ -34,12 +59,19 @@ type ServiceManager struct {
 func NewServiceManager() *ServiceManager {
 	return &ServiceManager{
 		Registry: make(map[string]Service),
+		Statuses: make(map[string]string),
+		Info:     make(map[string]ServiceRegistrationInfo),
 	}
 }
 
 // Register adds a service to the manager by ID. If the service already exists,
 // it will be overwritten (previous instance is automatically stopped).
 func (sm *ServiceManager) Register(id string, s Service) {
+	sm.RegisterWithInfo(id, s, ServiceRegistrationInfo{Source: "internal"})
+}
+
+// RegisterWithInfo adds a service with explicit provenance metadata.
+func (sm *ServiceManager) RegisterWithInfo(id string, s Service, info ServiceRegistrationInfo) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -48,6 +80,14 @@ func (sm *ServiceManager) Register(id string, s Service) {
 	}
 
 	sm.Registry[id] = s
+	if sm.Statuses == nil {
+		sm.Statuses = make(map[string]string)
+	}
+	if sm.Info == nil {
+		sm.Info = make(map[string]ServiceRegistrationInfo)
+	}
+	sm.Statuses[id] = serviceStatusStopped
+	sm.Info[id] = normalizeServiceRegistrationInfo(info)
 	log.Printf("service manager: registered service %q", id)
 }
 
@@ -66,6 +106,8 @@ func (sm *ServiceManager) Deregister(id string) {
 	}
 
 	delete(sm.Registry, id)
+	delete(sm.Statuses, id)
+	delete(sm.Info, id)
 	log.Printf("service manager: deregistered service %q", id)
 }
 
@@ -91,7 +133,7 @@ func (sm *ServiceManager) StartAll(ctx context.Context) error {
 		go func(id string, s Service) {
 			defer sm.Wg.Done()
 			defer started.Done()
-			if err := s.Start(ctx); err != nil {
+			if err := sm.startService(id, s, ctx); err != nil {
 				log.Printf("service %s start failed: %v", id, err)
 			}
 		}(id, s)
@@ -104,17 +146,24 @@ func (sm *ServiceManager) StartAll(ctx context.Context) error {
 // StopAll synchronously stops all registered services. Returns an error only if
 // one or more services returned a stop error. This is used in Workspace.Close().
 func (sm *ServiceManager) StopAll() error {
+	if sm == nil {
+		return nil
+	}
 	sm.Mu.Lock()
-	defer sm.Mu.Unlock()
+	services := make(map[string]Service, len(sm.Registry))
+	for id, svc := range sm.Registry {
+		services[id] = svc
+	}
+	sm.Mu.Unlock()
 
 	var errs []error
-	for id, s := range sm.Registry {
-		if err := s.Stop(); err != nil {
+	for id, s := range services {
+		if err := sm.stopService(id, s); err != nil {
 			errs = append(errs, fmt.Errorf("service %s stop error: %v", id, err))
 		}
 	}
 
-	sm.Wg.Wait() // wait for all stop operations to complete
+	sm.Wg.Wait() // wait for service goroutines to observe shutdown
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
@@ -132,6 +181,32 @@ func (sm *ServiceManager) Get(id string) Service {
 		return s
 	}
 	return nil
+}
+
+// Snapshot returns the current registry with lifecycle status for each service.
+func (sm *ServiceManager) Snapshot() []ServiceSnapshot {
+	sm.Mu.Lock()
+	defer sm.Mu.Unlock()
+
+	out := make([]ServiceSnapshot, 0, len(sm.Registry))
+	for id := range sm.Registry {
+		status := sm.Statuses[id]
+		if status == "" {
+			status = serviceStatusStopped
+		}
+		info := sm.Info[id]
+		out = append(out, ServiceSnapshot{
+			ID:     id,
+			Status: status,
+			Source: info.Source,
+			Owner:  info.Owner,
+			Notes:  append([]string(nil), info.Notes...),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
 }
 
 // Has checks if a service with the given ID is registered.
@@ -169,8 +244,97 @@ func (sm *ServiceManager) Clear() error {
 	err := sm.StopAll()
 	sm.Mu.Lock()
 	sm.Registry = make(map[string]Service)
+	sm.Statuses = make(map[string]string)
+	sm.Info = make(map[string]ServiceRegistrationInfo)
 	sm.Mu.Unlock()
 	return err
+}
+
+// Start starts one registered service and updates its status.
+func (sm *ServiceManager) Start(id string, ctx context.Context) error {
+	if sm == nil {
+		return fmt.Errorf("service manager unavailable")
+	}
+	sm.Mu.Lock()
+	svc, ok := sm.Registry[id]
+	sm.Mu.Unlock()
+	if !ok {
+		return fmt.Errorf("service %s not found", id)
+	}
+	return sm.startService(id, svc, ctx)
+}
+
+// Stop stops one registered service and updates its status.
+func (sm *ServiceManager) Stop(id string) error {
+	if sm == nil {
+		return fmt.Errorf("service manager unavailable")
+	}
+	sm.Mu.Lock()
+	svc, ok := sm.Registry[id]
+	sm.Mu.Unlock()
+	if !ok {
+		return fmt.Errorf("service %s not found", id)
+	}
+	return sm.stopService(id, svc)
+}
+
+// Restart stops and then starts one registered service.
+func (sm *ServiceManager) Restart(id string, ctx context.Context) error {
+	if err := sm.Stop(id); err != nil {
+		return err
+	}
+	return sm.Start(id, ctx)
+}
+
+func (sm *ServiceManager) startService(id string, svc Service, ctx context.Context) error {
+	if svc == nil {
+		return fmt.Errorf("service %s unavailable", id)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := svc.Start(ctx); err != nil {
+		sm.setStatus(id, serviceStatusError)
+		return err
+	}
+	sm.setStatus(id, serviceStatusRunning)
+	return nil
+}
+
+func (sm *ServiceManager) stopService(id string, svc Service) error {
+	if svc == nil {
+		return fmt.Errorf("service %s unavailable", id)
+	}
+	if err := svc.Stop(); err != nil {
+		sm.setStatus(id, serviceStatusError)
+		return err
+	}
+	sm.setStatus(id, serviceStatusStopped)
+	return nil
+}
+
+func (sm *ServiceManager) setStatus(id, status string) {
+	sm.Mu.Lock()
+	defer sm.Mu.Unlock()
+	if sm.Statuses == nil {
+		sm.Statuses = make(map[string]string)
+	}
+	sm.Statuses[id] = status
+}
+
+func normalizeServiceRegistrationInfo(info ServiceRegistrationInfo) ServiceRegistrationInfo {
+	info.Source = strings.TrimSpace(info.Source)
+	info.Owner = strings.TrimSpace(info.Owner)
+	if len(info.Notes) > 0 {
+		notes := make([]string, 0, len(info.Notes))
+		for _, note := range info.Notes {
+			if trimmed := strings.TrimSpace(note); trimmed != "" {
+				notes = append(notes, trimmed)
+			}
+		}
+		info.Notes = notes
+	}
+	return info
 }
 
 // ScheduledJob represents a time-based job that the scheduler will execute.

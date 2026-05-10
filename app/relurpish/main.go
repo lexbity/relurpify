@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -20,8 +19,7 @@ import (
 )
 
 var (
-	cfg         = runtimesvc.DefaultConfig()
-	startServer bool
+	cfg = runtimesvc.DefaultConfig()
 )
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
@@ -52,13 +50,11 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
 	root.PersistentFlags().StringVar(&cfg.SandboxBackend, "sandbox-backend", cfg.SandboxBackend, "Sandbox backend to use (gvisor or docker)")
 	root.PersistentFlags().StringVar(&cfg.AgentName, "agent", cfg.AgentLabel(), "Agent preset (coding, planner, react, reflection)")
-	root.PersistentFlags().StringVar(&cfg.ServerAddr, "addr", cfg.ServerAddr, "HTTP server listen address")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.ContainerRuntime, "container-runtime", cfg.Sandbox.ContainerRuntime, "Container runtime (docker/containerd)")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
-	root.PersistentFlags().BoolVar(&startServer, "serve", false, "Launch the HTTP API server alongside the TUI")
 
-	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd(), newServeCmd())
+	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd())
 	return root
 }
 
@@ -105,28 +101,6 @@ func newChatCmd() *cobra.Command {
 	return cmd
 }
 
-// newServeCmd runs only the HTTP server, useful for automation.
-func newServeCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Run only the HTTP API server",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithRuntime(cmd, func(cmdCtx context.Context, rt *runtimesvc.Runtime) error {
-				stop, err := rt.StartServer(cmdCtx, cfg.ServerAddr)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "relurpish API listening on %s\n", cfg.ServerAddr)
-				<-cmdCtx.Done()
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				return stop(shutdownCtx)
-			})
-		},
-	}
-	return cmd
-}
-
 // runWithRuntime ensures the runtime is created and cleaned up for the command.
 func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Runtime) error) error {
 	ctx := cmd.Context()
@@ -152,17 +126,8 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	return fn(ctx, rt)
 }
 
-// runTUI optionally starts the server and then launches the Bubble Tea program.
+// runTUI launches the Bubble Tea program.
 func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
-	var stop func(context.Context) error
-	var err error
-	if startServer {
-		stop, err = rt.StartServer(ctx, cfg.ServerAddr)
-		if err != nil {
-			return err
-		}
-		defer stop(context.Background())
-	}
 	// Prevent stdlib logger output (used by some debug paths) from drawing over the TUI.
 	if rt != nil && rt.AgentWorkspace() != nil && rt.AgentWorkspace().Logger != nil {
 		log.SetOutput(rt.AgentWorkspace().Logger.Writer())

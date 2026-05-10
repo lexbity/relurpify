@@ -45,6 +45,49 @@ func TestServiceManager_RegisterAndGet(t *testing.T) {
 	}
 }
 
+func TestServiceManager_StartStopAndSnapshot(t *testing.T) {
+	sm := NewServiceManager()
+	svc := &mockService{}
+	sm.RegisterWithInfo("svc", svc, ServiceRegistrationInfo{Source: "test/source", Owner: "workspace", Notes: []string{"note one", "note two"}})
+
+	if err := sm.Start("svc", context.Background()); err != nil {
+		t.Fatalf("Start returned %v", err)
+	}
+	if svc.startCount.Load() != 1 {
+		t.Fatalf("startCount = %d, want 1", svc.startCount.Load())
+	}
+	snapshots := sm.Snapshot()
+	if len(snapshots) != 1 {
+		t.Fatalf("Snapshot len = %d, want 1", len(snapshots))
+	}
+	if snapshots[0].Status != serviceStatusRunning {
+		t.Fatalf("Snapshot status = %q, want %q", snapshots[0].Status, serviceStatusRunning)
+	}
+	if snapshots[0].Source != "test/source" {
+		t.Fatalf("Snapshot source = %q, want test/source", snapshots[0].Source)
+	}
+	if snapshots[0].Owner != "workspace" {
+		t.Fatalf("Snapshot owner = %q, want workspace", snapshots[0].Owner)
+	}
+	if len(snapshots[0].Notes) != 2 {
+		t.Fatalf("Snapshot notes len = %d, want 2", len(snapshots[0].Notes))
+	}
+
+	if err := sm.Stop("svc"); err != nil {
+		t.Fatalf("Stop returned %v", err)
+	}
+	if svc.stopCount.Load() != 1 {
+		t.Fatalf("stopCount = %d, want 1", svc.stopCount.Load())
+	}
+	snapshots = sm.Snapshot()
+	if len(snapshots) != 1 {
+		t.Fatalf("Snapshot len = %d, want 1", len(snapshots))
+	}
+	if snapshots[0].Status != serviceStatusStopped {
+		t.Fatalf("Snapshot status = %q, want %q", snapshots[0].Status, serviceStatusStopped)
+	}
+}
+
 func TestServiceManager_Deregister(t *testing.T) {
 	sm := NewServiceManager()
 	svc := &mockService{}
