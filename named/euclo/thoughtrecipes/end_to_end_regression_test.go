@@ -22,25 +22,19 @@ func TestPromptAndRecipeLibraryIntegrationEndToEnd(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(promptRoot, "explore.prompt"), []byte(`---
-apiVersion: framework.prompt/v1
-id: named.euclo.code.explore
-name: Explore Prompt
+schema framework.prompt/v2
+id named.euclo.code.explore
+tag "system"
 ---
-
-# Task
-
 Explore the codebase thoroughly.
 `), 0o644); err != nil {
 		t.Fatalf("write explore prompt: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(promptRoot, "clarify.prompt"), []byte(`---
-apiVersion: framework.prompt/v1
-id: named.euclo.intent.clarify.question.v1
-name: Clarify Question
+schema framework.prompt/v2
+id named.euclo.intent.clarify.question.v1
+tag "system"
 ---
-
-# Question
-
 Which module should be updated?
 `), 0o644); err != nil {
 		t.Fatalf("write clarify prompt: %v", err)

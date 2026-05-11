@@ -11,6 +11,7 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.2.1
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
+	github.com/yuin/goldmark v1.3.5
 	go.lsp.dev/protocol v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )

@@ -59,6 +59,46 @@ func itoa(n int) string {
 	return string(b)
 }
 
+// DuplicateIDError is returned when two prompt files declare the same ID.
+type DuplicateIDError struct {
+	ID           string
+	ExistingPath string
+	NewPath      string
+}
+
+func (e *DuplicateIDError) Error() string {
+	if e == nil {
+		return "duplicate prompt id"
+	}
+	if e.ExistingPath != "" && e.NewPath != "" {
+		return "duplicate prompt id: " + e.ID + " (" + e.ExistingPath + ", " + e.NewPath + ")"
+	}
+	if e.NewPath != "" {
+		return "duplicate prompt id: " + e.ID + " (" + e.NewPath + ")"
+	}
+	return "duplicate prompt id: " + e.ID
+}
+
+// UnknownVariableError is returned when a body references a variable that has
+// no runtime value or declared default.
+type UnknownVariableError struct {
+	Name string
+}
+
+func (e *UnknownVariableError) Error() string {
+	return "unknown variable: " + e.Name
+}
+
+// InvalidVariableReferenceError is returned when a body contains malformed
+// brace substitution syntax.
+type InvalidVariableReferenceError struct {
+	Reference string
+}
+
+func (e *InvalidVariableReferenceError) Error() string {
+	return "invalid variable reference: " + e.Reference
+}
+
 // alreadyRegisteredError is the sentinel used by the registry when a duplicate
 // provider name is registered. Callers use IsAlreadyRegistered to detect it.
 type alreadyRegisteredError struct {

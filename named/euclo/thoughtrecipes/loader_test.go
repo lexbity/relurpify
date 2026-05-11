@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/services"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 )
 
@@ -271,6 +272,59 @@ run reviewer:
 	}
 	if got := len(result.Warnings); got != 0 {
 		t.Fatalf("expected no warnings, got %d: %#v", got, result.Warnings)
+	}
+	if got := result.Registry.Count(); got != 1 {
+		t.Fatalf("registry count = %d, want 1", got)
+	}
+}
+
+func TestThoughtRecipeLoaderValidatesPromptImportsWithRepositoryPromptRegistry(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..")
+	promptRegistry, err := services.BuildPromptRegistry(repoRoot, nil)
+	if err != nil {
+		t.Fatalf("BuildPromptRegistry: %v", err)
+	}
+	for _, id := range []string{
+		"named.euclo.code.explore",
+		"named.euclo.intent.clarify.question.v1",
+	} {
+		if cfg, ok := promptRegistry.Get(id); !ok || cfg == nil {
+			t.Fatalf("expected repository prompt %q to be registered", id)
+		}
+	}
+
+	root := t.TempDir()
+	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
+	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+		t.Fatalf("mkdir source root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
+"Prompt import."
+
+trigger as capability:
+  may read workspace
+  may ask user
+
+import prompt named.euclo.code.explore as explore
+import prompt named.euclo.intent.clarify.question.v1 as clarify_question
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+
+ask user:
+  question prompt clarify_question
+`), 0o644); err != nil {
+		t.Fatalf("write prompt import thoughtrecipe: %v", err)
+	}
+
+	result, err := NewLoader().WithPromptRegistry(promptRegistry).LoadWorkspace(root)
+	if err != nil {
+		t.Fatalf("LoadWorkspace returned error: %v", err)
+	}
+	if result == nil || result.Registry == nil {
+		t.Fatal("expected loaded thoughtrecipe registry")
 	}
 	if got := result.Registry.Count(); got != 1 {
 		t.Fatalf("registry count = %d, want 1", got)

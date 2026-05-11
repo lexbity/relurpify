@@ -28,8 +28,6 @@ func ParseFile(path string) (*ParseResult, error) {
 // ParseBytes parses a .prompt file from raw bytes. sourcePath is informational.
 func ParseBytes(data []byte, sourcePath string) (*ParseResult, error) {
 	lines := splitLines(string(data))
-	var warnings []string
-
 	if len(lines) == 0 || lines[0] != "---" {
 		return nil, fmt.Errorf("%s: missing front matter opening ---", sourcePath)
 	}
@@ -46,40 +44,19 @@ func ParseBytes(data []byte, sourcePath string) (*ParseResult, error) {
 	}
 
 	fmLines := lines[1:closeIdx]
-	blockLines := lines[closeIdx+1:]
+	body := strings.Join(lines[closeIdx+1:], "\n")
 
-	fm, err := parseFrontMatter(fmLines)
+	fm, warnings, err := parseFrontMatter(fmLines, sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("%s: front matter: %w", sourcePath, err)
 	}
-	for _, uf := range fm.UnknownFields {
-		warnings = append(warnings, "unknown front matter field: "+uf)
-	}
-	if fm.Stability == "" {
-		fm.Stability = "stable"
-	}
-
-	rawBlocks := parseBlocks(blockLines)
-	blocks, blockWarnings := buildBlocks(rawBlocks, fm.ID)
-	warnings = append(warnings, blockWarnings...)
 
 	cfg := &PromptConfig{
-		APIVersion:        fm.APIVersion,
-		ID:                fm.ID,
-		Name:              fm.Name,
-		Description:       fm.Description,
-		Extends:           fm.Extends,
-		FrameworkCritical: fm.FrameworkCritical,
-		RequiresProviders: fm.RequiresProviders,
-		Tags: Tags{
-			Paradigm:  fm.Paradigm,
-			Agent:     fm.Agent,
-			Domain:    fm.Domain,
-			Kind:      fm.Kind,
-			Stability: fm.Stability,
-		},
+		Schema:     fm.Schema,
+		ID:         fm.ID,
+		Tags:       fm.Tags,
 		Variables:  fm.Variables,
-		Blocks:     blocks,
+		Body:       body,
 		SourcePath: sourcePath,
 	}
 

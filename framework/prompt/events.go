@@ -56,8 +56,8 @@ type ProviderFailedEvent struct {
 // noopTelemetry is the default no-op sink used when no telemetry is provided.
 type noopTelemetry struct{}
 
-func (noopTelemetry) EmitPromptResolved(ResolvedEvent)           {}
-func (noopTelemetry) EmitPromptResolveFailed(ResolveFailedEvent) {}
-func (noopTelemetry) EmitPromptContextMissing(ContextMissingEvent) {}
+func (noopTelemetry) EmitPromptResolved(ResolvedEvent)               {}
+func (noopTelemetry) EmitPromptResolveFailed(ResolveFailedEvent)     {}
+func (noopTelemetry) EmitPromptContextMissing(ContextMissingEvent)   {}
 func (noopTelemetry) EmitPromptValidationIssue(ValidationIssueEvent) {}
-func (noopTelemetry) EmitPromptProviderFailed(ProviderFailedEvent) {}
+func (noopTelemetry) EmitPromptProviderFailed(ProviderFailedEvent)   {}

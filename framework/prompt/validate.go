@@ -1,6 +1,8 @@
 package prompt
 
-import "strings"
+import (
+	"strings"
+)
 
 // IssueSeverity classifies a validation finding.
 type IssueSeverity int
@@ -36,102 +38,70 @@ func (v ValidationIssue) Error() string {
 	return v.Severity.String() + ": [" + v.PromptID + "] " + v.Message
 }
 
-// validParadigms is the set of allowed paradigm tag values.
-var validParadigms = map[string]bool{
-	"react":      true,
-	"pipeline":   true,
-	"htn":        true,
-	"goalcon":    true,
-	"blackboard": true,
-	"rewoo":      true,
-}
-
-// validKinds is the set of allowed kind values for tags and block metadata.
-var validKinds = map[string]bool{
-	"persona":    true,
-	"task":       true,
-	"capability": true,
-	"format":     true,
-	"constraint": true,
-	"fragment":   true,
-}
-
-// validStabilities is the set of allowed stability values.
-var validStabilities = map[string]bool{
-	"experimental": true,
-	"beta":         true,
-	"stable":       true,
-	"deprecated":   true,
-}
-
 // validateConfig performs structural validation on a parsed PromptConfig.
-// It does not validate inheritance references (done after all files are loaded).
 func validateConfig(cfg *PromptConfig) []ValidationIssue {
 	var issues []ValidationIssue
 
-	warn := func(blockID, msg string) {
-		issues = append(issues, ValidationIssue{PromptID: cfg.ID, BlockID: blockID, Severity: SeverityWarning, Message: msg})
-	}
-	fail := func(blockID, msg string) {
-		issues = append(issues, ValidationIssue{PromptID: cfg.ID, BlockID: blockID, Severity: SeverityError, Message: msg})
+	if cfg == nil {
+		return []ValidationIssue{{
+			Severity: SeverityError,
+			Message:  "prompt config is nil",
+		}}
 	}
 
-	if cfg.APIVersion != "framework.prompt/v1" {
-		fail("", "unknown apiVersion: "+cfg.APIVersion)
+	fail := func(msg string) {
+		issues = append(issues, ValidationIssue{PromptID: cfg.ID, Severity: SeverityError, Message: msg})
+	}
+	warn := func(msg string) {
+		issues = append(issues, ValidationIssue{PromptID: cfg.ID, Severity: SeverityWarning, Message: msg})
+	}
+
+	if cfg.Schema != "framework.prompt/v2" {
+		fail("unknown schema: " + cfg.Schema)
 	}
 	if cfg.ID == "" {
-		fail("", "missing required field: id")
+		fail("missing required field: id")
 	}
-	if cfg.Name == "" {
-		fail("", "missing required field: name")
-	}
-
-	// Paradigm tag validation.
-	for _, p := range cfg.Tags.Paradigm {
-		if !validParadigms[p] {
-			fail("", "unknown paradigm tag: "+p)
-		}
+	if !validPromptID(cfg.ID) {
+		fail("invalid id: " + cfg.ID)
 	}
 
-	// Kind validation.
-	if cfg.Tags.Kind != "" && !validKinds[cfg.Tags.Kind] {
-		warn("", "unknown kind tag: "+cfg.Tags.Kind)
+	seenTags := make(map[string]struct{}, len(cfg.Tags))
+	for _, tag := range cfg.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			fail("tag values must not be empty")
+			continue
+		}
+		if _, ok := seenTags[tag]; ok {
+			continue
+		}
+		seenTags[tag] = struct{}{}
 	}
 
-	// Stability validation.
-	if cfg.Tags.Stability != "" && !validStabilities[cfg.Tags.Stability] {
-		warn("", "unknown stability: "+cfg.Tags.Stability)
+	if strings.TrimSpace(cfg.Body) == "" {
+		fail("prompt body is required")
 	}
 
-	// Block-level checks.
-	seenBlockIDs := make(map[string]bool)
-	for i := range cfg.Blocks {
-		b := &cfg.Blocks[i]
-		if seenBlockIDs[b.ID] {
-			fail(b.ID, "duplicate block id")
+	resolved := make(map[string]string, len(cfg.Variables))
+	for name, decl := range cfg.Variables {
+		if !validIdentifier(name) {
+			fail("invalid variable name: " + name)
 		}
-		seenBlockIDs[b.ID] = true
-
-		if b.From == SourceProvider && b.Provider == "" {
-			fail(b.ID, "block has from: provider but no provider field")
+		if strings.TrimSpace(decl.Default) == "" {
+			warn("empty default for variable: " + name)
 		}
-		if b.From == SourceStatic && b.Content == "" {
-			warn(b.ID, "static block has empty content")
-		}
-		if b.From == SourceProvider && b.Content != "" {
-			warn(b.ID, "provider block has content body (ignored at resolve time)")
-		}
-		if b.Kind != "" && !validKinds[b.Kind] {
-			warn(b.ID, "unknown block kind: "+b.Kind)
-		}
+		resolved[name] = decl.Default
 	}
 
-	// Unused variable warnings: collect all variable references in blocks.
-	if len(cfg.Variables) > 0 {
-		used := collectUsedVars(cfg.Blocks)
-		for name := range cfg.Variables {
+	if strings.TrimSpace(cfg.Body) != "" {
+		if _, err := renderMarkdownBody(cfg.Body, resolved); err != nil {
+			fail(err.Error())
+		}
+		used := collectUsedVars(cfg.Body)
+		for name := range resolved {
 			if !used[name] {
-				warn("", "variable declared but not used: "+name)
+				warn("variable declared but not used: " + name)
 			}
 		}
 	}
@@ -139,36 +109,9 @@ func validateConfig(cfg *PromptConfig) []ValidationIssue {
 	return issues
 }
 
-// collectUsedVars returns the set of variable names referenced in block content.
-func collectUsedVars(blocks []PromptBlock) map[string]bool {
-	used := make(map[string]bool)
-	for _, b := range blocks {
-		scanVarRefs(b.Content, used)
-	}
-	return used
-}
-
-// scanVarRefs populates used with variable names found in {name} patterns.
-func scanVarRefs(s string, used map[string]bool) {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' {
-			i++ // escaped brace
-			continue
-		}
-		if s[i] == '{' {
-			j := i + 1
-			for j < len(s) && s[j] != '}' && s[j] != '{' && s[j] != '\n' {
-				j++
-			}
-			if j < len(s) && s[j] == '}' {
-				name := s[i+1 : j]
-				if name != "" {
-					used[name] = true
-				}
-			}
-			i = j
-		}
-	}
+// collectUsedVars returns the set of variable names referenced in the body.
+func collectUsedVars(body string) map[string]bool {
+	return markdownReferencedVariables(body)
 }
 
 // ValidateStructuredMap checks that a structured prompt output contains the
