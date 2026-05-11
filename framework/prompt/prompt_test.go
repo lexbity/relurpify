@@ -290,6 +290,38 @@ func TestRegistry_RegisterAndResolve(t *testing.T) {
 	}
 }
 
+func TestRegistry_GetAndResolveUseExactPromptIDs(t *testing.T) {
+	r := NewRegistry()
+	dr := r.(*defaultRegistry)
+	result, err := ParseBytes([]byte(samplePrompt), "sample.prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dr.indexOne(result.Config, result.Warnings)
+
+	cfg, ok := r.Get("test.sample")
+	if !ok || cfg == nil {
+		t.Fatal("expected exact prompt ID lookup to succeed")
+	}
+	if _, ok := r.Get("test.sample "); ok {
+		t.Fatal("expected lookup with trailing whitespace to fail")
+	}
+	if _, ok := r.Get("test"); ok {
+		t.Fatal("expected partial lookup to fail")
+	}
+
+	assembled, err := r.Resolve("test.sample", RuntimeContext{})
+	if err != nil {
+		t.Fatalf("Resolve exact ID failed: %v", err)
+	}
+	if !strings.Contains(assembled, "Write code in") {
+		t.Fatalf("expected resolved prompt content, got %s", assembled)
+	}
+	if _, err := r.Resolve("test.sample ", RuntimeContext{}); err == nil {
+		t.Fatal("expected resolve with trailing whitespace to fail")
+	}
+}
+
 func TestRegistry_NotFound(t *testing.T) {
 	r := NewRegistry()
 	_, err := r.Resolve("nonexistent.id", RuntimeContext{})

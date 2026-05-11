@@ -41,6 +41,14 @@ type Declaration interface {
 	declarationNode()
 }
 
+// ImportKind identifies a top-level import declaration target kind.
+type ImportKind string
+
+const (
+	ImportKindPrompt ImportKind = "prompt"
+	ImportKindRecipe ImportKind = "recipe"
+)
+
 // ValueExpr is a source-oriented value expression.
 type ValueExpr interface {
 	Node
@@ -139,6 +147,16 @@ type TypeDecl struct {
 }
 
 func (TypeDecl) declarationNode() {}
+
+// ImportDecl binds a prompt or recipe identifier into the local recipe scope.
+type ImportDecl struct {
+	positioned
+	Kind   ImportKind
+	Target PathExpr
+	Alias  Identifier
+}
+
+func (ImportDecl) declarationNode() {}
 
 // DefinitionName preserves the declared name for a type or agent.
 type DefinitionName struct {
@@ -331,7 +349,8 @@ func (FromClause) executionItemNode() {}
 // GoalClause provides a goal string for execution.
 type GoalClause struct {
 	positioned
-	Text StringLiteral
+	Text     StringLiteral
+	PromptID *PromptRef
 }
 
 func (GoalClause) executionItemNode() {}
@@ -391,10 +410,18 @@ type CaptureBinding struct {
 // QuestionClause preserves ask user question text.
 type QuestionClause struct {
 	positioned
-	Text StringLiteral
+	Text     StringLiteral
+	PromptID *PromptRef
 }
 
 func (QuestionClause) askItemNode() {}
+
+// PromptRef references a locally imported prompt binding.
+type PromptRef struct {
+	positioned
+	Name       Identifier
+	ResolvedID string
+}
 
 // ChoicesListClause preserves an inline choice list.
 type ChoicesListClause struct {

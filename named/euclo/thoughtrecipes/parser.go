@@ -84,6 +84,8 @@ func (p *Parser) parseHeader() (ThoughtRecipeHeader, error) {
 
 func (p *Parser) parseTopLevelDeclaration() (Declaration, error) {
 	switch p.peek().Lexeme {
+	case "import":
+		return p.parseImportDecl()
 	case "trigger":
 		return p.parseTriggerDecl()
 	case "input":
@@ -105,6 +107,38 @@ func (p *Parser) parseTopLevelDeclaration() (Declaration, error) {
 	default:
 		return nil, p.unexpectedToken(p.peek(), "unknown top-level declaration")
 	}
+}
+
+func (p *Parser) parseImportDecl() (*ImportDecl, error) {
+	start := p.next()
+	kindTok, err := p.expectKeyword("prompt")
+	if err != nil {
+		if _, recipeErr := p.expectKeyword("recipe"); recipeErr != nil {
+			return nil, p.unexpectedToken(p.peek(), "expected prompt or recipe import kind")
+		}
+		kindTok = Token{Lexeme: "recipe", File: start.File, Line: start.Line, Column: start.Column}
+	}
+	kind := ImportKind(kindTok.Lexeme)
+	if kind != ImportKindPrompt && kind != ImportKindRecipe {
+		return nil, p.unexpectedToken(kindTok, "expected prompt or recipe import kind")
+	}
+	target, err := p.parsePathExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expectKeyword("as"); err != nil {
+		return nil, err
+	}
+	aliasTok, err := p.expectName("import alias")
+	if err != nil {
+		return nil, err
+	}
+	return &ImportDecl{
+		positioned: positioned{Span: spanFromTokens(start, aliasTok)},
+		Kind:       kind,
+		Target:     target,
+		Alias:      Identifier{positioned: positioned{Span: spanFromToken(aliasTok)}, Value: aliasTok.Lexeme},
+	}, nil
 }
 
 func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
@@ -526,11 +560,20 @@ func (p *Parser) parseFromClause() (*FromClause, error) {
 
 func (p *Parser) parseGoalClause() (*GoalClause, error) {
 	start := p.next()
-	str, err := p.expectStringLiteral("goal text")
-	if err != nil {
-		return nil, err
+	switch p.peek().Lexeme {
+	case "prompt":
+		ref, err := p.parsePromptRef()
+		if err != nil {
+			return nil, err
+		}
+		return &GoalClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(ref.Span))}, PromptID: ref}, nil
+	default:
+		str, err := p.expectStringLiteral("goal text")
+		if err != nil {
+			return nil, err
+		}
+		return &GoalClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(str.Span))}, Text: *str}, nil
 	}
-	return &GoalClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(str.Span))}, Text: *str}, nil
 }
 
 func (p *Parser) parseCapabilityInvocation() (*CapabilityInvocation, error) {
@@ -725,11 +768,20 @@ func (p *Parser) parseAskItem() (AskItem, error) {
 	switch p.peek().Lexeme {
 	case "question":
 		start := p.next()
-		text, err := p.expectStringLiteral("question text")
-		if err != nil {
-			return nil, err
+		switch p.peek().Lexeme {
+		case "prompt":
+			ref, err := p.parsePromptRef()
+			if err != nil {
+				return nil, err
+			}
+			return &QuestionClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(ref.Span))}, PromptID: ref}, nil
+		default:
+			text, err := p.expectStringLiteral("question text")
+			if err != nil {
+				return nil, err
+			}
+			return &QuestionClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(text.Span))}, Text: *text}, nil
 		}
-		return &QuestionClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(text.Span))}, Text: *text}, nil
 	case "choices":
 		start := p.next()
 		if p.peekLexeme("from") {
@@ -772,6 +824,21 @@ func (p *Parser) parseAskItem() (AskItem, error) {
 	default:
 		return nil, p.unexpectedToken(p.peek(), "unsupported ask item")
 	}
+}
+
+func (p *Parser) parsePromptRef() (*PromptRef, error) {
+	start := p.peek()
+	if _, err := p.expectKeyword("prompt"); err != nil {
+		return nil, err
+	}
+	nameTok, err := p.expectName("prompt binding")
+	if err != nil {
+		return nil, err
+	}
+	return &PromptRef{
+		positioned: positioned{Span: spanFromTokens(start, nameTok)},
+		Name:       Identifier{positioned: positioned{Span: spanFromToken(nameTok)}, Value: nameTok.Lexeme},
+	}, nil
 }
 
 func (p *Parser) parsePredicateExpr() (PredicateExpr, error) {

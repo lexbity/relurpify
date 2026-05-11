@@ -236,6 +236,81 @@ ask user:
 	}
 }
 
+func TestLowerDocumentLowersPromptBoundGoalAndQuestion(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe prompt_demo
+"Prompt demo."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as explore
+import prompt named.euclo.intent.clarify.question.v1 as clarify_question
+
+agent reviewer uses react
+
+run reviewer:
+  from input.prompt
+  goal prompt explore
+
+ask user:
+  question prompt clarify_question
+`)
+
+	plan, err := LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument failed: %v", err)
+	}
+	if got, want := len(plan.Steps), 2; got != want {
+		t.Fatalf("step count = %d, want %d", got, want)
+	}
+
+	run := plan.Steps[0]
+	if run.Type != "run" {
+		t.Fatalf("run step type = %q, want run", run.Type)
+	}
+	if run.Goal != "" {
+		t.Fatalf("run goal = %q, want empty", run.Goal)
+	}
+	if run.PromptID != "explore" {
+		t.Fatalf("run prompt ID = %q, want explore", run.PromptID)
+	}
+	if run.Prompt != "" {
+		t.Fatalf("run prompt text = %q, want empty", run.Prompt)
+	}
+	if run.Step.PromptID != "explore" {
+		t.Fatalf("run step prompt ID = %q, want explore", run.Step.PromptID)
+	}
+	if run.Step.Prompt != "" {
+		t.Fatalf("run step prompt text = %q, want empty", run.Step.Prompt)
+	}
+	if got := run.Step.Config["prompt_id"]; got != "explore" {
+		t.Fatalf("run config prompt_id = %#v, want explore", got)
+	}
+
+	ask := plan.Steps[1]
+	if ask.Type != "ask" {
+		t.Fatalf("ask step type = %q, want ask", ask.Type)
+	}
+	if ask.Question != "" {
+		t.Fatalf("ask question = %q, want empty", ask.Question)
+	}
+	if ask.PromptID != "clarify_question" {
+		t.Fatalf("ask prompt ID = %q, want clarify_question", ask.PromptID)
+	}
+	if ask.Prompt != "" {
+		t.Fatalf("ask prompt text = %q, want empty", ask.Prompt)
+	}
+	if ask.Step.PromptID != "clarify_question" {
+		t.Fatalf("ask step prompt ID = %q, want clarify_question", ask.Step.PromptID)
+	}
+	if ask.Step.Prompt != "" {
+		t.Fatalf("ask step prompt text = %q, want empty", ask.Step.Prompt)
+	}
+	if got := ask.Step.Config["prompt_id"]; got != "clarify_question" {
+		t.Fatalf("ask config prompt_id = %#v, want clarify_question", got)
+	}
+}
+
 func TestLowerDocumentPreservesIntentRouteKind(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe intent_demo
 "Clarify."

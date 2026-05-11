@@ -73,6 +73,7 @@ type Lexer struct {
 
 var reservedKeywords = map[string]struct{}{
 	"thoughtrecipe": {},
+	"import":        {},
 	"trigger":       {},
 	"as":            {},
 	"may":           {},

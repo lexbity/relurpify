@@ -1,6 +1,9 @@
 package services
 
 import (
+	"errors"
+	"os"
+
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -12,6 +15,9 @@ func (r *defaultThoughtRecipeLoader) LoadAll() (*thoughtrecipepkg.LoadResult, er
 	result, err := loader.LoadWorkspace(".")
 	if err == nil && result != nil {
 		return result, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 	return &thoughtrecipepkg.LoadResult{
 		Registry: thoughtrecipepkg.NewThoughtRecipeRegistry(),

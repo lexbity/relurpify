@@ -145,7 +145,7 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 	if !ok {
 		return ExecutionStep{}, fmt.Errorf("%s:%d:%d: unknown agent %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, agentName)
 	}
-	sources, goals, directives, captures, config := lowerRunItems(items)
+	sources, goals, directives, captures, promptID, config := lowerRunItems(items)
 	stepID := fmt.Sprintf("%s.%d.%d.%s.%d", kind, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, sanitizeComponent(agentName), *index)
 	step := ExecutionStep{
 		ID:              stepID,
@@ -155,12 +155,14 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 		Sources:         sources,
 		Directives:      directives,
 		CaptureBindings: captures,
+		PromptID:        promptID,
 		Prompt:          strings.Join(goals, "\n"),
 		Step:            ThoughtRecipeStep{ID: stepID},
 	}
 	step.Step.Parent.Paradigm = binding.Paradigm
 	step.Step.Parent.Context = ThoughtRecipeStepContext{}
 	step.Step.Prompt = step.Prompt
+	step.Step.PromptID = promptID
 	step.Step.Type = kind
 	step.Step.Config = config
 	*index = *index + 1

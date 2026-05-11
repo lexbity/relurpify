@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
 )
 
 // CapabilityRegistryLookup is the minimal capability lookup contract required
@@ -19,16 +20,31 @@ type SemanticWarning struct {
 	Message string
 }
 
+// PromptRegistryLookup is the minimal prompt registry contract required by
+// semantic validation.
+type PromptRegistryLookup interface {
+	Get(id string) (*prompt.PromptConfig, bool)
+}
+
+// ThoughtRecipeRegistryLookup is the minimal thoughtrecipe registry contract
+// required by semantic validation.
+type ThoughtRecipeRegistryLookup interface {
+	Get(id string) (*ThoughtRecipe, bool)
+}
+
 // SymbolTable stores the resolved names for a Euclo document.
 type SymbolTable struct {
 	Document    *ThoughtRecipeDocument
 	agents      map[string]*AgentDecl
 	inputs      map[string]*InputDecl
 	types       map[string]*TypeDecl
+	imports     map[string]*ImportDecl
 	declared    map[string]SourceSpan
 	trigger     *TriggerDecl
 	invocations []*CapabilityInvocation
 	capability  CapabilityRegistryLookup
+	prompts     PromptRegistryLookup
+	recipes     ThoughtRecipeRegistryLookup
 	Warnings    []SemanticWarning
 }
 
@@ -39,6 +55,7 @@ func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
 		agents:   make(map[string]*AgentDecl),
 		inputs:   make(map[string]*InputDecl),
 		types:    make(map[string]*TypeDecl),
+		imports:  make(map[string]*ImportDecl),
 		declared: make(map[string]SourceSpan),
 	}
 }
@@ -46,6 +63,18 @@ func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
 // WithCapabilityRegistry wires capability lookup into the symbol table.
 func (s *SymbolTable) WithCapabilityRegistry(reg CapabilityRegistryLookup) *SymbolTable {
 	s.capability = reg
+	return s
+}
+
+// WithPromptRegistry wires prompt lookup into the symbol table.
+func (s *SymbolTable) WithPromptRegistry(reg PromptRegistryLookup) *SymbolTable {
+	s.prompts = reg
+	return s
+}
+
+// WithRecipeRegistry wires thoughtrecipe lookup into the symbol table.
+func (s *SymbolTable) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *SymbolTable {
+	s.recipes = reg
 	return s
 }
 
@@ -62,6 +91,9 @@ func (s *SymbolTable) Resolve() error {
 	}
 
 	if err := s.collectTopLevelSymbols(); err != nil {
+		return err
+	}
+	if err := s.validateImports(); err != nil {
 		return err
 	}
 	if err := s.resolveDeclarations(); err != nil {
@@ -85,12 +117,52 @@ func (s *SymbolTable) collectTopLevelSymbols() error {
 				return err
 			}
 			s.types[name] = node
+		case *ImportDecl:
+			alias := strings.TrimSpace(node.Alias.Value)
+			if err := s.registerTopLevel(alias, node.GetSpan()); err != nil {
+				return err
+			}
+			s.imports[alias] = node
 		case *AgentDecl:
 			name := strings.TrimSpace(node.Name.Value)
 			if err := s.registerTopLevel(name, node.GetSpan()); err != nil {
 				return err
 			}
 			s.agents[name] = node
+		}
+	}
+	return nil
+}
+
+func (s *SymbolTable) validateImports() error {
+	for alias, decl := range s.imports {
+		if decl == nil {
+			continue
+		}
+		target := strings.TrimSpace(decl.Target.Raw)
+		if target == "" {
+			return fmt.Errorf("%s:%d:%d: import target is required", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
+		}
+		if target == strings.TrimSpace(s.Document.Name) {
+			return fmt.Errorf("%s:%d:%d: direct import cycle for %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, target)
+		}
+		switch decl.Kind {
+		case ImportKindPrompt:
+			if s.prompts == nil {
+				return fmt.Errorf("%s:%d:%d: prompt registry is required for prompt import %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, alias)
+			}
+			if _, ok := s.prompts.Get(target); !ok {
+				return fmt.Errorf("%s:%d:%d: unknown prompt import %q -> %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, alias, target)
+			}
+		case ImportKindRecipe:
+			if s.recipes == nil {
+				return fmt.Errorf("%s:%d:%d: thoughtrecipe registry is required for recipe import %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, alias)
+			}
+			if _, ok := s.recipes.Get(target); !ok {
+				return fmt.Errorf("%s:%d:%d: unknown recipe import %q -> %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, alias, target)
+			}
+		default:
+			return fmt.Errorf("%s:%d:%d: unsupported import kind %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, decl.Kind)
 		}
 	}
 	return nil
@@ -214,7 +286,7 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 	case *FromClause:
 		return s.resolveValueExpr(node.Source)
 	case *GoalClause:
-		return nil
+		return s.resolvePromptClause(node.Text.Value, node.PromptID, node.GetSpan(), "goal")
 	case *DirectiveClause:
 		for _, arg := range node.Arguments {
 			if err := s.resolveValueExpr(arg); err != nil {
@@ -284,6 +356,9 @@ func (s *SymbolTable) resolveAskItems(items []AskItem) error {
 	for _, item := range items {
 		switch node := item.(type) {
 		case *QuestionClause:
+			if err := s.resolvePromptClause(node.Text.Value, node.PromptID, node.GetSpan(), "question"); err != nil {
+				return err
+			}
 			continue
 		case *ChoicesListClause:
 			for _, entry := range node.Items {
@@ -303,6 +378,50 @@ func (s *SymbolTable) resolveAskItems(items []AskItem) error {
 			return fmt.Errorf("%s:%d:%d: unsupported ask item %T", item.GetSpan().Start.File, item.GetSpan().Start.Line, item.GetSpan().Start.Column, item)
 		}
 	}
+	return nil
+}
+
+func (s *SymbolTable) resolvePromptClause(text string, ref *PromptRef, span SourceSpan, context string) error {
+	hasText := strings.TrimSpace(text) != ""
+	hasRef := ref != nil && strings.TrimSpace(ref.Name.Value) != ""
+	if hasText && hasRef {
+		return fmt.Errorf("%s:%d:%d: %s clause cannot use both inline text and a prompt binding", span.Start.File, span.Start.Line, span.Start.Column, context)
+	}
+	if !hasText && !hasRef {
+		return fmt.Errorf("%s:%d:%d: %s clause requires either inline text or a prompt binding", span.Start.File, span.Start.Line, span.Start.Column, context)
+	}
+	if hasRef {
+		return s.resolvePromptRef(ref, span, context)
+	}
+	return nil
+}
+
+func (s *SymbolTable) resolvePromptRef(ref *PromptRef, span SourceSpan, context string) error {
+	if ref == nil {
+		return fmt.Errorf("%s:%d:%d: %s prompt reference is nil", span.Start.File, span.Start.Line, span.Start.Column, context)
+	}
+	alias := strings.TrimSpace(ref.Name.Value)
+	if alias == "" {
+		return fmt.Errorf("%s:%d:%d: %s prompt binding is required", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, context)
+	}
+	decl, ok := s.imports[alias]
+	if !ok || decl == nil {
+		return fmt.Errorf("%s:%d:%d: unknown prompt binding %q", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, alias)
+	}
+	if decl.Kind != ImportKindPrompt {
+		return fmt.Errorf("%s:%d:%d: binding %q is not a prompt import", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, alias)
+	}
+	if s.prompts == nil {
+		return fmt.Errorf("%s:%d:%d: prompt registry is required for prompt binding %q", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, alias)
+	}
+	target := strings.TrimSpace(decl.Target.Raw)
+	if target == "" {
+		return fmt.Errorf("%s:%d:%d: prompt binding %q has no registry target", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, alias)
+	}
+	if _, ok := s.prompts.Get(target); !ok {
+		return fmt.Errorf("%s:%d:%d: unknown prompt target %q for binding %q", ref.GetSpan().Start.File, ref.GetSpan().Start.Line, ref.GetSpan().Start.Column, target, alias)
+	}
+	ref.ResolvedID = target
 	return nil
 }
 

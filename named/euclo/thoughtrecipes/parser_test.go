@@ -163,6 +163,112 @@ pipeline:
 	}
 }
 
+func TestParseSourceParsesImportsAndPromptBindings(t *testing.T) {
+	doc, err := ParseSource("imports.euclo", `thoughtrecipe review_flow
+"Route review questions."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as explore
+import recipe named.euclo.review.basic as review_basic
+
+agent reviewer uses react
+
+run reviewer:
+  from input.prompt
+  goal prompt explore
+
+ask user:
+  question prompt clarify_question
+`)
+	if err != nil {
+		t.Fatalf("ParseSource failed: %v", err)
+	}
+
+	if got, want := len(doc.Declarations), 6; got != want {
+		t.Fatalf("declaration count = %d, want %d", got, want)
+	}
+
+	importPrompt, ok := doc.Declarations[1].(*ImportDecl)
+	if !ok {
+		t.Fatalf("declaration 1 type = %T, want *ImportDecl", doc.Declarations[1])
+	}
+	if got := importPrompt.Kind; got != ImportKindPrompt {
+		t.Fatalf("prompt import kind = %q, want %q", got, ImportKindPrompt)
+	}
+	if got := importPrompt.Target.Raw; got != "named.euclo.code.explore" {
+		t.Fatalf("prompt import target = %q, want %q", got, "named.euclo.code.explore")
+	}
+	if got := importPrompt.Alias.Value; got != "explore" {
+		t.Fatalf("prompt import alias = %q, want %q", got, "explore")
+	}
+
+	importRecipe, ok := doc.Declarations[2].(*ImportDecl)
+	if !ok {
+		t.Fatalf("declaration 2 type = %T, want *ImportDecl", doc.Declarations[2])
+	}
+	if got := importRecipe.Kind; got != ImportKindRecipe {
+		t.Fatalf("recipe import kind = %q, want %q", got, ImportKindRecipe)
+	}
+	if got := importRecipe.Target.Raw; got != "named.euclo.review.basic" {
+		t.Fatalf("recipe import target = %q, want %q", got, "named.euclo.review.basic")
+	}
+	if got := importRecipe.Alias.Value; got != "review_basic" {
+		t.Fatalf("recipe import alias = %q, want %q", got, "review_basic")
+	}
+
+	run := doc.Declarations[4].(*RunDecl)
+	if got := run.Items[1].(*GoalClause).PromptID; got == nil || got.Name.Value != "explore" {
+		t.Fatalf("run goal prompt binding = %#v, want explore", got)
+	}
+	if got := run.Items[1].(*GoalClause).Text.Value; got != "" {
+		t.Fatalf("run goal inline text = %q, want empty", got)
+	}
+
+	ask := doc.Declarations[5].(*AskDecl)
+	if got := ask.Items[0].(*QuestionClause).PromptID; got == nil || got.Name.Value != "clarify_question" {
+		t.Fatalf("ask question prompt binding = %#v, want clarify_question", got)
+	}
+	if got := ask.Items[0].(*QuestionClause).Text.Value; got != "" {
+		t.Fatalf("ask question inline text = %q, want empty", got)
+	}
+}
+
+func TestParseSourceRejectsMalformedImportDeclarations(t *testing.T) {
+	_, err := ParseSource("bad_import.euclo", `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import named.euclo.code.explore as explore
+`)
+	if err == nil {
+		t.Fatal("expected malformed import to fail")
+	}
+}
+
+func TestParseSourceRejectsMalformedPromptBindings(t *testing.T) {
+	_, err := ParseSource("bad_bindings.euclo", `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt
+
+ask user:
+  question prompt
+`)
+	if err == nil {
+		t.Fatal("expected malformed prompt binding to fail")
+	}
+}
+
 func TestParseSourceRejectsBadIndentation(t *testing.T) {
 	_, err := ParseSource("bad.euclo", "thoughtrecipe demo\ntrigger as capability:\n    may read workspace\n")
 	if err == nil {

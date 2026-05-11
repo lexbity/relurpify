@@ -10,7 +10,10 @@ import (
 )
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
-type Loader struct{}
+type Loader struct {
+	PromptRegistry PromptRegistryLookup
+	RecipeRegistry ThoughtRecipeRegistryLookup
+}
 
 var ErrYAMLThoughtRecipeLoadingRemoved = errors.New("euclo thoughtrecipe source loading has been removed")
 
@@ -40,6 +43,18 @@ type LoadResult struct {
 // NewLoader creates a new thoughtrecipe loader.
 func NewLoader() *Loader {
 	return &Loader{}
+}
+
+// WithPromptRegistry wires prompt lookup into the loader.
+func (l *Loader) WithPromptRegistry(reg PromptRegistryLookup) *Loader {
+	l.PromptRegistry = reg
+	return l
+}
+
+// WithRecipeRegistry wires thoughtrecipe lookup into the loader.
+func (l *Loader) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Loader {
+	l.RecipeRegistry = reg
+	return l
 }
 
 // LoadFromFile reports that legacy file-based thoughtrecipe loading is no longer supported.
@@ -106,10 +121,7 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 
 	for _, source := range result.Sources {
 		if err := l.loadThoughtRecipeSource(result, source); err != nil {
-			result.Warnings = append(result.Warnings, LoadWarning{
-				Path:    source.Path,
-				Message: err.Error(),
-			})
+			return nil, fmt.Errorf("load thoughtrecipe source %q: %w", source.Path, err)
 		}
 	}
 
@@ -137,6 +149,12 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 		return err
 	}
 	symbols := NewSymbolTable(doc)
+	symbols.WithPromptRegistry(l.PromptRegistry)
+	if l.RecipeRegistry != nil {
+		symbols.WithRecipeRegistry(l.RecipeRegistry)
+	} else if result.Registry != nil {
+		symbols.WithRecipeRegistry(result.Registry)
+	}
 	if err := symbols.Resolve(); err != nil {
 		return err
 	}

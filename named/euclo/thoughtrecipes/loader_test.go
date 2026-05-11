@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 )
 
 func TestThoughtRecipeLoaderRejectsBytes(t *testing.T) {
@@ -206,5 +208,110 @@ trigger as intent:
 		t.Fatal("expected compiled plan for intent thoughtrecipe")
 	} else if plan.RouteKind != TriggerRouteKindIntent {
 		t.Fatalf("compiled plan route kind = %q, want %q", plan.RouteKind, TriggerRouteKindIntent)
+	}
+}
+
+func TestThoughtRecipeLoaderRejectsPromptImportsWithoutPromptRegistry(t *testing.T) {
+	root := t.TempDir()
+	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
+	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+		t.Fatalf("mkdir source root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
+"Prompt import."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as explore
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+`), 0o644); err != nil {
+		t.Fatalf("write prompt import thoughtrecipe: %v", err)
+	}
+
+	result, err := NewLoader().LoadWorkspace(root)
+	if err == nil {
+		t.Fatal("expected prompt import validation error without prompt registry")
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on hard validation failure, got %#v", result)
+	}
+}
+
+func TestThoughtRecipeLoaderValidatesPromptImportsWithPromptRegistry(t *testing.T) {
+	root := t.TempDir()
+	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
+	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+		t.Fatalf("mkdir source root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
+"Prompt import."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as explore
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+`), 0o644); err != nil {
+		t.Fatalf("write prompt import thoughtrecipe: %v", err)
+	}
+
+	loader := NewLoader().WithPromptRegistry(prompttest.New().With("named.euclo.code.explore", "Explore."))
+	result, err := loader.LoadWorkspace(root)
+	if err != nil {
+		t.Fatalf("LoadWorkspace returned error: %v", err)
+	}
+	if got := len(result.Warnings); got != 0 {
+		t.Fatalf("expected no warnings, got %d: %#v", got, result.Warnings)
+	}
+	if got := result.Registry.Count(); got != 1 {
+		t.Fatalf("registry count = %d, want 1", got)
+	}
+}
+
+func TestThoughtRecipeLoaderStopsOnHardImportValidationFailures(t *testing.T) {
+	root := t.TempDir()
+	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
+	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+		t.Fatalf("mkdir source root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "a.euclo"), []byte(`thoughtrecipe valid_recipe
+"Valid."
+
+trigger as capability:
+  may read workspace
+`), 0o644); err != nil {
+		t.Fatalf("write valid thoughtrecipe: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "b.euclo"), []byte(`thoughtrecipe invalid_recipe
+"Invalid."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.missing as explore
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+`), 0o644); err != nil {
+		t.Fatalf("write invalid thoughtrecipe: %v", err)
+	}
+
+	result, err := NewLoader().WithPromptRegistry(prompttest.New().With("named.euclo.code.explore", "Explore.")).LoadWorkspace(root)
+	if err == nil {
+		t.Fatal("expected hard import validation failure")
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on hard failure, got %#v", result)
 	}
 }

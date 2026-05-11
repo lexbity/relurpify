@@ -201,6 +201,24 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	}
 }
 
+func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
+	env := contextdata.NewEnvelope("task-1", "session-1")
+	step := ExecutionStep{
+		ID:       "clarify.step",
+		Paradigm: "euclo",
+		PromptID: "euclo.intent.clarify.question.v1",
+		Step: ThoughtRecipeStep{
+			ID:       "clarify.step",
+			PromptID: "euclo.intent.clarify.question.v1",
+		},
+	}
+	node := NewThoughtRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{}, step)
+
+	if _, err := node.buildTask(env); err == nil {
+		t.Fatal("expected buildTask to fail without a prompt registry")
+	}
+}
+
 func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	env := contextdata.NewEnvelope("task-meta", "session-meta")
 	step := ExecutionStep{

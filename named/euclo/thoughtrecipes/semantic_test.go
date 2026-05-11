@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 )
 
@@ -13,6 +14,7 @@ func TestSymbolTableResolvesValidDocument(t *testing.T) {
 
 trigger as capability:
   may read workspace
+  may ask user
   may write workspace
 
 input workspace: "**/*"
@@ -262,6 +264,209 @@ trigger as capability:
 
 	if err := NewSymbolTable(doc).Resolve(); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
+	}
+}
+
+func TestSymbolTableResolvesPromptAndRecipeImports(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe review_flow
+"Route review prompts."
+
+trigger as capability:
+  may read workspace
+  may ask user
+
+import prompt named.euclo.code.explore as explore
+import prompt named.euclo.intent.clarify.question.v1 as clarify_question
+import recipe named.euclo.review.basic as review_basic
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+
+ask user:
+  question prompt clarify_question
+`)
+
+	prompts := prompttest.New().
+		With("named.euclo.code.explore", "Explore the workspace.").
+		With("named.euclo.intent.clarify.question.v1", "Clarify the request.")
+	recipes := NewThoughtRecipeRegistry()
+	seedRecipe := &ThoughtRecipe{
+		ID:   "named.euclo.review.basic",
+		Name: "named.euclo.review.basic",
+		Metadata: ThoughtRecipeMetadata{
+			Name: "named.euclo.review.basic",
+		},
+	}
+	if _, err := recipes.RegisterCompiledFirstWins(seedRecipe, &ExecutionPlan{ThoughtRecipe: seedRecipe}, "seed.euclo"); err != nil {
+		t.Fatalf("RegisterCompiledFirstWins failed: %v", err)
+	}
+
+	st := NewSymbolTable(doc).
+		WithPromptRegistry(prompts).
+		WithRecipeRegistry(recipes)
+	if err := st.Resolve(); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+}
+
+func TestSymbolTableRejectsUnknownPromptImportTarget(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.missing as explore
+`)
+
+	err := NewSymbolTable(doc).WithPromptRegistry(prompttest.New()).Resolve()
+	if err == nil || !strings.Contains(err.Error(), "unknown prompt import") {
+		t.Fatalf("expected unknown prompt import error, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsUnknownRecipeImportTarget(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import recipe named.euclo.review.missing as review_basic
+`)
+
+	err := NewSymbolTable(doc).WithRecipeRegistry(NewThoughtRecipeRegistry()).Resolve()
+	if err == nil || !strings.Contains(err.Error(), "unknown recipe import") {
+		t.Fatalf("expected unknown recipe import error, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsPromptBindingWithoutPromptRegistry(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as explore
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt explore
+`)
+
+	prompts := prompttest.New().With("named.euclo.code.explore", "Explore.")
+	err := NewSymbolTable(doc).
+		WithPromptRegistry(nil).
+		Resolve()
+	if err == nil || !strings.Contains(err.Error(), "prompt registry is required") {
+		t.Fatalf("expected prompt registry error, got %v", err)
+	}
+
+	// Ensure the positive path still validates with a registry.
+	if err := NewSymbolTable(doc).WithPromptRegistry(prompts).Resolve(); err != nil {
+		t.Fatalf("expected prompt registry validation to succeed, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsPromptBindingToRecipeImport(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import recipe named.euclo.review.basic as review_basic
+
+agent reviewer uses react
+
+run reviewer:
+  goal prompt review_basic
+`)
+
+	recipes := NewThoughtRecipeRegistry()
+	seedRecipe := &ThoughtRecipe{
+		ID:   "named.euclo.review.basic",
+		Name: "named.euclo.review.basic",
+		Metadata: ThoughtRecipeMetadata{
+			Name: "named.euclo.review.basic",
+		},
+	}
+	if _, err := recipes.RegisterCompiledFirstWins(seedRecipe, &ExecutionPlan{ThoughtRecipe: seedRecipe}, "seed.euclo"); err != nil {
+		t.Fatalf("RegisterCompiledFirstWins failed: %v", err)
+	}
+
+	err := NewSymbolTable(doc).
+		WithRecipeRegistry(recipes).
+		Resolve()
+	if err == nil || !strings.Contains(err.Error(), "not a prompt import") {
+		t.Fatalf("expected binding kind error, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsDuplicateImportBindings(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import prompt named.euclo.code.explore as shared
+import recipe named.euclo.review.basic as shared
+`)
+
+	prompts := prompttest.New().With("named.euclo.code.explore", "Explore.")
+	recipes := NewThoughtRecipeRegistry()
+	seedRecipe := &ThoughtRecipe{
+		ID:   "named.euclo.review.basic",
+		Name: "named.euclo.review.basic",
+		Metadata: ThoughtRecipeMetadata{
+			Name: "named.euclo.review.basic",
+		},
+	}
+	if _, err := recipes.RegisterCompiledFirstWins(seedRecipe, &ExecutionPlan{ThoughtRecipe: seedRecipe}, "seed.euclo"); err != nil {
+		t.Fatalf("RegisterCompiledFirstWins failed: %v", err)
+	}
+
+	err := NewSymbolTable(doc).
+		WithPromptRegistry(prompts).
+		WithRecipeRegistry(recipes).
+		Resolve()
+	if err == nil || !strings.Contains(err.Error(), "duplicate declaration") {
+		t.Fatalf("expected duplicate binding error, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsDirectImportCycles(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+import recipe demo as self
+`)
+
+	recipes := NewThoughtRecipeRegistry()
+	seedRecipe := &ThoughtRecipe{
+		ID:   "demo",
+		Name: "demo",
+		Metadata: ThoughtRecipeMetadata{
+			Name: "demo",
+		},
+	}
+	if _, err := recipes.RegisterCompiledFirstWins(seedRecipe, &ExecutionPlan{ThoughtRecipe: seedRecipe}, "seed.euclo"); err != nil {
+		t.Fatalf("RegisterCompiledFirstWins failed: %v", err)
+	}
+
+	err := NewSymbolTable(doc).
+		WithRecipeRegistry(recipes).
+		Resolve()
+	if err == nil || !strings.Contains(err.Error(), "direct import cycle") {
+		t.Fatalf("expected direct import cycle error, got %v", err)
 	}
 }
 

@@ -1,7 +1,9 @@
 package euclo
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"codeburg.org/lexbit/relurpify/agents/promptprovider"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
@@ -51,6 +53,9 @@ func loadEucloThoughtRecipes() (interface{}, error) {
 	result, err := loader.LoadWorkspace(".")
 	if err == nil && result != nil {
 		return result, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 	return &thoughtrecipepkg.LoadResult{
 		Registry: thoughtrecipepkg.NewThoughtRecipeRegistry(),

@@ -81,7 +81,7 @@ func firstTriggerDecl(doc *ThoughtRecipeDocument) *TriggerDecl {
 	return nil
 }
 
-func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, config map[string]any) {
+func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, promptID string, config map[string]any) {
 	var directiveConfigs []map[string]any
 	for _, item := range items {
 		switch node := item.(type) {
@@ -90,6 +90,14 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 				sources = append(sources, raw)
 			}
 		case *GoalClause:
+			if node.PromptID != nil {
+				if ref := strings.TrimSpace(node.PromptID.ResolvedID); ref != "" {
+					promptID = ref
+				} else if ref := strings.TrimSpace(node.PromptID.Name.Value); ref != "" {
+					promptID = ref
+				}
+				continue
+			}
 			if text := strings.TrimSpace(node.Text.Value); text != "" {
 				goals = append(goals, text)
 			}
@@ -129,7 +137,7 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 			})
 		}
 	}
-	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 {
+	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 || strings.TrimSpace(promptID) != "" {
 		config = map[string]any{}
 	}
 	if len(sources) > 0 {
@@ -137,6 +145,9 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	}
 	if len(goals) > 0 {
 		config["goals"] = append([]string(nil), goals...)
+	}
+	if strings.TrimSpace(promptID) != "" {
+		config["prompt_id"] = strings.TrimSpace(promptID)
 	}
 	if len(directives) > 0 {
 		config["directives"] = append([]string(nil), directives...)
@@ -150,14 +161,14 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	if len(config) == 0 {
 		config = nil
 	}
-	return sources, goals, directives, captures, config
+	return sources, goals, directives, captures, promptID, config
 }
 
 func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 	if decl == nil {
 		return ExecutionStep{}, fmt.Errorf("ask declaration is nil")
 	}
-	question, choices, choiceSource, captures, config, err := lowerAskItems(decl.Items)
+	question, choices, choiceSource, captures, promptID, config, err := lowerAskItems(decl.Items)
 	if err != nil {
 		return ExecutionStep{}, err
 	}
@@ -171,28 +182,38 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 		ChoiceSource:    choiceSource,
 		CaptureBindings: captures,
 		Prompt:          question,
+		PromptID:        promptID,
 		Step:            ThoughtRecipeStep{ID: stepID, Type: "ask"},
 	}
 	step.Step.Parent.Paradigm = "euclo"
 	step.Step.Prompt = question
+	step.Step.PromptID = promptID
 	step.Step.Type = "ask"
 	step.Step.Config = config
 	*runIndex = *runIndex + 1
 	return step, nil
 }
 
-func lowerAskItems(items []AskItem) (question string, choices []string, choiceSource string, captures []CaptureBinding, config map[string]any, err error) {
+func lowerAskItems(items []AskItem) (question string, choices []string, choiceSource string, captures []CaptureBinding, promptID string, config map[string]any, err error) {
 	var staticChoices []string
 	for _, item := range items {
 		switch node := item.(type) {
 		case *QuestionClause:
 			if strings.TrimSpace(question) != "" {
-				return "", nil, "", nil, nil, fmt.Errorf("%s:%d:%d: duplicate ask question", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+				return "", nil, "", nil, "", nil, fmt.Errorf("%s:%d:%d: duplicate ask question", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+			}
+			if node.PromptID != nil {
+				if ref := strings.TrimSpace(node.PromptID.ResolvedID); ref != "" {
+					promptID = ref
+				} else if ref := strings.TrimSpace(node.PromptID.Name.Value); ref != "" {
+					promptID = ref
+				}
+				continue
 			}
 			question = strings.TrimSpace(node.Text.Value)
 		case *ChoicesListClause:
 			if len(staticChoices) > 0 || strings.TrimSpace(choiceSource) != "" {
-				return "", nil, "", nil, nil, fmt.Errorf("%s:%d:%d: duplicate ask choices", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+				return "", nil, "", nil, "", nil, fmt.Errorf("%s:%d:%d: duplicate ask choices", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
 			}
 			for _, entry := range node.Items {
 				if choice := strings.TrimSpace(askChoiceText(entry)); choice != "" {
@@ -201,23 +222,26 @@ func lowerAskItems(items []AskItem) (question string, choices []string, choiceSo
 			}
 		case *ChoicesReferenceClause:
 			if len(staticChoices) > 0 || strings.TrimSpace(choiceSource) != "" {
-				return "", nil, "", nil, nil, fmt.Errorf("%s:%d:%d: duplicate ask choices", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+				return "", nil, "", nil, "", nil, fmt.Errorf("%s:%d:%d: duplicate ask choices", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
 			}
 			choiceSource = strings.TrimSpace(valueExprRaw(node.Source))
 		case *CaptureBlock:
 			captures = append(captures, LowerCaptureBindings(node)...)
 		}
 	}
-	if strings.TrimSpace(question) == "" {
-		return "", nil, "", nil, nil, fmt.Errorf("ask user requires a question")
+	if strings.TrimSpace(question) == "" && strings.TrimSpace(promptID) == "" {
+		return "", nil, "", nil, "", nil, fmt.Errorf("ask user requires a question")
 	}
 	if len(staticChoices) > 0 {
 		choices = append([]string(nil), staticChoices...)
 	}
-	if len(captures) > 0 || strings.TrimSpace(question) != "" || len(choices) > 0 || strings.TrimSpace(choiceSource) != "" {
+	if len(captures) > 0 || strings.TrimSpace(question) != "" || len(choices) > 0 || strings.TrimSpace(choiceSource) != "" || strings.TrimSpace(promptID) != "" {
 		config = map[string]any{
 			"question": question,
 		}
+	}
+	if strings.TrimSpace(promptID) != "" {
+		config["prompt_id"] = strings.TrimSpace(promptID)
 	}
 	if len(choices) > 0 {
 		config["choices"] = append([]string(nil), choices...)
@@ -228,7 +252,7 @@ func lowerAskItems(items []AskItem) (question string, choices []string, choiceSo
 	if len(captures) > 0 {
 		config["capture_bindings"] = summarizeCaptureBindings(captures)
 	}
-	return question, choices, choiceSource, captures, config, nil
+	return question, choices, choiceSource, captures, promptID, config, nil
 }
 
 func askChoiceText(expr ValueExpr) string {

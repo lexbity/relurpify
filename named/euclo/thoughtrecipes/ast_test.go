@@ -12,6 +12,12 @@ func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
 			Description: &StringLiteral{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 2, 1, 2, 16)}, Raw: `"Review."`, Value: "Review."},
 		},
 		Declarations: []Declaration{
+			&ImportDecl{
+				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 3, 1, 3, 56)},
+				Kind:       ImportKindPrompt,
+				Target:     PathExpr{Raw: "named.euclo.code.explore", Parts: []Identifier{{Value: "named"}, {Value: "euclo"}, {Value: "code"}, {Value: "explore"}}},
+				Alias:      Identifier{Value: "explore"},
+			},
 			&TriggerDecl{
 				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 4, 1, 6, 1)},
 				Associations: []TriggerAssociationDecl{
@@ -40,7 +46,7 @@ func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
 		t.Fatalf("Header.Description = %q, want %q", got, "Review.")
 	}
 
-	wantTypes := []string{"*thoughtrecipe.TriggerDecl", "*thoughtrecipe.InputDecl", "*thoughtrecipe.AgentDecl"}
+	wantTypes := []string{"*thoughtrecipe.ImportDecl", "*thoughtrecipe.TriggerDecl", "*thoughtrecipe.InputDecl", "*thoughtrecipe.AgentDecl"}
 	for i, decl := range doc.Declarations {
 		if got := typeName(decl); got != wantTypes[i] {
 			t.Fatalf("declaration %d type = %s, want %s", i, got, wantTypes[i])
@@ -50,10 +56,13 @@ func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
 	if got := doc.Header.GetSpan(); got.Start.Line != 1 || got.Start.Column != 1 || got.End.Line != 2 || got.End.Column != 1 {
 		t.Fatalf("header span = %+v, want 1:1-2:1", got)
 	}
-	if got := doc.Declarations[0].GetSpan(); got.Start.Line != 4 || got.End.Line != 6 {
+	if got := doc.Declarations[0].GetSpan(); got.Start.Line != 3 || got.End.Line != 3 {
+		t.Fatalf("import span = %+v, want 3:1-3:56", got)
+	}
+	if got := doc.Declarations[1].GetSpan(); got.Start.Line != 4 || got.End.Line != 6 {
 		t.Fatalf("trigger span = %+v, want 4:1-6:1", got)
 	}
-	if got := doc.Declarations[1].GetSpan(); got.Start.Line != 8 || got.End.Line != 8 {
+	if got := doc.Declarations[2].GetSpan(); got.Start.Line != 8 || got.End.Line != 8 {
 		t.Fatalf("input span = %+v, want 8:1-8:24", got)
 	}
 }
@@ -140,6 +149,67 @@ func TestAstPreservesRawLiteralsAndNestedBlocks(t *testing.T) {
 	}
 }
 
+func TestAstPreservesPromptReferences(t *testing.T) {
+	doc := &ThoughtRecipeDocument{
+		SourcePath: "relurpify_cfg/euclo/code_review.euclo",
+		Name:       "code_review",
+		Declarations: []Declaration{
+			&ImportDecl{
+				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 3, 1, 3, 56)},
+				Kind:       ImportKindPrompt,
+				Target:     PathExpr{Raw: "named.euclo.code.explore", Parts: []Identifier{{Value: "named"}, {Value: "euclo"}, {Value: "code"}, {Value: "explore"}}},
+				Alias:      Identifier{Value: "explore"},
+			},
+			&RunDecl{
+				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 12, 1, 15, 1)},
+				Agent:      Identifier{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 12, 5, 12, 12)}, Value: "reviewer"},
+				Items: []ExecutionItem{
+					&GoalClause{
+						positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 13, 3, 13, 32)},
+						PromptID:   &PromptRef{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 13, 8, 13, 32)}, Name: Identifier{Value: "explore"}},
+					},
+				},
+			},
+			&AskDecl{
+				positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 20, 1, 23, 1)},
+				Items: []AskItem{
+					&QuestionClause{
+						positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 21, 3, 21, 44)},
+						PromptID:   &PromptRef{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 21, 13, 21, 44)}, Name: Identifier{Value: "clarify_question"}},
+					},
+				},
+			},
+		},
+	}
+
+	importDecl := doc.Declarations[0].(*ImportDecl)
+	if got := importDecl.Kind; got != ImportKindPrompt {
+		t.Fatalf("import kind = %q, want %q", got, ImportKindPrompt)
+	}
+	if got := importDecl.Alias.Value; got != "explore" {
+		t.Fatalf("import alias = %q, want %q", got, "explore")
+	}
+	if got := importDecl.Target.Raw; got != "named.euclo.code.explore" {
+		t.Fatalf("import target raw = %q, want %q", got, "named.euclo.code.explore")
+	}
+
+	run := doc.Declarations[1].(*RunDecl)
+	if got := run.Items[0].(*GoalClause).PromptID.Name.Value; got != "explore" {
+		t.Fatalf("goal prompt binding = %q, want %q", got, "explore")
+	}
+	if got := run.Items[0].(*GoalClause).Text.Value; got != "" {
+		t.Fatalf("goal inline text = %q, want empty", got)
+	}
+
+	ask := doc.Declarations[2].(*AskDecl)
+	if got := ask.Items[0].(*QuestionClause).PromptID.Name.Value; got != "clarify_question" {
+		t.Fatalf("question prompt binding = %q, want %q", got, "clarify_question")
+	}
+	if got := ask.Items[0].(*QuestionClause).Text.Value; got != "" {
+		t.Fatalf("question inline text = %q, want empty", got)
+	}
+}
+
 func typeName(v any) string {
 	switch v.(type) {
 	case *TriggerDecl:
@@ -148,6 +218,8 @@ func typeName(v any) string {
 		return "*thoughtrecipe.InputDecl"
 	case *TypeDecl:
 		return "*thoughtrecipe.TypeDecl"
+	case *ImportDecl:
+		return "*thoughtrecipe.ImportDecl"
 	case *AgentDecl:
 		return "*thoughtrecipe.AgentDecl"
 	case *RunDecl:
