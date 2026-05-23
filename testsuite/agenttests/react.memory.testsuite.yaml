@@ -25,7 +25,7 @@ spec:
     - relurpify_cfg/test_runs/**
     - relurpify_cfg/memory/**
   models:
-  - name: qwen2.5-coder:14b
+  - name: gemma4:e4b
     endpoint: http://localhost:11434
   cases:
   - name: recalls_seeded_runtime_memory

@@ -384,7 +384,7 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 				return fmt.Errorf("inference backend construction failed for preflight: %w", err)
 			}
 			// Preflight using provider-agnostic approach with timeout
-			preflightTimeout := 30 * time.Second
+			preflightTimeout := 180 * time.Second
 			if opts.Timeout > 0 && opts.Timeout < preflightTimeout {
 				preflightTimeout = opts.Timeout / 2
 			}

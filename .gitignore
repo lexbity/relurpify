@@ -1,8 +1,11 @@
+.codex/
+.agents/
 .gocache/
 .claude/
 .github/
 .gomodcache/
 .memory/
+.windsurf/
 .relurpify/
 testdata/
 relurpify/

@@ -27,7 +27,7 @@ spec:
     endpoint: http://localhost:1234
     reset_strategy: none
   models:
-  - name: qwen2.5-coder:14b
+  - name: gemma4:e4b
   recording:
     mode: 'off'
   cases:

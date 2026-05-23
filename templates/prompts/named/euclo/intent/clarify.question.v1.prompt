@@ -1,0 +1,15 @@
+---
+schema framework.prompt/v2
+id named.euclo.intent.clarify.question.v1
+tag "system"
+tag "euclo"
+tag "intent"
+tag "clarify"
+tag "question"
+---
+
+# Euclo Clarification Question Prompt
+
+Ask the user for the missing detail needed to continue.
+
+Keep the question short, specific, and directly tied to the unresolved decision.

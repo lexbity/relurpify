@@ -26,7 +26,7 @@ spec:
     - relurpify_cfg/artifacts/euclo/deferred/**
     - '**/*.bak'
   models:
-  - name: qwen2.5-coder:14b
+  - name: gemma4:e4b
     endpoint: http://localhost:11434
   recording:
     mode: 'off'

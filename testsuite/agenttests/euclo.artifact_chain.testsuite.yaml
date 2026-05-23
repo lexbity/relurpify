@@ -21,7 +21,7 @@ spec:
     - .gomodcache/**
     - relurpify_cfg/test_runs/**
   models:
-  - name: qwen2.5-coder:14b
+  - name: gemma4:e4b
     endpoint: http://localhost:11434
   recording:
     mode: 'off'

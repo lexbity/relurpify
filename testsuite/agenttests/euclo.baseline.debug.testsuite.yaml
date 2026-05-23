@@ -25,7 +25,7 @@ spec:
     - relurpify_cfg/logs/skills.log
     - relurpify_cfg/artifacts/euclo/deferred/**
   models:
-  - name: qwen2.5-coder:14b
+  - name: gemma4:e4b
     endpoint: http://localhost:11434
   recording:
     mode: 'off'
@@ -75,7 +75,7 @@ spec:
             supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.localization
-            recipe_ids:
+            thoughtrecipe_ids:
             - debug.investigate-repair.reproduce
   - name: debug_simple_repair_baseline
     description: Baseline validation of euclo:debug.repair.simple in isolation.
@@ -116,7 +116,7 @@ spec:
           euclo:
             behavior_family: stale_assumption_detection
             primary_relurpic_capability: euclo:debug.repair.simple
-            recipe_ids:
+            thoughtrecipe_ids:
             - debug.repair-simple.read
             - debug.repair-simple.edit
   - name: debug_investigate_flaw_surface_baseline
@@ -170,7 +170,7 @@ spec:
             supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.flaw-surface
-            recipe_ids:
+            thoughtrecipe_ids:
             - debug.investigate-repair.reproduce
   - name: debug_verification_repair_baseline
     description: Debug repair should fix the implementation and verify the result.
@@ -220,5 +220,5 @@ spec:
             supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.verification-repair
-            recipe_ids:
+            thoughtrecipe_ids:
             - debug.investigate-repair.reproduce
