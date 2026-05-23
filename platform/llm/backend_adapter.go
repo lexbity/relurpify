@@ -137,4 +137,12 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 	}
 }
 
+func (a managedBackendAdapter) Pull(ctx context.Context, model string) error {
+	if a.inner == nil {
+		return nil
+	}
+	return a.inner.Pull(ctx, model)
+}
+
 var _ ManagedBackend = managedBackendAdapter{}
+var _ PullableBackend = managedBackendAdapter{}

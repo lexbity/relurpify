@@ -36,6 +36,12 @@ type ManagedBackend interface {
 	Reset(ctx context.Context, strategy string) error
 }
 
+// PullableBackend is an optional extension for ManagedBackend implementations
+// that support pulling/downloading models from a remote registry on-demand.
+type PullableBackend interface {
+	Pull(ctx context.Context, model string) error
+}
+
 // BackendHealthState classifies backend availability and recovery status.
 type BackendHealthState string
 

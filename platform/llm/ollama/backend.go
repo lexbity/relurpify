@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -173,11 +174,55 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return out, nil
 }
 
-// Warm performs a reachability check against the Ollama backend.
+// Warm performs a reachability check and forces Ollama to load the model into VRAM.
 func (b *Backend) Warm(ctx context.Context) error {
 	_, err := b.ListModels(ctx)
+	if err != nil {
+		return err
+	}
 	_, _ = b.ModelContextSize(ctx)
-	return err
+	
+	// Force the model to load in memory by executing an empty generation request
+	_, _ = b.Model().Generate(ctx, "", nil)
+	return nil
+}
+
+// Pull requests Ollama to download/pull a model from the remote registry.
+func (b *Backend) Pull(ctx context.Context, model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return fmt.Errorf("model name is empty")
+	}
+	body, err := json.Marshal(map[string]any{
+		"name":   model,
+		"stream": false,
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.client.ollamaAPIEndpoint()+"/api/pull", strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Use a dedicated client with no timeout so it is bounded only by the context.
+	pullClient := &http.Client{
+		Transport: b.client.getHTTPClient().Transport,
+	}
+	resp, err := pullClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(msg))
+		if detail != "" {
+			return fmt.Errorf("ollama pull error %s: %s", resp.Status, detail)
+		}
+		return fmt.Errorf("ollama pull error: %s", resp.Status)
+	}
+	return nil
 }
 
 // Close drains idle connections when the underlying transport supports it.
