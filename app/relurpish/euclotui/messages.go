@@ -3,7 +3,51 @@ package euclotui
 import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 )
+
+// SurfaceFrameMsg is re-exported for Euclo-specific event plumbing helpers.
+type SurfaceFrameMsg = tui.SurfaceFrameMsg
+
+// PatchHunk describes one causal code change attached to an execution event.
+type PatchHunk struct {
+	File        string
+	Summary     string
+	Body        string
+	StepID      string
+	Origin      string
+	LinesAdded  int
+	LinesRemoved int
+}
+
+// ExecutionEvent is the normalized event envelope used by the Euclo router.
+type ExecutionEvent struct {
+	Header     reporting.EventHeader
+	Type       reporting.EventType
+	TaskID     string
+	SessionID  string
+	NodeID     string
+	RecipeID   string
+	StepID     string
+	Surface    string
+	Summary    string
+	Milestone  string
+	Output     string
+	RouteScores map[string]float64
+	PatchHunks []PatchHunk
+	Frame      *interaction.InteractionFrame
+	Payload    map[string]any
+}
+
+// RecipeRunMsg groups execution events under one recipe run identifier.
+type RecipeRunMsg struct {
+	RunID    string
+	RecipeID string
+	TaskID   string
+	Events   []ExecutionEvent
+	Complete bool
+	Outcome  string
+}
 
 // NewFrameMsg packages an interaction frame into the generic surface message
 // format used by the relurpish host.

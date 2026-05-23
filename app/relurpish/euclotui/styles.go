@@ -39,12 +39,17 @@ var (
 	diffRemoveStyle = lipgloss.NewStyle().
 			Foreground(colorError)
 
+	diffAddStyle = lipgloss.NewStyle().
+			Foreground(colorSuccess)
+
 	pendingStyle = lipgloss.NewStyle().
 			Foreground(colorDim)
 
 	panelItemActiveStyle = lipgloss.NewStyle().
 				Foreground(colorPrimary).
 				Bold(true)
+
+	panelItemStyle = lipgloss.NewStyle()
 
 	// Euclo-specific styles.
 	eucloFrameStyle = lipgloss.NewStyle().

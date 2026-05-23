@@ -3,12 +3,14 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	colorPrimary   = lipgloss.Color("39")
-	colorSecondary = lipgloss.Color("86")
-	colorSuccess   = lipgloss.Color("42")
-	colorWarning   = lipgloss.Color("220")
-	colorError     = lipgloss.Color("196")
-	colorDim       = lipgloss.Color("241")
+	colorBackground = lipgloss.AdaptiveColor{Light: "#f4f4f5", Dark: "#1f1f23"}
+	colorSurface    = lipgloss.AdaptiveColor{Light: "#d8d8dd", Dark: "#2b2f36"}
+	colorPrimary    = lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"}
+	colorSecondary  = lipgloss.AdaptiveColor{Light: "#4f6d7a", Dark: "#8ad6c2"}
+	colorSuccess    = lipgloss.AdaptiveColor{Light: "#2f7d32", Dark: "#87d75f"}
+	colorWarning    = lipgloss.AdaptiveColor{Light: "#9a5f00", Dark: "#ffd75f"}
+	colorError      = lipgloss.AdaptiveColor{Light: "#b00020", Dark: "#ff8787"}
+	colorDim        = lipgloss.AdaptiveColor{Light: "#62666d", Dark: "#8d94a1"}
 
 	messageBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -61,13 +63,8 @@ var (
 
 	diffContextStyle = lipgloss.NewStyle()
 
-	statusStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("235")).
-			Foreground(lipgloss.Color("255")).
-			Padding(0, 1)
-
 	promptBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("237")).
+			Background(colorSurface).
 			Padding(0, 1)
 
 	buttonStyle = lipgloss.NewStyle().
@@ -95,24 +92,29 @@ var (
 	panelItemActiveStyle = lipgloss.NewStyle().
 				Foreground(colorPrimary).
 				Bold(true)
+
+	agentStripStyle = lipgloss.NewStyle().
+			Background(colorSurface).
+			Foreground(colorSecondary).
+			Bold(true).
+			Padding(0, 1)
+
+	agentStripActiveStyle = lipgloss.NewStyle().
+				Background(colorPrimary).
+				Foreground(colorBackground).
+				Bold(true).
+				Padding(0, 1)
 )
 
 var (
-	// New styles for rewritten components
-
-	titleBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Foreground(lipgloss.Color("255")).
-			Padding(0, 1)
-
 	tabBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("234")).
+			Background(colorSurface).
 			Padding(0, 1)
 
 	tabActiveStyle = lipgloss.NewStyle().
 			Foreground(colorPrimary).
 			Bold(true).
-			Background(lipgloss.Color("236")).
+			Background(colorBackground).
 			Padding(0, 1)
 
 	tabInactiveStyle = lipgloss.NewStyle().
@@ -120,28 +122,40 @@ var (
 				Padding(0, 1)
 
 	notifInfoStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("18")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorPrimary).
+			Foreground(colorBackground).
 			Padding(0, 1)
 
 	notifHITLStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("202")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorWarning).
+			Foreground(colorBackground).
 			Bold(true).
 			Padding(0, 1)
 
 	notifSuccessStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("28")).
-				Foreground(lipgloss.Color("255")).
+				Background(colorSuccess).
+				Foreground(colorBackground).
 				Padding(0, 1)
 
 	notifErrorStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("124")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorError).
+			Foreground(colorBackground).
 			Padding(0, 1)
 
 	inputBarNewStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("236")).
+				Background(colorSurface).
+				Padding(0, 1)
+
+	inputBarFocusedStyle = lipgloss.NewStyle().
+				Background(colorBackground).
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorPrimary).
+				Padding(0, 1)
+
+	inputBarBlurredStyle = lipgloss.NewStyle().
+				Background(colorSurface).
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorDim).
 				Padding(0, 1)
 
 	inputPrefixStyle = lipgloss.NewStyle().
@@ -161,23 +175,23 @@ var (
 
 	helpOverlayStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62")).
+				BorderForeground(colorSecondary).
 				Padding(1, 2).
-				Background(lipgloss.Color("236"))
+				Background(colorBackground)
 
 	// Subtab bar styles (layout.go SubTabBar).
 	subtabBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("235")).
+			Background(colorSurface).
 			Padding(0, 1)
 
 	subtabBarEmptyStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("235")).
+				Background(colorSurface).
 				Height(1)
 
 	subtabActiveStyle = lipgloss.NewStyle().
 				Foreground(colorSecondary).
 				Bold(true).
-				Background(lipgloss.Color("237")).
+				Background(colorBackground).
 				Padding(0, 1)
 
 	subtabInactiveStyle = lipgloss.NewStyle().

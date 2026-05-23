@@ -32,8 +32,12 @@ type DoctorReport struct {
 	WorkspacePresent      bool
 	ConfigExists          bool
 	ManifestExists        bool
+	ModelProfilesExists   bool
+	StarterTemplatesReady  bool
 	ConfigError           string
 	ManifestError         string
+	ModelProfilesError    string
+	StarterTemplatesError string
 	ManifestWarnings      []string
 	DeprecationNotices    []string
 	ProtectedPaths        []string
@@ -48,7 +52,7 @@ func (r DoctorReport) HasBlockingIssues() bool {
 	if !r.ConfigExists || !r.ManifestExists {
 		return true
 	}
-	if r.ConfigError != "" || r.ManifestError != "" {
+	if r.ConfigError != "" || r.ManifestError != "" || r.ModelProfilesError != "" || r.StarterTemplatesError != "" {
 		return true
 	}
 	for _, dep := range r.Dependencies {
@@ -61,6 +65,11 @@ func (r DoctorReport) HasBlockingIssues() bool {
 
 func (r DoctorReport) NeedsInitialization() bool {
 	return !r.WorkspacePresent || !r.ConfigExists || !r.ManifestExists
+}
+
+// Ready reports whether the workspace can start without landing in the Doctor tab.
+func (r DoctorReport) Ready() bool {
+	return !r.HasBlockingIssues()
 }
 
 // BuildDoctorReport checks workspace state and local runtime dependencies
@@ -81,6 +90,12 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 			report.ConfigError = err.Error()
 		} else if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
 			cfg.SandboxBackend = loaded.SandboxBackend
+			if loaded.Provider != "" && cfg.InferenceProvider == "" {
+				cfg.InferenceProvider = loaded.Provider
+			}
+			if loaded.Model != "" && cfg.InferenceModel == "" {
+				cfg.InferenceModel = loaded.Model
+			}
 		}
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
@@ -98,6 +113,19 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 	report.ProtectedPaths = manifest.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath)
 
+	resolver := templates.NewResolver()
+	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
+		if starterManifest, err := resolver.ResolveWorkspaceManifestTemplate(); err == nil {
+			report.StarterTemplatesReady = true
+			_ = starterConfig
+			_ = starterManifest
+		} else {
+			report.StarterTemplatesError = err.Error()
+		}
+	} else {
+		report.StarterTemplatesError = err.Error()
+	}
+
 	var env EnvironmentReport
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
 	if err != nil {
@@ -111,6 +139,16 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		env = ProbeEnvironment(ctx, cfg, backend)
 	}
 	report.Inference = env.Inference
+	if reg, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
+		if resolution.SourcePath != "" {
+			report.ModelProfilesExists = true
+		} else {
+			report.ModelProfilesError = "no workspace model profile matched the selected model"
+		}
+	} else {
+		report.ModelProfilesError = err.Error()
+	}
 	// Convert ayenitd probe results
 	// Map available Config fields to ayenitd.WorkspaceConfig.
 	// Some fields may be missing in Config; use zero values.
@@ -145,6 +183,20 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 			Details:   r.Message,
 		})
 	}
+	deps = append(deps, DependencyStatus{
+		Name:      "starter-templates",
+		Required:  true,
+		Available: report.StarterTemplatesReady,
+		Blocking:  report.StarterTemplatesError != "",
+		Details:   firstNonEmpty(report.StarterTemplatesError, "workspace template archive available"),
+	})
+	deps = append(deps, DependencyStatus{
+		Name:      "model-profile",
+		Required:  true,
+		Available: report.ModelProfilesExists,
+		Blocking:  report.ModelProfilesError != "",
+		Details:   firstNonEmpty(report.ModelProfilesError, report.Inference.SelectedProfile, "workspace profile available"),
+	})
 	// Keep existing sandbox and chromium checks
 	deps = append(deps, DependencyStatus{
 		Name:      "runsc",

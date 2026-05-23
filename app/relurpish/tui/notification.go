@@ -304,6 +304,79 @@ func renderGenericNotification(item NotificationItem) string {
 	return rendered
 }
 
+// PromptOverlay returns a modal overlay for notifications that require
+// explicit confirmation rather than a banner-only acknowledgement.
+func (nb *NotificationBar) PromptOverlay() (Overlay, bool) {
+	if nb == nil || nb.queue == nil {
+		return nil, false
+	}
+	current, ok := nb.queue.Current()
+	if !ok {
+		return nil, false
+	}
+	switch current.Kind {
+	case NotifKindRestore, NotifKindDeferred:
+		return &notificationPromptOverlay{queue: nb.queue, item: current}, true
+	default:
+		return nil, false
+	}
+}
+
+type notificationPromptOverlay struct {
+	queue *NotificationQueue
+	item  NotificationItem
+}
+
+func (o *notificationPromptOverlay) Render(width, height int) string {
+	if o == nil {
+		return ""
+	}
+	_ = height
+	title := "Notification"
+	if o.item.Kind == NotifKindRestore {
+		title = "Restore Session"
+	} else if o.item.Kind == NotifKindDeferred {
+		title = "Deferred Review"
+	}
+	lines := []string{
+		panelHeaderStyle.Render(title),
+		o.item.Msg,
+	}
+	switch o.item.Kind {
+	case NotifKindRestore:
+		lines = append(lines, dimStyle.Render("[enter] restore  [d] dismiss"))
+	case NotifKindDeferred:
+		lines = append(lines, dimStyle.Render("[enter] review  [d] dismiss"))
+	}
+	w := width
+	if w < 1 {
+		w = 1
+	}
+	return panelStyle.Width(w).Render(strings.Join(lines, "\n"))
+}
+
+func (o *notificationPromptOverlay) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if o == nil || o.queue == nil {
+		return nil, false
+	}
+	switch msg.String() {
+	case "enter":
+		id := o.item.ID
+		o.queue.Resolve(id)
+		switch o.item.Kind {
+		case NotifKindRestore:
+			return func() tea.Msg { return NotifRestoreSessionMsg{ID: id} }, true
+		case NotifKindDeferred:
+			return func() tea.Msg { return NotifReviewDeferredMsg{} }, true
+		}
+	case "d", "esc":
+		id := o.item.ID
+		o.queue.Resolve(id)
+		return func() tea.Msg { return NotifDismissMsg{ID: id} }, true
+	}
+	return nil, false
+}
+
 func renderApprovalNotification(item NotificationItem) string {
 	parts := []string{item.Msg}
 	if kind := item.Extra["kind"]; kind != "" {

@@ -291,6 +291,9 @@ func (p *GuidancePanel) View() string {
 	if w == 0 {
 		w = 80
 	}
+	if w < 2 {
+		w = 2
+	}
 	return guidancePanelStyle.Width(w - 2).Render(inner)
 }
 
@@ -299,18 +302,18 @@ func guidanceKindStyle(k GuidanceTriggerKind) lipgloss.Style {
 	switch k {
 	case GuidanceTriggerAmbiguity:
 		return lipgloss.NewStyle().
-			Background(lipgloss.Color("202")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorWarning).
+			Foreground(colorBackground).
 			Padding(0, 1)
 	case GuidanceTriggerDeferred:
 		return lipgloss.NewStyle().
-			Background(lipgloss.Color("18")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorPrimary).
+			Foreground(colorBackground).
 			Padding(0, 1)
 	case GuidanceTriggerLearning:
 		return lipgloss.NewStyle().
-			Background(lipgloss.Color("22")).
-			Foreground(lipgloss.Color("255")).
+			Background(colorSuccess).
+			Foreground(colorBackground).
 			Padding(0, 1)
 	default:
 		return dimStyle
@@ -324,4 +327,24 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen-1]) + "…"
+}
+
+// Render satisfies the host overlay interface.
+func (p *GuidancePanel) Render(width, height int) string {
+	if p == nil || !p.open {
+		return ""
+	}
+	p.SetWidth(width)
+	_ = height
+	return p.View()
+}
+
+// HandleKey routes key events through the guidance panel overlay.
+func (p *GuidancePanel) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if p == nil || !p.open {
+		return nil, false
+	}
+	updated, cmd := p.Update(msg)
+	*p = updated
+	return cmd, true
 }

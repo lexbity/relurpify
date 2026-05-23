@@ -2,15 +2,60 @@ package runtime
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
+	current := Config{
+		Workspace:         "/old/workspace",
+		AgentName:         "euclo",
+		InferenceProvider: "ollama",
+		InferenceEndpoint: "http://localhost:11434",
+		InferenceModel:    "codex",
+		InferenceAPIKey:   "secret",
+		SandboxBackend:    "docker",
+		RecordingMode:     "on",
+		ManifestPath:      "/old/workspace/manifest.yaml",
+		AgentsDir:         "/old/workspace/relurpify_cfg/agents",
+		MemoryPath:        "/old/workspace/relurpify_cfg/memory",
+		LogPath:           "/old/workspace/relurpify_cfg/logs/relurpish.log",
+		TelemetryPath:     "/old/workspace/relurpify_cfg/telemetry",
+		EventsPath:        "/old/workspace/relurpify_cfg/events.jsonl",
+		ConfigPath:        "/old/workspace/relurpify_cfg/config.yaml",
+	}
+
+	cfg := ConfigForWorkspace(current, "/new/workspace")
+	if cfg.Workspace != "/new/workspace" {
+		t.Fatalf("workspace = %q, want /new/workspace", cfg.Workspace)
+	}
+	if cfg.AgentName != current.AgentName {
+		t.Fatalf("agent name = %q, want %q", cfg.AgentName, current.AgentName)
+	}
+	if cfg.InferenceModel != current.InferenceModel || cfg.SandboxBackend != current.SandboxBackend {
+		t.Fatalf("config fields were not preserved: %#v", cfg)
+	}
+	if cfg.ConfigPath == current.ConfigPath || cfg.ManifestPath == current.ManifestPath {
+		t.Fatalf("workspace paths were not rebound: %#v", cfg)
+	}
+	if want := "/new/workspace/relurpify_cfg/config.yaml"; cfg.ConfigPath != want {
+		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, want)
+	}
+	if want := "/new/workspace/relurpify_cfg/agent.yaml"; cfg.ManifestPath != want {
+		t.Fatalf("manifest path = %q, want %q", cfg.ManifestPath, want)
+	}
+}
 
 type recordingExecutor struct {
 	mu        sync.Mutex
@@ -99,5 +144,54 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	}
 	if got, ok := env.GetWorkingValue("euclo.interaction.frame_requested"); !ok || got != false {
 		t.Fatalf("frame_requested = %#v ok=%v, want false", got, ok)
+	}
+}
+
+func TestSaveAgentManifestWithBackup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	seed := &manifest.AgentManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentManifest",
+		Metadata: manifest.ManifestMetadata{
+			Name:    "coding",
+			Version: "1.0.0",
+		},
+		Spec: manifest.ManifestSpec{
+			Image:   "ghcr.io/example/runtime:latest",
+			Runtime: "gvisor",
+			Permissions: contracts.PermissionSet{
+				FileSystem: []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "/workspace/**"}},
+			},
+		},
+	}
+	if err := manifest.SaveAgentManifest(path, seed); err != nil {
+		t.Fatalf("seed manifest: %v", err)
+	}
+	updated, err := manifest.CloneAgentManifest(seed)
+	if err != nil {
+		t.Fatalf("clone manifest: %v", err)
+	}
+	updated.Metadata.Description = "updated"
+
+	backup, err := SaveAgentManifestWithBackup(path, updated)
+	if err != nil {
+		t.Fatalf("save with backup: %v", err)
+	}
+	if backup == "" {
+		t.Fatal("expected backup path")
+	}
+	if _, err := os.Stat(backup); err != nil {
+		t.Fatalf("backup missing: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if string(data) == "" || !strings.Contains(string(data), "updated") {
+		t.Fatalf("manifest not updated after save: %s", string(data))
 	}
 }

@@ -409,3 +409,98 @@ func renderFramePayload(payload map[string]any) string {
 	}
 	return b.String()
 }
+
+// RenderChatProjection renders the human-sized milestone feed for the chat
+// surface.
+func RenderChatProjection(p ChatProjection) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Chat Projection") + "\n")
+	if len(p.Milestones) == 0 && len(p.Outputs) == 0 && len(p.Frames) == 0 {
+		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+	}
+	for _, line := range p.Milestones {
+		b.WriteString("  " + headerStyle.Render("●") + " " + line + "\n")
+	}
+	for _, line := range p.Outputs {
+		b.WriteString("  " + dimStyle.Render("LLM") + " " + line + "\n")
+	}
+	for _, frame := range p.Frames {
+		b.WriteString("  " + dimStyle.Render("frame") + " " + frameLabel(frame) + "\n")
+	}
+	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+}
+
+// RenderGraphProjection renders the active Euclo execution DAG.
+func RenderGraphProjection(p GraphProjection) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Graph Projection") + "\n")
+	if len(p.Order) == 0 {
+		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+	}
+	for _, id := range p.Order {
+		node := p.Nodes[id]
+		if node == nil {
+			continue
+		}
+		label := node.Label
+		if label == "" {
+			label = node.ID
+		}
+		status := node.Status
+		if status == "" {
+			status = "pending"
+		}
+		icon := "○"
+		switch status {
+		case "completed":
+			icon = "●"
+		case "running":
+			icon = "◐"
+		case "failed":
+			icon = "✗"
+		}
+		line := fmt.Sprintf("  %s %s", icon, label)
+		if node.ID == p.ActiveNode {
+			line += " " + dimStyle.Render("<active>")
+		}
+		b.WriteString(line + "\n")
+		if len(node.RouteScores) > 0 {
+			for _, key := range sortedScoreKeys(node.RouteScores) {
+				b.WriteString(fmt.Sprintf("    %s %0.2f\n", dimStyle.Render(key+":"), node.RouteScores[key]))
+			}
+		}
+	}
+	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+}
+
+// RenderLibraryProjection renders historical recipe statistics.
+func RenderLibraryProjection(p LibraryProjection) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Library Projection") + "\n")
+	if len(p.Recipes) == 0 && len(p.Tags) == 0 {
+		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+	}
+	if len(p.Recipes) > 0 {
+		b.WriteString(dimStyle.Render("recipes") + "\n")
+		keys := make([]string, 0, len(p.Recipes))
+		for k := range p.Recipes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString(fmt.Sprintf("  %s %d\n", k, p.Recipes[k]))
+		}
+	}
+	if len(p.Tags) > 0 {
+		b.WriteString(dimStyle.Render("tags") + "\n")
+		keys := make([]string, 0, len(p.Tags))
+		for k := range p.Tags {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString(fmt.Sprintf("  %s %d\n", k, p.Tags[k]))
+		}
+	}
+	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+}

@@ -33,11 +33,21 @@ func estimateTokens(content string) int {
 	return max(1, len(content)/4)
 }
 
+// EstimateTokens is the exported wrapper for euclotui callers.
+func EstimateTokens(content string) int {
+	return estimateTokens(content)
+}
+
 func estimateTokensFromBytes(size int64) int {
 	if size <= 0 {
 		return 0
 	}
 	return max(1, int(size)/4)
+}
+
+// EstimateTokensFromBytes is the exported wrapper for euclotui callers.
+func EstimateTokensFromBytes(size int64) int {
+	return estimateTokensFromBytes(size)
 }
 
 func formatBytes(n int64) string {
@@ -58,6 +68,38 @@ func formatSizeToken(size int64, tokens int) string {
 		tokens = estimateTokensFromBytes(size)
 	}
 	return fmt.Sprintf("%s | ~%d tok", formatBytes(size), tokens)
+}
+
+// FormatSizeToken is the exported wrapper for euclotui callers.
+func FormatSizeToken(size int64, tokens int) string {
+	return formatSizeToken(size, tokens)
+}
+
+func renderPercentBar(progress float64, width int) string {
+	if width <= 0 {
+		width = 12
+	}
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 1 {
+		progress = 1
+	}
+	filled := int(progress*float64(width) + 0.5)
+	if filled > width {
+		filled = width
+	}
+	var b strings.Builder
+	b.WriteByte('[')
+	for i := 0; i < width; i++ {
+		if i < filled {
+			b.WriteByte('#')
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // formatAge returns a human-readable duration since t (e.g. "2h ago").

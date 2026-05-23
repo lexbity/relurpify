@@ -18,11 +18,15 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 const contextFileMaxBytes = 8000
+
+// DoctorReport is the runtime readiness report surfaced in the base shell.
+type DoctorReport = runtimesvc.DoctorReport
 
 // ToolInfo describes a registered local tool and its current policy for the config pane.
 type ToolInfo struct {
@@ -73,6 +77,14 @@ type RuntimeAdapter interface {
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
+	// LoadSandboxManifest returns a mutable clone of the current workspace manifest.
+	LoadSandboxManifest() (*manifest.AgentManifest, error)
+	// SaveSandboxManifest persists a sandbox manifest clone with backup.
+	SaveSandboxManifest(m *manifest.AgentManifest) (string, error)
+	// SandboxBackend returns the active sandbox backend name.
+	SandboxBackend() string
+	// SaveSandboxBackend persists the active sandbox backend in workspace config.
+	SaveSandboxBackend(backend string) (string, error)
 	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
 	// ListCapabilities returns all registered capabilities with runtime-family metadata.
@@ -109,6 +121,14 @@ type RuntimeAdapter interface {
 	// Diagnostics returns a snapshot of runtime resource and agent state for
 	// display in the session live subtab.
 	Diagnostics() DiagnosticsInfo
+	// BuildDoctorReport computes the workspace readiness report used by the
+	// base-framework Doctor tab.
+	BuildDoctorReport(ctx context.Context) DoctorReport
+	// ReloadWorkspace rebuilds the runtime against a different workspace root.
+	ReloadWorkspace(ctx context.Context, workspace string) error
+	// InitializeWorkspaceFromTemplates materializes the bundled relurpify_cfg
+	// tree into the active workspace.
+	InitializeWorkspaceFromTemplates(overwrite bool) error
 	// ApplyChatPolicy hints to the runtime that the user has switched to a
 	// chat subtab with a specific execution policy. Implementations may update
 	// the agent mode, tool enablement, or context strategy accordingly.
@@ -389,25 +409,38 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	cfgPath := r.rt.Config.ConfigPath
-	if cfgPath == "" {
-		return fmt.Errorf("config path not set")
+	workspace := strings.TrimSpace(r.rt.Config.Workspace)
+	if workspace == "" {
+		return fmt.Errorf("workspace not set")
 	}
-	wsCfg, err := runtimesvc.LoadWorkspaceConfig(cfgPath)
+	path := manifest.New(workspace).ProvidersFile()
+	profile, err := runtimesvc.LoadProviderConfig(path)
 	if err != nil {
-		wsCfg = runtimesvc.WorkspaceConfig{}
+		profile = runtimesvc.ProviderConfig{}
 	}
-	provider := strings.TrimSpace(r.rt.Config.InferenceProvider)
-	if provider == "" {
-		provider = strings.TrimSpace(r.SessionInfo().Provider)
+	if profile.Provider == "" {
+		profile.Provider = strings.TrimSpace(r.rt.Config.InferenceProvider)
 	}
-	wsCfg.Provider = provider
-	wsCfg.Model = model
-	if backend := strings.TrimSpace(r.rt.Config.SandboxBackend); backend != "" {
-		wsCfg.SandboxBackend = backend
+	if profile.Provider == "" {
+		profile.Provider = strings.TrimSpace(r.SessionInfo().Provider)
 	}
-	wsCfg.LastUpdated = time.Now().Unix()
-	return runtimesvc.SaveWorkspaceConfig(cfgPath, wsCfg)
+	profile.Endpoint = strings.TrimSpace(r.rt.Config.InferenceEndpoint)
+	profile.Model = strings.TrimSpace(model)
+	profile.NativeToolCalling = r.rt.Config.InferenceNativeToolCalling
+	if profile.Timeout == "" {
+		profile.Timeout = "30s"
+	}
+	profile.LastUpdated = time.Now().Unix()
+	if _, err := runtimesvc.SaveProviderConfigWithBackup(path, profile); err != nil {
+		return err
+	}
+	r.rt.Config.InferenceProvider = profile.Provider
+	r.rt.Config.InferenceEndpoint = profile.Endpoint
+	r.rt.Config.InferenceModel = model
+	r.rt.Config.InferenceNativeToolCalling = profile.NativeToolCalling
+	r.rt.WorkspaceConfig.Provider = profile.Provider
+	r.rt.WorkspaceConfig.Model = model
+	return nil
 }
 
 func (r *runtimeAdapter) ListWorkflows(limit int) ([]WorkflowInfo, error) {
@@ -490,13 +523,85 @@ func (r *runtimeAdapter) ListCapabilities() []CapabilityInfo {
 	return out
 }
 
+func (r *runtimeAdapter) PromptRegistry() prompt.Registry {
+	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil {
+		return nil
+	}
+	return r.rt.AgentWorkspace().Environment.PromptRegistry
+}
+
 func (r *runtimeAdapter) ListPrompts() []PromptInfo {
-	return nil
+	reg := r.PromptRegistry()
+	if reg == nil {
+		return nil
+	}
+	cfgs := reg.All()
+	out := make([]PromptInfo, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		if cfg == nil {
+			continue
+		}
+		vars := make([]string, 0, len(cfg.Variables))
+		for name := range cfg.Variables {
+			vars = append(vars, name)
+		}
+		sort.Strings(vars)
+		out = append(out, PromptInfo{
+			Meta: InspectableMeta{
+				ID:    cfg.ID,
+				Kind:  "prompt",
+				Title: cfg.ID,
+				Source: cfg.SourcePath,
+				State: strings.Join(cfg.Tags, ", "),
+			},
+			PromptID:    cfg.ID,
+			ProviderID:  "local",
+			Tags:        append([]string(nil), cfg.Tags...),
+			Variables:   vars,
+			Description: strings.TrimSpace(cfg.Body),
+		})
+	}
+	return out
 }
 
 func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
-	_ = workflowRefs
-	return nil
+	if len(workflowRefs) == 0 {
+		prompts := r.ListPrompts()
+		out := make([]ResourceInfo, 0, len(prompts))
+		for _, promptInfo := range prompts {
+			out = append(out, ResourceInfo{
+				Meta: InspectableMeta{
+					ID:    promptInfo.PromptID,
+					Kind:  "prompt",
+					Title: promptInfo.Meta.Title,
+					Source: promptInfo.Meta.Source,
+					State: promptInfo.Meta.State,
+				},
+				ResourceID: promptInfo.PromptID,
+			})
+		}
+		return out
+	}
+	out := make([]ResourceInfo, 0, len(workflowRefs))
+	for _, ref := range workflowRefs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		out = append(out, ResourceInfo{
+			Meta: InspectableMeta{
+				ID:    ref,
+				Kind:  "workflow-resource",
+				Title: ref,
+				Source: ref,
+				State: "linked",
+			},
+			ResourceID:       ref,
+			WorkflowResource: true,
+			WorkflowURI:      ref,
+		})
+	}
+	return out
 }
 
 func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, error) {
@@ -529,11 +634,121 @@ func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, erro
 }
 
 func (r *runtimeAdapter) GetPromptDetail(id string) (*PromptDetail, error) {
-	return nil, fmt.Errorf("prompt details not available")
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("prompt id required")
+	}
+	reg := r.PromptRegistry()
+	if reg == nil {
+		return nil, fmt.Errorf("prompt registry unavailable")
+	}
+	cfg, ok := reg.Get(id)
+	if !ok || cfg == nil {
+		return nil, fmt.Errorf("prompt %s not found", id)
+	}
+	vars := make([]string, 0, len(cfg.Variables))
+	for name := range cfg.Variables {
+		vars = append(vars, name)
+	}
+	sort.Strings(vars)
+	metadata := []string{}
+	if len(cfg.Tags) > 0 {
+		metadata = append(metadata, "tags: "+strings.Join(cfg.Tags, ", "))
+	}
+	if len(vars) > 0 {
+		metadata = append(metadata, "variables: "+strings.Join(vars, ", "))
+	}
+	if cfg.SourcePath != "" {
+		metadata = append(metadata, "source: "+cfg.SourcePath)
+	}
+	body := strings.TrimSpace(cfg.Body)
+	if body == "" {
+		body = "(empty prompt body)"
+	}
+	return &PromptDetail{
+		Meta: InspectableMeta{
+			ID:    cfg.ID,
+			Kind:  "prompt",
+			Title: cfg.ID,
+			Source: cfg.SourcePath,
+			State: strings.Join(cfg.Tags, ", "),
+		},
+		PromptID:    cfg.ID,
+		ProviderID:  "local",
+		Description: strings.TrimSpace(cfg.Body),
+		Messages: []StructuredPromptMessage{{
+			Role: "system",
+			Content: []StructuredContentBlock{{
+				Type:       "text",
+				Summary:    "prompt body",
+				Body:       body,
+				Provenance: map[string]string{"source": cfg.SourcePath},
+			}},
+		}},
+		Metadata: metadata,
+	}, nil
 }
 
 func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, error) {
-	return nil, fmt.Errorf("resource details not available")
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	idOrURI = strings.TrimSpace(idOrURI)
+	if idOrURI == "" {
+		return nil, fmt.Errorf("resource id required")
+	}
+	if detail, err := r.getWorkflowResourceDetail(idOrURI); err == nil && detail != nil {
+		return detail, nil
+	}
+	reg := r.PromptRegistry()
+	if reg == nil {
+		return nil, fmt.Errorf("resource details not available")
+	}
+	cfg, ok := reg.Get(idOrURI)
+	if !ok || cfg == nil {
+		return nil, fmt.Errorf("resource %s not found", idOrURI)
+	}
+	var names []string
+	for name := range cfg.Variables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	metadata := []string{}
+	if len(cfg.Tags) > 0 {
+		metadata = append(metadata, "tags: "+strings.Join(cfg.Tags, ", "))
+	}
+	if len(names) > 0 {
+		metadata = append(metadata, "variables: "+strings.Join(names, ", "))
+	}
+	if cfg.SourcePath != "" {
+		metadata = append(metadata, "source: "+cfg.SourcePath)
+	}
+	body := strings.TrimSpace(cfg.Body)
+	if body == "" {
+		body = "(empty prompt body)"
+	}
+	return &ResourceDetail{
+		Meta: InspectableMeta{
+			ID:    cfg.ID,
+			Kind:  "prompt-resource",
+			Title: cfg.ID,
+			Source: cfg.SourcePath,
+			State: "ready",
+		},
+		ResourceID:  cfg.ID,
+		ProviderID:  "local",
+		Description: strings.TrimSpace(cfg.Body),
+		Contents: []StructuredContentBlock{{
+			Type:       "text",
+			Summary:    "prompt body",
+			Body:       body,
+			Provenance: map[string]string{"source": cfg.SourcePath},
+		}},
+		Metadata: metadata,
+	}, nil
 }
 
 func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
@@ -614,9 +829,105 @@ func (r *runtimeAdapter) SetClassPolicyLive(class string, level agentspec.AgentP
 }
 
 func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error {
-	_ = toolName
-	_ = level
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	manifestPath := r.rt.Config.ManifestPath
+	if manifestPath == "" {
+		return fmt.Errorf("manifest path not set")
+	}
+	current := r.rt.AgentWorkspace().Registration.Manifest
+	clone, err := manifest.CloneAgentManifest(current)
+	if err != nil {
+		return err
+	}
+	if clone == nil {
+		return fmt.Errorf("manifest unavailable")
+	}
+	if clone.Spec.Agent == nil {
+		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
+	}
+	if clone.Spec.Agent.ToolExecutionPolicy == nil {
+		clone.Spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
+	}
+	clone.Spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)}
+	if err := clone.Validate(); err != nil {
+		return err
+	}
+	if _, err := runtimesvc.SaveAgentManifestWithBackup(manifestPath, clone); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (r *runtimeAdapter) LoadSandboxManifest() (*manifest.AgentManifest, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	current := r.rt.AgentWorkspace().Registration.Manifest
+	clone, err := manifest.CloneAgentManifest(current)
+	if err != nil {
+		return nil, err
+	}
+	if clone != nil {
+		return clone, nil
+	}
+	if r.rt.Config.ManifestPath == "" {
+		return nil, fmt.Errorf("manifest unavailable")
+	}
+	return manifest.LoadAgentManifest(r.rt.Config.ManifestPath)
+}
+
+func (r *runtimeAdapter) SaveSandboxManifest(m *manifest.AgentManifest) (string, error) {
+	if r == nil || r.rt == nil {
+		return "", fmt.Errorf("runtime unavailable")
+	}
+	if m == nil {
+		return "", fmt.Errorf("manifest required")
+	}
+	if err := m.Validate(); err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(r.rt.Config.ManifestPath)
+	if path == "" {
+		return "", fmt.Errorf("manifest path not set")
+	}
+	return runtimesvc.SaveAgentManifestWithBackup(path, m)
+}
+
+func (r *runtimeAdapter) SandboxBackend() string {
+	if r == nil || r.rt == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.rt.Config.SandboxBackend)
+}
+
+func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
+	if r == nil || r.rt == nil {
+		return "", fmt.Errorf("runtime unavailable")
+	}
+	backend = strings.ToLower(strings.TrimSpace(backend))
+	switch backend {
+	case "gvisor", "docker":
+	default:
+		return "", fmt.Errorf("unsupported sandbox backend %q", backend)
+	}
+	r.rt.Config.SandboxBackend = backend
+	r.rt.WorkspaceConfig.SandboxBackend = backend
+	path := r.rt.Config.ConfigPath
+	if path == "" {
+		return "", fmt.Errorf("config path not set")
+	}
+	return runtimesvc.SaveWorkspaceConfigWithBackup(path, runtimesvc.WorkspaceConfig{
+		Model:               r.rt.Config.InferenceModel,
+		Provider:            r.rt.Config.InferenceProvider,
+		SandboxBackend:      backend,
+		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
+		AllowedCapabilities: append([]core.CapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
+		Nexus:               r.rt.WorkspaceConfig.Nexus,
+		NodeRegistration:    r.rt.WorkspaceConfig.NodeRegistration,
+		LastUpdated:         time.Now().Unix(),
+	})
 }
 
 func dedupeLowerPreserveOrder(values []string) []string {
@@ -1000,6 +1311,32 @@ func (r *runtimeAdapter) ResolveInteractionFrame(ctx context.Context, taskID, fr
 		return fmt.Errorf("runtime unavailable")
 	}
 	return r.rt.ResolveInteractionFrame(ctx, taskID, frameID, choice, freetext)
+}
+
+func (r *runtimeAdapter) BuildDoctorReport(ctx context.Context) DoctorReport {
+	if r == nil || r.rt == nil {
+		return DoctorReport{}
+	}
+	return runtimesvc.BuildDoctorReport(ctx, r.rt.Config)
+}
+
+func (r *runtimeAdapter) ReloadWorkspace(ctx context.Context, workspace string) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	newRT, err := runtimesvc.ReloadRuntimeForWorkspace(ctx, r.rt, workspace)
+	if err != nil {
+		return err
+	}
+	r.rt = newRT
+	return nil
+}
+
+func (r *runtimeAdapter) InitializeWorkspaceFromTemplates(overwrite bool) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	return runtimesvc.InitializeWorkspaceFromTemplates(r.rt.Config, overwrite)
 }
 
 func (r *runtimeAdapter) activeWorkflowID() string {

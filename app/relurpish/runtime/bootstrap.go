@@ -21,6 +21,14 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
+// StartupState captures the first-screen startup decision for the TUI shell.
+type StartupState struct {
+	Report      DoctorReport
+	ActiveAgent string
+	ActiveTab   string
+	Locked      bool
+}
+
 type AgentBootstrapOptions struct {
 	Context             context.Context
 	AgentID             string
@@ -129,6 +137,77 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Contract:             boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,
 	}, nil
+}
+
+// ReloadRuntimeForWorkspace rebuilds the runtime against a new workspace root
+// and closes the previous runtime only after the replacement succeeds.
+func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace string) (*Runtime, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if current == nil {
+		return New(ctx, ConfigForWorkspace(Config{}, workspace))
+	}
+	cfg := ConfigForWorkspace(current.Config, workspace)
+	newRT, err := New(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := current.Close(); err != nil {
+		_ = newRT.Close()
+		return nil, err
+	}
+	return newRT, nil
+}
+
+// ConfigForWorkspace derives a normalized runtime config for a new workspace
+// while preserving the caller's runtime selections.
+func ConfigForWorkspace(current Config, workspace string) Config {
+	cfg := current
+	cfg.Workspace = workspace
+	paths := manifest.New(workspace)
+	cfg.ManifestPath = paths.ManifestFile()
+	cfg.AgentsDir = paths.AgentsDir()
+	cfg.MemoryPath = paths.MemoryDir()
+	cfg.LogPath = paths.LogFile("relurpish.log")
+	cfg.TelemetryPath = paths.TelemetryFile("")
+	cfg.EventsPath = paths.EventsFile()
+	cfg.ConfigPath = paths.ConfigFile()
+	return cfg
+}
+
+// BootstrapStartupState prepares the workspace for the TUI startup flow.
+//
+// If the workspace has not been initialized yet, starter templates are copied in
+// place before the runtime is created. The returned report reflects the final
+// post-bootstrap state used to decide whether the shell should start locked in
+// Doctor mode or auto-promote to Euclo chat.
+func BootstrapStartupState(ctx context.Context, cfg Config) (StartupState, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	state := StartupState{
+		ActiveAgent: "euclo",
+		ActiveTab:   "chat",
+	}
+	report := BuildDoctorReport(ctx, cfg)
+	if report.NeedsInitialization() {
+		if err := InitializeWorkspaceFromTemplates(cfg, false); err != nil {
+			state.Report = report
+			state.Locked = true
+			state.ActiveAgent = "none"
+			state.ActiveTab = "doctor"
+			return state, err
+		}
+		report = BuildDoctorReport(ctx, cfg)
+	}
+	state.Report = report
+	if report.HasBlockingIssues() {
+		state.Locked = true
+		state.ActiveAgent = "none"
+		state.ActiveTab = "doctor"
+	}
+	return state, nil
 }
 
 func graphDBFromIndexManager(indexManager *ast.IndexManager) *graphdb.Engine {

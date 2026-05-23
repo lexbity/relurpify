@@ -9,18 +9,22 @@ import (
 
 // EucloSurface is the default Euclo interaction surface.
 type EucloSurface struct {
-	base tui.AgentSurface
+	base   tui.AgentSurface
+	router *EucloEventRouter
 }
 
 // NewSurface returns the Euclo interaction surface.
 func NewSurface() tui.AgentSurface {
-	return &EucloSurface{base: tui.NewDefaultSurfaceFactory().Resolve("generic")}
+	return &EucloSurface{
+		base:   tui.NewDefaultSurfaceFactory().Resolve("none"),
+		router: NewEucloEventRouter(),
+	}
 }
 
 // NewSurfaceFactory returns a surface registry with Euclo registered and the
 // generic surface as the fallback.
 func NewSurfaceFactory() tui.SurfaceFactory {
-	registry := tui.NewSurfaceRegistry(tui.NewDefaultSurfaceFactory().Resolve("generic"))
+	registry := tui.NewSurfaceRegistry(tui.NewDefaultSurfaceFactory().Resolve("none"))
 	registry.Register("euclo", NewSurface())
 	return registry
 }
@@ -28,35 +32,22 @@ func NewSurfaceFactory() tui.SurfaceFactory {
 func (s *EucloSurface) Name() string { return "euclo" }
 
 func (s *EucloSurface) RegisterTabs(reg *tui.TabRegistry) {
-	if s.base != nil {
-		s.base.RegisterTabs(reg)
-	}
+	RegisterEucloTabs(reg)
 }
 
 func (s *EucloSurface) RegisterCommands(reg *tui.CommandRegistry) {
-	if s.base != nil {
-		s.base.RegisterCommands(reg)
-	}
+	tui.RegisterSurfaceCommands(reg)
 }
 
 func (s *EucloSurface) NewChat(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue) tui.ChatPaner {
-	if s.base != nil {
-		return s.base.NewChat(rt, ctx, sess, notifQ)
-	}
-	return tui.NewChatPane(rt, ctx, sess, notifQ)
+	return NewChatPane(rt, ctx, sess, notifQ, s.router)
 }
 
 func (s *EucloSurface) InitialTab() tui.TabID {
-	if s.base != nil {
-		return s.base.InitialTab()
-	}
 	return tui.TabChat
 }
 
 func (s *EucloSurface) InitialSubTab(tab tui.TabID) tui.SubTabID {
-	if s.base != nil {
-		return s.base.InitialSubTab(tab)
-	}
 	if tab == tui.TabChat {
 		return tui.SubTabChatLocalEdit
 	}
@@ -77,6 +68,9 @@ func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tu
 			s.base.HandleFrame(ctx, m, msg)
 		}
 		return
+	}
+	if s.router != nil {
+		s.router.ApplyInteractionFrame(frame)
 	}
 	if msg.Notification.Kind == "" {
 		msg.Notification = notificationItemFromFrame(tui.GenerateID(), NotifKindInteraction, frame, nil)

@@ -1,13 +1,16 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
 )
@@ -193,6 +196,32 @@ type WorkspaceConfig struct {
 	LastUpdated         int64                     `yaml:"last_updated"`
 }
 
+// ProviderConfig captures the persisted provider editor state for relurpish.
+type ProviderConfig struct {
+	Provider          string `yaml:"provider"`
+	Endpoint          string `yaml:"endpoint,omitempty"`
+	Model             string `yaml:"model,omitempty"`
+	APIKeyRef         string `yaml:"api_key_ref,omitempty"`
+	Timeout           string `yaml:"timeout,omitempty"`
+	NativeToolCalling bool   `yaml:"native_tool_calling,omitempty"`
+	LastUpdated       int64  `yaml:"last_updated"`
+}
+
+// KeybindingConfig captures persisted shell and surface keybindings.
+type KeybindingConfig struct {
+	Bindings []KeybindingEntry `yaml:"bindings"`
+}
+
+// KeybindingEntry captures one remappable binding.
+type KeybindingEntry struct {
+	Action      string   `yaml:"action"`
+	Keys        []string `yaml:"keys"`
+	Scope       string   `yaml:"scope,omitempty"`
+	Source      string   `yaml:"source,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	DefaultKeys []string `yaml:"default_keys,omitempty"`
+}
+
 type NexusConfig struct {
 	Enabled       bool   `yaml:"enabled,omitempty"`
 	Address       string `yaml:"address,omitempty"`
@@ -225,6 +254,22 @@ func LoadWorkspaceConfig(path string) (WorkspaceConfig, error) {
 	return cfg, nil
 }
 
+// LoadProviderConfig loads the persisted provider editor state.
+func LoadProviderConfig(path string) (ProviderConfig, error) {
+	if path == "" {
+		return ProviderConfig{}, fmt.Errorf("provider config path required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ProviderConfig{}, err
+	}
+	var cfg ProviderConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ProviderConfig{}, err
+	}
+	return cfg, nil
+}
+
 // SaveWorkspaceConfig persists selections for future sessions.
 func SaveWorkspaceConfig(path string, cfg WorkspaceConfig) error {
 	if path == "" {
@@ -238,4 +283,204 @@ func SaveWorkspaceConfig(path string, cfg WorkspaceConfig) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
+}
+
+// SaveWorkspaceConfigWithBackup snapshots the existing config before writing
+// the new workspace preferences.
+func SaveWorkspaceConfigWithBackup(path string, cfg WorkspaceConfig) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("config path required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	backup, err := CreateTimestampedBackup(path)
+	if err != nil {
+		return "", err
+	}
+	if err := SaveWorkspaceConfig(path, cfg); err != nil {
+		return "", err
+	}
+	return backup, nil
+}
+
+// SaveProviderConfig persists provider editor state with a backup snapshot.
+func SaveProviderConfigWithBackup(path string, cfg ProviderConfig) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("provider config path required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	backup, err := CreateTimestampedBackup(path)
+	if err != nil {
+		return "", err
+	}
+	if err := SaveYAML(path, cfg); err != nil {
+		return "", err
+	}
+	return backup, nil
+}
+
+// SaveKeybindingConfigWithBackup persists keybinding editor state with a backup snapshot.
+func SaveKeybindingConfigWithBackup(path string, cfg KeybindingConfig) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("keybinding config path required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	backup, err := CreateTimestampedBackup(path)
+	if err != nil {
+		return "", err
+	}
+	if err := SaveYAML(path, cfg); err != nil {
+		return "", err
+	}
+	return backup, nil
+}
+
+// SaveYAML marshals v to YAML and overwrites path.
+func SaveYAML(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+// SaveJSON marshals v to pretty JSON and overwrites path.
+func SaveJSON(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func resolveAPIKeyRef(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+	if strings.HasPrefix(ref, "env:") {
+		return os.Getenv(strings.TrimSpace(strings.TrimPrefix(ref, "env:")))
+	}
+	return ref
+}
+
+// CreateTimestampedBackup copies path into relurpify_cfg/backups with a
+// timestamped .bak suffix. Missing files are ignored and return an empty path.
+func CreateTimestampedBackup(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	backupDir := filepath.Join(filepath.Dir(path), "backups")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return "", err
+	}
+	base := filepath.Base(path)
+	stamp := time.Now().UTC().Format("20060102_150405")
+	backupPath := filepath.Join(backupDir, fmt.Sprintf("%s.%s.bak", base, stamp))
+	if _, err := os.Stat(backupPath); err == nil {
+		for i := 2; ; i++ {
+			candidate := filepath.Join(backupDir, fmt.Sprintf("%s.%s.%d.bak", base, stamp, i))
+			if _, err := os.Stat(candidate); os.IsNotExist(err) {
+				backupPath = candidate
+				break
+			}
+		}
+	}
+	if err := os.WriteFile(backupPath, data, 0o644); err != nil {
+		return "", err
+	}
+	if err := pruneTimestampedBackups(backupDir, base, 10); err != nil {
+		return "", err
+	}
+	return backupPath, nil
+}
+
+func pruneTimestampedBackups(backupDir, base string, max int) error {
+	if max <= 0 {
+		return nil
+	}
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return err
+	}
+	type backupEntry struct {
+		path string
+		name string
+		mod  time.Time
+	}
+	var backups []backupEntry
+	prefix := base + "."
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".bak") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		backups = append(backups, backupEntry{
+			path: filepath.Join(backupDir, name),
+			name: name,
+			mod:  info.ModTime(),
+		})
+	}
+	if len(backups) <= max {
+		return nil
+	}
+	sort.Slice(backups, func(i, j int) bool {
+		if backups[i].mod.Equal(backups[j].mod) {
+			return backups[i].name < backups[j].name
+		}
+		return backups[i].mod.Before(backups[j].mod)
+	})
+	for i := 0; i < len(backups)-max; i++ {
+		if err := os.Remove(backups[i].path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveAgentManifestWithBackup writes the manifest to path after snapshotting
+// the previous file into relurpify_cfg/backups.
+func SaveAgentManifestWithBackup(path string, m *manifest.AgentManifest) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("manifest path required")
+	}
+	if m == nil {
+		return "", fmt.Errorf("manifest required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	backup, err := CreateTimestampedBackup(path)
+	if err != nil {
+		return "", err
+	}
+	if err := manifest.SaveAgentManifest(path, m); err != nil {
+		return "", err
+	}
+	return backup, nil
 }

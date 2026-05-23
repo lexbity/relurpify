@@ -107,19 +107,11 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg); err != nil {
+		return err
+	}
 	rt, err := runtimesvc.New(ctx, cfg)
 	if err != nil {
-		if shouldRunDoctorFallback(err) {
-			fmt.Fprintln(cmd.ErrOrStderr(), "Workspace is not ready. Running doctor...")
-			if doctorErr := runDoctor(cmd, false, false); doctorErr != nil {
-				return doctorErr
-			}
-			rt, err = runtimesvc.New(ctx, cfg)
-			if err == nil {
-				defer rt.Close()
-				return fn(ctx, rt)
-			}
-		}
 		return err
 	}
 	defer rt.Close()
@@ -140,7 +132,11 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	report := runtimesvc.BuildDoctorReport(ctx, cfg)
+	state, err := runtimesvc.BootstrapStartupState(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	report := state.Report
 	renderDoctorReport(cmd.OutOrStdout(), report)
 
 	shouldOfferInit := report.NeedsInitialization() || fix
@@ -281,15 +277,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func shouldRunDoctorFallback(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return os.IsNotExist(err) ||
-		strings.Contains(msg, "missing spec.agent") ||
-		strings.Contains(msg, "no such file or directory") ||
-		strings.Contains(msg, "missing spec.agent.model.name")
 }

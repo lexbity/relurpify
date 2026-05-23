@@ -1,18 +1,25 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // globalKeyMap holds all global keybindings for the TUI.
 type globalKeyMap struct {
 	// Navigation
-	Quit    key.Binding
-	Help    key.Binding
-	Tab1    key.Binding
-	Tab2    key.Binding
-	Tab3    key.Binding
-	Tab4    key.Binding
-	TabNext key.Binding
-	TabPrev key.Binding
+	Quit         key.Binding
+	Help         key.Binding
+	AgentPicker  key.Binding
+	Tab1         key.Binding
+	Tab2         key.Binding
+	Tab3         key.Binding
+	Tab4         key.Binding
+	Tab5         key.Binding
+	Tab6         key.Binding
+	FocusRegion1 key.Binding
 
 	// Chat operations
 	Undo          key.Binding
@@ -25,12 +32,9 @@ type globalKeyMap struct {
 	ToggleSidebar key.Binding
 
 	// UI toggles
-	ToggleBar  key.Binding
 	SearchMode key.Binding
-
 	// Sidebar operations (chat context sidebar)
 	SidebarToggle key.Binding
-	SidebarFocus  key.Binding
 
 	// Service operations (session services subtab)
 	ServiceStop       key.Binding
@@ -41,14 +45,16 @@ type globalKeyMap struct {
 // GlobalKeys is the application-wide keybinding set.
 var GlobalKeys = globalKeyMap{
 	// Navigation
-	Quit:    key.NewBinding(key.WithKeys("ctrl+c", "ctrl+d"), key.WithHelp("ctrl+c", "quit")),
-	Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-	Tab1:    key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "chat")),
-	Tab2:    key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "tasks")),
-	Tab3:    key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "session")),
-	Tab4:    key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "settings")),
-	TabNext: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
-	TabPrev: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev tab")),
+	Quit:         key.NewBinding(key.WithKeys("ctrl+c", "ctrl+d"), key.WithHelp("ctrl+c", "quit")),
+	Help:         key.NewBinding(key.WithKeys("f1"), key.WithHelp("f1", "help")),
+	AgentPicker:  key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "agent picker")),
+	Tab1:         key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "welcome")),
+	Tab2:         key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "sandbox")),
+	Tab3:         key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "security")),
+	Tab4:         key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "ai provider")),
+	Tab5:         key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "keybindings")),
+	Tab6:         key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "doctor")),
+	FocusRegion1: key.NewBinding(key.WithKeys("tab", "ctrl+down"), key.WithHelp("tab/ctrl+down", "focus region 1")),
 
 	// Chat operations
 	Undo:          key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("ctrl+z", "undo")),
@@ -61,12 +67,10 @@ var GlobalKeys = globalKeyMap{
 	ToggleSidebar: key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "toggle sidebar")),
 
 	// UI toggles
-	ToggleBar:  key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "toggle title")),
 	SearchMode: key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "search")),
 
 	// Sidebar operations
 	SidebarToggle: key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "toggle sidebar")),
-	SidebarFocus:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "focus sidebar")),
 
 	// Service operations
 	ServiceStop:       key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "stop service")),
@@ -74,15 +78,36 @@ var GlobalKeys = globalKeyMap{
 	ServiceRestartAll: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "restart all services")),
 }
 
+func keyMatchesBinding(binding key.Binding, keyStr string) bool {
+	keyStr = strings.ToLower(strings.TrimSpace(keyStr))
+	if keyStr == "" {
+		return false
+	}
+	for _, candidate := range binding.Keys() {
+		if strings.ToLower(strings.TrimSpace(candidate)) == keyStr {
+			return true
+		}
+	}
+	return false
+}
+
+func keyMsgMatchesBinding(msg tea.KeyMsg, binding key.Binding) bool {
+	return keyMatchesBinding(binding, msg.String())
+}
+
 // ShortHelp returns compact keybinding descriptions.
 func (k globalKeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.Quit,
 		k.Help,
+		k.AgentPicker,
 		k.Tab1,
 		k.Tab2,
 		k.Tab3,
 		k.Tab4,
+		k.Tab5,
+		k.Tab6,
+		k.FocusRegion1,
 		k.Undo,
 		k.Redo,
 	}
@@ -93,10 +118,11 @@ func (k globalKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		// Quit and help
 		{k.Quit, k.Help},
+		{k.AgentPicker},
 
 		// Tab navigation
-		{k.Tab1, k.Tab2, k.Tab3, k.Tab4},
-		{k.TabNext, k.TabPrev},
+		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5, k.Tab6},
+		{k.FocusRegion1},
 
 		// Chat operations
 		{k.Undo, k.Redo},
@@ -104,10 +130,10 @@ func (k globalKeyMap) FullHelp() [][]key.Binding {
 		{k.FilePicker, k.Compact, k.ToggleSidebar},
 
 		// UI toggles and search
-		{k.ToggleBar, k.SearchMode},
+		{k.SearchMode},
 
 		// Sidebar operations (chat context)
-		{k.SidebarToggle, k.SidebarFocus},
+		{k.SidebarToggle},
 
 		// Service operations (session services subtab)
 		{k.ServiceStop, k.ServiceRestart, k.ServiceRestartAll},

@@ -65,13 +65,14 @@ type PermissionDecision struct {
 
 // HITLBroker coordinates blocking and async approvals.
 type HITLBroker struct {
-	timeout  time.Duration
-	mu       sync.Mutex
-	requests map[string]*PermissionRequest
-	waiters  map[string]chan PermissionDecision
-	subs     map[int]chan HITLEvent
-	subSeq   int
-	clock    func() time.Time
+	timeout     time.Duration
+	mu          sync.Mutex
+	requests    map[string]*PermissionRequest
+	waiters     map[string]chan PermissionDecision
+	subs        map[int]chan HITLEvent
+	subSeq      int
+	clock       func() time.Time
+	AutoApprove bool
 }
 
 // NewHITLBroker builds a broker with the supplied timeout.
@@ -155,6 +156,17 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 	req.ID = fmt.Sprintf("hitl-%d", h.clock().UnixNano())
 	req.RequestedAt = h.clock()
 	req.State = "pending"
+
+	if h.AutoApprove {
+		return &PermissionGrant{
+			ID:          req.ID + ":auto-approve",
+			Permission:  req.Permission,
+			Scope:       req.Scope,
+			ApprovedBy:  "auto-approve",
+			GrantedAt:   h.clock(),
+			Description: req.Justification,
+		}, nil
+	}
 
 	waitCh := make(chan PermissionDecision, 1)
 

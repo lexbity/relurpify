@@ -14,6 +14,7 @@ type CommandPalette struct {
 	items []commandItem
 	sel   int
 	width int
+	label string
 }
 
 // NewCommandPalette returns an empty palette.
@@ -22,11 +23,12 @@ func NewCommandPalette() *CommandPalette {
 }
 
 // Sync mirrors the current palette state from InputBar.
-func (p *CommandPalette) Sync(open bool, items []commandItem, sel int, width int) {
+func (p *CommandPalette) Sync(open bool, items []commandItem, sel int, width int, label string) {
 	p.open = open && len(items) > 0
 	p.items = append(p.items[:0], items...)
 	p.sel = sel
 	p.width = width
+	p.label = label
 	if p.sel < 0 {
 		p.sel = 0
 	}
@@ -40,6 +42,7 @@ func (p *CommandPalette) Close() {
 	p.open = false
 	p.items = nil
 	p.sel = 0
+	p.label = ""
 }
 
 // IsOpen reports whether the palette should be rendered.
@@ -60,7 +63,11 @@ func (p *CommandPalette) View() string {
 	if !p.IsOpen() {
 		return ""
 	}
-	lines := []string{panelHeaderStyle.Render("Commands")}
+	header := "Commands"
+	if strings.TrimSpace(p.label) != "" {
+		header = p.label
+	}
+	lines := []string{panelHeaderStyle.Render(header)}
 	for i, item := range p.items {
 		label := item.Usage
 		if item.Description != "" {
@@ -74,39 +81,11 @@ func (p *CommandPalette) View() string {
 		lines = append(lines, label)
 	}
 	content := strings.Join(lines, "\n")
-	return panelStyle.Width(max(24, p.width)).Render(content)
-}
-
-// statusBarText renders a compact, context-sensitive key hint line.
-func (m RootModel) statusBarText() string {
-	switch {
-	case m.hitlPanel.IsOpen():
-		return "guidance: enter submit | a annotate | d defer | v explore | esc close"
-	case m.notifBar != nil && m.notifBar.Active():
-		if current, ok := m.notifBar.queue.Current(); ok {
-			switch current.Kind {
-			case NotifKindHITL:
-				return "notification: y approve | n deny | d dismiss"
-			case NotifKindInteraction, NotifKindGuidance:
-				return "notification: 1-9 select | enter default | d dismiss"
-			}
-		}
-		return "notification: d dismiss"
-	case m.cmdPalette != nil && m.cmdPalette.IsOpen():
-		return "commands: ↑↓ select | tab complete | enter run | esc cancel"
-	case m.inputBar != nil && m.inputBar.IsFilePickerActive():
-		return "files: ↑↓ select | enter choose | esc cancel"
-	case m.activeTab == TabSession:
-		return "session: [ ] subtabs | / commands | ctrl+f filter"
-	case m.activeTab == TabConfig:
-		return "config: / commands | tab cycle sections | r refresh"
-	default:
-		return "chat: / commands | @ files | ctrl+f search | ? help"
+	width := p.width
+	if width < 1 {
+		width = 1
 	}
-}
-
-func (m RootModel) renderStatusBar() string {
-	return statusStyle.Width(m.width).Render(m.statusBarText())
+	return panelStyle.Width(width).Render(content)
 }
 
 func overlayPanelView(parts ...string) string {

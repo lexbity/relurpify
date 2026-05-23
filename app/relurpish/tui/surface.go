@@ -70,6 +70,9 @@ func (r *surfaceRegistry) Resolve(agentName string) AgentSurface {
 		return nil
 	}
 	if agentName = normalizeSurfaceKey(agentName); agentName != "" {
+		if agentName == "none" {
+			return r.defaultSurface
+		}
 		if surface, ok := r.surfaces[agentName]; ok && surface != nil {
 			return surface
 		}
@@ -87,40 +90,39 @@ func newGenericSurface() AgentSurface {
 	return genericSurface{}
 }
 
-func (genericSurface) Name() string { return "generic" }
+func (genericSurface) Name() string { return "none" }
 
 func (genericSurface) RegisterTabs(reg *TabRegistry) {
 	if reg == nil {
 		return
 	}
 	reg.Register(TabDefinition{
-		ID:    TabChat,
-		Label: "chat",
-		SubTabs: []SubTabDefinition{
-			{ID: SubTabChatLocalRead, Label: "local-read-only"},
-			{ID: SubTabChatLocalEdit, Label: "local-edit-on"},
-			{ID: SubTabChatOnlineRead, Label: "online-read-on"},
-			{ID: SubTabChatOnlineEdit, Label: "online-edit-on"},
-		},
+		ID:          TabWelcome,
+		Label:       "welcome",
+		AgentFilter: []string{"none"},
 	})
+	reg.Register(TabDefinition{
+		ID:          TabSandbox,
+		Label:       "sandbox",
+		AgentFilter: []string{"none"},
+	})
+	reg.Register(TabDefinition{ID: TabSecurityGuard, Label: "securityguard", AgentFilter: []string{"none"}})
+	reg.Register(TabDefinition{ID: TabAIProvider, Label: "ai provider", AgentFilter: []string{"none"}})
+	reg.Register(TabDefinition{ID: TabKeybindings, Label: "keybindings", AgentFilter: []string{"none"}})
+	reg.Register(TabDefinition{ID: TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})
 }
 
 func (genericSurface) RegisterCommands(reg *CommandRegistry) {
-	registerSurfaceCommands(reg)
+	_ = reg
 }
 
 func (genericSurface) NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner {
-	return NewChatPane(rt, ctx, sess, notifQ)
+	return nil
 }
 
-func (genericSurface) InitialTab() TabID { return TabChat }
+func (genericSurface) InitialTab() TabID { return TabWelcome }
 
-func (genericSurface) InitialSubTab(tab TabID) SubTabID {
-	if tab == TabChat {
-		return SubTabChatLocalEdit
-	}
-	return ""
-}
+func (genericSurface) InitialSubTab(tab TabID) SubTabID { return "" }
 
 func (genericSurface) RenderNotification(item NotificationItem) string {
 	return renderGenericNotification(item)

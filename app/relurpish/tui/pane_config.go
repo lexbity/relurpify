@@ -26,6 +26,7 @@ const (
 type ConfigPane struct {
 	section configSection
 	sel     int
+	filter  string
 
 	// Loaded state
 	classPolicies map[string]agentspec.AgentPermissionLevel
@@ -56,6 +57,20 @@ func NewConfigPane(rt RuntimeAdapter) *ConfigPane {
 
 // SetSize resizes the pane.
 func (p *ConfigPane) SetSize(w, h int) { p.width = w; p.height = h }
+
+// SetSection switches the visible config section.
+func (p *ConfigPane) SetSection(section configSection) {
+	p.section = section
+	p.sel = 0
+	p.refreshDetail()
+}
+
+// SetFilter updates the live filter string for the current base tab.
+func (p *ConfigPane) SetFilter(filter string) {
+	p.filter = strings.ToLower(strings.TrimSpace(filter))
+	p.sel = 0
+	p.refreshDetail()
+}
 
 // Refresh reloads live state from the runtime.
 func (p *ConfigPane) Refresh() {
@@ -254,6 +269,15 @@ func (p *ConfigPane) viewPolicies() string {
 	b.WriteString(sectionHeaderStyle.Render("Capability Class Policies") + "\n")
 
 	rows := p.classPolicyRows()
+	if p.filter != "" {
+		filtered := rows[:0]
+		for _, row := range rows {
+			if strings.Contains(strings.ToLower(row.class+" "+string(row.policy)), p.filter) {
+				filtered = append(filtered, row)
+			}
+		}
+		rows = append([]classPolicyRow(nil), filtered...)
+	}
 	if len(rows) == 0 {
 		b.WriteString(dimStyle.Render("  No class policies configured.") + "\n")
 	} else {
@@ -298,7 +322,11 @@ func (p *ConfigPane) viewCapabilities() string {
 	widths := splitWidths(p.width, 5, 7)
 	lines := make([]string, 0, len(p.capabilities))
 	for _, capability := range p.capabilities {
-		lines = append(lines, fmt.Sprintf("%s  %s  %s", capability.Name, capability.Kind, capability.RuntimeFamily))
+		line := fmt.Sprintf("%s  %s  %s", capability.Name, capability.Kind, capability.RuntimeFamily)
+		if p.filter != "" && !strings.Contains(strings.ToLower(line), p.filter) {
+			continue
+		}
+		lines = append(lines, line)
 	}
 	detail := []string{dimStyle.Render("No capability selected.")}
 	if p.capability != nil {

@@ -5,48 +5,132 @@ import (
 	"strings"
 )
 
-// ChromeLayout tracks terminal dimensions and derives component heights for the
-// mode-driven chrome structure:
-//
-//	title bar      1 row  agent name + workspace path
-//	subtab bar     1 row  subtabs of the active main tab
-//	main pane      N rows content (variable)
-//	input bar      1 row  universal input / command palette
-//	main tab bar   1 row  chat · config · session
-//	status bar     1 row  context-sensitive keybindings
+const (
+	chromeAgentWidth   = 20
+	chromeBottomRows   = 2
+	chromeSubtabRows   = 1
+	chromeMinCellWidth = 1
+)
+
+// ChromeLayout tracks terminal dimensions and derives component heights for
+// the host chrome structure.
 type ChromeLayout struct {
-	Width        int
-	Height       int
-	TitleHeight  int // always 1
-	SubtabHeight int // always 1
-	InputHeight  int // 1 normally, 2 during multiline
-	TabBarHeight int // always 1
-	StatusHeight int // always 1
+	Width             int
+	Height            int
+	HitlHeight        int
+	AgentWidth        int
+	Region1Height     int
+	Region1PaneHeight int
+	InputWidth        int
 }
 
-// MainPaneHeight returns available rows for the main pane (minus optional HITL
-// overlay rows). Guarantees at least 1.
-func (c ChromeLayout) MainPaneHeight(hitlRows int) int {
-	reserved := c.TitleHeight + c.SubtabHeight + c.InputHeight + c.TabBarHeight + c.StatusHeight + hitlRows
-	h := c.Height - reserved
-	if h < 1 {
-		return 1
+// Recalculate updates all dimensions on WindowSizeMsg.
+func (c *ChromeLayout) Recalculate(width, height int, hitlVisible bool) {
+	if c == nil {
+		return
 	}
-	return h
-}
-
-// Recalculate updates all dimensions on WindowSizeMsg. Fixed-height rows are
-// always 1; InputHeight defaults to 1 (caller may set to 2 for multiline).
-func (c *ChromeLayout) Recalculate(width, height int) {
+	if width < 0 {
+		width = 0
+	}
+	if height < 0 {
+		height = 0
+	}
 	c.Width = width
 	c.Height = height
-	c.TitleHeight = 1
-	c.SubtabHeight = 1
-	if c.InputHeight == 0 {
-		c.InputHeight = 1
+	c.HitlHeight = 0
+	if hitlVisible {
+		c.HitlHeight = 1
 	}
-	c.TabBarHeight = 1
-	c.StatusHeight = 1
+	c.AgentWidth = chromeAgentWidth
+	if width > 0 && c.AgentWidth >= width {
+		c.AgentWidth = width - chromeMinCellWidth
+		if c.AgentWidth < chromeMinCellWidth {
+			c.AgentWidth = chromeMinCellWidth
+		}
+	}
+	c.Region1Height = height - chromeBottomRows - c.HitlHeight
+	if c.Region1Height < chromeSubtabRows+chromeMinCellWidth {
+		c.Region1Height = chromeSubtabRows + chromeMinCellWidth
+	}
+	c.Region1PaneHeight = c.Region1Height - chromeSubtabRows
+	if c.Region1PaneHeight < chromeMinCellWidth {
+		c.Region1PaneHeight = chromeMinCellWidth
+	}
+	c.InputWidth = width - c.AgentWidth
+	if c.InputWidth < chromeMinCellWidth {
+		c.InputWidth = chromeMinCellWidth
+	}
+}
+
+// Region3Width returns the width available to the universal input bar.
+func (c ChromeLayout) Region3Width() int {
+	if c.InputWidth > 0 {
+		return c.InputWidth
+	}
+	if c.Width > 0 {
+		return c.Width
+	}
+	return chromeMinCellWidth
+}
+
+// Region2Width returns the width available to the active-agent chrome cell.
+func (c ChromeLayout) Region2Width() int {
+	if c.AgentWidth > 0 {
+		return c.AgentWidth
+	}
+	if c.Width > 0 {
+		if c.Width < chromeAgentWidth {
+			return c.Width
+		}
+		return chromeAgentWidth
+	}
+	return chromeMinCellWidth
+}
+
+// Region1PaneRows returns the rows available to the active pane within the
+// first region after the subtab strip is accounted for.
+func (c ChromeLayout) Region1PaneRows() int {
+	if c.Region1PaneHeight > 0 {
+		return c.Region1PaneHeight
+	}
+	return chromeMinCellWidth
+}
+
+// Region1Rows returns the total rows available to the first region.
+func (c ChromeLayout) Region1Rows() int {
+	if c.Region1Height > 0 {
+		return c.Region1Height
+	}
+	return chromeSubtabRows + chromeMinCellWidth
+}
+
+// renderAgentCell renders the active-agent chrome cell for Region 2.
+func renderAgentCell(agent string, width int) string {
+	if width < chromeMinCellWidth {
+		width = chromeMinCellWidth
+	}
+	label := strings.TrimSpace(agent)
+	if label == "" {
+		label = "none"
+	}
+	label = clipText(label, width)
+	return agentStripActiveStyle.Width(width).Render(label)
+}
+
+func clipText(value string, width int) string {
+	if width < chromeMinCellWidth {
+		return ""
+	}
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	if len(value) <= width {
+		return value
+	}
+	if width <= 3 {
+		return value[:width]
+	}
+	return value[:width-3] + "..."
 }
 
 // SubTabBar renders the subtab row for the currently active main tab.
@@ -93,12 +177,21 @@ func (s SubTabBar) View() string {
 		return subtabBarEmptyStyle.Width(s.width).Render("")
 	}
 	parts := make([]string, 0, len(s.subtabs))
+	available := s.width - (len(s.subtabs)-1)*2
+	if available < len(s.subtabs) {
+		available = len(s.subtabs)
+	}
+	cellWidth := available / len(s.subtabs)
+	if cellWidth < chromeMinCellWidth {
+		cellWidth = chromeMinCellWidth
+	}
 	for i, st := range s.subtabs {
-		label := fmt.Sprintf("%d:%s", i+1, st.Label)
+		label := fmt.Sprintf("[%d] %s", i+1, st.Label)
+		label = clipText(label, cellWidth)
 		if st.ID == s.active {
-			parts = append(parts, subtabActiveStyle.Render(label))
+			parts = append(parts, subtabActiveStyle.Width(cellWidth).Render(label))
 		} else {
-			parts = append(parts, subtabInactiveStyle.Render(label))
+			parts = append(parts, subtabInactiveStyle.Width(cellWidth).Render(label))
 		}
 	}
 	content := strings.Join(parts, "  ")

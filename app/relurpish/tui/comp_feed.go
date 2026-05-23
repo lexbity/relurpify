@@ -77,6 +77,16 @@ func (f *Feed) UpdateMessage(msg Message) {
 	f.refresh()
 }
 
+// Mutate exposes the underlying message slice to controlled in-place updates.
+// Callers must refresh any derived state through the provided function.
+func (f *Feed) Mutate(fn func(msgs []Message)) {
+	if fn == nil {
+		return
+	}
+	fn(f.messages)
+	f.refresh()
+}
+
 // ClearMessages removes all messages from the feed.
 func (f *Feed) ClearMessages() {
 	f.messages = nil

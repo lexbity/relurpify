@@ -41,6 +41,9 @@ func executePreparedRunAgentTask(ctx context.Context, ws *agentenv.Workspace, de
 	if ws.Registration != nil && ws.Registration.Permissions != nil {
 		ws.Registration.Permissions.SetDefaultPolicy(agentspec.AgentPermissionAllow)
 	}
+	if ws.Registration != nil && ws.Registration.HITL != nil {
+		ws.Registration.HITL.AutoApprove = true
+	}
 	spec.Bash.Default = agentspec.AgentPermissionAllow
 
 	if ws.Environment.Config == nil {

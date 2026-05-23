@@ -61,11 +61,12 @@ type SessionPane struct {
 	provider    *LiveProviderDetail
 	approval    *ApprovalDetail
 
-	context *AgentContext
-	session *Session
-	runtime RuntimeAdapter
-	width   int
-	height  int
+	context       *AgentContext
+	session       *Session
+	runtime       RuntimeAdapter
+	frameworkMode bool
+	width         int
+	height        int
 }
 
 // NewSessionPane creates a SessionPane.
@@ -92,6 +93,14 @@ func (p *SessionPane) SetSize(w, h int) { p.width = w; p.height = h }
 
 // SetSubTab switches the active subtab.
 func (p *SessionPane) SetSubTab(id SubTabID) { p.activeSubTab = id }
+
+// SetFrameworkMode switches the pane into the base-framework provider dashboard.
+func (p *SessionPane) SetFrameworkMode(on bool) { p.frameworkMode = on }
+
+// SetSection switches the visible task section.
+func (p *SessionPane) SetSection(section SessionSection) {
+	p.section = section
+}
 
 // SetDiagnostics refreshes the live diagnostics snapshot.
 func (p *SessionPane) SetDiagnostics(d DiagnosticsInfo) { p.diagnostics = d }
@@ -163,6 +172,25 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 		p.applyFilter()
 
 	case tea.KeyMsg:
+		if p.frameworkMode {
+			switch msg.String() {
+			case "tab", "right", "l":
+				p.liveSection = (p.liveSection + 1) % 3
+			case "shift+tab", "left", "h":
+				p.liveSection = (p.liveSection + 2) % 3
+			case "up", "k":
+				p.moveLiveSelection(-1)
+			case "down", "j":
+				p.moveLiveSelection(1)
+			case "r":
+				if p.runtime != nil {
+					// Refresh on demand so the provider dashboard stays live.
+					workflows, _ := p.runtime.ListWorkflows(3)
+					p.SetLiveSnapshot(p.runtime.Diagnostics(), workflows, p.runtime.ListLiveProviders(), p.runtime.ListApprovals())
+				}
+			}
+			return p, nil
+		}
 		if p.activeSubTab == SubTabSessionLive {
 			switch msg.String() {
 			case "tab", "right", "l":
@@ -281,11 +309,20 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 
 // HandleFilterInput updates the file filter from the input bar.
 func (p *SessionPane) HandleFilterInput(query string) {
+	p.SetFilter(query)
+}
+
+// SetFilter updates the live filter string for the active base shell panel or
+// the task file browser.
+func (p *SessionPane) SetFilter(query string) {
+	p.filter = strings.TrimSpace(query)
+	p.fileSel = 0
+	if p.frameworkMode {
+		return
+	}
 	if p.activeSubTab != "" && p.activeSubTab != SubTabSessionTasks {
 		return
 	}
-	p.filter = strings.TrimSpace(query)
-	p.fileSel = 0
 	p.applyFilter()
 }
 
@@ -305,6 +342,9 @@ func (p *SessionPane) applyFilter() {
 
 // View renders the active session subtab.
 func (p *SessionPane) View() string {
+	if p.frameworkMode {
+		return p.viewLive()
+	}
 	switch p.activeSubTab {
 	case SubTabSessionLive:
 		return p.viewLive()
@@ -430,82 +470,137 @@ func (p *SessionPane) viewChanges() string {
 func (p *SessionPane) viewLive() string {
 	widths := splitWidths(p.width, 4, 4, 4)
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Live Session") + "\n\n")
+	title := "Live Session"
+	if p.frameworkMode {
+		title = "AI Provider"
+	}
+	b.WriteString(sectionHeaderStyle.Render(title) + "\n\n")
+	filter := strings.ToLower(strings.TrimSpace(p.filter))
+	if filter != "" {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("filter: %q", p.filter)) + "\n\n")
+	}
 
 	d := p.diagnostics
 	if p.session != nil {
-		b.WriteString(dimStyle.Render("workspace  ") + filePathStyle.Render(p.session.Workspace) + "\n")
-		b.WriteString(dimStyle.Render("agent      ") + textStyle.Render(p.session.Agent) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(p.session.Workspace), filter) {
+			b.WriteString(dimStyle.Render("workspace  ") + filePathStyle.Render(p.session.Workspace) + "\n")
+		}
+		if filter == "" || strings.Contains(strings.ToLower(p.session.Agent), filter) {
+			b.WriteString(dimStyle.Render("agent      ") + textStyle.Render(p.session.Agent) + "\n")
+		}
 		if p.session.Provider != "" {
 			label := p.session.Provider
 			if p.session.BackendState != "" {
 				label = fmt.Sprintf("%s [%s]", label, p.session.BackendState)
 			}
-			b.WriteString(dimStyle.Render("provider   ") + textStyle.Render(label) + "\n")
+			if filter == "" || strings.Contains(strings.ToLower(label), filter) {
+				b.WriteString(dimStyle.Render("provider   ") + textStyle.Render(label) + "\n")
+			}
 		}
-		b.WriteString(dimStyle.Render("model      ") + textStyle.Render(p.session.Model) + "\n")
-		if p.session.Mode != "" {
+		if filter == "" || strings.Contains(strings.ToLower(p.session.Model), filter) {
+			b.WriteString(dimStyle.Render("model      ") + textStyle.Render(p.session.Model) + "\n")
+		}
+		if p.session.Mode != "" && (filter == "" || strings.Contains(strings.ToLower(p.session.Mode), filter)) {
 			b.WriteString(dimStyle.Render("mode       ") + inProgressStyle.Render(p.session.Mode) + "\n")
 		}
-		if p.session.Strategy != "" {
+		if p.session.Strategy != "" && (filter == "" || strings.Contains(strings.ToLower(p.session.Strategy), filter)) {
 			b.WriteString(dimStyle.Render("strategy   ") + textStyle.Render(p.session.Strategy) + "\n")
 		}
 		dur := p.session.TotalDuration.Round(1e9)
-		b.WriteString(dimStyle.Render("tokens     ") + fmt.Sprintf("%d  %s", p.session.TotalTokens, dimStyle.Render(dur.String())) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d %s", p.session.TotalTokens, dur.String())), filter) {
+			b.WriteString(dimStyle.Render("tokens     ") + fmt.Sprintf("%d  %s", p.session.TotalTokens, dimStyle.Render(dur.String())) + "\n")
+		}
 		b.WriteString("\n")
 	}
 
 	if d.ContextTokensMax > 0 {
 		pct := 100 * d.ContextTokensUsed / d.ContextTokensMax
 		bar := contextBar(pct, 20)
-		b.WriteString(dimStyle.Render("context    ") + bar +
-			dimStyle.Render(fmt.Sprintf("  %d/%d", d.ContextTokensUsed, d.ContextTokensMax)) + "\n")
+		line := dimStyle.Render("context    ") + bar + dimStyle.Render(fmt.Sprintf("  %d/%d", d.ContextTokensUsed, d.ContextTokensMax))
+		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
+			b.WriteString(line + "\n")
+		}
 	}
 	if d.ActiveWorkflows > 0 || d.PatternEntries > 0 {
-		b.WriteString(dimStyle.Render("workflows  ") + fmt.Sprintf("%d", d.ActiveWorkflows) + "\n")
-		b.WriteString(dimStyle.Render("patterns   ") + fmt.Sprintf("%d", d.PatternEntries) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.ActiveWorkflows)), filter) {
+			b.WriteString(dimStyle.Render("workflows  ") + fmt.Sprintf("%d", d.ActiveWorkflows) + "\n")
+		}
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.PatternEntries)), filter) {
+			b.WriteString(dimStyle.Render("patterns   ") + fmt.Sprintf("%d", d.PatternEntries) + "\n")
+		}
 	}
 	if d.ActiveMode != "" {
-		b.WriteString(dimStyle.Render("exec mode  ") + inProgressStyle.Render(d.ActiveMode) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ActiveMode), filter) {
+			b.WriteString(dimStyle.Render("exec mode  ") + inProgressStyle.Render(d.ActiveMode) + "\n")
+		}
 	}
 	if d.ActivePhase != "" {
-		b.WriteString(dimStyle.Render("phase      ") + textStyle.Render(d.ActivePhase) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ActivePhase), filter) {
+			b.WriteString(dimStyle.Render("phase      ") + textStyle.Render(d.ActivePhase) + "\n")
+		}
 	}
 	if d.ActiveProfile != "" {
-		b.WriteString(dimStyle.Render("profile    ") + textStyle.Render(d.ActiveProfile) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ActiveProfile), filter) {
+			b.WriteString(dimStyle.Render("profile    ") + textStyle.Render(d.ActiveProfile) + "\n")
+		}
 	}
 	if d.ProfileReason != "" {
-		b.WriteString(dimStyle.Render("reason     ") + textStyle.Render(d.ProfileReason) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ProfileReason), filter) {
+			b.WriteString(dimStyle.Render("reason     ") + textStyle.Render(d.ProfileReason) + "\n")
+		}
 	}
 	if d.ManifestFingerprint != "" {
-		b.WriteString(dimStyle.Render("fingerprint") + "  " + textStyle.Render(d.ManifestFingerprint) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ManifestFingerprint), filter) {
+			b.WriteString(dimStyle.Render("fingerprint") + "  " + textStyle.Render(d.ManifestFingerprint) + "\n")
+		}
 	}
 	if len(d.ProtectedPaths) > 0 {
-		b.WriteString(dimStyle.Render("sandbox    ") + textStyle.Render(strings.Join(d.ProtectedPaths, ", ")) + "\n")
+		line := strings.Join(d.ProtectedPaths, ", ")
+		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
+			b.WriteString(dimStyle.Render("sandbox    ") + textStyle.Render(line) + "\n")
+		}
 	}
 	if d.ManifestPolicy != "" {
-		b.WriteString(dimStyle.Render("policy     ") + textStyle.Render(d.ManifestPolicy) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ManifestPolicy), filter) {
+			b.WriteString(dimStyle.Render("policy     ") + textStyle.Render(d.ManifestPolicy) + "\n")
+		}
 	}
 	if d.DoomLoopState != "" && d.DoomLoopState != "idle" {
-		b.WriteString(dimStyle.Render("doom loop  ") + diffRemoveStyle.Render(d.DoomLoopState) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.DoomLoopState), filter) {
+			b.WriteString(dimStyle.Render("doom loop  ") + diffRemoveStyle.Render(d.DoomLoopState) + "\n")
+		}
 	}
 	if d.ContextStrategy != "" {
-		b.WriteString(dimStyle.Render("ctx strat  ") + textStyle.Render(d.ContextStrategy) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(d.ContextStrategy), filter) {
+			b.WriteString(dimStyle.Render("ctx strat  ") + textStyle.Render(d.ContextStrategy) + "\n")
+		}
 	}
 	if d.PruningEvents > 0 {
-		b.WriteString(dimStyle.Render("pruning    ") + inProgressStyle.Render(fmt.Sprintf("%d event(s)", d.PruningEvents)) + "\n")
+		line := fmt.Sprintf("%d event(s)", d.PruningEvents)
+		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
+			b.WriteString(dimStyle.Render("pruning    ") + inProgressStyle.Render(line) + "\n")
+		}
 	}
 	if d.CapabilitiesTotal > 0 {
-		b.WriteString(dimStyle.Render("caps       ") + fmt.Sprintf("%d", d.CapabilitiesTotal) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.CapabilitiesTotal)), filter) {
+			b.WriteString(dimStyle.Render("caps       ") + fmt.Sprintf("%d", d.CapabilitiesTotal) + "\n")
+		}
 	}
 	if d.PendingApprovals > 0 {
-		b.WriteString(dimStyle.Render("pending ✓  ") + inProgressStyle.Render(fmt.Sprintf("%d", d.PendingApprovals)) + "\n")
+		line := fmt.Sprintf("%d", d.PendingApprovals)
+		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
+			b.WriteString(dimStyle.Render("pending ✓  ") + inProgressStyle.Render(line) + "\n")
+		}
 	}
 	if d.LiveProviders > 0 {
-		b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.LiveProviders)), filter) {
+			b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
+		}
 	}
 	if len(d.DeprecationNotices) > 0 {
-		b.WriteString(dimStyle.Render("deprecate  ") + fmt.Sprintf("%d", len(d.DeprecationNotices)) + "\n")
+		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", len(d.DeprecationNotices))), filter) {
+			b.WriteString(dimStyle.Render("deprecate  ") + fmt.Sprintf("%d", len(d.DeprecationNotices)) + "\n")
+		}
 	}
 
 	panels := []string{
@@ -603,8 +698,12 @@ func (p *SessionPane) liveWorkflowLines() []string {
 	if len(p.workflows) == 0 {
 		return []string{dimStyle.Render("no workflows")}
 	}
+	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.workflows))
 	for i, wf := range p.workflows {
+		if filter != "" && !strings.Contains(strings.ToLower(wf.WorkflowID+" "+wf.Status+" "+wf.Instruction), filter) {
+			continue
+		}
 		line := fmt.Sprintf("%s  %s  %s", wf.WorkflowID, wf.Status, wf.Instruction)
 		if p.liveSection == liveSectionWorkflows && i == p.workflowSel {
 			line = panelItemActiveStyle.Render("  " + line)
@@ -618,8 +717,12 @@ func (p *SessionPane) liveProviderLines() []string {
 	if len(p.providers) == 0 {
 		return []string{dimStyle.Render("no providers")}
 	}
+	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.providers))
 	for i, provider := range p.providers {
+		if filter != "" && !strings.Contains(strings.ToLower(provider.ProviderID+" "+provider.Kind+" "+provider.Meta.State), filter) {
+			continue
+		}
 		line := fmt.Sprintf("%s  %s  %s", provider.ProviderID, provider.Kind, provider.Meta.State)
 		if p.liveSection == liveSectionProviders && i == p.providerSel {
 			line = panelItemActiveStyle.Render("  " + line)
@@ -633,8 +736,12 @@ func (p *SessionPane) liveApprovalLines() []string {
 	if len(p.approvals) == 0 {
 		return []string{dimStyle.Render("no approvals")}
 	}
+	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.approvals))
 	for i, approval := range p.approvals {
+		if filter != "" && !strings.Contains(strings.ToLower(approval.ID+" "+approval.Kind+" "+approval.Action), filter) {
+			continue
+		}
 		line := fmt.Sprintf("%s  %s  %s", approval.ID, approval.Kind, approval.Action)
 		if p.liveSection == liveSectionApprovals && i == p.approvalSel {
 			line = panelItemActiveStyle.Render("  " + line)
@@ -645,6 +752,7 @@ func (p *SessionPane) liveApprovalLines() []string {
 }
 
 func (p *SessionPane) liveDetailLines() []string {
+	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	switch p.liveSection {
 	case liveSectionWorkflows:
 		if p.workflow != nil {
@@ -664,6 +772,18 @@ func (p *SessionPane) liveDetailLines() []string {
 					lines = append(lines, fallback(resource.Summary, resource.URI))
 				}
 			}
+			if filter != "" {
+				var filtered []string
+				for _, line := range lines {
+					if strings.Contains(strings.ToLower(line), filter) {
+						filtered = append(filtered, line)
+					}
+				}
+				if len(filtered) > 0 {
+					return filtered
+				}
+				return []string{dimStyle.Render("No matching workflow detail")}
+			}
 			return lines
 		}
 		if len(p.workflows) == 0 {
@@ -680,7 +800,7 @@ func (p *SessionPane) liveDetailLines() []string {
 		}
 	case liveSectionProviders:
 		if p.provider != nil {
-			return []string{
+			lines := []string{
 				p.provider.ProviderID,
 				"",
 				dimStyle.Render("Kind") + "  " + p.provider.Kind,
@@ -691,6 +811,19 @@ func (p *SessionPane) liveDetailLines() []string {
 				dimStyle.Render("Capabilities") + "  " + joinOrNA(p.provider.CapabilityIDs),
 				dimStyle.Render("Metadata") + "  " + joinOrNA(p.provider.Metadata),
 			}
+			if filter != "" {
+				var filtered []string
+				for _, line := range lines {
+					if strings.Contains(strings.ToLower(line), filter) {
+						filtered = append(filtered, line)
+					}
+				}
+				if len(filtered) > 0 {
+					return filtered
+				}
+				return []string{dimStyle.Render("No matching provider detail")}
+			}
+			return lines
 		}
 		if len(p.providers) == 0 {
 			return []string{dimStyle.Render("No provider selected.")}
@@ -719,6 +852,18 @@ func (p *SessionPane) liveDetailLines() []string {
 			}
 			if len(p.approval.Metadata) > 0 {
 				lines = append(lines, dimStyle.Render("Metadata")+"  "+joinStringMap(p.approval.Metadata))
+			}
+			if filter != "" {
+				var filtered []string
+				for _, line := range lines {
+					if strings.Contains(strings.ToLower(line), filter) {
+						filtered = append(filtered, line)
+					}
+				}
+				if len(filtered) > 0 {
+					return filtered
+				}
+				return []string{dimStyle.Render("No matching approval detail")}
 			}
 			return lines
 		}
@@ -882,7 +1027,7 @@ func changeStatusDisplay(s ChangeStatus) (string, func(string) string) {
 	case StatusApproved:
 		return "✓", wrap(taskDoneStyle)
 	case StatusRejected:
-		return "✗", wrap(lipgloss.NewStyle().Foreground(lipgloss.Color("1")))
+		return "✗", wrap(lipgloss.NewStyle().Foreground(colorError))
 	default:
 		return "?", wrap(dimStyle)
 	}

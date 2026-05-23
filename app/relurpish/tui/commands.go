@@ -109,6 +109,17 @@ var rootCommandRegistry *CommandRegistry
 
 func registerUniversalCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
+		{Name: "workspace", Description: "Switch workspace root", Usage: "/workspace [path]", Handler: rootHandleWorkspace},
+		{Name: "permissions", Description: "Open sandbox permissions", Usage: "/permissions", Handler: rootHandlePermissions},
+		{Name: "securityguard", Description: "Open SecurityGuard filters", Usage: "/securityguard", Handler: rootHandleSecurityGuard},
+		{Name: "filescopes", Description: "Focus file scope controls", Usage: "/filescopes", Handler: rootHandleFileScopes},
+		{Name: "doctor", Description: "Show workspace doctor report", Usage: "/doctor", Handler: rootHandleDoctor},
+		{Name: "model", Description: "Inspect or set the active model", Usage: "/model [model_name]", Handler: rootHandleModel},
+		{Name: "model-provider", Description: "Open model provider configuration", Usage: "/model-provider", Handler: rootHandleModelProvider},
+		{Name: "keybindings", Description: "Open keybinding configuration", Usage: "/keybindings", Handler: rootHandleKeybindings},
+		{Name: "recipes", Description: "Open the recipe library", Usage: "/recipes", Handler: rootHandleRecipes},
+		{Name: "recipe", Description: "Run, open, validate, or inspect a recipe", Usage: "/recipe <run|open|validate|reload> [recipe-id]", Handler: rootHandleRecipe},
+		{Name: "reload", Description: "Reload recipes and prompt templates", Usage: "/reload", Handler: rootHandleReloadCatalog},
 		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
 		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
 		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
@@ -123,7 +134,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "resume", Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
 		{Name: "hitl", Description: "Show pending HITL approvals", Usage: "/hitl", Handler: rootHandleHITL},
 		{Name: "queue", Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
-		{Name: "service", Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabSession}},
+		{Name: "service", Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabAIProvider}},
 	} {
 		r.Register(cmd)
 	}
@@ -148,7 +159,7 @@ func registerChatCommands(r *CommandRegistry) {
 	}
 }
 
-func registerSurfaceCommands(reg *CommandRegistry) {
+func RegisterSurfaceCommands(reg *CommandRegistry) {
 	// Default surface commands preserve the current chat-oriented workflow.
 	// Agent-specific surfaces can replace or extend these commands.
 	for _, cmd := range []Command{
@@ -224,6 +235,304 @@ func rootHandleHelp(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
+func rootHandleWorkspace(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) == 0 {
+		workspace := ""
+		if m.sharedSess != nil {
+			workspace = m.sharedSess.Workspace
+		}
+		if workspace == "" && m.runtime != nil {
+			workspace = m.runtime.SessionInfo().Workspace
+		}
+		if workspace == "" {
+			m.addSystemMessage("Workspace: (unset)")
+		} else {
+			m.addSystemMessage(fmt.Sprintf("Workspace: %s", workspace))
+		}
+		m.setActiveTab(TabWelcome)
+		return m, nil
+	}
+	workspace := strings.TrimSpace(args[0])
+	if workspace == "" {
+		m.addSystemMessage("Usage: /workspace [path]")
+		return m, nil
+	}
+	if m.sharedSess != nil {
+		m.sharedSess.Workspace = workspace
+	}
+	m.scope = workspace
+	if m.inputBar != nil {
+		m.inputBar.SetWorkspace(workspace)
+	}
+	if m.store != nil {
+		m.store = NewSessionStore(workspace)
+	}
+	m.setActiveTab(TabWelcome)
+	m.addSystemMessage(fmt.Sprintf("Workspace set to %s", workspace))
+	if m.session != nil {
+		return m, m.session.Init()
+	}
+	return m, nil
+}
+
+func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabSandbox)
+	if m.sandbox != nil {
+		m.sandbox.FocusFilescopes()
+	}
+	m.addSystemMessage("Opened sandbox permissions")
+	return m, nil
+}
+
+func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabSecurityGuard)
+	m.addSystemMessage("Opened SecurityGuard filters")
+	return m, nil
+}
+
+func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabSandbox)
+	if m.sandbox != nil {
+		m.sandbox.FocusFilescopes()
+	}
+	m.addSystemMessage("Focused file scopes")
+	return m, nil
+}
+
+func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabDoctor)
+	workspace := ""
+	model := ""
+	provider := ""
+	if m.sharedSess != nil {
+		workspace = m.sharedSess.Workspace
+		model = m.sharedSess.Model
+		provider = m.sharedSess.Provider
+	}
+	if m.runtime != nil {
+		info := m.runtime.SessionInfo()
+		if workspace == "" {
+			workspace = info.Workspace
+		}
+		if model == "" {
+			model = info.Model
+		}
+		if provider == "" {
+			provider = info.Provider
+		}
+	}
+	m.addSystemMessage(fmt.Sprintf("Doctor: workspace=%s provider=%s model=%s", workspace, provider, model))
+	return m, nil
+}
+
+func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) == 0 {
+		current := ""
+		if m.sharedSess != nil {
+			current = m.sharedSess.Model
+		}
+		available := ""
+		if m.runtime != nil {
+			if models, err := m.runtime.InferenceModels(context.Background()); err == nil && len(models) > 0 {
+				available = fmt.Sprintf("\nAvailable: %s", strings.Join(models, ", "))
+			}
+		}
+		_ = m.switchActiveAgent("none")
+		m.setActiveTab(TabAIProvider)
+		m.addSystemMessage(fmt.Sprintf("Current model: %s%s", current, available))
+		return m, nil
+	}
+	model := strings.TrimSpace(args[0])
+	if model == "" {
+		m.addSystemMessage("Usage: /model [model_name]")
+		return m, nil
+	}
+	if m.runtime != nil {
+		if err := m.runtime.SaveModel(model); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Model save failed: %v", err))
+			return m, nil
+		}
+	}
+	if m.sharedSess != nil {
+		m.sharedSess.Model = model
+	}
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabAIProvider)
+	m.addSystemMessage(fmt.Sprintf("Model set to %s", model))
+	return m, nil
+}
+
+func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabAIProvider)
+	info := ""
+	if m.runtime != nil {
+		session := m.runtime.SessionInfo()
+		info = fmt.Sprintf("provider=%s model=%s", session.Provider, session.Model)
+	}
+	m.addSystemMessage("Opened model provider configuration" + func() string {
+		if info == "" {
+			return ""
+		}
+		return ": " + info
+	}())
+	return m, nil
+}
+
+func rootHandleKeybindings(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	_ = m.switchActiveAgent("none")
+	m.setActiveTab(TabKeybindings)
+	m.addSystemMessage("Opened keybindings")
+	return m, nil
+}
+
+func rootHandleRecipes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if err := m.switchActiveAgent("euclo"); err != nil {
+		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
+		return m, nil
+	}
+	if m.library != nil {
+		m.library.Refresh()
+	}
+	m.setActiveTab(TabLibrary)
+	m.addSystemMessage("Opened recipe library")
+	return m, nil
+}
+
+func rootHandleReloadCatalog(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if m.library == nil {
+		m.addSystemMessage("recipe library unavailable")
+		return m, nil
+	}
+	if err := m.switchActiveAgent("euclo"); err != nil {
+		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
+		return m, nil
+	}
+	m.library.Refresh()
+	m.setActiveTab(TabLibrary)
+	m.addSystemMessage("Reloaded recipe and prompt catalogs")
+	return m, nil
+}
+
+func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.library == nil {
+		m.addSystemMessage("recipe library unavailable")
+		return m, nil
+	}
+	if err := m.switchActiveAgent("euclo"); err != nil {
+		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
+		return m, nil
+	}
+	if len(args) == 0 {
+		m.setActiveTab(TabLibrary)
+		m.addSystemMessage("Opened recipe library")
+		return m, nil
+	}
+
+	switch args[0] {
+	case "list":
+		m.setActiveTab(TabLibrary)
+		m.addSystemMessage("Opened recipe library")
+		return m, nil
+	case "reload":
+		return rootHandleReloadCatalog(m, nil)
+	case "run":
+		id, cmdArgs := recipeCommandTarget(args[1:])
+		if id == "" {
+			if selected := m.library.selectedID(); selected != "" {
+				id = selected
+			}
+		}
+		if id == "" {
+			m.addSystemMessage("Usage: /recipe run <recipe-id> [params...]")
+			return m, nil
+		}
+		if prompt, ok := m.library.runPromptForID(id); ok {
+			if len(cmdArgs) > 0 {
+				prompt = strings.Join([]string{"/recipe", "run", id, strings.Join(cmdArgs, " ")}, " ")
+				prompt += " "
+			}
+			m.setActiveTab(TabLibrary)
+			m.addSystemMessage(fmt.Sprintf("Prepared recipe %s for parameter input", id))
+			if m.inputBar != nil {
+				m.inputBar.SetValue(prompt)
+			}
+			m.setFocus(FocusRegionInput)
+			return m, nil
+		}
+		m.addSystemMessage(fmt.Sprintf("Recipe not found: %s", id))
+		return m, nil
+	case "open":
+		id, _ := recipeCommandTarget(args[1:])
+		if id == "" {
+			id = m.library.selectedID()
+		}
+		if id == "" {
+			m.addSystemMessage("Usage: /recipe open <recipe-id>")
+			return m, nil
+		}
+		if m.library.selectByID(id) {
+			_, cmd := m.library.openSelectedEditorCmd()
+			m.setActiveTab(TabLibrary)
+			return m, cmd
+		}
+		m.addSystemMessage(fmt.Sprintf("Recipe not found: %s", id))
+		return m, nil
+	case "validate":
+		id, _ := recipeCommandTarget(args[1:])
+		if id == "" {
+			id = m.library.selectedID()
+		}
+		if id == "" {
+			m.addSystemMessage("Usage: /recipe validate <recipe-id>")
+			return m, nil
+		}
+		if m.library.selectByID(id) {
+			_, cmd := m.library.validateSelected()
+			m.setActiveTab(TabLibrary)
+			return m, cmd
+		}
+		m.addSystemMessage(fmt.Sprintf("Recipe not found: %s", id))
+		return m, nil
+	default:
+		id, cmdArgs := recipeCommandTarget(args)
+		if id == "" {
+			m.addSystemMessage("Usage: /recipe <run|open|validate|reload> [recipe-id]")
+			return m, nil
+		}
+		if prompt, ok := m.library.runPromptForID(id); ok {
+			if len(cmdArgs) > 0 {
+				prompt = strings.Join([]string{"/recipe", "run", id, strings.Join(cmdArgs, " ")}, " ")
+				prompt += " "
+			}
+			m.setActiveTab(TabLibrary)
+			m.addSystemMessage(fmt.Sprintf("Prepared recipe %s for parameter input", id))
+			if m.inputBar != nil {
+				m.inputBar.SetValue(prompt)
+			}
+			m.setFocus(FocusRegionInput)
+			return m, nil
+		}
+		m.addSystemMessage(fmt.Sprintf("Recipe not found: %s", id))
+		return m, nil
+	}
+}
+
+func recipeCommandTarget(args []string) (string, []string) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	id := strings.TrimSpace(args[0])
+	if id == "" {
+		return "", args[1:]
+	}
+	return id, args[1:]
+}
+
 func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if len(args) == 0 {
 		m.addSystemMessage("Usage: /add <path>")
@@ -240,11 +549,8 @@ func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 				m.sharedCtx.AddFile(path)
 			}
 			// Update chat sidebar if visible
-			if m.chat != nil {
-				// We need to cast to *ChatPane to access AddFileToSidebar
-				if chatPane, ok := m.chat.(*ChatPane); ok {
-					chatPane.AddFileToSidebar(path)
-				}
+			if sidebar, ok := m.chat.(ChatSidebarController); ok {
+				_ = sidebar.AddFileToSidebar(path)
 			}
 		}
 	} else if m.chat != nil {
@@ -269,21 +575,16 @@ func rootHandleRemove(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 				m.sharedCtx.RemoveFile(path)
 			}
 			// Update chat sidebar if visible
-			if m.chat != nil {
-				// We need to cast to *ChatPane to access RemoveFileFromSidebar
-				if chatPane, ok := m.chat.(*ChatPane); ok {
-					chatPane.RemoveFileFromSidebar(path)
-				}
+			if sidebar, ok := m.chat.(ChatSidebarController); ok {
+				sidebar.RemoveFileFromSidebar(path)
 			}
 		}
 	} else if m.sharedCtx != nil {
 		m.sharedCtx.RemoveFile(path)
 		m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
 		// Update chat sidebar if visible
-		if m.chat != nil {
-			if chatPane, ok := m.chat.(*ChatPane); ok {
-				chatPane.RemoveFileFromSidebar(path)
-			}
+		if sidebar, ok := m.chat.(ChatSidebarController); ok {
+			sidebar.RemoveFileFromSidebar(path)
 		}
 	}
 	return m, nil
@@ -329,8 +630,7 @@ func rootHandleQueueTask(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.session != nil {
 		m.session.SyncQueuedTasks(m.tasks.Items())
 	}
-	m.setActiveTab(TabSession)
-	m.setActiveSubTab(SubTabSessionTasks)
+	m.setActiveTab(TabAIProvider)
 	return m, m.dequeueNextTask()
 }
 
@@ -487,40 +787,25 @@ func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.sharedSess != nil {
 		m.sharedSess.Mode = args[0]
 	}
-	m.titleBar.Update(0, 0)
 	m.addSystemMessage(fmt.Sprintf("Set mode to: %s", args[0]))
 	return m, nil
 }
 
 func rootHandleAgent(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if len(args) == 0 {
-		current := "(default)"
-		if m.sharedSess != nil && m.sharedSess.Agent != "" {
-			current = m.sharedSess.Agent
-		}
+		current := m.activeAgentName()
 		available := ""
-		if m.runtime != nil {
-			list := m.runtime.AvailableAgents()
-			if len(list) > 0 {
-				available = fmt.Sprintf("\nAvailable: %s", strings.Join(list, ", "))
-			}
+		if list := m.availableAgents(); len(list) > 0 {
+			available = fmt.Sprintf("\nAvailable: %s", strings.Join(list, ", "))
 		}
 		m.addSystemMessage(fmt.Sprintf("Current agent: %s%s", current, available))
 		return m, nil
 	}
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable: cannot switch agent")
-		return m, nil
-	}
 	name := args[0]
-	if err := m.runtime.SwitchAgent(name); err != nil {
+	if err := m.switchActiveAgent(name); err != nil {
 		m.addSystemMessage(fmt.Sprintf("Agent switch failed: %v", err))
 		return m, nil
 	}
-	if m.sharedSess != nil {
-		m.sharedSess.Agent = name
-	}
-	m.activateSurface(name)
 	m.addSystemMessage(fmt.Sprintf("Switched agent to: %s", name))
 	return m, nil
 }
@@ -817,6 +1102,7 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.addSystemMessage("Runtime unavailable")
 		return m, nil
 	}
+	m.setActiveTab(TabAIProvider)
 
 	switch action {
 	case "stop":

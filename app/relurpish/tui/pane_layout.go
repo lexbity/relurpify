@@ -52,7 +52,7 @@ func sectionPanel(title string, width int, lines ...string) string {
 	}
 	content := []string{panelHeaderStyle.Render(title)}
 	content = append(content, lines...)
-	return panelStyle.Width(max(24, width)).Render(strings.Join(content, "\n"))
+	return panelStyle.Width(width).Render(strings.Join(content, "\n"))
 }
 
 // sectionList renders a selectable list with a clipped visible window.

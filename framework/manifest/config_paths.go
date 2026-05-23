@@ -90,6 +90,14 @@ func (p Paths) PolicyRulesFile() string {
 	return filepath.Join(p.ConfigRoot(), "policy_rules.yaml")
 }
 
+func (p Paths) ProvidersFile() string {
+	return filepath.Join(p.ConfigRoot(), "providers.yaml")
+}
+
+func (p Paths) KeybindingsFile() string {
+	return filepath.Join(p.ConfigRoot(), "keybindings.yaml")
+}
+
 func (p Paths) MemoryDir() string {
 	return filepath.Join(p.ConfigRoot(), "memory")
 }
@@ -181,6 +189,8 @@ func (p Paths) GovernanceRoots(extra ...string) []string {
 		p.ConfigFile(),
 		p.NexusConfigFile(),
 		p.PolicyRulesFile(),
+		p.ProvidersFile(),
+		p.KeybindingsFile(),
 		p.ModelProfilesDir(),
 	}
 	for _, path := range extra {

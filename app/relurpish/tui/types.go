@@ -10,13 +10,20 @@ type TabID string
 
 // Universal tab IDs — present for all agents.
 const (
-	TabConfig  TabID = "config"
-	TabSession TabID = "session"
+	TabWelcome       TabID = "welcome"
+	TabSandbox       TabID = "sandbox"
+	TabSecurityGuard TabID = "securityguard"
+	TabAIProvider    TabID = "ai-provider"
+	TabKeybindings   TabID = "keybindings"
+	TabDoctor        TabID = "doctor"
 )
 
 // Euclo tab IDs — registered by the euclo agent on init.
 const (
-	TabChat TabID = "chat"
+	TabChat    TabID = "chat"
+	TabGraph   TabID = "graph"
+	TabDiff    TabID = "diff"
+	TabLibrary TabID = "library"
 )
 
 // SubTabID identifies a subtab within a main tab. Alias so string literals are
@@ -244,6 +251,14 @@ type SessionLiveSnapshotMsg struct {
 
 // configRefreshMsg is an internal signal to reload config pane state from runtime.
 type configRefreshMsg struct{}
+
+// sandboxPersistedMsg is emitted after the sandbox manifest is saved and the
+// runtime has been reloaded against the current workspace.
+type sandboxPersistedMsg struct {
+	Workspace string
+	Backup    string
+	Err       error
+}
 
 // NotificationKind describes what kind of notification is being shown.
 type NotificationKind string

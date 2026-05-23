@@ -19,6 +19,12 @@ type RunState struct {
 	Dropped int64
 }
 
+// StreamDoneMsg signals that a streaming run completed and the host should
+// perform its post-run bookkeeping.
+type StreamDoneMsg struct{ RunID string }
+
+type streamDoneMsg = StreamDoneMsg
+
 // UpdateTaskMsg allows external messages to update plan task status in-place.
 type UpdateTaskMsg struct {
 	TaskIndex int

@@ -43,12 +43,14 @@ func rootHandleCheckpoint(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-// compactResultMsg carries the outcome of a /compact operation.
-type compactResultMsg struct {
-	summary       string
-	originalCount int
-	err           error
+// CompactResultMsg carries the outcome of a /compact operation.
+type CompactResultMsg struct {
+	Summary       string
+	OriginalCount int
+	Err           error
 }
+
+type compactResultMsg = CompactResultMsg
 
 // rootHandleCompact compresses the chat history to a single LLM-generated summary.
 // The current feed is snapshotted onto the undo stack before replacement, so

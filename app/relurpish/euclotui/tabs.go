@@ -2,11 +2,15 @@ package euclotui
 
 import "codeburg.org/lexbit/relurpify/app/relurpish/tui"
 
-// RegisterEucloTabs adds the chat tab for the euclo agent.
-// It is called via EucloPlugin.SetupTabs from tui.newRootModel.
+// RegisterEucloTabs adds the Euclo surface tabs.
 func RegisterEucloTabs(reg *tui.TabRegistry) {
+	if reg == nil {
+		return
+	}
 	reg.Register(tui.TabDefinition{
-		ID: tui.TabChat, Label: "chat", AgentFilter: []string{"euclo"},
+		ID:          tui.TabChat,
+		Label:       "chat",
+		AgentFilter: []string{"euclo"},
 		SubTabs: []tui.SubTabDefinition{
 			{ID: tui.SubTabChatLocalRead, Label: "local-read-only"},
 			{ID: tui.SubTabChatLocalEdit, Label: "local-edit-on"},
@@ -14,4 +18,7 @@ func RegisterEucloTabs(reg *tui.TabRegistry) {
 			{ID: tui.SubTabChatOnlineEdit, Label: "online-edit-on"},
 		},
 	})
+	reg.Register(tui.TabDefinition{ID: tui.TabGraph, Label: "graph", AgentFilter: []string{"euclo"}})
+	reg.Register(tui.TabDefinition{ID: tui.TabDiff, Label: "diff", AgentFilter: []string{"euclo"}})
+	reg.Register(tui.TabDefinition{ID: tui.TabLibrary, Label: "library", AgentFilter: []string{"euclo"}})
 }

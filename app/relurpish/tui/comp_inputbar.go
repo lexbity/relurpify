@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -9,11 +8,17 @@ import (
 )
 
 // Messages emitted by InputBar.
-type InputSubmittedMsg struct{ Value string }
-type CommandInvokedMsg struct {
-	Name string
-	Args []string
+type InputSubmittedMsg struct {
+	Value  string
+	Prefix string
 }
+
+type CommandInvokedMsg struct {
+	Name   string
+	Args   []string
+	Prefix string
+}
+
 type GlobalKeyMsg struct{ Key string }
 
 const commandPaletteRows = 6
@@ -26,18 +31,22 @@ type commandItem struct {
 	Score       int
 }
 
-// InputBar wraps textinput with prefix-by-tab, ↑↓ history, and inline /command palette.
+// InputBar wraps textinput with prefix-sensitive completion and file picker support.
 type InputBar struct {
-	input   textinput.Model
-	history InputHistory
-	palette []commandItem
-	palSel  int
-	palOpen bool
-	width   int
-	// searchMode suppresses global keys and shows a search placeholder.
+	input     textinput.Model
+	history   InputHistory
+	palette   []commandItem
+	palSel    int
+	palOpen   bool
+	palPrefix string
+	palLabel  string
+	width     int
+	focused   bool
+
+	// searchMode is the explicit Ctrl+F mode. Typed `?` is still parsed from the buffer.
 	searchMode bool
 
-	// File picker state
+	// File picker state.
 	pickerActive bool
 	pickerQuery  string
 	pickerResult filePickerResultMsg
@@ -54,9 +63,9 @@ type InputBar struct {
 // NewInputBar creates a focused InputBar.
 func NewInputBar() *InputBar {
 	ti := textinput.New()
-	ti.Placeholder = "Type a message or /help for commands"
+	ti.Placeholder = "Type a message, /help, :git status, or ?search"
 	ti.Focus()
-	return &InputBar{input: ti}
+	return &InputBar{input: ti, focused: true}
 }
 
 // SetWorkspace sets the workspace path for file picker globbing.
@@ -82,9 +91,9 @@ func (b *InputBar) SetContext(tab TabID, sub SubTabID) {
 
 // PaletteState exposes the current command palette state so RootModel can
 // render it as a first-class overlay.
-func (b *InputBar) PaletteState() (bool, []commandItem, int) {
+func (b *InputBar) PaletteState() (bool, []commandItem, int, string) {
 	items := append([]commandItem(nil), b.palette...)
-	return b.palOpen && len(items) > 0, items, b.palSel
+	return b.palOpen && len(items) > 0, items, b.palSel, b.palLabel
 }
 
 // IsFilePickerActive reports whether the file picker overlay is active.
@@ -95,7 +104,22 @@ func (b *InputBar) IsFilePickerActive() bool {
 // SetWidth sets the input width.
 func (b *InputBar) SetWidth(w int) {
 	b.width = w
-	b.input.Width = max(10, w-4)
+	b.input.Width = max(1, w-4)
+}
+
+// SetFocused updates the visible focus state for the input bar.
+func (b *InputBar) SetFocused(on bool) {
+	b.focused = on
+	if on {
+		b.input.Focus()
+		return
+	}
+	b.input.Blur()
+}
+
+// Focused reports whether the input bar currently owns focus.
+func (b *InputBar) Focused() bool {
+	return b != nil && b.focused
 }
 
 // Value returns the current text value.
@@ -104,16 +128,16 @@ func (b *InputBar) Value() string { return b.input.Value() }
 // SetValue sets the input text.
 func (b *InputBar) SetValue(v string) { b.input.SetValue(v) }
 
-// SetSearchMode enters or exits search mode.
+// SetSearchMode enters or exits explicit search mode.
 func (b *InputBar) SetSearchMode(on bool) {
 	b.searchMode = on
 	if on {
-		b.input.Placeholder = "search messages..."
+		b.input.Placeholder = "search..."
 		b.input.SetValue("")
-		b.input.Focus()
-	} else {
-		b.input.Placeholder = "Type a message or /help for commands"
+		b.SetFocused(true)
+		return
 	}
+	b.input.Placeholder = "Type a message, /help, :git status, or ?search"
 }
 
 // SetFilePickerMode enters or exits file picker mode.
@@ -121,26 +145,131 @@ func (b *InputBar) SetFilePickerMode(on bool) {
 	if on {
 		b.input.Placeholder = "@ - select files or type path"
 		b.input.SetValue("@")
-		b.input.Focus()
-	} else {
-		b.input.Placeholder = "Type a message or /help for commands"
-		b.input.SetValue("")
+		b.SetFocused(true)
+		return
 	}
+	b.input.Placeholder = "Type a message, /help, :git status, or ?search"
+	b.input.SetValue("")
 }
 
-// prefix returns the prompt prefix for the current context.
-func (b *InputBar) prefix(tab TabID) string {
+func (b *InputBar) promptLabel(activeTab TabID, draft inputDraft) string {
+	if draft.promptLabel != "" {
+		return draft.promptLabel
+	}
 	if b.searchMode {
-		return "/ "
+		return "search"
 	}
-	switch tab {
-	case TabSession:
-		return "@ "
-	case TabConfig:
-		return "? "
-	default:
-		return "> "
+	if draft.prefix != "" {
+		switch draft.prefix {
+		case "/":
+			return "slash"
+		case ":":
+			return "shell"
+		case "?":
+			return "search"
+		case ">":
+			return "prompt"
+		}
 	}
+	if activeTab == TabChat {
+		return "prompt"
+	}
+	return "filter"
+}
+
+func (b *InputBar) updatePalette(draft inputDraft) {
+	if !draft.commandMode {
+		b.palOpen = false
+		b.palette = nil
+		b.palSel = 0
+		b.palPrefix = ""
+		b.palLabel = ""
+		return
+	}
+	shouldOpen := draft.command == "" || (len(draft.args) == 0 && !draft.trailingSpace)
+	if !shouldOpen {
+		b.palOpen = false
+		b.palette = nil
+		b.palSel = 0
+		b.palPrefix = ""
+		b.palLabel = ""
+		return
+	}
+	items := commandPaletteItems(b.cmdReg, draft.paletteQuery, b.ctxTab, b.ctxSub)
+	b.palette = items
+	b.palOpen = len(items) > 0
+	b.palSel = 0
+	b.palPrefix = draft.prefix
+	b.palLabel = draft.promptLabel
+}
+
+func (b *InputBar) updateFilePicker(raw string, draft inputDraft, activeTab TabID) tea.Cmd {
+	if draft.commandMode || draft.prefix == "?" {
+		b.pickerActive = false
+		b.pickerResult.Results = nil
+		b.pickerSel = 0
+		b.pickerQuery = ""
+		return nil
+	}
+	if draft.prefix == "" && activeTab != TabChat {
+		b.pickerActive = false
+		b.pickerResult.Results = nil
+		b.pickerSel = 0
+		b.pickerQuery = ""
+		return nil
+	}
+	token, ok := filePickerTokenPrefix(raw)
+	if !ok || b.workspace == "" || b.runtime == nil {
+		b.pickerActive = false
+		b.pickerResult.Results = nil
+		b.pickerSel = 0
+		b.pickerQuery = ""
+		return nil
+	}
+	if token == b.pickerQuery && b.pickerActive {
+		return nil
+	}
+	b.pickerActive = true
+	b.pickerQuery = token
+	b.pickerSel = 0
+	return filePickerQueryCmd(b.runtime, b.workspace, token)
+}
+
+func (b *InputBar) completePaletteSelection() {
+	if !b.palOpen || len(b.palette) == 0 {
+		return
+	}
+	if b.palSel < 0 || b.palSel >= len(b.palette) {
+		b.palSel = 0
+	}
+	item := b.palette[b.palSel]
+	raw := b.input.Value()
+	b.input.SetValue(replaceTokenAtPrefix(raw, b.palPrefix, item.Name))
+	b.input.CursorEnd()
+	b.palOpen = false
+	b.palette = nil
+	b.palSel = 0
+	b.palPrefix = ""
+	b.palLabel = ""
+}
+
+func (b *InputBar) completePickerSelection() {
+	if !b.pickerActive || len(b.pickerResult.Results) == 0 {
+		return
+	}
+	if b.pickerSel < 0 || b.pickerSel >= len(b.pickerResult.Results) {
+		b.pickerSel = 0
+	}
+	selectedFile := b.pickerResult.Results[b.pickerSel]
+	currentVal := b.input.Value()
+	if updated := filePickerReplaceToken(currentVal, selectedFile); updated != currentVal {
+		b.input.SetValue(updated)
+		b.input.CursorEnd()
+	}
+	b.pickerActive = false
+	b.pickerResult.Results = nil
+	b.pickerSel = 0
+	b.pickerQuery = ""
 }
 
 // Update processes key input and emits typed messages.
@@ -151,73 +280,79 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		return b, nil
 
 	case tea.KeyMsg:
-		// Intercept global navigation keys only when input is empty.
 		if b.input.Value() == "" && !b.palOpen && !b.searchMode {
-			switch msg.String() {
-			case "1", "2", "3", "4", "5", "6", "?", "ctrl+t", "ctrl+f":
+			if keyMatchesBinding(GlobalKeys.Tab1, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Tab2, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Tab3, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Tab4, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Tab5, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Tab6, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.SearchMode, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.Help, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.FocusRegion1, msg.String()) ||
+				keyMatchesBinding(GlobalKeys.AgentPicker, msg.String()) {
 				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
-			case "tab", "shift+tab":
-				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
-			case "[", "]":
+			}
+			if msg.String() == "[" || msg.String() == "]" {
 				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 			}
 		}
 
-		switch msg.String() {
-		case "ctrl+c", "ctrl+d":
+		switch {
+		case keyMatchesBinding(GlobalKeys.Quit, msg.String()), keyMatchesBinding(GlobalKeys.Help, msg.String()):
 			return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 
-		case "enter":
-			// File picker: select current file
-			if b.pickerActive && len(b.pickerResult.Results) > 0 && b.pickerSel < len(b.pickerResult.Results) {
-				selectedFile := b.pickerResult.Results[b.pickerSel]
-				// Insert selected file as @path token
-				currentVal := b.input.Value()
-				// Remove the @prefix query
-				atIdx := strings.LastIndex(currentVal, "@")
-				if atIdx >= 0 {
-					beforeAt := currentVal[:atIdx]
-					b.input.SetValue(beforeAt + "@" + selectedFile + " ")
-					b.pickerActive = false
-					b.pickerResult.Results = nil
-					b.pickerSel = 0
-					b.input.CursorEnd()
-					return b, nil
-				}
+		case msg.String() == "enter":
+			if b.pickerActive && len(b.pickerResult.Results) > 0 {
+				b.completePickerSelection()
+				return b, nil
 			}
-
+			if b.palOpen && len(b.palette) > 0 {
+				b.completePaletteSelection()
+				return b, nil
+			}
 			raw := strings.TrimSpace(b.input.Value())
 			b.input.SetValue("")
 			b.palOpen = false
 			b.palette = nil
 			b.palSel = 0
+			b.palPrefix = ""
+			b.palLabel = ""
 			b.pickerActive = false
 			b.pickerResult.Results = nil
 			b.pickerSel = 0
+			b.pickerQuery = ""
 			if raw == "" {
 				return b, nil
 			}
-			if strings.HasPrefix(raw, "/") {
-				name, args := parseSlashCommand(raw)
-				if name != "" {
-					b.history.Push(raw)
-					return b, func() tea.Msg { return CommandInvokedMsg{Name: name, Args: args} }
+			prefix, name, args, ok := parseCommandLine(raw)
+			if ok {
+				b.history.Push(raw)
+				return b, func() tea.Msg { return CommandInvokedMsg{Name: name, Args: args, Prefix: prefix} }
+			}
+			draft := parseInputDraft(raw, activeTab, b.searchMode)
+			b.history.Push(raw)
+			return b, func() tea.Msg {
+				return InputSubmittedMsg{
+					Value:  sanitizeSubmittedValue(raw, draft.prefix),
+					Prefix: draft.prefix,
 				}
 			}
-			b.history.Push(raw)
-			return b, func() tea.Msg { return InputSubmittedMsg{Value: raw} }
 
-		case "esc":
+		case msg.String() == "esc":
 			if b.pickerActive {
 				b.pickerActive = false
 				b.pickerResult.Results = nil
 				b.pickerSel = 0
+				b.pickerQuery = ""
 				return b, nil
 			}
 			if b.palOpen {
 				b.palOpen = false
 				b.palette = nil
-				b.input.SetValue("")
+				b.palSel = 0
+				b.palPrefix = ""
+				b.palLabel = ""
 				return b, nil
 			}
 			if b.searchMode {
@@ -225,7 +360,7 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 				return b, func() tea.Msg { return GlobalKeyMsg{Key: "esc"} }
 			}
 
-		case "up":
+		case msg.String() == "up":
 			if b.pickerActive && b.pickerSel > 0 {
 				b.pickerSel--
 				return b, nil
@@ -241,7 +376,7 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			}
 			return b, nil
 
-		case "down":
+		case msg.String() == "down":
 			if b.pickerActive && b.pickerSel < len(b.pickerResult.Results)-1 {
 				b.pickerSel++
 				return b, nil
@@ -255,158 +390,72 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			b.input.CursorEnd()
 			return b, nil
 
-		case "tab":
-			// File picker: select current file (same as enter)
-			if b.pickerActive && len(b.pickerResult.Results) > 0 && b.pickerSel < len(b.pickerResult.Results) {
-				selectedFile := b.pickerResult.Results[b.pickerSel]
-				currentVal := b.input.Value()
-				atIdx := strings.LastIndex(currentVal, "@")
-				if atIdx >= 0 {
-					beforeAt := currentVal[:atIdx]
-					b.input.SetValue(beforeAt + "@" + selectedFile + " ")
-					b.pickerActive = false
-					b.pickerResult.Results = nil
-					b.pickerSel = 0
-					b.input.CursorEnd()
-					return b, nil
-				}
+		case msg.String() == "tab":
+			if b.pickerActive && len(b.pickerResult.Results) > 0 {
+				b.completePickerSelection()
+				return b, nil
 			}
 			if b.palOpen && len(b.palette) > 0 {
-				b.autocomplete()
-				b.updatePalette()
+				b.completePaletteSelection()
 				return b, nil
 			}
 		}
 
-		// Pass through to textinput.
 		var cmd tea.Cmd
 		b.input, cmd = b.input.Update(msg)
-
-		// Check if we should open the command palette or file picker.
-		val := b.input.Value()
-		if strings.HasPrefix(val, "/") {
-			b.palOpen = true
-			b.updatePalette()
-			b.pickerActive = false
-			b.pickerResult.Results = nil
-		} else if strings.Contains(val, "@") {
-			// Find the last @ and get the text after it
-			atIdx := strings.LastIndex(val, "@")
-			if atIdx >= 0 {
-				afterAt := val[atIdx+1:]
-				// Only activate picker if @ is not preceded by another word character
-				isTokenStart := atIdx == 0 || !isWordChar(rune(val[atIdx-1]))
-				if isTokenStart && b.workspace != "" && b.runtime != nil {
-					b.pickerActive = true
-					b.pickerQuery = "@" + afterAt
-					b.pickerSel = 0
-					return b, filePickerQueryCmd(b.runtime, b.workspace, "@"+afterAt)
-				}
-			}
-			b.palOpen = false
-			b.palette = nil
-		} else {
-			b.palOpen = false
-			b.palette = nil
-			b.pickerActive = false
-			b.pickerResult.Results = nil
+		raw := b.input.Value()
+		draft := parseInputDraft(raw, activeTab, b.searchMode)
+		b.updatePalette(draft)
+		if pickerCmd := b.updateFilePicker(raw, draft, activeTab); pickerCmd != nil {
+			return b, pickerCmd
 		}
 		return b, cmd
 	}
 
-	// Pass through blink tick etc.
 	var cmd tea.Cmd
 	b.input, cmd = b.input.Update(msg)
 	return b, cmd
 }
 
-func (b *InputBar) autocomplete() {
-	if len(b.palette) == 0 {
-		return
-	}
-	if b.palSel < 0 || b.palSel >= len(b.palette) {
-		b.palSel = 0
-	}
-	item := b.palette[b.palSel]
-	v := "/" + item.Name
-	if strings.Contains(item.Usage, " ") {
-		v += " "
-	}
-	b.input.SetValue(v)
-	b.input.CursorEnd()
-}
-
-func (b *InputBar) updatePalette() {
-	query := strings.TrimPrefix(b.input.Value(), "/")
-	if f := strings.Fields(query); len(f) > 0 {
-		query = f[0]
-	}
-
-	// Get candidate commands: use registry for context-aware filtering if available.
-	var candidates []Command
-	if b.cmdReg != nil && b.ctxTab != "" {
-		candidates = b.cmdReg.Match("", b.ctxTab, b.ctxSub)
-	} else {
-		candidates = listCommandsSorted()
-	}
-
-	var items []commandItem
-	for _, cmd := range candidates {
-		score := 0
-		if query != "" {
-			ok, s := fuzzyMatchScore(query, cmd.Name)
-			if ok {
-				score = s
-			} else if ok2, s2 := fuzzyMatchScore(query, cmd.Usage); ok2 {
-				score = s2 - 2
-			} else {
-				continue
-			}
-		}
-		items = append(items, commandItem{Name: cmd.Name, Usage: cmd.Usage, Description: cmd.Description, Score: score})
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Score == items[j].Score {
-			return items[i].Name < items[j].Name
-		}
-		return items[i].Score > items[j].Score
-	})
-	if len(items) > commandPaletteRows {
-		items = items[:commandPaletteRows]
-	}
-	b.palette = items
-	if b.palSel >= len(items) {
-		b.palSel = 0
-	}
-}
-
-// View renders the input bar (prefix + textinput + hint).
+// View renders the input bar and any active inline hint.
 func (b *InputBar) View(activeTab TabID, streaming bool) string {
-	prefix := inputPrefixStyle.Render(b.prefix(activeTab))
+	draft := parseInputDraft(b.input.Value(), activeTab, b.searchMode)
+	prompt := b.promptLabel(activeTab, draft)
+	prefix := ""
+	if prompt != "" {
+		prefix = inputPrefixStyle.Render(prompt + " ")
+	}
 
 	var hint string
 	if streaming {
 		hint = dimStyle.Render(" streaming…  pgup/down scroll | ctrl+c quit")
 	} else if b.pickerActive && len(b.pickerResult.Results) > 0 {
-		hint = dimStyle.Render(" enter select | esc cancel | ↑↓ navigate")
+		hint = dimStyle.Render(" enter/tab select | esc cancel | ↑↓ navigate")
 	} else if b.palOpen && len(b.palette) > 0 {
-		hint = dimStyle.Render(" enter run | esc cancel | tab complete | ↑↓ select")
-	} else if b.searchMode {
-		hint = dimStyle.Render(" esc exit search")
+		hint = dimStyle.Render(" enter/tab complete | esc cancel | ↑↓ select")
+	} else if b.searchMode || draft.prefix == "?" {
+		hint = dimStyle.Render(" esc exit search | enter apply")
 	} else {
-		hint = dimStyle.Render(" / commands | @ context | ctrl+f search | ? help")
+		hint = dimStyle.Render(" / slash | : shell | ? search | ctrl+f search")
 	}
 
 	content := prefix + b.input.View()
 	if hint != "" {
 		content += " " + hint
 	}
-	bar := inputBarNewStyle.Width(b.width).Render(content)
-
-	if b.pickerActive && len(b.pickerResult.Results) > 0 {
-		return b.renderPicker() + "\n" + bar
+	barStyle := inputBarBlurredStyle
+	if b.Focused() {
+		barStyle = inputBarFocusedStyle
 	}
-	return bar
+	return barStyle.Width(b.width).Render(content)
+}
+
+// PickerView renders the active file picker overlay.
+func (b *InputBar) PickerView() string {
+	if !b.pickerActive || len(b.pickerResult.Results) == 0 {
+		return ""
+	}
+	return b.renderPicker()
 }
 
 func (b *InputBar) renderPicker() string {
@@ -423,16 +472,19 @@ func (b *InputBar) renderPicker() string {
 	return panelStyle.Width(b.width).Render(strings.Join(lines, "\n"))
 }
 
-func parseSlashCommand(input string) (string, []string) {
-	parts := strings.Fields(input)
-	if len(parts) == 0 || !strings.HasPrefix(parts[0], "/") {
-		return "", nil
+func sanitizeSubmittedValue(raw, prefix string) string {
+	if prefix == "" {
+		return raw
 	}
-	name := strings.TrimPrefix(parts[0], "/")
-	return name, parts[1:]
-}
-
-// isWordChar checks if a rune is a word character (letter, digit, or underscore).
-func isWordChar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if raw == prefix {
+		return ""
+	}
+	if raw[0] == prefix[0] && len(raw) > 1 {
+		return strings.TrimSpace(raw[1:])
+	}
+	return raw
 }

@@ -75,3 +75,30 @@ func filePickerQueryCmd(rt RuntimeAdapter, workspace, prefix string) tea.Cmd {
 		return filePickerResultMsg{Query: prefix, Results: results}
 	}
 }
+
+// filePickerTokenPrefix returns the active @-prefixed token in the provided
+// input buffer, if one exists at a token boundary.
+func filePickerTokenPrefix(input string) (string, bool) {
+	idx := strings.LastIndex(input, "@")
+	if idx < 0 {
+		return "", false
+	}
+	if idx > 0 && isWordChar(rune(input[idx-1])) {
+		return "", false
+	}
+	return input[idx:], true
+}
+
+// filePickerReplaceToken replaces the active @ token with the selected file
+// path while preserving any trailing text.
+func filePickerReplaceToken(input, selected string) string {
+	token, ok := filePickerTokenPrefix(input)
+	if !ok {
+		return input
+	}
+	idx := strings.LastIndex(input, token)
+	if idx < 0 {
+		return input
+	}
+	return input[:idx] + "@" + selected + input[idx+len(token):]
+}

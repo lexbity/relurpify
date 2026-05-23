@@ -111,6 +111,28 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
+	if providerCfgPath := manifest.New(cfg.Workspace).ProvidersFile(); providerCfgPath != "" {
+		if loaded, err := LoadProviderConfig(providerCfgPath); err == nil {
+			if loaded.Provider != "" {
+				cfg.InferenceProvider = loaded.Provider
+			}
+			if loaded.Endpoint != "" {
+				cfg.InferenceEndpoint = loaded.Endpoint
+			}
+			if loaded.Model != "" {
+				cfg.InferenceModel = loaded.Model
+			}
+			if loaded.APIKeyRef != "" && cfg.InferenceAPIKey == "" {
+				cfg.InferenceAPIKey = resolveAPIKeyRef(loaded.APIKeyRef)
+			}
+			if loaded.Timeout != "" {
+				if timeout, err := time.ParseDuration(loaded.Timeout); err == nil && timeout > 0 {
+					cfg.HITLTimeout = timeout
+				}
+			}
+			cfg.InferenceNativeToolCalling = loaded.NativeToolCalling
+		}
+	}
 
 	// Delegate all workspace initialization to framework/agentenv.Open().
 	ws, err := agentenv.Open(ctx, agentenv.WorkspaceConfig{

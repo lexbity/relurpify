@@ -119,10 +119,12 @@ func extractTopLevelJSONObjects(text string) []string {
 
 func tryParseSingleToolCall(jsonText string) (contracts.ToolCall, bool) {
 	var raw struct {
-		Tool      string                 `json:"tool"`
-		Name      string                 `json:"name"` // alias for 'tool'
-		Arguments map[string]interface{} `json:"arguments"`
-		Args      map[string]interface{} `json:"args"` // alias for 'arguments'
+		Tool       string                 `json:"tool"`
+		Name       string                 `json:"name"`      // alias for 'tool'
+		ToolName   string                 `json:"tool_name"` // alias for 'tool'
+		Arguments  map[string]interface{} `json:"arguments"`
+		Args       map[string]interface{} `json:"args"`       // alias for 'arguments'
+		Parameters map[string]interface{} `json:"parameters"` // alias for 'arguments'
 	}
 
 	if err := json.Unmarshal([]byte(jsonText), &raw); err != nil {
@@ -137,6 +139,13 @@ func tryParseSingleToolCall(jsonText string) (contracts.ToolCall, bool) {
 		name = raw.Name
 	}
 	if name == "" {
+		name = raw.ToolName
+	}
+	name = strings.TrimSpace(name)
+	if name == "file_edit" {
+		name = "file_write"
+	}
+	if name == "" {
 		return contracts.ToolCall{}, false
 	}
 
@@ -145,7 +154,15 @@ func tryParseSingleToolCall(jsonText string) (contracts.ToolCall, bool) {
 		args = raw.Args
 	}
 	if args == nil {
+		args = raw.Parameters
+	}
+	if args == nil {
 		args = make(map[string]interface{})
+	}
+	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
+		if _, exists := args["path"]; !exists {
+			args["path"] = filePath
+		}
 	}
 
 	return contracts.ToolCall{

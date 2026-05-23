@@ -7,7 +7,35 @@ import (
 	"time"
 )
 
-// Session tracks high-level session metadata for the status bar.
+// FocusRegion identifies which host region currently owns keyboard focus.
+type FocusRegion int
+
+const (
+	FocusRegionInput FocusRegion = iota
+	FocusRegionRegion1
+)
+
+// FocusState captures the host-level focus owner.
+type FocusState struct {
+	Region FocusRegion
+}
+
+// NewFocusState returns the default focus state.
+func NewFocusState() FocusState {
+	return FocusState{Region: FocusRegionInput}
+}
+
+// InRegion1 reports whether Region 1 currently owns focus.
+func (f FocusState) InRegion1() bool {
+	return f.Region == FocusRegionRegion1
+}
+
+// InInput reports whether Region 3 currently owns focus.
+func (f FocusState) InInput() bool {
+	return f.Region == FocusRegionInput
+}
+
+// Session tracks high-level session metadata for the host shell and panels.
 type Session struct {
 	ID            string
 	StartTime     time.Time
@@ -147,6 +175,9 @@ type PromptInfo struct {
 	Meta       InspectableMeta
 	PromptID   string
 	ProviderID string
+	Tags       []string
+	Variables  []string
+	Description string
 }
 
 // PromptDetail is the richer prompt inspection model.
