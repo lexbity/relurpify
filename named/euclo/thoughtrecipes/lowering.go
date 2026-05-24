@@ -137,20 +137,6 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 				return nil, nil, nil, nil, nil, "", nil, nil, fmt.Errorf("%s:%d:%d: multiple direct capability invocations in one run block are not supported", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
 			}
 			capabilityPlan = plan
-			directiveConfigs = append(directiveConfigs, map[string]any{
-				"type":       "capability",
-				"namespace":  node.Namespace.Value,
-				"capability": node.Capability.Value,
-				"target":     valueExprRaw(node.Target),
-				"input":      valueExprRaw(node.Input),
-				"capability_id": plan.CapabilityID,
-			})
-			if plan.Target != "" {
-				directiveConfigs[len(directiveConfigs)-1]["target"] = plan.Target
-			}
-			if plan.Input != "" {
-				directiveConfigs[len(directiveConfigs)-1]["input"] = plan.Input
-			}
 		case *ToolInvokePolicyDecl:
 			toolScopes = append(toolScopes, lowerToolScopeFrame(node, "run"))
 		}
@@ -389,6 +375,12 @@ func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentB
 			steps = append(steps, step)
 		case *PipelineDecl:
 			step, err := lowerPipelineDecl(node, agents, runIndex, plan)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, step)
+		case *CapabilityInvocation:
+			step, err := lowerCapabilityExecutionDecl(node, runIndex)
 			if err != nil {
 				return nil, err
 			}

@@ -414,15 +414,15 @@ func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *capabi
 	if err != nil {
 		t.Fatalf("ParseSource failed: %v", err)
 	}
+	symbols := thoughtrecipepkg.NewSymbolTable(doc)
 	if toolReg != nil {
-		if err := thoughtrecipepkg.NewSymbolTable(doc).WithToolRegistry(toolReg).Resolve(); err != nil {
-			t.Fatalf("Resolve failed: %v", err)
-		}
+		symbols.WithToolRegistry(toolReg)
 	}
 	if capReg != nil {
-		if err := thoughtrecipepkg.NewSymbolTable(doc).WithCapabilityRegistry(capReg).Resolve(); err != nil {
-			t.Fatalf("Resolve failed: %v", err)
-		}
+		symbols.WithCapabilityRegistry(capReg)
+	}
+	if err := symbols.Resolve(); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
 	}
 	plan, err := thoughtrecipepkg.LowerDocument(doc)
 	if err != nil {
@@ -655,5 +655,61 @@ run reviewer:
 	}
 	if got, ok := env.GetWorkingValue("euclo.execution.kind"); !ok || got != "thoughtrecipe" {
 		t.Fatalf("execution kind = %#v, want thoughtrecipe (ok=%v)", got, ok)
+	}
+}
+
+func TestThoughtRecipeExecutorNodeCombinesScopedToolsAndNestedCapabilityInvocation(t *testing.T) {
+	toolReg := capability.NewCapabilityRegistry()
+	for _, name := range []string{"scope_read", "scope_write"} {
+		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+			t.Fatalf("register %s: %v", name, err)
+		}
+	}
+
+	scopedSource := `thoughtrecipe scope_demo
+"Scoped demo."
+
+trigger as capability:
+  may read workspace
+  may invoke ["scope_read"]
+
+agent reviewer uses react
+
+run reviewer:
+  may invoke ["scope_write"]
+  goal "Inspect the workspace."
+`
+	model, _, _ := executeThoughtRecipeFromSource(t, scopedSource, toolReg, toolReg, nil, true)
+	if len(model.chatToolSpecs) != 1 {
+		t.Fatalf("native tool call count = %d, want 1", len(model.chatToolSpecs))
+	}
+	if got, want := toolSpecNames(model.chatToolSpecs[0]), []string{"scope_read", "scope_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("scoped tool names = %#v, want %#v", got, want)
+	}
+
+	capHandler := &recordingCapabilityHandler{}
+	runtimeReg := capability.NewCapabilityRegistry()
+	if err := runtimeReg.RegisterInvocableCapability(capHandler); err != nil {
+		t.Fatalf("register invocable capability: %v", err)
+	}
+	semanticCaps := ecap.NewRegistry()
+	capSource := `thoughtrecipe capability_demo
+"Capability demo."
+
+trigger as capability:
+  may read workspace
+
+input workspace: "**/*"
+agent reviewer uses react
+
+run reviewer:
+  do relurpic:code_review on input.workspace
+`
+	_, env, _ := executeThoughtRecipeFromSource(t, capSource, runtimeReg, nil, semanticCaps, true)
+	if !capHandler.called {
+		t.Fatal("expected direct capability invocation")
+	}
+	if got, ok := env.GetWorkingValue("euclo.execution.capability_id"); !ok || got != "euclo:cap.code_review" {
+		t.Fatalf("capability id = %#v, want euclo:cap.code_review (ok=%v)", got, ok)
 	}
 }

@@ -131,6 +131,12 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 				return nil, err
 			}
 			steps = append(steps, step)
+		case *CapabilityInvocation:
+			step, err := lowerCapabilityExecutionDecl(node, runIndex)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, step)
 		}
 	}
 	return steps, nil
@@ -196,6 +202,42 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 		if len(step.EffectiveToolNames) > 0 {
 			step.Step.Config["effective_tool_names"] = append([]string(nil), step.EffectiveToolNames...)
 		}
+	}
+	*index = *index + 1
+	return step, nil
+}
+
+func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (ExecutionStep, error) {
+	if index == nil {
+		return ExecutionStep{}, fmt.Errorf("execution index is nil")
+	}
+	plan, err := LowerCapabilityInvocation(inv)
+	if err != nil {
+		return ExecutionStep{}, err
+	}
+	stepID := fmt.Sprintf("capability.%d.%d.%d", inv.GetSpan().Start.Line, inv.GetSpan().Start.Column, *index)
+	step := ExecutionStep{
+		ID:           stepID,
+		Type:         "capability",
+		Paradigm:     "euclo",
+		CapabilityID: plan.CapabilityID,
+		Prompt:       fmt.Sprintf("do relurpic:%s", strings.TrimSpace(inv.Capability.Value)),
+		Step: ThoughtRecipeStep{
+			ID:   stepID,
+			Type: "capability",
+			Parent: ThoughtRecipeStepAgent{
+				Paradigm: "euclo",
+			},
+			Config: map[string]any{},
+		},
+	}
+	step.Step.Prompt = step.Prompt
+	step.Step.Config["capability_id"] = plan.CapabilityID
+	if plan.Target != "" {
+		step.Step.Config["target"] = plan.Target
+	}
+	if plan.Input != "" {
+		step.Step.Config["input"] = plan.Input
 	}
 	*index = *index + 1
 	return step, nil

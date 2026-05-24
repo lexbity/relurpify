@@ -541,6 +541,64 @@ run reviewer:
 	}
 }
 
+func TestLowerDocumentLowersNestedCapabilityInvocationsInRouteAndPipeline(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe nested_capabilities
+"Nested capability demo."
+
+trigger as capability:
+  may read workspace
+
+route:
+  when state.intent is review:
+    do relurpic:code_review on input.workspace
+
+pipeline:
+  stage review:
+    do relurpic:code_review on input.workspace
+`)
+
+	plan, err := LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument failed: %v", err)
+	}
+
+	if got, want := len(plan.Routes), 1; got != want {
+		t.Fatalf("route group count = %d, want %d", got, want)
+	}
+	routeStep := plan.Routes[0].Branches[0].Steps[0]
+	if got, want := routeStep.CapabilityID, "euclo:cap.code_review"; got != want {
+		t.Fatalf("route capability id = %q, want %q", got, want)
+	}
+
+	if got, want := len(plan.Pipelines), 1; got != want {
+		t.Fatalf("pipeline group count = %d, want %d", got, want)
+	}
+	pipelineStep := plan.Pipelines[0].Stages[0].Steps[0]
+	if got, want := pipelineStep.CapabilityID, "euclo:cap.code_review"; got != want {
+		t.Fatalf("pipeline capability id = %q, want %q", got, want)
+	}
+}
+
+func TestLowerDocumentRejectsMultipleDirectCapabilityInvocationsInRun(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe capability_demo
+"Capability demo."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  do relurpic:code_review on input.workspace
+  do relurpic:targeted_refactor on input.workspace
+`)
+
+	_, err := LowerDocument(doc)
+	if err == nil || !strings.Contains(err.Error(), "multiple direct capability invocations") {
+		t.Fatalf("expected multiple capability error, got %v", err)
+	}
+}
+
 func TestSymbolTableRejectsUnsupportedAgentType(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe demo
 "Demo."

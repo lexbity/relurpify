@@ -49,6 +49,7 @@ type ThoughtRecipeExecutionContext struct {
 type ExecutionPlan struct {
 	ThoughtRecipe *ThoughtRecipe
 	Agents        map[string]AgentBinding
+	ToolScopes    []ToolScopeFrame
 	Steps         []ExecutionStep
 	Routes        []CompiledRouteGroup
 	Pipelines     []CompiledPipelineGroup
@@ -71,6 +72,8 @@ type ExecutionStep struct {
 	ID                  string
 	Type                string
 	Paradigm            string
+	ToolScopes          []ToolScopeFrame
+	EffectiveToolNames  []string
 	Question            string
 	Choices             []string
 	ChoiceSource        string
@@ -92,6 +95,13 @@ type ExecutionStep struct {
 	Dependencies        []string
 	ClarificationConfig *ClarificationStepConfig
 	Step                ThoughtRecipeStep
+}
+
+// ToolScopeFrame captures one lexical tool allowlist contribution.
+type ToolScopeFrame struct {
+	ScopeKind string
+	ToolNames []string
+	Span      SourceSpan
 }
 
 // CompiledRouteGroup is a compiled constrained route block.
