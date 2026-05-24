@@ -23,7 +23,6 @@ func Tools(basePath string) []contracts.Tool {
 		NewLddTool(basePath),
 		NewObjdumpTool(basePath),
 		NewPerfTool(basePath),
-		NewStraceTool(basePath),
 	}
 }
 

@@ -171,6 +171,14 @@ func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
 			if err != nil {
 				return nil, err
 			}
+			if p.peekLexeme("invoke") {
+				policy, err := p.parseToolInvokePolicyDecl(mayTok)
+				if err != nil {
+					return nil, err
+				}
+				decl.ToolPolicies = append(decl.ToolPolicies, *policy)
+				continue
+			}
 			effectTok, err := p.expectName("trigger effect")
 			if err != nil {
 				return nil, err
@@ -317,7 +325,7 @@ func (p *Parser) parseRunDecl() (*RunDecl, error) {
 	if _, err := p.expectKind(TokenIndent, "run body"); err != nil {
 		return nil, err
 	}
-	items, endTok, err := p.parseExecutionBlockItems()
+	items, endTok, err := p.parseRunBlockItems()
 	if err != nil {
 		return nil, err
 	}
@@ -472,6 +480,27 @@ func (p *Parser) parsePipelineDecl() (*PipelineDecl, error) {
 	return &PipelineDecl{positioned: positioned{Span: spanFromTokens(start, endTok)}, Stages: stages}, nil
 }
 
+func (p *Parser) parseRunBlockItems() ([]ExecutionItem, Token, error) {
+	var items []ExecutionItem
+	var last Token
+	for !p.atEOF() && p.peek().Kind != TokenDedent {
+		item, err := p.parseRunExecutionItem()
+		if err != nil {
+			return nil, Token{}, err
+		}
+		items = append(items, item)
+		last = endToken(item)
+	}
+	endTok, err := p.expectKind(TokenDedent, "end block")
+	if err != nil {
+		return nil, Token{}, err
+	}
+	if last.Kind == TokenIllegal {
+		last = endTok
+	}
+	return items, endTok, nil
+}
+
 func (p *Parser) parsePipelineStage() (PipelineStage, error) {
 	start := p.peek()
 	if _, err := p.expectKeyword("stage"); err != nil {
@@ -519,6 +548,18 @@ func (p *Parser) parseExecutionBlockItems() ([]ExecutionItem, Token, error) {
 	return items, endTok, nil
 }
 
+func (p *Parser) parseRunExecutionItem() (ExecutionItem, error) {
+	if p.peekLexeme("may") {
+		mayTok := p.peek()
+		p.next()
+		if !p.peekLexeme("invoke") {
+			return nil, p.unexpectedToken(mayTok, "may invoke is the only may policy allowed in run blocks")
+		}
+		return p.parseToolInvokePolicyDecl(mayTok)
+	}
+	return p.parseExecutionItem()
+}
+
 func (p *Parser) parseExecutionItem() (ExecutionItem, error) {
 	switch p.peek().Lexeme {
 	case "run":
@@ -547,6 +588,22 @@ func (p *Parser) parseExecutionItem() (ExecutionItem, error) {
 		}
 		return nil, p.unexpectedToken(p.peek(), "unsupported execution item")
 	}
+}
+
+func (p *Parser) parseToolInvokePolicyDecl(mayTok Token) (*ToolInvokePolicyDecl, error) {
+	invokeTok, err := p.expectKeyword("invoke")
+	if err != nil {
+		return nil, p.unexpectedToken(p.peek(), `expected "invoke" after "may"`)
+	}
+	list, err := p.parseToolNameList()
+	if err != nil {
+		return nil, err
+	}
+	return &ToolInvokePolicyDecl{
+		positioned: positioned{Span: spanFromTokens(mayTok, endToken(list))},
+		ToolNames:  list,
+		Raw:        strings.TrimSpace(joinTokens(mayTok, invokeTok, list)),
+	}, nil
 }
 
 func (p *Parser) parseFromClause() (*FromClause, error) {
@@ -690,6 +747,13 @@ func (p *Parser) parseDirectiveItem() (ExecutionItem, error) {
 	rawTokens := []Token{nameTok}
 	var args []ValueExpr
 	var pred *PredicateExpr
+
+	if nameTok.Lexeme == "may" {
+		if p.peekLexeme("invoke") {
+			return nil, p.unexpectedToken(p.peek(), "may invoke is only allowed in trigger and run blocks")
+		}
+		return nil, p.unexpectedToken(nameTok, "may policy lines are only allowed in trigger blocks")
+	}
 
 	if nameTok.Lexeme == "when" {
 		pexpr, err := p.parsePredicateExpr()
@@ -985,6 +1049,40 @@ func (p *Parser) parseInlineList() (*ListLiteral, error) {
 		}
 	}
 	return nil, p.unexpectedEOF("unterminated list literal")
+}
+
+func (p *Parser) parseToolNameList() (*ListLiteral, error) {
+	start, err := p.expectPunctuation("[")
+	if err != nil {
+		return nil, p.unexpectedToken(p.peek(), "expected tool name list")
+	}
+	list := &ListLiteral{positioned: positioned{Span: spanFromToken(start)}, Raw: start.Lexeme}
+	for !p.atEOF() {
+		if p.peekKind(TokenPunctuation, "]") {
+			end := p.next()
+			list.Span = spanFromTokens(start, end)
+			list.Raw = formatListRaw(list.Entries)
+			return list, nil
+		}
+		if p.peekKind(TokenPunctuation, ",") {
+			p.next()
+			continue
+		}
+		tok := p.peek()
+		if tok.Kind != TokenString {
+			return nil, p.unexpectedToken(tok, "tool name list must contain string literals")
+		}
+		str, err := p.expectStringLiteral("tool name")
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(str.Value) == "" {
+			return nil, p.unexpectedToken(tokenFromSpan(str.Span), "empty tool name is not allowed")
+		}
+		list.Entries = append(list.Entries, *str)
+		list.Span = spanFromTokens(start, tokenFromSpan(str.Span))
+	}
+	return nil, p.unexpectedEOF("unterminated tool name list")
 }
 
 func (p *Parser) parseBlockList() (*ListLiteral, error) {
@@ -1405,6 +1503,8 @@ func endTokenExecutionItem(v ExecutionItem) Token {
 	case *DirectiveBlock:
 		return tokenFromSpan(x.Span)
 	case *CapabilityInvocation:
+		return tokenFromSpan(x.Span)
+	case *ToolInvokePolicyDecl:
 		return tokenFromSpan(x.Span)
 	case *CaptureBlock:
 		return tokenFromSpan(x.Span)
