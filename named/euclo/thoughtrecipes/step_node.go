@@ -31,6 +31,11 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
+const (
+	executionCapabilityIDKey = "execution_capability_id"
+	eucloCapabilityIDKey      = "euclo.execution.capability_id"
+)
+
 // ThoughtRecipeStepNode executes a compiled thoughtrecipe step by delegating to the matching
 // /agents constructor for the step's paradigm.
 type ThoughtRecipeStepNode struct {
@@ -241,8 +246,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
 	}
 	n.writeStepMetadata(env)
-	env.SetWorkingValue("euclo.execution.capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
+	writeCapabilityMetadata(env, n.step.ID, n.step.CapabilityID)
 
 	reg := n.env.Registry
 	if reg == nil {
@@ -570,6 +574,9 @@ func (n *ThoughtRecipeStepNode) stepMetadata() map[string]interface{} {
 	if len(n.step.Directives) > 0 {
 		metadata["execution_directives"] = append([]string(nil), n.step.Directives...)
 	}
+	if strings.TrimSpace(n.step.CapabilityID) != "" {
+		metadata[executionCapabilityIDKey] = n.step.CapabilityID
+	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
 		metadata["execution_clarification_type"] = n.step.Type
 		metadata["execution_clarification_config"] = cfg
@@ -603,6 +610,9 @@ func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string
 	}
 	if len(n.step.Directives) > 0 {
 		state["execution_directives"] = append([]string(nil), n.step.Directives...)
+	}
+	if strings.TrimSpace(n.step.CapabilityID) != "" {
+		state[executionCapabilityIDKey] = n.step.CapabilityID
 	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
 		state["execution_clarification_type"] = n.step.Type
@@ -643,6 +653,9 @@ func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
 	if len(n.step.Directives) > 0 {
 		env.SetWorkingValue(base+".directives", append([]string(nil), n.step.Directives...), contextdata.MemoryClassTask)
 	}
+	if strings.TrimSpace(n.step.CapabilityID) != "" {
+		env.SetWorkingValue(base+".capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
+	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
 		env.SetWorkingValue(base+".clarification_type", n.step.Type, contextdata.MemoryClassTask)
 		env.SetWorkingValue(base+".clarification_config", cfg, contextdata.MemoryClassTask)
@@ -654,6 +667,14 @@ func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
 		env.SetWorkingValue(base+".clarification_projection_policy", cfg.ProjectionPolicy, contextdata.MemoryClassTask)
 		env.SetWorkingValue(base+".clarification_requery_on_success", cfg.RequeryOnSuccess, contextdata.MemoryClassTask)
 	}
+}
+
+func writeCapabilityMetadata(env *contextdata.Envelope, stepID, capabilityID string) {
+	if env == nil || strings.TrimSpace(capabilityID) == "" {
+		return
+	}
+	env.SetWorkingValue(eucloCapabilityIDKey, capabilityID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.execution.step."+stepID+".capability_id", capabilityID, contextdata.MemoryClassTask)
 }
 
 func clarificationRuntimeState(env *contextdata.Envelope) map[string]any {

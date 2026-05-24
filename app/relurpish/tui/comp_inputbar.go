@@ -451,7 +451,7 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	} else if b.searchMode || draft.prefix == "?" {
 		hint = dimStyle.Render(" esc exit search | enter apply")
 	} else {
-		hint = dimStyle.Render(" / slash | : shell | ? search | ctrl+f search")
+		hint = ""
 	}
 
 	content := prefix + b.input.View()

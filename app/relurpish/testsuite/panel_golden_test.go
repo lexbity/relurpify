@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -29,6 +30,33 @@ var goldenDir = func() string {
 	}
 	return filepath.Join(filepath.Dir(file), "testdata", "golden")
 }()
+
+type mockOllamaBackend struct{}
+
+func (b *mockOllamaBackend) Model() contracts.LanguageModel { return nil }
+func (b *mockOllamaBackend) Embedder() llm.Embedder { return nil }
+func (b *mockOllamaBackend) Capabilities() contracts.BackendCapabilities { return contracts.BackendCapabilities{} }
+func (b *mockOllamaBackend) ModelContextSize(ctx context.Context) (int, error) { return 2048, nil }
+func (b *mockOllamaBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{State: llm.BackendHealthReady}, nil
+}
+func (b *mockOllamaBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
+	return []llm.ModelInfo{
+		{Name: "qwen2.5-coder:14b", Family: "qwen"},
+		{Name: "llama3:latest", Family: "llama"},
+	}, nil
+}
+func (b *mockOllamaBackend) Warm(ctx context.Context) error { return nil }
+func (b *mockOllamaBackend) Close() error { return nil }
+func (b *mockOllamaBackend) SetDebugLogging(enabled bool) {}
+func (b *mockOllamaBackend) SetProfile(profile *contracts.ModelProfile) {}
+func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
+
+func init() {
+	llm.RegisterProvider("ollama", func(cfg llm.ProviderConfig) (llm.ManagedBackend, error) {
+		return &mockOllamaBackend{}, nil
+	})
+}
 
 func goldenPath(name string) string {
 	return filepath.Join(goldenDir, name)
@@ -211,6 +239,15 @@ func TestPanelGoldenViews(t *testing.T) {
 	sec.SetSize(96, 18)
 	assertGolden(t, "securityguard_panel.txt", sec.View())
 
+	aiProvider := tui.NewAIProviderPane(&sessionInfoFixture{workspace: workdir})
+	aiProvider.SetSize(96, 18)
+	tui.SetAIProviderModelsForTest(aiProvider, []llm.ModelInfo{
+		{Name: "qwen2.5-coder:14b", Family: "qwen"},
+		{Name: "llama3:latest", Family: "llama"},
+	})
+	tui.SetAIProviderStatusForTest(aiProvider, "loaded 2 models")
+	assertGolden(t, "aiprovider_panel.txt", aiProvider.View())
+
 	keybinds := tui.NewKeybindingPane(&sessionInfoFixture{workspace: workdir})
 	keybinds.SetSize(96, 18)
 	assertGolden(t, "keybindings_panel.txt", keybinds.View())
@@ -274,3 +311,97 @@ trigger as capability:
 	library.SetSize(96, 18)
 	assertGolden(t, "euclo_library_panel.txt", normalizeSnapshot(library.View(), workdir))
 }
+
+func TestRootTUIViews(t *testing.T) {
+	workdir := t.TempDir()
+	withWorkingDir(t, workdir)
+
+	// Create necessary directories for runtime config
+	if err := os.MkdirAll(filepath.Join(workdir, "relurpify_cfg"), 0o755); err != nil {
+		t.Fatalf("mkdir config: %v", err)
+	}
+
+	// 1. Integrated Welcome TUI Screen (no-agent welcome tab)
+	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
+	m.SetWidthHeightForTest(120, 40)
+	m.SetActiveTabForTest(tui.TabWelcome)
+
+	if m.ActiveAgentNameForTest() != "none" {
+		t.Errorf("expected active agent none, got %s", m.ActiveAgentNameForTest())
+	}
+	assertGolden(t, "integrated_welcome_tui.txt", normalizeSnapshot(m.View(), workdir))
+
+	// 2. Integrated Sandbox TUI Screen
+	m.SetActiveTabForTest(tui.TabSandbox)
+	assertGolden(t, "integrated_sandbox_tui.txt", normalizeSnapshot(m.View(), workdir))
+
+	// 3. Integrated AI Provider TUI Screen
+	m.SetActiveTabForTest(tui.TabAIProvider)
+	assertGolden(t, "integrated_aiprovider_tui.txt", normalizeSnapshot(m.View(), workdir))
+
+	// 4. Integrated Keybindings TUI Screen
+	m.SetActiveTabForTest(tui.TabKeybindings)
+	assertGolden(t, "integrated_keybindings_tui.txt", normalizeSnapshot(m.View(), workdir))
+
+	// 5. Integrated HITL Row Screen (with simulated frame)
+	m2 := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
+	err := m2.SwitchActiveAgentForTest("euclo")
+	if err != nil {
+		t.Fatalf("switch agent: %v", err)
+	}
+	m2.SetWidthHeightForTest(120, 40)
+	m2.SetActiveTabForTest("chat")
+
+	now := time.Date(2020, 1, 2, 3, 4, 0, 0, time.UTC)
+	frame := interaction.NewClarificationFrame("task-1", "session-1", "Clarification needed: which parser target?", []string{"parser.go", "types.go", "manual"}, nil)
+	frame.ID = "frame-1"
+	frame.Metadata.Timestamp = now
+	frame.CreatedAt = now
+
+	m2.OpenInteractionGuidanceForTest("frame-1", *frame)
+	assertGolden(t, "integrated_hitl_row_tui.txt", normalizeSnapshot(m2.View(), workdir))
+}
+
+func TestFocusRedirectionAndAutocomplete(t *testing.T) {
+	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
+	m.SetWidthHeightForTest(120, 40)
+
+	// Verify focus is initially in input
+	if !m.IsFocusInInputForTest() {
+		t.Fatalf("expected focus in input at startup")
+	}
+
+	// Focus Region 1
+	m.SetFocusRegion1ForTest()
+	if !m.IsFocusInRegion1ForTest() {
+		t.Fatalf("expected focus in region 1")
+	}
+
+	// Send a printable character to trigger focus redirection
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = updated.(tui.RootModel)
+
+	if !m.IsFocusInInputForTest() {
+		t.Fatalf("expected focus to return to input on printable character")
+	}
+	if m.InputBarValueForTest() != "x" {
+		t.Errorf("expected input value 'x', got %q", m.InputBarValueForTest())
+	}
+
+	// Test autocomplete trigger via prefix
+	// Clear input first by backspacing
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = updated.(tui.RootModel)
+	if m.InputBarValueForTest() != "" {
+		t.Errorf("expected input to be empty after backspace, got %q", m.InputBarValueForTest())
+	}
+
+	// Type ':' to enter command mode and trigger palette sync
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
+	m = updated.(tui.RootModel)
+
+	if m.OverlaysForTest().Len() != 1 {
+		t.Errorf("expected 1 active overlay for autocomplete list, got %d", m.OverlaysForTest().Len())
+	}
+}
+
