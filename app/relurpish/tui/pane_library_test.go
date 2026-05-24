@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -64,9 +64,9 @@ func TestLibraryPaneRunSelectedPreparesPrompt(t *testing.T) {
 		t.Fatal("expected run command")
 	}
 	msg := cmd()
-	runMsg, ok := msg.(libraryRunRequestedMsg)
+	runMsg, ok := msg.(LibraryRunRequestedMsg)
 	if !ok {
-		t.Fatalf("message type = %T, want libraryRunRequestedMsg", msg)
+		t.Fatalf("message type = %T, want LibraryRunRequestedMsg", msg)
 	}
 	if runMsg.RecipeID != "demo.recipe" {
 		t.Fatalf("recipe id = %q, want demo.recipe", runMsg.RecipeID)
@@ -100,7 +100,7 @@ run reviewer:
 		t.Fatalf("write recipe: %v", err)
 	}
 
-	result, err := thoughtrecipes.NewLoader().LoadWorkspace(root)
+	result, err := thoughtrecipe.NewLoader().LoadWorkspace(root)
 	if err != nil {
 		t.Fatalf("LoadWorkspace: %v", err)
 	}

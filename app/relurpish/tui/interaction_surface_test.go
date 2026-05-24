@@ -10,7 +10,7 @@ func TestEucloSurfaceOpensGuidanceForFreeTextClarification(t *testing.T) {
 	q := &NotificationQueue{}
 	m := RootModel{
 		notifQ:            q,
-		hitlPanel:         newGuidancePanel(),
+		hitlRow:           &HITLRow{},
 		interactionFrames: make(map[string]*interaction.InteractionFrame),
 	}
 
@@ -22,11 +22,11 @@ func TestEucloSurfaceOpensGuidanceForFreeTextClarification(t *testing.T) {
 	if q.Len() != 1 {
 		t.Fatalf("expected one notification, got %d", q.Len())
 	}
-	if !m.hitlPanel.IsOpen() {
-		t.Fatal("expected guidance panel to open for freetext clarification")
+	if m.hitlRow == nil || !m.hitlRow.Active() {
+		t.Fatal("expected hitl row to open for freetext clarification")
 	}
-	if got := m.hitlPanel.RequestID(); got != "notif-1" {
-		t.Fatalf("request id = %q, want %q", got, "notif-1")
+	if m.hitlRow.FrameID() != "notif-1" {
+		t.Fatalf("frame id = %q, want %q", m.hitlRow.FrameID(), "notif-1")
 	}
 	if _, ok := m.interactionFrames["notif-1"]; !ok {
 		t.Fatalf("expected interaction frame tracked under notification id %q", "notif-1")

@@ -7,38 +7,12 @@ import (
 	"strings"
 	"time"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-// Run bootstraps the TUI with the default interaction surface factory.
-func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
-	return RunWithSurface(ctx, rt, NewDefaultSurfaceFactory())
-}
-
-// RunWithSurface bootstraps the TUI with an agent-surface factory.
-func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory SurfaceFactory) error {
-	if rt == nil {
-		return fmt.Errorf("runtime is required")
-	}
-	adapter := newRuntimeAdapter(rt)
-	m := newRootModel(adapter, factory)
-	program := tea.NewProgram(
-		m,
-		tea.WithContext(ctx),
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
-	final, err := program.Run()
-	if rm, ok := final.(RootModel); ok {
-		rm.cleanup()
-	}
-	return err
-}
 
 // RootModel is the top-level Bubble Tea model. It owns the layout and routes
 // messages to focused panes.  Panes are held by pointer so mutations survive
@@ -102,8 +76,12 @@ type RootModel struct {
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
 
-	// Guidance panel (Phase B): renders above input bar when open.
-	hitlPanel GuidancePanel
+	// HITL notification row: renders between Region 1 and the bottom bar
+	// when the agent emits an interaction frame.
+	hitlRow   *HITLRow
+
+	// Input gate blocks > prompts during active execution.
+	inputGate *InputGate
 
 	// Phase G: instance-based command registry and corpus scope.
 	cmdReg *CommandRegistry
@@ -173,7 +151,8 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	m := RootModel{
 		tabs:              state.tabs,
 		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
-		hitlPanel:         newGuidancePanel(),
+		hitlRow:           &HITLRow{},
+		inputGate:         &InputGate{},
 		tabBar:            tabBar,
 		notifBar:          NewNotificationBar(notifQ),
 		inputBar:          inputBar,
@@ -468,9 +447,6 @@ func (m *RootModel) syncOverlayStack() {
 			m.overlays.Push(overlay)
 		}
 	}
-	if m.hitlPanel.IsOpen() {
-		m.overlays.Push(&m.hitlPanel)
-	}
 }
 
 func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
@@ -561,8 +537,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		}
-		// Notification bar captures keys when active unless the current guidance
-		// request expects freetext input through the input bar.
+		// HITL Row captures keys when active.
+		if m.hitlRow != nil && m.hitlRow.Active() {
+			if cmd, handled := m.hitlRow.HandleKey(msg); handled {
+				m.syncCommandPalette()
+				m.syncOverlayStack()
+				return m, cmd
+			}
+		}
+
+		// Notification bar captures keys when active.
 		if m.notifBar.Active() {
 			nb, cmd := m.notifBar.Update(msg)
 			m.notifBar = nb
@@ -593,7 +577,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		nm, cmd := executeCommand(&m, msg.Name, msg.Args)
 		return *nm, cmd
 
-	case libraryRunRequestedMsg:
+	case LibraryRunRequestedMsg:
 		if m.inputBar != nil {
 			m.inputBar.SetValue(msg.Prompt)
 		}
@@ -744,28 +728,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case hitlResolvedMsg:
 		return m.handleHITLResolved(msg)
 
-	// Guidance panel responses.
-	case GuidancePanelSubmitMsg:
-		if m.resolvePendingInteraction(msg.RequestID, msg.Response, "") {
-			m.syncOverlayStack()
+	// HITL Row responses.
+	case HITLRowAnswerMsg:
+		if m.resolvePendingInteraction(msg.FrameID, msg.SlotID, "") {
 			return m, nil
 		}
-		m.syncCommandPalette()
-		m.syncOverlayStack()
 		return m, nil
-	case GuidancePanelDeferMsg:
-		if m.deferPendingInteraction(msg.RequestID) {
-			m.syncOverlayStack()
+	case HITLRowDismissMsg:
+		if m.deferPendingInteraction(msg.FrameID) {
 			return m, nil
 		}
-		m.syncCommandPalette()
-		m.syncOverlayStack()
-		return m, nil
-	case GuidancePanelAnnotateMsg:
-		// Annotation saved; panel stays open — no further model action needed here.
-		return m, nil
-	case GuidancePanelJumpExploreMsg:
-		m.addSystemMessage("expanded view is no longer available")
 		return m, nil
 
 	case NotifInteractionResolveMsg:
@@ -942,6 +914,18 @@ func (m RootModel) View() string {
 	}
 
 	streaming := m.chat != nil && m.chat.HasActiveRuns()
+	if m.inputGate != nil {
+		m.inputGate.SetActive(streaming)
+	}
+	if m.inputBar != nil {
+		m.inputBar.SetGated(streaming)
+	}
+
+	if m.hitlRow != nil && m.hitlRow.Active() {
+		m.hitlRow.SetWidth(m.width)
+		parts = append(parts, m.hitlRow.View())
+	}
+
 	bottom := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		renderAgentCell(m.activeAgentName(), m.layout.Region2Width()),
@@ -1041,12 +1025,18 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.library != nil {
 		m.library.SetSize(msg.Width, paneH)
 	}
+	if m.hitlRow != nil {
+		m.hitlRow.SetWidth(msg.Width)
+	}
 
 	return m, nil
 }
 
 func (m RootModel) notificationRowVisible() bool {
-	return m.notifBar != nil && m.notifBar.Active()
+	if m.notifBar != nil && m.notifBar.Active() {
+		return true
+	}
+	return m.hitlRow != nil && m.hitlRow.Active()
 }
 
 func (m RootModel) activeAgentName() string {
@@ -1471,6 +1461,10 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 	}
 
 	if msg.Prefix == ">" {
+		if m.inputGate != nil && m.inputGate.Active() {
+			m.addSystemMessage("Cannot submit prompt while a run is active. Use /stop to cancel or wait for completion.")
+			return m, nil
+		}
 		switch m.activeTab {
 		case TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabLibrary:
 			return m, nil
@@ -1688,47 +1682,40 @@ func (m *RootModel) openInteractionGuidance(notificationID string, frame interac
 	if m == nil {
 		return
 	}
-	if m.hitlPanel.IsOpen() {
+	if m.hitlRow != nil && m.hitlRow.Active() {
 		return
 	}
-	body := strings.TrimSpace(frame.Question)
-	if body == "" {
-		body = frameLabelFromInteraction(frame)
+	question := strings.TrimSpace(frame.Question)
+	if question == "" {
+		question = frameLabelFromInteraction(frame)
 	}
+
+	var slotIDs []string
+	var slotNames []string
+
 	if len(frame.Choices) > 0 {
-		var choiceLines []string
 		for i, choice := range frame.Choices {
-			choiceLines = append(choiceLines, fmt.Sprintf("[%d] %s", i+1, choice))
+			slotIDs = append(slotIDs, choice)
+			slotNames = append(slotNames, choice)
+			if i == 0 {
+				_ = i
+			}
 		}
-		if body != "" {
-			body += "\n\n"
-		}
-		body += "Choices: " + strings.Join(choiceLines, "  ")
-	}
-	if len(frame.Slots) > 0 && len(frame.Choices) == 0 {
-		var slotLines []string
-		for i, slot := range frame.Slots {
+		_ = len(frame.Choices)
+	} else if len(frame.Slots) > 0 {
+		for _, slot := range frame.Slots {
 			label := strings.TrimSpace(slot.Label)
 			if label == "" {
 				label = slot.ID
 			}
-			slotLines = append(slotLines, fmt.Sprintf("[%d] %s", i+1, label))
+			slotIDs = append(slotIDs, strings.TrimSpace(slot.ID))
+			slotNames = append(slotNames, label)
 		}
-		if body != "" {
-			body += "\n\n"
-		}
-		body += "Actions: " + strings.Join(slotLines, "  ")
 	}
-	m.hitlPanel.Open(
-		GuidanceTriggerAmbiguity,
-		strings.TrimSpace(notificationID),
-		strings.TrimSpace(frameLabelFromInteraction(frame)),
-		body,
-		nil,
-		"",
-		"",
-	)
-	m.syncOverlayStack()
+
+	if m.hitlRow != nil {
+		m.hitlRow.Open(strings.TrimSpace(notificationID), question, slotIDs, slotNames)
+	}
 }
 
 func (m *RootModel) resolvePendingInteraction(notificationID, choiceID, freetext string) bool {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/prompt"
-	"codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -46,7 +46,7 @@ type libraryItem struct {
 	LastUsed    time.Time
 }
 
-type libraryRunRequestedMsg struct {
+type LibraryRunRequestedMsg struct {
 	RecipeID string
 	Prompt   string
 }
@@ -298,7 +298,7 @@ func (p *LibraryPane) rebuildItems(preferredID string) {
 			return li.After(lj)
 		}
 		if p.items[i].Kind != p.items[j].Kind {
-			return p.items[i].Kind < p.items[j].Kind
+			return p.items[i].Kind == libraryItemRecipe
 		}
 		if p.items[i].Title != p.items[j].Title {
 			return p.items[i].Title < p.items[j].Title
@@ -479,7 +479,7 @@ func (p *LibraryPane) runSelectedCmd() (*LibraryPane, tea.Cmd) {
 	p.touchSelected()
 	p.status = fmt.Sprintf("prepared run prompt for %s", item.ID)
 	return p, func() tea.Msg {
-		return libraryRunRequestedMsg{
+		return LibraryRunRequestedMsg{
 			RecipeID: item.ID,
 			Prompt:   buildRecipeRunPrompt(item),
 		}
@@ -579,7 +579,7 @@ func revalidateRecipe(item libraryItem, rt RuntimeAdapter) (libraryItem, error) 
 	if workspace == "" {
 		workspace = discoverRepoRoot()
 	}
-	loader := thoughtrecipes.NewLoader()
+	loader := thoughtrecipe.NewLoader()
 	if reg := promptRegistryFromRuntime(rt); reg != nil {
 		loader.WithPromptRegistry(reg)
 	}
@@ -604,7 +604,7 @@ func loadLibraryItems(rt RuntimeAdapter) ([]libraryItem, error) {
 	if workspace == "" {
 		workspace = discoverRepoRoot()
 	}
-	loader := thoughtrecipes.NewLoader()
+	loader := thoughtrecipe.NewLoader()
 	if reg := promptRegistryFromRuntime(rt); reg != nil {
 		loader.WithPromptRegistry(reg)
 	}
@@ -627,7 +627,7 @@ func loadLibraryItems(rt RuntimeAdapter) ([]libraryItem, error) {
 	return items, nil
 }
 
-func recipeItemFromEntry(entry thoughtrecipes.ThoughtRecipeEntry) libraryItem {
+func recipeItemFromEntry(entry thoughtrecipe.ThoughtRecipeEntry) libraryItem {
 	item := libraryItem{
 		Kind:        libraryItemRecipe,
 		ID:          strings.TrimSpace(entry.ThoughtRecipe.ID),
@@ -696,14 +696,14 @@ func recipeInputsFromSource(path string) []string {
 	if err != nil {
 		return nil
 	}
-	doc, err := thoughtrecipes.ParseSource(path, string(data))
+	doc, err := thoughtrecipe.ParseSource(path, string(data))
 	if err != nil {
 		return nil
 	}
 	seen := make(map[string]struct{})
 	var out []string
 	for _, decl := range doc.Declarations {
-		input, ok := decl.(*thoughtrecipes.InputDecl)
+		input, ok := decl.(*thoughtrecipe.InputDecl)
 		if !ok || input == nil {
 			continue
 		}

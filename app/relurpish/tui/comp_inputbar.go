@@ -58,6 +58,7 @@ type InputBar struct {
 	cmdReg *CommandRegistry
 	ctxTab TabID
 	ctxSub SubTabID
+	gated  bool
 }
 
 // NewInputBar creates a focused InputBar.
@@ -87,6 +88,12 @@ func (b *InputBar) SetCommandRegistry(reg *CommandRegistry) {
 func (b *InputBar) SetContext(tab TabID, sub SubTabID) {
 	b.ctxTab = tab
 	b.ctxSub = sub
+}
+
+// SetGated marks whether the input bar should block prompt submissions (>).
+// Slash commands, shell commands, and search remain active.
+func (b *InputBar) SetGated(v bool) {
+	b.gated = v
 }
 
 // PaletteState exposes the current command palette state so RootModel can
@@ -168,8 +175,14 @@ func (b *InputBar) promptLabel(activeTab TabID, draft inputDraft) string {
 		case "?":
 			return "search"
 		case ">":
+			if b.gated {
+				return "running"
+			}
 			return "prompt"
 		}
+	}
+	if b.gated {
+		return "running"
 	}
 	if activeTab == TabChat {
 		return "prompt"
@@ -427,7 +440,9 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	}
 
 	var hint string
-	if streaming {
+	if b.gated {
+		hint = dimStyle.Render(" running — > blocked | : and / active | ctrl+c quit")
+	} else if streaming {
 		hint = dimStyle.Render(" streaming…  pgup/down scroll | ctrl+c quit")
 	} else if b.pickerActive && len(b.pickerResult.Results) > 0 {
 		hint = dimStyle.Render(" enter/tab select | esc cancel | ↑↓ navigate")

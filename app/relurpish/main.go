@@ -124,37 +124,41 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 	if rt != nil && rt.AgentWorkspace() != nil && rt.AgentWorkspace().Logger != nil {
 		log.SetOutput(rt.AgentWorkspace().Logger.Writer())
 	}
-	return tui.RunWithSurface(ctx, rt, euclotui.NewSurfaceFactory())
+	return tui.PTYSafe(func() error {
+		return tui.RunWithSurface(ctx, rt, euclotui.NewSurfaceFactory())
+	})
 }
 
 func runDoctor(cmd *cobra.Command, fix, yes bool) error {
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	state, err := runtimesvc.BootstrapStartupState(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	report := state.Report
-	renderDoctorReport(cmd.OutOrStdout(), report)
-
-	shouldOfferInit := report.NeedsInitialization() || fix
-	if shouldOfferInit {
-		overwrite := fix
-		if yes || confirmDoctorAction(cmd.InOrStdin(), cmd.OutOrStdout(), doctorPrompt(report, fix)) {
-			if err := runtimesvc.InitializeWorkspaceFromTemplates(cfg, overwrite); err != nil {
-				return err
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Workspace starter configuration written to relurpify_cfg/")
-			report = runtimesvc.BuildDoctorReport(ctx, cfg)
-			renderDoctorReport(cmd.OutOrStdout(), report)
+	return tui.PTYSafe(func() error {
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
 		}
-	}
-	if report.HasBlockingIssues() {
-		return fmt.Errorf("doctor found blocking issues")
-	}
-	return nil
+		state, err := runtimesvc.BootstrapStartupState(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		report := state.Report
+		renderDoctorReport(cmd.OutOrStdout(), report)
+
+		shouldOfferInit := report.NeedsInitialization() || fix
+		if shouldOfferInit {
+			overwrite := fix
+			if yes || confirmDoctorAction(cmd.InOrStdin(), cmd.OutOrStdout(), doctorPrompt(report, fix)) {
+				if err := runtimesvc.InitializeWorkspaceFromTemplates(cfg, overwrite); err != nil {
+					return err
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), "Workspace starter configuration written to relurpify_cfg/")
+				report = runtimesvc.BuildDoctorReport(ctx, cfg)
+				renderDoctorReport(cmd.OutOrStdout(), report)
+			}
+		}
+		if report.HasBlockingIssues() {
+			return fmt.Errorf("doctor found blocking issues")
+		}
+		return nil
+	})
 }
 
 func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
