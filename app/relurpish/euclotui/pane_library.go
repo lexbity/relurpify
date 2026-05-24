@@ -62,6 +62,8 @@ type EucloLibraryPane struct {
 	projection LibraryProjection
 }
 
+var _ tui.LibrarySurface = (*EucloLibraryPane)(nil)
+
 func NewEucloLibraryPane(rt tui.RuntimeAdapter, router *EucloEventRouter) *EucloLibraryPane {
 	p := &EucloLibraryPane{
 		runtime:    rt,
@@ -101,13 +103,13 @@ func (p *EucloLibraryPane) Refresh() {
 		return
 	}
 	p.allItems = items
-	p.rebuildItems(p.selectedID())
+	p.rebuildItems(p.SelectedID())
 	p.status = fmt.Sprintf("loaded %d recipes and %d prompts",
 		countEucloItems(items, eucloLibraryItemRecipe),
 		countEucloItems(items, eucloLibraryItemPrompt))
 }
 
-func (p *EucloLibraryPane) Update(msg tea.Msg) (*EucloLibraryPane, tea.Cmd) {
+func (p *EucloLibraryPane) Update(msg tea.Msg) (tui.LibrarySurface, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -123,10 +125,10 @@ func (p *EucloLibraryPane) Update(msg tea.Msg) (*EucloLibraryPane, tea.Cmd) {
 			}
 		case "tab":
 			p.view = (p.view + 1) % 3
-			p.rebuildItems(p.selectedID())
+			p.rebuildItems(p.SelectedID())
 		case "shift+tab":
 			p.view = (p.view + 2) % 3
-			p.rebuildItems(p.selectedID())
+			p.rebuildItems(p.SelectedID())
 		case "r", "enter":
 			return p.runSelectedCmd()
 		case "e":
@@ -135,11 +137,11 @@ func (p *EucloLibraryPane) Update(msg tea.Msg) (*EucloLibraryPane, tea.Cmd) {
 			return p.validateSelected()
 		case "t":
 			p.toggleSelectedTagFilter()
-			p.rebuildItems(p.selectedID())
+			p.rebuildItems(p.SelectedID())
 		case "esc":
 			if len(p.tagFilters) > 0 {
 				p.tagFilters = make(map[string]bool)
-				p.rebuildItems(p.selectedID())
+				p.rebuildItems(p.SelectedID())
 			} else if p.filter != "" {
 				p.filter = ""
 				p.rebuildItems("")
@@ -394,7 +396,7 @@ func (p *EucloLibraryPane) updateSelected() {
 	p.selected = p.items[p.sel]
 }
 
-func (p *EucloLibraryPane) selectedID() string {
+func (p *EucloLibraryPane) SelectedID() string {
 	if p.selected.ID != "" {
 		return p.selected.ID
 	}
@@ -402,6 +404,52 @@ func (p *EucloLibraryPane) selectedID() string {
 		return p.items[p.sel].ID
 	}
 	return ""
+}
+
+func (p *EucloLibraryPane) SelectByID(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	for i, item := range p.items {
+		if item.ID == id {
+			p.sel = i
+			p.updateSelected()
+			return true
+		}
+	}
+	for _, item := range p.allItems {
+		if item.ID != id {
+			continue
+		}
+		p.view = eucloLibraryViewAll
+		p.rebuildItems(id)
+		return true
+	}
+	return false
+}
+
+func (p *EucloLibraryPane) RunPromptForID(id string) (string, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", false
+	}
+	for _, item := range p.allItems {
+		if item.ID == id && item.Kind == eucloLibraryItemRecipe {
+			return buildEucloRecipeRunPrompt(item), true
+		}
+	}
+	return "", false
+}
+
+func (p *EucloLibraryPane) OpenSelectedEditorCmd() tea.Cmd {
+	_, cmd := p.openSelectedEditorCmd()
+	return cmd
+}
+
+func (p *EucloLibraryPane) ValidateSelected() tea.Cmd {
+	_, cmd := p.validateSelected()
+	return cmd
 }
 
 func (p *EucloLibraryPane) runSelectedCmd() (*EucloLibraryPane, tea.Cmd) {
@@ -515,6 +563,14 @@ func (p *EucloLibraryPane) validateSelected() (*EucloLibraryPane, tea.Cmd) {
 		p.status = fmt.Sprintf("recipe %s not found after reload", item.ID)
 	}
 	return p, nil
+}
+
+func buildEucloRecipeRunPrompt(item eucloLibraryItem) string {
+	parts := []string{"/recipe", "run", item.ID}
+	for _, input := range item.Inputs {
+		parts = append(parts, fmt.Sprintf("[%s=?]", input))
+	}
+	return strings.Join(parts, " ") + " "
 }
 
 func (p *EucloLibraryPane) toggleSelectedTagFilter() {

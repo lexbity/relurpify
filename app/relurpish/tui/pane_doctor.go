@@ -51,6 +51,15 @@ type DoctorPane struct {
 	height  int
 }
 
+// Report returns the current doctor report.
+func (p *DoctorPane) Report() DoctorReport { return p.report }
+
+// SetReport replaces the current doctor report.
+func (p *DoctorPane) SetReport(report DoctorReport) { p.report = report }
+
+// SetStatus overrides the visible doctor status line.
+func (p *DoctorPane) SetStatus(status string) { p.status = status }
+
 func NewDoctorPane(rt RuntimeAdapter) *DoctorPane {
 	p := &DoctorPane{runtime: rt}
 	p.Refresh()

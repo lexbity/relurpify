@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,6 +32,14 @@ func (s *registrySurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *Noti
 		return s.chat
 	}
 	return &fakeChatPane{}
+}
+
+func (s *registrySurface) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+	return nil
+}
+
+func (s *registrySurface) NewRegion1(RuntimeAdapter, *AgentContext, *Session, *SessionStore, *NotificationQueue) Region1Surface {
+	return nil
 }
 
 func (s *registrySurface) InitialTab() TabID {
@@ -70,14 +79,28 @@ func (f *registryFactory) Resolve(agentName string) AgentSurface {
 	return f.defaultSurface
 }
 
+func (f *registryFactory) AvailableAgents() []string {
+	agents := make([]string, 0, len(f.surfaces))
+	for name, surface := range f.surfaces {
+		if surface == nil {
+			continue
+		}
+		if key := normalizeSurfaceKey(name); key != "" && key != "none" {
+			agents = append(agents, key)
+		}
+	}
+	sort.Strings(agents)
+	return agents
+}
+
 func TestSurfaceRegistryResolveFallsBack(t *testing.T) {
 	defaultSurface := &registrySurface{name: "none"}
 	registry := NewSurfaceRegistry(defaultSurface)
-	custom := &registrySurface{name: "euclo"}
-	registry.Register("euclo", custom)
+	custom := &registrySurface{name: "guest"}
+	registry.Register("guest", custom)
 
-	if got := registry.Resolve("euclo"); got != custom {
-		t.Fatalf("expected euclo surface, got %#v", got)
+	if got := registry.Resolve("guest"); got != custom {
+		t.Fatalf("expected guest surface, got %#v", got)
 	}
 	if got := registry.Resolve("unknown"); got != defaultSurface {
 		t.Fatalf("expected default surface, got %#v", got)
@@ -100,21 +123,21 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		},
 		chat: &fakeChatPane{},
 	}
-	eucloChat := &fakeChatPane{}
-	eucloSurface := &registrySurface{
-		name: "euclo",
+	guestChat := &fakeChatPane{}
+	guestSurface := &registrySurface{
+		name: "guest",
 		tabs: []TabDefinition{
 			{ID: TabChat, Label: "chat"},
 			{ID: TabGraph, Label: "graph"},
 			{ID: TabDiff, Label: "diff"},
 			{ID: TabLibrary, Label: "library"},
 		},
-		chat: eucloChat,
+		chat: guestChat,
 	}
 	factory := &registryFactory{
 		defaultSurface: noneSurface,
 		surfaces: map[string]AgentSurface{
-			"euclo": eucloSurface,
+			"guest": guestSurface,
 		},
 	}
 
@@ -126,20 +149,20 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		t.Fatalf("initial tab count = %d, want 6", got)
 	}
 
-	if err := m.switchActiveAgent("euclo"); err != nil {
-		t.Fatalf("switch to euclo failed: %v", err)
+	if err := m.switchActiveAgent("guest"); err != nil {
+		t.Fatalf("switch to guest failed: %v", err)
 	}
-	if got := m.activeAgentName(); got != "euclo" {
-		t.Fatalf("agent after switch = %q, want euclo", got)
+	if got := m.activeAgentName(); got != "guest" {
+		t.Fatalf("agent after switch = %q, want guest", got)
 	}
 	if got := len(m.tabs.All()); got != 4 {
-		t.Fatalf("euclo tab count = %d, want 4", got)
+		t.Fatalf("guest tab count = %d, want 4", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "chat" {
-		t.Fatalf("euclo first tab label = %q, want chat", got)
+		t.Fatalf("guest first tab label = %q, want chat", got)
 	}
 
-	eucloChat.width = 77
+	guestChat.width = 77
 	m.setActiveTab(TabDiff)
 	m.setActiveSubTab("")
 
@@ -156,11 +179,11 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		t.Fatalf("none first tab label = %q, want welcome", got)
 	}
 
-	if err := m.switchActiveAgent("euclo"); err != nil {
-		t.Fatalf("switch back to euclo failed: %v", err)
+	if err := m.switchActiveAgent("guest"); err != nil {
+		t.Fatalf("switch back to guest failed: %v", err)
 	}
-	if got := m.activeAgentName(); got != "euclo" {
-		t.Fatalf("agent after restoring = %q, want euclo", got)
+	if got := m.activeAgentName(); got != "guest" {
+		t.Fatalf("agent after restoring = %q, want guest", got)
 	}
 	if got := m.tabs.ActiveTab().ID; got != TabDiff {
 		t.Fatalf("restored active tab = %q, want %q", got, TabDiff)
@@ -169,7 +192,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		t.Fatalf("restored chat width = %d, want 77", got)
 	}
 	if got := m.tabs.All()[3].Label; got != "library" {
-		t.Fatalf("euclo tab labels not restored, got %q", got)
+		t.Fatalf("guest tab labels not restored, got %q", got)
 	}
 }
 
@@ -178,7 +201,7 @@ func TestAgentPickerOpensFromRegion2Click(t *testing.T) {
 	factory := &registryFactory{
 		defaultSurface: noneSurface,
 		surfaces: map[string]AgentSurface{
-			"euclo": &registrySurface{name: "euclo", tabs: []TabDefinition{{ID: TabChat, Label: "chat"}}},
+			"guest": &registrySurface{name: "guest", tabs: []TabDefinition{{ID: TabChat, Label: "chat"}}},
 		},
 	}
 	m := newRootModel(nil, factory)

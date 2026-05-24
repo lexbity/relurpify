@@ -22,14 +22,14 @@ func (m *RootModel) AppendSurfaceMessage(msg Message) {
 	m.chat.AppendMessage(msg)
 }
 
-// ApplyInteractionFrame lets the active chat pane update any surface-local
-// sidebar or frame state when it supports the interaction protocol.
+// ApplyInteractionFrame lets the active chat pane update surface-local sidebar
+// or frame state when it supports the interaction protocol.
 func (m *RootModel) ApplyInteractionFrame(frame interaction.InteractionFrame) {
 	if m == nil || m.chat == nil {
 		return
 	}
 	if updater, ok := m.chat.(interface {
-		UpdateSidebarFromFrame(interaction.InteractionFrame)
+		UpdateSidebarFromFrame(any)
 	}); ok {
 		updater.UpdateSidebarFromFrame(frame)
 	}
@@ -41,8 +41,7 @@ func (m *RootModel) TrackInteractionFrame(notificationID string, frame interacti
 	m.trackInteractionFrame(notificationID, frame)
 }
 
-// OpenInteractionGuidance opens the guidance panel for a freetext interaction
-// frame.
+// OpenInteractionGuidance opens the guidance panel for a freetext interaction frame.
 func (m *RootModel) OpenInteractionGuidance(notificationID string, frame interaction.InteractionFrame) {
 	m.openInteractionGuidance(notificationID, frame)
 }

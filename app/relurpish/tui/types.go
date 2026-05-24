@@ -18,7 +18,7 @@ const (
 	TabDoctor        TabID = "doctor"
 )
 
-// Euclo tab IDs — registered by the euclo agent on init.
+// Guest tab IDs — registered by the active surface on init.
 const (
 	TabChat    TabID = "chat"
 	TabGraph   TabID = "graph"
@@ -30,9 +30,9 @@ const (
 // accepted without casting in switch statements.
 type SubTabID = string
 
-// Euclo subtab IDs.
+// Surface subtab IDs used by the chat surface.
 const (
-	// Chat subtabs — map to euclo capability/edit policy.
+	// Chat subtabs map to execution policy and context mode.
 	SubTabChatLocalRead  SubTabID = "local-read-only"
 	SubTabChatLocalEdit  SubTabID = "local-edit-on"
 	SubTabChatOnlineRead SubTabID = "online-read-on"
@@ -252,12 +252,41 @@ type SessionLiveSnapshotMsg struct {
 // configRefreshMsg is an internal signal to reload config pane state from runtime.
 type configRefreshMsg struct{}
 
+// ConfigRefreshMsg reloads config pane state from runtime.
+type ConfigRefreshMsg struct{}
+
 // sandboxPersistedMsg is emitted after the sandbox manifest is saved and the
 // runtime has been reloaded against the current workspace.
 type sandboxPersistedMsg struct {
 	Workspace string
 	Backup    string
 	Err       error
+}
+
+// SandboxPersistedMsg is the exported version of sandboxPersistedMsg.
+type SandboxPersistedMsg struct {
+	Workspace string
+	Backup    string
+	Err       error
+}
+
+// WorkspaceSelectedMsg reports that the welcome pane selected a workspace.
+type WorkspaceSelectedMsg struct {
+	Workspace string
+}
+
+// DoctorProgressMsg reports long-running doctor progress updates.
+type DoctorProgressMsg struct {
+	Action   string
+	Progress float64
+}
+
+// DoctorStatusMsg reports the final state of a doctor action.
+type DoctorStatusMsg struct {
+	Action  string
+	Report  DoctorReport
+	Message string
+	Err     error
 }
 
 // NotificationKind describes what kind of notification is being shown.

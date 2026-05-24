@@ -57,6 +57,8 @@ type fakeSurface struct {
 	tabCount     int
 	commandCount int
 	tabs         []TabDefinition
+	doctorReport DoctorReport
+	doctorStatus string
 }
 
 func (s *fakeSurface) Name() string { return s.name }
@@ -86,10 +88,35 @@ func (s *fakeSurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *Notifica
 	return &fakeChatPane{}
 }
 
+func (s *fakeSurface) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+	return nil
+}
+
+func (s *fakeSurface) NewRegion1(RuntimeAdapter, *AgentContext, *Session, *SessionStore, *NotificationQueue) Region1Surface {
+	return s
+}
+
 func (s *fakeSurface) InitialTab() TabID                                        { return TabChat }
 func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             { return "" }
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
+func (s *fakeSurface) DoctorReport() DoctorReport                                 { return s.doctorReport }
+func (s *fakeSurface) SetDoctorReport(report DoctorReport)                        { s.doctorReport = report }
+func (s *fakeSurface) SetDoctorStatus(status string)                              { s.doctorStatus = status }
+func (s *fakeSurface) SetSize(int, int)                                           {}
+func (s *fakeSurface) SetStore(*SessionStore)                                    {}
+func (s *fakeSurface) SetActiveTab(TabID)                                        {}
+func (s *fakeSurface) SetFilter(string)                                          {}
+func (s *fakeSurface) Refresh()                                                  {}
+func (s *fakeSurface) Update(msg tea.Msg) (Region1Surface, tea.Cmd)              { return s, nil }
+func (s *fakeSurface) View() string                                              { return "" }
+func (s *fakeSurface) HandleInputSubmit(string) tea.Cmd                          { return nil }
+func (s *fakeSurface) Cleanup()                                                  {}
+func (s *fakeSurface) FocusFilescopes()                                          {}
+func (s *fakeSurface) OpenSecurityGuard()                                        {}
+func (s *fakeSurface) OpenAIProvider()                                           {}
+func (s *fakeSurface) OpenKeybindings()                                           {}
+func (s *fakeSurface) OpenDoctor()                                               {}
 
 type countingFactory struct {
 	shared        AgentSurface
@@ -106,8 +133,19 @@ func (f *countingFactory) Resolve(agentName string) AgentSurface {
 	return f.shared
 }
 
+func (f *countingFactory) AvailableAgents() []string {
+	if f.shared == nil {
+		return nil
+	}
+	name := normalizeSurfaceKey(f.shared.Name())
+	if name == "" || name == "none" {
+		return nil
+	}
+	return []string{name}
+}
+
 func TestRootModelResizeAllocatesChromeRows(t *testing.T) {
-	surface := &fakeSurface{name: "euclo", chat: &fakeChatPane{}}
+	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
 	m := newRootModel(nil, factory)
 	q := &NotificationQueue{}

@@ -162,3 +162,118 @@ func (o overlayFunc) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	}
 	return o.handle(msg)
 }
+
+// openAgentPicker opens the active-agent overlay when permitted.
+func (m *RootModel) openAgentPicker() {
+	if m == nil || m.agentPicker == nil {
+		return
+	}
+	if m.startupLocked {
+		return
+	}
+	if m.overlays != nil && m.overlays.Len() > 0 {
+		return
+	}
+	items := m.availableAgents()
+	current := m.activeAgentName()
+	m.agentPicker.Open(items, current)
+	m.syncOverlayStack()
+}
+
+// closeAgentPicker hides the active-agent overlay.
+func (m *RootModel) closeAgentPicker() {
+	if m == nil || m.agentPicker == nil {
+		return
+	}
+	m.agentPicker.Close()
+}
+
+// syncCommandPalette mirrors the input bar palette state into the host-owned
+// command palette overlay.
+func (m *RootModel) syncCommandPalette() {
+	if m.inputBar == nil || m.cmdPalette == nil {
+		return
+	}
+	open, items, sel, label := m.inputBar.PaletteState()
+	m.cmdPalette.Sync(open, items, sel, m.width, label)
+}
+
+// syncOverlayStack rebuilds the host overlay stack from the current overlay
+// sources.
+func (m *RootModel) syncOverlayStack() {
+	if m.overlays == nil {
+		m.overlays = NewOverlayStack()
+	}
+	m.overlays.Clear()
+	if m.agentPicker != nil && m.agentPicker.IsOpen() {
+		picker := m.agentPicker
+		m.overlays.Push(overlayFunc{
+			render: func(width, height int) string {
+				return picker.Render(width, height)
+			},
+			handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
+				selected, handled := picker.HandleKey(msg)
+				if !handled {
+					return nil, false
+				}
+				if selected != "" {
+					if err := m.switchActiveAgent(selected); err != nil {
+						m.addSystemMessage(fmt.Sprintf("Agent switch failed: %v", err))
+					} else {
+						m.setFocus(FocusRegionInput)
+					}
+				}
+				if msg.String() == "esc" || selected != "" {
+					m.closeAgentPicker()
+				}
+				m.syncOverlayStack()
+				return nil, true
+			},
+		})
+		return
+	}
+	if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
+		palette := m.cmdPalette
+		m.overlays.Push(overlayFunc{
+			render: func(width, height int) string {
+				_ = height
+				_ = width
+				return palette.View()
+			},
+			handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
+				if m.inputBar == nil {
+					return nil, false
+				}
+				ib, cmd := m.inputBar.Update(msg, m.activeTab)
+				m.inputBar = ib
+				m.syncCommandPalette()
+				m.syncOverlayStack()
+				return cmd, true
+			},
+		})
+	}
+	if m.inputBar != nil {
+		if m.inputBar.PickerView() != "" {
+			ib := m.inputBar
+			m.overlays.Push(overlayFunc{
+				render: func(width, height int) string {
+					_ = width
+					_ = height
+					return ib.PickerView()
+				},
+				handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
+					updated, cmd := ib.Update(msg, m.activeTab)
+					m.inputBar = updated
+					m.syncCommandPalette()
+					m.syncOverlayStack()
+					return cmd, true
+				},
+			})
+		}
+	}
+	if m.notifBar != nil {
+		if overlay, ok := m.notifBar.PromptOverlay(); ok {
+			m.overlays.Push(overlay)
+		}
+	}
+}

@@ -363,13 +363,16 @@ func (p *ChatPane) RemoveFileFromSidebar(path string) {
 	p.removeSelectedFile(path)
 	p.updateSidebarContent()
 }
-func (p *ChatPane) UpdateSidebarFromFrame(frame interaction.InteractionFrame) {
-	if content, ok := frame.Content.(interaction.ContextProposalContent); ok {
-		p.updateSidebarFromProposalFrame(content)
-	}
-	if payloadFiles, ok := frame.Payload["euclo.user_selected_files"]; ok {
-		if files, ok := payloadFiles.([]string); ok {
-			p.replaceSelectedFiles(files)
+func (p *ChatPane) UpdateSidebarFromFrame(frame any) {
+	switch frame := frame.(type) {
+	case interaction.InteractionFrame:
+		if content, ok := frame.Content.(interaction.ContextProposalContent); ok {
+			p.updateSidebarFromProposalFrame(content)
+		}
+		if payloadFiles, ok := frame.Payload["euclo.user_selected_files"]; ok {
+			if files, ok := payloadFiles.([]string); ok {
+				p.replaceSelectedFiles(files)
+			}
 		}
 	}
 }

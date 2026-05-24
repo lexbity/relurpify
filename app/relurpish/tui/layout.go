@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 const (
@@ -196,4 +198,50 @@ func (s SubTabBar) View() string {
 	}
 	content := strings.Join(parts, "  ")
 	return subtabBarStyle.Width(s.width).Render(content)
+}
+
+// notificationRowVisible reports whether the host should reserve a row for
+// notification or HITL presentation.
+func (m RootModel) notificationRowVisible() bool {
+	if m.notifBar != nil && m.notifBar.Active() {
+		return true
+	}
+	return m.hitlRow != nil && m.hitlRow.Active()
+}
+
+// handleResize distributes new terminal dimensions to all host-owned
+// components.
+func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	m.ready = true
+
+	m.layout.Recalculate(msg.Width, msg.Height, m.notificationRowVisible())
+
+	m.subTabBar.SetWidth(msg.Width)
+	m.tabBar.SetWidth(msg.Width)
+	if m.notifBar != nil {
+		m.notifBar.SetWidth(msg.Width)
+	}
+	if m.inputBar != nil {
+		m.inputBar.SetWidth(m.layout.Region3Width())
+	}
+	m.help.SetSize(msg.Width, msg.Height)
+
+	paneH := m.layout.Region1PaneRows()
+	if m.chat != nil {
+		m.chat.SetSize(msg.Width, paneH)
+	}
+	m.session.SetSize(msg.Width, paneH)
+	if m.baseSurface != nil {
+		m.baseSurface.SetSize(msg.Width, paneH)
+	}
+	if m.library != nil {
+		m.library.SetSize(msg.Width, paneH)
+	}
+	if m.hitlRow != nil {
+		m.hitlRow.SetWidth(msg.Width)
+	}
+
+	return m, nil
 }

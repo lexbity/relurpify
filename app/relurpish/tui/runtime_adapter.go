@@ -17,7 +17,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
-	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -276,14 +275,15 @@ func (r *runtimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo {
 	return out
 }
 
+type runtimeProfileProvider interface {
+	RuntimeProfile() (mode, strategy string)
+}
+
 func describeAgentRuntime(agent agentgraph.WorkflowExecutor) (string, string) {
-	switch typed := agent.(type) {
-	case *euclo.Agent:
-		return "euclo", "route-dispatch"
-	default:
-		_ = typed
-		return "", ""
+	if typed, ok := agent.(runtimeProfileProvider); ok {
+		return typed.RuntimeProfile()
 	}
+	return "", ""
 }
 
 func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution {
@@ -548,11 +548,11 @@ func (r *runtimeAdapter) ListPrompts() []PromptInfo {
 		sort.Strings(vars)
 		out = append(out, PromptInfo{
 			Meta: InspectableMeta{
-				ID:    cfg.ID,
-				Kind:  "prompt",
-				Title: cfg.ID,
+				ID:     cfg.ID,
+				Kind:   "prompt",
+				Title:  cfg.ID,
 				Source: cfg.SourcePath,
-				State: strings.Join(cfg.Tags, ", "),
+				State:  strings.Join(cfg.Tags, ", "),
 			},
 			PromptID:    cfg.ID,
 			ProviderID:  "local",
@@ -571,11 +571,11 @@ func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
 		for _, promptInfo := range prompts {
 			out = append(out, ResourceInfo{
 				Meta: InspectableMeta{
-					ID:    promptInfo.PromptID,
-					Kind:  "prompt",
-					Title: promptInfo.Meta.Title,
+					ID:     promptInfo.PromptID,
+					Kind:   "prompt",
+					Title:  promptInfo.Meta.Title,
 					Source: promptInfo.Meta.Source,
-					State: promptInfo.Meta.State,
+					State:  promptInfo.Meta.State,
 				},
 				ResourceID: promptInfo.PromptID,
 			})
@@ -590,11 +590,11 @@ func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
 		}
 		out = append(out, ResourceInfo{
 			Meta: InspectableMeta{
-				ID:    ref,
-				Kind:  "workflow-resource",
-				Title: ref,
+				ID:     ref,
+				Kind:   "workflow-resource",
+				Title:  ref,
 				Source: ref,
-				State: "linked",
+				State:  "linked",
 			},
 			ResourceID:       ref,
 			WorkflowResource: true,
@@ -670,11 +670,11 @@ func (r *runtimeAdapter) GetPromptDetail(id string) (*PromptDetail, error) {
 	}
 	return &PromptDetail{
 		Meta: InspectableMeta{
-			ID:    cfg.ID,
-			Kind:  "prompt",
-			Title: cfg.ID,
+			ID:     cfg.ID,
+			Kind:   "prompt",
+			Title:  cfg.ID,
 			Source: cfg.SourcePath,
-			State: strings.Join(cfg.Tags, ", "),
+			State:  strings.Join(cfg.Tags, ", "),
 		},
 		PromptID:    cfg.ID,
 		ProviderID:  "local",
@@ -732,11 +732,11 @@ func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, err
 	}
 	return &ResourceDetail{
 		Meta: InspectableMeta{
-			ID:    cfg.ID,
-			Kind:  "prompt-resource",
-			Title: cfg.ID,
+			ID:     cfg.ID,
+			Kind:   "prompt-resource",
+			Title:  cfg.ID,
 			Source: cfg.SourcePath,
-			State: "ready",
+			State:  "ready",
 		},
 		ResourceID:  cfg.ID,
 		ProviderID:  "local",

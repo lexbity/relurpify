@@ -6,9 +6,6 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 )
 
-// SurfaceFrameMsg is re-exported for Euclo-specific event plumbing helpers.
-type SurfaceFrameMsg = tui.SurfaceFrameMsg
-
 // PatchHunk describes one causal code change attached to an execution event.
 type PatchHunk struct {
 	File        string

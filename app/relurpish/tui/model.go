@@ -32,16 +32,11 @@ type RootModel struct {
 	overlays   *OverlayStack
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
-	chat          ChatPaner
-	tasks         *TasksPane
-	session       *SessionPane
-	sandbox       *SandboxPane
-	securityguard *SecurityGuardPane
-	aiprovider    *AIProviderPane
-	library       *LibraryPane
-	welcome       *WelcomePane
-	keybindings   *KeybindingPane
-	doctor        *DoctorPane
+	chat        ChatPaner
+	baseSurface Region1Surface
+	tasks       *TasksPane
+	session     *SessionPane
+	library     LibrarySurface
 
 	// Shared state
 	activeTab     TabID
@@ -78,7 +73,7 @@ type RootModel struct {
 
 	// HITL notification row: renders between Region 1 and the bottom bar
 	// when the agent emits an interaction frame.
-	hitlRow   *HITLRow
+	hitlRow *HITLRow
 
 	// Input gate blocks > prompts during active execution.
 	inputGate *InputGate
@@ -93,6 +88,17 @@ type surfaceState struct {
 	tabs    *TabRegistry
 	cmdReg  *CommandRegistry
 	chat    ChatPaner
+	region1 Region1Surface
+	library LibrarySurface
+}
+
+func isBaseFrameworkTab(id TabID) bool {
+	switch id {
+	case TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor:
+		return true
+	default:
+		return false
+	}
 }
 
 func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
@@ -137,11 +143,15 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	if strings.TrimSpace(sess.Agent) == "" {
 		sess.Agent = "none"
 	}
+	var store *SessionStore
+	if info.Workspace != "" {
+		store = NewSessionStore(info.Workspace)
+	}
 	initialAgent := normalizeSurfaceKey(info.Agent)
 	if initialAgent == "" {
 		initialAgent = "none"
 	}
-	state := buildSurfaceState(factory, initialAgent, rt, ctx, sess, notifQ)
+	state := buildSurfaceState(factory, initialAgent, rt, ctx, sess, store, notifQ)
 	inputBar.SetCommandRegistry(state.cmdReg)
 	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
 
@@ -175,10 +185,9 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		activeSurface:     state.surface,
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
-
-	var store *SessionStore
-	if info.Workspace != "" {
-		store = NewSessionStore(info.Workspace)
+	if state.region1 != nil {
+		state.region1.SetStore(store)
+		m.baseSurface = state.region1
 	}
 	m.store = store
 
@@ -186,20 +195,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	m.tasks = NewTasksPane(rt, notifQ)
 	m.session = NewSessionPane(ctx, sess, rt)
 	m.session.SyncQueuedTasks(m.tasks.Items())
-	m.sandbox = NewSandboxPane(rt)
-	m.securityguard = NewSecurityGuardPane(rt)
-	m.aiprovider = NewAIProviderPane(rt)
-	if rt != nil {
-		m.library = NewLibraryPane(rt)
-	} else {
-		m.library = &LibraryPane{
-			tagFilters: make(map[string]bool),
-			lastUsed:   make(map[string]time.Time),
-		}
-	}
-	m.welcome = NewWelcomePane(sess, m.store)
-	m.keybindings = NewKeybindingPane(rt)
-	m.doctor = NewDoctorPane(rt)
+	m.library = state.library
 	if rt != nil {
 		m.applyStartupGate()
 	}
@@ -210,7 +206,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	return m
 }
 
-func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) *surfaceState {
+func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) *surfaceState {
 	surface := factory.Resolve(agentName)
 	if surface == nil {
 		surface = newGenericSurface()
@@ -239,20 +235,21 @@ func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapt
 	if tabAware, ok := chat.(TabAwarePane); ok {
 		tabAware.SetActiveTab(initialTab)
 	}
+	region1 := surface.NewRegion1(rt, ctx, sess, store, notifQ)
+	library := surface.NewLibrary(rt, ctx, sess)
 	return &surfaceState{
 		surface: surface,
 		tabs:    tabs,
 		cmdReg:  cmdReg,
 		chat:    chat,
+		region1: region1,
+		library: library,
 	}
 }
 
 func (m *RootModel) activateSurface(agentName string) {
 	if m == nil {
 		return
-	}
-	if m.surfaceCache == nil {
-		m.surfaceCache = make(map[string]*surfaceState)
 	}
 	key := normalizeSurfaceKey(agentName)
 	if key == "" {
@@ -261,16 +258,13 @@ func (m *RootModel) activateSurface(agentName string) {
 	if key == "" {
 		key = "none"
 	}
-	state, ok := m.surfaceCache[key]
-	if !ok || state == nil {
-		state = buildSurfaceState(m.surfaceFactory, agentName, m.runtime, m.sharedCtx, m.sharedSess, m.notifQ)
-		m.surfaceCache[key] = state
-	}
+	state := m.surfaceStateFor(key)
 	m.activeAgent = key
 	m.activeSurface = state.surface
 	m.tabs = state.tabs
 	m.cmdReg = state.cmdReg
 	m.chat = state.chat
+	m.library = state.library
 	if m.inputBar != nil {
 		m.inputBar.SetCommandRegistry(state.cmdReg)
 		m.inputBar.SetContext(m.tabs.ActiveTab().ID, m.tabs.ActiveSubTab())
@@ -282,8 +276,93 @@ func (m *RootModel) activateSurface(agentName string) {
 	if m.notifBar != nil && state.surface != nil {
 		m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 	}
+	if state.region1 != nil {
+		state.region1.SetStore(m.store)
+		m.baseSurface = state.region1
+	}
 	m.activeTab = m.tabs.ActiveTab().ID
 	m.setActiveTab(m.activeTab)
+}
+
+func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {
+	if m == nil {
+		return nil
+	}
+	if m.surfaceCache == nil {
+		m.surfaceCache = make(map[string]*surfaceState)
+	}
+	key := normalizeSurfaceKey(agentName)
+	if key == "" {
+		key = "none"
+	}
+	state, ok := m.surfaceCache[key]
+	if !ok || state == nil {
+		state = buildSurfaceState(m.surfaceFactory, key, m.runtime, m.sharedCtx, m.sharedSess, m.store, m.notifQ)
+		m.surfaceCache[key] = state
+	}
+	return state
+}
+
+func (m *RootModel) preferredLibraryAgent() string {
+	if m == nil {
+		return ""
+	}
+	seen := make(map[string]struct{})
+	var candidates []string
+	add := func(name string) {
+		name = normalizeSurfaceKey(name)
+		if name == "" || name == "none" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		candidates = append(candidates, name)
+	}
+	add(m.activeAgent)
+	if m.sharedSess != nil {
+		add(m.sharedSess.Agent)
+	}
+	if m.surfaceFactory != nil {
+		for _, name := range m.surfaceFactory.AvailableAgents() {
+			add(name)
+		}
+	}
+	if m.runtime != nil {
+		for _, name := range m.runtime.AvailableAgents() {
+			add(name)
+		}
+	}
+	for _, name := range candidates {
+		state := m.surfaceStateFor(name)
+		if state != nil && state.library != nil {
+			return name
+		}
+	}
+	return ""
+}
+
+func (m *RootModel) switchToLibrarySurface() error {
+	if m == nil {
+		return nil
+	}
+	if m.library != nil {
+		return nil
+	}
+	agent := m.preferredLibraryAgent()
+	if agent == "" {
+		return fmt.Errorf("recipe library unavailable")
+	}
+	if agent != m.activeAgentName() {
+		if err := m.switchActiveAgent(agent); err != nil {
+			return err
+		}
+	}
+	if m.library == nil {
+		return fmt.Errorf("recipe library unavailable")
+	}
+	return nil
 }
 
 func (m *RootModel) switchActiveAgent(agentName string) error {
@@ -338,115 +417,6 @@ func (m *RootModel) availableAgents() []string {
 	sort.Strings(rest)
 	out = append(out, rest...)
 	return out
-}
-
-func (m *RootModel) openAgentPicker() {
-	if m == nil || m.agentPicker == nil {
-		return
-	}
-	if m.startupLocked {
-		return
-	}
-	if m.overlays != nil && m.overlays.Len() > 0 {
-		return
-	}
-	items := m.availableAgents()
-	current := m.activeAgentName()
-	m.agentPicker.Open(items, current)
-	m.syncOverlayStack()
-}
-
-func (m *RootModel) closeAgentPicker() {
-	if m == nil || m.agentPicker == nil {
-		return
-	}
-	m.agentPicker.Close()
-}
-
-func (m *RootModel) syncCommandPalette() {
-	if m.inputBar == nil || m.cmdPalette == nil {
-		return
-	}
-	open, items, sel, label := m.inputBar.PaletteState()
-	m.cmdPalette.Sync(open, items, sel, m.width, label)
-}
-
-func (m *RootModel) syncOverlayStack() {
-	if m.overlays == nil {
-		m.overlays = NewOverlayStack()
-	}
-	m.overlays.Clear()
-	if m.agentPicker != nil && m.agentPicker.IsOpen() {
-		picker := m.agentPicker
-		m.overlays.Push(overlayFunc{
-			render: func(width, height int) string {
-				return picker.Render(width, height)
-			},
-			handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
-				selected, handled := picker.HandleKey(msg)
-				if !handled {
-					return nil, false
-				}
-				if selected != "" {
-					if err := m.switchActiveAgent(selected); err != nil {
-						m.addSystemMessage(fmt.Sprintf("Agent switch failed: %v", err))
-					} else {
-						m.setFocus(FocusRegionInput)
-					}
-				}
-				if msg.String() == "esc" || selected != "" {
-					m.closeAgentPicker()
-				}
-				m.syncOverlayStack()
-				return nil, true
-			},
-		})
-		return
-	}
-	if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
-		palette := m.cmdPalette
-		m.overlays.Push(overlayFunc{
-			render: func(width, height int) string {
-				_ = height
-				_ = width
-				return palette.View()
-			},
-			handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
-				if m.inputBar == nil {
-					return nil, false
-				}
-				ib, cmd := m.inputBar.Update(msg, m.activeTab)
-				m.inputBar = ib
-				m.syncCommandPalette()
-				m.syncOverlayStack()
-				return cmd, true
-			},
-		})
-	}
-	if m.inputBar != nil {
-		if m.inputBar.PickerView() != "" {
-			ib := m.inputBar
-			m.overlays.Push(overlayFunc{
-				render: func(width, height int) string {
-					_ = width
-					_ = height
-					return ib.PickerView()
-				},
-				handle: func(msg tea.KeyMsg) (tea.Cmd, bool) {
-					updated, cmd := ib.Update(msg, m.activeTab)
-					m.inputBar = updated
-					m.syncCommandPalette()
-					m.syncOverlayStack()
-					return cmd, true
-				},
-			})
-		}
-	}
-	if m.notifBar != nil {
-		if overlay, ok := m.notifBar.PromptOverlay(); ok {
-			m.overlays.Push(overlay)
-		}
-	}
 }
 
 func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
@@ -637,7 +607,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case workspaceSelectedMsg:
+	case WorkspaceSelectedMsg:
 		return m.handleWorkspaceSelected(msg.Workspace)
 
 	// HITL subscription initialization.
@@ -662,42 +632,26 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	// Config refresh — forward to config pane regardless of active tab.
-	case configRefreshMsg:
-		if m.securityguard != nil {
-			m.securityguard.Refresh()
-		}
-		if m.aiprovider != nil {
-			m.aiprovider.Refresh()
-		}
-		if m.keybindings != nil {
-			m.keybindings.Refresh()
+	case ConfigRefreshMsg:
+		if m.baseSurface != nil {
+			m.baseSurface.Refresh()
 		}
 		return m, nil
 
-	case doctorStatusMsg:
-		if m.doctor != nil {
-			m.doctor.report = msg.Report
-			m.doctor.working = false
-			m.doctor.progress = 1
-			if msg.Err != nil {
-				m.doctor.status = fmt.Sprintf("%s failed: %v", msg.Action, msg.Err)
-				m.addSystemMessage(m.doctor.status)
-				return m, nil
-			}
-			if msg.Action != "" {
-				m.doctor.status = msg.Message
-			}
-		}
+	case DoctorStatusMsg:
 		m.applyDoctorReport(msg.Report)
+		if msg.Err != nil {
+			m.addSystemMessage(fmt.Sprintf("%s failed: %v", msg.Action, msg.Err))
+		}
 		return m, nil
 
-	case sandboxPersistedMsg:
+	case SandboxPersistedMsg:
 		if msg.Err != nil {
 			m.addSystemMessage(fmt.Sprintf("Sandbox save failed: %v", msg.Err))
 			return m, nil
 		}
-		if m.sandbox != nil {
-			m.sandbox.Refresh()
+		if m.baseSurface != nil {
+			m.baseSurface.Refresh()
 		}
 		if msg.Workspace != "" && m.sharedSess != nil {
 			m.sharedSess.Workspace = msg.Workspace
@@ -831,55 +785,15 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
+		pane, cmd := m.baseSurface.Update(msg)
+		m.baseSurface = pane
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
 	switch m.activeTab {
-	case TabWelcome:
-		if m.welcome != nil {
-			wp, cmd := m.welcome.Update(msg)
-			m.welcome = wp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	case TabSandbox:
-		if m.sandbox != nil {
-			sp, cmd := m.sandbox.Update(msg)
-			m.sandbox = sp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	case TabSecurityGuard:
-		if m.securityguard != nil {
-			cp, cmd := m.securityguard.Update(msg)
-			m.securityguard = cp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	case TabAIProvider:
-		if m.aiprovider != nil {
-			pa, cmd := m.aiprovider.Update(msg)
-			m.aiprovider = pa
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	case TabKeybindings:
-		if m.keybindings != nil {
-			kp, cmd := m.keybindings.Update(msg)
-			m.keybindings = kp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	case TabDoctor:
-		if m.doctor != nil {
-			dp, cmd := m.doctor.Update(msg)
-			m.doctor = dp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
 	case TabLibrary:
 		if m.library != nil {
 			lp, cmd := m.library.Update(msg)
@@ -944,31 +858,10 @@ func (m RootModel) View() string {
 }
 
 func (m RootModel) activePaneView() string {
+	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
+		return m.baseSurface.View()
+	}
 	switch m.activeTab {
-	case TabWelcome:
-		if m.welcome != nil {
-			return m.welcome.View()
-		}
-	case TabSandbox:
-		if m.sandbox != nil {
-			return m.sandbox.View()
-		}
-	case TabSecurityGuard:
-		if m.securityguard != nil {
-			return m.securityguard.View()
-		}
-	case TabAIProvider:
-		if m.aiprovider != nil {
-			return m.aiprovider.View()
-		}
-	case TabKeybindings:
-		if m.keybindings != nil {
-			return m.keybindings.View()
-		}
-	case TabDoctor:
-		if m.doctor != nil {
-			return m.doctor.View()
-		}
 	case TabLibrary:
 		if m.library != nil {
 			return m.library.View()
@@ -979,64 +872,6 @@ func (m RootModel) activePaneView() string {
 		}
 	}
 	return ""
-}
-
-// handleResize distributes new terminal dimensions to all components.
-func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	m.width = msg.Width
-	m.height = msg.Height
-	m.ready = true
-
-	m.layout.Recalculate(msg.Width, msg.Height, m.notificationRowVisible())
-
-	m.subTabBar.SetWidth(msg.Width)
-	m.tabBar.SetWidth(msg.Width)
-	if m.notifBar != nil {
-		m.notifBar.SetWidth(msg.Width)
-	}
-	if m.inputBar != nil {
-		m.inputBar.SetWidth(m.layout.Region3Width())
-	}
-	m.help.SetSize(msg.Width, msg.Height)
-
-	paneH := m.layout.Region1PaneRows()
-	if m.chat != nil {
-		m.chat.SetSize(msg.Width, paneH)
-	}
-	m.session.SetSize(msg.Width, paneH)
-	if m.sandbox != nil {
-		m.sandbox.SetSize(msg.Width, paneH)
-	}
-	if m.securityguard != nil {
-		m.securityguard.SetSize(msg.Width, paneH)
-	}
-	if m.aiprovider != nil {
-		m.aiprovider.SetSize(msg.Width, paneH)
-	}
-	if m.welcome != nil {
-		m.welcome.SetSize(msg.Width, paneH)
-	}
-	if m.keybindings != nil {
-		m.keybindings.SetSize(msg.Width, paneH)
-	}
-	if m.doctor != nil {
-		m.doctor.SetSize(msg.Width, paneH)
-	}
-	if m.library != nil {
-		m.library.SetSize(msg.Width, paneH)
-	}
-	if m.hitlRow != nil {
-		m.hitlRow.SetWidth(msg.Width)
-	}
-
-	return m, nil
-}
-
-func (m RootModel) notificationRowVisible() bool {
-	if m.notifBar != nil && m.notifBar.Active() {
-		return true
-	}
-	return m.hitlRow != nil && m.hitlRow.Active()
 }
 
 func (m RootModel) activeAgentName() string {
@@ -1066,37 +901,11 @@ func (m *RootModel) setActiveTab(id TabID) {
 	if m.inputBar != nil {
 		filter = m.inputBar.Value()
 	}
-	switch id {
-	case TabWelcome:
-		if m.welcome != nil {
-			m.welcome.Refresh()
-			m.welcome.SetFilter(filter)
-		}
-	case TabSandbox:
-		if m.sandbox != nil {
-			m.sandbox.SetFilter(filter)
-		}
-	case TabSecurityGuard:
-		if m.securityguard != nil {
-			m.securityguard.Refresh()
-			m.securityguard.SetFilter(filter)
-		}
-	case TabAIProvider:
-		if m.aiprovider != nil {
-			m.aiprovider.Refresh()
-			m.aiprovider.SetFilter(filter)
-		}
-	case TabKeybindings:
-		if m.keybindings != nil {
-			m.keybindings.Refresh()
-			m.keybindings.SetFilter(filter)
-		}
-	case TabDoctor:
-		if m.doctor != nil {
-			m.doctor.Refresh()
-			m.doctor.SetFilter(filter)
-		}
-	case TabLibrary:
+	switch {
+	case isBaseFrameworkTab(id) && m.baseSurface != nil:
+		m.baseSurface.SetActiveTab(id)
+		m.baseSurface.SetFilter(filter)
+	case id == TabLibrary:
 		if m.library != nil {
 			m.library.SetFilter(filter)
 		}
@@ -1324,49 +1133,12 @@ func (m *RootModel) routeInputKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 func (m *RootModel) routeRegion1Key(msg tea.KeyMsg) tea.Cmd {
+	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
+		pane, cmd := m.baseSurface.Update(msg)
+		m.baseSurface = pane
+		return cmd
+	}
 	switch m.activeTab {
-	case TabWelcome:
-		if m.welcome == nil {
-			return nil
-		}
-		wp, cmd := m.welcome.Update(msg)
-		m.welcome = wp
-		return cmd
-	case TabSandbox:
-		if m.sandbox == nil {
-			return nil
-		}
-		sp, cmd := m.sandbox.Update(msg)
-		m.sandbox = sp
-		return cmd
-	case TabSecurityGuard:
-		if m.securityguard == nil {
-			return nil
-		}
-		cp, cmd := m.securityguard.Update(msg)
-		m.securityguard = cp
-		return cmd
-	case TabAIProvider:
-		if m.aiprovider == nil {
-			return nil
-		}
-		sp, cmd := m.aiprovider.Update(msg)
-		m.aiprovider = sp
-		return cmd
-	case TabKeybindings:
-		if m.keybindings == nil {
-			return nil
-		}
-		kp, cmd := m.keybindings.Update(msg)
-		m.keybindings = kp
-		return cmd
-	case TabDoctor:
-		if m.doctor == nil {
-			return nil
-		}
-		dp, cmd := m.doctor.Update(msg)
-		m.doctor = dp
-		return cmd
 	case TabLibrary:
 		if m.library == nil {
 			return nil
@@ -1392,20 +1164,31 @@ func (m *RootModel) setFocus(region FocusRegion) {
 }
 
 func (m *RootModel) applyStartupGate() {
-	if m == nil || m.doctor == nil {
+	if m == nil {
 		return
 	}
-	report := m.doctor.report
+	report := DoctorReport{}
+	if reporter, ok := m.baseSurface.(StartupGateController); ok && reporter != nil {
+		report = reporter.DoctorReport()
+	}
 	if report.Ready() {
 		m.startupLocked = false
-		if err := m.switchActiveAgent("euclo"); err == nil {
+		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
+			controller.SetDoctorReport(report)
+		}
+		target := m.preferredLibraryAgent()
+		if target != "" {
+			if err := m.switchActiveAgent(target); err == nil {
+				m.setActiveTab(TabChat)
+				return
+			}
+			m.activateSurface(target)
+			m.activeAgent = target
+			if m.sharedSess != nil {
+				m.sharedSess.Agent = target
+			}
 			m.setActiveTab(TabChat)
 			return
-		}
-		m.activateSurface("euclo")
-		m.activeAgent = "euclo"
-		if m.sharedSess != nil {
-			m.sharedSess.Agent = "euclo"
 		}
 		m.setActiveTab(TabChat)
 		return
@@ -1417,7 +1200,10 @@ func (m *RootModel) applyStartupGate() {
 		m.sharedSess.Agent = "none"
 	}
 	m.setActiveTab(TabDoctor)
-	m.doctor.status = "startup checks failed; resolve Doctor issues to unlock Euclo chat"
+	if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
+		controller.SetDoctorReport(report)
+		controller.SetDoctorStatus("startup checks failed; resolve Doctor issues to unlock guest chat")
+	}
 }
 
 func (m *RootModel) applyDoctorReport(report DoctorReport) {
@@ -1426,18 +1212,30 @@ func (m *RootModel) applyDoctorReport(report DoctorReport) {
 	}
 	if report.Ready() {
 		m.startupLocked = false
-		if err := m.switchActiveAgent("euclo"); err != nil {
-			m.activateSurface("euclo")
-			m.activeAgent = "euclo"
+		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
+			controller.SetDoctorReport(report)
+		}
+		target := m.preferredLibraryAgent()
+		if target != "" {
+			if err := m.switchActiveAgent(target); err != nil {
+				m.activateSurface(target)
+				m.activeAgent = target
+				if m.sharedSess != nil {
+					m.sharedSess.Agent = target
+				}
+				m.setActiveTab(TabChat)
+				m.addSystemMessage("Doctor checks passed; auto-promoted to active guest chat")
+				return
+			}
 			if m.sharedSess != nil {
-				m.sharedSess.Agent = "euclo"
+				m.sharedSess.Agent = target
 			}
 			m.setActiveTab(TabChat)
-			m.addSystemMessage("Doctor checks passed; auto-promoted to Euclo chat")
+			m.addSystemMessage("Doctor checks passed; auto-promoted to active guest chat")
 			return
 		}
 		m.setActiveTab(TabChat)
-		m.addSystemMessage("Doctor checks passed; auto-promoted to Euclo chat")
+		m.addSystemMessage("Doctor checks passed; startup checks are healthy")
 		return
 	}
 	m.startupLocked = true
@@ -1448,6 +1246,10 @@ func (m *RootModel) applyDoctorReport(report DoctorReport) {
 	}
 	m.setActiveTab(TabDoctor)
 	m.addSystemMessage("Startup checks failed; Doctor tab remains locked")
+	if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
+		controller.SetDoctorReport(report)
+		controller.SetDoctorStatus("startup checks failed; resolve Doctor issues to unlock guest chat")
+	}
 }
 
 // handleInputSubmitted routes a submitted value to the active pane.
@@ -1465,8 +1267,8 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 			m.addSystemMessage("Cannot submit prompt while a run is active. Use /stop to cancel or wait for completion.")
 			return m, nil
 		}
-		switch m.activeTab {
-		case TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabLibrary:
+		switch {
+		case isBaseFrameworkTab(m.activeTab), m.activeTab == TabLibrary:
 			return m, nil
 		}
 		if m.chat == nil {
@@ -1476,8 +1278,8 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 		return m, cmd
 	}
 	m.syncActivePaneFilter(value)
-	switch m.activeTab {
-	case TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabLibrary:
+	switch {
+	case isBaseFrameworkTab(m.activeTab), m.activeTab == TabLibrary:
 		return m, nil
 	default:
 		if m.chat == nil {
@@ -1512,9 +1314,9 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 		m.inputBar.SetWorkspace(workspace)
 	}
 	m.store = NewSessionStore(workspace)
-	if m.welcome != nil {
-		m.welcome.store = m.store
-		m.welcome.Refresh()
+	if m.baseSurface != nil {
+		m.baseSurface.SetStore(m.store)
+		m.baseSurface.Refresh()
 	}
 	if m.session != nil {
 		m.session.SyncContext(m.sharedCtx)
@@ -1522,23 +1324,8 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 	if m.chat != nil {
 		m.chat.SetSearchFilter("")
 	}
-	if m.sandbox != nil {
-		m.sandbox.Refresh()
-	}
-	if m.securityguard != nil {
-		m.securityguard.Refresh()
-	}
-	if m.aiprovider != nil {
-		m.aiprovider.Refresh()
-	}
-	if m.keybindings != nil {
-		m.keybindings.Refresh()
-	}
 	if m.library != nil {
 		m.library.Refresh()
-	}
-	if m.doctor != nil {
-		m.doctor.Refresh()
 	}
 	m.applyStartupGate()
 	m.syncActivePaneFilter(m.inputBar.Value())
@@ -1562,32 +1349,10 @@ func (m *RootModel) syncActivePaneFilter(raw string) {
 	if draft.filterMode && !draft.commandMode && draft.prefix != ">" {
 		filter = strings.TrimSpace(draft.current)
 	}
-	switch m.activeTab {
-	case TabWelcome:
-		if m.welcome != nil {
-			m.welcome.SetFilter(filter)
-		}
-	case TabSandbox:
-		if m.sandbox != nil {
-			m.sandbox.SetFilter(filter)
-		}
-	case TabSecurityGuard:
-		if m.securityguard != nil {
-			m.securityguard.SetFilter(filter)
-		}
-	case TabAIProvider:
-		if m.aiprovider != nil {
-			m.aiprovider.SetFilter(filter)
-		}
-	case TabKeybindings:
-		if m.keybindings != nil {
-			m.keybindings.SetFilter(filter)
-		}
-	case TabDoctor:
-		if m.doctor != nil {
-			m.doctor.SetFilter(filter)
-		}
-	case TabLibrary:
+	switch {
+	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
+		m.baseSurface.SetFilter(filter)
+	case m.activeTab == TabLibrary:
 		if m.library != nil {
 			m.library.SetFilter(filter)
 		}
@@ -1602,32 +1367,10 @@ func (m *RootModel) refreshActivePane() {
 	if m == nil {
 		return
 	}
-	switch m.activeTab {
-	case TabWelcome:
-		if m.welcome != nil {
-			m.welcome.Refresh()
-		}
-	case TabSandbox:
-		if m.sandbox != nil {
-			m.sandbox.Refresh()
-		}
-	case TabSecurityGuard:
-		if m.securityguard != nil {
-			m.securityguard.Refresh()
-		}
-	case TabAIProvider:
-		if m.aiprovider != nil {
-			m.aiprovider.Refresh()
-		}
-	case TabKeybindings:
-		if m.keybindings != nil {
-			m.keybindings.Refresh()
-		}
-	case TabDoctor:
-		if m.doctor != nil {
-			m.doctor.Refresh()
-		}
-	case TabLibrary:
+	switch {
+	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
+		m.baseSurface.Refresh()
+	case m.activeTab == TabLibrary:
 		if m.library != nil {
 			m.library.Refresh()
 		}
@@ -1662,190 +1405,6 @@ func (m *RootModel) addSystemMessage(text string) {
 	}
 }
 
-func (m *RootModel) trackInteractionFrame(notificationID string, frame interaction.InteractionFrame) {
-	if m == nil {
-		return
-	}
-	if m.interactionFrames == nil {
-		m.interactionFrames = make(map[string]*interaction.InteractionFrame)
-	}
-	frameCopy := frame
-	if notificationID = strings.TrimSpace(notificationID); notificationID != "" {
-		m.interactionFrames[notificationID] = &frameCopy
-	}
-	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
-		m.interactionFrames[frameID] = &frameCopy
-	}
-}
-
-func (m *RootModel) openInteractionGuidance(notificationID string, frame interaction.InteractionFrame) {
-	if m == nil {
-		return
-	}
-	if m.hitlRow != nil && m.hitlRow.Active() {
-		return
-	}
-	question := strings.TrimSpace(frame.Question)
-	if question == "" {
-		question = frameLabelFromInteraction(frame)
-	}
-
-	var slotIDs []string
-	var slotNames []string
-
-	if len(frame.Choices) > 0 {
-		for i, choice := range frame.Choices {
-			slotIDs = append(slotIDs, choice)
-			slotNames = append(slotNames, choice)
-			if i == 0 {
-				_ = i
-			}
-		}
-		_ = len(frame.Choices)
-	} else if len(frame.Slots) > 0 {
-		for _, slot := range frame.Slots {
-			label := strings.TrimSpace(slot.Label)
-			if label == "" {
-				label = slot.ID
-			}
-			slotIDs = append(slotIDs, strings.TrimSpace(slot.ID))
-			slotNames = append(slotNames, label)
-		}
-	}
-
-	if m.hitlRow != nil {
-		m.hitlRow.Open(strings.TrimSpace(notificationID), question, slotIDs, slotNames)
-	}
-}
-
-func (m *RootModel) resolvePendingInteraction(notificationID, choiceID, freetext string) bool {
-	if m == nil {
-		return false
-	}
-	if m.interactionFrames == nil {
-		m.interactionFrames = make(map[string]*interaction.InteractionFrame)
-	}
-	requestID := strings.TrimSpace(notificationID)
-	if requestID == "" {
-		return false
-	}
-	frame, ok := m.interactionFrames[requestID]
-	if !ok || frame == nil {
-		return false
-	}
-	answer := strings.TrimSpace(choiceID)
-	if answer == "" {
-		answer = strings.TrimSpace(freetext)
-	}
-	if answer == "" {
-		answer = defaultInteractionAnswer(frame)
-	}
-	extra := map[string]any{
-		"notification_id": requestID,
-		"frame_id":        strings.TrimSpace(frame.ID),
-		"frame_type":      string(frame.Type),
-	}
-	if strings.TrimSpace(frame.TaskID) != "" {
-		extra["task_id"] = strings.TrimSpace(frame.TaskID)
-	}
-	if strings.TrimSpace(freetext) != "" {
-		extra["freetext"] = strings.TrimSpace(freetext)
-	}
-	frame.SetResponse(answer, extra, "relurpish", time.Now().UTC())
-	delete(m.interactionFrames, requestID)
-	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
-		delete(m.interactionFrames, frameID)
-	}
-	if m.notifQ != nil {
-		m.notifQ.Resolve(requestID)
-	}
-	m.syncOverlayStack()
-	if m.runtime != nil {
-		if err := m.runtime.ResolveInteractionFrame(context.Background(), frame.TaskID, frame.ID, answer, freetext); err != nil {
-			m.addSystemMessage(fmt.Sprintf("Interaction persistence failed: %v", err))
-		}
-	}
-	if answer != "" {
-		m.addSystemMessage(fmt.Sprintf("Resolved %s: %s", frameLabelFromInteraction(*frame), answer))
-	} else {
-		m.addSystemMessage(fmt.Sprintf("Resolved %s", frameLabelFromInteraction(*frame)))
-	}
-	return true
-}
-
-func defaultInteractionAnswer(frame *interaction.InteractionFrame) string {
-	if frame == nil {
-		return ""
-	}
-	if slot := strings.TrimSpace(frame.DefaultChoice); slot != "" {
-		return slot
-	}
-	for _, slot := range frame.Slots {
-		if slot.Default {
-			if id := strings.TrimSpace(slot.ID); id != "" {
-				return id
-			}
-		}
-	}
-	if len(frame.Slots) > 0 {
-		return strings.TrimSpace(frame.Slots[0].ID)
-	}
-	if len(frame.Choices) > 0 {
-		return strings.TrimSpace(frame.Choices[0])
-	}
-	return ""
-}
-
-func (m *RootModel) deferPendingInteraction(notificationID string) bool {
-	if m == nil {
-		return false
-	}
-	requestID := strings.TrimSpace(notificationID)
-	if requestID == "" {
-		return false
-	}
-	frame, ok := m.interactionFrames[requestID]
-	if !ok || frame == nil {
-		return false
-	}
-	delete(m.interactionFrames, requestID)
-	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
-		delete(m.interactionFrames, frameID)
-	}
-	if m.notifQ != nil {
-		m.notifQ.Resolve(requestID)
-	}
-	m.addSystemMessage(fmt.Sprintf("Deferred %s", frameLabelFromInteraction(*frame)))
-	m.syncOverlayStack()
-	return true
-}
-
-func frameLabelFromInteraction(frame interaction.InteractionFrame) string {
-	frameType := strings.TrimSpace(string(frame.Type))
-	if frameType == "" {
-		frameType = strings.TrimSpace(string(frame.Kind))
-	}
-	if frameType == "" {
-		frameType = "interaction"
-	}
-	return prettyFrameLabel(frameType)
-}
-
-func prettyFrameLabel(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	parts := strings.Fields(strings.ReplaceAll(value, "_", " "))
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
-	}
-	return strings.Join(parts, " ")
-}
-
 // autoSave persists the current session after each completed run.
 func (m RootModel) autoSave() {
 	if m.store == nil || m.chat == nil {
@@ -1872,55 +1431,6 @@ func (m RootModel) cleanup() {
 	if m.chat != nil {
 		m.chat.Cleanup()
 	}
-}
-
-// handleHITLEvent processes HITL events from the subscription.
-func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
-	var pending []*fauthorization.PermissionRequest
-	if m.chat != nil {
-		if svc := m.chat.HITLService(); svc != nil {
-			pending = svc.PendingHITL()
-		}
-	}
-	switch msg.event.Type {
-	case fauthorization.HITLEventRequested:
-		req := msg.event.Request
-		if req == nil && len(pending) > 0 {
-			req = pending[0]
-		}
-		if req != nil && m.notifQ != nil {
-			m.notifQ.PushHITL(req)
-		}
-	case fauthorization.HITLEventResolved, fauthorization.HITLEventExpired:
-		if msg.event.Request != nil && m.notifQ != nil {
-			m.notifQ.Resolve(msg.event.Request.ID)
-		}
-		if msg.event.Type == fauthorization.HITLEventExpired && msg.event.Request != nil {
-			reason := msg.event.Error
-			if reason == "" {
-				reason = "expired"
-			}
-			m.addSystemMessage(fmt.Sprintf("Permission %s expired: %s", msg.event.Request.ID, reason))
-		}
-	}
-	// Re-queue the listener to continue draining the channel
-	return m, listenHITLEvents(m.hitlCh)
-}
-
-// handleHITLResolved processes HITL resolution messages.
-func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) {
-	if m.notifQ != nil {
-		m.notifQ.Resolve(msg.requestID)
-	}
-	if msg.err != nil {
-		m.addSystemMessage(fmt.Sprintf("HITL %s failed: %v", msg.requestID, msg.err))
-	} else if msg.approved {
-		m.addSystemMessage(fmt.Sprintf("Approved %s", msg.requestID))
-	} else {
-		m.addSystemMessage(fmt.Sprintf("Denied %s", msg.requestID))
-	}
-	// Re-queue the listener to continue draining the channel
-	return m, listenHITLEvents(m.hitlCh)
 }
 
 // dequeueNextTask starts the next pending task from the task queue, if any.

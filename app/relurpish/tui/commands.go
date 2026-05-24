@@ -117,9 +117,6 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "model", Description: "Inspect or set the active model", Usage: "/model [model_name]", Handler: rootHandleModel},
 		{Name: "model-provider", Description: "Open model provider configuration", Usage: "/model-provider", Handler: rootHandleModelProvider},
 		{Name: "keybindings", Description: "Open keybinding configuration", Usage: "/keybindings", Handler: rootHandleKeybindings},
-		{Name: "recipes", Description: "Open the recipe library", Usage: "/recipes", Handler: rootHandleRecipes},
-		{Name: "recipe", Description: "Run, open, validate, or inspect a recipe", Usage: "/recipe <run|open|validate|reload> [recipe-id]", Handler: rootHandleRecipe},
-		{Name: "reload", Description: "Reload recipes and prompt templates", Usage: "/reload", Handler: rootHandleReloadCatalog},
 		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
 		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
 		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
@@ -140,28 +137,10 @@ func registerUniversalCommands(r *CommandRegistry) {
 	}
 }
 
-func registerChatCommands(r *CommandRegistry) {
-	for _, cmd := range []Command{
-		{Name: "add", Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
-		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
-		{Name: "context", Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
-		{Name: "clear", Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
-		{Name: "approve", Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
-		{Name: "reject", Description: "Reject pending changes", Usage: "/reject", Handler: rootHandleReject, TabFilter: []TabID{TabChat}},
-		{Name: "diff", Description: "Toggle diff expansion", Usage: "/diff [index|path]", Handler: rootHandleDiff, TabFilter: []TabID{TabChat}},
-		{Name: "parallel", Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel, TabFilter: []TabID{TabChat}},
-		{Name: "commit", Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit, TabFilter: []TabID{TabChat}},
-		{Name: "local-review", Description: "Show git diff stat for current changes", Usage: "/local-review", Handler: rootHandleLocalReview, TabFilter: []TabID{TabChat}},
-		{Name: "checkpoint", Description: "Save a named session checkpoint", Usage: "/checkpoint [label]", Handler: rootHandleCheckpoint, TabFilter: []TabID{TabChat}},
-		{Name: "compact", Description: "Compress chat history to a summary", Usage: "/compact", Handler: rootHandleCompact, TabFilter: []TabID{TabChat}},
-	} {
-		r.Register(cmd)
+func RegisterEucloCommands(reg *CommandRegistry) {
+	if reg == nil {
+		return
 	}
-}
-
-func RegisterSurfaceCommands(reg *CommandRegistry) {
-	// Default surface commands preserve the current chat-oriented workflow.
-	// Agent-specific surfaces can replace or extend these commands.
 	for _, cmd := range []Command{
 		{Name: "add", Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
 		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
@@ -175,10 +154,11 @@ func RegisterSurfaceCommands(reg *CommandRegistry) {
 		{Name: "local-review", Description: "Show git diff stat for current changes", Usage: "/local-review", Handler: rootHandleLocalReview, TabFilter: []TabID{TabChat}},
 		{Name: "checkpoint", Description: "Save a named session checkpoint", Usage: "/checkpoint [label]", Handler: rootHandleCheckpoint, TabFilter: []TabID{TabChat}},
 		{Name: "compact", Description: "Compress chat history to a summary", Usage: "/compact", Handler: rootHandleCompact, TabFilter: []TabID{TabChat}},
+		{Name: "recipes", Description: "Open the recipe library", Usage: "/recipes", Handler: rootHandleRecipes},
+		{Name: "recipe", Description: "Run, open, validate, or inspect a recipe", Usage: "/recipe <run|open|validate|reload> [recipe-id]", Handler: rootHandleRecipe},
+		{Name: "reload", Description: "Reload recipes and prompt templates", Usage: "/reload", Handler: rootHandleReloadCatalog},
 	} {
-		if reg != nil {
-			reg.Register(cmd)
-		}
+		reg.Register(cmd)
 	}
 }
 
@@ -191,7 +171,6 @@ func registerDebugCommands(_ *CommandRegistry) {}
 func init() {
 	rootCommandRegistry = NewCommandRegistry()
 	registerUniversalCommands(rootCommandRegistry)
-	registerChatCommands(rootCommandRegistry)
 	registerPlannerCommands(rootCommandRegistry)
 }
 
@@ -267,6 +246,10 @@ func rootHandleWorkspace(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.store != nil {
 		m.store = NewSessionStore(workspace)
 	}
+	if m.baseSurface != nil {
+		m.baseSurface.SetStore(m.store)
+		m.baseSurface.Refresh()
+	}
 	m.setActiveTab(TabWelcome)
 	m.addSystemMessage(fmt.Sprintf("Workspace set to %s", workspace))
 	if m.session != nil {
@@ -278,8 +261,8 @@ func rootHandleWorkspace(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSandbox)
-	if m.sandbox != nil {
-		m.sandbox.FocusFilescopes()
+	if m.baseSurface != nil {
+		m.baseSurface.FocusFilescopes()
 	}
 	m.addSystemMessage("Opened sandbox permissions")
 	return m, nil
@@ -288,6 +271,9 @@ func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSecurityGuard)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenSecurityGuard()
+	}
 	m.addSystemMessage("Opened SecurityGuard filters")
 	return m, nil
 }
@@ -295,8 +281,8 @@ func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSandbox)
-	if m.sandbox != nil {
-		m.sandbox.FocusFilescopes()
+	if m.baseSurface != nil {
+		m.baseSurface.FocusFilescopes()
 	}
 	m.addSystemMessage("Focused file scopes")
 	return m, nil
@@ -305,6 +291,9 @@ func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabDoctor)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenDoctor()
+	}
 	workspace := ""
 	model := ""
 	provider := ""
@@ -330,11 +319,11 @@ func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) == 0 {
-		current := ""
-		if m.sharedSess != nil {
-			current = m.sharedSess.Model
-		}
+		if len(args) == 0 {
+			current := ""
+			if m.sharedSess != nil {
+				current = m.sharedSess.Model
+			}
 		available := ""
 		if m.runtime != nil {
 			if models, err := m.runtime.InferenceModels(context.Background()); err == nil && len(models) > 0 {
@@ -343,6 +332,9 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		}
 		_ = m.switchActiveAgent("none")
 		m.setActiveTab(TabAIProvider)
+		if m.baseSurface != nil {
+			m.baseSurface.OpenAIProvider()
+		}
 		m.addSystemMessage(fmt.Sprintf("Current model: %s%s", current, available))
 		return m, nil
 	}
@@ -362,6 +354,9 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabAIProvider)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenAIProvider()
+	}
 	m.addSystemMessage(fmt.Sprintf("Model set to %s", model))
 	return m, nil
 }
@@ -369,6 +364,9 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabAIProvider)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenAIProvider()
+	}
 	info := ""
 	if m.runtime != nil {
 		session := m.runtime.SessionInfo()
@@ -386,12 +384,15 @@ func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 func rootHandleKeybindings(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabKeybindings)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenKeybindings()
+	}
 	m.addSystemMessage("Opened keybindings")
 	return m, nil
 }
 
 func rootHandleRecipes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if err := m.switchActiveAgent("euclo"); err != nil {
+	if err := m.switchToLibrarySurface(); err != nil {
 		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
 		return m, nil
 	}
@@ -404,11 +405,7 @@ func rootHandleRecipes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleReloadCatalog(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.library == nil {
-		m.addSystemMessage("recipe library unavailable")
-		return m, nil
-	}
-	if err := m.switchActiveAgent("euclo"); err != nil {
+	if err := m.switchToLibrarySurface(); err != nil {
 		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
 		return m, nil
 	}
@@ -419,11 +416,7 @@ func rootHandleReloadCatalog(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.library == nil {
-		m.addSystemMessage("recipe library unavailable")
-		return m, nil
-	}
-	if err := m.switchActiveAgent("euclo"); err != nil {
+	if err := m.switchToLibrarySurface(); err != nil {
 		m.addSystemMessage(fmt.Sprintf("recipe library unavailable: %v", err))
 		return m, nil
 	}
@@ -435,23 +428,21 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 
 	switch args[0] {
 	case "list":
-		m.setActiveTab(TabLibrary)
-		m.addSystemMessage("Opened recipe library")
-		return m, nil
+		return rootHandleRecipes(m, nil)
 	case "reload":
 		return rootHandleReloadCatalog(m, nil)
 	case "run":
 		id, cmdArgs := recipeCommandTarget(args[1:])
 		if id == "" {
-			if selected := m.library.selectedID(); selected != "" {
-				id = selected
-			}
+		if selected := m.library.SelectedID(); selected != "" {
+			id = selected
+		}
 		}
 		if id == "" {
 			m.addSystemMessage("Usage: /recipe run <recipe-id> [params...]")
 			return m, nil
 		}
-		if prompt, ok := m.library.runPromptForID(id); ok {
+		if prompt, ok := m.library.RunPromptForID(id); ok {
 			if len(cmdArgs) > 0 {
 				prompt = strings.Join([]string{"/recipe", "run", id, strings.Join(cmdArgs, " ")}, " ")
 				prompt += " "
@@ -469,14 +460,14 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	case "open":
 		id, _ := recipeCommandTarget(args[1:])
 		if id == "" {
-			id = m.library.selectedID()
+			id = m.library.SelectedID()
 		}
 		if id == "" {
 			m.addSystemMessage("Usage: /recipe open <recipe-id>")
 			return m, nil
 		}
-		if m.library.selectByID(id) {
-			_, cmd := m.library.openSelectedEditorCmd()
+		if m.library.SelectByID(id) {
+			cmd := m.library.OpenSelectedEditorCmd()
 			m.setActiveTab(TabLibrary)
 			return m, cmd
 		}
@@ -485,14 +476,14 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	case "validate":
 		id, _ := recipeCommandTarget(args[1:])
 		if id == "" {
-			id = m.library.selectedID()
+			id = m.library.SelectedID()
 		}
 		if id == "" {
 			m.addSystemMessage("Usage: /recipe validate <recipe-id>")
 			return m, nil
 		}
-		if m.library.selectByID(id) {
-			_, cmd := m.library.validateSelected()
+		if m.library.SelectByID(id) {
+			cmd := m.library.ValidateSelected()
 			m.setActiveTab(TabLibrary)
 			return m, cmd
 		}
@@ -504,7 +495,7 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			m.addSystemMessage("Usage: /recipe <run|open|validate|reload> [recipe-id]")
 			return m, nil
 		}
-		if prompt, ok := m.library.runPromptForID(id); ok {
+		if prompt, ok := m.library.RunPromptForID(id); ok {
 			if len(cmdArgs) > 0 {
 				prompt = strings.Join([]string{"/recipe", "run", id, strings.Join(cmdArgs, " ")}, " ")
 				prompt += " "

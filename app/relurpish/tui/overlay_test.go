@@ -70,3 +70,22 @@ func TestOverlayStackRenderOrderIsDeterministic(t *testing.T) {
 		t.Fatalf("render = %q, want %q", got, want)
 	}
 }
+
+func TestOverlayStackPushExclusiveReplacesExistingEntries(t *testing.T) {
+	stack := NewOverlayStack()
+	first := &testOverlay{rendered: "first"}
+	second := &testOverlay{rendered: "second"}
+
+	stack.Push(first)
+	stack.PushExclusive(second)
+
+	if got := stack.Len(); got != 1 {
+		t.Fatalf("stack len = %d, want 1", got)
+	}
+	if got := stack.Top(); got != second {
+		t.Fatalf("top overlay = %#v, want second", got)
+	}
+	if got := stack.Render(80, 24); got != "second" {
+		t.Fatalf("render = %q, want second", got)
+	}
+}

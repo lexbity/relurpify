@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -52,17 +51,56 @@ type ChatPaner interface {
 	AddFile(path string) tea.Cmd
 }
 
-// ChatSidebarController exposes the surface-local sidebar operations that the
-// host shell needs to keep in sync with the active chat pane.
+// ChatSidebarController exposes surface-local sidebar operations that the host
+// shell needs to keep in sync with the active chat pane.
 type ChatSidebarController interface {
 	ToggleSidebar()
 	AddFileToSidebar(path string) error
 	RemoveFileFromSidebar(path string)
-	UpdateSidebarFromFrame(frame interaction.InteractionFrame)
+	UpdateSidebarFromFrame(frame any)
+}
+
+// Region1Surface owns the active Region 1 pane for a surface.
+// The host keeps shell chrome and delegates the pane body to the surface.
+type Region1Surface interface {
+	SetSize(w, h int)
+	SetStore(store *SessionStore)
+	SetActiveTab(id TabID)
+	SetFilter(filter string)
+	Refresh()
+	Update(msg tea.Msg) (Region1Surface, tea.Cmd)
+	View() string
+	HandleInputSubmit(value string) tea.Cmd
+	Cleanup()
+	FocusFilescopes()
+	OpenSecurityGuard()
+	OpenAIProvider()
+	OpenKeybindings()
+	OpenDoctor()
+}
+
+// LibrarySurface owns the guest library tab state and rendering.
+type LibrarySurface interface {
+	SetSize(w, h int)
+	SetFilter(filter string)
+	Refresh()
+	Update(msg tea.Msg) (LibrarySurface, tea.Cmd)
+	View() string
+	SelectedID() string
+	RunPromptForID(id string) (string, bool)
+	SelectByID(id string) bool
+	OpenSelectedEditorCmd() tea.Cmd
+	ValidateSelected() tea.Cmd
+}
+
+// StartupGateController exposes Doctor-based startup state to the host.
+type StartupGateController interface {
+	DoctorReport() DoctorReport
+	SetDoctorReport(report DoctorReport)
+	SetDoctorStatus(status string)
 }
 
 // TabAwarePane lets the host tell a pane which main tab is currently active.
-// Euclo uses this to switch its Region 1 layout without a separate host stack.
 type TabAwarePane interface {
 	SetActiveTab(id TabID)
 }

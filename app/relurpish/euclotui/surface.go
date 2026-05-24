@@ -3,6 +3,7 @@ package euclotui
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
@@ -24,7 +25,7 @@ func NewSurface() tui.AgentSurface {
 // NewSurfaceFactory returns a surface registry with Euclo registered and the
 // generic surface as the fallback.
 func NewSurfaceFactory() tui.SurfaceFactory {
-	registry := tui.NewSurfaceRegistry(tui.NewDefaultSurfaceFactory().Resolve("none"))
+	registry := tui.NewSurfaceRegistry(relurpifyenvtui.NewSurface())
 	registry.Register("euclo", NewSurface())
 	return registry
 }
@@ -36,11 +37,21 @@ func (s *EucloSurface) RegisterTabs(reg *tui.TabRegistry) {
 }
 
 func (s *EucloSurface) RegisterCommands(reg *tui.CommandRegistry) {
-	tui.RegisterSurfaceCommands(reg)
+	tui.RegisterEucloCommands(reg)
 }
 
 func (s *EucloSurface) NewChat(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue) tui.ChatPaner {
 	return NewChatPane(rt, ctx, sess, notifQ, s.router)
+}
+
+func (s *EucloSurface) NewLibrary(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session) tui.LibrarySurface {
+	_ = ctx
+	_ = sess
+	return NewEucloLibraryPane(rt, s.router)
+}
+
+func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {
+	return nil
 }
 
 func (s *EucloSurface) InitialTab() tui.TabID {

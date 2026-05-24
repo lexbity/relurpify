@@ -2,12 +2,13 @@ package tui
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-// AgentSurface owns the agent-specific interaction surface for a given agent.
+// AgentSurface owns the interaction surface for a given agent.
 // The host keeps shell chrome, lifecycle, and persistence, while the surface
 // owns its tabs, commands, notification rendering, and frame handling.
 type AgentSurface interface {
@@ -15,6 +16,8 @@ type AgentSurface interface {
 	RegisterTabs(reg *TabRegistry)
 	RegisterCommands(reg *CommandRegistry)
 	NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner
+	NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface
+	NewLibrary(rt RuntimeAdapter, ctx *AgentContext, sess *Session) LibrarySurface
 	InitialTab() TabID
 	InitialSubTab(tab TabID) SubTabID
 	RenderNotification(item NotificationItem) string
@@ -24,6 +27,7 @@ type AgentSurface interface {
 // SurfaceFactory resolves the active surface for a given agent name.
 type SurfaceFactory interface {
 	Resolve(agentName string) AgentSurface
+	AvailableAgents() []string
 }
 
 // SurfaceFrameMsg is a surface-local event emitted by agent-specific runtime
@@ -41,6 +45,7 @@ type surfaceRegistry struct {
 	surfaces       map[string]AgentSurface
 }
 
+// NewDefaultSurfaceFactory returns a registry with the host default surface.
 func NewDefaultSurfaceFactory() SurfaceFactory {
 	registry := NewSurfaceRegistry(newGenericSurface())
 	return registry
@@ -80,6 +85,23 @@ func (r *surfaceRegistry) Resolve(agentName string) AgentSurface {
 	return r.defaultSurface
 }
 
+func (r *surfaceRegistry) AvailableAgents() []string {
+	if r == nil {
+		return nil
+	}
+	agents := make([]string, 0, len(r.surfaces))
+	for name, surface := range r.surfaces {
+		if surface == nil {
+			continue
+		}
+		if name = normalizeSurfaceKey(name); name != "" && name != "none" {
+			agents = append(agents, name)
+		}
+	}
+	sort.Strings(agents)
+	return agents
+}
+
 func normalizeSurfaceKey(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
@@ -117,6 +139,14 @@ func (genericSurface) RegisterCommands(reg *CommandRegistry) {
 }
 
 func (genericSurface) NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner {
+	return nil
+}
+
+func (genericSurface) NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface {
+	return nil
+}
+
+func (genericSurface) NewLibrary(rt RuntimeAdapter, ctx *AgentContext, sess *Session) LibrarySurface {
 	return nil
 }
 
