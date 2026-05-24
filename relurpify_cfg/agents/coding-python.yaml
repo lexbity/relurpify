@@ -11,16 +11,16 @@ spec:
         permissions:
             filesystem:
                 - action: fs:read
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: Read workspace
                 - action: fs:list
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: List workspace
                 - action: fs:write
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: Modify workspace
                 - action: fs:execute
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: Execute tooling inside workspace
             executables:
                 - binary: python3
@@ -56,7 +56,7 @@ spec:
         prompt: You are coding. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
         model:
             provider: ollama
-            name: qwen2.5-coder:14b
+            name: gemma4:e4b
             temperature: 0.2
             max_tokens: 4096
         bash_permissions:

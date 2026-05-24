@@ -1,0 +1,20 @@
+thoughtrecipe with_fallback
+"ThoughtRecipe demonstrating a fallback step."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+
+agent primary uses goalcon
+agent fallback uses planner
+
+run primary:
+  goal "Attempt the primary plan first."
+  capture:
+    primary_result -> state.primary_result
+
+delegate to fallback:
+  from state.primary_result
+  goal "Fallback if needed."
+  capture:
+    result -> output.result

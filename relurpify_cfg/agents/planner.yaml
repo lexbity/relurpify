@@ -11,10 +11,10 @@ spec:
         permissions:
             filesystem:
                 - action: fs:read
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: Read workspace
                 - action: fs:list
-                  path: /home/lex/Public/Relurpify/**
+                  path: /home/lex/Public/relurpify/**
                   justification: List workspace
             network:
                 - direction: egress
@@ -41,7 +41,7 @@ spec:
         prompt: You are a planning agent. Focus on plans and avoid execution unless asked.
         model:
             provider: ollama
-            name: qwen2.5-coder:14b
+            name: gemma4:e4b
             temperature: 0.2
             max_tokens: 4096
         ollama_tool_calling: true

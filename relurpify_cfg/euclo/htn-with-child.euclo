@@ -1,0 +1,20 @@
+thoughtrecipe htn_with_child
+"HTN planning with a React child step."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+
+agent planner uses htn
+agent helper uses react
+
+run planner:
+  goal "Produce a plan before execution."
+  capture:
+    plan -> state.plan
+
+delegate to helper:
+  from state.plan
+  goal "Execute the child step."
+  capture:
+    result -> output.result

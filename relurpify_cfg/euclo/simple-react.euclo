@@ -1,0 +1,13 @@
+thoughtrecipe simple_react
+"Basic single-step thoughtrecipe using the React paradigm."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+
+agent analyzer uses react
+
+run analyzer:
+  goal "Execute a simple React workflow."
+  capture:
+    analysis -> output.analysis
