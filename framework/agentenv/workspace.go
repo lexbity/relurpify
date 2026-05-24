@@ -181,6 +181,7 @@ type AgentBootstrapOptions struct {
 	DebugLLM            bool
 	DebugAgent          bool
 	AgentLifecycle      agentlifecycle.Repository
+	ModelProfile        *contracts.ModelProfile
 }
 
 // BootstrappedAgentRuntime contains the results of bootstrapping an agent runtime.
@@ -304,6 +305,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Telemetry:         opts.Telemetry,
 	}
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
+	if opts.ModelProfile != nil {
+		registry.SetModelProfile(opts.ModelProfile)
+	}
 	admissionResults, err := capability.AdmitCandidates(
 		registry,
 		nil,
@@ -530,6 +534,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFu
 		AllowedCapabilities: cfg.AllowedCapabilities,
 		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
+		ModelProfile:        profileResolution.Profile,
 	})
 	if err != nil {
 		logFile.Close()

@@ -23,6 +23,7 @@ type (
 	Message       = contracts.Message
 	LLMToolSpec   = contracts.LLMToolSpec
 	Schema        = contracts.Schema
+	ModelProfile  = contracts.ModelProfile
 )
 
 // Client implements LanguageModel for OpenAI-compatible backends.

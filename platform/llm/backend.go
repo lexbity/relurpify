@@ -11,6 +11,7 @@ import (
 type (
 	LanguageModel       = contracts.LanguageModel
 	BackendCapabilities = contracts.BackendCapabilities
+	ModelProfile        = contracts.ModelProfile
 )
 
 // Embedder produces dense vector representations of text.

@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -264,3 +265,84 @@ type Event struct {
 type Telemetry interface {
 	Emit(event Event)
 }
+
+// ModelProfile captures model-specific quirks and configuration.
+type ModelProfile struct {
+	Provider    string `yaml:"provider,omitempty" json:"provider,omitempty"`
+	Model       string `yaml:"model,omitempty" json:"model,omitempty"`
+	Pattern     string `yaml:"pattern,omitempty" json:"pattern,omitempty"`
+	ContextSize int    `yaml:"context_size,omitempty" json:"context_size,omitempty"`
+
+	ToolCalling struct {
+		NativeAPI               bool              `yaml:"native_api" json:"native_api"`
+		DoubleEncodedArgs       bool              `yaml:"double_encoded_args" json:"double_encoded_args"`
+		MultilineStringLiterals bool              `yaml:"multiline_string_literals" json:"multiline_string_literals"`
+		MaxToolsPerCall         int               `yaml:"max_tools_per_call" json:"max_tools_per_call"`
+		Aliases                 map[string]string `yaml:"aliases,omitempty" json:"aliases,omitempty"`
+	} `yaml:"tool_calling" json:"tool_calling"`
+
+	Repair struct {
+		Strategy    string `yaml:"strategy" json:"strategy"`
+		MaxAttempts int    `yaml:"max_attempts" json:"max_attempts"`
+	} `yaml:"repair" json:"repair"`
+
+	Schema struct {
+		FlattenNested     bool `yaml:"flatten_nested" json:"flatten_nested"`
+		MaxDescriptionLen int  `yaml:"max_description_len" json:"max_description_len"`
+	} `yaml:"schema" json:"schema"`
+
+	SourcePath string `yaml:"-" json:"-"`
+}
+
+// Normalize applies compatibility defaults and canonicalizes string fields.
+func (p *ModelProfile) Normalize() {
+	if p == nil {
+		return
+	}
+	p.Provider = strings.ToLower(strings.TrimSpace(p.Provider))
+	p.Model = strings.TrimSpace(p.Model)
+	p.Pattern = strings.TrimSpace(p.Pattern)
+	if p.Repair.Strategy == "" {
+		p.Repair.Strategy = "heuristic-only"
+	}
+	if p.Repair.MaxAttempts < 0 {
+		p.Repair.MaxAttempts = 0
+	}
+}
+
+// Clone returns a deep copy of the profile.
+func (p *ModelProfile) Clone() *ModelProfile {
+	if p == nil {
+		return nil
+	}
+	clone := *p
+	return &clone
+}
+
+// IsExactModelMatch reports whether the profile pins a specific model name.
+func (p *ModelProfile) IsExactModelMatch() bool {
+	if p == nil {
+		return false
+	}
+	if p.Model != "" {
+		return !hasGlobMeta(p.Model)
+	}
+	return p.Pattern != "" && !hasGlobMeta(p.Pattern)
+}
+
+// MatchPattern returns the effective model selector used by registry matching.
+func (p *ModelProfile) MatchPattern() string {
+	if p == nil {
+		return ""
+	}
+	if p.Model != "" {
+		return p.Model
+	}
+	return p.Pattern
+}
+
+func hasGlobMeta(s string) bool {
+	return strings.ContainsAny(s, "*?[")
+}
+
+

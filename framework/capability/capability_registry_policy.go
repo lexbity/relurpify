@@ -705,3 +705,36 @@ func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[stri
 	}
 	return result
 }
+
+
+// SetModelProfile sets the active model profile for the registry to enable custom tool aliasing.
+func (r *CapabilityRegistry) SetModelProfile(p *contracts.ModelProfile) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.modelProfile = p
+}
+
+// NormalizeToolName resolves potential capability/tool call aliases to canonical names.
+func (r *CapabilityRegistry) NormalizeToolName(name string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.normalizeToolNameLocked(name)
+}
+
+func (r *CapabilityRegistry) normalizeToolNameLocked(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	profile := r.modelProfile
+	if profile != nil && profile.ToolCalling.Aliases != nil {
+		if canonical, exists := profile.ToolCalling.Aliases[name]; exists {
+			return canonical
+		}
+	}
+	if canonical, exists := defaultToolNameNormalization[name]; exists {
+		return canonical
+	}
+	return name
+}
+

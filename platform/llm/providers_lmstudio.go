@@ -122,7 +122,7 @@ func (a lmStudioBackendAdapter) SetProfile(profile *ModelProfile) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.SetProfile(profile.AsOpenAICompatProfile())
+	a.inner.SetProfile(profile)
 }
 
 func (a lmStudioBackendAdapter) Reset(ctx context.Context, strategy string) error {

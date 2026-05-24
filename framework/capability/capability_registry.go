@@ -63,6 +63,7 @@ type CapabilityRegistry struct {
 	safety              *runtimeSafetyController
 	policyEngine        authorization.PolicyEngine
 	nodeProviders       map[string]core.NodeProvider
+	modelProfile        *contracts.ModelProfile
 
 	// delegate and toolIDAllowlist support scoped views returned by WithAllowlist.
 	// When delegate is non-nil, this registry defers all operations to delegate
@@ -698,6 +699,7 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec
 func (r *CapabilityRegistry) GetModelTool(name string) (contracts.Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	name = r.normalizeToolNameLocked(name)
 	entry, ok := r.localToolEntryByNameLocked(name)
 	if !ok || entry == nil || entry.legacyTool == nil {
 		return nil, false
@@ -718,6 +720,7 @@ func (r *CapabilityRegistry) GetCapability(idOrName string) (core.CapabilityDesc
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	idOrName = r.normalizeToolNameLocked(idOrName)
 	if capability, ok := r.capabilities[idOrName]; ok {
 		return capability, true
 	}
@@ -1128,6 +1131,7 @@ func (r *CapabilityRegistry) handleDoomLoopGuidance(ctx context.Context, doomErr
 func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	idOrName = r.normalizeToolNameLocked(idOrName)
 	if entry, ok := r.entries[idOrName]; ok {
 		return entry, nil
 	}

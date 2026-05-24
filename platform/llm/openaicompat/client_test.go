@@ -159,16 +159,9 @@ func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
-	client.SetProfile(&ModelProfile{
-		ToolCalling: struct {
-			NativeAPI               bool `yaml:"native_api"`
-			DoubleEncodedArgs       bool `yaml:"double_encoded_args"`
-			MultilineStringLiterals bool `yaml:"multiline_string_literals"`
-			MaxToolsPerCall         int  `yaml:"max_tools_per_call"`
-		}{
-			NativeAPI: false,
-		},
-	})
+	profile := &ModelProfile{}
+	profile.ToolCalling.NativeAPI = false
+	client.SetProfile(profile)
 	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)

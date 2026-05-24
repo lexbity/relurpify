@@ -24,6 +24,7 @@ type (
 	Schema              = contracts.Schema
 	BackendClass        = contracts.BackendClass
 	BackendCapabilities = contracts.BackendCapabilities
+	ModelProfile        = contracts.ModelProfile
 )
 
 const (

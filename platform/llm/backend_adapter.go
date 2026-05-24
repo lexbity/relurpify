@@ -98,7 +98,7 @@ func (a managedBackendAdapter) SetProfile(profile *ModelProfile) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.SetProfile(profile.AsOllamaProfile())
+	a.inner.SetProfile(profile)
 }
 
 func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error {
