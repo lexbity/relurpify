@@ -25,7 +25,7 @@ func NormalizeRoutePredicate(pred PredicateExpr) (*RoutePredicate, error) {
 	}, nil
 }
 
-func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan) (*CompiledRouteGroup, error) {
+func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame) (*CompiledRouteGroup, error) {
 	if decl == nil {
 		return nil, fmt.Errorf("route declaration is nil")
 	}
@@ -54,7 +54,7 @@ func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *i
 			compiled.Predicate = pred
 		}
 
-		steps, err := lowerRouteExecutionItems(branch.Body, agents, runIndex, plan)
+		steps, err := lowerRouteExecutionItems(branch.Body, agents, runIndex, plan, inheritedToolScopes)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +78,7 @@ func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *i
 	return group, nil
 }
 
-func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan) ([]ExecutionStep, error) {
+func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame) ([]ExecutionStep, error) {
 	type executionFrame struct {
 		items []ExecutionItem
 		index int
@@ -99,19 +99,19 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 
 		switch node := item.(type) {
 		case *RunDecl:
-			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex)
+			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *DelegateDecl:
-			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex)
+			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *RouteDecl:
-			group, err := lowerRouteDecl(node, agents, runIndex, plan)
+			group, err := lowerRouteDecl(node, agents, runIndex, plan, inheritedToolScopes)
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +136,7 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 	return steps, nil
 }
 
-func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionItem, agents map[string]AgentBinding, index *int) (ExecutionStep, error) {
+func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionItem, agents map[string]AgentBinding, index *int, inheritedToolScopes []ToolScopeFrame) (ExecutionStep, error) {
 	if index == nil {
 		return ExecutionStep{}, fmt.Errorf("execution index is nil")
 	}
@@ -145,19 +145,28 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 	if !ok {
 		return ExecutionStep{}, fmt.Errorf("%s:%d:%d: unknown agent %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, agentName)
 	}
-	sources, goals, directives, captures, promptID, config := lowerRunItems(items)
+	sources, goals, directives, captures, localToolScopes, promptID, capabilityPlan, config, err := lowerRunItems(items)
+	if err != nil {
+		return ExecutionStep{}, err
+	}
 	stepID := fmt.Sprintf("%s.%d.%d.%s.%d", kind, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, sanitizeComponent(agentName), *index)
+	effectiveScopes := appendToolScopeFrames(copyToolScopeFrames(inheritedToolScopes), localToolScopes...)
 	step := ExecutionStep{
-		ID:              stepID,
-		Type:            kind,
-		Paradigm:        binding.Paradigm,
-		Goal:            strings.Join(goals, "\n"),
-		Sources:         sources,
-		Directives:      directives,
-		CaptureBindings: captures,
-		PromptID:        promptID,
-		Prompt:          strings.Join(goals, "\n"),
-		Step:            ThoughtRecipeStep{ID: stepID},
+		ID:                 stepID,
+		Type:               kind,
+		Paradigm:           binding.Paradigm,
+		ToolScopes:         append([]ToolScopeFrame(nil), localToolScopes...),
+		EffectiveToolNames: effectiveToolNames(effectiveScopes),
+		Goal:               strings.Join(goals, "\n"),
+		Sources:            sources,
+		Directives:         directives,
+		CaptureBindings:    captures,
+		PromptID:           promptID,
+		Prompt:             strings.Join(goals, "\n"),
+		Step:               ThoughtRecipeStep{ID: stepID},
+	}
+	if capabilityPlan != nil {
+		step.CapabilityID = capabilityPlan.CapabilityID
 	}
 	step.Step.Parent.Paradigm = binding.Paradigm
 	step.Step.Parent.Context = ThoughtRecipeStepContext{}
@@ -165,6 +174,29 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 	step.Step.PromptID = promptID
 	step.Step.Type = kind
 	step.Step.Config = config
+	if capabilityPlan != nil {
+		if step.Step.Config == nil {
+			step.Step.Config = map[string]any{}
+		}
+		if capabilityPlan.Target != "" {
+			step.Step.Config["target"] = capabilityPlan.Target
+		}
+		if capabilityPlan.Input != "" {
+			step.Step.Config["input"] = capabilityPlan.Input
+		}
+		step.Step.Config["capability_id"] = capabilityPlan.CapabilityID
+	}
+	if step.Step.Config == nil && (len(step.ToolScopes) > 0 || len(step.EffectiveToolNames) > 0) {
+		step.Step.Config = map[string]any{}
+	}
+	if step.Step.Config != nil {
+		if len(step.ToolScopes) > 0 {
+			step.Step.Config["tool_scopes"] = summarizeToolScopeFrames(step.ToolScopes)
+		}
+		if len(step.EffectiveToolNames) > 0 {
+			step.Step.Config["effective_tool_names"] = append([]string(nil), step.EffectiveToolNames...)
+		}
+	}
 	*index = *index + 1
 	return step, nil
 }

@@ -1,10 +1,36 @@
 package capability
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+type availabilityToggleTool struct {
+	name      string
+	available bool
+}
+
+func (t *availabilityToggleTool) Name() string                          { return t.name }
+func (t *availabilityToggleTool) Description() string                   { return t.name }
+func (t *availabilityToggleTool) Category() string                      { return "test" }
+func (t *availabilityToggleTool) Parameters() []contracts.ToolParameter { return nil }
+func (t *availabilityToggleTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+	_ = ctx
+	_ = args
+	return &contracts.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
+}
+func (t *availabilityToggleTool) IsAvailable(ctx context.Context) bool {
+	_ = ctx
+	return t.available
+}
+func (t *availabilityToggleTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{}
+}
+func (t *availabilityToggleTool) Tags() []string { return nil }
 
 func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 	reg := NewCapabilityRegistry()
@@ -144,4 +170,75 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 		}
 	}
 	<-done
+}
+
+func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
+	reg := NewCapabilityRegistry()
+	tool := &availabilityToggleTool{name: "scope_read", available: true}
+	if err := reg.RegisterLegacyTool(tool); err != nil {
+		t.Fatalf("register scope_read: %v", err)
+	}
+
+	if got, want := len(reg.ModelCallableTools()), 1; got != want {
+		t.Fatalf("callable tool count = %d, want %d", got, want)
+	}
+
+	tool.available = false
+
+	if got, want := len(reg.ModelCallableTools()), 0; got != want {
+		t.Fatalf("callable tool count after disable = %d, want %d", got, want)
+	}
+	if got, want := len(reg.CaptureExecutionCatalogSnapshot().ModelCallableTools()), 0; got != want {
+		t.Fatalf("snapshot callable tool count after disable = %d, want %d", got, want)
+	}
+}
+
+func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
+	reg := NewCapabilityRegistry()
+	tool := &availabilityToggleTool{name: "scope_read", available: true}
+	if err := reg.RegisterLegacyTool(tool); err != nil {
+		t.Fatalf("register scope_read: %v", err)
+	}
+
+	tool.available = false
+	_, err := reg.InvokeCapability(context.Background(), nil, "scope_read", nil)
+	if err == nil {
+		t.Fatal("expected invoke error")
+	}
+	if !strings.Contains(err.Error(), "tool unavailable") {
+		t.Fatalf("invoke error = %v, want unavailable failure", err)
+	}
+}
+
+func TestWithAllowlist_PreservesFilteringAndReflectsAvailabilityChanges(t *testing.T) {
+	reg := NewCapabilityRegistry()
+	visible := &availabilityToggleTool{name: "scope_read", available: true}
+	hidden := &availabilityToggleTool{name: "scope_write", available: true}
+	if err := reg.RegisterLegacyTool(visible); err != nil {
+		t.Fatalf("register scope_read: %v", err)
+	}
+	if err := reg.RegisterLegacyTool(hidden); err != nil {
+		t.Fatalf("register scope_write: %v", err)
+	}
+
+	scoped := reg.WithAllowlist([]string{"tool:scope_read"})
+	if scoped == nil {
+		t.Fatal("expected scoped registry")
+	}
+
+	if got, want := len(scoped.ModelCallableTools()), 1; got != want {
+		t.Fatalf("scoped callable tool count = %d, want %d", got, want)
+	}
+	if got := scoped.ModelCallableTools()[0].Name(); got != "scope_read" {
+		t.Fatalf("scoped callable tool name = %q, want scope_read", got)
+	}
+
+	visible.available = false
+
+	if got, want := len(scoped.ModelCallableTools()), 0; got != want {
+		t.Fatalf("scoped callable tool count after disable = %d, want %d", got, want)
+	}
+	if got, want := len(scoped.CaptureExecutionCatalogSnapshot().ModelCallableTools()), 0; got != want {
+		t.Fatalf("scoped snapshot callable tool count after disable = %d, want %d", got, want)
+	}
 }

@@ -1,6 +1,7 @@
 package capability
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -94,12 +95,16 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 			continue
 		}
 		exposure := r.effectiveExposureLocked(entry.descriptor)
+		available := true
+		if entry.legacyTool != nil {
+			available = entry.legacyTool.IsAvailable(context.Background())
+		}
 		catalogEntry := ExecutionCapabilityCatalogEntry{
 			Descriptor:    entry.descriptor,
 			Exposure:      exposure,
 			Inspectable:   exposure != core.CapabilityExposureHidden,
-			Callable:      exposure == core.CapabilityExposureCallable,
-			ModelCallable: exposure == core.CapabilityExposureCallable && (entry.legacyTool != nil || isInvocableCapabilityEntry(entry)),
+			Callable:      exposure == core.CapabilityExposureCallable && available,
+			ModelCallable: exposure == core.CapabilityExposureCallable && available && (entry.legacyTool != nil || isInvocableCapabilityEntry(entry)),
 			LocalTool:     entry.legacyTool != nil,
 			localTool:     entry.legacyTool,
 		}

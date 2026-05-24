@@ -317,6 +317,130 @@ trigger as capability:
 	}
 }
 
+func TestParseSourceParsesToolInvokePolicyInTriggerAndRunBlocks(t *testing.T) {
+	doc, err := ParseSource("tool_policy.euclo", `thoughtrecipe policy_demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_write", "grep"]
+
+agent reviewer uses react
+
+run reviewer:
+  may invoke ["grep"]
+  goal "Inspect."
+`)
+	if err != nil {
+		t.Fatalf("ParseSource failed: %v", err)
+	}
+
+	trigger := doc.Declarations[0].(*TriggerDecl)
+	if got := len(trigger.ToolPolicies); got != 1 {
+		t.Fatalf("trigger tool policy count = %d, want 1", got)
+	}
+	triggerPolicy := trigger.ToolPolicies[0]
+	if got := triggerPolicy.Raw; got != `may invoke ["file_write", "grep"]` {
+		t.Fatalf("trigger policy raw = %q, want %q", got, `may invoke ["file_write", "grep"]`)
+	}
+	if got := triggerPolicy.ToolNames.Raw; got != `["file_write", "grep"]` {
+		t.Fatalf("trigger tool names raw = %q, want %q", got, `["file_write", "grep"]`)
+	}
+	if got := len(triggerPolicy.ToolNames.Entries); got != 2 {
+		t.Fatalf("trigger tool name count = %d, want 2", got)
+	}
+	if got := triggerPolicy.ToolNames.Entries[0].(StringLiteral).Value; got != "file_write" {
+		t.Fatalf("trigger tool name 0 = %q, want %q", got, "file_write")
+	}
+	if got := triggerPolicy.ToolNames.Entries[1].(StringLiteral).Value; got != "grep" {
+		t.Fatalf("trigger tool name 1 = %q, want %q", got, "grep")
+	}
+
+	run := doc.Declarations[2].(*RunDecl)
+	policy, ok := run.Items[0].(*ToolInvokePolicyDecl)
+	if !ok {
+		t.Fatalf("run item 0 type = %T, want *ToolInvokePolicyDecl", run.Items[0])
+	}
+	if got := policy.Raw; got != `may invoke ["grep"]` {
+		t.Fatalf("run policy raw = %q, want %q", got, `may invoke ["grep"]`)
+	}
+	if got := policy.ToolNames.Raw; got != `["grep"]` {
+		t.Fatalf("run tool names raw = %q, want %q", got, `["grep"]`)
+	}
+}
+
+func TestParseSourceRejectsMalformedToolInvokePolicy(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "non-string",
+			src: `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may invoke [file_write]
+`,
+			want: "tool name list must contain string literals",
+		},
+		{
+			name: "empty-string",
+			src: `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may invoke [""]
+`,
+			want: "empty tool name is not allowed",
+		},
+		{
+			name: "unterminated",
+			src: `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may invoke ["grep"
+`,
+			want: "unterminated tool name list",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSource("bad_tool_policy.euclo", tt.src)
+			if err == nil {
+				t.Fatal("expected parse error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseSourceRejectsMayInvokeOutsideSupportedBlocks(t *testing.T) {
+	_, err := ParseSource("bad_tool_policy.euclo", `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+delegate to reviewer:
+  may invoke ["grep"]
+  goal "Inspect."
+`)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if !strings.Contains(err.Error(), "may invoke is only allowed in trigger and run blocks") {
+		t.Fatalf("error = %v, want unsupported placement message", err)
+	}
+}
+
 func TestParseSourceHandlesDeepNestedTypeExpressionsIteratively(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("thoughtrecipe deep_types\n")

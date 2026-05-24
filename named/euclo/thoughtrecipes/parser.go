@@ -1069,6 +1069,9 @@ func (p *Parser) parseToolNameList() (*ListLiteral, error) {
 			continue
 		}
 		tok := p.peek()
+		if tok.Kind == TokenEOF || tok.Kind == TokenDedent {
+			return nil, p.unexpectedEOF("unterminated tool name list")
+		}
 		if tok.Kind != TokenString {
 			return nil, p.unexpectedToken(tok, "tool name list must contain string literals")
 		}

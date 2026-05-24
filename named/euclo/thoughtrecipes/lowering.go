@@ -42,6 +42,7 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 		plan.ThoughtRecipe.Metadata.Keywords = meta.Keywords
 		plan.ThoughtRecipe.Metadata.HandoffTargets = meta.HandoffTargets
 		plan.ThoughtRecipe.Metadata.Tags = meta.Tags
+		plan.ToolScopes = lowerToolScopeFrames(trigger.ToolPolicies, "trigger")
 	}
 
 	for _, decl := range doc.Declarations {
@@ -81,7 +82,7 @@ func firstTriggerDecl(doc *ThoughtRecipeDocument) *TriggerDecl {
 	return nil
 }
 
-func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, promptID string, config map[string]any) {
+func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, toolScopes []ToolScopeFrame, promptID string, capabilityPlan *CapabilityInvocationPlan, config map[string]any, err error) {
 	var directiveConfigs []map[string]any
 	for _, item := range items {
 		switch node := item.(type) {
@@ -128,16 +129,33 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 				"bindings": summarizeCaptureBindings(node.Bindings),
 			})
 		case *CapabilityInvocation:
+			plan, err := LowerCapabilityInvocation(node)
+			if err != nil {
+				return nil, nil, nil, nil, nil, "", nil, nil, err
+			}
+			if capabilityPlan != nil {
+				return nil, nil, nil, nil, nil, "", nil, nil, fmt.Errorf("%s:%d:%d: multiple direct capability invocations in one run block are not supported", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+			}
+			capabilityPlan = plan
 			directiveConfigs = append(directiveConfigs, map[string]any{
 				"type":       "capability",
 				"namespace":  node.Namespace.Value,
 				"capability": node.Capability.Value,
 				"target":     valueExprRaw(node.Target),
 				"input":      valueExprRaw(node.Input),
+				"capability_id": plan.CapabilityID,
 			})
+			if plan.Target != "" {
+				directiveConfigs[len(directiveConfigs)-1]["target"] = plan.Target
+			}
+			if plan.Input != "" {
+				directiveConfigs[len(directiveConfigs)-1]["input"] = plan.Input
+			}
+		case *ToolInvokePolicyDecl:
+			toolScopes = append(toolScopes, lowerToolScopeFrame(node, "run"))
 		}
 	}
-	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 || strings.TrimSpace(promptID) != "" {
+	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 || len(toolScopes) > 0 || strings.TrimSpace(promptID) != "" {
 		config = map[string]any{}
 	}
 	if len(sources) > 0 {
@@ -158,10 +176,14 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	if len(captures) > 0 {
 		config["capture_bindings"] = summarizeCaptureBindings(captures)
 	}
+	if len(toolScopes) > 0 {
+		config["tool_scopes"] = summarizeToolScopeFrames(toolScopes)
+		config["effective_tool_names"] = effectiveToolNames(toolScopes)
+	}
 	if len(config) == 0 {
 		config = nil
 	}
-	return sources, goals, directives, captures, promptID, config
+	return sources, goals, directives, captures, toolScopes, promptID, capabilityPlan, config, nil
 }
 
 func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
@@ -342,19 +364,19 @@ func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentB
 	for _, item := range items {
 		switch node := item.(type) {
 		case *RunDecl:
-			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex)
+			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *DelegateDecl:
-			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex)
+			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *RouteDecl:
-			group, err := lowerRouteDecl(node, agents, runIndex, plan)
+			group, err := lowerRouteDecl(node, agents, runIndex, plan, plan.ToolScopes)
 			if err != nil {
 				return nil, err
 			}
@@ -425,19 +447,19 @@ func pipelineGroupID(decl *PipelineDecl) string {
 func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runIndex *int) error {
 	switch v := node.(type) {
 	case *RunDecl:
-		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex)
+		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *DelegateDecl:
-		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex)
+		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *RouteDecl:
-		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan)
+		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
@@ -461,19 +483,19 @@ func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runInde
 func gatherLoweredFromExecutionItem(item ExecutionItem, plan *ExecutionPlan, runIndex *int) error {
 	switch v := item.(type) {
 	case *RunDecl:
-		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex)
+		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *DelegateDecl:
-		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex)
+		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *RouteDecl:
-		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan)
+		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
@@ -550,6 +572,133 @@ func summarizeCaptureBindings(bindings []CaptureBinding) []string {
 		if raw := strings.TrimSpace(valueExprRaw(binding.Source)); raw != "" {
 			out = append(out, raw)
 		}
+	}
+	return out
+}
+
+func lowerToolScopeFrames(policies []ToolInvokePolicyDecl, scopeKind string) []ToolScopeFrame {
+	if len(policies) == 0 {
+		return nil
+	}
+	frames := make([]ToolScopeFrame, 0, len(policies))
+	for i := range policies {
+		frames = append(frames, lowerToolScopeFrame(&policies[i], scopeKind))
+	}
+	return frames
+}
+
+func lowerToolScopeFrame(policy *ToolInvokePolicyDecl, scopeKind string) ToolScopeFrame {
+	if policy == nil {
+		return ToolScopeFrame{ScopeKind: scopeKind}
+	}
+	names := toolNamesFromPolicy(policy)
+	return ToolScopeFrame{
+		ScopeKind: scopeKind,
+		ToolNames: append([]string(nil), names...),
+		Span:      policy.GetSpan(),
+	}
+}
+
+func toolNamesFromPolicy(policy *ToolInvokePolicyDecl) []string {
+	if policy == nil {
+		return nil
+	}
+	if len(policy.ResolvedToolNames) > 0 {
+		return append([]string(nil), policy.ResolvedToolNames...)
+	}
+	if policy.ToolNames == nil {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(policy.ToolNames.Entries))
+	out := make([]string, 0, len(policy.ToolNames.Entries))
+	for _, entry := range policy.ToolNames.Entries {
+		name := canonicalToolNameEntry(entry)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out
+}
+
+func copyToolScopeFrames(frames []ToolScopeFrame) []ToolScopeFrame {
+	if len(frames) == 0 {
+		return nil
+	}
+	out := make([]ToolScopeFrame, len(frames))
+	for i := range frames {
+		out[i] = ToolScopeFrame{
+			ScopeKind: frames[i].ScopeKind,
+			ToolNames: append([]string(nil), frames[i].ToolNames...),
+			Span:      frames[i].Span,
+		}
+	}
+	return out
+}
+
+func appendToolScopeFrames(base []ToolScopeFrame, extra ...ToolScopeFrame) []ToolScopeFrame {
+	if len(extra) == 0 {
+		return base
+	}
+	out := copyToolScopeFrames(base)
+	for _, frame := range extra {
+		out = append(out, ToolScopeFrame{
+			ScopeKind: frame.ScopeKind,
+			ToolNames: append([]string(nil), frame.ToolNames...),
+			Span:      frame.Span,
+		})
+	}
+	return out
+}
+
+func effectiveToolNames(frames []ToolScopeFrame) []string {
+	if len(frames) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, frame := range frames {
+		for _, name := range frame.ToolNames {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func summarizeToolScopeFrames(frames []ToolScopeFrame) []map[string]any {
+	if len(frames) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(frames))
+	for _, frame := range frames {
+		out = append(out, map[string]any{
+			"scope_kind": frame.ScopeKind,
+			"tool_names": append([]string(nil), frame.ToolNames...),
+			"span": map[string]any{
+				"start": map[string]any{
+					"file":   frame.Span.Start.File,
+					"line":   frame.Span.Start.Line,
+					"column": frame.Span.Start.Column,
+				},
+				"end": map[string]any{
+					"file":   frame.Span.End.File,
+					"line":   frame.Span.End.Line,
+					"column": frame.Span.End.Column,
+				},
+			},
+		})
 	}
 	return out
 }

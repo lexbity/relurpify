@@ -6,12 +6,19 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CapabilityRegistryLookup is the minimal capability lookup contract required
 // by semantic validation.
 type CapabilityRegistryLookup interface {
 	Select(capabilityID string) (core.CapabilityDescriptor, bool)
+}
+
+// ToolRegistryLookup exposes the callable tool surface for semantic validation.
+type ToolRegistryLookup interface {
+	GetCapability(idOrName string) (core.CapabilityDescriptor, bool)
+	ModelCallableTools() []contracts.Tool
 }
 
 // SemanticWarning captures a non-fatal semantic diagnostic.
@@ -43,6 +50,7 @@ type SymbolTable struct {
 	trigger     *TriggerDecl
 	invocations []*CapabilityInvocation
 	capability  CapabilityRegistryLookup
+	tools       ToolRegistryLookup
 	prompts     PromptRegistryLookup
 	recipes     ThoughtRecipeRegistryLookup
 	Warnings    []SemanticWarning
@@ -63,6 +71,15 @@ func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
 // WithCapabilityRegistry wires capability lookup into the symbol table.
 func (s *SymbolTable) WithCapabilityRegistry(reg CapabilityRegistryLookup) *SymbolTable {
 	s.capability = reg
+	if tools, ok := reg.(ToolRegistryLookup); ok {
+		s.tools = tools
+	}
+	return s
+}
+
+// WithToolRegistry wires callable tool lookup into the symbol table.
+func (s *SymbolTable) WithToolRegistry(reg ToolRegistryLookup) *SymbolTable {
+	s.tools = reg
 	return s
 }
 
@@ -239,6 +256,11 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 	if _, err := TriggerAssociationsFromDecl(decl); err != nil {
 		return err
 	}
+	for i := range decl.ToolPolicies {
+		if err := s.resolveToolInvokePolicyDecl(&decl.ToolPolicies[i]); err != nil {
+			return err
+		}
+	}
 	switch TriggerRouteKindFromDecl(decl) {
 	case TriggerRouteKindCapability, TriggerRouteKindIntent:
 	default:
@@ -247,6 +269,101 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 	}
 	s.trigger = decl
 	return nil
+}
+
+func (s *SymbolTable) resolveToolInvokePolicyDecl(decl *ToolInvokePolicyDecl) error {
+	if decl == nil {
+		return nil
+	}
+	names, err := s.resolveToolNames(decl)
+	if err != nil {
+		return err
+	}
+	decl.ResolvedToolNames = names
+	return nil
+}
+
+func (s *SymbolTable) resolveToolNames(decl *ToolInvokePolicyDecl) ([]string, error) {
+	if decl == nil {
+		return nil, fmt.Errorf("tool invoke policy is nil")
+	}
+	if decl.ToolNames == nil {
+		return nil, fmt.Errorf("%s:%d:%d: tool name list is required", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
+	}
+	entries := decl.ToolNames.Entries
+	if len(entries) == 0 {
+		// Parser already rejects empty lists for this syntax, but keep the semantic
+		// check fail-closed for constructed ASTs.
+		return nil, fmt.Errorf("%s:%d:%d: tool name list is required", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
+	}
+
+	seen := make(map[string]struct{}, len(entries))
+	resolved := make([]string, 0, len(entries))
+	if s.tools == nil {
+		for _, entry := range entries {
+			name := canonicalToolNameEntry(entry)
+			if name == "" {
+				return nil, fmt.Errorf("%s:%d:%d: empty tool name is not allowed", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			resolved = append(resolved, name)
+		}
+		return resolved, nil
+	}
+
+	callable := make(map[string]struct{}, len(entries))
+	for _, tool := range s.tools.ModelCallableTools() {
+		name := strings.TrimSpace(tool.Name())
+		if name == "" {
+			continue
+		}
+		callable[name] = struct{}{}
+	}
+
+	for _, entry := range entries {
+		name := canonicalToolNameEntry(entry)
+		if name == "" {
+			return nil, fmt.Errorf("%s:%d:%d: empty tool name is not allowed", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
+		}
+		desc, ok := s.tools.GetCapability(name)
+		if !ok {
+			return nil, fmt.Errorf("%s:%d:%d: unknown tool %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
+		}
+		canonical := strings.TrimSpace(desc.Name)
+		if canonical == "" {
+			canonical = strings.TrimSpace(desc.ID)
+		}
+		if canonical == "" {
+			return nil, fmt.Errorf("%s:%d:%d: tool %q has no canonical name", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
+		}
+		if _, ok := callable[canonical]; !ok {
+			return nil, fmt.Errorf("%s:%d:%d: tool %q is not callable in the active registry view", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
+		}
+		if _, ok := seen[canonical]; ok {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		resolved = append(resolved, canonical)
+	}
+	return resolved, nil
+}
+
+func canonicalToolNameEntry(expr ValueExpr) string {
+	switch v := expr.(type) {
+	case StringLiteral:
+		return strings.TrimSpace(v.Value)
+	case *StringLiteral:
+		return strings.TrimSpace(v.Value)
+	case Identifier:
+		return strings.TrimSpace(v.Value)
+	case *Identifier:
+		return strings.TrimSpace(v.Value)
+	default:
+		return strings.TrimSpace(valueExprRaw(expr))
+	}
 }
 
 func (s *SymbolTable) resolveTypeDecl(decl *TypeDecl) error {
@@ -316,6 +433,8 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 			return err
 		}
 		return nil
+	case *ToolInvokePolicyDecl:
+		return s.resolveToolInvokePolicyDecl(node)
 	case *CaptureBlock:
 		return s.resolveCaptureBlock(node)
 	case *RunDecl:

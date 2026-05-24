@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
@@ -428,6 +429,118 @@ func TestApplyCaptureBindingsWritesExplicitNamespaces(t *testing.T) {
 	}
 }
 
+func TestLowerDocumentLowersToolScopesAndEvictsRunLocalScope(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe scope_demo
+"Scope demo."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_write"]
+
+input workspace: "**/*"
+agent writer uses react
+
+run writer:
+  may invoke ["file_search"]
+  goal "Inspect the workspace."
+
+run writer:
+  goal "Inspect again."
+`)
+
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+		t.Fatalf("register file_write: %v", err)
+	}
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+		t.Fatalf("register file_search: %v", err)
+	}
+	if err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve(); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	plan, err := LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument failed: %v", err)
+	}
+
+	if got, want := len(plan.ToolScopes), 1; got != want {
+		t.Fatalf("plan tool scope count = %d, want %d", got, want)
+	}
+	if got := plan.ToolScopes[0].ScopeKind; got != "trigger" {
+		t.Fatalf("plan tool scope kind = %q, want trigger", got)
+	}
+	if got, want := plan.ToolScopes[0].ToolNames, []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("plan tool names = %#v, want %#v", got, want)
+	}
+
+	first := plan.Steps[0]
+	if got, want := len(first.ToolScopes), 1; got != want {
+		t.Fatalf("first step local tool scope count = %d, want %d", got, want)
+	}
+	if got := first.ToolScopes[0].ScopeKind; got != "run" {
+		t.Fatalf("first step scope kind = %q, want run", got)
+	}
+	if got, want := first.ToolScopes[0].ToolNames, []string{"file_search"}; !equalStringSlices(got, want) {
+		t.Fatalf("first step tool names = %#v, want %#v", got, want)
+	}
+	if got, want := first.EffectiveToolNames, []string{"file_write", "file_search"}; !equalStringSlices(got, want) {
+		t.Fatalf("first step effective tool names = %#v, want %#v", got, want)
+	}
+	if cfg, ok := first.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write", "file_search"}) {
+		t.Fatalf("first step config effective_tool_names = %#v", first.Step.Config["effective_tool_names"])
+	}
+	if scopes, ok := first.Step.Config["tool_scopes"].([]map[string]any); !ok || len(scopes) != 1 {
+		t.Fatalf("first step config tool_scopes = %#v, want 1 frame", first.Step.Config["tool_scopes"])
+	}
+
+	second := plan.Steps[1]
+	if got, want := len(second.ToolScopes), 0; got != want {
+		t.Fatalf("second step local tool scope count = %d, want %d", got, want)
+	}
+	if got, want := second.EffectiveToolNames, []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("second step effective tool names = %#v, want %#v", got, want)
+	}
+	if cfg, ok := second.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write"}) {
+		t.Fatalf("second step config effective_tool_names = %#v", second.Step.Config["effective_tool_names"])
+	}
+	if _, ok := second.Step.Config["tool_scopes"]; ok {
+		t.Fatal("second step should not carry a local tool_scopes entry")
+	}
+}
+
+func TestLowerDocumentLowersDirectCapabilityInvocationToExecutableStep(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe capability_demo
+"Capability demo."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  do relurpic:code_review on input.workspace
+`)
+
+	plan, err := LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument failed: %v", err)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("plan steps = %d, want 1", len(plan.Steps))
+	}
+	step := plan.Steps[0]
+	if got, want := step.CapabilityID, "euclo:cap.code_review"; got != want {
+		t.Fatalf("step capability id = %q, want %q", got, want)
+	}
+	if got, want := step.Step.Config["target"], "input.workspace"; got != want {
+		t.Fatalf("step target = %#v, want %q", got, want)
+	}
+	if got, want := step.Step.Config["capability_id"], "euclo:cap.code_review"; got != want {
+		t.Fatalf("step config capability id = %#v, want %q", got, want)
+	}
+}
+
 func TestSymbolTableRejectsUnsupportedAgentType(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe demo
 "Demo."
@@ -442,4 +555,16 @@ agent reviewer uses not_a_real_paradigm
 	if err == nil || !strings.Contains(err.Error(), "unsupported agent paradigm") {
 		t.Fatalf("expected unsupported agent paradigm error, got %v", err)
 	}
+}
+
+func equalStringSlices(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -219,6 +219,35 @@ pipeline:
 	}
 }
 
+func TestExecutionStepFromAgentInheritsParentToolScope(t *testing.T) {
+	parent := ExecutionStep{
+		ID:                 "parent.step",
+		ToolScopes:         []ToolScopeFrame{{ScopeKind: "run", ToolNames: []string{"file_write"}}},
+		EffectiveToolNames: []string{"file_write"},
+		Step: ThoughtRecipeStep{
+			ID: "parent.step",
+			Config: map[string]any{
+				"tool_scopes":          []map[string]any{{"scope_kind": "run", "tool_names": []string{"file_write"}}},
+				"effective_tool_names": []string{"file_write"},
+			},
+		},
+	}
+	step := executionStepFromAgent("fallback.step", &ThoughtRecipeStepAgent{
+		Paradigm: "react",
+		Prompt:   "fallback",
+	}, parent)
+
+	if got, want := len(step.ToolScopes), 1; got != want {
+		t.Fatalf("fallback tool scope count = %d, want %d", got, want)
+	}
+	if got, want := step.EffectiveToolNames, []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("fallback effective tools = %#v, want %#v", got, want)
+	}
+	if got, ok := step.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(got, []string{"file_write"}) {
+		t.Fatalf("fallback step config effective_tool_names = %#v", step.Step.Config["effective_tool_names"])
+	}
+}
+
 func edgeTargets(edges []agentgraph.Edge) []string {
 	targets := make([]string, 0, len(edges))
 	for _, edge := range edges {

@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -201,6 +202,66 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	}
 }
 
+func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testing.T) {
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_read", available: true}); err != nil {
+		t.Fatalf("register file_read: %v", err)
+	}
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+		t.Fatalf("register file_write: %v", err)
+	}
+
+	env := agentenv.WorkspaceEnvironment{Registry: reg}
+	baseEnv := contextdata.NewEnvelope("task-scope", "session-scope")
+	scopedStep := ExecutionStep{
+		ID:                 "scope.step",
+		Paradigm:           "react",
+		EffectiveToolNames: []string{"file_write"},
+		Step: ThoughtRecipeStep{
+			ID: "scope.step",
+		},
+	}
+	scopedNode := NewThoughtRecipeStepNode("scope.step", env, scopedStep)
+	rctx := scopedNode.buildRuntimeContext(baseEnv)
+
+	if got, want := runtimeToolNames(rctx.Tools), []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("scoped runtime tools = %#v, want %#v", got, want)
+	}
+	if got, want := runtimeCapabilityNames(rctx.Capabilities), []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("scoped runtime capabilities = %#v, want %#v", got, want)
+	}
+
+	scopedRegistry := scopedNode.scopedRegistry()
+	if scopedRegistry == nil {
+		t.Fatal("expected scoped registry")
+	}
+	if got, want := runtimeToolNames(scopedRegistry.ModelCallableTools()), []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("scoped registry tools = %#v, want %#v", got, want)
+	}
+	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv, "file_write", map[string]any{}); err != nil {
+		t.Fatalf("expected scoped file_write invocation to succeed: %v", err)
+	}
+	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv, "file_read", map[string]any{}); err == nil {
+		t.Fatal("expected scoped registry to reject file_read")
+	}
+
+	nextStep := ExecutionStep{
+		ID:       "scope.next",
+		Paradigm: "react",
+		Step: ThoughtRecipeStep{
+			ID: "scope.next",
+		},
+	}
+	nextNode := NewThoughtRecipeStepNode("scope.next", env, nextStep)
+	nextRctx := nextNode.buildRuntimeContext(baseEnv)
+	if got, want := runtimeToolNames(nextRctx.Tools), []string{"file_read", "file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
+	}
+	if scoped := nextNode.scopedRegistry(); scoped != nil {
+		t.Fatalf("expected no scoped registry for unbounded step, got %#v", scoped)
+	}
+}
+
 func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	step := ExecutionStep{
@@ -217,6 +278,39 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 	if _, err := node.buildTask(env); err == nil {
 		t.Fatal("expected buildTask to fail without a prompt registry")
 	}
+}
+
+func runtimeToolNames(tools []contracts.Tool) []string {
+	if len(tools) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		names = append(names, tool.Name())
+	}
+	sort.Strings(names)
+	return names
+}
+
+func runtimeCapabilityNames(caps []core.CapabilityDescriptor) []string {
+	if len(caps) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(caps))
+	for _, cap := range caps {
+		name := cap.Name
+		if name == "" {
+			name = cap.ID
+		}
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {

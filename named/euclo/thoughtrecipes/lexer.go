@@ -77,6 +77,7 @@ var reservedKeywords = map[string]struct{}{
 	"trigger":       {},
 	"as":            {},
 	"may":           {},
+	"invoke":        {},
 	"family":        {},
 	"keyword":       {},
 	"handoff":       {},

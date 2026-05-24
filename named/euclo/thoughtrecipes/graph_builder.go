@@ -358,16 +358,16 @@ func buildBranchSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironm
 	return artifacts[0].entry, nil
 }
 
-func executionStepFromAgent(id string, agent *ThoughtRecipeStepAgent) ExecutionStep {
+func executionStepFromAgent(id string, agent *ThoughtRecipeStepAgent, parent ExecutionStep) ExecutionStep {
 	if agent == nil {
-		return ExecutionStep{ID: id}
+		return inheritExecutionStepScope(ExecutionStep{ID: id}, parent)
 	}
 	step := ThoughtRecipeStep{
 		ID:      id,
 		Parent:  *agent,
 		Context: agent.Context,
 	}
-	return ExecutionStep{
+	return inheritExecutionStepScope(ExecutionStep{
 		ID:       id,
 		Paradigm: agent.Paradigm,
 		Prompt:   agent.Prompt,
@@ -376,7 +376,28 @@ func executionStepFromAgent(id string, agent *ThoughtRecipeStepAgent) ExecutionS
 		Inherit:  append([]string(nil), agent.Context.Inherit...),
 		Capture:  append([]string(nil), agent.Context.Capture...),
 		Step:     step,
+	}, parent)
+}
+
+func inheritExecutionStepScope(step, parent ExecutionStep) ExecutionStep {
+	if len(step.ToolScopes) == 0 && len(parent.ToolScopes) > 0 {
+		step.ToolScopes = append([]ToolScopeFrame(nil), parent.ToolScopes...)
 	}
+	if len(step.EffectiveToolNames) == 0 && len(parent.EffectiveToolNames) > 0 {
+		step.EffectiveToolNames = append([]string(nil), parent.EffectiveToolNames...)
+	}
+	if step.Step.Config == nil && (len(step.ToolScopes) > 0 || len(step.EffectiveToolNames) > 0) {
+		step.Step.Config = map[string]any{}
+	}
+	if step.Step.Config != nil {
+		if len(step.ToolScopes) > 0 {
+			step.Step.Config["tool_scopes"] = summarizeToolScopeFrames(step.ToolScopes)
+		}
+		if len(step.EffectiveToolNames) > 0 {
+			step.Step.Config["effective_tool_names"] = append([]string(nil), step.EffectiveToolNames...)
+		}
+	}
+	return step
 }
 
 func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, step ExecutionStep) (stepArtifacts, error) {
@@ -467,7 +488,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment
 	var fallbackID string
 	if step.Fallback != nil {
 		fallbackID = step.ID + ".fallback"
-		fallbackStep := executionStepFromAgent(fallbackID, step.Fallback)
+		fallbackStep := executionStepFromAgent(fallbackID, step.Fallback, step)
 		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, env, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}

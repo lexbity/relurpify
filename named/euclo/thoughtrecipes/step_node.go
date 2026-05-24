@@ -29,7 +29,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ThoughtRecipeStepNode executes a compiled thoughtrecipe step by delegating to the matching
@@ -242,6 +241,8 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
 	}
 	n.writeStepMetadata(env)
+	env.SetWorkingValue("euclo.execution.capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
 
 	reg := n.env.Registry
 	if reg == nil {
@@ -515,6 +516,7 @@ func (n *ThoughtRecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (
 // buildRuntimeContext creates a prompt.RuntimeContext for thoughtrecipe step resolution.
 func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) prompt.RuntimeContext {
 	data := thoughtrecipeTemplateData(env, n.step)
+	scopedRegistry := n.scopedRegistry()
 	runtime := prompt.NewRuntimeContext(env, n.step.Paradigm, "euclo").
 		WithVariable("instruction", n.renderTemplate(n.step.Prompt, data)).
 		WithVariable("question", func() string {
@@ -533,8 +535,15 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 		Instruction: n.renderTemplate(n.step.Prompt, data),
 		Context:     data,
 	}
-	runtime.Tools = []contracts.Tool{}
-	runtime.Capabilities = []core.CapabilityDescriptor{}
+	if scopedRegistry != nil {
+		runtime.Tools = scopedRegistry.ModelCallableTools()
+		if snapshot := scopedRegistry.CaptureExecutionCatalogSnapshot(); snapshot != nil {
+			runtime.Capabilities = snapshot.InspectableCapabilities()
+		}
+	} else if n.env.Registry != nil {
+		runtime.Tools = n.env.Registry.ModelCallableTools()
+		runtime.Capabilities = n.env.Registry.AllCapabilities()
+	}
 	runtime.AgentSpec = nil
 	return runtime
 }
@@ -542,12 +551,12 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 func (n *ThoughtRecipeStepNode) stepMetadata() map[string]interface{} {
 	metadata := map[string]interface{}{
 		"execution_step_id":   n.step.ID,
-		"execution_step_type":  n.step.Type,
-		"execution_paradigm":   n.step.Paradigm,
-		"execution_goal":       n.step.Goal,
-		"execution_question":   n.step.Question,
-		"execution_mutation":   n.step.Mutation,
-		"execution_hitl":       n.step.HITL,
+		"execution_step_type": n.step.Type,
+		"execution_paradigm":  n.step.Paradigm,
+		"execution_goal":      n.step.Goal,
+		"execution_question":  n.step.Question,
+		"execution_mutation":  n.step.Mutation,
+		"execution_hitl":      n.step.HITL,
 	}
 	if len(n.step.Sources) > 0 {
 		metadata["execution_sources"] = append([]string(nil), n.step.Sources...)
@@ -816,11 +825,44 @@ func (n *ThoughtRecipeStepNode) scopedRegistry() *capability.Registry {
 	if n == nil || n.env.Registry == nil {
 		return nil
 	}
-	allowed := extractAllowedCapabilities(n.step.Step)
+	allowed := n.effectiveToolAllowlist()
 	if len(allowed) == 0 {
 		return nil
 	}
 	return n.env.Registry.WithAllowlist(allowed)
+}
+
+func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
+	if n == nil || n.env.Registry == nil {
+		return nil
+	}
+	if len(n.step.EffectiveToolNames) == 0 {
+		return nil
+	}
+	allowed := make([]string, 0, len(n.step.EffectiveToolNames))
+	seen := make(map[string]struct{}, len(n.step.EffectiveToolNames))
+	for _, toolName := range n.step.EffectiveToolNames {
+		name := strings.TrimSpace(toolName)
+		if name == "" {
+			continue
+		}
+		desc, ok := n.env.Registry.GetCapability(name)
+		if !ok {
+			continue
+		}
+		if desc.ID == "" {
+			continue
+		}
+		if _, exists := seen[desc.ID]; exists {
+			continue
+		}
+		seen[desc.ID] = struct{}{}
+		allowed = append(allowed, desc.ID)
+	}
+	if len(allowed) == 0 {
+		return []string{"__euclo__.deny_all__"}
+	}
+	return allowed
 }
 
 func (n *ThoughtRecipeStepNode) streamOptions() []reactagent.Option {

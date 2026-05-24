@@ -1,12 +1,32 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+type semanticTestTool struct {
+	name      string
+	available bool
+}
+
+func (t semanticTestTool) Name() string                          { return t.name }
+func (t semanticTestTool) Description() string                   { return t.name }
+func (t semanticTestTool) Category() string                      { return "test" }
+func (t semanticTestTool) Parameters() []contracts.ToolParameter { return nil }
+func (t semanticTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+	return &contracts.ToolResult{Success: true}, nil
+}
+func (t semanticTestTool) IsAvailable(ctx context.Context) bool   { return t.available }
+func (t semanticTestTool) Permissions() contracts.ToolPermissions { return contracts.ToolPermissions{} }
+func (t semanticTestTool) Tags() []string                         { return nil }
 
 func TestSymbolTableResolvesValidDocument(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe code_review
@@ -40,6 +60,97 @@ run reviewer:
 	st := NewSymbolTable(doc).WithCapabilityRegistry(ecap.NewRegistry())
 	if err := st.Resolve(); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
+	}
+}
+
+func TestSymbolTableResolvesToolPoliciesWithCanonicalNames(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+  may invoke [" file_edit ", "grep", "file_write", "grep"]
+
+input workspace: "**/*"
+agent reviewer uses react
+
+run reviewer:
+  may invoke ["grep", "file_edit"]
+  goal "Inspect the code."
+`)
+
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+		t.Fatalf("register file_write: %v", err)
+	}
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+		t.Fatalf("register file_search: %v", err)
+	}
+
+	st := NewSymbolTable(doc).WithToolRegistry(reg)
+	if err := st.Resolve(); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	trigger := doc.Declarations[0].(*TriggerDecl)
+	if got, want := trigger.ToolPolicies[0].ResolvedToolNames, []string{"file_write", "file_search"}; !equalStrings(got, want) {
+		t.Fatalf("trigger resolved tool names = %#v, want %#v", got, want)
+	}
+
+	run := doc.Declarations[3].(*RunDecl)
+	policy := run.Items[0].(*ToolInvokePolicyDecl)
+	if got, want := policy.ResolvedToolNames, []string{"file_search", "file_write"}; !equalStrings(got, want) {
+		t.Fatalf("run resolved tool names = %#v, want %#v", got, want)
+	}
+}
+
+func TestSymbolTableRejectsUnknownTool(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+  may invoke ["missing_tool"]
+
+input workspace: "**/*"
+agent reviewer uses react
+`)
+
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+		t.Fatalf("register file_search: %v", err)
+	}
+
+	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()
+	if err == nil || !strings.Contains(err.Error(), "unknown tool") {
+		t.Fatalf("expected unknown tool error, got %v", err)
+	}
+}
+
+func TestSymbolTableRejectsNonCallableTool(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe demo
+"Demo."
+
+trigger as capability:
+  may read workspace
+  may invoke ["hidden_tool"]
+
+input workspace: "**/*"
+agent reviewer uses react
+`)
+
+	reg := capability.NewCapabilityRegistry()
+	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
+		t.Fatalf("register hidden_tool: %v", err)
+	}
+	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+		Selector: core.CapabilitySelector{Name: "hidden_tool"},
+		Access:   core.CapabilityExposureHidden,
+	}})
+
+	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()
+	if err == nil || !strings.Contains(err.Error(), "not callable") {
+		t.Fatalf("expected not callable error, got %v", err)
 	}
 }
 
@@ -567,4 +678,16 @@ func mustParseDoc(t *testing.T, src string) *ThoughtRecipeDocument {
 		t.Fatalf("ParseSource failed: %v", err)
 	}
 	return doc
+}
+
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

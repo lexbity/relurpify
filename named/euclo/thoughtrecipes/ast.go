@@ -100,6 +100,7 @@ type TriggerDecl struct {
 	Policy       Identifier
 	RouteKind    TriggerRouteKind
 	Lines        []TriggerLine
+	ToolPolicies []ToolInvokePolicyDecl
 	Associations []TriggerAssociationDecl
 }
 
@@ -129,6 +130,16 @@ type TriggerAssociationDecl struct {
 	Values *ListLiteral
 	Raw    string
 }
+
+// ToolInvokePolicyDecl declares the visible tool allowlist for a scope.
+type ToolInvokePolicyDecl struct {
+	positioned
+	ToolNames         *ListLiteral
+	ResolvedToolNames []string
+	Raw               string
+}
+
+func (ToolInvokePolicyDecl) executionItemNode() {}
 
 // InputDecl describes an input binding.
 type InputDecl struct {

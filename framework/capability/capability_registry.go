@@ -612,6 +612,9 @@ func (r *CapabilityRegistry) CallableTools() []contracts.Tool {
 		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
 			continue
 		}
+		if !toolAvailableForPrompt(entry.legacyTool) {
+			continue
+		}
 		res = append(res, entry.legacyTool)
 	}
 	return res
@@ -662,6 +665,9 @@ func (r *CapabilityRegistry) ModelCallableTools() []contracts.Tool {
 		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
 			continue
 		}
+		if !toolAvailableForPrompt(entry.legacyTool) {
+			continue
+		}
 		res = append(res, entry.legacyTool)
 	}
 	return res
@@ -687,12 +693,22 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec
 			continue
 		}
 		if entry.legacyTool != nil {
+			if !toolAvailableForPrompt(entry.legacyTool) {
+				continue
+			}
 			res = append(res, contracts.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
 		} else if _, ok := entry.handler.(core.InvocableCapabilityHandler); ok {
 			res = append(res, core.LLMToolSpecFromDescriptor(entry.descriptor))
 		}
 	}
 	return res
+}
+
+func toolAvailableForPrompt(tool contracts.Tool) bool {
+	if tool == nil {
+		return false
+	}
+	return tool.IsAvailable(context.Background())
 }
 
 // GetModelTool resolves a callable local tool by name for post-LLM dispatch.

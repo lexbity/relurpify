@@ -12,13 +12,10 @@ func Tools(basePath string) []contracts.Tool {
 		NewDFTool(basePath),
 		NewDUTool(basePath),
 		NewPSTool(basePath),
-		NewTopTool(basePath),
-		NewHtopTool(basePath),
 		NewLsofTool(basePath),
 		NewStraceTool(basePath),
 		NewTimeTool(basePath),
 		NewUptimeTool(basePath),
-		NewSystemctlTool(basePath),
 	}
 }
 
