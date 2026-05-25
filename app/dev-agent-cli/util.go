@@ -75,10 +75,7 @@ func (r *agentRegistry) Errors() []agentLoadError {
 // buildRegistry loads manifests scoped to the workspace.
 func buildRegistry(workspace string) (*agentRegistry, error) {
 	reg := newAgentRegistry()
-	paths := frameworkmanifest.DefaultAgentPaths(workspace)
-	if globalCfg != nil {
-		paths = globalCfg.AgentSearchPaths(workspace)
-	}
+	paths := []string{frameworkmanifest.New(workspace).AgentsDir()}
 	for _, path := range paths {
 		if path == "" {
 			continue

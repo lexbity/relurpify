@@ -80,6 +80,7 @@ func newSkillInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			encoded = append([]byte("schema: relurpify/skill/v1\n\n"), encoded...)
 			manifestPath := frameworkskills.SkillManifestPath(ws, name)
 			if err := os.WriteFile(manifestPath, encoded, 0o644); err != nil {
 				return err
@@ -181,7 +182,7 @@ func newSkillDoctorCmd() *cobra.Command {
 
 			if agentManifest != nil {
 				resolvedSpec := manifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
-				resolvedSpec = manifest.ResolveAgentSpec(globalCfg, resolvedSpec)
+				resolvedSpec = manifest.ResolveAgentSpec(resolvedSpec)
 				_ = resolvedSpec
 			}
 			for _, bin := range skill.Spec.Requires.Bins {

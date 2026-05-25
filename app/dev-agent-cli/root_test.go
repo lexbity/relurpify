@@ -1,10 +1,11 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,49 +24,58 @@ func TestNewRootCmdUsesDevAgentName(t *testing.T) {
 func TestNewRootCmdPersistentPreRunLoadsDefaultConfig(t *testing.T) {
 	originalWorkspace := workspace
 	originalCfgFile := cfgFile
-	originalGlobalCfg := globalCfg
+	originalWorkspaceCfg := workspaceCfg
 	t.Cleanup(func() {
 		workspace = originalWorkspace
 		cfgFile = originalCfgFile
-		globalCfg = originalGlobalCfg
+		workspaceCfg = originalWorkspaceCfg
 	})
 
-	workspace = t.TempDir()
-	cfgFile = ""
-	globalCfg = nil
-
 	root := NewRootCmd()
+	workspace = t.TempDir()
+	configPath := cfgload.DefaultWorkspaceConfigPath(workspace)
+	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
+	yamlContent := `schema: relurpify/workspace/v1
+model:
+  default_name: test-model
+sandbox:
+  backend: gvisor
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yamlContent), 0o644))
+
+	cfgFile = ""
+	workspaceCfg = nil
+
 	require.NoError(t, root.PersistentPreRunE(root, nil))
-	require.Equal(t, frameworkmanifest.DefaultConfigPath(workspace), cfgFile)
-	require.NotNil(t, globalCfg)
-	require.Equal(t, "1.0.0", globalCfg.Version)
-	require.Equal(t, frameworkmanifest.DefaultAgentPaths(workspace), globalCfg.AgentPaths)
+	require.Equal(t, cfgload.DefaultWorkspaceConfigPath(workspace), cfgFile)
+	require.NotNil(t, workspaceCfg)
+	require.Equal(t, "test-model", *workspaceCfg.Model.DefaultName)
 }
 
 func TestNewRootCmdPersistentPreRunLoadsExplicitConfig(t *testing.T) {
 	originalWorkspace := workspace
 	originalCfgFile := cfgFile
-	originalGlobalCfg := globalCfg
+	originalWorkspaceCfg := workspaceCfg
 	t.Cleanup(func() {
 		workspace = originalWorkspace
 		cfgFile = originalCfgFile
-		globalCfg = originalGlobalCfg
+		workspaceCfg = originalWorkspaceCfg
 	})
 
-	workspace = t.TempDir()
-	explicitPath := filepath.Join(workspace, "custom-manifest.yaml")
-	if err := frameworkmanifest.SaveGlobalConfig(explicitPath, &frameworkmanifest.GlobalConfig{
-		Version:    "2.0.0",
-		AgentPaths: []string{"./custom-agents"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	globalCfg = nil
-
 	root := NewRootCmd()
+	workspace = t.TempDir()
+	explicitPath := filepath.Join(workspace, "custom-workspace.yaml")
+	yamlContent := `schema: relurpify/workspace/v1
+model:
+  default_name: custom-model
+sandbox:
+  backend: gvisor
+`
+	require.NoError(t, os.WriteFile(explicitPath, []byte(yamlContent), 0o644))
+	workspaceCfg = nil
+
 	cfgFile = explicitPath
 	require.NoError(t, root.PersistentPreRunE(root, nil))
-	require.NotNil(t, globalCfg)
-	require.Equal(t, "2.0.0", globalCfg.Version)
-	require.Equal(t, []string{"./custom-agents"}, globalCfg.AgentPaths)
+	require.NotNil(t, workspaceCfg)
+	require.Equal(t, "custom-model", *workspaceCfg.Model.DefaultName)
 }

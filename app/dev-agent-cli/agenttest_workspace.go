@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
@@ -106,7 +107,7 @@ func openPreparedRunWorkspace(ctx context.Context, desc *agenttest.PreparedRunDe
 			return nil, nil, err
 		}
 	}
-	ws, err := agentenv.Open(ctx, target.Config, preparedRunRegistrationFuncsFn())
+	ws, err := agentenv.Open(ctx, target.Config, llm.ProviderSecrets{}, preparedRunRegistrationFuncsFn())
 	if err != nil {
 		return nil, nil, err
 	}

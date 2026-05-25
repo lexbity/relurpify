@@ -1,6 +1,11 @@
 .PHONY: test-unit test-integ test-scenario test-all
+.PHONY: validate-config
 
-test-unit:
+validate-config:
+	go run ./app/dev-agent-cli config validate
+	go run ./app/relurpish validate
+
+test-unit: validate-config
 	go test ./... -count=1 -timeout 60s
 
 test-integ:

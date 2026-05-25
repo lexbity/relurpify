@@ -139,6 +139,9 @@ func newAgentsCreateCmd() *cobra.Command {
 							Temperature: 0.2,
 							MaxTokens:   4096,
 						},
+						Capabilities: agentspec.AgentCapabilitiesSpec{
+							Relurpic: defaultRelurpicCapabilities(name),
+						},
 						AllowedCapabilities: []core.CapabilitySelector{
 							{Name: "file_read", Kind: core.CapabilityKindTool},
 							{Name: "file_write", Kind: core.CapabilityKindTool},
@@ -230,4 +233,28 @@ func newAgentsTestCmd() *cobra.Command {
 // defaultManifestPrompt returns a short instruction block for generated agents.
 func defaultManifestPrompt(name string) string {
 	return fmt.Sprintf(`You are %s. Follow project rules, ask before destructive actions, and summarize each change.`, strings.Title(name))
+}
+
+func defaultRelurpicCapabilities(name string) []string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "euclo":
+		return []string{
+			"euclo:cap.test_run",
+			"euclo:cap.ast_query",
+			"euclo:cap.symbol_trace",
+			"euclo:cap.call_graph",
+			"euclo:cap.blame_trace",
+			"euclo:cap.bisect",
+			"euclo:cap.code_review",
+			"euclo:cap.diff_summary",
+			"euclo:cap.layer_check",
+			"euclo:cap.targeted_refactor",
+			"euclo:cap.rename_symbol",
+			"euclo:cap.api_compat",
+			"euclo:cap.boundary_report",
+			"euclo:cap.coverage_check",
+		}
+	default:
+		return nil
+	}
 }

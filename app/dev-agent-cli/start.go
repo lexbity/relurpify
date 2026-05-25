@@ -15,10 +15,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +57,10 @@ func newStartCmd() *cobra.Command {
 				runCtx = context.Background()
 			}
 			ws := ensureWorkspace()
+			if report := configcheck.ValidateWorkspaceTree(ws); report.HasErrors() {
+				fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
+				return report
+			}
 			reg, err := buildRegistry(ws)
 			if err != nil {
 				return err
@@ -70,12 +77,12 @@ func newStartCmd() *cobra.Command {
 				return fmt.Errorf("agent %s missing spec.agent section", agentManifest.Metadata.Name)
 			}
 			spec = frameworkmanifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, spec, agentManifest.Spec.Defaults)
-			spec = frameworkmanifest.ResolveAgentSpec(globalCfg, spec)
+			spec = frameworkmanifest.ResolveAgentSpec(spec)
 			logLLM := false
 			logAgent := false
-			if globalCfg != nil {
-				logLLM = globalCfg.Logging.LLM
-				logAgent = globalCfg.Logging.Agent
+			if workspaceCfg != nil && workspaceCfg.Logging.Level != nil && *workspaceCfg.Logging.Level == "debug" {
+				logLLM = true
+				logAgent = true
 			}
 			if spec.Logging != nil {
 				if spec.Logging.LLM != nil {
@@ -109,6 +116,7 @@ func newStartCmd() *cobra.Command {
 			if modelName == "" {
 				modelName = defaultModelName()
 			}
+			secrets := cfgload.LoadSecrets(os.Environ())
 			workspace, err := workspaceOpenFn(runCtx, agentenv.WorkspaceConfig{
 				Workspace:         runtimeCfg.Workspace,
 				ManifestPath:      runtimeCfg.ManifestPath,
@@ -120,7 +128,7 @@ func newStartCmd() *cobra.Command {
 				AgentName:         agentName,
 				SandboxBackend:    sandboxBackend,
 				LogPath:           logPath,
-			}, workspaceRegistrationFuncsFn())
+			}, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, workspaceRegistrationFuncsFn())
 			if err != nil {
 				return err
 			}
@@ -285,15 +293,15 @@ func selectDefaultAgent(reg *agentRegistry) string {
 // defaultModelName returns the preferred model from config or falls back to a
 // safe local default.
 func defaultModelName() string {
-	if globalCfg != nil && globalCfg.DefaultModel.Name != "" {
-		return globalCfg.DefaultModel.Name
+	if workspaceCfg != nil && workspaceCfg.Model.DefaultName != nil && *workspaceCfg.Model.DefaultName != "" {
+		return *workspaceCfg.Model.DefaultName
 	}
 	return "codellama:13b"
 }
 
 // defaultEndpoint resolves the Ollama endpoint, honoring overrides from env.
 func defaultEndpoint() string {
-	if val := os.Getenv("OLLAMA_HOST"); val != "" {
+	if val := cfgload.LoadEnvOverrides(os.Environ()).OllamaHost; val != "" {
 		return val
 	}
 	return "http://localhost:11434"
