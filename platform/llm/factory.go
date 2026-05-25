@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-type providerFactory func(ProviderConfig) (ManagedBackend, error)
+type providerFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
 
 var (
 	providerFactoriesMu sync.RWMutex
@@ -26,7 +26,7 @@ func RegisterProvider(name string, factory providerFactory) {
 }
 
 // New builds a managed backend from the provided transport configuration.
-func New(cfg ProviderConfig) (ManagedBackend, error) {
+func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 	if strings.TrimSpace(cfg.Provider) == "" {
 		cfg.Provider = "ollama"
 	}
@@ -38,7 +38,7 @@ func New(cfg ProviderConfig) (ManagedBackend, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
 	}
-	return factory(cfg)
+	return factory(cfg, secrets)
 }
 
 func applyProviderDefaults(cfg *ProviderConfig) {

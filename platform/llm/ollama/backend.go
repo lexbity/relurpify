@@ -35,6 +35,7 @@ const (
 type Backend struct {
 	client *Client
 	cfg    Config
+	apiKey string
 
 	mu                sync.Mutex
 	cachedContextSize int
@@ -46,10 +47,10 @@ type managedModel struct {
 }
 
 // NewBackend constructs a managed Ollama backend.
-func NewBackend(cfg Config) *Backend {
-	client := NewClient(cfg.Endpoint, cfg.Model)
+func NewBackend(cfg Config, apiKey string) *Backend {
+	client := NewClient(cfg.Endpoint, cfg.Model, apiKey)
 	client.SetNativeToolCalling(cfg.NativeToolCalling)
-	return &Backend{client: client, cfg: cfg}
+	return &Backend{client: client, cfg: cfg, apiKey: strings.TrimSpace(apiKey)}
 }
 
 // Model returns the underlying language model client.
@@ -72,7 +73,6 @@ func (b *Backend) Embedder() *Embedder {
 	return NewEmbedder(Config{
 		Endpoint: b.cfg.Endpoint,
 		Model:    model,
-		APIKey:   b.cfg.APIKey,
 		Timeout:  b.cfg.Timeout,
 		Debug:    b.cfg.Debug,
 	}, model)
@@ -182,7 +182,7 @@ func (b *Backend) Warm(ctx context.Context) error {
 		return err
 	}
 	_, _ = b.ModelContextSize(ctx)
-	
+
 	// Force the model to load in memory by executing an empty generation request
 	_, _ = b.Model().Generate(ctx, "", nil)
 	return nil

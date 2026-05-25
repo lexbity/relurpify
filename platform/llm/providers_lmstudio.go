@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	RegisterProvider("lmstudio", func(cfg ProviderConfig) (ManagedBackend, error) {
+	RegisterProvider("lmstudio", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
@@ -15,11 +15,10 @@ func init() {
 			inner: lmstudiobackend.NewBackend(lmstudiobackend.Config{
 				Endpoint:          cfg.Endpoint,
 				Model:             cfg.Model,
-				APIKey:            cfg.APIKey,
 				Timeout:           cfg.Timeout,
 				NativeToolCalling: cfg.NativeToolCalling,
 				Debug:             cfg.Debug,
-			}),
+			}, secrets.APIKey),
 		}, nil
 	})
 }

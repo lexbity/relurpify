@@ -30,16 +30,18 @@ type (
 type Client struct {
 	cfg        OpenAICompatConfig
 	httpClient *http.Client
+	apiKey     string
 	profile    *ModelProfile
 }
 
-func NewClient(cfg OpenAICompatConfig) *Client {
+func NewClient(cfg OpenAICompatConfig, apiKey string) *Client {
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
 	return &Client{
-		cfg: cfg,
+		cfg:    cfg,
+		apiKey: strings.TrimSpace(apiKey),
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -269,8 +271,8 @@ func (c *Client) newRequest(ctx context.Context, method, path string, payload an
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(c.cfg.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.cfg.APIKey))
+	if strings.TrimSpace(c.apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.apiKey))
 	}
 	return req, nil
 }

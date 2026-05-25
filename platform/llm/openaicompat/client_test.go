@@ -30,7 +30,7 @@ func TestChat_Sync(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, APIKey: "token"})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "token")
 	resp, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, &contracts.LLMOptions{Model: "model-a"})
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
@@ -54,7 +54,7 @@ func TestChat_Streaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	var got strings.Builder
 	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, &contracts.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
@@ -94,7 +94,7 @@ func TestChatWithTools_NativeEnabled_Sync(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
 	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.ToolCalls, 1)
@@ -115,7 +115,7 @@ func TestChatWithTools_NativeEnabled_Streaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
 	var got strings.Builder
 	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, &contracts.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
@@ -139,7 +139,7 @@ func TestChatWithTools_NativeDisabled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: false})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: false}, "")
 	resp, err := client.ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
@@ -158,7 +158,7 @@ func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
 	profile := &ModelProfile{}
 	profile.ToolCalling.NativeAPI = false
 	client.SetProfile(profile)
@@ -175,7 +175,7 @@ func TestBearerAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, APIKey: "secret"})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "secret")
 	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
@@ -187,7 +187,7 @@ func TestBearerAuth_NoKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
@@ -202,7 +202,7 @@ func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	resp, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.True(t, resp.Usage.Estimated)
@@ -219,7 +219,7 @@ func TestListModels(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
 	require.Len(t, models, 1)
@@ -237,7 +237,7 @@ func TestEmbedder_Single(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a")
+	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a", "")
 	embeddings, err := embedder.Embed(context.Background(), []string{"hello"})
 	require.NoError(t, err)
 	require.Len(t, embeddings, 1)
@@ -256,7 +256,7 @@ func TestEmbedder_Batch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a")
+	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a", "")
 	embeddings, err := embedder.Embed(context.Background(), []string{"a", "b"})
 	require.NoError(t, err)
 	require.Len(t, embeddings, 2)
@@ -269,7 +269,7 @@ func TestHTTPError_500(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	_, err := client.Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "500")
@@ -285,7 +285,7 @@ func TestStreamingCancel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL})
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	ctx, cancel := context.WithCancel(context.Background())
 	ch, err := client.GenerateStream(ctx, "hello", nil)
 	require.NoError(t, err)

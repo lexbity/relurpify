@@ -23,10 +23,11 @@ const (
 type Backend struct {
 	client *openaicompat.Client
 	cfg    Config
+	apiKey string
 }
 
 // NewBackend constructs a managed LM Studio backend.
-func NewBackend(cfg Config) *Backend {
+func NewBackend(cfg Config, apiKey string) *Backend {
 	endpoint := strings.TrimSpace(cfg.Endpoint)
 	if endpoint == "" {
 		endpoint = "http://localhost:1234"
@@ -34,13 +35,13 @@ func NewBackend(cfg Config) *Backend {
 	cfg.Endpoint = endpoint
 	clientCfg := openaicompat.OpenAICompatConfig{
 		Endpoint:          endpoint,
-		APIKey:            cfg.APIKey,
 		Timeout:           cfg.Timeout,
 		NativeToolCalling: cfg.NativeToolCalling,
 	}
 	return &Backend{
-		client: openaicompat.NewClient(clientCfg),
+		client: openaicompat.NewClient(clientCfg, apiKey),
 		cfg:    cfg,
+		apiKey: strings.TrimSpace(apiKey),
 	}
 }
 
@@ -63,10 +64,9 @@ func (b *Backend) Embedder() *openaicompat.Embedder {
 	}
 	return openaicompat.NewEmbedder(openaicompat.OpenAICompatConfig{
 		Endpoint:          b.cfg.Endpoint,
-		APIKey:            b.cfg.APIKey,
 		Timeout:           b.cfg.Timeout,
 		NativeToolCalling: b.cfg.NativeToolCalling,
-	}, model)
+	}, model, b.apiKey)
 }
 
 // Capabilities reports the transport-backed feature set.

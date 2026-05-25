@@ -8,7 +8,6 @@ type Config struct {
 	Model             string
 	EmbeddingModel    string
 	ModelPath         string
-	APIKey            string
 	Timeout           time.Duration
 	NativeToolCalling bool
 	Debug             bool

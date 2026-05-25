@@ -17,9 +17,9 @@ type Embedder struct {
 }
 
 // NewEmbedder constructs a new OpenAI-compatible embedder.
-func NewEmbedder(cfg OpenAICompatConfig, model string) *Embedder {
+func NewEmbedder(cfg OpenAICompatConfig, model string, apiKey string) *Embedder {
 	return &Embedder{
-		client: NewClient(cfg),
+		client: NewClient(cfg, apiKey),
 		model:  strings.TrimSpace(model),
 	}
 }
@@ -47,8 +47,8 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, erro
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(e.client.cfg.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(e.client.cfg.APIKey))
+	if strings.TrimSpace(e.client.apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(e.client.apiKey))
 	}
 	resp, err := e.client.httpClient.Do(req)
 	if err != nil {

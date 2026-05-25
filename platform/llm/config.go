@@ -13,11 +13,15 @@ type ProviderConfig struct {
 	Endpoint          string         `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	Model             string         `yaml:"model,omitempty" json:"model,omitempty"`
 	ModelPath         string         `yaml:"model_path,omitempty" json:"model_path,omitempty"`
-	APIKey            string         `yaml:"api_key,omitempty" json:"api_key,omitempty"`
 	Timeout           time.Duration  `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	NativeToolCalling bool           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Debug             bool           `yaml:"debug,omitempty" json:"debug,omitempty"`
 	Config            map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+}
+
+// ProviderSecrets carries env-only credentials for a provider.
+type ProviderSecrets struct {
+	APIKey string
 }
 
 // RuntimeConfigSource is implemented by runtime config structs that can be
@@ -26,7 +30,6 @@ type RuntimeConfigSource interface {
 	InferenceProviderValue() string
 	InferenceEndpointValue() string
 	InferenceModelValue() string
-	InferenceAPIKeyValue() string
 	InferenceNativeToolCallingValue() bool
 }
 
@@ -39,7 +42,6 @@ func ProviderConfigFromRuntimeConfig(cfg RuntimeConfigSource) ProviderConfig {
 		Provider:          cfg.InferenceProviderValue(),
 		Endpoint:          cfg.InferenceEndpointValue(),
 		Model:             cfg.InferenceModelValue(),
-		APIKey:            cfg.InferenceAPIKeyValue(),
 		NativeToolCalling: cfg.InferenceNativeToolCallingValue(),
 	}
 }

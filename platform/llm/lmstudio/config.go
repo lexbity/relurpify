@@ -6,7 +6,6 @@ import "time"
 type Config struct {
 	Endpoint          string
 	Model             string
-	APIKey            string
 	Timeout           time.Duration
 	NativeToolCalling bool
 	Debug             bool

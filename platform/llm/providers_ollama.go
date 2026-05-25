@@ -5,7 +5,7 @@ import (
 )
 
 func init() {
-	RegisterProvider("ollama", func(cfg ProviderConfig) (ManagedBackend, error) {
+	RegisterProvider("ollama", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
@@ -14,12 +14,11 @@ func init() {
 				Endpoint:          cfg.Endpoint,
 				Model:             cfg.Model,
 				ModelPath:         cfg.ModelPath,
-				APIKey:            cfg.APIKey,
 				Timeout:           cfg.Timeout,
 				NativeToolCalling: cfg.NativeToolCalling,
 				Debug:             cfg.Debug,
 				Config:            cfg.Config,
-			}),
+			}, secrets.APIKey),
 			modelName: cfg.Model,
 		}, nil
 	})

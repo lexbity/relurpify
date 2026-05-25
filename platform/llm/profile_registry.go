@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
@@ -79,6 +80,9 @@ func loadProfileFile(path string) (*ModelProfile, error) {
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("read profile %s: %w", path, err)
+	}
+	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
+		return nil, err
 	}
 	var profile ModelProfile
 	if err := yaml.Unmarshal(data, &profile); err != nil {

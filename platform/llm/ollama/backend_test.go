@@ -24,7 +24,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 				Model:             "test-model",
 				EmbeddingModel:    "embed-model",
 				NativeToolCalling: nativeToolCalling,
-			})
+			}, "")
 		},
 		NewServer: func(t *testing.T, scenario string, nativeToolCalling bool) *httptest.Server {
 			t.Helper()
@@ -171,7 +171,7 @@ func TestBackend_Warm_Reachable(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"})
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	require.NoError(t, backend.Warm(context.Background()))
 }
 
@@ -186,7 +186,7 @@ func TestBackend_ListModels(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"})
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	models, err := backend.ListModels(context.Background())
 	require.NoError(t, err)
 	require.Len(t, models, 1)
@@ -196,7 +196,7 @@ func TestBackend_ListModels(t *testing.T) {
 }
 
 func TestBackend_Capabilities(t *testing.T) {
-	backend := NewBackend(Config{NativeToolCalling: true})
+	backend := NewBackend(Config{NativeToolCalling: true}, "")
 	caps := backend.Capabilities()
 	require.True(t, caps.NativeToolCalling)
 	require.True(t, caps.Streaming)
@@ -207,7 +207,7 @@ func TestBackend_Capabilities(t *testing.T) {
 }
 
 func TestBackend_ModelContextSize_ProfileOverride(t *testing.T) {
-	backend := NewBackend(Config{Model: "test-model"})
+	backend := NewBackend(Config{Model: "test-model"}, "")
 	backend.SetProfile(&ModelProfile{ContextSize: 8192})
 	size, err := backend.ModelContextSize(context.Background())
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestBackend_ModelContextSize_ProfileOverride(t *testing.T) {
 }
 
 func TestClient_NormalizeUsageMapping(t *testing.T) {
-	client := NewClient("http://localhost:11434", "test-model")
+	client := NewClient("http://localhost:11434", "test-model", "")
 	resp, err := client.decodeLLMResponse(strings.NewReader(`{"response":"ok","prompt_eval_count":512,"eval_count":128}`), 0)
 	require.NoError(t, err)
 	require.Equal(t, 512, resp.Usage.PromptTokens)
@@ -225,7 +225,7 @@ func TestClient_NormalizeUsageMapping(t *testing.T) {
 }
 
 func TestClient_NormalizeUsageEstimationFallback(t *testing.T) {
-	client := NewClient("http://localhost:11434", "test-model")
+	client := NewClient("http://localhost:11434", "test-model", "")
 	resp, err := client.decodeLLMResponse(strings.NewReader(`{"response":"hello"}`), 0)
 	require.NoError(t, err)
 	require.True(t, resp.Usage.Estimated)
@@ -244,7 +244,7 @@ func TestBackend_Chat_RoundTrip(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"})
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	resp, err := backend.Model().Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "response", resp.Text)
@@ -260,7 +260,7 @@ func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false})
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "")
 	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
@@ -278,7 +278,7 @@ func TestBackend_Streaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true})
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
 	var got strings.Builder
 	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, &contracts.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },

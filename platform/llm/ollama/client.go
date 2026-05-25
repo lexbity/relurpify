@@ -23,6 +23,7 @@ type Client struct {
 	Model             string
 	client            *http.Client
 	Debug             bool
+	apiKey            string
 	profile           *ModelProfile
 	nativeToolCalling bool
 }
@@ -68,19 +69,20 @@ type ollamaResponse struct {
 
 // NewClientWithProfile builds a new Ollama client with an active model profile.
 func NewClientWithProfile(endpoint, model string, p *ModelProfile) *Client {
-	c := NewClient(endpoint, model)
+	c := NewClient(endpoint, model, "")
 	c.profile = p
 	return c
 }
 
 // NewClient builds a new Ollama client.
-func NewClient(endpoint, model string) *Client {
+func NewClient(endpoint, model, apiKey string) *Client {
 	if endpoint == "" {
 		endpoint = "http://localhost:11434"
 	}
 	return &Client{
 		Endpoint:          endpoint,
 		Model:             model,
+		apiKey:            strings.TrimSpace(apiKey),
 		nativeToolCalling: true,
 		client: &http.Client{
 			Timeout: 3 * time.Minute,
