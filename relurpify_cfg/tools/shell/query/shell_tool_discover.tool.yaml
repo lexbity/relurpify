@@ -1,0 +1,71 @@
+schema: relurpify/tool/v1
+name: shell_tool_discover
+version: "1"
+family: shell_query
+intent:
+  - shell_query
+description: Searches the shell catalog using bounded discovery queries.
+parameters:
+  - name: tool_name
+    type: string
+    description: Canonical tool name to prioritize.
+    required: false
+    default: null
+  - name: aliases
+    type: array
+    description: Tool aliases to match.
+    required: false
+    default: null
+  - name: family
+    type: string
+    description: Family name to narrow the search.
+    required: false
+    default: null
+  - name: intent
+    type: array
+    description: Intent keywords to match.
+    required: false
+    default: null
+  - name: keywords
+    type: array
+    description: Free-form search keywords.
+    required: false
+    default: null
+  - name: required_params
+    type: array
+    description: Parameter names that must be supported.
+    required: false
+    default: null
+  - name: preferred_output
+    type: string
+    description: Preferred output style.
+    required: false
+    default: null
+  - name: workspace_context
+    type: object
+    description: Workspace hints such as cargo, go, python, or git.
+    required: false
+    default: null
+  - name: max_results
+    type: integer
+    description: Maximum number of matches to return, capped at 25.
+    required: false
+    default: 10
+  - name: allow_deprecated
+    type: boolean
+    description: Include deprecated tools in the search results.
+    required: false
+    default: null
+execution:
+  backend: go_native
+  implementation: shell_tool_discover
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - filesystem_read

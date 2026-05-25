@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_rustfmt
+version: "1"
+family: build
+intent:
+  - format
+  - rust
+description: Formats Rust code using rustfmt.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - rustfmt
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

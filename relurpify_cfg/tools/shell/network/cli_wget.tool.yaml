@@ -1,0 +1,26 @@
+schema: relurpify/tool/v1
+name: cli_wget
+version: "1"
+family: network
+intent:
+  - fetch
+  - http
+description: Downloads resources with wget.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - wget
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+    network_access: true
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+    - network
+  effect_class:
+    - process_spawn

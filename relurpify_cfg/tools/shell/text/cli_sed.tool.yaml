@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_sed
+version: "1"
+family: text
+intent:
+  - transform
+  - edit
+description: Runs sed for stream editing tasks.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - sed
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - filesystem_read

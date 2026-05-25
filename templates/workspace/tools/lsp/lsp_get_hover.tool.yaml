@@ -1,0 +1,36 @@
+schema: relurpify/tool/v1
+name: lsp_get_hover
+version: "1"
+family: lsp
+intent:
+  - lsp
+description: Retrieves type information for a position.
+parameters:
+  - name: file
+    type: string
+    description: ""
+    required: true
+    default: null
+  - name: line
+    type: int
+    description: ""
+    required: true
+    default: null
+  - name: character
+    type: int
+    description: ""
+    required: true
+    default: null
+execution:
+  backend: go_native
+  implementation: lsp_get_hover
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - context_insertion

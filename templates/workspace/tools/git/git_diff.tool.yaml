@@ -1,0 +1,20 @@
+schema: relurpify/tool/v1
+name: git_diff
+version: "1"
+family: git
+intent:
+  - git
+description: Shows changes in the working tree.
+execution:
+  backend: go_native
+  implementation: git_diff
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - external_state

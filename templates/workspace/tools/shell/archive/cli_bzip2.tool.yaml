@@ -1,0 +1,23 @@
+schema: relurpify/tool/v1
+name: cli_bzip2
+version: "1"
+family: archive
+intent:
+  - compress
+description: Compresses data using bzip2.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - bzip2
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

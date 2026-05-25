@@ -1,0 +1,36 @@
+schema: relurpify/tool/v1
+name: git_blame
+version: "1"
+family: git
+intent:
+  - git
+description: Shows blame information.
+parameters:
+  - name: file
+    type: string
+    description: ""
+    required: true
+    default: null
+  - name: start
+    type: int
+    description: ""
+    required: false
+    default: 1
+  - name: end
+    type: int
+    description: ""
+    required: false
+    default: 1
+execution:
+  backend: go_native
+  implementation: git_blame
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - external_state

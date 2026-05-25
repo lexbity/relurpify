@@ -1,0 +1,23 @@
+schema: relurpify/tool/v1
+name: cli_touch
+version: "1"
+family: fileops
+intent:
+  - create
+description: Creates empty files or updates timestamps via touch.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - touch
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - filesystem_read

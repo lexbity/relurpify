@@ -1,0 +1,32 @@
+schema: relurpify/tool/v1
+name: git_commit
+version: "1"
+family: git
+intent:
+  - git
+description: Creates a commit (without pushing).
+parameters:
+  - name: message
+    type: string
+    description: ""
+    required: true
+    default: null
+  - name: files
+    type: array
+    description: ""
+    required: false
+    default: null
+execution:
+  backend: go_native
+  implementation: git_commit
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+    - destructive
+  effect_class:
+    - external_state

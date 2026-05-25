@@ -1,3 +1,4 @@
+schema: relurpify/agent/v1
 apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:

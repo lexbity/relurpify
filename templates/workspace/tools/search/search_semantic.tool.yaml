@@ -1,0 +1,26 @@
+schema: relurpify/tool/v1
+name: search_semantic
+version: "1"
+family: search
+intent:
+  - search
+description: Performs semantic search using heuristic embeddings.
+parameters:
+  - name: query
+    type: string
+    description: ""
+    required: true
+    default: null
+execution:
+  backend: go_native
+  implementation: search_semantic
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - filesystem_read

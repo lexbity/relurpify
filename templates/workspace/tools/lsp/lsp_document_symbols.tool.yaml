@@ -1,0 +1,26 @@
+schema: relurpify/tool/v1
+name: lsp_document_symbols
+version: "1"
+family: lsp
+intent:
+  - lsp
+description: Lists symbols in a document.
+parameters:
+  - name: file
+    type: string
+    description: ""
+    required: true
+    default: null
+execution:
+  backend: go_native
+  implementation: lsp_document_symbols
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - context_insertion

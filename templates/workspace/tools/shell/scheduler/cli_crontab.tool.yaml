@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_crontab
+version: "1"
+family: scheduler
+intent:
+  - inspect
+  - reconcile
+description: Edits or lists cron jobs via crontab.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - crontab
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

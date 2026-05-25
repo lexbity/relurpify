@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_npm
+version: "1"
+family: build
+intent:
+  - build
+  - node
+description: Executes npm commands inside the workspace.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - npm
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn
