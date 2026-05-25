@@ -1,0 +1,7 @@
+schema: relurpify/policy/localtool/v1
+
+tools:
+  git:
+    execute: ask
+  bash:
+    execute: ask

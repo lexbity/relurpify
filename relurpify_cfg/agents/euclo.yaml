@@ -1,89 +1,45 @@
-apiVersion: relurpify/v1alpha1
-kind: AgentManifest
-metadata:
-    name: euclo
-    version: 1.0.0
-    description: Euclo coding agent manifest
-spec:
-    image: ghcr.io/lexcodex/relurpify/runtime:latest
-    runtime: gvisor
-    defaults:
-        permissions:
-            filesystem:
-                - action: fs:read
-                  path: /home/lex/Public/relurpify/**
-                  justification: Read workspace
-                - action: fs:list
-                  path: /home/lex/Public/relurpify/**
-                  justification: List workspace
-                - action: fs:write
-                  path: /home/lex/Public/relurpify/**
-                  justification: Modify workspace
-                - action: fs:execute
-                  path: /home/lex/Public/relurpify/**
-                  justification: Execute tooling inside workspace
-            executables:
-                - binary: go
-                  args: ["*"]
-                - binary: golangci-lint
-                  args: ["*"]
-                - binary: git
-                  args: ["*"]
-                - binary: bash
-                  args: ["-c", "*"]
-            network:
-                - direction: egress
-                  protocol: tcp
-                  host: localhost
-                  port: 11434
-                  description: Ollama
-        resources:
-            limits:
-                cpu: "2"
-                memory: 4Gi
-                disk_io: 200MBps
-    security:
-        run_as_user: 1000
-        read_only_root: false
-        no_new_privileges: true
-    audit:
-        level: verbose
-        retention_days: 7
-    agent:
-        implementation: euclo
-        mode: primary
-        version: 1.0.0
-        prompt: You are Euclo, a coding-specialized agent. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
-        model:
-            provider: ollama
-            name: gemma4:e4b
-            temperature: 0.2
-            max_tokens: 4096
-        bash_permissions:
-            default: ask
-            allow_patterns: []
-            deny_patterns: []
-        file_permissions:
-            write:
-                default: allow
-                allow_patterns: ["**"]
-            edit:
-                default: allow
-                allow_patterns: ["**"]
-        capability_policies:
-            - selector:
-                kind: tool
-                risk_classes: ["destructive"]
-              execute: ask
-        policies:
-            destructive: ask
-            network: ask
-        provider_policies:
-            remote-mcp:
-                activate: ask
-                default_trust: remote-declared-untrusted
-        ollama_tool_calling: true
-    skills:
-        - system
-        - coding
-        - gocoder
+schema: relurpify/agent/v1
+kind: agent
+name: euclo
+sandbox:
+  runtime: gvisor
+  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  limits:
+    cpu: "2"
+    memory: 4Gi
+    disk_io: 200MBps
+  security:
+    run_as_user: 1000
+    read_only_root: false
+    no_new_privileges: true
+model:
+  name: gemma4:e4b
+  temperature: 0.2
+  max_tokens: 4096
+filesystem:
+  - action: [fs:read, fs:list, fs:write, fs:execute]
+    path: "${workspace}/**"
+capabilities:
+  relurpic:
+    - euclo:cap.test_run
+    - euclo:cap.ast_query
+    - euclo:cap.symbol_trace
+    - euclo:cap.call_graph
+    - euclo:cap.blame_trace
+    - euclo:cap.bisect
+    - euclo:cap.code_review
+    - euclo:cap.diff_summary
+    - euclo:cap.layer_check
+    - euclo:cap.targeted_refactor
+    - euclo:cap.rename_symbol
+    - euclo:cap.api_compat
+    - euclo:cap.boundary_report
+    - euclo:cap.coverage_check
+audit:
+  level: verbose
+  retention_days: 7
+network:
+  allow:
+    - host: localhost
+      port: 11434
+      protocol: tcp

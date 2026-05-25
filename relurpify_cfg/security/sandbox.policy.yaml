@@ -1,0 +1,10 @@
+schema: relurpify/policy/sandbox/v1
+
+read_only_root: false
+protected_paths:
+  - relurpify_cfg
+no_new_privileges: true
+seccomp_profile: ""
+allowed_env_keys: []
+denied_env_keys: []
+network_rules: []

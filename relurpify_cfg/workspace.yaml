@@ -1,0 +1,21 @@
+schema: relurpify/workspace/v1
+
+# Workspace-local state lives outside relurpify_cfg/.
+paths:
+  state_dir: .relurpify_state
+
+model:
+  default_name: gemma4:e4b
+
+sandbox:
+  backend: gvisor
+
+logging:
+  level: info
+  format: json
+
+audit:
+  retention_days: 7
+
+telemetry:
+  enabled: true

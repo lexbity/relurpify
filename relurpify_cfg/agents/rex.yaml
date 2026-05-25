@@ -1,56 +1,29 @@
-apiVersion: relurpify/v1alpha1
-kind: AgentManifest
-metadata:
-    name: rex
-    version: 1.0.0
-    description: Nexus-managed rex runtime manifest
-spec:
-    image: ghcr.io/lexcodex/relurpify/runtime:latest
-    runtime: gvisor
-    defaults:
-        permissions:
-            filesystem:
-                - action: fs:read
-                  path: /home/lex/Public/relurpify/**
-                  justification: Read workspace
-                - action: fs:list
-                  path: /home/lex/Public/relurpify/**
-                  justification: List workspace
-                - action: fs:write
-                  path: /home/lex/Public/relurpify/**
-                  justification: Modify workspace
-                - action: fs:execute
-                  path: /home/lex/Public/relurpify/**
-                  justification: Execute tooling inside workspace
-            network:
-                - direction: egress
-                  protocol: tcp
-                  host: localhost
-                  port: 11434
-                  description: Ollama
-        resources:
-            limits:
-                cpu: "2"
-                memory: 4Gi
-                disk_io: 200MBps
-    security:
-        run_as_user: 1000
-        read_only_root: false
-        no_new_privileges: true
-    audit:
-        level: verbose
-        retention_days: 7
-    agent:
-        implementation: rex
-        mode: primary
-        version: 1.0.0
-        prompt: You are rex. Route work pragmatically across review, planning, recovery, and implementation paths, and summarize outcomes with explicit verification status when relevant.
-        model:
-            provider: ollama
-            name: gemma4:e4b
-            temperature: 0.2
-            max_tokens: 4096
-        ollama_tool_calling: true
-    skills:
-        - system
-        - coding
+schema: relurpify/agent/v1
+kind: agent
+name: rex
+sandbox:
+  runtime: gvisor
+  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  limits:
+    cpu: "2"
+    memory: 4Gi
+    disk_io: 200MBps
+  security:
+    run_as_user: 1000
+    read_only_root: false
+    no_new_privileges: true
+model:
+  name: gemma4:e4b
+  temperature: 0.2
+  max_tokens: 4096
+filesystem:
+  - action: [fs:read, fs:list, fs:write, fs:execute]
+    path: "${workspace}/**"
+audit:
+  level: verbose
+  retention_days: 7
+network:
+  allow:
+    - host: localhost
+      port: 11434
+      protocol: tcp

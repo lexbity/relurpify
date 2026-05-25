@@ -1,0 +1,14 @@
+# Default model profile — safe baseline applied when no specific profile matches.
+# All quirk flags off; repair via heuristics only (no extra LLM call).
+pattern: "*"
+tool_calling:
+  native_api: false
+  double_encoded_args: false
+  multiline_string_literals: false
+  max_tools_per_call: 0
+repair:
+  strategy: heuristic-only
+  max_attempts: 0
+schema:
+  flatten_nested: false
+  max_description_len: 0

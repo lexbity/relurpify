@@ -1,0 +1,15 @@
+# Profile for qwen2.5-coder models.
+# Codifies workarounds that were previously unconditional in ollama.go and
+# react_think_node.go.
+pattern: "qwen2.5-coder*"
+tool_calling:
+  native_api: true
+  double_encoded_args: true
+  multiline_string_literals: true
+  max_tools_per_call: 1
+repair:
+  strategy: llm
+  max_attempts: 1
+schema:
+  flatten_nested: false
+  max_description_len: 0

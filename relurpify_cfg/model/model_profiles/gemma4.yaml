@@ -1,0 +1,17 @@
+# Profile for gemma4 models used in live tests.
+#
+# This is a conservative starter profile. If live runs show a different tool
+# calling behavior, tune the quirk flags here rather than hard-coding model
+# branches in the testsuite runner.
+pattern: "gemma4*"
+tool_calling:
+  native_api: true
+  double_encoded_args: false
+  multiline_string_literals: true
+  max_tools_per_call: 2
+repair:
+  strategy: llm
+  max_attempts: 1
+schema:
+  flatten_nested: false
+  max_description_len: 0
