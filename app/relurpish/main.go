@@ -16,6 +16,9 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/configcheck"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 var (
@@ -55,6 +58,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
 
 	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd())
+	root.AddCommand(newValidateCmd())
 	return root
 }
 
@@ -107,10 +111,15 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg); err != nil {
+	if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+		fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
+		return report
+	}
+	secrets := cfgload.LoadSecrets(os.Environ())
+	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
 		return err
 	}
-	rt, err := runtimesvc.New(ctx, cfg)
+	rt, err := runtimesvc.New(ctx, cfg, secrets)
 	if err != nil {
 		return err
 	}
@@ -135,7 +144,16 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		state, err := runtimesvc.BootstrapStartupState(ctx, cfg)
+		if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+			renderDoctorReport(cmd.OutOrStdout(), runtimesvc.DoctorReport{
+				Workspace:   cfg.Workspace,
+				ConfigRoot:  manifest.New(cfg.Workspace).ConfigRoot(),
+				ConfigError: report.Error(),
+			})
+			return report
+		}
+		secrets := cfgload.LoadSecrets(os.Environ())
+		state, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets)
 		if err != nil {
 			return err
 		}
@@ -150,7 +168,7 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 					return err
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), "Workspace starter configuration written to relurpify_cfg/")
-				report = runtimesvc.BuildDoctorReport(ctx, cfg)
+				report = runtimesvc.BuildDoctorReport(ctx, cfg, secrets)
 				renderDoctorReport(cmd.OutOrStdout(), report)
 			}
 		}

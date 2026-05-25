@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -657,7 +657,7 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
-	if _, err := runtimesvc.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
+	if _, err := cfgload.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return os.WriteFile(abs, updated, 0o644)

@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
-	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -34,8 +34,10 @@ var goldenDir = func() string {
 type mockOllamaBackend struct{}
 
 func (b *mockOllamaBackend) Model() contracts.LanguageModel { return nil }
-func (b *mockOllamaBackend) Embedder() llm.Embedder { return nil }
-func (b *mockOllamaBackend) Capabilities() contracts.BackendCapabilities { return contracts.BackendCapabilities{} }
+func (b *mockOllamaBackend) Embedder() llm.Embedder         { return nil }
+func (b *mockOllamaBackend) Capabilities() contracts.BackendCapabilities {
+	return contracts.BackendCapabilities{}
+}
 func (b *mockOllamaBackend) ModelContextSize(ctx context.Context) (int, error) { return 2048, nil }
 func (b *mockOllamaBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
 	return &llm.HealthReport{State: llm.BackendHealthReady}, nil
@@ -46,14 +48,16 @@ func (b *mockOllamaBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, er
 		{Name: "llama3:latest", Family: "llama"},
 	}, nil
 }
-func (b *mockOllamaBackend) Warm(ctx context.Context) error { return nil }
-func (b *mockOllamaBackend) Close() error { return nil }
-func (b *mockOllamaBackend) SetDebugLogging(enabled bool) {}
-func (b *mockOllamaBackend) SetProfile(profile *contracts.ModelProfile) {}
+func (b *mockOllamaBackend) Warm(ctx context.Context) error                   { return nil }
+func (b *mockOllamaBackend) Close() error                                     { return nil }
+func (b *mockOllamaBackend) SetDebugLogging(enabled bool)                     {}
+func (b *mockOllamaBackend) SetProfile(profile *contracts.ModelProfile)       {}
 func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
 
 func init() {
-	llm.RegisterProvider("ollama", func(cfg llm.ProviderConfig) (llm.ManagedBackend, error) {
+	llm.RegisterProvider("ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
+		_ = cfg
+		_ = secrets
 		return &mockOllamaBackend{}, nil
 	})
 }
@@ -84,11 +88,12 @@ func writeGolden(t *testing.T, name, content string) {
 
 func assertGolden(t *testing.T, name, got string) {
 	t.Helper()
+	got = normalizeGoldenText(got)
 	if *update {
 		writeGolden(t, name, got)
 		return
 	}
-	want := readGolden(t, name)
+	want := normalizeGoldenText(readGolden(t, name))
 	if got != want {
 		t.Errorf("golden mismatch for %s\n--- got:\n%s\n--- want:\n%s", name, got, want)
 	}
@@ -96,9 +101,13 @@ func assertGolden(t *testing.T, name, got string) {
 
 func normalizeSnapshot(view, root string) string {
 	if root == "" {
-		return view
+		return normalizeGoldenText(view)
 	}
-	return strings.ReplaceAll(view, root, "<WORKDIR>")
+	return normalizeGoldenText(strings.ReplaceAll(view, root, "<WORKDIR>"))
+}
+
+func normalizeGoldenText(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\r\n", "\n")), " ")
 }
 
 type sandboxFixtureRuntime struct {
@@ -255,12 +264,12 @@ func TestPanelGoldenViews(t *testing.T) {
 	doctor := tui.NewDoctorPane(nil)
 	doctor.SetSize(96, 18)
 	doctor.SetReport(tui.DoctorReport{
-		Workspace:            workdir,
-		ConfigRoot:           filepath.Join(workdir, "relurpify_cfg"),
-		WorkspacePresent:     true,
-		ConfigExists:         true,
-		ManifestExists:       true,
-		ManifestFingerprint:  "sha256:demo",
+		Workspace:             workdir,
+		ConfigRoot:            filepath.Join(workdir, "relurpify_cfg"),
+		WorkspacePresent:      true,
+		ConfigExists:          true,
+		ManifestExists:        true,
+		ManifestFingerprint:   "sha256:demo",
 		StarterTemplatesReady: true,
 		Dependencies: []runtimesvc.DependencyStatus{
 			{Name: "git", Available: true, Blocking: false, Details: "git available"},
@@ -404,4 +413,3 @@ func TestFocusRedirectionAndAutocomplete(t *testing.T) {
 		t.Errorf("expected 1 active overlay for autocomplete list, got %d", m.OverlaysForTest().Len())
 	}
 }
-

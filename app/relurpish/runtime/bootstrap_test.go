@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 )
 
 func TestBootstrapStartupStateInitializesWorkspaceTemplates(t *testing.T) {
@@ -14,7 +16,7 @@ func TestBootstrapStartupStateInitializesWorkspaceTemplates(t *testing.T) {
 		t.Fatalf("normalize config: %v", err)
 	}
 
-	state, err := BootstrapStartupState(context.Background(), cfg)
+	state, err := BootstrapStartupState(context.Background(), cfg, cfgload.Secrets{})
 	if err != nil {
 		t.Fatalf("bootstrap startup state: %v", err)
 	}
@@ -49,7 +51,7 @@ func TestBootstrapStartupStatePreservesInitializedWorkspace(t *testing.T) {
 		t.Fatalf("initialize workspace: %v", err)
 	}
 
-	state, err := BootstrapStartupState(context.Background(), cfg)
+	state, err := BootstrapStartupState(context.Background(), cfg, cfgload.Secrets{})
 	if err != nil {
 		t.Fatalf("bootstrap startup state: %v", err)
 	}

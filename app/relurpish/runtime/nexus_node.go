@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -23,7 +24,7 @@ type LocalNexusNodeProvider struct {
 	closeOnce   sync.Once
 }
 
-func NewLocalNexusNodeProvider(registry *capability.Registry, cfg NodeRegistrationConfig) (*LocalNexusNodeProvider, error) {
+func NewLocalNexusNodeProvider(registry *capability.Registry, cfg cfgload.RuntimeNodeRegistrationConfig) (*LocalNexusNodeProvider, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}
@@ -35,14 +36,14 @@ func NewLocalNexusNodeProvider(registry *capability.Registry, cfg NodeRegistrati
 	if name == "" {
 		name = "Relurpish Local Node"
 	}
-	platform := cfg.Platform
-	if platform == "" {
-		platform = defaultNodePlatform()
+	nodePlatform := convertNodePlatformString(cfg.Platform)
+	if nodePlatform == "" {
+		nodePlatform = defaultNodePlatform()
 	}
 	descriptor := core.NodeDescriptor{
 		ID:         nodeID,
 		Name:       name,
-		Platform:   platform,
+		Platform:   nodePlatform,
 		TrustClass: core.TrustClassWorkspaceTrusted,
 		PairedAt:   time.Now().UTC().Unix(),
 		Tags:       cloneTags(cfg.Tags),

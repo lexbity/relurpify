@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/gorilla/websocket"
@@ -40,10 +41,10 @@ type NexusClient struct {
 	pending      map[string]chan contracts.CapabilityExecutionResult
 }
 
-func NewNexusClient(cfg NexusConfig) *NexusClient {
+func NewNexusClient(cfg cfgload.RuntimeNexusConfig, token string) *NexusClient {
 	return &NexusClient{
 		Address:       cfg.Address,
-		Token:         cfg.Token,
+		Token:         token,
 		AutoReconnect: cfg.AutoReconnect,
 		Dial:          dialNexusWebsocket,
 		subscribers:   map[int]chan core.FrameworkEvent{},

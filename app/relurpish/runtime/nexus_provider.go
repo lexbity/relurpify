@@ -137,7 +137,7 @@ func registerNexusGatewayProvider(ctx context.Context, rt *Runtime) error {
 	if !cfg.Enabled || cfg.Address == "" {
 		return nil
 	}
-	client := NewNexusClient(cfg)
+	client := NewNexusClient(cfg, rt.secrets.NexusToken)
 	return rt.RegisterProvider(ctx, &nexusGatewayRuntimeProvider{client: client})
 }
 

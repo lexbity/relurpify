@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -183,7 +184,7 @@ func (p *SecurityGuardPane) loadShellRules() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := manifest.New(workspace).ShellBlacklistFile()
+	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -191,6 +192,11 @@ func (p *SecurityGuardPane) loadShellRules() {
 			return
 		}
 		p.status = fmt.Sprintf("shell blacklist load failed: %v", err)
+		p.shellRules = nil
+		return
+	}
+	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
+		p.status = fmt.Sprintf("shell blacklist secret field rejected: %v", err)
 		p.shellRules = nil
 		return
 	}
@@ -208,7 +214,7 @@ func (p *SecurityGuardPane) loadGuardRules() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := manifest.New(workspace).PolicyRulesFile()
+	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "policy_rules.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -422,20 +428,20 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 			return sandboxPersistedMsg{Err: fmt.Errorf("workspace unavailable")}
 		}
 		paths := manifest.New(workspace)
-		shellPath := paths.ShellBlacklistFile()
-		guardPath := paths.PolicyRulesFile()
-		shellBackup, err := runtimesvc.CreateTimestampedBackup(shellPath)
+		shellPath := filepath.Join(paths.ConfigRoot(), "security", "shell.policy.yaml")
+		guardPath := filepath.Join(paths.ConfigRoot(), "policy_rules.yaml")
+		shellBackup, err := cfgload.CreateTimestampedBackup(shellPath)
 		if err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
-		guardBackup, err := runtimesvc.CreateTimestampedBackup(guardPath)
+		guardBackup, err := cfgload.CreateTimestampedBackup(guardPath)
 		if err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
-		if err := runtimesvc.SaveYAML(shellPath, securityGuardFile{Version: "1", Rules: shellRules}); err != nil {
+		if err := cfgload.SaveYAML(shellPath, securityGuardFile{Version: "1", Rules: shellRules}); err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
-		if err := runtimesvc.SaveJSON(guardPath, guardRules); err != nil {
+		if err := cfgload.SaveJSON(guardPath, guardRules); err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
 		if p.runtime != nil {

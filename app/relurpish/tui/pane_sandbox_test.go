@@ -9,6 +9,7 @@ import (
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,7 +60,7 @@ func (f *sandboxPaneRuntimeFake) SaveSandboxBackend(backend string) (string, err
 		return "", os.ErrInvalid
 	}
 	f.backend = strings.TrimSpace(backend)
-	backup, err := runtimesvc.SaveWorkspaceConfigWithBackup(f.configPath, runtimesvc.WorkspaceConfig{
+	backup, err := cfgload.SaveRuntimeWorkspaceConfigWithBackup(f.configPath, cfgload.RuntimeWorkspaceConfig{
 		SandboxBackend: f.backend,
 		LastUpdated:    1,
 	})

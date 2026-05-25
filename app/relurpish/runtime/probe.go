@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -72,7 +73,7 @@ type EnvironmentReport struct {
 	Sandbox   SandboxReport
 	Inference InferenceBackendReport
 	Manifest  ManifestSummary
-	Config    WorkspaceConfig
+	Config    cfgload.RuntimeWorkspaceConfig
 	Agent     string
 	Timestamp time.Time
 }
@@ -93,12 +94,12 @@ type StatusSnapshot struct {
 
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
 // and the active manifest for status/reporting surfaces.
-func ProbeEnvironment(ctx context.Context, cfg Config, backend llm.ManagedBackend) EnvironmentReport {
+func ProbeEnvironment(ctx context.Context, cfg Config, secrets cfgload.Secrets, backend llm.ManagedBackend) EnvironmentReport {
 	sandbox := detectSandbox(ctx, cfg)
-	inference := detectInferenceBackend(ctx, cfg, backend)
+	inference := detectInferenceBackend(ctx, cfg, secrets, backend)
 	manifest := summarizeManifest(cfg.ManifestPath)
-	var workspaceCfg WorkspaceConfig
-	if wcfg, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
+	var workspaceCfg cfgload.RuntimeWorkspaceConfig
+	if wcfg, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 		workspaceCfg = wcfg
 	}
 	return EnvironmentReport{
@@ -136,7 +137,7 @@ func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
 }
 
 // detectInferenceBackend queries the managed backend facade for health + models.
-func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.ManagedBackend) InferenceBackendReport {
+func detectInferenceBackend(ctx context.Context, cfg Config, secrets cfgload.Secrets, backend llm.ManagedBackend) InferenceBackendReport {
 	report := InferenceBackendReport{
 		Provider: cfg.InferenceProvider,
 		Endpoint: cfg.InferenceEndpoint,
@@ -144,7 +145,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.Managed
 	ownedBackend := false
 	if backend == nil {
 		var err error
-		backend, err = newManagedBackend(llm.ProviderConfigFromRuntimeConfig(cfg))
+		backend, err = newManagedBackend(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
 		if err != nil {
 			report.Error = err.Error()
 			report.State = llm.BackendHealthUnhealthy
@@ -363,7 +364,7 @@ func summarizeManifest(path string) ManifestSummary {
 
 // Status collects runtime + environment data for the status view.
 func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
-	env := ProbeEnvironment(ctx, r.Config, r.AgentWorkspace().Backend)
+	env := ProbeEnvironment(ctx, r.Config, r.secrets, r.AgentWorkspace().Backend)
 	snapshot := StatusSnapshot{
 		Environment:  env,
 		PendingHITL:  r.PendingHITL(),

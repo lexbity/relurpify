@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -372,7 +373,7 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 		}
 		return models, nil
 	}
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.rt.Config))
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.rt.Config), r.rt.ProviderSecrets())
 	if err != nil {
 		return nil, err
 	}
@@ -413,10 +414,10 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace not set")
 	}
-	path := manifest.New(workspace).ProvidersFile()
-	profile, err := runtimesvc.LoadProviderConfig(path)
+	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
+	profile, err := cfgload.LoadRuntimeProviderConfig(path)
 	if err != nil {
-		profile = runtimesvc.ProviderConfig{}
+		profile = cfgload.RuntimeProviderConfig{}
 	}
 	if profile.Provider == "" {
 		profile.Provider = strings.TrimSpace(r.rt.Config.InferenceProvider)
@@ -431,7 +432,7 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 		profile.Timeout = "30s"
 	}
 	profile.LastUpdated = time.Now().Unix()
-	if _, err := runtimesvc.SaveProviderConfigWithBackup(path, profile); err != nil {
+	if _, err := cfgload.SaveRuntimeProviderConfigWithBackup(path, profile); err != nil {
 		return err
 	}
 	r.rt.Config.InferenceProvider = profile.Provider
@@ -918,12 +919,12 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("config path not set")
 	}
-	return runtimesvc.SaveWorkspaceConfigWithBackup(path, runtimesvc.WorkspaceConfig{
+	return cfgload.SaveRuntimeWorkspaceConfigWithBackup(path, cfgload.RuntimeWorkspaceConfig{
 		Model:               r.rt.Config.InferenceModel,
 		Provider:            r.rt.Config.InferenceProvider,
 		SandboxBackend:      backend,
 		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
-		AllowedCapabilities: append([]core.CapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
+		AllowedCapabilities: append([]cfgload.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
 		Nexus:               r.rt.WorkspaceConfig.Nexus,
 		NodeRegistration:    r.rt.WorkspaceConfig.NodeRegistration,
 		LastUpdated:         time.Now().Unix(),
@@ -1317,7 +1318,7 @@ func (r *runtimeAdapter) BuildDoctorReport(ctx context.Context) DoctorReport {
 	if r == nil || r.rt == nil {
 		return DoctorReport{}
 	}
-	return runtimesvc.BuildDoctorReport(ctx, r.rt.Config)
+	return runtimesvc.BuildDoctorReport(ctx, r.rt.Config, r.rt.Secrets())
 }
 
 func (r *runtimeAdapter) ReloadWorkspace(ctx context.Context, workspace string) error {

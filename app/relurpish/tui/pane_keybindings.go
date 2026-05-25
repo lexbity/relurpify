@@ -3,13 +3,13 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"gopkg.in/yaml.v3"
 )
 
 type keybindingRuntime interface {
@@ -178,17 +178,12 @@ func (p *KeybindingPane) loadPersistedBindings() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := manifest.New(workspace).KeybindingsFile()
-	data, err := os.ReadFile(path)
+	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "keybindings.yaml")
+	cfg, err := cfgload.LoadRuntimeKeybindingConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
 		}
-		p.status = fmt.Sprintf("load failed: %v", err)
-		return
-	}
-	var cfg runtimesvc.KeybindingConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		p.status = fmt.Sprintf("parse failed: %v", err)
 		return
 	}
@@ -321,13 +316,13 @@ func (p *KeybindingPane) resetAll() {
 }
 
 func (p *KeybindingPane) persistCmd() tea.Cmd {
-	cfg := runtimesvc.KeybindingConfig{Bindings: make([]runtimesvc.KeybindingEntry, 0, len(p.targets))}
+	cfg := cfgload.RuntimeKeybindingConfig{Bindings: make([]cfgload.RuntimeKeybindingEntry, 0, len(p.targets))}
 	workspace := ""
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	for _, target := range p.targets {
-		cfg.Bindings = append(cfg.Bindings, runtimesvc.KeybindingEntry{
+		cfg.Bindings = append(cfg.Bindings, cfgload.RuntimeKeybindingEntry{
 			Action:      target.Action,
 			Keys:        append([]string(nil), target.bindingKeys()...),
 			Scope:       target.Scope,
@@ -340,8 +335,8 @@ func (p *KeybindingPane) persistCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "keybindings save failed: workspace unavailable"}
 		}
-		path := manifest.New(workspace).KeybindingsFile()
-		backup, err := runtimesvc.SaveKeybindingConfigWithBackup(path, cfg)
+		path := filepath.Join(manifest.New(workspace).ConfigRoot(), "keybindings.yaml")
+		backup, err := cfgload.SaveRuntimeKeybindingConfigWithBackup(path, cfg)
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("keybindings save failed: %v", err)}
 		}

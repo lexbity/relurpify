@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,7 +26,6 @@ const (
 	providerFieldProvider providerField = iota
 	providerFieldEndpoint
 	providerFieldModel
-	providerFieldAPIKeyRef
 	providerFieldTimeout
 	providerFieldNativeToolCalling
 )
@@ -33,7 +33,7 @@ const (
 type AIProviderPane struct {
 	runtime aiProviderRuntime
 
-	profile runtimesvc.ProviderConfig
+	profile cfgload.RuntimeProviderConfig
 	models  []llm.ModelInfo
 	status  string
 
@@ -164,8 +164,8 @@ func (p *AIProviderPane) loadProfile() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := manifest.New(workspace).ProvidersFile()
-	loaded, err := runtimesvc.LoadProviderConfig(path)
+	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
+	loaded, err := cfgload.LoadRuntimeProviderConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			p.profile = defaultProviderProfile()
@@ -183,7 +183,7 @@ func (p *AIProviderPane) loadProfile() {
 
 func (p *AIProviderPane) refreshModels() {
 	cfg := p.llmConfig()
-	backend, err := llm.New(cfg)
+	backend, err := llm.New(cfg, llm.ProviderSecrets{})
 	if err != nil {
 		p.status = fmt.Sprintf("backend error: %v", err)
 		p.models = nil
@@ -237,9 +237,6 @@ func (p *AIProviderPane) beginEdit() {
 	case providerFieldModel:
 		p.editLabel = "model"
 		p.editBuf = p.profile.Model
-	case providerFieldAPIKeyRef:
-		p.editLabel = "api key ref"
-		p.editBuf = p.profile.APIKeyRef
 	case providerFieldTimeout:
 		p.editLabel = "timeout"
 		p.editBuf = p.profile.Timeout
@@ -262,8 +259,6 @@ func (p *AIProviderPane) commitEdit() {
 		p.profile.Endpoint = value
 	case providerFieldModel:
 		p.profile.Model = value
-	case providerFieldAPIKeyRef:
-		p.profile.APIKeyRef = value
 	case providerFieldTimeout:
 		if value != "" {
 			if _, err := time.ParseDuration(value); err != nil {
@@ -292,9 +287,9 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "provider save failed: workspace unavailable"}
 		}
-		path := manifest.New(workspace).ProvidersFile()
+		path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
 		profile.LastUpdated = time.Now().Unix()
-		backup, err := runtimesvc.SaveProviderConfigWithBackup(path, profile)
+		backup, err := cfgload.SaveRuntimeProviderConfigWithBackup(path, profile)
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("provider save failed: %v", err)}
 		}
@@ -314,7 +309,7 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 func (p *AIProviderPane) testProviderCmd() tea.Cmd {
 	cfg := p.llmConfig()
 	return func() tea.Msg {
-		backend, err := llm.New(cfg)
+		backend, err := llm.New(cfg, llm.ProviderSecrets{})
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("provider test failed: %v", err)}
 		}
@@ -333,10 +328,6 @@ func (p *AIProviderPane) testProviderCmd() tea.Cmd {
 }
 
 func (p *AIProviderPane) llmConfig() llm.ProviderConfig {
-	apiKey := p.profile.APIKeyRef
-	if strings.HasPrefix(strings.ToLower(apiKey), "env:") {
-		apiKey = os.Getenv(strings.TrimSpace(strings.TrimPrefix(apiKey, "env:")))
-	}
 	timeout := time.Duration(0)
 	if strings.TrimSpace(p.profile.Timeout) != "" {
 		if parsed, err := time.ParseDuration(p.profile.Timeout); err == nil {
@@ -350,7 +341,6 @@ func (p *AIProviderPane) llmConfig() llm.ProviderConfig {
 		Provider:          p.profile.Provider,
 		Endpoint:          p.profile.Endpoint,
 		Model:             p.profile.Model,
-		APIKey:            apiKey,
 		Timeout:           timeout,
 		NativeToolCalling: p.profile.NativeToolCalling,
 	}
@@ -385,7 +375,6 @@ func (p *AIProviderPane) renderConfigPanel() string {
 		fmt.Sprintf("provider: %s", p.profile.Provider),
 		fmt.Sprintf("endpoint: %s", p.profile.Endpoint),
 		fmt.Sprintf("model: %s", p.profile.Model),
-		fmt.Sprintf("api_key_ref: %s", p.profile.APIKeyRef),
 		fmt.Sprintf("timeout: %s", p.profile.Timeout),
 		fmt.Sprintf("native_tool_calling: %t", p.profile.NativeToolCalling),
 	}
@@ -399,8 +388,8 @@ func (p *AIProviderPane) renderConfigPanel() string {
 	return sectionPanel("Configurator", max(20, p.width/2), strings.Join(fields, "\n"))
 }
 
-func defaultProviderProfile() runtimesvc.ProviderConfig {
-	return runtimesvc.ProviderConfig{
+func defaultProviderProfile() cfgload.RuntimeProviderConfig {
+	return cfgload.RuntimeProviderConfig{
 		Provider:          "ollama",
 		Endpoint:          "http://localhost:11434",
 		Model:             "",

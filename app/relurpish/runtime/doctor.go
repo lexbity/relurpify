@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/templates"
@@ -33,7 +34,7 @@ type DoctorReport struct {
 	ConfigExists          bool
 	ManifestExists        bool
 	ModelProfilesExists   bool
-	StarterTemplatesReady  bool
+	StarterTemplatesReady bool
 	ConfigError           string
 	ManifestError         string
 	ModelProfilesError    string
@@ -74,7 +75,7 @@ func (r DoctorReport) Ready() bool {
 
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
-func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
+func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets) DoctorReport {
 	paths := manifest.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
@@ -86,7 +87,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 	if _, err := os.Stat(cfg.ConfigPath); err == nil {
 		report.ConfigExists = true
-		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err != nil {
+		if loaded, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err != nil {
 			report.ConfigError = err.Error()
 		} else if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
 			cfg.SandboxBackend = loaded.SandboxBackend
@@ -111,14 +112,26 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 			}
 		}
 	}
-	report.ProtectedPaths = manifest.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath)
+	report.ProtectedPaths = manifest.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, cfgload.DefaultWorkspaceConfigPath(cfg.Workspace))
 
 	resolver := templates.NewResolver()
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
 		if starterManifest, err := resolver.ResolveWorkspaceManifestTemplate(); err == nil {
-			report.StarterTemplatesReady = true
-			_ = starterConfig
-			_ = starterManifest
+			sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
+			shellTemplate, shellErr := resolver.ResolveWorkspaceSecurityTemplate("shell")
+			localToolTemplate, localToolErr := resolver.ResolveWorkspaceSecurityTemplate("localtool")
+			ingestionTemplate, ingestionErr := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
+			if sandboxErr == nil && shellErr == nil && localToolErr == nil && ingestionErr == nil {
+				report.StarterTemplatesReady = true
+				_ = starterConfig
+				_ = starterManifest
+				_ = sandboxTemplate
+				_ = shellTemplate
+				_ = localToolTemplate
+				_ = ingestionTemplate
+			} else {
+				report.StarterTemplatesError = firstNonEmpty(errorString(sandboxErr), errorString(shellErr), errorString(localToolErr), errorString(ingestionErr))
+			}
 		} else {
 			report.StarterTemplatesError = err.Error()
 		}
@@ -127,16 +140,18 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 
 	var env EnvironmentReport
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{
+		APIKey: secrets.LLMAPIKey,
+	})
 	if err != nil {
-		env = ProbeEnvironment(ctx, cfg, nil)
+		env = ProbeEnvironment(ctx, cfg, secrets, nil)
 		if env.Inference.Error == "" {
 			env.Inference.Error = err.Error()
 		}
 		env.Inference.State = llm.BackendHealthUnhealthy
 	} else {
 		defer backend.Close()
-		env = ProbeEnvironment(ctx, cfg, backend)
+		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
 	if reg, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir()); err == nil {
@@ -158,7 +173,6 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		InferenceProvider:          cfg.InferenceProvider,
 		InferenceEndpoint:          cfg.InferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
-		InferenceAPIKey:            cfg.InferenceAPIKey,
 		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
 		ConfigPath:                 cfg.ConfigPath,
 		AgentsDir:                  cfg.AgentsDir,
@@ -172,7 +186,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		SandboxBackend:             cfg.SandboxBackend,
 		Sandbox:                    cfg.Sandbox,
 	}
-	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg, nil)
+	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
 	var deps []DependencyStatus
 	for _, r := range ayenitdResults {
 		deps = append(deps, DependencyStatus{
@@ -243,20 +257,57 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve workspace manifest template: %w", err)
 	}
-	if err := copyTemplateFile(configTemplate, cfg.ConfigPath, cfg.Workspace, overwrite); err != nil {
+	sandboxTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
+	if err != nil {
+		return fmt.Errorf("resolve sandbox security template: %w", err)
+	}
+	shellTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("shell")
+	if err != nil {
+		return fmt.Errorf("resolve shell security template: %w", err)
+	}
+	localToolTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("localtool")
+	if err != nil {
+		return fmt.Errorf("resolve localtool security template: %w", err)
+	}
+	ingestionTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
+	if err != nil {
+		return fmt.Errorf("resolve ingestion security template: %w", err)
+	}
+	workspaceConfigPath := cfgload.DefaultWorkspaceConfigPath(cfg.Workspace)
+	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
 		return err
 	}
 	if err := copyTemplateFile(manifestTemplate, cfg.ManifestPath, cfg.Workspace, overwrite); err != nil {
 		return err
 	}
+	securityDir := filepath.Join(paths.ConfigRoot(), "security")
+	for _, dir := range []string{securityDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	if err := copyTemplateFile(sandboxTemplate, filepath.Join(securityDir, "sandbox.policy.yaml"), cfg.Workspace, overwrite); err != nil {
+		return err
+	}
+	if err := copyTemplateFile(shellTemplate, filepath.Join(securityDir, "shell.policy.yaml"), cfg.Workspace, overwrite); err != nil {
+		return err
+	}
+	if err := copyTemplateFile(localToolTemplate, filepath.Join(securityDir, "localtool.policy.yaml"), cfg.Workspace, overwrite); err != nil {
+		return err
+	}
+	if err := copyTemplateFile(ingestionTemplate, filepath.Join(securityDir, "workspaceingestion.policy.yaml"), cfg.Workspace, overwrite); err != nil {
+		return err
+	}
+	stateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
 		paths.AgentsDir(),
 		paths.SkillsDir(),
-		paths.LogsDir(),
-		paths.TelemetryDir(),
-		paths.MemoryDir(),
-		paths.SessionsDir(),
-		paths.TestRunsDir(),
+		stateDir,
+		filepath.Join(stateDir, "logs"),
+		filepath.Join(stateDir, "telemetry"),
+		filepath.Join(stateDir, "memory"),
+		filepath.Join(stateDir, "sessions"),
+		filepath.Join(stateDir, "test_run"),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
@@ -351,6 +402,13 @@ func summarizeManifestPolicy(m *manifest.AgentManifest) string {
 		parts = append(parts, fmt.Sprintf("tool-calling=%s", m.Spec.Agent.ResolveToolCallingIntent()))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 var execLookPath = func(file string) (string, error) {

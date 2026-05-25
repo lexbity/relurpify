@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
@@ -11,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -146,10 +148,10 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 		ctx = context.Background()
 	}
 	if current == nil {
-		return New(ctx, ConfigForWorkspace(Config{}, workspace))
+		return New(ctx, ConfigForWorkspace(Config{}, workspace), cfgload.Secrets{})
 	}
 	cfg := ConfigForWorkspace(current.Config, workspace)
-	newRT, err := New(ctx, cfg)
+	newRT, err := New(ctx, cfg, current.secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -166,13 +168,17 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg := current
 	cfg.Workspace = workspace
 	paths := manifest.New(workspace)
-	cfg.ManifestPath = paths.ManifestFile()
+	agentName := cfg.AgentName
+	if agentName == "" {
+		agentName = "coding"
+	}
+	cfg.ManifestPath = filepath.Join(paths.AgentsDir(), agentName+".yaml")
 	cfg.AgentsDir = paths.AgentsDir()
-	cfg.MemoryPath = paths.MemoryDir()
-	cfg.LogPath = paths.LogFile("relurpish.log")
-	cfg.TelemetryPath = paths.TelemetryFile("")
-	cfg.EventsPath = paths.EventsFile()
-	cfg.ConfigPath = paths.ConfigFile()
+	cfg.MemoryPath = cfgload.DefaultWorkspaceStateMemoryDir(workspace)
+	cfg.LogPath = filepath.Join(cfgload.DefaultWorkspaceStateLogsDir(workspace), "relurpish.log")
+	cfg.TelemetryPath = filepath.Join(cfgload.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
+	cfg.EventsPath = cfgload.DefaultWorkspaceStateEventsFile(workspace)
+	cfg.ConfigPath = cfgload.DefaultWorkspaceConfigPath(workspace)
 	return cfg
 }
 
@@ -182,7 +188,7 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 // place before the runtime is created. The returned report reflects the final
 // post-bootstrap state used to decide whether the shell should start locked in
 // Doctor mode or auto-promote to Euclo chat.
-func BootstrapStartupState(ctx context.Context, cfg Config) (StartupState, error) {
+func BootstrapStartupState(ctx context.Context, cfg Config, secrets cfgload.Secrets) (StartupState, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -190,7 +196,7 @@ func BootstrapStartupState(ctx context.Context, cfg Config) (StartupState, error
 		ActiveAgent: "euclo",
 		ActiveTab:   "chat",
 	}
-	report := BuildDoctorReport(ctx, cfg)
+	report := BuildDoctorReport(ctx, cfg, secrets)
 	if report.NeedsInitialization() {
 		if err := InitializeWorkspaceFromTemplates(cfg, false); err != nil {
 			state.Report = report
@@ -199,7 +205,7 @@ func BootstrapStartupState(ctx context.Context, cfg Config) (StartupState, error
 			state.ActiveTab = "doctor"
 			return state, err
 		}
-		report = BuildDoctorReport(ctx, cfg)
+		report = BuildDoctorReport(ctx, cfg, secrets)
 	}
 	state.Report = report
 	if report.HasBlockingIssues() {

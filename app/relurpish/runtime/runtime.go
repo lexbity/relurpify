@@ -23,6 +23,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
@@ -36,6 +38,7 @@ import (
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
@@ -55,9 +58,10 @@ type Runtime struct {
 	SearchEngine      *search.SearchEngine
 	AgentLifecycle    agentlifecycle.Repository
 	Delegations       *fauthorization.DelegationManager
-	WorkspaceConfig   WorkspaceConfig
+	WorkspaceConfig   cfgload.RuntimeWorkspaceConfig
 	NexusNodeProvider core.NodeProvider
 	NexusClient       *NexusClient
+	secrets           cfgload.Secrets
 
 	hitlCancel  func()
 	nexusCancel func()
@@ -77,23 +81,58 @@ func (r *Runtime) AgentWorkspace() *agentenv.Workspace {
 	return r.Workspace
 }
 
+// ProviderSecrets returns env-only provider credentials for backend construction.
+func (r *Runtime) ProviderSecrets() llm.ProviderSecrets {
+	if r == nil {
+		return llm.ProviderSecrets{}
+	}
+	return llm.ProviderSecrets{APIKey: r.secrets.LLMAPIKey}
+}
+
+// Secrets returns the env-only runtime secret set.
+func (r *Runtime) Secrets() cfgload.Secrets {
+	if r == nil {
+		return cfgload.Secrets{}
+	}
+	return r.secrets
+}
+
 type MCPElicitationHandler interface {
 	HandleMCPElicitation(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error)
 }
 
 // New builds a fruntime for the TUI and status surfaces.
-func New(ctx context.Context, cfg Config) (*Runtime, error) {
+func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, error) {
+	envOverrides := cfgload.LoadEnvOverrides(os.Environ())
+	if envOverrides.WorkspaceRoot != "" {
+		cfg.Workspace = envOverrides.WorkspaceRoot
+	}
 	if err := cfg.Normalize(); err != nil {
 		return nil, err
+	}
+	if envOverrides.Model != "" {
+		cfg.InferenceModel = envOverrides.Model
+	}
+	if envOverrides.SandboxBackend != "" {
+		cfg.SandboxBackend = envOverrides.SandboxBackend
+	}
+	if envOverrides.OllamaHost != "" {
+		cfg.InferenceEndpoint = envOverrides.OllamaHost
+	}
+	if envOverrides.LogLevel != "" {
+		cfg.RecordingMode = envOverrides.LogLevel
+	}
+	if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+		return nil, report
 	}
 
 	// Load workspace YAML to get AllowedCapabilities and Nexus config before
 	// calling ayenitd.Open — Open will handle model/agent-name overrides
 	// internally, but AllowedCapabilities is a runtime-level concern.
-	var workspaceCfg WorkspaceConfig
+	var workspaceCfg cfgload.RuntimeWorkspaceConfig
 	var allowedCapabilities []core.CapabilitySelector
 	if cfg.ConfigPath != "" {
-		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
+		if loaded, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
 			if workspaceCfg.Provider != "" && cfg.InferenceProvider == "" {
 				cfg.InferenceProvider = workspaceCfg.Provider
@@ -107,32 +146,11 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 			if len(workspaceCfg.Agents) > 0 && cfg.AgentName == "" {
 				cfg.AgentName = workspaceCfg.Agents[0]
 			}
-			allowedCapabilities = append(allowedCapabilities, workspaceCfg.AllowedCapabilities...)
+			allowedCapabilities = append(allowedCapabilities, convertRuntimeCapabilitySelectors(workspaceCfg.AllowedCapabilities)...)
 		}
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
-	if providerCfgPath := manifest.New(cfg.Workspace).ProvidersFile(); providerCfgPath != "" {
-		if loaded, err := LoadProviderConfig(providerCfgPath); err == nil {
-			if loaded.Provider != "" {
-				cfg.InferenceProvider = loaded.Provider
-			}
-			if loaded.Endpoint != "" {
-				cfg.InferenceEndpoint = loaded.Endpoint
-			}
-			if loaded.Model != "" {
-				cfg.InferenceModel = loaded.Model
-			}
-			if loaded.APIKeyRef != "" && cfg.InferenceAPIKey == "" {
-				cfg.InferenceAPIKey = resolveAPIKeyRef(loaded.APIKeyRef)
-			}
-			if loaded.Timeout != "" {
-				if timeout, err := time.ParseDuration(loaded.Timeout); err == nil && timeout > 0 {
-					cfg.HITLTimeout = timeout
-				}
-			}
-			cfg.InferenceNativeToolCalling = loaded.NativeToolCalling
-		}
-	}
+
 
 	// Delegate all workspace initialization to framework/agentenv.Open().
 	ws, err := agentenv.Open(ctx, agentenv.WorkspaceConfig{
@@ -141,7 +159,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		InferenceProvider:          cfg.InferenceProvider,
 		InferenceEndpoint:          cfg.InferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
-		InferenceAPIKey:            cfg.InferenceAPIKey,
 		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
 		ConfigPath:                 cfg.ConfigPath,
 		AgentsDir:                  cfg.AgentsDir,
@@ -158,7 +175,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		EventLogFactory: func(path string) (event.Log, error) {
 			return nexusdb.NewSQLiteEventLog(path)
 		},
-	}, euclo.GetRegistrationFuncs())
+	}, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +268,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		WorkspaceConfig:      workspaceCfg,
 		Delegations:          fauthorization.NewDelegationManager(),
 		interactionEnvelopes: make(map[string]*contextdata.Envelope),
+		secrets:              secrets,
 	}
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)

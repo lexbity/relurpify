@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -31,9 +31,9 @@ func TestKeybindingConflictEngine(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir keybinding dir: %v", err)
 	}
-	initial := runtimesvc.KeybindingConfig{Bindings: make([]runtimesvc.KeybindingEntry, 0)}
+	initial := cfgload.RuntimeKeybindingConfig{Bindings: make([]cfgload.RuntimeKeybindingEntry, 0)}
 	for _, target := range buildKeybindingTargets() {
-		initial.Bindings = append(initial.Bindings, runtimesvc.KeybindingEntry{
+		initial.Bindings = append(initial.Bindings, cfgload.RuntimeKeybindingEntry{
 			Action:      target.Action,
 			Keys:        append([]string(nil), target.DefaultKeys...),
 			Scope:       target.Scope,
@@ -42,7 +42,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 			DefaultKeys: append([]string(nil), target.DefaultKeys...),
 		})
 	}
-	if err := runtimesvc.SaveYAML(path, initial); err != nil {
+	if err := cfgload.SaveYAML(path, initial); err != nil {
 		t.Fatalf("seed keybindings: %v", err)
 	}
 

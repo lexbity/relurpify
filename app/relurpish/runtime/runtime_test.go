@@ -24,15 +24,14 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 		InferenceProvider: "ollama",
 		InferenceEndpoint: "http://localhost:11434",
 		InferenceModel:    "codex",
-		InferenceAPIKey:   "secret",
 		SandboxBackend:    "docker",
 		RecordingMode:     "on",
 		ManifestPath:      "/old/workspace/manifest.yaml",
 		AgentsDir:         "/old/workspace/relurpify_cfg/agents",
-		MemoryPath:        "/old/workspace/relurpify_cfg/memory",
-		LogPath:           "/old/workspace/relurpify_cfg/logs/relurpish.log",
-		TelemetryPath:     "/old/workspace/relurpify_cfg/telemetry",
-		EventsPath:        "/old/workspace/relurpify_cfg/events.jsonl",
+		MemoryPath:        "/old/workspace/.relurpify_state/memory",
+		LogPath:           "/old/workspace/.relurpify_state/logs/relurpish.log",
+		TelemetryPath:     "/old/workspace/.relurpify_state/telemetry/telemetry.jsonl",
+		EventsPath:        "/old/workspace/.relurpify_state/events.db",
 		ConfigPath:        "/old/workspace/relurpify_cfg/config.yaml",
 	}
 
@@ -49,11 +48,14 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 	if cfg.ConfigPath == current.ConfigPath || cfg.ManifestPath == current.ManifestPath {
 		t.Fatalf("workspace paths were not rebound: %#v", cfg)
 	}
-	if want := "/new/workspace/relurpify_cfg/config.yaml"; cfg.ConfigPath != want {
+	if want := "/new/workspace/relurpify_cfg/workspace.yaml"; cfg.ConfigPath != want {
 		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, want)
 	}
-	if want := "/new/workspace/relurpify_cfg/agent.yaml"; cfg.ManifestPath != want {
+	if want := "/new/workspace/relurpify_cfg/agents/euclo.yaml"; cfg.ManifestPath != want {
 		t.Fatalf("manifest path = %q, want %q", cfg.ManifestPath, want)
+	}
+	if want := "/new/workspace/.relurpify_state/logs/relurpish.log"; cfg.LogPath != want {
+		t.Fatalf("log path = %q, want %q", cfg.LogPath, want)
 	}
 }
 
