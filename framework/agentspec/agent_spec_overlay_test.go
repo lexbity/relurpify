@@ -95,6 +95,36 @@ func TestAgentSpecOverlayFromSpecClonesToolCallingIntent(t *testing.T) {
 	require.Equal(t, ToolCallingIntentPreferPrompt, spec.ToolCallingIntent)
 }
 
+func TestAgentSpecOverlayFromSpecClonesCapabilities(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		Capabilities: AgentCapabilitiesSpec{
+			Relurpic: []string{"euclo:cap.test_run", "euclo:cap.ast_query"},
+		},
+	}
+
+	overlay := AgentSpecOverlayFromSpec(spec)
+	require.NotNil(t, overlay.Capabilities)
+	overlay.Capabilities.Relurpic[0] = "mutated"
+
+	require.Equal(t, "euclo:cap.test_run", spec.Capabilities.Relurpic[0])
+}
+
+func TestMergeAgentSpecsReplacesCapabilities(t *testing.T) {
+	base := &AgentRuntimeSpec{
+		Capabilities: AgentCapabilitiesSpec{
+			Relurpic: []string{"euclo:cap.test_run"},
+		},
+	}
+
+	merged := MergeAgentSpecs(base, AgentSpecOverlay{
+		Capabilities: &AgentCapabilitiesSpec{
+			Relurpic: []string{"euclo:cap.ast_query", "euclo:cap.code_review"},
+		},
+	})
+
+	require.Equal(t, []string{"euclo:cap.ast_query", "euclo:cap.code_review"}, merged.Capabilities.Relurpic)
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }

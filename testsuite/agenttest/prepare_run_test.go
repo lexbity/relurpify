@@ -14,7 +14,8 @@ func TestPrepareRunWritesDescriptor(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: euclo
@@ -71,7 +72,8 @@ func TestPrepareRunMaterializesCaseSetupFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: euclo

@@ -4,12 +4,36 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
+
+var testRelurpicCapabilities = []string{
+	"euclo:cap.test_run",
+	"euclo:cap.ast_query",
+	"euclo:cap.symbol_trace",
+	"euclo:cap.call_graph",
+	"euclo:cap.blame_trace",
+	"euclo:cap.bisect",
+	"euclo:cap.code_review",
+	"euclo:cap.diff_summary",
+	"euclo:cap.layer_check",
+	"euclo:cap.targeted_refactor",
+	"euclo:cap.rename_symbol",
+	"euclo:cap.api_compat",
+	"euclo:cap.boundary_report",
+	"euclo:cap.coverage_check",
+}
 
 func TestAgentInitializeDoesNotPanic(t *testing.T) {
 	// Create a minimal WorkspaceEnvironment
 	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
 		Registry: capability.NewCapabilityRegistry(),
 	}
 

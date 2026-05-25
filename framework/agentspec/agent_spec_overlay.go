@@ -9,6 +9,7 @@ type AgentSpecOverlay struct {
 	Version               *string                         `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt                *string                         `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	ModelOverlay          *AgentModelConfigOverlay        `yaml:"model,omitempty" json:"model,omitempty"`
+	Capabilities          *AgentCapabilitiesSpec          `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
 	AllowedCapabilities   []CapabilitySelector            `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
 	ToolExecutionPolicy   map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
 	CapabilityPolicies    []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
@@ -85,6 +86,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		ASTIndex:      &spec.Search.ASTIndex,
 	}
 	skillConfig := cloneAgentSkillConfig(spec.SkillConfig)
+	capabilities := cloneAgentCapabilitiesSpec(&spec.Capabilities)
 	metadata := spec.Metadata
 	intent := resolveToolCallingIntent(spec.ToolCallingIntent, spec.NativeToolCalling)
 	toolCalling := spec.NativeToolCalling
@@ -100,6 +102,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		Version:               &version,
 		Prompt:                &prompt,
 		ModelOverlay:          &modelOverlay,
+		Capabilities:          &capabilities,
 		AllowedCapabilities:   cloneCapabilitySelectors(spec.AllowedCapabilities),
 		ToolExecutionPolicy:   cloneToolPolicies(spec.ToolExecutionPolicy),
 		CapabilityPolicies:    cloneCapabilityPolicies(spec.CapabilityPolicies),
@@ -138,6 +141,9 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	}
 	if overlay.Prompt != nil {
 		spec.Prompt = *overlay.Prompt
+	}
+	if overlay.Capabilities != nil {
+		spec.Capabilities = cloneAgentCapabilitiesSpec(overlay.Capabilities)
 	}
 	if overlay.AllowedCapabilities != nil {
 		spec.AllowedCapabilities = mergeCapabilitySelectors(spec.AllowedCapabilities, overlay.AllowedCapabilities)
@@ -244,6 +250,7 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	}
 	clone := *spec
 	clone.AllowedCapabilities = cloneCapabilitySelectors(spec.AllowedCapabilities)
+	clone.Capabilities = cloneAgentCapabilitiesSpec(&spec.Capabilities)
 	clone.ToolExecutionPolicy = cloneToolPolicies(spec.ToolExecutionPolicy)
 	clone.CapabilityPolicies = cloneCapabilityPolicies(spec.CapabilityPolicies)
 	clone.ExposurePolicies = cloneExposurePolicies(spec.ExposurePolicies)
@@ -563,6 +570,15 @@ func cloneRuntimeSafetySpec(spec *RuntimeSafetySpec) *RuntimeSafetySpec {
 	}
 	clone := *spec
 	return &clone
+}
+
+func cloneAgentCapabilitiesSpec(input *AgentCapabilitiesSpec) AgentCapabilitiesSpec {
+	out := AgentCapabilitiesSpec{}
+	if input == nil {
+		return out
+	}
+	out.Relurpic = append([]string{}, input.Relurpic...)
+	return out
 }
 
 func cloneAgentSkillConfig(input AgentSkillConfig) AgentSkillConfig {

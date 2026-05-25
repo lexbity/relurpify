@@ -34,6 +34,5 @@ type SourceSummary struct {
 
 // ResolveOptions provides optional inputs layered on top of the raw
 type ResolveOptions struct {
-	GlobalConfig  *GlobalConfig
 	AgentOverlays []agentspec.AgentSpecOverlay
 }

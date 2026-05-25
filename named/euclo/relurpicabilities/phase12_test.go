@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -73,8 +74,21 @@ func TestPhase12Descriptors(t *testing.T) {
 }
 
 func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{Registry: capability.NewCapabilityRegistry()}
-	require.NoError(t, RegisterAll(env))
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
+					"euclo:cap.targeted_refactor",
+					"euclo:cap.rename_symbol",
+					"euclo:cap.api_compat",
+					"euclo:cap.boundary_report",
+					"euclo:cap.coverage_check",
+				}},
+			},
+		},
+		Registry: capability.NewCapabilityRegistry(),
+	}
+	require.NoError(t, RegisterAll(env, env.Config.AgentSpec.Capabilities.Relurpic))
 	for _, id := range []string{
 		"euclo:cap.targeted_refactor",
 		"euclo:cap.rename_symbol",

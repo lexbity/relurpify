@@ -25,7 +25,10 @@ func GetRegistrationFuncs() agentenv.AgentRegistrationFuncs {
 // Relurpic capabilities are subagent-backed and caller-owned: Euclo registers
 // them when it receives the WorkspaceEnvironment.
 func registerEucloCapabilities(env agentenv.WorkspaceEnvironment) error {
-	if err := relurpicabilities.RegisterAll(env); err != nil {
+	if env.Config == nil || env.Config.AgentSpec == nil {
+		return fmt.Errorf("agent spec required for relurpic capability registration")
+	}
+	if err := relurpicabilities.RegisterAll(env, env.Config.AgentSpec.Capabilities.Relurpic); err != nil {
 		return fmt.Errorf("register relurpic capabilities: %w", err)
 	}
 	return nil

@@ -2,7 +2,7 @@ package shell
 
 import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-		platformsqlite "codeburg.org/lexbit/relurpify/platform/db/sqlite"
+	platformsqlite "codeburg.org/lexbit/relurpify/platform/db/sqlite"
 	platformgo "codeburg.org/lexbit/relurpify/platform/lang/go"
 	platformjs "codeburg.org/lexbit/relurpify/platform/lang/js"
 	platformpython "codeburg.org/lexbit/relurpify/platform/lang/python"
@@ -20,12 +20,24 @@ import (
 )
 
 // CommandLineTools exposes the default Unix-style CLI helpers.
-func CommandLineTools(basePath string, runner contracts.CommandRunner) []contracts.Tool {
-	return CommandLineToolsWithTelemetry(basePath, runner, nil)
+func CommandLineTools(basePath string, runner contracts.CommandRunner, registry contracts.ToolRegistry) []contracts.Tool {
+	return CommandLineToolsWithTelemetry(basePath, runner, registry, nil)
 }
 
 // CommandLineToolsWithTelemetry exposes the default Unix-style CLI helpers and emits optional telemetry.
-func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunner, telemetry shelltelemetry.Sink) []contracts.Tool {
+func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunner, registry contracts.ToolRegistry, telemetry shelltelemetry.Sink) []contracts.Tool {
+	allowed := make(map[string]contracts.ToolManifest)
+	if registry != nil {
+		tools := registry.ListTools()
+		allowed = make(map[string]contracts.ToolManifest, len(tools))
+		for _, manifest := range tools {
+			name := contracts.NormalizeToolName(manifest.Name)
+			if name == "" {
+				continue
+			}
+			allowed[name] = manifest
+		}
+	}
 	sourceGroups := [][]contracts.Tool{
 		clitext.Tools(basePath),
 		clifileops.Tools(basePath),
@@ -40,6 +52,9 @@ func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunn
 	for _, group := range sourceGroups {
 		for _, tool := range group {
 			name := catalog.NormalizeName(tool.Name())
+			if _, ok := allowed[name]; !ok {
+				continue
+			}
 			if _, ok := seen[name]; ok {
 				continue
 			}
@@ -71,15 +86,21 @@ func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunn
 		platformsqlite.NewSQLiteIntegrityCheckTool(basePath),
 	} {
 		name := catalog.NormalizeName(tool.Name())
+		if _, ok := allowed[name]; !ok {
+			continue
+		}
 		if _, ok := seen[name]; ok {
 			continue
 		}
 		seen[name] = struct{}{}
 		res = append(res, tool)
 	}
-	if cat := ToolCatalog(); cat != nil {
+	if cat := ToolCatalog(registry); cat != nil {
 		for _, tool := range shellquery.ToolsWithTelemetry(cat, telemetry) {
 			name := catalog.NormalizeName(tool.Name())
+			if _, ok := allowed[name]; !ok {
+				continue
+			}
 			if _, ok := seen[name]; ok {
 				continue
 			}
@@ -97,34 +118,30 @@ func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunn
 }
 
 // CatalogEntries returns the current shell family catalog in deterministic order.
-func CatalogEntries() []catalog.ToolCatalogEntry {
-	families := [][]catalog.ToolCatalogEntry{
-		clitext.CatalogEntries(),
-		clifileops.CatalogEntries(),
-		clisystem.CatalogEntries(),
-		clibuild.CatalogEntries(),
-		cliarchive.CatalogEntries(),
-		clinetwork.CatalogEntries(),
-		clischeduler.CatalogEntries(),
-	}
+func CatalogEntries(registry contracts.ToolRegistry) []catalog.ToolCatalogEntry {
 	seen := make(map[string]struct{})
 	var entries []catalog.ToolCatalogEntry
-	for _, family := range families {
-		for _, entry := range family {
-			if _, ok := seen[entry.Name]; ok {
-				continue
-			}
-			seen[entry.Name] = struct{}{}
-			entries = append(entries, entry)
+	if registry == nil {
+		return entries
+	}
+	for _, manifest := range registry.ListTools() {
+		entry := catalog.EntryFromManifest(manifest)
+		if entry.Name == "" {
+			continue
 		}
+		if _, ok := seen[entry.Name]; ok {
+			continue
+		}
+		seen[entry.Name] = struct{}{}
+		entries = append(entries, entry)
 	}
 	return entries
 }
 
 // ToolCatalog builds a canonical catalog from the current shell registry.
-func ToolCatalog() *catalog.ToolCatalog {
+func ToolCatalog(registry contracts.ToolRegistry) *catalog.ToolCatalog {
 	cat := catalog.NewToolCatalog()
-	for _, entry := range CatalogEntries() {
+	for _, entry := range CatalogEntries(registry) {
 		_ = cat.Register(entry)
 	}
 	return cat

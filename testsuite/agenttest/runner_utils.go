@@ -38,7 +38,7 @@ func fallbackManifestPath(manifestPath, workspace string) string {
 	}
 	paths := manifest.New(workspace)
 	candidates := []string{
-		paths.ManifestFile(),
+		filepath.Join(paths.ConfigRoot(), "agent.manifest.yaml"),
 	}
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate); err == nil {

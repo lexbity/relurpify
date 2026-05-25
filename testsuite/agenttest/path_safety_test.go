@@ -4,7 +4,6 @@
 package agenttest
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -57,43 +56,4 @@ func TestResolveCaseExecutionRejectsEscapingTapePath(t *testing.T) {
 	}
 }
 
-func TestResolveBrowserFixtureFileRejectsEscapingTargetWorkspace(t *testing.T) {
-	targetWorkspace := t.TempDir()
-	workspace := t.TempDir()
-	outsideDir := t.TempDir()
-	outsideFile := filepath.Join(outsideDir, "page.html")
-	if err := os.WriteFile(outsideFile, []byte("outside"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
-	suite := &Suite{
-		SourcePath: filepath.Join(targetWorkspace, "suite.yaml"),
-	}
-	if _, err := resolveBrowserFixtureFile(suite, targetWorkspace, workspace, outsideFile); err == nil {
-		t.Fatal("expected fixture outside target workspace to fail")
-	}
-}
-
-func TestResolveBrowserFixtureFileRejectsEscapingSuiteRelativePath(t *testing.T) {
-	targetWorkspace := t.TempDir()
-	workspace := t.TempDir()
-	suiteDir := filepath.Join(targetWorkspace, "testsuite", "agenttests")
-	if err := os.MkdirAll(suiteDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	outsideDir := filepath.Join(targetWorkspace, "fixtures")
-	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	outsideFile := filepath.Join(outsideDir, "page.html")
-	if err := os.WriteFile(outsideFile, []byte("outside"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	suite := &Suite{
-		SourcePath: filepath.Join(suiteDir, "suite.yaml"),
-	}
-	if _, err := resolveBrowserFixtureFile(suite, targetWorkspace, workspace, "../fixtures/page.html"); err == nil {
-		t.Fatal("expected suite-relative fixture traversal to fail")
-	}
-}

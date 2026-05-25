@@ -112,6 +112,41 @@ func TestValidateSkillCapabilitySelectorAcceptsRuntimeFamilyField(t *testing.T) 
 	require.NoError(t, err)
 }
 
+func TestAgentRuntimeSpecValidateAcceptsRelurpicCapabilities(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		Mode: AgentModePrimary,
+		Model: AgentModelConfig{
+			Provider: "ollama",
+			Name:     "test",
+		},
+		Capabilities: AgentCapabilitiesSpec{
+			Relurpic: []string{
+				"euclo:cap.test_run",
+				"euclo:cap.ast_query",
+			},
+		},
+	}
+
+	require.NoError(t, spec.Validate())
+}
+
+func TestAgentRuntimeSpecValidateRejectsInvalidRelurpicCapabilityID(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		Mode: AgentModePrimary,
+		Model: AgentModelConfig{
+			Provider: "ollama",
+			Name:     "test",
+		},
+		Capabilities: AgentCapabilitiesSpec{
+			Relurpic: []string{" invalid"},
+		},
+	}
+
+	err := spec.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "capabilities.relurpic")
+}
+
 func TestSkillSelectorMatchesDescriptor(t *testing.T) {
 	desc := CapabilityDescriptor{
 		ID:            "relurpic:planner.plan",

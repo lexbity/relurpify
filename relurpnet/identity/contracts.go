@@ -42,10 +42,10 @@ type PrincipalResolver interface {
 	ResolvePrincipal(ctx context.Context, token string) (ConnectionPrincipal, error)
 }
 
-// StaticTokenBinding describes a configured bearer token that should resolve
-// without consulting the persistent token store.
+// StaticTokenBinding describes a configured bearer token hash that should
+// resolve without consulting the persistent token store.
 type StaticTokenBinding struct {
-	Token       string
+	TokenHash   string
 	TenantID    string
 	Role        string
 	SubjectKind SubjectKind

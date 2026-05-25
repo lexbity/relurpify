@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"gopkg.in/yaml.v3"
 )
 
 // SkillManifest defines a reusable skill package.
@@ -21,25 +21,17 @@ type SkillManifest struct {
 
 // SkillSpec defines prompt snippets, tool allowances, execution policies, and resource paths.
 type SkillSpec struct {
-	Requires                 SkillRequiresSpec                              `yaml:"requires,omitempty" json:"requires,omitempty"`
-	PromptSnippets           []string                                       `yaml:"prompt_snippets,omitempty" json:"prompt_snippets,omitempty"`
-	AllowedCapabilities      []agentspec.CapabilitySelector                 `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
-	ToolExecutionPolicy      map[string]agentspec.ToolPolicy                `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
-	CapabilityPolicies       []agentspec.CapabilityPolicy                   `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
-	InsertionPolicies        []agentspec.CapabilityInsertionPolicy          `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
-	SessionPolicies          []agentspec.SessionPolicy                      `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
-	GlobalPolicies           map[string]agentspec.AgentPermissionLevel      `yaml:"policies,omitempty" json:"policies,omitempty"`
-	ProviderPolicies         map[string]agentspec.ProviderPolicy            `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
-	Providers                []core.ProviderConfig                          `yaml:"providers,omitempty" json:"providers,omitempty"`
-	ResourcePaths            SkillResourceSpec                              `yaml:"resource_paths,omitempty" json:"resource_paths,omitempty"`
-	PhaseCapabilities        map[string][]string                            `yaml:"phase_capabilities,omitempty" json:"phase_capabilities,omitempty"`
-	PhaseCapabilitySelectors map[string][]agentspec.SkillCapabilitySelector `yaml:"phase_capability_selectors,omitempty" json:"phase_capability_selectors,omitempty"`
-	Verification             SkillVerificationSpec                          `yaml:"verification,omitempty" json:"verification,omitempty"`
-	Recovery                 SkillRecoverySpec                              `yaml:"recovery,omitempty" json:"recovery,omitempty"`
-	Planning                 SkillPlanningSpec                              `yaml:"planning,omitempty" json:"planning,omitempty"`
-	Review                   SkillReviewSpec                                `yaml:"review,omitempty" json:"review,omitempty"`
-	ContextHints             SkillContextHintsSpec                          `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
-	ContextContributions     SkillContextContributionsSpec                  `yaml:"context_contributions,omitempty" json:"context_contributions,omitempty"`
+	Requires            SkillRequiresSpec                     `yaml:"requires,omitempty" json:"requires,omitempty"`
+	PromptSnippets      []string                              `yaml:"prompt_snippets,omitempty" json:"prompt_snippets,omitempty"`
+	AllowedCapabilities  []agentspec.CapabilitySelector        `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
+	ToolExecutionPolicy  map[string]agentspec.ToolPolicy       `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
+	CapabilityPolicies   []agentspec.CapabilityPolicy          `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
+	InsertionPolicies    []agentspec.CapabilityInsertionPolicy `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
+	SessionPolicies      []agentspec.SessionPolicy             `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
+	GlobalPolicies       map[string]agentspec.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
+	ProviderPolicies     map[string]agentspec.ProviderPolicy    `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
+	Providers            []core.ProviderConfig                 `yaml:"providers,omitempty" json:"providers,omitempty"`
+	ResourcePaths        SkillResourceSpec                     `yaml:"resource_paths,omitempty" json:"resource_paths,omitempty"`
 }
 
 // SkillRequiresSpec declares binary prerequisites for a skill.
@@ -54,61 +46,6 @@ type SkillResourceSpec struct {
 	Templates []string `yaml:"templates,omitempty" json:"templates,omitempty"`
 }
 
-type SkillVerificationSpec struct {
-	SuccessTools               []string                            `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
-	SuccessCapabilitySelectors []agentspec.SkillCapabilitySelector `yaml:"success_capability_selectors,omitempty" json:"success_capability_selectors,omitempty"`
-	StopOnSuccess              bool                                `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
-}
-
-type SkillRecoverySpec struct {
-	FailureProbeTools               []string                            `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
-	FailureProbeCapabilitySelectors []agentspec.SkillCapabilitySelector `yaml:"failure_probe_capability_selectors,omitempty" json:"failure_probe_capability_selectors,omitempty"`
-}
-
-type SkillPlanningSpec struct {
-	RequiredBeforeEdit          []agentspec.SkillCapabilitySelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
-	PreferredEditCapabilities   []agentspec.SkillCapabilitySelector `yaml:"preferred_edit_capabilities,omitempty" json:"preferred_edit_capabilities,omitempty"`
-	PreferredVerifyCapabilities []agentspec.SkillCapabilitySelector `yaml:"preferred_verify_capabilities,omitempty" json:"preferred_verify_capabilities,omitempty"`
-	StepTemplates               []agentspec.SkillStepTemplate       `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
-	RequireVerificationStep     bool                                `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
-}
-
-type SkillReviewSpec struct {
-	Criteria        []string                           `yaml:"criteria,omitempty" json:"criteria,omitempty"`
-	FocusTags       []string                           `yaml:"focus_tags,omitempty" json:"focus_tags,omitempty"`
-	ApprovalRules   agentspec.AgentReviewApprovalRules `yaml:"approval_rules,omitempty" json:"approval_rules,omitempty"`
-	SeverityWeights map[string]float64                 `yaml:"severity_weights,omitempty" json:"severity_weights,omitempty"`
-}
-
-type SkillContextHintsSpec struct {
-	PreferredDetailLevel string   `yaml:"preferred_detail_level,omitempty" json:"preferred_detail_level,omitempty"`
-	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
-}
-
-// SkillContextContributionsSpec defines how a skill contributes to context policy.
-type SkillContextContributionsSpec struct {
-	IngestionSources []SkillIngestionSourceSpec `yaml:"ingestion_sources,omitempty" json:"ingestion_sources,omitempty"`
-	RankerAdmission  []string                   `yaml:"ranker_admission,omitempty" json:"ranker_admission,omitempty"`
-	ScannerConfig    SkillScannerConfigSpec     `yaml:"scanner_config,omitempty" json:"scanner_config,omitempty"`
-}
-
-// SkillIngestionSourceSpec defines a path pattern for skill resource ingestion.
-type SkillIngestionSourceSpec struct {
-	Path       string `yaml:"path" json:"path"`
-	SourceType string `yaml:"source_type,omitempty" json:"source_type,omitempty"`
-}
-
-// SkillScannerConfigSpec defines scanner-specific contributions from a skill.
-type SkillScannerConfigSpec struct {
-	AdditionalSignatures []SkillScannerSignatureSpec `yaml:"additional_signatures,omitempty" json:"additional_signatures,omitempty"`
-}
-
-// SkillScannerSignatureSpec defines a pattern-based signature for the scanner.
-type SkillScannerSignatureSpec struct {
-	Pattern string `yaml:"pattern" json:"pattern"`
-	Flag    string `yaml:"flag,omitempty" json:"flag,omitempty"`
-}
-
 // LoadSkillManifest parses and validates a skill manifest file.
 func LoadSkillManifest(path string) (*SkillManifest, error) {
 	data, err := os.ReadFile(path)
@@ -116,7 +53,7 @@ func LoadSkillManifest(path string) (*SkillManifest, error) {
 		return nil, err
 	}
 	var manifest SkillManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	if _, err := cfgload.DecodeWithSchema(path, data, cfgload.NewSchemaRegistry(), &manifest); err != nil {
 		return nil, err
 	}
 	if err := manifest.Validate(); err != nil {
@@ -148,26 +85,6 @@ func (m *SkillManifest) Validate() error {
 			return fmt.Errorf("requires.bins entry %q must not contain '/'", bin)
 		}
 	}
-	for i, policy := range m.Spec.CapabilityPolicies {
-		if err := agentspec.ValidateCapabilityPolicy(policy); err != nil {
-			return fmt.Errorf("capability_policies[%d] invalid: %w", i, err)
-		}
-	}
-	for i, policy := range m.Spec.InsertionPolicies {
-		if err := agentspec.ValidateCapabilityInsertionPolicy(policy); err != nil {
-			return fmt.Errorf("insertion_policies[%d] invalid: %w", i, err)
-		}
-	}
-	seenSessionPolicyIDs := make(map[string]struct{}, len(m.Spec.SessionPolicies))
-	for i, policy := range m.Spec.SessionPolicies {
-		if err := agentspec.ValidateSessionPolicy(policy); err != nil {
-			return fmt.Errorf("session_policies[%d] invalid: %w", i, err)
-		}
-		if _, exists := seenSessionPolicyIDs[policy.ID]; exists {
-			return fmt.Errorf("session_policies[%d] duplicates id %q", i, policy.ID)
-		}
-		seenSessionPolicyIDs[policy.ID] = struct{}{}
-	}
 	for i, selector := range m.Spec.AllowedCapabilities {
 		if err := agentspec.ValidateCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("allowed_capabilities[%d] invalid: %w", i, err)
@@ -196,76 +113,25 @@ func (m *SkillManifest) Validate() error {
 			return fmt.Errorf("providers[%d] invalid: %w", idx, err)
 		}
 	}
-	for phase, tools := range m.Spec.PhaseCapabilities {
-		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("phase_capabilities contains empty phase")
-		}
-		for _, tool := range tools {
-			if strings.TrimSpace(tool) == "" {
-				return fmt.Errorf("phase_capabilities[%s] contains empty capability", phase)
-			}
+	for i, policy := range m.Spec.CapabilityPolicies {
+		if err := agentspec.ValidateCapabilityPolicy(policy); err != nil {
+			return fmt.Errorf("capability_policies[%d] invalid: %w", i, err)
 		}
 	}
-	for phase, selectors := range m.Spec.PhaseCapabilitySelectors {
-		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("phase_capability_selectors contains empty phase")
-		}
-		for _, selector := range selectors {
-			if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-				return fmt.Errorf("phase_capability_selectors[%s] invalid: %w", phase, err)
-			}
+	for i, policy := range m.Spec.InsertionPolicies {
+		if err := agentspec.ValidateCapabilityInsertionPolicy(policy); err != nil {
+			return fmt.Errorf("insertion_policies[%d] invalid: %w", i, err)
 		}
 	}
-	for _, selector := range m.Spec.Verification.SuccessCapabilitySelectors {
-		if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("verification.success_capability_selectors invalid: %w", err)
+	seenSessionPolicyIDs := make(map[string]struct{}, len(m.Spec.SessionPolicies))
+	for i, policy := range m.Spec.SessionPolicies {
+		if err := agentspec.ValidateSessionPolicy(policy); err != nil {
+			return fmt.Errorf("session_policies[%d] invalid: %w", i, err)
 		}
-	}
-	for _, selector := range m.Spec.Recovery.FailureProbeCapabilitySelectors {
-		if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("recovery.failure_probe_capability_selectors invalid: %w", err)
+		if _, exists := seenSessionPolicyIDs[policy.ID]; exists {
+			return fmt.Errorf("session_policies[%d] duplicates id %q", i, policy.ID)
 		}
-	}
-	for _, selector := range m.Spec.Planning.RequiredBeforeEdit {
-		if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("planning.required_before_edit invalid: %w", err)
-		}
-	}
-	for _, selector := range m.Spec.Planning.PreferredEditCapabilities {
-		if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("planning.preferred_edit_capabilities invalid: %w", err)
-		}
-	}
-	for _, selector := range m.Spec.Planning.PreferredVerifyCapabilities {
-		if err := agentspec.ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("planning.preferred_verify_capabilities invalid: %w", err)
-		}
-	}
-	for _, step := range m.Spec.Planning.StepTemplates {
-		if strings.TrimSpace(step.Kind) == "" {
-			return fmt.Errorf("planning.step_templates contains empty kind")
-		}
-		if strings.TrimSpace(step.Description) == "" {
-			return fmt.Errorf("planning.step_templates[%s] contains empty description", step.Kind)
-		}
-	}
-	for _, criterion := range m.Spec.Review.Criteria {
-		if strings.TrimSpace(criterion) == "" {
-			return fmt.Errorf("review.criteria contains empty criterion")
-		}
-	}
-	for _, tag := range m.Spec.Review.FocusTags {
-		if strings.TrimSpace(tag) == "" {
-			return fmt.Errorf("review.focus_tags contains empty tag")
-		}
-	}
-	for severity, weight := range m.Spec.Review.SeverityWeights {
-		if strings.TrimSpace(severity) == "" {
-			return fmt.Errorf("review.severity_weights contains empty severity")
-		}
-		if weight < 0 {
-			return fmt.Errorf("review.severity_weights[%s] must be >= 0", severity)
-		}
+		seenSessionPolicyIDs[policy.ID] = struct{}{}
 	}
 	return nil
 }

@@ -2,9 +2,11 @@ package security
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"github.com/stretchr/testify/require"
 )
 
 // TestSandboxPolicyAuditIntegration validates that sandbox policy state
@@ -148,8 +150,10 @@ func TestFileScopeAuditCorrelation(t *testing.T) {
 		if policy.Workspace != workspace {
 			t.Error("workspace should be observable for audit correlation")
 		}
-		if len(policy.ProtectedPaths) != len(protectedPaths) {
-			t.Error("protected paths should be observable for audit correlation")
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, "relurpify_cfg")))
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, ".git")))
+		for _, path := range protectedPaths {
+			require.Contains(t, policy.ProtectedPaths, path)
 		}
 	})
 

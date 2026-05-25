@@ -35,11 +35,3 @@ type SkillCapabilityCandidate struct {
 	PromptHandler   core.PromptCapabilityHandler
 	ResourceHandler core.ResourceCapabilityHandler
 }
-
-// SkillContextContribution holds the context contributions from a resolved skill.
-type SkillContextContribution struct {
-	SkillName         string
-	IngestionSources  []manifest.SkillIngestionSourceSpec
-	RankerAdmission   []string
-	ScannerSignatures []manifest.SkillScannerSignatureSpec
-}

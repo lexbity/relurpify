@@ -19,7 +19,7 @@ func buildCaseBackend(execution resolvedCaseExecution, profile *llm.ModelProfile
 		Debug:    debug,
 	}
 
-	backend, err := llm.New(cfg)
+	backend, err := llm.New(cfg, llm.ProviderSecrets{})
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func buildCaseManagedBackend(execution resolvedCaseExecution, profile *llm.Model
 		Debug:    debug,
 	}
 
-	backend, err := llm.New(cfg)
+	backend, err := llm.New(cfg, llm.ProviderSecrets{})
 	if err != nil {
 		return nil, err
 	}

@@ -7,10 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -24,10 +25,10 @@ type WorkspaceConfig struct {
 	Workspace                  string
 	ManifestPath               string
 	ConfigPath                 string
+	StateDir                   string
 	InferenceProvider          string
 	InferenceEndpoint          string
 	InferenceModel             string
-	InferenceAPIKey            string
 	InferenceNativeToolCalling bool
 	AgentName                  string
 	AgentsDir                  string
@@ -73,11 +74,6 @@ func (cfg WorkspaceConfig) InferenceModelValue() string {
 	return cfg.InferenceModel
 }
 
-// InferenceAPIKeyValue returns the inference API key
-func (cfg WorkspaceConfig) InferenceAPIKeyValue() string {
-	return cfg.InferenceAPIKey
-}
-
 // InferenceNativeToolCallingValue returns whether native tool calling is enabled
 func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
@@ -100,24 +96,25 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, regFunc
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
+	securityBundle, err := cfgsecurity.LoadBundle(cfg.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("load security policies: %w", err)
+	}
 
 	// Phase 1: Build capability bundle with permission manager and agent spec
-	workspacePaths := manifest.New(cfg.Workspace)
-	runner := sandbox.NewLocalCommandRunner(cfg.Workspace, nil)
+	runner := sandbox.NewLocalCommandRunner(
+		cfg.Workspace,
+		cfgsecurity.SubprocessEnvAllowlist(securityBundle.Sandbox),
+		nil,
+	)
 
 	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, runner, services.CapabilityRegistryOptions{
 		Context:           ctx,
 		AgentID:           cfg.AgentID,
 		PermissionManager: cfg.PermissionManager,
 		AgentSpec:         cfg.AgentSpec,
-		ProtectedPaths: workspacePaths.GovernanceRoots(
-			workspacePaths.ManifestFile(),
-			workspacePaths.ConfigFile(),
-			workspacePaths.NexusConfigFile(),
-			workspacePaths.PolicyRulesFile(),
-			workspacePaths.ModelProfilesDir(),
-		),
-		SkipASTIndex: cfg.SkipASTIndex,
+		ProtectedPaths:    append([]string(nil), securityBundle.Sandbox.ProtectedPaths...),
+		SkipASTIndex:      cfg.SkipASTIndex,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build capability bundle: %w", err)
@@ -143,13 +140,7 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, regFunc
 	}
 
 	// Phase 4: Construct WorkspaceEnvironment
-	fileScope := sandbox.NewFileScopePolicy(cfg.Workspace, workspacePaths.GovernanceRoots(
-		workspacePaths.ManifestFile(),
-		workspacePaths.ConfigFile(),
-		workspacePaths.NexusConfigFile(),
-		workspacePaths.PolicyRulesFile(),
-		workspacePaths.ModelProfilesDir(),
-	))
+	fileScope := sandbox.NewFileScopePolicy(cfg.Workspace, append([]string(nil), securityBundle.Sandbox.ProtectedPaths...))
 
 	// Create working memory store
 	wm := memory.NewWorkingMemoryStore()

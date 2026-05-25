@@ -406,7 +406,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		})
 		return nil, fmt.Errorf("tool %q is deprecated", entry.Name)
 	}
-	if err := validateInstantiationArgs(entry, q.Arguments); err != nil {
+	if err := contracts.ValidateToolArguments(toManifest(entry), q.Arguments); err != nil {
 		e.emitTelemetry("tool_result", "shell instantiation query validation failed", map[string]any{
 			"query_type": "instantiation",
 			"status":     "failed",
@@ -415,20 +415,21 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		})
 		return nil, err
 	}
-	args := buildCLIArgs(entry, q.Arguments)
-	wd := ""
-	if entry.Preset.SupportsWorkdir {
-		wd = q.ArgumentString("working_directory")
-	}
-	stdin := ""
-	if entry.Preset.AllowStdin {
-		stdin = q.ArgumentString("stdin")
+	resolution, request, err := contracts.BuildToolExecutionPlan(toManifest(entry), q.Arguments)
+	if err != nil {
+		e.emitTelemetry("tool_result", "shell instantiation query validation failed", map[string]any{
+			"query_type": "instantiation",
+			"status":     "failed",
+			"tool_name":  entry.Name,
+			"error":      err.Error(),
+		})
+		return nil, err
 	}
 	result := DiscoveryMatch{
 		Entry:            entry,
 		Score:            1,
 		Reasons:          []string{"resolved"},
-		ParameterSummary: parameterSummary(entry),
+		ParameterSummary: contracts.ToolParameterSummary(toManifest(entry)),
 		Examples:         append([]catalog.ToolExample(nil), entry.Examples...),
 	}
 	e.emitTelemetry("tool_result", "shell instantiation query completed", map[string]any{
@@ -443,21 +444,17 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		Match:           result,
 		Preset: execute.CommandPreset{
 			Name:        entry.Name,
-			Command:     commandFromEntry(entry),
+			Command:     contracts.ToolCommand(toManifest(entry)),
 			DefaultArgs: append([]string(nil), entry.Preset.DefaultArgs...),
 			Description: entry.Description,
 			Category:    entry.Family,
 			Tags:        append([]string(nil), entry.Tags...),
 			Timeout:     60 * time.Second,
 			AllowStdin:  entry.Preset.AllowStdin,
-			WorkdirMode: workdirMode(entry),
+			WorkdirMode: contracts.ToolWorkdirMode(toManifest(entry)),
 		},
-		Request: contracts.CommandRequest{
-			Args:    args,
-			Workdir: wd,
-			Input:   stdin,
-		},
-		StructuredArgs: cloneMap(q.Arguments),
+		Request:        request,
+		StructuredArgs: resolution.StructuredArgs,
 	}, nil
 }
 
@@ -549,7 +546,7 @@ func scoreEntry(entry catalog.ToolCatalogEntry, q DiscoveryQuery) DiscoveryMatch
 		Entry:            entry,
 		Score:            score,
 		Reasons:          uniqueStrings(reasons),
-		ParameterSummary: parameterSummary(entry),
+		ParameterSummary: contracts.ToolParameterSummary(toManifest(entry)),
 		Examples:         append([]catalog.ToolExample(nil), entry.Examples...),
 	}
 }
@@ -648,71 +645,6 @@ func hasParameter(entry catalog.ToolCatalogEntry, name string) bool {
 	return contains(entry.ParameterSchema.Required, name)
 }
 
-func buildCLIArgs(entry catalog.ToolCatalogEntry, args map[string]any) []string {
-	cmd := append([]string{}, entry.Preset.CommandTemplate...)
-	cmd = append(cmd, entry.Preset.DefaultArgs...)
-	if raw, ok := args["args"]; ok {
-		if extra, err := asStringSlice(raw); err == nil {
-			cmd = append(cmd, extra...)
-		}
-	}
-	return cmd
-}
-
-func validateInstantiationArgs(entry catalog.ToolCatalogEntry, args map[string]any) error {
-	if len(entry.ParameterSchema.Required) == 0 && len(entry.ParameterSchema.Properties) == 0 {
-		return nil
-	}
-	for _, name := range entry.ParameterSchema.Required {
-		if _, ok := args[name]; !ok {
-			return fmt.Errorf("missing required parameter %q", name)
-		}
-	}
-	for name := range args {
-		if name == "args" || name == "working_directory" || name == "stdin" {
-			continue
-		}
-		if _, ok := entry.ParameterSchema.Properties[name]; !ok {
-			return fmt.Errorf("unknown parameter %q", name)
-		}
-	}
-	return nil
-}
-
-func parameterSummary(entry catalog.ToolCatalogEntry) []string {
-	var out []string
-	if len(entry.ParameterSchema.Required) > 0 || len(entry.ParameterSchema.Properties) > 0 {
-		out = append(out, entry.ParameterSchema.Required...)
-		for name := range entry.ParameterSchema.Properties {
-			if !contains(out, name) {
-				out = append(out, name)
-			}
-		}
-	}
-	out = append(out, "args")
-	if entry.Preset.SupportsWorkdir {
-		out = append(out, "working_directory")
-	}
-	if entry.Preset.AllowStdin {
-		out = append(out, "stdin")
-	}
-	return uniqueStrings(out)
-}
-
-func workdirMode(entry catalog.ToolCatalogEntry) string {
-	if entry.Preset.SupportsWorkdir {
-		return "workspace"
-	}
-	return "fixed"
-}
-
-func commandFromEntry(entry catalog.ToolCatalogEntry) string {
-	if len(entry.Preset.CommandTemplate) > 0 {
-		return entry.Preset.CommandTemplate[0]
-	}
-	return ""
-}
-
 func renderDiscoveryQuery(q DiscoveryQuery) string {
 	parts := []string{q.ToolName, q.Family, strings.Join(q.Intent, ","), strings.Join(q.Keywords, ","), strings.Join(q.RequiredParams, ",")}
 	return strings.Join(filterEmpty(parts), " ")
@@ -721,6 +653,59 @@ func renderDiscoveryQuery(q DiscoveryQuery) string {
 func renderInstantiationQuery(q InstantiationQuery) string {
 	parts := []string{q.ToolName, q.Family}
 	return strings.Join(filterEmpty(parts), " ")
+}
+
+func toManifest(entry catalog.ToolCatalogEntry) contracts.ToolManifest {
+	manifest := contracts.ToolManifest{
+		Name:        entry.Name,
+		Family:      entry.Family,
+		Intent:      append([]string(nil), entry.Intent...),
+		Description: entry.Description,
+		Parameters:  make([]contracts.ToolParameter, 0, len(entry.ParameterSchema.Properties)),
+		Execution: contracts.ToolManifestExecution{
+			DefaultArgs:     append([]string(nil), entry.Preset.DefaultArgs...),
+			AllowStdin:      entry.Preset.AllowStdin,
+			SupportsWorkdir: entry.Preset.SupportsWorkdir,
+		},
+		Capability: contracts.ToolManifestCapability{
+			RiskClass: append([]string(nil), entry.Tags...),
+		},
+	}
+	if len(entry.Preset.CommandTemplate) > 0 {
+		manifest.Execution.Backend = contracts.ToolBackendSubprocess
+		manifest.Execution.Command = &contracts.ToolManifestCommand{
+			Base: append([]string(nil), entry.Preset.CommandTemplate...),
+		}
+		manifest.Execution.Implementation = entry.Preset.CommandTemplate[0]
+	} else {
+		manifest.Execution.Backend = contracts.ToolBackendGoNative
+		manifest.Execution.Implementation = entry.Name
+	}
+	for name, field := range entry.ParameterSchema.Properties {
+		param := contracts.ToolParameter{
+			Name:        name,
+			Type:        field.Type,
+			Description: field.Description,
+			Default:     field.Default,
+		}
+		for _, required := range entry.ParameterSchema.Required {
+			if required == name {
+				param.Required = true
+				break
+			}
+		}
+		manifest.Parameters = append(manifest.Parameters, param)
+	}
+	manifest.Capability.TrustClass = "local"
+	if len(manifest.Capability.RiskClass) == 0 {
+		manifest.Capability.RiskClass = []string{"read-only"}
+	}
+	if len(entry.Preset.CommandTemplate) == 0 {
+		manifest.Execution.Backend = contracts.ToolBackendGoNative
+	}
+	manifest.SourcePath = ""
+	manifest.CanonicalName = entry.Name
+	return manifest
 }
 
 func uniqueStrings(values []string) []string {

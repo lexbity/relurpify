@@ -141,6 +141,7 @@ func writeSkillManifestFixture(t *testing.T, workspace, name string, allowed []s
 		}
 	}
 	var builder strings.Builder
+	builder.WriteString("schema: relurpify/skill/v1\n")
 	builder.WriteString("apiVersion: euclo.skills/v1\n")
 	builder.WriteString("kind: SkillManifest\n")
 	builder.WriteString("metadata:\n")

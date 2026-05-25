@@ -34,7 +34,7 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 		return nil, err
 	}
 	if runner == nil {
-		runner = sandbox.NewLocalCommandRunner(desc.DerivedWorkspaceRoot, nil)
+		runner = sandbox.NewLocalCommandRunner(desc.DerivedWorkspaceRoot, nil, nil)
 	}
 
 	report := &PreparedRunVerificationReport{

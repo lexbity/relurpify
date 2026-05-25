@@ -167,6 +167,9 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 	if err := os.MkdirAll(derivedWorkspace, 0o755); err != nil {
 		return err
 	}
+	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{manifest.DirName + "/**"}, exclude...)); err != nil {
+		return err
+	}
 
 	paths := manifest.New(derivedWorkspace)
 	resolver := templates.NewResolver()

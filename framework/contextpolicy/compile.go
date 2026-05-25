@@ -153,34 +153,6 @@ func Compile(manifest *manifest.AgentManifest, skills []manifest.ResolvedSkill, 
 			}
 		}
 
-		// Merge ContextContributions from skills (via Manifest)
-		if skill.Manifest != nil && skill.Manifest.Spec.ContextContributions.IngestionSources != nil {
-			for _, source := range skill.Manifest.Spec.ContextContributions.IngestionSources {
-				bundle.SkillContributions.IngestionSources = append(bundle.SkillContributions.IngestionSources, IngestionSource{
-					Path:       source.Path,
-					SourceType: source.SourceType,
-				})
-			}
-		}
-
-		// Merge ranker admissions
-		if skill.Manifest != nil {
-			for _, rankerID := range skill.Manifest.Spec.ContextContributions.RankerAdmission {
-				if !hasString(bundle.SkillContributions.AdmittedRankers, rankerID) {
-					bundle.SkillContributions.AdmittedRankers = append(bundle.SkillContributions.AdmittedRankers, rankerID)
-				}
-			}
-		}
-
-		// Merge scanner signatures
-		if skill.Manifest != nil {
-			for _, sig := range skill.Manifest.Spec.ContextContributions.ScannerConfig.AdditionalSignatures {
-				bundle.SkillContributions.ScannerSignatures = append(bundle.SkillContributions.ScannerSignatures, ScannerSignature{
-					Pattern: sig.Pattern,
-					Flag:    sig.Flag,
-				})
-			}
-		}
 	}
 
 	return bundle, nil

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 )
 
@@ -16,8 +18,12 @@ func TestLiveWorkspaceHandshakeBuildsWorkspaceEnvironment(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(relurpifyCfg, "agents"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(relurpifyCfg, "security"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	manifestPath := filepath.Join(relurpifyCfg, "agents", "euclo.yaml")
-	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: euclo
@@ -35,10 +41,67 @@ spec:
     model:
       provider: ollama
       name: qwen2.5-coder:14b
+    capabilities:
+      relurpic:
+        - euclo:cap.test_run
+        - euclo:cap.ast_query
+        - euclo:cap.symbol_trace
+        - euclo:cap.call_graph
+        - euclo:cap.blame_trace
+        - euclo:cap.bisect
+        - euclo:cap.code_review
+        - euclo:cap.diff_summary
+        - euclo:cap.layer_check
+        - euclo:cap.targeted_refactor
+        - euclo:cap.rename_symbol
+        - euclo:cap.api_compat
+        - euclo:cap.boundary_report
+        - euclo:cap.coverage_check
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(relurpifyCfg, "config.yaml"), []byte("provider: ollama\nmodel: qwen2.5-coder:14b\nsandbox_backend: gvisor\nagent: euclo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(relurpifyCfg, "security", "sandbox.policy.yaml"), []byte(`schema: relurpify/policy/sandbox/v1
+read_only_root: false
+protected_paths:
+  - relurpify_cfg/agents
+  - relurpify_cfg/config.yaml
+  - relurpify_cfg/security
+no_new_privileges: true
+allowed_env_keys: []
+denied_env_keys: []
+network_rules: []
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(relurpifyCfg, "security", "shell.policy.yaml"), []byte(`schema: relurpify/policy/shell/v1
+rules:
+  - id: deny-git-reset-hard
+    pattern: '(^|\s)git\s+reset\s+--hard(\s|$)'
+    reason: "Destructive git reset is blocked"
+    action: block
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(relurpifyCfg, "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
+tools:
+  git:
+    execute: ask
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(relurpifyCfg, "security", "workspaceingestion.policy.yaml"), []byte(`schema: relurpify/policy/ingestion/v1
+rules:
+  - id: allow-workspace-ingestion
+    name: Workspace ingestion
+    priority: 100
+    enabled: true
+    effect:
+      action: allow
+      reason: Allow workspace ingestion for configured sources
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg := agentenv.WorkspaceConfig{
@@ -50,6 +113,31 @@ spec:
 		AgentName:         "euclo",
 		AgentsDir:         filepath.Join(relurpifyCfg, "agents"),
 		SandboxBackend:    "gvisor",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "qwen2.5-coder:14b",
+			},
+			Capabilities: agentspec.AgentCapabilitiesSpec{
+				Relurpic: []string{
+					"euclo:cap.test_run",
+					"euclo:cap.ast_query",
+					"euclo:cap.symbol_trace",
+					"euclo:cap.call_graph",
+					"euclo:cap.blame_trace",
+					"euclo:cap.bisect",
+					"euclo:cap.code_review",
+					"euclo:cap.diff_summary",
+					"euclo:cap.layer_check",
+					"euclo:cap.targeted_refactor",
+					"euclo:cap.rename_symbol",
+					"euclo:cap.api_compat",
+					"euclo:cap.boundary_report",
+					"euclo:cap.coverage_check",
+				},
+			},
+		},
 	}
 	env, err := agentenv.BuildWorkspaceEnvironment(context.Background(), cfg, euclo.GetRegistrationFuncs())
 	if err != nil {

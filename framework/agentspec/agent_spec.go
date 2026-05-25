@@ -15,6 +15,7 @@ type AgentRuntimeSpec struct {
 	Version             string                          `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt              string                          `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Model               AgentModelConfig                `yaml:"model" json:"model"`
+	Capabilities        AgentCapabilitiesSpec           `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
 	AllowedCapabilities []CapabilitySelector            `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
 	ToolExecutionPolicy map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
 	CapabilityPolicies  []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
@@ -119,6 +120,11 @@ func (a *AgentRuntimeSpec) IngestOutputsEnabled() bool {
 type AgentLoggingSpec struct {
 	LLM   *bool `yaml:"llm,omitempty" json:"llm,omitempty"`
 	Agent *bool `yaml:"agent,omitempty" json:"agent,omitempty"`
+}
+
+// AgentCapabilitiesSpec declares named agent capability ownership.
+type AgentCapabilitiesSpec struct {
+	Relurpic []string `yaml:"relurpic,omitempty" json:"relurpic,omitempty"`
 }
 
 // AgentMode categorizes the manifest mode.
@@ -472,6 +478,16 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("composition invalid: %w", err)
 		}
 	}
+	seenRelurpic := make(map[string]struct{}, len(a.Capabilities.Relurpic))
+	for i, capabilityID := range a.Capabilities.Relurpic {
+		if err := ValidateRelurpicCapabilityID(capabilityID); err != nil {
+			return fmt.Errorf("capabilities.relurpic[%d] invalid: %w", i, err)
+		}
+		if _, exists := seenRelurpic[capabilityID]; exists {
+			return fmt.Errorf("capabilities.relurpic[%d] duplicates capability %q", i, capabilityID)
+		}
+		seenRelurpic[capabilityID] = struct{}{}
+	}
 	for _, selector := range a.AllowedCapabilities {
 		if err := ValidateCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("allowed_capabilities invalid: %w", err)
@@ -584,6 +600,22 @@ func resolveToolCallingIntent(intent ToolCallingIntent, legacy *bool) ToolCallin
 	default:
 		return intent
 	}
+}
+
+// ValidateRelurpicCapabilityID enforces the namespaced relurpic capability ID
+// format used by named agents.
+func ValidateRelurpicCapabilityID(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("capability id required")
+	}
+	if strings.ContainsAny(id, " \t\n\r") {
+		return fmt.Errorf("capability id must not contain whitespace")
+	}
+	if strings.HasPrefix(id, ".") || strings.HasSuffix(id, ".") || !strings.Contains(id, ".") {
+		return fmt.Errorf("capability id must be dot-namespaced")
+	}
+	return nil
 }
 
 func ValidateCapabilityPolicy(policy CapabilityPolicy) error {

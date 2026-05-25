@@ -11,6 +11,9 @@ import (
 
 var ErrNotAgentDefinition = errors.New("not an agent definition")
 
+// RejectForbiddenSecretFields is injected by cfgload at init to break import cycles.
+var RejectForbiddenSecretFields func(string, []byte) error
+
 // AgentDefinition defines the configuration for a single agent.
 type AgentDefinition struct {
 	Name        string           `yaml:"name" json:"name"`
@@ -23,6 +26,11 @@ func LoadAgentDefinition(path string) (*AgentDefinition, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if RejectForbiddenSecretFields != nil {
+		if err := RejectForbiddenSecretFields(path, data); err != nil {
+			return nil, err
+		}
 	}
 	var header struct {
 		Kind string `yaml:"kind"`

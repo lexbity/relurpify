@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
@@ -106,11 +107,7 @@ type AuditSpec struct {
 // SaveAgentManifest marshals m to YAML and overwrites path.
 // This preserves the manifest structure but will not retain hand-written comments.
 func SaveAgentManifest(path string, m *AgentManifest) error {
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
-	}
-	return os.WriteFile(path, data, 0644)
+	return cfgload.WriteWithSchema(path, "relurpify/agent/v1", m)
 }
 
 // LoadAgentManifestSnapshot parses, validates, and fingerprints a manifest file.
@@ -120,7 +117,7 @@ func LoadAgentManifestSnapshot(path string) (*AgentManifestSnapshot, error) {
 		return nil, err
 	}
 	var loaded AgentManifest
-	if err := yaml.Unmarshal(data, &loaded); err != nil {
+	if _, err := cfgload.DecodeWithSchema(path, data, cfgload.NewSchemaRegistry(), &loaded); err != nil {
 		return nil, err
 	}
 	if err := loaded.Validate(); err != nil {

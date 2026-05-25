@@ -57,6 +57,8 @@ type PermissionManager struct {
 	hitlRateLimits   map[string]*hitlRateBucket
 	fsPermCache      map[string]*contracts.FileSystemPermission
 	execPermCache    map[string]*contracts.ExecutablePermission
+	fsProtectedRoots []string
+	fsExcludedRoots  []string
 }
 
 type taskGrant struct {
@@ -86,6 +88,20 @@ func NewPermissionManager(basePath string, declared *contracts.PermissionSet, au
 	}
 	pm.inflateScopes()
 	return pm, nil
+}
+
+// SetFilesystemGuardRoots configures filesystem roots that must never be
+// matched by manifest permissions, plus roots that are excluded from the
+// default workspace glob unless explicitly declared.
+func (m *PermissionManager) SetFilesystemGuardRoots(protectedRoots, excludedRoots []string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.fsProtectedRoots = normalizeFilesystemRoots(protectedRoots)
+	m.fsExcludedRoots = normalizeFilesystemRoots(excludedRoots)
+	m.fsPermCache = make(map[string]*contracts.FileSystemPermission)
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
@@ -633,6 +649,9 @@ func (m *PermissionManager) findFilesystemPermission(action contracts.FileSystem
 		return nil
 	}
 	normalized := filepath.ToSlash(filepath.Clean(path))
+	if m.isFilesystemProtectedPath(normalized) {
+		return nil
+	}
 	cacheKey := string(action) + ":" + normalized
 	m.mu.RLock()
 	if perm, ok := m.fsPermCache[cacheKey]; ok {
@@ -641,11 +660,15 @@ func (m *PermissionManager) findFilesystemPermission(action contracts.FileSystem
 	}
 	m.mu.RUnlock()
 	var matched *contracts.FileSystemPermission
+	protectedRoots := m.filesystemGuardRootsSnapshot()
 	for _, perm := range m.declared.FileSystem {
 		if perm.Action != action {
 			continue
 		}
 		if matchGlob(perm.Path, normalized) {
+			if len(protectedRoots) > 0 && m.isFilesystemExcludedPath(normalized, protectedRoots) && !filesystemPatternTargetsExcludedRoot(perm.Path, protectedRoots) {
+				continue
+			}
 			permCopy := perm
 			matched = &permCopy
 			break
@@ -655,6 +678,100 @@ func (m *PermissionManager) findFilesystemPermission(action contracts.FileSystem
 	m.fsPermCache[cacheKey] = matched
 	m.mu.Unlock()
 	return matched
+}
+
+func normalizeFilesystemRoots(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		path = filepath.ToSlash(filepath.Clean(path))
+		if path == "" || path == "." {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		out = append(out, path)
+	}
+	return out
+}
+
+func (m *PermissionManager) filesystemGuardRootsSnapshot() []string {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.fsProtectedRoots) == 0 && len(m.fsExcludedRoots) == 0 {
+		return nil
+	}
+	roots := make([]string, 0, len(m.fsProtectedRoots)+len(m.fsExcludedRoots))
+	roots = append(roots, m.fsProtectedRoots...)
+	roots = append(roots, m.fsExcludedRoots...)
+	return roots
+}
+
+func (m *PermissionManager) isFilesystemProtectedPath(path string) bool {
+	if m == nil {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, root := range m.fsProtectedRoots {
+		if root != "" && pathWithinRoot(path, root) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *PermissionManager) isFilesystemExcludedPath(path string, roots []string) bool {
+	for _, root := range roots {
+		if root != "" && pathWithinRoot(path, root) {
+			return true
+		}
+	}
+	return false
+}
+
+func filesystemPatternTargetsExcludedRoot(pattern string, roots []string) bool {
+	pattern = filepath.ToSlash(filepath.Clean(strings.TrimSpace(pattern)))
+	if pattern == "" {
+		return false
+	}
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		root = filepath.ToSlash(filepath.Clean(root))
+		if pattern == root || strings.HasPrefix(pattern, root+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func pathWithinRoot(target, root string) bool {
+	target = filepath.ToSlash(filepath.Clean(target))
+	root = filepath.ToSlash(filepath.Clean(root))
+	if root == "" {
+		return false
+	}
+	if target == root {
+		return true
+	}
+	return strings.HasPrefix(target, root+"/")
 }
 
 // findExecutablePermission locates the manifest entry authorizing a binary.

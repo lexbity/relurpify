@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -87,6 +88,16 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	registry := newCapabilityRegistryFn()
 	var store *ast.SQLiteStore
 	var manager *ast.IndexManager
+	platformCfg, err := cfgload.LoadPlatformConfig(workspace)
+	if err != nil {
+		return nil, err
+	}
+	toolManifests := platformCfg.ToolManifests
+	toolRegistry := platformCfg.ToolRegistry
+	if toolRegistry == nil {
+		return nil, fmt.Errorf("platform tool registry missing")
+	}
+	registry.UseToolAdmission(capability.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
 			cleanupCapabilityBundleFn(store, manager)
@@ -107,35 +118,25 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		}
 		return nil
 	}
-	for _, tool := range platformFileOperationsFn(workspace) {
-		if err := register(tool); err != nil {
-			return nil, err
+	available := make(map[string]contracts.Tool)
+	addTools := func(tools ...contracts.Tool) {
+		for _, tool := range tools {
+			if tool == nil {
+				continue
+			}
+			available[contracts.NormalizeToolName(tool.Name())] = tool
 		}
 	}
-	for _, tool := range []contracts.Tool{
-		newSimilarityToolFn(workspace),
-		newSemanticSearchToolFn(workspace),
-	} {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range []contracts.Tool{
+	addTools(platformFileOperationsFn(workspace)...)
+	addTools(newSimilarityToolFn(workspace), newSemanticSearchToolFn(workspace))
+	addTools(
 		newGitCommandToolFn(workspace, "diff", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "history", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "branch", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "commit", commandRunnerAdapter{runner: runner}),
 		newGitCommandToolFn(workspace, "blame", commandRunnerAdapter{runner: runner}),
-	} {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}) {
-		if err := register(tool); err != nil {
-			return nil, err
-		}
-	}
+	)
+	addTools(platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}, toolRegistry)...)
 	paths := manifest.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
@@ -170,8 +171,20 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 	})
 	attachASTSymbolProviderFn(manager, registry)
-	if err := register(ast.NewASTTool(manager)); err != nil {
-		return nil, err
+	addTools(ast.NewASTTool(manager))
+	declared := make(map[string]struct{}, len(toolManifests))
+	for _, manifest := range toolManifests {
+		declared[contracts.NormalizeToolName(manifest.Name)] = struct{}{}
+	}
+	for name := range declared {
+		if _, ok := available[name]; !ok {
+			log.Printf("tool admission warning: manifest %q has no registered Go implementation", name)
+		}
+	}
+	for _, tool := range available {
+		if err := register(tool); err != nil {
+			return nil, err
+		}
 	}
 	if err := startIndexingFn(manager, buildCtx); err != nil {
 		if !shouldIgnoreBootstrapIndexError(err) {

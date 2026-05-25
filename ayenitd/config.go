@@ -16,7 +16,6 @@ type WorkspaceConfig struct {
 	InferenceProvider          string
 	InferenceEndpoint          string
 	InferenceModel             string // overrides manifest if non-empty
-	InferenceAPIKey            string
 	InferenceNativeToolCalling bool
 
 	// Optional
@@ -44,7 +43,6 @@ type WorkspaceConfig struct {
 func (cfg WorkspaceConfig) InferenceProviderValue() string { return cfg.InferenceProvider }
 func (cfg WorkspaceConfig) InferenceEndpointValue() string { return cfg.InferenceEndpoint }
 func (cfg WorkspaceConfig) InferenceModelValue() string    { return cfg.InferenceModel }
-func (cfg WorkspaceConfig) InferenceAPIKeyValue() string   { return cfg.InferenceAPIKey }
 func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }

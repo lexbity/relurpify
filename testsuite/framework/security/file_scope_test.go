@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFileScopePolicy validates that filesystem scope policy correctly
@@ -31,14 +32,10 @@ func TestFileScopePolicy(t *testing.T) {
 		}
 
 		policy := sandbox.NewFileScopePolicy(workspace, protectedPaths)
-
-		if len(policy.ProtectedPaths) != len(protectedPaths) {
-			t.Errorf("protected paths count mismatch: got %d, want %d", len(policy.ProtectedPaths), len(protectedPaths))
-		}
-		for i, path := range policy.ProtectedPaths {
-			if path != protectedPaths[i] {
-				t.Errorf("protected path %d mismatch: got %s, want %s", i, path, protectedPaths[i])
-			}
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, "relurpify_cfg")))
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, ".git")))
+		for _, path := range protectedPaths {
+			require.Contains(t, policy.ProtectedPaths, path)
 		}
 	})
 
@@ -46,9 +43,8 @@ func TestFileScopePolicy(t *testing.T) {
 		workspace := t.TempDir()
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
-		if len(policy.ProtectedPaths) != 0 {
-			t.Error("policy with no protected paths should have empty protected paths list")
-		}
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, "relurpify_cfg")))
+		require.Contains(t, policy.ProtectedPaths, filepath.ToSlash(filepath.Join(workspace, ".git")))
 	})
 
 	t.Run("policy handles relative workspace path", func(t *testing.T) {

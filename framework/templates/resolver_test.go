@@ -35,7 +35,7 @@ func TestResolverPrefersSharedRoot(t *testing.T) {
 
 func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	root := t.TempDir()
-	configTemplate := filepath.Join(root, "templates", "workspace", "manifest.yaml")
+	configTemplate := filepath.Join(root, "templates", "workspace", "workspace.yaml")
 	if err := os.MkdirAll(filepath.Dir(configTemplate), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +49,25 @@ func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	}
 	if got != configTemplate {
 		t.Fatalf("ResolveWorkspaceConfigTemplate() = %q, want %q", got, configTemplate)
+	}
+}
+
+func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
+	root := t.TempDir()
+	templatePath := filepath.Join(root, "templates", "workspace", "security", "sandbox.policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(templatePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(templatePath, []byte("schema: relurpify/policy/sandbox/v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := Resolver{roots: []string{root}}
+	got, err := r.ResolveWorkspaceSecurityTemplate("sandbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != templatePath {
+		t.Fatalf("ResolveWorkspaceSecurityTemplate() = %q, want %q", got, templatePath)
 	}
 }
 

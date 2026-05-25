@@ -25,11 +25,17 @@ type FileScopePolicy struct {
 // deterministic scope checks.
 func NewFileScopePolicy(workspace string, protectedPaths []string) *FileScopePolicy {
 	policy := &FileScopePolicy{Workspace: canonicalScopePath(workspace)}
+	for _, root := range defaultFileScopeProtectedRoots(policy.Workspace) {
+		if root != "" {
+			policy.ProtectedPaths = append(policy.ProtectedPaths, root)
+		}
+	}
 	for _, path := range protectedPaths {
 		if resolved := canonicalScopePath(path); resolved != "" {
 			policy.ProtectedPaths = append(policy.ProtectedPaths, resolved)
 		}
 	}
+	policy.ProtectedPaths = dedupeScopePaths(policy.ProtectedPaths)
 	return policy
 }
 
@@ -116,4 +122,34 @@ func pathWithinOrEqual(target, root string) bool {
 		return true
 	}
 	return strings.HasPrefix(target, root+"/")
+}
+
+func defaultFileScopeProtectedRoots(workspace string) []string {
+	if workspace == "" {
+		return nil
+	}
+	return []string{
+		filepath.ToSlash(filepath.Clean(filepath.Join(workspace, "relurpify_cfg"))),
+		filepath.ToSlash(filepath.Clean(filepath.Join(workspace, ".git"))),
+	}
+}
+
+func dedupeScopePaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		path = filepath.ToSlash(filepath.Clean(path))
+		if path == "." || path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		out = append(out, path)
+	}
+	return out
 }

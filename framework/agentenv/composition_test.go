@@ -3,6 +3,8 @@ package agentenv
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -49,8 +51,10 @@ func TestWorkspaceConfig(t *testing.T) {
 
 func TestBuildWorkspaceEnvironment(t *testing.T) {
 	ctx := context.Background()
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 	cfg := WorkspaceConfig{
-		Workspace:    t.TempDir(),
+		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
 	}
@@ -84,6 +88,18 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	if env.PromptRegistry == nil {
 		t.Error("PromptRegistry should not be nil")
 	}
+	if env.FileScope == nil {
+		t.Error("FileScope should not be nil")
+	} else {
+		wantCfg := filepath.ToSlash(filepath.Join(workspace, "relurpify_cfg"))
+		wantGit := filepath.ToSlash(filepath.Join(workspace, ".git"))
+		if !containsString(env.FileScope.ProtectedPaths, wantCfg) {
+			t.Errorf("FileScope protected paths missing %s", wantCfg)
+		}
+		if !containsString(env.FileScope.ProtectedPaths, wantGit) {
+			t.Errorf("FileScope protected paths missing %s", wantGit)
+		}
+	}
 
 	// Verify AgentID is propagated
 	if env.Config.Name != "" {
@@ -94,6 +110,15 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	if env.IndexManager != nil {
 		_ = env.IndexManager.Close()
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
@@ -112,8 +137,10 @@ func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
 func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 	ctx := context.Background()
 	called := false
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 	cfg := WorkspaceConfig{
-		Workspace:    t.TempDir(),
+		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
 	}
@@ -147,8 +174,10 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 
 func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 	ctx := context.Background()
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 	cfg := WorkspaceConfig{
-		Workspace:    t.TempDir(),
+		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
 	}
@@ -169,8 +198,10 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 
 func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	ctx := context.Background()
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 	cfg := WorkspaceConfig{
-		Workspace:    t.TempDir(),
+		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
 		AgentName:    "test-agent",
@@ -195,4 +226,67 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	if env.IndexManager != nil {
 		_ = env.IndexManager.Close()
 	}
+}
+
+func TestBuildWorkspaceEnvironmentRequiresSecurityPolicies(t *testing.T) {
+	ctx := context.Background()
+	cfg := WorkspaceConfig{
+		Workspace:    t.TempDir(),
+		SkipASTIndex: true,
+		AgentID:      "test-agent-id",
+	}
+
+	_, err := BuildWorkspaceEnvironment(ctx, cfg, AgentRegistrationFuncs{})
+	if err == nil {
+		t.Fatal("expected missing security policies to fail")
+	}
+}
+
+func writeSecurityPolicyFixtures(t *testing.T, workspace string) {
+	t.Helper()
+	securityDir := filepath.Join(workspace, "relurpify_cfg", "security")
+	if err := os.MkdirAll(securityDir, 0o755); err != nil {
+		t.Fatalf("mkdir security dir: %v", err)
+	}
+	mustWrite := func(name, body string) {
+		path := filepath.Join(securityDir, name)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	mustWrite("sandbox.policy.yaml", `schema: relurpify/policy/sandbox/v1
+read_only_root: false
+protected_paths:
+  - relurpify_cfg/agent.manifest.yaml
+  - relurpify_cfg/config.yaml
+  - relurpify_cfg/nexus.yaml
+  - relurpify_cfg/policy_rules.yaml
+  - relurpify_cfg/model_profiles
+no_new_privileges: true
+allowed_env_keys: []
+denied_env_keys: []
+network_rules: []
+`)
+	mustWrite("shell.policy.yaml", `schema: relurpify/policy/shell/v1
+rules:
+  - id: deny-git-reset-hard
+    pattern: '(^|\s)git\s+reset\s+--hard(\s|$)'
+    reason: "Destructive git reset is blocked"
+    action: block
+`)
+	mustWrite("localtool.policy.yaml", `schema: relurpify/policy/localtool/v1
+tools:
+  git:
+    execute: ask
+`)
+	mustWrite("workspaceingestion.policy.yaml", `schema: relurpify/policy/ingestion/v1
+rules:
+  - id: allow-workspace-ingestion
+    name: "Workspace ingestion"
+    priority: 100
+    enabled: true
+    effect:
+      action: allow
+      reason: "Allow workspace ingestion for configured sources"
+`)
 }

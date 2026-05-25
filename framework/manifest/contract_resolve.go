@@ -64,14 +64,14 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		resolvedSpec = baseSpec
 	}
 
-	finalSpec := ResolveAgentSpec(opts.GlobalConfig, resolvedSpec, opts.AgentOverlays...)
+	finalSpec := ResolveAgentSpec(resolvedSpec, opts.AgentOverlays...)
 
 	sources := SourceSummary{
 		ManifestName:     m.Metadata.Name,
 		ManifestVersion:  m.Metadata.Version,
 		Workspace:        workspace,
 		RequestedSkills:  append([]string{}, m.Spec.Skills...),
-		GlobalDefaults:   opts.GlobalConfig != nil,
+		GlobalDefaults:   false,
 		OverlayCount:     len(opts.AgentOverlays),
 		RuntimeOverrides: len(opts.AgentOverlays),
 	}

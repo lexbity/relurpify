@@ -14,9 +14,10 @@ import (
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/named/euclo"
-	"gopkg.in/yaml.v3"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 var (
@@ -98,7 +99,7 @@ func newWorkspaceInitCmd() *cobra.Command {
 	var agentName string
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Create a default relurpify.yaml workspace config",
+		Short: "Create a default workspace.yaml workspace config",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := ensureWorkspace()
 			if strings.TrimSpace(modelName) == "" {
@@ -107,32 +108,37 @@ func newWorkspaceInitCmd() *cobra.Command {
 			if strings.TrimSpace(agentName) == "" {
 				agentName = "coding"
 			}
-			path := filepath.Join(frameworkmanifest.New(ws).ConfigRoot(), "relurpify.yaml")
+			path := cfgload.DefaultWorkspaceConfigPath(ws)
 			if _, err := os.Stat(path); err == nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "Workspace config already exists at %s\n", path)
 				return nil
 			}
-			cfg := workspaceInitConfig{
-				Version:      "1.0.0",
-				DefaultModel: frameworkmanifest.ModelRef{Name: modelName, Provider: "ollama"},
-				AgentPaths:   frameworkmanifest.DefaultAgentPaths(ws),
-				Model:        modelName,
-				Agent:        agentName,
-				Agents:       []string{agentName},
-				Permissions: map[string]string{
-					"file_write":  "ask",
-					"file_edit":   "ask",
-					"file_delete": "deny",
-				},
-			}
+			content := fmt.Sprintf(`schema: relurpify/workspace/v1
+
+# Workspace-local state lives outside relurpify_cfg/.
+paths:
+  state_dir: .relurpify_state
+
+model:
+  default_name: %s
+
+sandbox:
+  backend: gvisor
+
+logging:
+  level: info
+  format: json
+
+audit:
+  retention_days: 7
+
+telemetry:
+  enabled: true
+`, modelName)
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				return err
 			}
-			data, err := yaml.Marshal(cfg)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, data, 0o644); err != nil {
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Created workspace config at %s\n", path)
@@ -144,21 +150,8 @@ func newWorkspaceInitCmd() *cobra.Command {
 	return cmd
 }
 
-type workspaceInitConfig struct {
-	Version      string                     `yaml:"version"`
-	DefaultModel frameworkmanifest.ModelRef `yaml:"default_model"`
-	AgentPaths   []string                   `yaml:"agent_paths"`
-	Model        string                     `yaml:"model,omitempty"`
-	Agent        string                     `yaml:"agent,omitempty"`
-	Agents       []string                   `yaml:"agents,omitempty"`
-	Permissions  map[string]string          `yaml:"permissions,omitempty"`
-}
-
 func buildProbeWorkspaceConfig(ws string) ayenitd.WorkspaceConfig {
 	modelName := defaultModelName()
-	if globalCfg != nil && globalCfg.DefaultModel.Name != "" {
-		modelName = globalCfg.DefaultModel.Name
-	}
 	return ayenitd.WorkspaceConfig{
 		Workspace:         ws,
 		InferenceProvider: "ollama",
@@ -184,7 +177,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		return nil, fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 	}
 	spec = frameworkmanifest.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
-	spec = frameworkmanifest.ResolveAgentSpec(globalCfg, spec)
+	spec = frameworkmanifest.ResolveAgentSpec(spec)
 	runtimeCfg := appruntime.DefaultConfig()
 	runtimeCfg.Workspace = ws
 	runtimeCfg.ManifestPath = manifest.SourcePath
@@ -229,5 +222,6 @@ func openWorkspaceForInspection(ctx context.Context, ws string) (*agentenv.Works
 	if err != nil {
 		return nil, err
 	}
-	return workspaceOpenFn(ctx, target.cfg, workspaceRegistrationFuncsFn())
+	secrets := cfgload.LoadSecrets(os.Environ())
+	return workspaceOpenFn(ctx, target.cfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, workspaceRegistrationFuncsFn())
 }

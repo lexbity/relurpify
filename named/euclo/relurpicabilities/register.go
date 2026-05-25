@@ -2,40 +2,110 @@ package relurpicabilities
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-// RegisterAll registers all Euclo relurpic capability handlers with the
-// capability registry in the provided workspace environment.
-//
-// This function is called during agent initialization.
-func RegisterAll(env agentenv.WorkspaceEnvironment) error {
+type relurpicCapabilityBlueprint struct {
+	ID            string
+	RequiredTools []string
+	NewHandler    func(agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler
+}
+
+var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
+	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler { return NewTestRunHandler(env) }},
+	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewASTQueryHandler(env)
+	}},
+	{ID: "euclo:cap.symbol_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewSymbolTraceHandler(env)
+	}},
+	{ID: "euclo:cap.call_graph", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewCallGraphHandler(env)
+	}},
+	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewBlameTraceHandler(env)
+	}},
+	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler { return NewBisectHandler(env) }},
+	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewCodeReviewHandler(env)
+	}},
+	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewDiffSummaryHandler(env)
+	}},
+	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewLayerCheckHandler(env)
+	}},
+	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewTargetedRefactorHandler(env)
+	}},
+	{ID: "euclo:cap.rename_symbol", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewRenameSymbolHandler(env)
+	}},
+	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewAPICompatHandler(env)
+	}},
+	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewBoundaryReportHandler(env)
+	}},
+	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+		return NewCoverageCheckHandler(env)
+	}},
+}
+
+// RegisterAll registers only the Euclo relurpic capability handlers declared
+// by the active agent spec.
+func RegisterAll(env agentenv.WorkspaceEnvironment, declared []string) error {
 	if env.Registry == nil {
 		return fmt.Errorf("capability registry is nil")
 	}
-
-	specs := []relurpicCapabilitySpec{
-		{Handler: NewTestRunHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewASTQueryHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewSymbolTraceHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewCallGraphHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewBlameTraceHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewBisectHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewCodeReviewHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewDiffSummaryHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewLayerCheckHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewTargetedRefactorHandler(env), RequiredTools: []string{"file_read", "file_write"}},
-		{Handler: NewRenameSymbolHandler(env), RequiredTools: []string{"file_read", "file_write"}},
-		{Handler: NewAPICompatHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewBoundaryReportHandler(env), RequiredTools: []string{"file_read"}},
-		{Handler: NewCoverageCheckHandler(env), RequiredTools: []string{"file_read"}},
+	if len(declared) == 0 {
+		return fmt.Errorf("capabilities.relurpic required")
 	}
 
-	for _, spec := range specs {
-		if err := registerRelurpicCapability(env.Registry, spec); err != nil {
-			return fmt.Errorf("failed to register handler: %w", err)
+	declaredSet := make(map[string]struct{}, len(declared))
+	for _, id := range declared {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return fmt.Errorf("capabilities.relurpic contains empty capability id")
 		}
+		declaredSet[id] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, len(declaredSet))
+	for _, blueprint := range eucloRelurpicCapabilityBlueprints {
+		if _, ok := declaredSet[blueprint.ID]; !ok {
+			continue
+		}
+		if env.Registry.HasCapability(blueprint.ID) {
+			seen[blueprint.ID] = struct{}{}
+			continue
+		}
+		handler := blueprint.NewHandler(env)
+		if handler == nil {
+			return fmt.Errorf("relurpic capability %s handler is nil", blueprint.ID)
+		}
+		if err := registerRelurpicCapability(env.Registry, relurpicCapabilitySpec{
+			Handler:       handler,
+			RequiredTools: blueprint.RequiredTools,
+		}); err != nil {
+			return fmt.Errorf("failed to register %s: %w", blueprint.ID, err)
+		}
+		seen[blueprint.ID] = struct{}{}
+	}
+
+	missing := make([]string, 0, len(declaredSet))
+	for id := range declaredSet {
+		if _, ok := seen[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("unknown relurpic capability declaration(s): %s", strings.Join(missing, ", "))
 	}
 
 	return nil

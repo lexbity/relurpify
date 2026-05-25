@@ -30,7 +30,6 @@ func ResolveSkills(workspace string, baseSpec *agentspec.AgentRuntimeSpec, skill
 	globalPolicies := cloneGlobalPolicies(spec.GlobalPolicies)
 	providerPolicies := cloneProviderPolicies(spec.ProviderPolicies)
 	providers := cloneProviderConfigs(spec.Providers)
-	skillConfig := agentspec.AgentSkillConfig{}
 	resolved := make([]ResolvedSkill, 0, len(skillNames))
 
 	for _, name := range skillNames {
@@ -70,8 +69,6 @@ func ResolveSkills(workspace string, baseSpec *agentspec.AgentRuntimeSpec, skill
 		if len(skillManifest.Spec.PromptSnippets) > 0 {
 			spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
 		}
-		skillConfig = mergeSkillConfig(skillConfig, skillManifest.Spec)
-
 		results = append(results, SkillResolution{
 			Name:    skillManifest.Metadata.Name,
 			Applied: true,
@@ -91,10 +88,6 @@ func ResolveSkills(workspace string, baseSpec *agentspec.AgentRuntimeSpec, skill
 	spec.GlobalPolicies = globalPolicies
 	spec.ProviderPolicies = providerPolicies
 	spec.Providers = providers
-	spec.SkillConfig = agentspec.MergeAgentSpecs(
-		&agentspec.AgentRuntimeSpec{SkillConfig: spec.SkillConfig},
-		agentspec.AgentSpecOverlay{SkillConfig: &skillConfig},
-	).SkillConfig
 	return spec, resolved, results
 }
 
@@ -160,25 +153,4 @@ func logSkillError(workspace, name, reason string, err error, paths SkillPaths) 
 		Error:   err.Error(),
 		Paths:   paths,
 	}
-}
-
-// ExtractContextContributions extracts context contributions from resolved skills.
-// This is used by the contextpolicy compiler to merge skill contributions into the policy bundle.
-func ExtractContextContributions(resolved []ResolvedSkill) []SkillContextContribution {
-	contributions := make([]SkillContextContribution, 0, len(resolved))
-	for _, skill := range resolved {
-		if skill.Manifest == nil {
-			continue
-		}
-		contrib := skill.Manifest.Spec.ContextContributions
-		if len(contrib.IngestionSources) > 0 || len(contrib.RankerAdmission) > 0 || len(contrib.ScannerConfig.AdditionalSignatures) > 0 {
-			contributions = append(contributions, SkillContextContribution{
-				SkillName:         skill.Manifest.Metadata.Name,
-				IngestionSources:  contrib.IngestionSources,
-				RankerAdmission:   contrib.RankerAdmission,
-				ScannerSignatures: contrib.ScannerConfig.AdditionalSignatures,
-			})
-		}
-	}
-	return contributions
 }

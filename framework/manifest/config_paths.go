@@ -24,16 +24,8 @@ func (p Paths) ConfigRoot() string {
 	return filepath.Join(p.Workspace, DirName)
 }
 
-func (p Paths) ConfigFile() string {
-	return filepath.Join(p.ConfigRoot(), "config.yaml")
-}
-
-func (p Paths) NexusConfigFile() string {
-	return filepath.Join(p.ConfigRoot(), "nexus.yaml")
-}
-
-func (p Paths) ManifestFile() string {
-	return filepath.Join(p.ConfigRoot(), "agent.yaml")
+func (p Paths) WorkspaceFile() string {
+	return filepath.Join(p.ConfigRoot(), "workspace.yaml")
 }
 
 func (p Paths) AgentsDir() string {
@@ -44,8 +36,12 @@ func (p Paths) SkillsDir() string {
 	return filepath.Join(p.ConfigRoot(), "skills")
 }
 
+func (p Paths) StateRoot() string {
+	return filepath.Join(p.Workspace, ".relurpify_state")
+}
+
 func (p Paths) LogsDir() string {
-	return filepath.Join(p.ConfigRoot(), "logs")
+	return filepath.Join(p.StateRoot(), "logs")
 }
 
 func (p Paths) LogFile(name string) string {
@@ -56,7 +52,7 @@ func (p Paths) LogFile(name string) string {
 }
 
 func (p Paths) TelemetryDir() string {
-	return filepath.Join(p.ConfigRoot(), "telemetry")
+	return filepath.Join(p.StateRoot(), "telemetry")
 }
 
 func (p Paths) TelemetryFile(name string) string {
@@ -67,39 +63,28 @@ func (p Paths) TelemetryFile(name string) string {
 }
 
 func (p Paths) EventsFile() string {
-	return filepath.Join(p.ConfigRoot(), "events.db")
+	return filepath.Join(p.StateRoot(), "events.db")
 }
 
 func (p Paths) NodesFile() string {
-	return filepath.Join(p.ConfigRoot(), "nodes.db")
+	return filepath.Join(p.StateRoot(), "nodes.db")
 }
 
 func (p Paths) SessionStoreFile() string {
-	return filepath.Join(p.ConfigRoot(), "sessions.db")
+	return filepath.Join(p.StateRoot(), "sessions.db")
 }
 
 func (p Paths) IdentityStoreFile() string {
-	return filepath.Join(p.ConfigRoot(), "identities.db")
+	return filepath.Join(p.StateRoot(), "identities.db")
 }
 
 func (p Paths) AdminTokenStoreFile() string {
-	return filepath.Join(p.ConfigRoot(), "admin_tokens.db")
+	return filepath.Join(p.StateRoot(), "admin_tokens.db")
 }
 
-func (p Paths) PolicyRulesFile() string {
-	return filepath.Join(p.ConfigRoot(), "policy_rules.yaml")
-}
-
-func (p Paths) ProvidersFile() string {
-	return filepath.Join(p.ConfigRoot(), "providers.yaml")
-}
-
-func (p Paths) KeybindingsFile() string {
-	return filepath.Join(p.ConfigRoot(), "keybindings.yaml")
-}
 
 func (p Paths) MemoryDir() string {
-	return filepath.Join(p.ConfigRoot(), "memory")
+	return filepath.Join(p.StateRoot(), "memory")
 }
 
 func (p Paths) ASTIndexDir() string {
@@ -115,7 +100,7 @@ func (p Paths) RetrievalDB() string {
 }
 
 func (p Paths) SessionsDir() string {
-	return filepath.Join(p.ConfigRoot(), "sessions")
+	return filepath.Join(p.StateRoot(), "sessions")
 }
 
 func (p Paths) CheckpointsDir() string {
@@ -127,15 +112,15 @@ func (p Paths) WorkflowStateFile() string {
 }
 
 func (p Paths) ExportsDir() string {
-	return filepath.Join(p.ConfigRoot(), "exports")
+	return filepath.Join(p.StateRoot(), "exports")
 }
 
 func (p Paths) TestsuitesDir() string {
-	return filepath.Join(p.ConfigRoot(), "testsuites")
+	return filepath.Join(p.StateRoot(), "testsuites")
 }
 
 func (p Paths) TestRunsDir() string {
-	return filepath.Join(p.ConfigRoot(), "test_run")
+	return filepath.Join(p.StateRoot(), "test_run")
 }
 
 func (p Paths) TestSetupDir(parts ...string) string {
@@ -171,12 +156,8 @@ func (p Paths) TestRunTmpDir(parts ...string) string {
 	return filepath.Join(segments...)
 }
 
-func (p Paths) ShellBlacklistFile() string {
-	return filepath.Join(p.ConfigRoot(), "shell_blacklist.yaml")
-}
-
 func (p Paths) ModelProfilesDir() string {
-	return filepath.Join(p.ConfigRoot(), "model_profiles")
+	return filepath.Join(p.ConfigRoot(), "model", "profiles")
 }
 
 // GovernanceRoots returns the canonical workspace governance paths that should
@@ -185,12 +166,8 @@ func (p Paths) ModelProfilesDir() string {
 func (p Paths) GovernanceRoots(extra ...string) []string {
 	roots := []string{
 		p.ConfigRoot(),
+		p.WorkspaceFile(),
 		p.AgentsDir(),
-		p.ConfigFile(),
-		p.NexusConfigFile(),
-		p.PolicyRulesFile(),
-		p.ProvidersFile(),
-		p.KeybindingsFile(),
 		p.ModelProfilesDir(),
 	}
 	for _, path := range extra {

@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -53,14 +55,36 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 
 func TestDefaultCapabilityRegistrarNilRegistry(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	if err := reg.RegisterAll(agentenv.WorkspaceEnvironment{}); err != nil {
-		t.Fatalf("expected nil registry to be ignored, got error: %v", err)
+	if err := reg.RegisterAll(agentenv.WorkspaceEnvironment{}); err == nil {
+		t.Fatal("expected nil registry to fail")
 	}
 }
 
 func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	env := agentenv.WorkspaceEnvironment{Registry: capability.NewRegistry()}
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
+					"euclo:cap.test_run",
+					"euclo:cap.ast_query",
+					"euclo:cap.symbol_trace",
+					"euclo:cap.call_graph",
+					"euclo:cap.blame_trace",
+					"euclo:cap.bisect",
+					"euclo:cap.code_review",
+					"euclo:cap.diff_summary",
+					"euclo:cap.layer_check",
+					"euclo:cap.targeted_refactor",
+					"euclo:cap.rename_symbol",
+					"euclo:cap.api_compat",
+					"euclo:cap.boundary_report",
+					"euclo:cap.coverage_check",
+				}},
+			},
+		},
+		Registry: capability.NewRegistry(),
+	}
 
 	if err := reg.RegisterAll(env); err != nil {
 		t.Fatalf("RegisterAll returned error: %v", err)

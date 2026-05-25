@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -25,6 +28,7 @@ type RuntimeConfig struct {
 	Sandbox          sandbox.SandboxConfig
 	AuditLimit       int
 	BaseFS           string
+	StateDir         string
 	HITLTimeout      time.Duration
 }
 
@@ -80,13 +84,28 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if err != nil {
 		return nil, fmt.Errorf("permission manager init: %w", err)
 	}
+	stateDir := cfg.StateDir
+	if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
+		stateDir = filepath.Join(cfg.BaseFS, ".relurpify_state")
+	}
+	permissions.SetFilesystemGuardRoots(
+		[]string{
+			filepath.Join(cfg.BaseFS, "relurpify_cfg"),
+			filepath.Join(cfg.BaseFS, ".git"),
+		},
+		[]string{stateDir},
+	)
 	if agentManifest.Spec.Policies != nil {
 		if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
 			permissions.SetDefaultPolicy(policy)
 		}
 	}
 	permissions.AttachRuntime(runtime)
-	policy := buildSandboxPolicy(cfg.BaseFS, agentManifest)
+	securityBundle, err := cfgsecurity.LoadBundle(cfg.BaseFS)
+	if err != nil {
+		return nil, fmt.Errorf("load security policies: %w", err)
+	}
+	policy := buildSandboxPolicy(agentManifest, securityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(policy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -123,7 +142,7 @@ func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *manifest.AgentManife
 	}
 }
 
-func buildSandboxPolicy(baseFS string, agentManifest *manifest.AgentManifest) sandbox.SandboxPolicy {
+func buildSandboxPolicy(agentManifest *manifest.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
 	policy := sandbox.SandboxPolicy{}
 	if agentManifest == nil {
 		return policy
@@ -131,7 +150,7 @@ func buildSandboxPolicy(baseFS string, agentManifest *manifest.AgentManifest) sa
 	policy.NetworkRules = buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
 	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
-	policy.ProtectedPaths = manifest.New(baseFS).GovernanceRoots()
+	policy.ProtectedPaths = append([]string(nil), protectedPaths...)
 	return policy
 }
 

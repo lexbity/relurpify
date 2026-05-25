@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 func TestOpenWorkspaceForInspectionUsesEucloRegistrationFuncs(t *testing.T) {
@@ -17,7 +18,8 @@ func TestOpenWorkspaceForInspectionUsesEucloRegistrationFuncs(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifestPath := filepath.Join(agentDir, "euclo.yaml")
-	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: euclo
@@ -54,8 +56,9 @@ spec:
 			LoadThoughtRecipes:      func() (interface{}, error) { return nil, nil },
 		}
 	}
-	workspaceOpenFn = func(ctx context.Context, cfg agentenv.WorkspaceConfig, funcs agentenv.AgentRegistrationFuncs) (*agentenv.Workspace, error) {
+	workspaceOpenFn = func(ctx context.Context, cfg agentenv.WorkspaceConfig, secrets llm.ProviderSecrets, funcs agentenv.AgentRegistrationFuncs) (*agentenv.Workspace, error) {
 		gotFuncs = funcs
+		_ = secrets
 		return &agentenv.Workspace{}, nil
 	}
 
@@ -73,7 +76,8 @@ func TestBuildInspectionTargetResolvesWorkspaceConfig(t *testing.T) {
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(agentDir, "euclo.yaml"), []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(filepath.Join(agentDir, "euclo.yaml"), []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: euclo
@@ -111,7 +115,7 @@ spec:
 	if target.cfg.InferenceProvider != "ollama" {
 		t.Fatalf("expected default provider ollama, got %q", target.cfg.InferenceProvider)
 	}
-	if target.cfg.ConfigPath == "" || !strings.HasSuffix(target.cfg.ConfigPath, filepath.Join("relurpify_cfg", "config.yaml")) {
+	if target.cfg.ConfigPath == "" || !strings.HasSuffix(target.cfg.ConfigPath, filepath.Join("relurpify_cfg", "workspace.yaml")) {
 		t.Fatalf("unexpected config path: %q", target.cfg.ConfigPath)
 	}
 }

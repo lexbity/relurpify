@@ -15,11 +15,12 @@ import (
 // LocalCommandRunner executes commands directly on the host machine while still
 // honoring the workspace boundary enforced by permissions/tooling.
 type LocalCommandRunner struct {
-	workspace string
-	extraEnv  []string
+	workspace  string
+	allowedEnv []string
+	extraEnv   []string
 }
 
-func NewLocalCommandRunner(workspace string, extraEnv []string) *LocalCommandRunner {
+func NewLocalCommandRunner(workspace string, allowedEnv, extraEnv []string) *LocalCommandRunner {
 	abs := workspace
 	if abs == "" {
 		abs = "."
@@ -28,8 +29,9 @@ func NewLocalCommandRunner(workspace string, extraEnv []string) *LocalCommandRun
 		abs = resolved
 	}
 	return &LocalCommandRunner{
-		workspace: filepath.Clean(abs),
-		extraEnv:  append([]string(nil), extraEnv...),
+		workspace:  filepath.Clean(abs),
+		allowedEnv: append([]string(nil), allowedEnv...),
+		extraEnv:   append([]string(nil), extraEnv...),
 	}
 }
 
@@ -53,9 +55,8 @@ func (r *LocalCommandRunner) Run(ctx context.Context, req CommandRequest) (strin
 
 	cmd := exec.CommandContext(execCtx, req.Args[0], req.Args[1:]...)
 	cmd.Dir = dir
-	cmd.Env = append([]string{}, os.Environ()...)
-	cmd.Env = append(cmd.Env, r.extraEnv...)
-	cmd.Env = append(cmd.Env, req.Env...)
+	extraEnv := append(append([]string(nil), r.extraEnv...), req.Env...)
+	cmd.Env = assembleSubprocessEnv(os.Environ(), r.allowedEnv, extraEnv)
 	if req.Input != "" {
 		cmd.Stdin = strings.NewReader(req.Input)
 	}

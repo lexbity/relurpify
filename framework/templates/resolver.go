@@ -50,10 +50,10 @@ func (r Resolver) ResolveWorkspaceManifestTemplate() (string, error) {
 	)
 }
 
-// ResolveWorkspaceConfigTemplate resolves the generic starter workspace manifest.
+// ResolveWorkspaceConfigTemplate resolves the starter workspace root config.
 func (r Resolver) ResolveWorkspaceConfigTemplate() (string, error) {
 	return r.resolve(
-		filepath.Join("templates", "workspace", "manifest.yaml"),
+		filepath.Join("templates", "workspace", "workspace.yaml"),
 	)
 }
 
@@ -61,6 +61,16 @@ func (r Resolver) ResolveWorkspaceConfigTemplate() (string, error) {
 func (r Resolver) ResolveSkillManifestTemplate() (string, error) {
 	return r.resolve(
 		filepath.Join("templates", "skills", "skill.manifest.yaml"),
+	)
+}
+
+// ResolveWorkspaceSecurityTemplate resolves a starter workspace security policy template.
+func (r Resolver) ResolveWorkspaceSecurityTemplate(name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", errors.New("security template name required")
+	}
+	return r.resolve(
+		filepath.Join("templates", "workspace", "security", name+".policy.yaml"),
 	)
 }
 

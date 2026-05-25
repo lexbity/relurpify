@@ -64,6 +64,7 @@ type CapabilityRegistry struct {
 	policyEngine        authorization.PolicyEngine
 	nodeProviders       map[string]core.NodeProvider
 	modelProfile        *contracts.ModelProfile
+	toolAdmission       *ToolAdmissionPolicy
 
 	// delegate and toolIDAllowlist support scoped views returned by WithAllowlist.
 	// When delegate is non-nil, this registry defers all operations to delegate
@@ -82,6 +83,16 @@ func NewCapabilityRegistry() *CapabilityRegistry {
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
 		safety:              newRuntimeSafetyController(),
 	}
+}
+
+// UseToolAdmission configures manifest-driven tool gating for legacy tool registration.
+func (r *CapabilityRegistry) UseToolAdmission(policy *ToolAdmissionPolicy) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.toolAdmission = policy
+	r.mu.Unlock()
 }
 
 // WithAllowlist returns a scoped view of this registry that restricts
@@ -534,6 +545,15 @@ func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler core.Capabil
 func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool contracts.Tool, seenIDs, seenToolNames map[string]struct{}) (core.CapabilityDescriptor, *capabilityEntry, error) {
 	if tool == nil {
 		return core.CapabilityDescriptor{}, nil, fmt.Errorf("tool required")
+	}
+	if r.toolAdmission != nil {
+		allowed, err := r.toolAdmission.Admit(tool)
+		if err != nil {
+			return core.CapabilityDescriptor{}, nil, err
+		}
+		if !allowed {
+			return core.CapabilityDescriptor{}, nil, nil
+		}
 	}
 	desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), tool))
 	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {

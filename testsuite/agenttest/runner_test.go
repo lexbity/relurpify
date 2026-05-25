@@ -4,7 +4,6 @@
 package agenttest
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,9 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -78,17 +75,17 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifest := manifest.New(workspace).ManifestFile()
-	if err := os.MkdirAll(filepath.Dir(manifest), 0o755); err != nil {
+	manifestPath := filepath.Join(manifest.New(workspace).ConfigRoot(), "agent.manifest.yaml")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(manifest, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
 	got := fallbackManifestPath(filepath.Join(workspace, "testsuite", "agent.manifest.yaml"), workspace)
-	if got != manifest {
-		t.Fatalf("expected %s, got %s", manifest, got)
+	if got != manifestPath {
+		t.Fatalf("expected %s, got %s", manifestPath, got)
 	}
 }
 
@@ -167,7 +164,7 @@ func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) 
 
 func TestResolveCaseModelProfileUsesWorkspaceRegistry(t *testing.T) {
 	workspace := t.TempDir()
-	profilesDir := filepath.Join(workspace, "relurpify_cfg", "model_profiles")
+	profilesDir := filepath.Join(workspace, "relurpify_cfg", "model", "profiles")
 	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +199,7 @@ repair:
 	if provenance.MatchKind != "glob" {
 		t.Fatalf("expected glob match kind, got %q", provenance.MatchKind)
 	}
-	if provenance.ProfileSource != filepath.ToSlash("relurpify_cfg/model_profiles/gemma4.yaml") {
+	if provenance.ProfileSource != filepath.ToSlash("relurpify_cfg/model/profiles/gemma4.yaml") {
 		t.Fatalf("unexpected profile source: %q", provenance.ProfileSource)
 	}
 	if profile.Repair.Strategy != "llm" || !profile.ToolCalling.NativeAPI || profile.ToolCalling.MaxToolsPerCall != 2 {
@@ -340,53 +337,7 @@ func TestProviderProvenanceForExecution(t *testing.T) {
 	}
 }
 
-func TestResolveCaseTimeout(t *testing.T) {
-	got, err := resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, nil, CaseSpec{Timeout: "2m"})
-	if err != nil {
-		t.Fatalf("resolveCaseTimeout case override: %v", err)
-	}
-	if got != 2*time.Minute {
-		t.Fatalf("expected 2m timeout, got %s", got)
-	}
 
-	got, err = resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, nil, CaseSpec{})
-	if err != nil {
-		t.Fatalf("resolveCaseTimeout global: %v", err)
-	}
-	if got != 30*time.Second {
-		t.Fatalf("expected 30s timeout, got %s", got)
-	}
-
-	got, err = resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, &Suite{
-		Spec: SuiteSpec{
-			Execution: SuiteExecutionSpec{Timeout: "90s"},
-		},
-	}, CaseSpec{})
-	if err != nil {
-		t.Fatalf("resolveCaseTimeout suite timeout: %v", err)
-	}
-	if got != 90*time.Second {
-		t.Fatalf("expected suite timeout 90s, got %s", got)
-	}
-
-	if _, err := resolveCaseTimeout(RunOptions{}, nil, CaseSpec{Timeout: "nope"}); err == nil {
-		t.Fatal("expected invalid case timeout to fail")
-	}
-}
-
-func TestResolveBootstrapTimeout(t *testing.T) {
-	if got := resolveBootstrapTimeout(RunOptions{BootstrapTimeout: 5 * time.Second}, CaseSpec{}); got != 5*time.Second {
-		t.Fatalf("expected 5s bootstrap timeout, got %s", got)
-	}
-	if got := resolveBootstrapTimeout(RunOptions{}, CaseSpec{}); got != 30*time.Second {
-		t.Fatalf("expected default bootstrap timeout, got %s", got)
-	}
-	if got := resolveBootstrapTimeout(RunOptions{BootstrapTimeout: 5 * time.Second}, CaseSpec{
-		Overrides: CaseOverrideSpec{BootstrapTimeout: "45s"},
-	}); got != 45*time.Second {
-		t.Fatalf("expected case bootstrap timeout override 45s, got %s", got)
-	}
-}
 
 func TestApplySetupGitInitCreatesCommittedBaseline(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
@@ -529,7 +480,8 @@ func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	manifestData := `apiVersion: relurpify/v1alpha1
+	manifestData := `schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: coding
@@ -592,7 +544,8 @@ func TestRunnerPreflightSuiteFailsWhenModelNotLoaded(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	manifestData := `apiVersion: relurpify/v1alpha1
+	manifestData := `schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: coding

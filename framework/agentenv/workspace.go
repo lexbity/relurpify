@@ -15,6 +15,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -32,7 +34,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"gopkg.in/yaml.v3"
 )
 
 // Workspace is a live, initialized workspace session. It holds all open
@@ -216,9 +217,12 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.Runner == nil {
 		return nil, fmt.Errorf("command runner required")
 	}
+	securityBundle, err := cfgsecurity.LoadBundle(workspace)
+	if err != nil {
+		return nil, fmt.Errorf("load security policies: %w", err)
+	}
 
 	var agentDefs map[string]*agentspec.AgentDefinition
-	var err error
 	if opts.AgentsDir != "" {
 		agentDefs, err = loadAgentDefinitions(opts.AgentsDir)
 		if err != nil && !os.IsNotExist(err) {
@@ -241,14 +245,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 	agentSpec := effectiveContract.AgentSpec
 	skillResults := append([]manifest.SkillResolution{}, effectiveContract.SkillResults...)
-	workspacePaths := manifest.New(workspace)
-	fileScope := fsandbox.NewFileScopePolicy(workspace, workspacePaths.GovernanceRoots(
-		workspacePaths.ManifestFile(),
-		workspacePaths.ConfigFile(),
-		workspacePaths.NexusConfigFile(),
-		workspacePaths.PolicyRulesFile(),
-		workspacePaths.ModelProfilesDir(),
-	))
+	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), securityBundle.Sandbox.ProtectedPaths...))
 
 	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
@@ -265,7 +262,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
 		AgentSpec:         agentSpec,
-		ProtectedPaths:    manifest.New(workspace).GovernanceRoots(manifest.New(workspace).ManifestFile(), manifest.New(workspace).ConfigFile(), manifest.New(workspace).NexusConfigFile(), manifest.New(workspace).PolicyRulesFile(), manifest.New(workspace).ModelProfilesDir()),
+		ProtectedPaths:    append([]string(nil), securityBundle.Sandbox.ProtectedPaths...),
 		SkipASTIndex:      opts.SkipASTIndex,
 	})
 	if err != nil {
@@ -405,16 +402,52 @@ func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspe
 //
 // Open is the single composition root for all Relurpify entry points.
 // app/relurpish, app/dev-agent-cli, and integration tests all call Open().
-func Open(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
-	// Resolve workspace YAML overrides before probing or opening stores.
-	cfg = resolveWorkspaceConfigOverrides(cfg)
+func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
+	if cfg.Workspace == "" {
+		return nil, fmt.Errorf("workspace required")
+	}
+	workspaceConfigPath := cfgload.DefaultWorkspaceConfigPath(cfg.Workspace)
+	strictMode := cfgload.LoadEnvOverrides(os.Environ()).Strict
+	workspaceCfg, err := cfgload.LoadWorkspaceConfig(workspaceConfigPath, cfg.Workspace, cfgload.WorkspaceLoadOptions{Strict: strictMode})
+	if err != nil {
+		return nil, fmt.Errorf("load workspace config: %w", err)
+	}
+	if len(workspaceCfg.DefaultsUsed) > 0 {
+		for _, usage := range workspaceCfg.DefaultsUsed {
+			log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceConfigPath, usage.Key, usage.Value)
+		}
+	}
+	cfg.StateDir = workspaceCfg.StateDir()
+	if cfg.SandboxBackend == "" {
+		cfg.SandboxBackend = stringValue(workspaceCfg.Sandbox.Backend)
+	}
+	if cfg.InferenceModel == "" {
+		cfg.InferenceModel = stringValue(workspaceCfg.Model.DefaultName)
+	}
+	defaultStateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
+	defaultLogPath := filepath.Join(defaultStateDir, "logs", "agentenv.log")
+	defaultTelemetryPath := filepath.Join(defaultStateDir, "telemetry", "agentenv.jsonl")
+	defaultEventsPath := filepath.Join(defaultStateDir, "events.db")
+	defaultMemoryPath := filepath.Join(defaultStateDir, "memory")
+	if cfg.LogPath == "" || filepath.Clean(cfg.LogPath) == filepath.Clean(defaultLogPath) {
+		cfg.LogPath = filepath.Join(cfg.StateDir, "logs", "agentenv.log")
+	}
+	if cfg.TelemetryPath == "" || filepath.Clean(cfg.TelemetryPath) == filepath.Clean(defaultTelemetryPath) {
+		cfg.TelemetryPath = filepath.Join(cfg.StateDir, "telemetry", "agentenv.jsonl")
+	}
+	if cfg.EventsPath == "" || filepath.Clean(cfg.EventsPath) == filepath.Clean(defaultEventsPath) {
+		cfg.EventsPath = filepath.Join(cfg.StateDir, "events.db")
+	}
+	if cfg.MemoryPath == "" || filepath.Clean(cfg.MemoryPath) == filepath.Clean(defaultMemoryPath) {
+		cfg.MemoryPath = filepath.Join(cfg.StateDir, "memory")
+	}
 
 	// Phase A: Configuration Validation
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
 
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
 	if err != nil {
 		return nil, fmt.Errorf("build inference backend: %w", err)
 	}
@@ -451,6 +484,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFu
 		Backend:          cfg.SandboxBackend,
 		AuditLimit:       cfg.AuditLimit,
 		BaseFS:           cfg.Workspace,
+		StateDir:         cfg.StateDir,
 		HITLTimeout:      cfg.HITLTimeout,
 	})
 	if err != nil {
@@ -659,52 +693,6 @@ func (a llmTelemetryAdapter) Emit(event contracts.Event) {
 	})
 }
 
-// resolveWorkspaceConfig loads the workspace YAML (if ConfigPath is
-// set) and applies model and agent-name overrides. Errors are silently ignored
-// so that a missing or malformed config file does not prevent startup.
-func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
-	if cfg.ConfigPath == "" {
-		return cfg
-	}
-	type yamlCfg struct {
-		Provider     string   `json:"provider" yaml:"provider"`
-		Model        string   `json:"model" yaml:"model"`
-		Backend      string   `json:"sandbox_backend" yaml:"sandbox_backend"`
-		Agent        string   `json:"agent" yaml:"agent"`
-		Agents       []string `json:"agents" yaml:"agents"`
-		DefaultModel struct {
-			Name string `json:"name" yaml:"name"`
-		} `json:"default_model" yaml:"default_model"`
-	}
-	data, err := os.ReadFile(cfg.ConfigPath)
-	if err != nil {
-		return cfg
-	}
-	// Try JSON first (YAML is a superset, but we keep it simple here).
-	var yc yamlCfg
-	if err := yaml.Unmarshal(data, &yc); err == nil {
-		if yc.Provider != "" && cfg.InferenceProvider == "" {
-			cfg.InferenceProvider = yc.Provider
-		}
-		if yc.Model != "" && cfg.InferenceModel == "" {
-			cfg.InferenceModel = yc.Model
-		}
-		if yc.Backend != "" && cfg.SandboxBackend == "" {
-			cfg.SandboxBackend = yc.Backend
-		}
-		if yc.DefaultModel.Name != "" && cfg.InferenceModel == "" {
-			cfg.InferenceModel = yc.DefaultModel.Name
-		}
-		if yc.Agent != "" && cfg.AgentName == "" {
-			cfg.AgentName = yc.Agent
-		}
-		if len(yc.Agents) > 0 && cfg.AgentName == "" {
-			cfg.AgentName = yc.Agents[0]
-		}
-	}
-	return cfg
-}
-
 func validateConfig(cfg WorkspaceConfig) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("Workspace is required")
@@ -718,14 +706,32 @@ func validateConfig(cfg WorkspaceConfig) error {
 	return nil
 }
 
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
 // setupTelemetry opens the log file, creates a logger, and assembles the
 // telemetry sink chain (logger + optional JSON file). Returns the log file
 // (which must be closed by the caller), the logger, and the assembled telemetry.
 func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
-		paths := manifest.New(cfg.Workspace)
-		logPath = filepath.Join(paths.LogsDir(), "agentenv.log")
+		if cfg.StateDir != "" {
+			logPath = filepath.Join(cfg.StateDir, "logs", "agentenv.log")
+		} else {
+			logPath = filepath.Join(cfg.Workspace, ".relurpify_state", "logs", "agentenv.log")
+		}
+	}
+	telemetryPath := cfg.TelemetryPath
+	if telemetryPath == "" {
+		if cfg.StateDir != "" {
+			telemetryPath = filepath.Join(cfg.StateDir, "telemetry", "agentenv.jsonl")
+		} else {
+			telemetryPath = filepath.Join(cfg.Workspace, ".relurpify_state", "telemetry", "agentenv.jsonl")
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return nil, nil, nil, fmt.Errorf("create log directory: %w", err)
@@ -739,9 +745,9 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 	var sinks []core.Telemetry
 	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
 
-	if cfg.TelemetryPath != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.TelemetryPath), 0o755); err == nil {
-			if fileSink, err := telemetry.NewJSONFileTelemetry(cfg.TelemetryPath); err == nil {
+	if telemetryPath != "" {
+		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o755); err == nil {
+			if fileSink, err := telemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
 				sinks = append(sinks, fileSink)
 			} else {
 				logger.Printf("warning: failed to init json telemetry: %v", err)

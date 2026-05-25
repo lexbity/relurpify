@@ -9,6 +9,7 @@ import (
 
 	nexusruntime "codeburg.org/lexbit/relurpify/app/nexusish/runtime"
 	"codeburg.org/lexbit/relurpify/app/nexusish/tui"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"github.com/spf13/cobra"
 )
 
@@ -37,5 +38,5 @@ func newRootCmd() *cobra.Command {
 }
 
 func runDashboard(ctx context.Context, workspace, configPath string) error {
-	return tui.Run(ctx, nexusruntime.New(workspace, configPath))
+	return tui.Run(ctx, nexusruntime.New(workspace, configPath, cfgload.LoadSecrets(os.Environ())))
 }

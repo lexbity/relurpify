@@ -21,7 +21,7 @@ type ProbeResult struct {
 
 // ProbeWorkspace runs all platform runtime checks required for a workspace.
 // It returns a slice of results, one per check.
-func ProbeWorkspace(cfg WorkspaceConfig, backend llm.ManagedBackend) []ProbeResult {
+func ProbeWorkspace(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) []ProbeResult {
 	var results []ProbeResult
 
 	// 1. Workspace directory
@@ -43,7 +43,7 @@ func ProbeWorkspace(cfg WorkspaceConfig, backend llm.ManagedBackend) []ProbeResu
 	})
 
 	// 3. Inference backend reachable
-	inferenceOk, inferenceMsg := checkInferenceBackend(cfg, backend)
+		inferenceOk, inferenceMsg := checkInferenceBackend(cfg, secrets, backend)
 	results = append(results, ProbeResult{
 		Name:     "inference_backend",
 		Required: true,
@@ -93,10 +93,10 @@ func checkSQLiteWritable(workspace string) (bool, string) {
 	return true, "SQLite locations are writable"
 }
 
-func checkInferenceBackend(cfg WorkspaceConfig, backend llm.ManagedBackend) (bool, string) {
+func checkInferenceBackend(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) (bool, string) {
 	if backend == nil {
 		var err error
-		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
 		if err != nil {
 			return false, fmt.Sprintf("build inference backend: %s", err)
 		}

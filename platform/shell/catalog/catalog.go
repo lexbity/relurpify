@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ToolCatalogEntry is the canonical registry record for a shell tool.
@@ -77,8 +79,8 @@ type CommandToolSpec struct {
 	AllowStdin      bool
 	SupportsWorkdir bool
 	ResultStyle     string
-	ParameterSchema  ToolSchema
-	OutputSchema     ToolSchema
+	ParameterSchema ToolSchema
+	OutputSchema    ToolSchema
 }
 
 // SchemaIssue describes a single validation failure.
@@ -199,10 +201,65 @@ func EntryFromCommandSpec(spec CommandToolSpec) ToolCatalogEntry {
 			ResultStyle:     spec.ResultStyle,
 		},
 		Tags:        normalizeNames(spec.Tags),
-		Deprecated:   spec.Deprecated,
-		Replacement:  NormalizeName(spec.Replacement),
-		Examples:     append([]ToolExample(nil), spec.Examples...),
+		Deprecated:  spec.Deprecated,
+		Replacement: NormalizeName(spec.Replacement),
+		Examples:    append([]ToolExample(nil), spec.Examples...),
 	}
+}
+
+// EntryFromManifest converts a tool manifest into a catalog entry.
+func EntryFromManifest(manifest contracts.ToolManifest) ToolCatalogEntry {
+	entry := ToolCatalogEntry{
+		Name:            NormalizeName(manifest.Name),
+		Family:          NormalizeName(manifest.Family),
+		Intent:          normalizeNames(manifest.Intent),
+		Description:     manifest.Description,
+		LongDescription: manifest.Description,
+		Preset: ToolPreset{
+			AllowStdin:      manifest.Execution.AllowStdin,
+			SupportsWorkdir: manifest.Execution.SupportsWorkdir,
+			DefaultArgs:     append([]string(nil), manifest.Execution.DefaultArgs...),
+		},
+		Tags:        append([]string(nil), manifest.Capability.RiskClass...),
+		Deprecated:  false,
+		Replacement: "",
+	}
+	if len(manifest.Parameters) > 0 {
+		props := make(map[string]ToolSchemaField, len(manifest.Parameters))
+		var required []string
+		for _, param := range manifest.Parameters {
+			props[NormalizeName(param.Name)] = ToolSchemaField{
+				Type:        param.Type,
+				Description: param.Description,
+				Default:     param.Default,
+			}
+			if param.Required {
+				required = append(required, NormalizeName(param.Name))
+			}
+		}
+		entry.ParameterSchema = ToolSchema{
+			Type:       "object",
+			Properties: props,
+			Required:   required,
+		}
+	}
+	entry.OutputSchema = ToolSchema{Type: "object"}
+	if manifest.Execution.Backend == contracts.ToolBackendSubprocess && manifest.Execution.Command != nil {
+		entry.Preset.CommandTemplate = append([]string(nil), manifest.Execution.Command.Base...)
+		if len(manifest.Execution.Command.Args) > 0 {
+			entry.Preset.CommandTemplate = append(entry.Preset.CommandTemplate, manifest.Execution.Command.Args...)
+		}
+	}
+	if manifest.Execution.Backend == contracts.ToolBackendGoNative {
+		entry.Preset.CommandTemplate = []string{manifest.Execution.Implementation}
+	}
+	if len(entry.Preset.CommandTemplate) == 0 && manifest.Execution.Implementation != "" {
+		entry.Preset.CommandTemplate = []string{manifest.Execution.Implementation}
+	}
+	if len(manifest.Intent) > 0 {
+		entry.Tags = append(entry.Tags, manifest.Intent...)
+	}
+	return entry
 }
 
 // Lookup resolves a canonical name or alias.

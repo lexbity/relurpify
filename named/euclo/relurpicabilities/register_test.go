@@ -6,10 +6,28 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+var declaredRelurpicIDs = []string{
+	"euclo:cap.test_run",
+	"euclo:cap.ast_query",
+	"euclo:cap.symbol_trace",
+	"euclo:cap.call_graph",
+	"euclo:cap.blame_trace",
+	"euclo:cap.bisect",
+	"euclo:cap.code_review",
+	"euclo:cap.diff_summary",
+	"euclo:cap.layer_check",
+	"euclo:cap.targeted_refactor",
+	"euclo:cap.rename_symbol",
+	"euclo:cap.api_compat",
+	"euclo:cap.boundary_report",
+	"euclo:cap.coverage_check",
+}
 
 type availabilityTool struct {
 	name      string
@@ -36,7 +54,7 @@ func TestRegisterAllNilRegistryErrors(t *testing.T) {
 		Registry: nil,
 	}
 
-	err := RegisterAll(env)
+	err := RegisterAll(env, declaredRelurpicIDs)
 	if err == nil {
 		t.Fatal("expected error when registry is nil, got nil")
 	}
@@ -46,12 +64,39 @@ func TestRegisterAllNilRegistryErrors(t *testing.T) {
 	}
 }
 
-func TestRegisterAllValidRegistryNoError(t *testing.T) {
+func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
+					"euclo:cap.test_run",
+					"euclo:cap.does_not_exist",
+				}},
+			},
+		},
 		Registry: capability.NewCapabilityRegistry(),
 	}
 
-	err := RegisterAll(env)
+	err := RegisterAll(env, []string{"euclo:cap.test_run", "euclo:cap.does_not_exist"})
+	if err == nil {
+		t.Fatal("expected unknown declaration to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown relurpic capability declaration") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRegisterAllValidRegistryNoError(t *testing.T) {
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
+			},
+		},
+		Registry: capability.NewCapabilityRegistry(),
+	}
+
+	err := RegisterAll(env, declaredRelurpicIDs)
 	if err != nil {
 		t.Fatalf("expected no error with valid registry, got: %v", err)
 	}
@@ -59,8 +104,15 @@ func TestRegisterAllValidRegistryNoError(t *testing.T) {
 
 func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 	reg := capability.NewCapabilityRegistry()
-	env := agentenv.WorkspaceEnvironment{Registry: reg}
-	if err := RegisterAll(env); err != nil {
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
+			},
+		},
+		Registry: reg,
+	}
+	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 
@@ -98,8 +150,15 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
 
-	env := agentenv.WorkspaceEnvironment{Registry: reg}
-	if err := RegisterAll(env); err != nil {
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
+			},
+		},
+		Registry: reg,
+	}
+	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 
@@ -133,8 +192,15 @@ func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
 	reg := capability.NewCapabilityRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 
-	env := agentenv.WorkspaceEnvironment{Registry: reg}
-	if err := RegisterAll(env); err != nil {
+	env := agentenv.WorkspaceEnvironment{
+		Config: &core.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
+			},
+		},
+		Registry: reg,
+	}
+	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 

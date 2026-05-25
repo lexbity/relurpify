@@ -118,7 +118,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if string(agentData) != "path: "+filepath.ToSlash(derived)+"\n" {
 		t.Fatalf("derived agent = %q", string(agentData))
 	}
-	if _, err := os.Stat(filepath.Join(derived, manifest.DirName, "logs")); err != nil {
+	if _, err := os.Stat(filepath.Join(derived, ".relurpify_state", "logs")); err != nil {
 		t.Fatalf("expected derived logs dir: %v", err)
 	}
 }
@@ -143,7 +143,8 @@ func TestMaterializeDerivedWorkspaceCopiesReferencedSkills(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
   name: coding
@@ -170,7 +171,7 @@ spec:
 	if _, err := manifest.LoadAgentManifest(manifestPath); err != nil {
 		t.Fatalf("LoadAgentManifest: %v", err)
 	}
-	if err := os.WriteFile(skillPath, []byte("apiVersion: relurpify/v1alpha1\nkind: SkillManifest\nmetadata:\n  name: system\n"), 0o644); err != nil {
+	if err := os.WriteFile(skillPath, []byte("schema: relurpify/skill/v1\napiVersion: relurpify/v1alpha1\nkind: SkillManifest\nmetadata:\n  name: system\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

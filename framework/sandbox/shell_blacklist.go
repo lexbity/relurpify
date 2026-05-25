@@ -5,9 +5,13 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// RejectForbiddenSecretFields is injected by cfgload at init to break import cycles.
+var RejectForbiddenSecretFields func(string, []byte) error
 
 // BlacklistAction defines the action to take when a rule matches.
 type BlacklistAction string
@@ -40,6 +44,33 @@ type ShellBlacklist struct {
 	rules []BlacklistRule
 }
 
+// NewShellBlacklist compiles a blacklist from validated rule definitions.
+func NewShellBlacklist(rules []BlacklistRule) (*ShellBlacklist, error) {
+	bl := &ShellBlacklist{}
+	for _, r := range rules {
+		if strings.TrimSpace(r.ID) == "" {
+			return nil, fmt.Errorf("shell blacklist rule id required")
+		}
+		switch r.Action {
+		case BlacklistActionBlock, BlacklistActionHITL:
+		default:
+			return nil, fmt.Errorf("shell blacklist rule %q action %q invalid", r.ID, r.Action)
+		}
+		pat, err := regexp.Compile(r.Raw)
+		if err != nil {
+			return nil, fmt.Errorf("compile pattern %q for rule %q: %w", r.Raw, r.ID, err)
+		}
+		bl.rules = append(bl.rules, BlacklistRule{
+			ID:      r.ID,
+			Pattern: pat,
+			Raw:     r.Raw,
+			Reason:  r.Reason,
+			Action:  r.Action,
+		})
+	}
+	return bl, nil
+}
+
 // Load reads and compiles rules from path. Missing file returns empty blacklist, no error.
 func Load(path string) (*ShellBlacklist, error) {
 	f, err := os.Open(path)
@@ -55,27 +86,17 @@ func Load(path string) (*ShellBlacklist, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read blacklist file: %w", err)
 	}
+	if RejectForbiddenSecretFields != nil {
+		if err := RejectForbiddenSecretFields(path, data); err != nil {
+			return nil, err
+		}
+	}
 
 	var raw shellBlacklistYAML
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse blacklist YAML: %w", err)
 	}
-
-	bl := &ShellBlacklist{}
-	for _, r := range raw.Rules {
-		pat, err := regexp.Compile(r.Raw)
-		if err != nil {
-			return nil, fmt.Errorf("compile pattern %q for rule %q: %w", r.Raw, r.ID, err)
-		}
-		bl.rules = append(bl.rules, BlacklistRule{
-			ID:      r.ID,
-			Pattern: pat,
-			Raw:     r.Raw,
-			Reason:  r.Reason,
-			Action:  r.Action,
-		})
-	}
-	return bl, nil
+	return NewShellBlacklist(raw.Rules)
 }
 
 // Check returns the first matching rule for the command string, or nil.
