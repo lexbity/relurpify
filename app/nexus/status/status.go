@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -48,7 +49,7 @@ type PendingPairingInfo struct {
 func Load(ctx context.Context, workspace, configPath string) (Snapshot, error) {
 	paths := frameworkmanifest.New(workspace)
 	if configPath == "" {
-		configPath = paths.NexusConfigFile()
+		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")
 	}
 	cfg, err := nexuscfg.Load(configPath)
 	if err != nil {

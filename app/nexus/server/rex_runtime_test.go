@@ -8,6 +8,7 @@ import (
 func TestNewRexRuntimeProvider(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 
 	provider, err := NewRexRuntimeProvider(ctx, workspace)
 	if err != nil {
@@ -60,6 +61,7 @@ func TestNewRexRuntimeProviderEmptyWorkspace(t *testing.T) {
 func TestRexRuntimeProviderClose(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 
 	provider, err := NewRexRuntimeProvider(ctx, workspace)
 	if err != nil {
@@ -76,6 +78,7 @@ func TestRexRuntimeProviderClose(t *testing.T) {
 func TestRexRuntimeProviderRegistration(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 
 	provider, err := NewRexRuntimeProvider(ctx, workspace)
 	if err != nil {

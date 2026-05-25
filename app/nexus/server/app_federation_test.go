@@ -55,6 +55,7 @@ func TestRexRuntimePublishesLocalTrustBundle(t *testing.T) {
 	t.Parallel()
 
 	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
 	signer := fwfmp.NewEd25519SignerFromSeed([]byte("nexus-app-local-bundle"))
 	mesh := &fwfmp.Service{
 		Trust:  &fwfmp.InMemoryTrustBundleStore{},

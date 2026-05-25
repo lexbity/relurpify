@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
@@ -136,7 +137,33 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 	// Build workspace environment using framework composition root
 	env, err := agentenv.BuildWorkspaceEnvironment(ctx, agentenv.WorkspaceConfig{
 		Workspace:    workspace,
+		AgentName:    "euclo",
 		SkipASTIndex: false,
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "qwen2.5-coder:14b",
+			},
+			Capabilities: agentspec.AgentCapabilitiesSpec{
+				Relurpic: []string{
+					"euclo:cap.test_run",
+					"euclo:cap.ast_query",
+					"euclo:cap.symbol_trace",
+					"euclo:cap.call_graph",
+					"euclo:cap.blame_trace",
+					"euclo:cap.bisect",
+					"euclo:cap.code_review",
+					"euclo:cap.diff_summary",
+					"euclo:cap.layer_check",
+					"euclo:cap.targeted_refactor",
+					"euclo:cap.rename_symbol",
+					"euclo:cap.api_compat",
+					"euclo:cap.boundary_report",
+					"euclo:cap.coverage_check",
+				},
+			},
+		},
 	}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		_ = workflowStore.Close()

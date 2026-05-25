@@ -137,7 +137,7 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 		return err
 	}
 	defer tokenStore.Close()
-	policyStore, err := nexusdb.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+	policyStore, err := nexusdb.NewFilePolicyRuleStore(filepath.Join(paths.ConfigRoot(), "policy_rules.yaml"))
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func newAdminMCPCmd(workspace, configPath *string) *cobra.Command {
 				return err
 			}
 			defer tokenStore.Close()
-			policyStore, err := nexusdb.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+			policyStore, err := nexusdb.NewFilePolicyRuleStore(filepath.Join(paths.ConfigRoot(), "policy_rules.yaml"))
 			if err != nil {
 				return err
 			}

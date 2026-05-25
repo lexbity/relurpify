@@ -29,11 +29,11 @@ func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusad
 		identityStore:  identityStore,
 	}
 	for _, entry := range cfg.Tokens {
-		if entry.Token == "" || entry.SubjectID == "" || entry.Role == "" {
+		if entry.TokenHash == "" || entry.SubjectID == "" || entry.Role == "" {
 			continue
 		}
 		resolver.staticBindings = append(resolver.staticBindings, identity.StaticTokenBinding{
-			Token:       entry.Token,
+			TokenHash:   entry.TokenHash,
 			TenantID:    entry.TenantID,
 			Role:        entry.Role,
 			SubjectKind: identity.SubjectKind(entry.SubjectKind),
@@ -66,8 +66,9 @@ func (r *gatewayPrincipalResolverImpl) Resolve(ctx context.Context, token string
 }
 
 func (r *gatewayPrincipalResolverImpl) resolveStatic(token string) (fwgateway.ConnectionPrincipal, bool) {
+	tokenHash := hashToken(token)
 	for _, binding := range r.staticBindings {
-		if binding.Token != token {
+		if binding.TokenHash != tokenHash {
 			continue
 		}
 		principal := authPrincipalFromBinding(binding)
@@ -192,19 +193,6 @@ func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, 
 			return identity.AuthenticatedPrincipal{}, fmt.Errorf("resolve admin principal: %w", err)
 		}
 		return *principal.Principal, nil
-	}
-	for _, entry := range cfg.Gateway.Auth.Tokens {
-		role := strings.ToLower(strings.TrimSpace(entry.Role))
-		if role != "admin" && role != "operator" {
-			continue
-		}
-		if resolver == nil {
-			break
-		}
-		principal, err := resolver(context.Background(), entry.Token)
-		if err == nil && principal.Principal != nil {
-			return *principal.Principal, nil
-		}
 	}
 	return identity.AuthenticatedPrincipal{
 		TenantID:      "default",

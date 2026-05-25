@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	nexusadminapi "codeburg.org/lexbit/relurpify/app/nexus/adminapi"
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
@@ -34,14 +36,15 @@ type adminClient interface {
 type Runtime struct {
 	Workspace  string
 	ConfigPath string
+	secrets    cfgload.Secrets
 
 	mu     sync.Mutex
 	client adminClient
 	mode   RuntimeMode
 }
 
-func New(workspace, configPath string) *Runtime {
-	return &Runtime{Workspace: workspace, ConfigPath: configPath}
+func New(workspace, configPath string, secrets cfgload.Secrets) *Runtime {
+	return &Runtime{Workspace: workspace, ConfigPath: configPath, secrets: secrets}
 }
 
 func (r *Runtime) State(ctx context.Context) (RuntimeState, error) {
@@ -173,13 +176,13 @@ func (r *Runtime) loadConfig() (nexuscfg.Config, error) {
 	paths := manifest.New(r.Workspace)
 	configPath := r.ConfigPath
 	if configPath == "" {
-		configPath = paths.NexusConfigFile()
+		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")
 	}
 	return nexuscfg.Load(configPath)
 }
 
 func (r *Runtime) connectHTTP(ctx context.Context, cfg nexuscfg.Config) (adminClient, error) {
-	token := selectAdminToken(cfg)
+	token := selectAdminToken(r.secrets.NexusAdminToken)
 	if strings.TrimSpace(token) == "" {
 		return nil, fmt.Errorf("no admin token configured")
 	}
@@ -191,7 +194,11 @@ func (r *Runtime) connectHTTP(ctx context.Context, cfg nexuscfg.Config) (adminCl
 }
 
 func (r *Runtime) connectStdio(ctx context.Context, cfg nexuscfg.Config) (adminClient, error) {
-	command, args := localAdminCommand(r.Workspace, r.ConfigPath, selectAdminToken(cfg))
+	token := selectAdminToken(r.secrets.NexusAdminToken)
+	if strings.TrimSpace(token) == "" {
+		return nil, fmt.Errorf("no admin token configured")
+	}
+	command, args := localAdminCommand(r.Workspace, r.ConfigPath, token)
 	return mcpclient.ConnectStdio(ctx, nil, mcpclient.StdioConfig{
 		Command:      command,
 		Args:         args,
@@ -213,20 +220,8 @@ func httpAdminURL(cfg nexuscfg.Config) string {
 	return "http://" + bind + "/admin/mcp"
 }
 
-func selectAdminToken(cfg nexuscfg.Config) string {
-	for _, entry := range cfg.Gateway.Auth.Tokens {
-		role := strings.ToLower(strings.TrimSpace(entry.Role))
-		if role == "admin" || role == "operator" {
-			return strings.TrimSpace(entry.Token)
-		}
-		for _, scope := range entry.Scopes {
-			scope = strings.ToLower(strings.TrimSpace(scope))
-			if scope == "gateway:admin" || scope == "nexus:admin" || scope == "nexus:operator" {
-				return strings.TrimSpace(entry.Token)
-			}
-		}
-	}
-	return ""
+func selectAdminToken(fallback string) string {
+	return strings.TrimSpace(fallback)
 }
 
 func localAdminCommand(workspace, configPath, token string) (string, []string) {

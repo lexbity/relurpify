@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"path/filepath"
 	"time"
 
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
@@ -14,7 +15,7 @@ import (
 func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
 	paths := manifest.New(workspace)
 	if configPath == "" {
-		configPath = paths.NexusConfigFile()
+		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")
 	}
 	cfg, err := nexuscfg.Load(configPath)
 	if err != nil {

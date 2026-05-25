@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +34,7 @@ type GatewayAuthConfig struct {
 }
 
 type GatewayTokenAuth struct {
-	Token       string   `yaml:"token"`
+	TokenHash   string   `yaml:"token_hash"`
 	TenantID    string   `yaml:"tenant_id,omitempty"`
 	Role        string   `yaml:"role"`
 	SubjectKind string   `yaml:"subject_kind,omitempty"`
@@ -93,8 +94,13 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
+		return Config{}, err
+	}
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return Config{}, err
 	}
 	if cfg.Gateway.Bind == "" {
