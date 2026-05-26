@@ -24,7 +24,7 @@ kind: AgentManifest
 metadata:
   name: euclo
 spec:
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  image: ghcr.io/lexcodex/relurpify/runtime:0.4.1
   runtime: gvisor
   permissions:
     filesystem:
@@ -82,7 +82,7 @@ kind: AgentManifest
 metadata:
   name: euclo
 spec:
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  image: ghcr.io/lexcodex/relurpify/runtime:0.4.1
   runtime: gvisor
   permissions:
     filesystem:
@@ -115,7 +115,7 @@ spec:
 	if target.cfg.InferenceProvider != "ollama" {
 		t.Fatalf("expected default provider ollama, got %q", target.cfg.InferenceProvider)
 	}
-	if target.cfg.ConfigPath == "" || !strings.HasSuffix(target.cfg.ConfigPath, filepath.Join("relurpify_cfg", "workspace.yaml")) {
+	if target.cfg.ConfigPath == "" || !strings.HasSuffix(target.cfg.ConfigPath, filepath.Join(".relurpify_state", "workspace.yaml")) {
 		t.Fatalf("unexpected config path: %q", target.cfg.ConfigPath)
 	}
 }

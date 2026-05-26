@@ -5,7 +5,8 @@ paths:
   state_dir: .relurpify_state
 
 model:
-  default_name: qwen2.5-coder:14b
+  provider: ollama
+  name: qwen2.5-coder:14b
 
 sandbox:
   backend: gvisor

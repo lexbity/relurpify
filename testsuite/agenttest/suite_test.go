@@ -15,7 +15,7 @@ func TestSuiteValidateDefaultsDerivedWorkspaceSettings(t *testing.T) {
 		Kind:       "AgentTestSuite",
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "smoke",
 				Prompt: "summarize",
@@ -46,7 +46,7 @@ func TestSuiteValidateRejectsLegacyWorkspaceStrategies(t *testing.T) {
 		Kind:       "AgentTestSuite",
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Workspace: WorkspaceSpec{Strategy: "copy"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -66,7 +66,7 @@ func TestSuiteValidateRejectsUnsupportedMemoryBackend(t *testing.T) {
 		Kind:       "AgentTestSuite",
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Memory:    MemorySpec{Backend: "mystery"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -86,7 +86,7 @@ func TestSuiteValidateRejectsIncompleteWorkflowSeed(t *testing.T) {
 		Kind:       "AgentTestSuite",
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "smoke",
 				Prompt: "summarize",
@@ -139,7 +139,7 @@ func TestSuiteValidateRejectsUnsupportedTier(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding", Tier: "mystery"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "smoke",
 				Prompt: "summarize",
@@ -159,7 +159,7 @@ func TestSuiteValidateRejectsUnsupportedExecutionProfile(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Execution: SuiteExecutionSpec{Profile: "mystery"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -180,7 +180,7 @@ func TestSuiteValidateRejectsInvalidExecutionTimeout(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Execution: SuiteExecutionSpec{Timeout: "nope"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -201,7 +201,7 @@ func TestSuiteValidateRejectsInteractionScriptStepWithoutAction(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "euclo-transitions"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "missing-action",
 				Prompt: "plan and implement the change",
@@ -238,7 +238,7 @@ metadata:
   name: sample
 spec:
   agent_name: coding
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   unknown_field: true
   cases:
     - name: smoke
@@ -263,7 +263,7 @@ metadata:
   name: sample
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: smoke
       prompt: summarize
@@ -288,7 +288,7 @@ func TestSuiteValidateRejectsUnsupportedRecordingMode(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Recording: RecordingSpec{Mode: "mystery"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -309,7 +309,7 @@ func TestSuiteValidateRejectsUnsupportedRecordingStrategy(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Recording: RecordingSpec{Strategy: "mystery"},
 			Cases: []CaseSpec{{
 				Name:   "smoke",
@@ -330,7 +330,7 @@ func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "smoke",
 				Prompt: "summarize",
@@ -355,7 +355,7 @@ func TestSuiteValidateRejectsInvalidSetupFileMode(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "coding"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Cases: []CaseSpec{{
 				Name:   "smoke",
 				Prompt: "summarize",

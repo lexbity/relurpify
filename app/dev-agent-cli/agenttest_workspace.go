@@ -9,7 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
@@ -47,23 +47,23 @@ func buildPreparedRunWorkspaceTarget(desc *agenttest.PreparedRunDescriptor, outp
 	executionWorkspace := filepath.Join(runRoot, "execution", "workspace")
 	executionLogPath := filepath.Join(runRoot, "execution", "logs", "agenttest.log")
 	executionTelemetryPath := filepath.Join(runRoot, "execution", "telemetry", "agenttest.jsonl")
-	configPath := workspacePathForExecution(executionWorkspace, setupWorkspace, working.ConfigPath, filepath.Join(executionWorkspace, manifest.DirName, "config.yaml"))
+	configPath := workspacePathForExecution(executionWorkspace, setupWorkspace, working.ConfigPath, filepath.Join(executionWorkspace, ".relurpify_state", "workspace.yaml"))
 	if configPath == "" {
 		return nil, fmt.Errorf("descriptor missing config_path")
 	}
-	manifestPath := workspacePathForExecution(executionWorkspace, setupWorkspace, working.ManifestPath, filepath.Join(executionWorkspace, manifest.DirName, "agent.manifest.yaml"))
+	manifestPath := workspacePathForExecution(executionWorkspace, setupWorkspace, working.ManifestPath, filepath.Join(executionWorkspace, cfgload.DirName, "agents", "coding.yaml"))
 	if manifestPath == "" {
 		return nil, fmt.Errorf("descriptor missing manifest_path")
 	}
-	agentsDir := workspacePathForExecution(executionWorkspace, setupWorkspace, working.AgentsDir, filepath.Join(executionWorkspace, manifest.DirName, "agents"))
+	agentsDir := workspacePathForExecution(executionWorkspace, setupWorkspace, working.AgentsDir, filepath.Join(executionWorkspace, cfgload.DirName, "agents"))
 	if agentsDir == "" {
 		return nil, fmt.Errorf("descriptor missing agents_dir")
 	}
-	snapshot, err := manifest.LoadAgentManifestSnapshot(working.ManifestPath)
+	snapshot, err := cfgload.LoadAgentManifestSnapshot(working.ManifestPath)
 	if err != nil {
 		return nil, err
 	}
-	effectiveContract, err := manifest.ResolveEffectiveAgentContract(executionWorkspace, snapshot.Manifest, manifest.ResolveOptions{}, nil)
+	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(executionWorkspace, snapshot.Manifest, cfgload.ResolveOptions{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +107,22 @@ func openPreparedRunWorkspace(ctx context.Context, desc *agenttest.PreparedRunDe
 			return nil, nil, err
 		}
 	}
+	loadedConfig, _, err := cfgload.Load(cfgload.LoadOptions{WorkspaceRoot: target.Config.Workspace})
+	if err != nil {
+		return nil, nil, err
+	}
+	manifestSnapshot, err := cfgload.LoadAgentManifestSnapshot(target.Config.ManifestPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	profileRegistry, err := llm.NewProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
+	if err != nil {
+		return nil, nil, err
+	}
+	target.Config.LoadedConfig = loadedConfig
+	target.Config.ManifestSnapshot = manifestSnapshot
+	target.Config.SecurityBundle = &loadedConfig.Security
+	target.Config.ProfileResolution = profileRegistry.Resolve(target.Config.InferenceProvider, target.Config.InferenceModel)
 	ws, err := agentenv.Open(ctx, target.Config, llm.ProviderSecrets{}, preparedRunRegistrationFuncsFn())
 	if err != nil {
 		return nil, nil, err

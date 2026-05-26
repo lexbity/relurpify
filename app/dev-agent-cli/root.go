@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/runtimeenv"
 )
 
 var (
@@ -16,6 +17,10 @@ var (
 	sandboxBackend string
 
 	workspaceCfg *cfgload.WorkspaceConfig
+	envSnapshot  []string
+	envOverrides cfgload.EnvOverrides
+	secrets      cfgload.Secrets
+	sharedRoot   string
 )
 
 // Execute is the entry point for the CLI.
@@ -49,6 +54,10 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 			workspaceCfg = cfg
+			envSnapshot = runtimeenv.Capture()
+			envOverrides = cfgload.LoadEnvOverrides(envSnapshot)
+			secrets = cfgload.LoadSecrets(envSnapshot)
+			sharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
 			return nil
 		},
 	}

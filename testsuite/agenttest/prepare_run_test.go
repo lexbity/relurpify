@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 )
 
 func TestPrepareRunWritesDescriptor(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(manifest.DirName, "agent.manifest.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
 				Provider: "ollama",
@@ -68,7 +68,7 @@ spec:
 
 func TestPrepareRunMaterializesCaseSetupFiles(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(manifest.DirName, "agent.manifest.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
 				Provider: "ollama",

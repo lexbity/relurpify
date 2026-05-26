@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
-	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
@@ -21,7 +20,8 @@ import (
 // RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
 	ManifestPath     string
-	ManifestSnapshot *manifest.AgentManifestSnapshot
+	ManifestSnapshot *cfgload.AgentManifestSnapshot
+	SecurityBundle   *cfgsecurity.Bundle
 	ConfigPath       string
 	Image            string
 	Backend          string
@@ -35,8 +35,8 @@ type RuntimeConfig struct {
 // AgentRegistration stores runtime metadata.
 type AgentRegistration struct {
 	ID               string
-	Manifest         *manifest.AgentManifest
-	ManifestSnapshot *manifest.AgentManifestSnapshot
+	Manifest         *cfgload.AgentManifest
+	ManifestSnapshot *cfgload.AgentManifestSnapshot
 	Runtime          sandbox.SandboxRuntime
 	Permissions      *PermissionManager
 	Policy           PolicyEngine
@@ -49,26 +49,29 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if cfg.ManifestSnapshot == nil && cfg.ManifestPath == "" {
 		return nil, errors.New("manifest path required")
 	}
+	if cfg.SecurityBundle == nil {
+		return nil, errors.New("security bundle required")
+	}
 	manifestSnapshot := cfg.ManifestSnapshot
 	var err error
 	if manifestSnapshot == nil {
-		manifestSnapshot, err = manifest.LoadAgentManifestSnapshot(cfg.ManifestPath)
+		manifestSnapshot, err = cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("load manifest: %w", err)
 		}
 	}
-	agentManifest, err := manifest.CloneAgentManifest(manifestSnapshot.Manifest)
+	agentManifest, err := cfgload.CloneAgentManifest(manifestSnapshot.Manifest)
 	if err != nil {
 		return nil, fmt.Errorf("clone manifest: %w", err)
 	}
 	if agentManifest == nil {
 		return nil, errors.New("manifest missing")
 	}
-	effectivePerms, err := manifest.ResolveEffectivePermissions(cfg.BaseFS, agentManifest)
+	effectivePerms, err := cfgload.ResolveEffectivePermissions(cfg.BaseFS, agentManifest)
 	if err != nil {
 		return nil, fmt.Errorf("resolve permissions: %w", err)
 	}
-	effectiveResources, err := manifest.ResolveEffectiveResources(cfg.BaseFS, agentManifest)
+	effectiveResources, err := cfgload.ResolveEffectiveResources(cfg.BaseFS, agentManifest)
 	if err != nil {
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
@@ -101,11 +104,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		}
 	}
 	permissions.AttachRuntime(runtime)
-	securityBundle, err := cfgsecurity.LoadBundle(cfg.BaseFS)
-	if err != nil {
-		return nil, fmt.Errorf("load security policies: %w", err)
-	}
-	policy := buildSandboxPolicy(agentManifest, securityBundle.Sandbox.ProtectedPaths)
+	policy := buildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(policy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -123,7 +122,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}, nil
 }
 
-func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *manifest.AgentManifest) (sandbox.SandboxRuntime, error) {
+func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *cfgload.AgentManifest) (sandbox.SandboxRuntime, error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.Backend)) {
 	case "", "gvisor":
 		return sandbox.NewSandboxRuntime(cfg.Sandbox), nil
@@ -142,7 +141,7 @@ func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *manifest.AgentManife
 	}
 }
 
-func buildSandboxPolicy(agentManifest *manifest.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
+func buildSandboxPolicy(agentManifest *cfgload.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
 	policy := sandbox.SandboxPolicy{}
 	if agentManifest == nil {
 		return policy

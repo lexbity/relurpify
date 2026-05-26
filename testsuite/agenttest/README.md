@@ -30,7 +30,7 @@ metadata:
   quarantined: false  # Required field
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: example_case
       task_type: code_modification

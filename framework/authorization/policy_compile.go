@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 // CompileManifestPolicyRules compiles manifest policy surfaces into normalized policy rules.
-func CompileManifestPolicyRules(m *manifest.AgentManifest) ([]core.PolicyRule, error) {
+func CompileManifestPolicyRules(m *cfgload.AgentManifest) ([]core.PolicyRule, error) {
 	if m == nil {
 		return nil, nil
 	}

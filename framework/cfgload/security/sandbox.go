@@ -25,7 +25,7 @@ type sandboxPolicyFile struct {
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
-func LoadSandboxPolicy(path, workspace string) (*sandbox.SandboxPolicy, error) {
+func LoadSandboxPolicy(path, workspace string, decode Decoder) (*sandbox.SandboxPolicy, error) {
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -37,12 +37,11 @@ func LoadSandboxPolicy(path, workspace string) (*sandbox.SandboxPolicy, error) {
 		return nil, fmt.Errorf("read sandbox policy %s: %w", path, err)
 	}
 	var file sandboxPolicyFile
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &file); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
+	if decode == nil {
+		return nil, fmt.Errorf("decoder required")
+	}
+	if _, err := decode(path, data, &file); err != nil {
+		return nil, err
 	}
 	absWorkspace, err := filepath.Abs(workspace)
 	if err != nil {

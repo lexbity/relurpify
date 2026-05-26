@@ -26,6 +26,7 @@ func PrepareRun(suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targ
 	if err := MaterializeDerivedWorkspace(
 		targetWorkspace,
 		artifacts.SetupWorkspaceDir,
+		opts.SharedRoot,
 		resolveTemplateProfile(suite, c),
 		suite.Spec.Manifest,
 		resolveWorkspaceExclude(suite, c),

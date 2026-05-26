@@ -20,7 +20,7 @@ rules:
     action: block
 `), 0o644))
 
-	blacklist, err := LoadShellPolicy(path, workspace)
+	blacklist, err := LoadShellPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
 	require.NotNil(t, blacklist)
 	require.NotNil(t, blacklist.Check("git reset --hard"))
@@ -38,7 +38,7 @@ rules:
     action: block
 `), 0o644))
 
-	_, err := LoadShellPolicy(path, workspace)
+	_, err := LoadShellPolicy(path, workspace, testDecode)
 	require.Error(t, err)
 }
 
@@ -54,6 +54,6 @@ rules:
     action: maybe
 `), 0o644))
 
-	_, err := LoadShellPolicy(path, workspace)
+	_, err := LoadShellPolicy(path, workspace, testDecode)
 	require.Error(t, err)
 }

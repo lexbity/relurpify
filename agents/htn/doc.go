@@ -2,7 +2,7 @@
 //
 // Framework ownership note:
 //
-// The framework layer owns manifests, config schemas, effective contract
+// The framework layer owns configuration, config schemas, effective contract
 // resolution, and capability admission policy. The htn package owns only the
 // runtime-facing HTN execution model: method selection, decomposition,
 // capability-routed primitive dispatch, graph execution, and HTN-specific

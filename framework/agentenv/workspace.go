@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -25,7 +24,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -52,11 +50,11 @@ type Workspace struct {
 	// Derived fields for callers that need them
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	EffectiveContract    *manifest.EffectiveAgentContract
-	CompiledPolicy       *manifest.CompiledPolicyBundle
+	EffectiveContract    *cfgload.EffectiveAgentContract
+	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 	CapabilityAdmissions []capability.AdmissionResult
-	SkillResults         []manifest.SkillResolution
+	SkillResults         []cfgload.SkillResolution
 
 	// Observability
 	Telemetry core.Telemetry
@@ -167,9 +165,11 @@ type AgentBootstrapOptions struct {
 	AgentID             string
 	AgentName           string
 	ConfigName          string
-	AgentsDir           string
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	Manifest            *manifest.AgentManifest
+	ManifestSnapshot    *cfgload.AgentManifestSnapshot
+	SecurityBundle      *cfgsecurity.Bundle
+	ProfileResolution   llm.ProfileResolution
+	AgentDefinitions    map[string]*agentspec.AgentDefinition
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               contracts.LanguageModel
@@ -182,7 +182,6 @@ type AgentBootstrapOptions struct {
 	DebugLLM            bool
 	DebugAgent          bool
 	AgentLifecycle      agentlifecycle.Repository
-	ModelProfile        *contracts.ModelProfile
 }
 
 // BootstrappedAgentRuntime contains the results of bootstrapping an agent runtime.
@@ -195,10 +194,10 @@ type BootstrappedAgentRuntime struct {
 	Backend              llm.ManagedBackend
 	Environment          WorkspaceEnvironment
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	SkillResults         []manifest.SkillResolution
+	SkillResults         []cfgload.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
-	Contract             *manifest.EffectiveAgentContract
-	CompiledPolicy       *manifest.CompiledPolicyBundle
+	Contract             *cfgload.EffectiveAgentContract
+	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 }
 
@@ -208,44 +207,40 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	if opts.Manifest == nil {
-		return nil, fmt.Errorf("agent manifest required")
+	if opts.ManifestSnapshot == nil {
+		return nil, fmt.Errorf("agent manifest snapshot required")
 	}
-	if opts.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
+	if opts.ManifestSnapshot.Manifest == nil {
+		return nil, fmt.Errorf("agent manifest missing")
+	}
+	if opts.ManifestSnapshot.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
 	if opts.Runner == nil {
 		return nil, fmt.Errorf("command runner required")
 	}
-	securityBundle, err := cfgsecurity.LoadBundle(workspace)
-	if err != nil {
-		return nil, fmt.Errorf("load security policies: %w", err)
+	if opts.SecurityBundle == nil {
+		return nil, fmt.Errorf("security bundle required")
 	}
 
-	var agentDefs map[string]*agentspec.AgentDefinition
-	if opts.AgentsDir != "" {
-		agentDefs, err = loadAgentDefinitions(opts.AgentsDir)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("load agent definitions: %w", err)
-		}
-	}
+	agentDefs := opts.AgentDefinitions
 
-	manifestForResolution := opts.Manifest
+	manifestForResolution := opts.ManifestSnapshot.Manifest
 	if opts.AgentSpec != nil {
-		clone := *opts.Manifest
+		clone := *opts.ManifestSnapshot.Manifest
 		clone.Spec.Agent = opts.AgentSpec
 		manifestForResolution = &clone
 	}
-	resolveOpts := manifest.ResolveOptions{
-		AgentOverlays: selectedAgentDefinitionOverlays(opts.AgentName, agentDefs),
+	resolveOpts := cfgload.ResolveOptions{
+		AgentOverlays: agentspec.AgentSpecOverlaysForName(opts.AgentName, agentDefs),
 	}
-	effectiveContract, err := manifest.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts, nil)
+	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts, nil)
 	if err != nil {
 		return nil, err
 	}
 	agentSpec := effectiveContract.AgentSpec
-	skillResults := append([]manifest.SkillResolution{}, effectiveContract.SkillResults...)
-	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), securityBundle.Sandbox.ProtectedPaths...))
+	skillResults := append([]cfgload.SkillResolution{}, effectiveContract.SkillResults...)
+	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...))
 
 	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
@@ -262,7 +257,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
 		AgentSpec:         agentSpec,
-		ProtectedPaths:    append([]string(nil), securityBundle.Sandbox.ProtectedPaths...),
+		ProtectedPaths:    append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...),
 		SkipASTIndex:      opts.SkipASTIndex,
 	})
 	if err != nil {
@@ -277,9 +272,16 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.PermissionManager != nil {
 		registry.UsePermissionManager(opts.AgentID, opts.PermissionManager)
 	}
+	if opts.ProfileResolution.Profile != nil {
+		registry.SetModelProfile(opts.ProfileResolution.Profile)
+	}
 	policyEngine, err := fauthorization.FromAgentSpecWithConfig(effectiveContract.AgentSpec, effectiveContract.AgentID, opts.PermissionManager)
 	if err != nil {
 		return nil, fmt.Errorf("compile effective policy: %w", err)
+	}
+	compiledPolicy, err := fauthorization.BuildFromContract(effectiveContract, policyEngine, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build compiled policy: %w", err)
 	}
 	registry.SetPolicyEngine(policyEngine)
 
@@ -289,7 +291,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 	configName := opts.ConfigName
 	if configName == "" {
-		configName = opts.Manifest.Metadata.Name
+		configName = opts.ManifestSnapshot.Manifest.Metadata.Name
 	}
 	agentCfg := &core.Config{
 		Name:              configName,
@@ -302,9 +304,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Telemetry:         opts.Telemetry,
 	}
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
-	if opts.ModelProfile != nil {
-		registry.SetModelProfile(opts.ModelProfile)
-	}
 	admissionResults, err := capability.AdmitCandidates(
 		registry,
 		nil,
@@ -351,49 +350,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		SkillResults:         skillResults,
 		CapabilityAdmissions: admissionResults,
 		Contract:             effectiveContract,
+		CompiledPolicy:       compiledPolicy,
 		PolicyEngine:         policyEngine,
 	}, nil
-}
-
-func loadAgentDefinitions(dir string) (map[string]*agentspec.AgentDefinition, error) {
-	defs := make(map[string]*agentspec.AgentDefinition)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-		path := filepath.Join(dir, name)
-		def, err := agentspec.LoadAgentDefinition(path)
-		if err != nil {
-			if errors.Is(err, agentspec.ErrNotAgentDefinition) {
-				continue
-			}
-			return nil, fmt.Errorf("load %s: %w", name, err)
-		}
-		if def.Name == "" {
-			def.Name = strings.TrimSuffix(name, filepath.Ext(name))
-		}
-		defs[def.Name] = def
-	}
-	return defs, nil
-}
-
-func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []agentspec.AgentSpecOverlay {
-	if defs == nil {
-		return nil
-	}
-	def, ok := defs[agentName]
-	if !ok || def == nil {
-		return nil
-	}
-	return []agentspec.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
 }
 
 // Open initializes a complete workspace session: platform checks, store
@@ -406,23 +365,36 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	workspaceConfigPath := cfgload.DefaultWorkspaceConfigPath(cfg.Workspace)
-	strictMode := cfgload.LoadEnvOverrides(os.Environ()).Strict
-	workspaceCfg, err := cfgload.LoadWorkspaceConfig(workspaceConfigPath, cfg.Workspace, cfgload.WorkspaceLoadOptions{Strict: strictMode})
-	if err != nil {
-		return nil, fmt.Errorf("load workspace config: %w", err)
+	if cfg.LoadedConfig == nil {
+		return nil, fmt.Errorf("loaded config required")
+	}
+	if cfg.ManifestSnapshot == nil {
+		return nil, fmt.Errorf("manifest snapshot required")
+	}
+	if cfg.SecurityBundle == nil {
+		return nil, fmt.Errorf("security bundle required")
+	}
+	if cfg.ProfileResolution.Profile == nil {
+		return nil, fmt.Errorf("profile resolution required")
+	}
+	workspaceCfg := cfg.LoadedConfig.Workspace
+	if workspaceCfg.SourcePath == "" {
+		return nil, fmt.Errorf("loaded workspace config missing source path")
 	}
 	if len(workspaceCfg.DefaultsUsed) > 0 {
 		for _, usage := range workspaceCfg.DefaultsUsed {
-			log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceConfigPath, usage.Key, usage.Value)
+			log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceCfg.SourcePath, usage.Key, usage.Value)
 		}
+	}
+	if cfg.ManifestPath == "" {
+		cfg.ManifestPath = cfg.ManifestSnapshot.SourcePath
 	}
 	cfg.StateDir = workspaceCfg.StateDir()
 	if cfg.SandboxBackend == "" {
 		cfg.SandboxBackend = stringValue(workspaceCfg.Sandbox.Backend)
 	}
 	if cfg.InferenceModel == "" {
-		cfg.InferenceModel = stringValue(workspaceCfg.Model.DefaultName)
+		cfg.InferenceModel = workspaceCfg.Model.Name
 	}
 	defaultStateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
 	defaultLogPath := filepath.Join(defaultStateDir, "logs", "agentenv.log")
@@ -472,14 +444,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 	// where the graphdb.Engine is available from IndexManager.
 
 	// Phase E: Agent Registration + Authorization
-	manifestSnapshot, err := manifest.LoadAgentManifestSnapshot(cfg.ManifestPath)
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("load manifest snapshot: %w", err)
-	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath:     cfg.ManifestPath,
-		ManifestSnapshot: manifestSnapshot,
+		ManifestSnapshot: cfg.ManifestSnapshot,
+		SecurityBundle:   cfg.SecurityBundle,
 		ConfigPath:       cfg.ConfigPath,
 		Backend:          cfg.SandboxBackend,
 		AuditLimit:       cfg.AuditLimit,
@@ -518,12 +486,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		}
 	}
 
-	profileRegistry, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir())
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("load model profiles: %w", err)
-	}
-	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, inferenceModel)
+	profileResolution := cfg.ProfileResolution
 	_ = llm.ApplyProfile(backend, profileResolution.Profile)
 
 	logLLM := cfg.DebugLLM
@@ -555,8 +518,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
 		ConfigName:          cfg.AgentName,
-		AgentsDir:           cfg.AgentsDir,
-		Manifest:            registration.Manifest,
+		ManifestSnapshot:    cfg.ManifestSnapshot,
+		SecurityBundle:      cfg.SecurityBundle,
+		ProfileResolution:   profileResolution,
+		AgentDefinitions:    cfg.AgentDefinitions,
 		PermissionManager:   registration.Permissions,
 		Runner:              runner,
 		Model:               model,
@@ -568,7 +533,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		AllowedCapabilities: cfg.AllowedCapabilities,
 		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
-		ModelProfile:        profileResolution.Profile,
 	})
 	if err != nil {
 		logFile.Close()

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
@@ -75,7 +75,7 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(manifest.New(workspace).ConfigRoot(), "agent.manifest.yaml")
+	manifestPath := filepath.Join(cfgload.New(workspace).ConfigRoot(), "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestFallbackManifestPath(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	got := fallbackManifestPath(filepath.Join(workspace, "testsuite", "agent.manifest.yaml"), workspace)
+	got := fallbackManifestPath(filepath.Join(workspace, "testsuite", "agent.yaml"), workspace)
 	if got != manifestPath {
 		t.Fatalf("expected %s, got %s", manifestPath, got)
 	}
@@ -168,16 +168,25 @@ func TestResolveCaseModelProfileUsesWorkspaceRegistry(t *testing.T) {
 	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profilesDir, "default.yaml"), []byte(`pattern: "*"
+	if err := os.WriteFile(filepath.Join(profilesDir, "default.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+pattern: "*"
+tool_calling:
+  native_api: false
+  double_encoded_args: false
+  multiline_string_literals: false
+  max_tools_per_call: 0
 repair:
   strategy: heuristic-only
   max_attempts: 0
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profilesDir, "gemma4.yaml"), []byte(`pattern: "gemma4*"
+	if err := os.WriteFile(filepath.Join(profilesDir, "gemma4.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+pattern: "gemma4*"
 tool_calling:
   native_api: true
+  double_encoded_args: false
+  multiline_string_literals: true
   max_tools_per_call: 2
 repair:
   strategy: llm
@@ -199,7 +208,7 @@ repair:
 	if provenance.MatchKind != "glob" {
 		t.Fatalf("expected glob match kind, got %q", provenance.MatchKind)
 	}
-	if provenance.ProfileSource != filepath.ToSlash("relurpify_cfg/model/profiles/gemma4.yaml") {
+	if provenance.ProfileSource != filepath.ToSlash("relurpify_cfg/model/profiles/gemma4.llm.yaml") {
 		t.Fatalf("unexpected profile source: %q", provenance.ProfileSource)
 	}
 	if profile.Repair.Strategy != "llm" || !profile.ToolCalling.NativeAPI || profile.ToolCalling.MaxToolsPerCall != 2 {
@@ -476,7 +485,7 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 
 func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
@@ -523,7 +532,7 @@ spec:
 		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "coding.testsuite.yaml"),
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Workspace: WorkspaceSpec{Strategy: "derived"},
 			Models:    []ModelSpec{{Name: "qwen2.5-coder:14b", Endpoint: server.URL}},
 			Cases: []CaseSpec{{
@@ -540,7 +549,7 @@ spec:
 
 func TestRunnerPreflightSuiteFailsWhenModelNotLoaded(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
@@ -587,7 +596,7 @@ spec:
 		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "coding.testsuite.yaml"),
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  "relurpify_cfg/agent.yaml",
 			Workspace: WorkspaceSpec{Strategy: "derived"},
 			Models:    []ModelSpec{{Name: "qwen2.5-coder:14b", Endpoint: server.URL}},
 			Cases: []CaseSpec{{
@@ -676,7 +685,7 @@ type assertionErr string
 func (e assertionErr) Error() string { return string(e) }
 
 func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
-	workflowStateRel := filepath.ToSlash(filepath.Join(manifest.DirName, "sessions", "workflow_state.db"))
+	workflowStateRel := filepath.ToSlash(filepath.Join(cfgload.DirName, "sessions", "workflow_state.db"))
 	before := &WorkspaceSnapshot{
 		Files: map[string]string{
 			workflowStateRel: "before",

@@ -5,7 +5,8 @@ paths:
   state_dir: .relurpify_state
 
 model:
-  default_name: gemma4:e4b
+  provider: ollama
+  name: gemma4:e4b
 
 sandbox:
   backend: gvisor

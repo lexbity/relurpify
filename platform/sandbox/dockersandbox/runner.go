@@ -65,7 +65,7 @@ func (r *Runner) Run(ctx context.Context, req sandbox.CommandRequest) (string, s
 	}
 	image := strings.TrimSpace(r.backend.config.Image)
 	if image == "" {
-		image = "ghcr.io/relurpify/runtime:latest"
+		image = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)

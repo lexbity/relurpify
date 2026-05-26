@@ -1,0 +1,31 @@
+schema: relurpify/tool/v1
+name: bash
+version: "1"
+family: shell
+intent:
+  - execute
+description: Runs a bash command string in the sandbox.
+parameters:
+  - name: command
+    type: string
+    description: Shell command to execute.
+    required: true
+    default: null
+execution:
+  backend: subprocess
+  command:
+    base:
+      - bash
+      - -lc
+    args:
+      - ${command}
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - external_state

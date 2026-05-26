@@ -15,7 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
@@ -120,7 +119,8 @@ paths:
   state_dir: .relurpify_state
 
 model:
-  default_name: %s
+  provider: ollama
+  name: %s
 
 sandbox:
   backend: gvisor
@@ -176,8 +176,8 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 	if spec == nil {
 		return nil, fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 	}
-	spec = frameworkmanifest.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
-	spec = frameworkmanifest.ResolveAgentSpec(spec)
+	spec = cfgload.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
+	spec = cfgload.ResolveAgentSpec(spec)
 	runtimeCfg := appruntime.DefaultConfig()
 	runtimeCfg.Workspace = ws
 	runtimeCfg.ManifestPath = manifest.SourcePath
@@ -199,7 +199,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		AgentsDir:         runtimeCfg.AgentsDir,
 		AgentName:         agentName,
 		SandboxBackend:    sandboxBackend,
-		LogPath:           frameworkmanifest.New(ws).LogFile("agentenv.log"),
+		LogPath:           cfgload.New(ws).LogFile("agentenv.log"),
 		MemoryPath:        runtimeCfg.MemoryPath,
 		SkipASTIndex:      true,
 		HITLTimeout:       runtimeCfg.HITLTimeout,
@@ -222,6 +222,5 @@ func openWorkspaceForInspection(ctx context.Context, ws string) (*agentenv.Works
 	if err != nil {
 		return nil, err
 	}
-	secrets := cfgload.LoadSecrets(os.Environ())
 	return workspaceOpenFn(ctx, target.cfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, workspaceRegistrationFuncsFn())
 }

@@ -2,7 +2,6 @@
 .agents/
 .gocache/
 .claude/
-.github/
 .gomodcache/
 .memory/
 .windsurf/
@@ -16,10 +15,13 @@ relurpify/
 /relurpify_cfg/memory/
 /relurpify_cfg/logs/
 /relurpify_cfg/sessions/
+/relurpify_cfg/telemetry/
 /relurpify_cfg/telemetry.jsonl
+/app/relurpish/runtime/relurpify_cfg/
 /devdocs
 
 /REFERENCE_ONLY
+*.db
 
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/

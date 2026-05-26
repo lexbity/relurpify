@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -26,9 +27,17 @@ func LoadPlatformConfig(workspace string) (*PlatformConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	policy, err := security.LoadLocalToolPolicy("", workspace, StrictDecode)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := BuildRegistry(manifests, policy, nil)
+	if err != nil {
+		return nil, err
+	}
 	return &PlatformConfig{
 		Workspace:     filepath.Clean(workspace),
 		ToolManifests: manifests,
-		ToolRegistry:  contracts.NewStaticToolRegistry(manifests),
+		ToolRegistry:  registry,
 	}, nil
 }

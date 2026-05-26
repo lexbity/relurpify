@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestLocalCommandRunnerDoesNotInheritHostEnvironmentWithoutAllowlist(t *testing.T) {
+	t.Setenv("VISIBLE_FROM_HOST", "host-value")
+	t.Setenv("RELURPIFY_LLM_API_KEY", "llm-secret")
+
+	runner := NewLocalCommandRunner(t.TempDir(), nil, nil)
+
+	stdout, stderr, err := runner.Run(context.Background(), CommandRequest{
+		Args: []string{
+			"sh",
+			"-c",
+			`printf '%s|%s' "$VISIBLE_FROM_HOST" "$RELURPIFY_LLM_API_KEY"`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("run failed: %v (stderr: %s)", err, stderr)
+	}
+
+	if got := strings.TrimSpace(stdout); got != "|" {
+		t.Fatalf("expected unlisted host vars to be absent, got %q", got)
+	}
+}
+
 func TestLocalCommandRunnerFiltersHostEnvironment(t *testing.T) {
 	t.Setenv("ALLOW_ME", "host-visible")
 	t.Setenv("RELURPIFY_LLM_API_KEY", "llm-secret")

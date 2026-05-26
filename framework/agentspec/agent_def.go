@@ -1,19 +1,5 @@
 package agentspec
 
-import (
-	"errors"
-	"fmt"
-	"os"
-	"strings"
-
-	"gopkg.in/yaml.v3"
-)
-
-var ErrNotAgentDefinition = errors.New("not an agent definition")
-
-// RejectForbiddenSecretFields is injected by cfgload at init to break import cycles.
-var RejectForbiddenSecretFields func(string, []byte) error
-
 // AgentDefinition defines the configuration for a single agent.
 type AgentDefinition struct {
 	Name        string           `yaml:"name" json:"name"`
@@ -21,32 +7,14 @@ type AgentDefinition struct {
 	Spec        AgentRuntimeSpec `yaml:"spec" json:"spec"`
 }
 
-// LoadAgentDefinition parses an agent definition file.
-func LoadAgentDefinition(path string) (*AgentDefinition, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+// AgentSpecOverlaysForName returns the overlay derived from a named agent definition.
+func AgentSpecOverlaysForName(name string, defs map[string]*AgentDefinition) []AgentSpecOverlay {
+	if defs == nil {
+		return nil
 	}
-	if RejectForbiddenSecretFields != nil {
-		if err := RejectForbiddenSecretFields(path, data); err != nil {
-			return nil, err
-		}
+	def, ok := defs[name]
+	if !ok || def == nil {
+		return nil
 	}
-	var header struct {
-		Kind string `yaml:"kind"`
-	}
-	if err := yaml.Unmarshal(data, &header); err != nil {
-		return nil, err
-	}
-	if header.Kind != "" && !strings.EqualFold(header.Kind, "AgentDefinition") {
-		return nil, ErrNotAgentDefinition
-	}
-	var def AgentDefinition
-	if err := yaml.Unmarshal(data, &def); err != nil {
-		return nil, err
-	}
-	if err := def.Spec.Validate(); err != nil {
-		return nil, fmt.Errorf("agent spec invalid: %w", err)
-	}
-	return &def, nil
+	return []AgentSpecOverlay{AgentSpecOverlayFromSpec(&def.Spec)}
 }

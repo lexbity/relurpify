@@ -12,9 +12,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/rex"
@@ -122,11 +123,15 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	paths := relmanifest.New(workspace)
+	paths := cfgload.New(workspace)
 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
+		return nil, err
+	}
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
 		return nil, err
 	}
 	workflowStore, err := rexstore.NewSQLiteWorkflowStore(filepath.Join(paths.MemoryDir(), "rex_workflow.db"))
@@ -136,9 +141,10 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 
 	// Build workspace environment using framework composition root
 	env, err := agentenv.BuildWorkspaceEnvironment(ctx, agentenv.WorkspaceConfig{
-		Workspace:    workspace,
-		AgentName:    "euclo",
-		SkipASTIndex: false,
+		Workspace:      workspace,
+		AgentName:      "euclo",
+		SkipASTIndex:   false,
+		SecurityBundle: securityBundle,
 		AgentSpec: &agentspec.AgentRuntimeSpec{
 			Mode: agentspec.AgentModePrimary,
 			Model: agentspec.AgentModelConfig{
@@ -164,7 +170,7 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 				},
 			},
 		},
-	}, euclo.GetRegistrationFuncs())
+	}, securityBundle, euclo.GetRegistrationFuncs())
 	if err != nil {
 		_ = workflowStore.Close()
 		return nil, err

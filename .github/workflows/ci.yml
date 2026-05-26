@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Lint config boundary
+        run: make lint-config-boundary
+      - name: Boundary tests
+        run: make test-boundary
+      - name: Check template drift
+        run: make check-template-drift
+      - name: Validate config
+        run: RELURPIFY_STRICT=true make validate-config
+      - name: Test unit
+        run: make test-unit

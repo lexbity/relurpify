@@ -1,29 +1,11 @@
 schema: relurpify/agent/v1
 kind: agent
 name: rex
-sandbox:
-  runtime: gvisor
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
-  limits:
-    cpu: "2"
-    memory: 4Gi
-    disk_io: 200MBps
-  security:
-    run_as_user: 1000
-    read_only_root: false
-    no_new_privileges: true
-model:
-  name: gemma4:e4b
-  temperature: 0.2
-  max_tokens: 4096
 filesystem:
   - action: [fs:read, fs:list, fs:write, fs:execute]
     path: "${workspace}/**"
-audit:
-  level: verbose
-  retention_days: 7
-network:
-  allow:
-    - host: localhost
-      port: 11434
-      protocol: tcp
+    exclude:
+      - "${workspace}/relurpify_cfg/**"
+capabilities:
+  tools:
+    - cli_git

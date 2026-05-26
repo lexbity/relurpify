@@ -14,9 +14,9 @@ import (
 	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	rexroute "codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
@@ -46,7 +46,7 @@ type Registry struct {
 }
 
 func NewRegistry(env *agentenv.WorkspaceEnvironment, workspace string) *Registry {
-	paths := manifest.New(workspace)
+	paths := cfgload.New(workspace)
 	return &Registry{delegates: map[string]Delegate{
 		rexroute.FamilyReAct:     agentDelegate{family: rexroute.FamilyReAct, agent: reactWithPaths(env, paths.CheckpointsDir())},
 		rexroute.FamilyPlanner:   agentDelegate{family: rexroute.FamilyPlanner, agent: plannerpkg.New(env)},

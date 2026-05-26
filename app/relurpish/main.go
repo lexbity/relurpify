@@ -18,15 +18,24 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/configcheck"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/runtimeenv"
 )
 
 var (
-	cfg = runtimesvc.DefaultConfig()
+	cfg          = runtimesvc.DefaultConfig()
+	envSnapshot  []string
+	envOverrides cfgload.EnvOverrides
+	secrets      cfgload.Secrets
 )
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
 func main() {
+	envSnapshot = runtimeenv.Capture()
+	envOverrides = cfgload.LoadEnvOverrides(envSnapshot)
+	secrets = cfgload.LoadSecrets(envSnapshot)
+	cfg.EnvOverrides = append([]string(nil), envSnapshot...)
+	cfg.Editor = envOverrides.Editor
+	cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	root := newRootCmd()
@@ -115,7 +124,6 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 		fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
 		return report
 	}
-	secrets := cfgload.LoadSecrets(os.Environ())
 	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
 		return err
 	}
@@ -133,6 +141,9 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 	if rt != nil && rt.AgentWorkspace() != nil && rt.AgentWorkspace().Logger != nil {
 		log.SetOutput(rt.AgentWorkspace().Logger.Writer())
 	}
+	if rt != nil {
+		tui.SetEditor(rt.Config.Editor)
+	}
 	return tui.PTYSafe(func() error {
 		return tui.RunWithSurface(ctx, rt, euclotui.NewSurfaceFactory())
 	})
@@ -147,12 +158,11 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
 			renderDoctorReport(cmd.OutOrStdout(), runtimesvc.DoctorReport{
 				Workspace:   cfg.Workspace,
-				ConfigRoot:  manifest.New(cfg.Workspace).ConfigRoot(),
+				ConfigRoot:  cfgload.New(cfg.Workspace).ConfigRoot(),
 				ConfigError: report.Error(),
 			})
 			return report
 		}
-		secrets := cfgload.LoadSecrets(os.Environ())
 		state, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets)
 		if err != nil {
 			return err

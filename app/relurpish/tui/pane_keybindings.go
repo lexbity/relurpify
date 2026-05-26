@@ -3,11 +3,9 @@ package tui
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -178,7 +176,7 @@ func (p *KeybindingPane) loadPersistedBindings() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "keybindings.yaml")
+	path := cfgload.New(workspace).RuntimeKeybindingsFile()
 	cfg, err := cfgload.LoadRuntimeKeybindingConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -335,7 +333,7 @@ func (p *KeybindingPane) persistCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "keybindings save failed: workspace unavailable"}
 		}
-		path := filepath.Join(manifest.New(workspace).ConfigRoot(), "keybindings.yaml")
+		path := cfgload.New(workspace).RuntimeKeybindingsFile()
 		backup, err := cfgload.SaveRuntimeKeybindingConfigWithBackup(path, cfg)
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("keybindings save failed: %v", err)}

@@ -30,8 +30,8 @@ func applySkillFilterToRegistry(workspace, skillName string, caps *capability.Ca
 			applied = true
 			break
 		}
-		if strings.TrimSpace(result.Error) != "" && failureReason == "" {
-			failureReason = strings.TrimSpace(result.Error)
+		if result.Error != nil && strings.TrimSpace(result.Error.Error()) != "" && failureReason == "" {
+			failureReason = strings.TrimSpace(result.Error.Error())
 		}
 	}
 	if !applied {

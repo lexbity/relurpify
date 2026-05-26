@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
 
@@ -41,6 +41,8 @@ type RunOptions struct {
 	BackendService      string   // default: ollama
 	BackendResetOn      []string // regexes matched against error to trigger reset+retry
 	BackendResetBetween bool     // reset before each case
+
+	SharedRoot string
 
 	Lane string // optional tag-lane filter for multi-suite runs
 }
@@ -220,7 +222,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if err != nil {
 		return nil, err
 	}
-	workspacePaths := manifest.New(targetWorkspace)
+	workspacePaths := cfgload.New(targetWorkspace)
 	runID := time.Now().UTC().Format("20060102-150405.000")
 	outDir := opts.OutputDir
 	if outDir == "" {
@@ -353,7 +355,7 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 		suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
 		suiteManifestAbs = fallbackManifestPath(suiteManifestAbs, targetWorkspace)
-		if loadedManifest, err := manifest.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
+		if loadedManifest, err := cfgload.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
 			manifestModel = loadedManifest.Spec.Agent.Model.Name
 		}
 	}

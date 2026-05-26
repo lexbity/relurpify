@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
 )
 
 // Validate enforces the workspace root contract and field constraints.
@@ -31,10 +33,6 @@ func (c *WorkspaceConfig) Validate() error {
 		if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 			errs = append(errs, fmt.Errorf("paths.state_dir must stay within the workspace: %q", stateDir))
 		}
-	}
-
-	if c.Model.DefaultName == nil || strings.TrimSpace(*c.Model.DefaultName) == "" {
-		errs = append(errs, fmt.Errorf("model.default_name required"))
 	}
 
 	backend := strings.ToLower(strings.TrimSpace(stringValue(c.Sandbox.Backend)))
@@ -66,6 +64,17 @@ func (c *WorkspaceConfig) Validate() error {
 
 	if len(errs) > 0 {
 		return fmt.Errorf("workspace validation failed: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
+// ValidateModelRef resolves the workspace model against the provider registry.
+func (c *WorkspaceConfig) ValidateModelRef(providers []*model.ResolvedProvider) error {
+	if c == nil {
+		return fmt.Errorf("workspace config required")
+	}
+	if _, err := model.ResolveModelRef(c.Model, model.ModelRef{}, providers); err != nil {
+		return fmt.Errorf("workspace model: %w", err)
 	}
 	return nil
 }

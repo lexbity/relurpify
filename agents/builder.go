@@ -18,7 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
-// BuildFromSpec constructs a workflow executor from the manifest/runtime spec and wires
+// BuildFromSpec constructs a workflow executor from the runtime spec and wires
 // the shared environment through InitializeEnvironment when supported.
 // This is a local dispatch table for generic agent paradigms only.
 // Named agents (e.g., coding, rex, architect) are handled by named/factory.BuildFromSpec.

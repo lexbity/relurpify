@@ -2,9 +2,10 @@ package cfgload
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
 )
 
 const defaultWorkspaceStateDir = ".relurpify_state"
@@ -23,7 +24,7 @@ type WorkspaceDefaultUsage struct {
 // WorkspaceConfig models relurpify_cfg/workspace.yaml.
 type WorkspaceConfig struct {
 	Paths     WorkspacePaths     `yaml:"paths"`
-	Model     WorkspaceModel     `yaml:"model"`
+	Model     model.ModelRef     `yaml:"model"`
 	Sandbox   WorkspaceSandbox   `yaml:"sandbox"`
 	Logging   WorkspaceLogging   `yaml:"logging"`
 	Audit     WorkspaceAudit     `yaml:"audit"`
@@ -39,11 +40,6 @@ type WorkspaceConfig struct {
 // WorkspacePaths configures workspace-relative filesystem roots.
 type WorkspacePaths struct {
 	StateDir *string `yaml:"state_dir"`
-}
-
-// WorkspaceModel configures the default model binding.
-type WorkspaceModel struct {
-	DefaultName *string `yaml:"default_name"`
 }
 
 // WorkspaceSandbox configures the default sandbox backend.
@@ -70,6 +66,11 @@ type WorkspaceTelemetry struct {
 // DefaultWorkspaceConfigPath returns the canonical workspace.yaml location.
 func DefaultWorkspaceConfigPath(workspace string) string {
 	return filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
+}
+
+// DefaultWorkspaceStateConfigPath returns the canonical workspace.yaml location under state.
+func DefaultWorkspaceStateConfigPath(workspace string) string {
+	return filepath.Join(DefaultWorkspaceStateDir(workspace), "workspace.yaml")
 }
 
 // DefaultWorkspaceStateDir returns the default runtime state directory.
@@ -109,7 +110,7 @@ func LoadWorkspaceConfig(path, workspace string, opts WorkspaceLoadOptions) (*Wo
 	if strings.TrimSpace(path) == "" {
 		path = DefaultWorkspaceConfigPath(absWorkspace)
 	}
-	data, err := os.ReadFile(path)
+	data, err := ReadConfigFile(workspace, path)
 	if err != nil {
 		return nil, err
 	}

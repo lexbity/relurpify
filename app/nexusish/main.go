@@ -10,17 +10,19 @@ import (
 	nexusruntime "codeburg.org/lexbit/relurpify/app/nexusish/runtime"
 	"codeburg.org/lexbit/relurpify/app/nexusish/tui"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/runtimeenv"
 	"github.com/spf13/cobra"
 )
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	env := runtimeenv.Capture()
+	if err := newRootCmd(env).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func newRootCmd() *cobra.Command {
+func newRootCmd(env []string) *cobra.Command {
 	var workspace string
 	var configPath string
 	cmd := &cobra.Command{
@@ -29,7 +31,7 @@ func newRootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			return runDashboard(ctx, workspace, configPath)
+			return runDashboard(ctx, workspace, configPath, env)
 		},
 	}
 	cmd.Flags().StringVar(&workspace, "workspace", ".", "workspace directory")
@@ -37,6 +39,6 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-func runDashboard(ctx context.Context, workspace, configPath string) error {
-	return tui.Run(ctx, nexusruntime.New(workspace, configPath, cfgload.LoadSecrets(os.Environ())))
+func runDashboard(ctx context.Context, workspace, configPath string, env []string) error {
+	return tui.Run(ctx, nexusruntime.New(workspace, configPath, cfgload.LoadSecrets(env)))
 }

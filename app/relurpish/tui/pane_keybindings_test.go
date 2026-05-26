@@ -27,7 +27,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 
 	dir := t.TempDir()
 	workspace := dir
-	path := filepath.Join(dir, "relurpify_cfg", "keybindings.yaml")
+	path := filepath.Join(dir, ".relurpify_state", "keybindings.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir keybinding dir: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 	if got, ok := msg.(chatSystemMsg); !ok || got.Text == "" {
 		t.Fatalf("persist message = %#v, want chatSystemMsg", msg)
 	}
-	backups, err := filepath.Glob(filepath.Join(dir, "relurpify_cfg", "backups", "keybindings.yaml.*.bak"))
+	backups, err := filepath.Glob(filepath.Join(dir, ".relurpify_state", "backups", "keybindings.yaml.*.bak"))
 	if err != nil {
 		t.Fatalf("glob backups: %v", err)
 	}

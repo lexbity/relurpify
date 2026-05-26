@@ -46,10 +46,10 @@ func PhaseOneFiles() []string {
 		"framework/agentenv/workspace.go",
 		"framework/agentenv/composition.go",
 		"framework/core/config.go",
-		"framework/manifest/manifest.go",
-		"framework/manifest/skill_manifest.go",
+		"framework/cfgload/manifest_types.go",
+		"framework/cfgload/contract_resolve.go",
+		"framework/authorization/policy_bundle.go",
 		"framework/skills/resolve.go",
-		"framework/skills/policies.go",
 		"platform/llm/config.go",
 		"framework/sandbox/local_command_runner.go",
 		"framework/templates/resolver.go",
@@ -61,7 +61,6 @@ func PhaseOneFiles() []string {
 		"app/relurpish/tui/editor_supervisor.go",
 		"app/relurpish/euclotui/pane_library.go",
 		"app/relurpish/euclotui/pane_diff.go",
-		"framework/manifest/contract_spec.go",
 	}
 }
 

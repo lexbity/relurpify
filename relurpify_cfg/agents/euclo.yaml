@@ -1,25 +1,21 @@
 schema: relurpify/agent/v1
 kind: agent
 name: euclo
-sandbox:
-  runtime: gvisor
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
-  limits:
-    cpu: "2"
-    memory: 4Gi
-    disk_io: 200MBps
-  security:
-    run_as_user: 1000
-    read_only_root: false
-    no_new_privileges: true
 model:
+  provider: ollama
   name: gemma4:e4b
-  temperature: 0.2
-  max_tokens: 4096
+sandbox:
+  limits:
+    memory: 8Gi
 filesystem:
   - action: [fs:read, fs:list, fs:write, fs:execute]
     path: "${workspace}/**"
+    exclude:
+      - "${workspace}/relurpify_cfg/**"
 capabilities:
+  tools:
+    - cli_git
+    - bash
   relurpic:
     - euclo:cap.test_run
     - euclo:cap.ast_query
@@ -35,11 +31,3 @@ capabilities:
     - euclo:cap.api_compat
     - euclo:cap.boundary_report
     - euclo:cap.coverage_check
-audit:
-  level: verbose
-  retention_days: 7
-network:
-  allow:
-    - host: localhost
-      port: 11434
-      protocol: tcp

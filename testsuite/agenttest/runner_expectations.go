@@ -11,7 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -652,7 +652,7 @@ func evaluateFileContentExpectations(expectations []FileContentExpectation, work
 }
 
 // evaluateSecurityExpectations evaluates security boundary assertions.
-func evaluateSecurityExpectations(spec SecuritySpec, m *manifest.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
+func evaluateSecurityExpectations(spec SecuritySpec, m *cfgload.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
 	var results []AssertionResult
 	var observations []SecurityObservation
 	var failures []string

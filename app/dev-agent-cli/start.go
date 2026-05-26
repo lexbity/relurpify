@@ -15,11 +15,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/spf13/cobra"
@@ -76,8 +75,8 @@ func newStartCmd() *cobra.Command {
 			if spec == nil {
 				return fmt.Errorf("agent %s missing spec.agent section", agentManifest.Metadata.Name)
 			}
-			spec = frameworkmanifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, spec, agentManifest.Spec.Defaults)
-			spec = frameworkmanifest.ResolveAgentSpec(spec)
+			spec = cfgload.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, spec, agentManifest.Spec.Defaults)
+			spec = cfgload.ResolveAgentSpec(spec)
 			logLLM := false
 			logAgent := false
 			if workspaceCfg != nil && workspaceCfg.Logging.Level != nil && *workspaceCfg.Logging.Level == "debug" {
@@ -116,7 +115,6 @@ func newStartCmd() *cobra.Command {
 			if modelName == "" {
 				modelName = defaultModelName()
 			}
-			secrets := cfgload.LoadSecrets(os.Environ())
 			workspace, err := workspaceOpenFn(runCtx, agentenv.WorkspaceConfig{
 				Workspace:         runtimeCfg.Workspace,
 				ManifestPath:      runtimeCfg.ManifestPath,
@@ -293,15 +291,15 @@ func selectDefaultAgent(reg *agentRegistry) string {
 // defaultModelName returns the preferred model from config or falls back to a
 // safe local default.
 func defaultModelName() string {
-	if workspaceCfg != nil && workspaceCfg.Model.DefaultName != nil && *workspaceCfg.Model.DefaultName != "" {
-		return *workspaceCfg.Model.DefaultName
+	if workspaceCfg != nil && strings.TrimSpace(workspaceCfg.Model.Name) != "" {
+		return workspaceCfg.Model.Name
 	}
 	return "codellama:13b"
 }
 
 // defaultEndpoint resolves the Ollama endpoint, honoring overrides from env.
 func defaultEndpoint() string {
-	if val := cfgload.LoadEnvOverrides(os.Environ()).OllamaHost; val != "" {
+	if val := envOverrides.OllamaHost; val != "" {
 		return val
 	}
 	return "http://localhost:11434"

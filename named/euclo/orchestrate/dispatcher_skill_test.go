@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 func TestDispatcherExecuteSkillFilterNarrowsCandidates(t *testing.T) {
@@ -134,11 +134,9 @@ func TestSkillFilterDryRunRespectsAvailability(t *testing.T) {
 
 func writeSkillManifestFixture(t *testing.T, workspace, name string, allowed []string) string {
 	t.Helper()
-	root := filepath.Join(manifest.New(workspace).SkillsDir(), name)
-	for _, dir := range []string{"scripts", "resources", "templates"} {
-		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
-			t.Fatalf("mkdir %s: %v", dir, err)
-		}
+	root := cfgload.New(workspace).SkillsDir()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir skill root: %v", err)
 	}
 	var builder strings.Builder
 	builder.WriteString("schema: relurpify/skill/v1\n")
@@ -153,7 +151,7 @@ func writeSkillManifestFixture(t *testing.T, workspace, name string, allowed []s
 			builder.WriteString("    - id: " + capID + "\n")
 		}
 	}
-	path := filepath.Join(root, "skill.yaml")
+	path := filepath.Join(root, name+".skill.yaml")
 	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
 		t.Fatalf("write skill manifest: %v", err)
 	}

@@ -10,9 +10,15 @@ The current model is:
 
 Current categories:
 
-- `agents/` for starter agent manifests
-- `workspace/` for starter workspace files
+- `agents/` for starter agent configs
+- `workspace/` for the canonical workspace starter set
 - `skills/` for starter skill files
 - `testsuite/` for derived testsuite workspace profiles
+
+The workspace starter set is intentionally minimal:
+
+- `workspace/workspace.yaml`
+- `workspace/agent.yaml`
+- `workspace/security/*.policy.yaml`
 
 `templates/` is the canonical repo-local development fallback tree.

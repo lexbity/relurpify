@@ -10,42 +10,55 @@ import (
 
 func TestProfileRegistryResolve_Precendence(t *testing.T) {
 	dir := t.TempDir()
-	writeProfileTestFile(t, dir, "default.yaml", `pattern: "*"
-repair:
-  strategy: heuristic-only
+	writeProfileTestFile(t, dir, "default.llm.yaml", `schema: relurpify/model/profile/v1
+pattern: "*"
+tool_calling:
+  intent: auto
+context:
+  max_tokens: 1024
+generation:
+  temperature: 0.2
+  top_p: 0.9
 `)
-	writeProfileTestFile(t, dir, "generic.yaml", `model: "model-a"
-repair:
-  strategy: llm
+	writeProfileTestFile(t, dir, "generic.llm.yaml", `schema: relurpify/model/profile/v1
+pattern: "model-a"
+tool_calling:
+  intent: native
+context:
+  max_tokens: 1024
+generation:
+  temperature: 0.2
+  top_p: 0.9
 `)
-	writeProfileTestFile(t, dir, "family.yaml", `pattern: "qwen2.5-coder*"
-repair:
-  strategy: llm
-`)
-	writeProfileTestFile(t, dir, "provider.yaml", `provider: "openai-compat"
-model: "model-a"
-repair:
-  strategy: heuristic-only
+	writeProfileTestFile(t, dir, "family.llm.yaml", `schema: relurpify/model/profile/v1
+pattern: "qwen2.5-coder*"
+tool_calling:
+  intent: native
+context:
+  max_tokens: 1024
+generation:
+  temperature: 0.2
+  top_p: 0.9
 `)
 
 	reg, err := NewProfileRegistry(dir)
 	require.NoError(t, err)
 
 	res := reg.Resolve("openai-compat", "model-a")
-	require.Equal(t, "provider.yaml", filepath.Base(res.SourcePath))
-	require.Equal(t, "provider/model exact match for openai-compat/model-a", res.Reason)
+	require.Equal(t, "generic.llm.yaml", filepath.Base(res.SourcePath))
+	require.Equal(t, "exact model match for model-a", res.Reason)
 
 	res = reg.Resolve("", "model-a")
-	require.Equal(t, "generic.yaml", filepath.Base(res.SourcePath))
+	require.Equal(t, "generic.llm.yaml", filepath.Base(res.SourcePath))
 	require.Equal(t, "exact model match for model-a", res.Reason)
 
 	res = reg.Resolve("", "qwen2.5-coder-7b")
-	require.Equal(t, "family.yaml", filepath.Base(res.SourcePath))
+	require.Equal(t, "family.llm.yaml", filepath.Base(res.SourcePath))
 	require.Equal(t, "glob match for qwen2.5-coder-7b", res.Reason)
 
 	res = reg.Resolve("", "missing")
-	require.Equal(t, "default.yaml", filepath.Base(res.SourcePath))
-	require.Equal(t, "default profile from default.yaml", res.Reason)
+	require.Equal(t, "default.llm.yaml", filepath.Base(res.SourcePath))
+	require.Equal(t, "default profile from default.llm.yaml", res.Reason)
 }
 
 func TestProfileRegistryResolve_BuiltinDefault(t *testing.T) {

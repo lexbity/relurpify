@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,8 +15,8 @@ import (
 
 type sandboxRuntime interface {
 	SessionInfo() SessionInfo
-	LoadSandboxManifest() (*manifest.AgentManifest, error)
-	SaveSandboxManifest(*manifest.AgentManifest) (string, error)
+	LoadSandboxManifest() (*cfgload.AgentManifest, error)
+	SaveSandboxManifest(*cfgload.AgentManifest) (string, error)
 	SandboxBackend() string
 	SaveSandboxBackend(string) (string, error)
 	ReloadWorkspace(context.Context, string) error
@@ -77,7 +77,7 @@ type sandboxNode struct {
 type SandboxPane struct {
 	runtime sandboxRuntime
 
-	manifest *manifest.AgentManifest
+	manifest *cfgload.AgentManifest
 	root     *sandboxNode
 	visible  []sandboxVisibleNode
 
@@ -713,8 +713,8 @@ func (p *SandboxPane) persistManifestCmd() tea.Cmd {
 	}
 }
 
-func (p *SandboxPane) buildSavedManifest() (*manifest.AgentManifest, error) {
-	clone, err := manifest.CloneAgentManifest(p.manifest)
+func (p *SandboxPane) buildSavedManifest() (*cfgload.AgentManifest, error) {
+	clone, err := cfgload.CloneAgentManifest(p.manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -740,7 +740,7 @@ func (p *SandboxPane) buildSavedManifest() (*manifest.AgentManifest, error) {
 	return clone, nil
 }
 
-func (p *SandboxPane) applyFileCategory(clone *manifest.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyFileCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
 	perms := make([]contracts.FileSystemPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
@@ -757,7 +757,7 @@ func (p *SandboxPane) applyFileCategory(clone *manifest.AgentManifest, cat *sand
 	clone.Spec.Permissions.FileSystem = perms
 }
 
-func (p *SandboxPane) applyCommandCategory(clone *manifest.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyCommandCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
@@ -784,7 +784,7 @@ func (p *SandboxPane) applyCommandCategory(clone *manifest.AgentManifest, cat *s
 	clone.Spec.Agent.Bash = bash
 }
 
-func (p *SandboxPane) applyNetworkCategory(clone *manifest.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyNetworkCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
 	perms := make([]contracts.NetworkPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
@@ -809,12 +809,12 @@ func (p *SandboxPane) applyNetworkCategory(clone *manifest.AgentManifest, cat *s
 	clone.Spec.Permissions.Network = perms
 }
 
-func ensureSandboxPolicy(spec *manifest.ManifestSpec) *manifest.ManifestPolicySpec {
+func ensureSandboxPolicy(spec *cfgload.ManifestSpec) *cfgload.ManifestPolicySpec {
 	if spec == nil {
 		return nil
 	}
 	if spec.Policy == nil {
-		policy := manifest.ManifestPolicySpec{
+		policy := cfgload.ManifestPolicySpec{
 			Permissions: spec.Permissions,
 			Resources:   spec.Resources,
 			Security:    spec.Security,
@@ -827,7 +827,7 @@ func ensureSandboxPolicy(spec *manifest.ManifestSpec) *manifest.ManifestPolicySp
 	return spec.Policy
 }
 
-func (p *SandboxPane) applyProviderCategory(clone *manifest.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyProviderCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
@@ -845,7 +845,7 @@ func (p *SandboxPane) applyProviderCategory(clone *manifest.AgentManifest, cat *
 	}
 }
 
-func (p *SandboxPane) applyToolCategory(clone *manifest.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyToolCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}

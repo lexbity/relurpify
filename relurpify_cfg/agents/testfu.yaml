@@ -1,31 +1,16 @@
 schema: relurpify/agent/v1
 kind: agent
 name: testfu
-sandbox:
-  runtime: gvisor
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
-  limits:
-    cpu: "2"
-    memory: 4Gi
-    disk_io: 200MBps
-  security:
-    run_as_user: 1000
-    read_only_root: false
-    no_new_privileges: true
 model:
-  name: gemma4:e4b
-  temperature: 0.0
-  max_tokens: 2048
+  provider: ollama
+  name: qwen2.5-coder:14b
 filesystem:
   - action: [fs:read, fs:list]
     path: "${workspace}/**"
+    exclude:
+      - "${workspace}/relurpify_cfg/**"
   - action: [fs:write]
-    path: "${workspace}/relurpify_cfg/test_runs/**"
-audit:
-  level: verbose
-  retention_days: 7
-network:
-  allow:
-    - host: localhost
-      port: 11434
-      protocol: tcp
+    path: "${workspace}/.relurpify_state/test_runs/**"
+capabilities:
+  tools:
+    - bash

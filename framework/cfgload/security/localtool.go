@@ -19,7 +19,7 @@ type localToolPolicyFile struct {
 }
 
 // LoadLocalToolPolicy loads and validates the local tool policy file.
-func LoadLocalToolPolicy(path, workspace string) (map[string]agentspec.ToolPolicy, error) {
+func LoadLocalToolPolicy(path, workspace string, decode Decoder) (map[string]agentspec.ToolPolicy, error) {
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -31,12 +31,11 @@ func LoadLocalToolPolicy(path, workspace string) (map[string]agentspec.ToolPolic
 		return nil, fmt.Errorf("read local tool policy %s: %w", path, err)
 	}
 	var file localToolPolicyFile
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &file); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
+	if decode == nil {
+		return nil, fmt.Errorf("decoder required")
+	}
+	if _, err := decode(path, data, &file); err != nil {
+		return nil, err
 	}
 	if err := validateLocalToolPolicies(file.Tools); err != nil {
 		return nil, err

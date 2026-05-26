@@ -12,6 +12,8 @@ func TestLoadPlatformConfig(t *testing.T) {
 	workspace := t.TempDir()
 	toolsDir := DefaultToolManifestDir(workspace)
 	require.NoError(t, os.MkdirAll(toolsDir, 0o755))
+	secDir := filepath.Join(workspace, "relurpify_cfg", "security")
+	require.NoError(t, os.MkdirAll(secDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
 name: demo
 family: cli
@@ -30,6 +32,11 @@ capability:
   trust_class: local
   risk_class: [read-only]
   effect_class: [inspect]
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(secDir, "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
+tools:
+  demo:
+    execute: ask
 `), 0o644))
 
 	cfg, err := LoadPlatformConfig(workspace)

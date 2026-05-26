@@ -9,8 +9,8 @@ import (
 func TestResolverPrefersSharedRoot(t *testing.T) {
 	shared := t.TempDir()
 	repo := t.TempDir()
-	sharedTemplate := filepath.Join(shared, "templates", "skills", "skill.manifest.yaml")
-	repoTemplate := filepath.Join(repo, "templates", "skills", "skill.manifest.yaml")
+	sharedTemplate := filepath.Join(shared, "templates", "skills", "skill.yaml")
+	repoTemplate := filepath.Join(repo, "templates", "skills", "skill.yaml")
 	if err := os.MkdirAll(filepath.Dir(sharedTemplate), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -23,13 +23,14 @@ func TestResolverPrefersSharedRoot(t *testing.T) {
 	if err := os.WriteFile(repoTemplate, []byte("repo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := Resolver{roots: []string{shared, repo}}
-	got, err := r.ResolveSkillManifestTemplate()
+	r := NewResolver(shared)
+	r.roots = []string{shared, repo}
+	got, err := r.ResolveSkillTemplate()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != sharedTemplate {
-		t.Fatalf("ResolveSkillManifestTemplate() = %q, want %q", got, sharedTemplate)
+		t.Fatalf("ResolveSkillTemplate() = %q, want %q", got, sharedTemplate)
 	}
 }
 
@@ -42,13 +43,32 @@ func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	if err := os.WriteFile(configTemplate, []byte("model: test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := Resolver{roots: []string{root}}
+	r := NewResolver(root)
 	got, err := r.ResolveWorkspaceConfigTemplate()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != configTemplate {
 		t.Fatalf("ResolveWorkspaceConfigTemplate() = %q, want %q", got, configTemplate)
+	}
+}
+
+func TestResolverWorkspaceAgentTemplate(t *testing.T) {
+	root := t.TempDir()
+	templatePath := filepath.Join(root, "templates", "workspace", "agent.yaml")
+	if err := os.MkdirAll(filepath.Dir(templatePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(templatePath, []byte("schema: relurpify/agent/v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := NewResolver(root)
+	got, err := r.ResolveWorkspaceAgentTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != templatePath {
+		t.Fatalf("ResolveWorkspaceAgentTemplate() = %q, want %q", got, templatePath)
 	}
 }
 
@@ -61,7 +81,7 @@ func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
 	if err := os.WriteFile(templatePath, []byte("schema: relurpify/policy/sandbox/v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := Resolver{roots: []string{root}}
+	r := NewResolver(root)
 	got, err := r.ResolveWorkspaceSecurityTemplate("sandbox")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +100,7 @@ func TestResolverStarterAgentPrefersTemplatesDir(t *testing.T) {
 	if err := os.WriteFile(canonical, []byte("canonical"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := Resolver{roots: []string{root}}
+	r := NewResolver(root)
 	got, err := r.ResolveStarterAgent("coding-go")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +116,7 @@ func TestResolverTestsuiteTemplateProfile(t *testing.T) {
 	if err := os.MkdirAll(profile, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r := Resolver{roots: []string{root}}
+	r := NewResolver(root)
 	got, err := r.ResolveTestsuiteTemplateProfile("")
 	if err != nil {
 		t.Fatal(err)

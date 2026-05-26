@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
 )
 
@@ -27,7 +27,7 @@ type ProviderRegistry struct {
 
 // NewProviderRegistry loads model provider files from a directory.
 func NewProviderRegistry(dir string) (*ProviderRegistry, error) {
-	loaded, err := cfgmodel.LoadProviderDir(dir)
+	loaded, err := cfgmodel.LoadProviderDir(dir, cfgload.StrictDecode)
 	if err != nil {
 		return nil, err
 	}

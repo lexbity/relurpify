@@ -492,14 +492,10 @@ func (p *EucloLibraryPane) openSelectedEditorCmd() (*EucloLibraryPane, tea.Cmd) 
 		p.status = "selected item has no source path"
 		return p, nil
 	}
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		editor = "vi"
-	}
 	p.lastUsed[item.ID] = time.Now()
 	p.selected = item
 	p.status = fmt.Sprintf("opening editor: %s", filepath.Base(path))
-	return p, tea.ExecProcess(exec.Command(editor, path), func(err error) tea.Msg {
+	return p, tea.ExecProcess(exec.Command(tui.EditorPath(), path), func(err error) tea.Msg {
 		if err != nil {
 			return tui.ChatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
 		}

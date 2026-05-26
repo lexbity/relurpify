@@ -10,14 +10,13 @@ import (
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type sandboxPaneRuntimeFake struct {
 	workspace    string
-	manifest     *manifest.AgentManifest
+	manifest     *cfgload.AgentManifest
 	manifestPath string
 	configPath   string
 	backend      string
@@ -28,18 +27,18 @@ func (f *sandboxPaneRuntimeFake) SessionInfo() SessionInfo {
 	return SessionInfo{Workspace: f.workspace}
 }
 
-func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*manifest.AgentManifest, error) {
+func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
 	if f.manifest == nil && f.manifestPath != "" {
-		loaded, err := manifest.LoadAgentManifest(f.manifestPath)
+		loaded, err := cfgload.LoadAgentManifest(f.manifestPath)
 		if err != nil {
 			return nil, err
 		}
 		f.manifest = loaded
 	}
-	return manifest.CloneAgentManifest(f.manifest)
+	return cfgload.CloneAgentManifest(f.manifest)
 }
 
-func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *manifest.AgentManifest) (string, error) {
+func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
 	if f.manifestPath == "" {
 		return "", os.ErrInvalid
 	}
@@ -75,7 +74,7 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	f.workspace = workspace
 	f.reloads++
 	if f.manifestPath != "" {
-		loaded, err := manifest.LoadAgentManifest(f.manifestPath)
+		loaded, err := cfgload.LoadAgentManifest(f.manifestPath)
 		if err != nil {
 			return err
 		}
@@ -84,17 +83,17 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	return nil
 }
 
-func testSandboxManifest() *manifest.AgentManifest {
-	return &manifest.AgentManifest{
+func testSandboxManifest() *cfgload.AgentManifest {
+	return &cfgload.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: manifest.ManifestMetadata{
+		Metadata: cfgload.ManifestMetadata{
 			Name:        "coding",
 			Version:     "1.0.0",
 			Description: "sandbox test manifest",
 		},
-		Spec: manifest.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:latest",
+		Spec: cfgload.ManifestSpec{
+			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
 			Permissions: contracts.PermissionSet{
 				FileSystem: []contracts.FileSystemPermission{
@@ -138,7 +137,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	if err := manifest.SaveAgentManifest(manifestPath, testSandboxManifest()); err != nil {
+	if err := cfgload.SaveAgentManifest(manifestPath, testSandboxManifest()); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
 	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), 0o644); err != nil {

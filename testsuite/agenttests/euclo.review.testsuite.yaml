@@ -9,7 +9,7 @@ metadata:
   quarantined: false
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   execution:
     profile: ci-live
     strict: true

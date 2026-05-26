@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/templates"
 )
 
@@ -158,7 +158,7 @@ func CopyWorkspace(src, dst string, exclude []string) error {
 	})
 }
 
-func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProfile, manifestRef string, exclude []string, overlayFiles []SetupFileSpec) error {
+func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, templateProfile, manifestRef string, exclude []string, overlayFiles []SetupFileSpec) error {
 	targetWorkspace = filepath.Clean(targetWorkspace)
 	derivedWorkspace = filepath.Clean(derivedWorkspace)
 	if err := os.RemoveAll(derivedWorkspace); err != nil {
@@ -167,12 +167,12 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 	if err := os.MkdirAll(derivedWorkspace, 0o755); err != nil {
 		return err
 	}
-	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{manifest.DirName + "/**"}, exclude...)); err != nil {
+	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{cfgload.DirName + "/**"}, exclude...)); err != nil {
 		return err
 	}
 
-	paths := manifest.New(derivedWorkspace)
-	resolver := templates.NewResolver()
+	paths := cfgload.New(derivedWorkspace)
+	resolver := templates.NewResolver(sharedRoot)
 	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
 	if err != nil {
 		return fmt.Errorf("resolve testsuite template profile %q: %w", firstNonEmpty(templateProfile, "default"), err)
@@ -209,7 +209,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 
 func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derivedWorkspace, manifestRef string) error {
 	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
-	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, manifest.DirName+"/") {
+	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, cfgload.DirName+"/") {
 		return nil
 	}
 	dst := filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
@@ -218,7 +218,7 @@ func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derived
 	candidate := filepath.Join(targetWorkspace, filepath.FromSlash(manifestRef))
 	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 		src = candidate
-	} else if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(manifest.DirName, "agents"))+"/") {
+	} else if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(cfgload.DirName, "agents"))+"/") {
 		name := strings.TrimSuffix(filepath.Base(manifestRef), filepath.Ext(manifestRef))
 		src, _ = resolver.ResolveStarterAgent(name)
 	}
@@ -320,7 +320,7 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 	if !filepath.IsAbs(manifestPath) {
 		manifestPath = filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
 	}
-	loadedManifest, err := manifest.LoadAgentManifest(manifestPath)
+	loadedManifest, err := cfgload.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil
 	}
@@ -330,12 +330,12 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 		if name == "" {
 			continue
 		}
-		dst := filepath.Join(derivedWorkspace, manifest.DirName, "skills", name)
-		if _, err := os.Stat(filepath.Join(dst, "skill.manifest.yaml")); err == nil {
+		dst := filepath.Join(derivedWorkspace, cfgload.DirName, "skills", name)
+		if _, err := os.Stat(filepath.Join(dst, "skill.yaml")); err == nil {
 			continue
 		}
-		src := filepath.Join(targetWorkspace, manifest.DirName, "skills", name)
-		if _, err := os.Stat(filepath.Join(src, "skill.manifest.yaml")); err != nil {
+		src := filepath.Join(targetWorkspace, cfgload.DirName, "skills", name)
+		if _, err := os.Stat(filepath.Join(src, "skill.yaml")); err != nil {
 			continue
 		}
 		if err := CopyWorkspace(src, dst, nil); err != nil {

@@ -1,0 +1,12 @@
+schema: relurpify/model/profile/v1
+pattern: "qwen2.5-coder*"
+tool_calling:
+  intent: native
+  max_concurrent_tools: 1
+  double_encode_args: true
+context:
+  max_tokens: 8192
+  response_reserve_tokens: 512
+generation:
+  temperature: 0.1
+  top_p: 0.95

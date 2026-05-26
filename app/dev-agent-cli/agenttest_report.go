@@ -47,8 +47,8 @@ func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace stri
 	configPath := desc.ConfigPath
 	manifestPath := desc.ManifestPath
 	if strings.TrimSpace(workspace) != "" {
-		configPath = filepath.Join(workspace, "relurpify_cfg", "config.yaml")
-		manifestPath = filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+		configPath = filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
+		manifestPath = filepath.Join(workspace, "relurpify_cfg", "agents", "coding.yaml")
 	}
 	report := preparedRunReport{
 		DescriptorPath:         filepath.Join(desc.SetupDir, "prepared_run.json"),

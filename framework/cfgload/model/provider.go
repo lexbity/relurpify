@@ -1,59 +1,50 @@
 package model
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
 
-// Provider describes one typed model provider definition.
-type Provider struct {
-	Schema                string   `yaml:"schema" json:"schema"`
-	Name                  string   `yaml:"name" json:"name"`
-	Endpoint              string   `yaml:"endpoint" json:"endpoint"`
-	Kind                  string   `yaml:"kind" json:"kind"`
-	RequestTimeoutSeconds int      `yaml:"request_timeout_seconds,omitempty" json:"request_timeout_seconds,omitempty"`
-	AvailableModels       []string `yaml:"available_models,omitempty" json:"available_models,omitempty"`
-	NativeToolCalling     bool     `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
-	MaxConcurrent         int      `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
-	SourcePath            string   `yaml:"-" json:"-"`
+var providerNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// ResolvedProvider is the canonical provider manifest loaded from relurpify_cfg/model/provider.
+type ResolvedProvider struct {
+	Schema                string   `yaml:"schema"`
+	Name                  string   `yaml:"name"`
+	Endpoint              string   `yaml:"endpoint"`
+	Kind                  string   `yaml:"kind"`
+	RequestTimeoutSeconds int      `yaml:"request_timeout_seconds,omitempty"`
+	AvailableModels       []string `yaml:"available_models,omitempty"`
+	NativeToolCalling     bool     `yaml:"native_tool_calling,omitempty"`
+	MaxConcurrent         int      `yaml:"max_concurrent,omitempty"`
+	SourcePath            string   `yaml:"-"`
 }
 
-// LoadProviderFile loads and validates a single provider file.
-func LoadProviderFile(path string) (*Provider, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var provider Provider
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &provider); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
-	}
-	if err := provider.Validate(); err != nil {
-		return nil, err
-	}
-	provider.SourcePath = path
-	return &provider, nil
-}
-
-// LoadProviderDir loads every provider file in a directory in deterministic order.
-func LoadProviderDir(dir string) ([]*Provider, error) {
+// LoadProviderDir loads all *.provider.yaml files from model/provider/.
+// It returns a hard error if the directory is missing or empty.
+func LoadProviderDir(dir string, decode Decoder) ([]*ResolvedProvider, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, fmt.Errorf("provider dir required")
 	}
-	entries, err := os.ReadDir(dir)
+	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+		return nil, fmt.Errorf("resolve provider dir: %w", err)
 	}
+	entries, err := os.ReadDir(absDir)
+	if err != nil {
+		return nil, fmt.Errorf("read provider dir: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("provider dir %q is empty", absDir)
+	}
+
+	workspaceRoot := filepath.Clean(filepath.Join(absDir, "..", "..", ".."))
 	var paths []string
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -63,47 +54,104 @@ func LoadProviderDir(dir string) ([]*Provider, error) {
 		if !strings.HasSuffix(name, ".provider.yaml") {
 			continue
 		}
-		paths = append(paths, filepath.Join(dir, name))
+		paths = append(paths, filepath.Join(absDir, name))
 	}
 	sort.Strings(paths)
-	out := make([]*Provider, 0, len(paths))
-	for _, path := range paths {
-		provider, err := LoadProviderFile(path)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, provider)
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("provider dir %q contains no *.provider.yaml files", absDir)
 	}
-	return out, nil
+
+	var errs []error
+	loaded := make([]*ResolvedProvider, 0, len(paths))
+	seenNames := map[string]string{}
+	for _, path := range paths {
+		body, err := readConfigFile(workspaceRoot, path)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("read %s: %w", path, err))
+			continue
+		}
+		if err := rejectForbiddenSecretFields(path, body); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if decode == nil {
+			errs = append(errs, fmt.Errorf("decoder required for %s", path))
+			continue
+		}
+		var provider ResolvedProvider
+		if _, err := decode(path, body, &provider); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		provider.SourcePath = path
+		if err := validateResolvedProvider(&provider); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(provider.Name))
+		if prev, ok := seenNames[key]; ok {
+			errs = append(errs, fmt.Errorf("duplicate provider name %q in %s and %s", provider.Name, prev, path))
+			continue
+		}
+		seenNames[key] = path
+		loaded = append(loaded, &provider)
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return loaded, nil
 }
 
-// Validate enforces the provider schema contract.
-func (p Provider) Validate() error {
-	if strings.TrimSpace(p.Name) == "" {
-		return fmt.Errorf("provider name required")
+func validateResolvedProvider(provider *ResolvedProvider) error {
+	if provider == nil {
+		return fmt.Errorf("provider required")
 	}
-	switch strings.ToLower(strings.TrimSpace(p.Kind)) {
-	case "ollama", "openai_compatible", "openai-compatible", "lmstudio":
-	default:
-		return fmt.Errorf("provider %q kind %q invalid", p.Name, p.Kind)
+	provider.Name = strings.TrimSpace(provider.Name)
+	provider.Endpoint = strings.TrimSpace(provider.Endpoint)
+	provider.Kind = strings.ToLower(strings.TrimSpace(provider.Kind))
+	if provider.Name == "" {
+		return fmt.Errorf("name required")
 	}
-	endpoint := strings.TrimSpace(p.Endpoint)
-	if endpoint == "" {
-		return fmt.Errorf("provider %q endpoint required", p.Name)
+	if !providerNamePattern.MatchString(provider.Name) {
+		return fmt.Errorf("name %q must match [A-Za-z0-9_-]+", provider.Name)
 	}
-	if !(strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://")) {
-		return fmt.Errorf("provider %q endpoint must be http or https", p.Name)
+	if err := validateProviderKind(provider.Kind); err != nil {
+		return err
 	}
-	if p.RequestTimeoutSeconds < 0 {
-		return fmt.Errorf("provider %q request_timeout_seconds must be >= 0", p.Name)
+	if _, err := url.ParseRequestURI(provider.Endpoint); err != nil {
+		return fmt.Errorf("endpoint invalid: %w", err)
 	}
-	if p.MaxConcurrent < 0 {
-		return fmt.Errorf("provider %q max_concurrent must be >= 0", p.Name)
+	if !strings.HasPrefix(provider.Endpoint, "http://") && !strings.HasPrefix(provider.Endpoint, "https://") {
+		return fmt.Errorf("endpoint must use http or https: %q", provider.Endpoint)
 	}
-	for i, model := range p.AvailableModels {
-		if strings.TrimSpace(model) == "" {
-			return fmt.Errorf("provider %q available_models[%d] required", p.Name, i)
-		}
+	provider.AvailableModels = normalizeStrings(provider.AvailableModels)
+	if provider.RequestTimeoutSeconds < 0 {
+		return fmt.Errorf("request_timeout_seconds must be >= 0")
+	}
+	if provider.MaxConcurrent < 0 {
+		return fmt.Errorf("max_concurrent must be >= 0")
 	}
 	return nil
+}
+
+func validateProviderKind(kind string) error {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "ollama", "openai_compatible", "lmstudio":
+		return nil
+	default:
+		return fmt.Errorf("kind %q must be one of ollama, openai_compatible, lmstudio", kind)
+	}
+}
+
+func normalizeStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }

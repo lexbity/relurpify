@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -26,12 +26,12 @@ func TestManifestResolution(t *testing.T) {
 			t.Fatalf("valid manifest should validate: %v", err)
 		}
 
-		manifestPath := filepath.Join(env.WorkspacePath, "agent.manifest.yaml")
-		if err := manifest.SaveAgentManifest(manifestPath, m); err != nil {
+		manifestPath := filepath.Join(env.WorkspacePath, "agent.yaml")
+		if err := cfgload.SaveAgentManifest(manifestPath, m); err != nil {
 			t.Fatalf("failed to save manifest: %v", err)
 		}
 
-		loaded, err := manifest.LoadAgentManifest(manifestPath)
+		loaded, err := cfgload.LoadAgentManifest(manifestPath)
 		if err != nil {
 			t.Fatalf("failed to load manifest: %v", err)
 		}
@@ -41,7 +41,7 @@ func TestManifestResolution(t *testing.T) {
 
 		AssertNormalizedFileSystemPermissionsEqual(t, loaded.Spec.Permissions.FileSystem, []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "${workspace}/**"}})
 
-		resolved, err := manifest.ResolveEffectivePermissions(env.WorkspacePath, loaded)
+		resolved, err := cfgload.ResolveEffectivePermissions(env.WorkspacePath, loaded)
 		if err != nil {
 			t.Fatalf("resolve effective permissions failed: %v", err)
 		}
@@ -132,16 +132,16 @@ func TestManifestPermissionPropagation(t *testing.T) {
 		m.Metadata.Version = "1.0.0"
 		m.Spec.Policy.Permissions.FileSystem = []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "${workspace}/**"}}
 
-		manifestPath := filepath.Join(env.WorkspacePath, "agent.manifest.yaml")
-		if err := manifest.SaveAgentManifest(manifestPath, m); err != nil {
+		manifestPath := filepath.Join(env.WorkspacePath, "agent.yaml")
+		if err := cfgload.SaveAgentManifest(manifestPath, m); err != nil {
 			t.Fatalf("failed to save manifest: %v", err)
 		}
-		loaded, err := manifest.LoadAgentManifest(manifestPath)
+		loaded, err := cfgload.LoadAgentManifest(manifestPath)
 		if err != nil {
 			t.Fatalf("failed to load manifest: %v", err)
 		}
 
-		resolved, err := manifest.ResolveEffectivePermissions(env.WorkspacePath, loaded)
+		resolved, err := cfgload.ResolveEffectivePermissions(env.WorkspacePath, loaded)
 		if err != nil {
 			t.Fatalf("resolve effective permissions failed: %v", err)
 		}

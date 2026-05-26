@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewRootCmdWiresNexusishEntryPoint(t *testing.T) {
-	root := newRootCmd()
+	root := newRootCmd(nil)
 	require.Equal(t, "nexusish", root.Use)
 	require.Equal(t, "Terminal dashboard for the Nexus gateway", root.Short)
 	require.NotNil(t, root.Flags().Lookup("workspace"))

@@ -2,14 +2,12 @@ package llm
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"gopkg.in/yaml.v3"
 )
 
 // ProfileRegistry loads ModelProfile files from a directory and matches them
@@ -34,62 +32,64 @@ type ProfileResolution struct {
 	Model      string
 }
 
-// NewProfileRegistry loads all *.yaml and *.yml files from configDir.
+// NewProfileRegistry loads model profile configs from the canonical directory.
 // Missing directory returns an empty registry using built-in defaults.
 func NewProfileRegistry(configDir string) (*ProfileRegistry, error) {
 	reg := &ProfileRegistry{}
 	if strings.TrimSpace(configDir) == "" {
 		return reg, nil
 	}
-	entries, err := os.ReadDir(configDir)
+	loaded, err := cfgmodel.LoadProfileDir(configDir, cfgload.StrictDecode)
 	if err != nil {
-		if os.IsNotExist(err) {
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "no such file") || strings.Contains(lower, "does not exist") {
 			return reg, nil
 		}
 		return nil, fmt.Errorf("read model profiles dir: %w", err)
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
+	return NewProfileRegistryFromConfigs(loaded)
+}
+
+// NewProfileRegistryFromConfigs builds a registry from already-loaded profile configs.
+func NewProfileRegistryFromConfigs(configs []*cfgmodel.ModelProfileConfig) (*ProfileRegistry, error) {
+	reg := &ProfileRegistry{}
+	for _, loadedProfile := range configs {
+		if loadedProfile == nil {
 			continue
 		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-		path := filepath.Join(configDir, name)
-		loaded, err := loadProfileFile(path)
-		if err != nil {
-			return nil, err
-		}
-		loaded.SourcePath = path
+		profile := convertModelProfileConfig(loadedProfile)
 		reg.profiles = append(reg.profiles, &profileEntry{
-			profile:    loaded,
-			sourcePath: path,
-			isDefault:  isDefaultProfileFile(name),
+			profile:    profile,
+			sourcePath: loadedProfile.SourcePath,
+			isDefault:  isDefaultProfileFile(loadedProfile.SourcePath),
 		})
 	}
 	return reg, nil
 }
 
-func loadProfileFile(path string) (*ModelProfile, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open profile %s: %w", path, err)
+func convertModelProfileConfig(cfg *cfgmodel.ModelProfileConfig) *ModelProfile {
+	if cfg == nil {
+		return nil
 	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("read profile %s: %w", path, err)
+	profile := &ModelProfile{
+		Pattern:    cfg.Pattern,
+		SourcePath: cfg.SourcePath,
 	}
-	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
-		return nil, err
+	switch strings.ToLower(strings.TrimSpace(cfg.ToolCalling.Intent)) {
+	case "native":
+		profile.ToolCalling.NativeAPI = true
+	case "prompt_based":
+		profile.ToolCalling.NativeAPI = false
+	case "auto":
+		profile.ToolCalling.NativeAPI = false
 	}
-	var profile ModelProfile
-	if err := yaml.Unmarshal(data, &profile); err != nil {
-		return nil, fmt.Errorf("parse profile %s: %w", path, err)
+	profile.ToolCalling.DoubleEncodedArgs = cfg.ToolCalling.DoubleEncodeArgs
+	profile.ToolCalling.MaxToolsPerCall = cfg.ToolCalling.MaxConcurrentTools
+	if cfg.Context.MaxTokens > 0 {
+		profile.ContextSize = cfg.Context.MaxTokens
 	}
 	profile.Normalize()
-	return &profile, nil
+	return profile
 }
 
 // Resolve returns the best-matching profile for provider/model.
@@ -277,7 +277,7 @@ func profileReason(kind string, profile *ModelProfile, provider, model string, i
 	}
 }
 
-func isDefaultProfileFile(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	return name == "default.yaml" || name == "default.yml"
+func isDefaultProfileFile(path string) bool {
+	name := strings.ToLower(strings.TrimSpace(filepath.Base(path)))
+	return name == "default.llm.yaml"
 }

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -113,23 +113,23 @@ func MixedLanguageWorkspace(basePath string) *WorkspaceBuilder {
 
 // ManifestBuilder builds deterministic manifest fixtures.
 type ManifestBuilder struct {
-	manifest *manifest.AgentManifest
+	manifest *cfgload.AgentManifest
 }
 
 // NewManifestBuilder creates a new manifest builder with defaults.
 func NewManifestBuilder() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &manifest.AgentManifest{
+		manifest: &cfgload.AgentManifest{
 			APIVersion: "relurpify/v1alpha1",
 			Kind:       "AgentManifest",
-			Metadata: manifest.ManifestMetadata{
+			Metadata: cfgload.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: manifest.ManifestSpec{
+			Spec: cfgload.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
-				Policy: &manifest.ManifestPolicySpec{
+				Policy: &cfgload.ManifestPolicySpec{
 					Permissions: contracts.PermissionSet{
 						FileSystem: []contracts.FileSystemPermission{
 							{Action: contracts.FileSystemRead, Path: "${workspace}/**"},
@@ -157,7 +157,7 @@ func (b *ManifestBuilder) WithVersion(version string) *ManifestBuilder {
 // WithFileSystemPermission adds a filesystem permission.
 func (b *ManifestBuilder) WithFileSystemPermission(action contracts.FileSystemAction, path string) *ManifestBuilder {
 	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &manifest.ManifestPolicySpec{}
+		b.manifest.Spec.Policy = &cfgload.ManifestPolicySpec{}
 	}
 	b.manifest.Spec.Policy.Permissions.FileSystem = append(
 		b.manifest.Spec.Policy.Permissions.FileSystem,
@@ -169,7 +169,7 @@ func (b *ManifestBuilder) WithFileSystemPermission(action contracts.FileSystemAc
 // WithNetworkPermission adds a network permission.
 func (b *ManifestBuilder) WithNetworkPermission(direction, protocol, host string, port int) *ManifestBuilder {
 	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &manifest.ManifestPolicySpec{}
+		b.manifest.Spec.Policy = &cfgload.ManifestPolicySpec{}
 	}
 	b.manifest.Spec.Policy.Permissions.Network = append(
 		b.manifest.Spec.Policy.Permissions.Network,
@@ -190,11 +190,11 @@ func (b *ManifestBuilder) WithHITLRequired() *ManifestBuilder {
 }
 
 // Build returns the constructed manifest.
-func (b *ManifestBuilder) Build() *manifest.AgentManifest {
+func (b *ManifestBuilder) Build() *cfgload.AgentManifest {
 	if b == nil || b.manifest == nil {
 		return nil
 	}
-	clone, err := manifest.CloneAgentManifest(b.manifest)
+	clone, err := cfgload.CloneAgentManifest(b.manifest)
 	if err != nil {
 		return b.manifest
 	}
@@ -219,13 +219,13 @@ func ValidManifest() *ManifestBuilder {
 // InvalidManifestMissingAPIVersion returns a builder for an invalid manifest (missing apiVersion).
 func InvalidManifestMissingAPIVersion() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &manifest.AgentManifest{
+		manifest: &cfgload.AgentManifest{
 			Kind: "AgentManifest",
-			Metadata: manifest.ManifestMetadata{
+			Metadata: cfgload.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: manifest.ManifestSpec{
+			Spec: cfgload.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
 			},
@@ -236,13 +236,13 @@ func InvalidManifestMissingAPIVersion() *ManifestBuilder {
 // InvalidManifestMissingKind returns a builder for an invalid manifest (missing kind).
 func InvalidManifestMissingKind() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &manifest.AgentManifest{
+		manifest: &cfgload.AgentManifest{
 			APIVersion: "relurpify/v1alpha1",
-			Metadata: manifest.ManifestMetadata{
+			Metadata: cfgload.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: manifest.ManifestSpec{
+			Spec: cfgload.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
 			},

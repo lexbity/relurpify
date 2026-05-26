@@ -543,11 +543,7 @@ func (p *DiffPane) openEditorCmd(path string) tea.Cmd {
 }
 
 func editorProcess(path string) *exec.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
-	}
-	return exec.Command(editor, path)
+	return exec.Command(tui.EditorPath(), path)
 }
 
 func (p *DiffPane) applyAllCmd() tea.Cmd {

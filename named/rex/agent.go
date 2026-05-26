@@ -10,9 +10,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/classify"
 	"codeburg.org/lexbit/relurpify/named/rex/delegates"
@@ -446,7 +446,7 @@ func resolveWorkspaceRoot(workspace string) string {
 	}
 	current := cwd
 	for {
-		if _, err := os.Stat(filepath.Join(current, frameworkmanifest.DirName)); err == nil {
+		if _, err := os.Stat(filepath.Join(current, cfgload.DirName)); err == nil {
 			return current
 		}
 		parent := filepath.Dir(current)

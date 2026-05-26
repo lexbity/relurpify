@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/templates"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
@@ -57,7 +57,7 @@ func newSkillInitCmd() *cobra.Command {
 				return err
 			}
 
-			templatePath, err := templates.NewResolver().ResolveSkillManifestTemplate()
+			templatePath, err := templates.NewResolver(sharedRoot).ResolveSkillTemplate()
 			if err != nil {
 				return fmt.Errorf("resolve skill template: %w", err)
 			}
@@ -65,7 +65,7 @@ func newSkillInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var skill manifest.SkillManifest
+			var skill cfgload.SkillManifest
 			if err := yaml.Unmarshal(data, &skill); err != nil {
 				return err
 			}
@@ -81,12 +81,8 @@ func newSkillInitCmd() *cobra.Command {
 				return err
 			}
 			encoded = append([]byte("schema: relurpify/skill/v1\n\n"), encoded...)
-			manifestPath := frameworkskills.SkillManifestPath(ws, name)
+			manifestPath := frameworkskills.SkillPath(ws, name)
 			if err := os.WriteFile(manifestPath, encoded, 0o644); err != nil {
-				return err
-			}
-
-			if err := createSkillResourceDirs(root, skill); err != nil {
 				return err
 			}
 
@@ -113,7 +109,7 @@ func newSkillInitCmd() *cobra.Command {
 func newSkillValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <name>",
-		Short: "Validate a skill manifest and its resources",
+		Short: "Validate a skill manifest",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := ensureWorkspace()
@@ -121,13 +117,9 @@ func newSkillValidateCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			manifestPath := frameworkskills.SkillManifestPath(ws, name)
-			skill, err := manifest.LoadSkillManifest(manifestPath)
+			manifestPath := frameworkskills.SkillPath(ws, name)
+			skill, err := cfgload.LoadSkillManifest(manifestPath)
 			if err != nil {
-				return err
-			}
-			paths := frameworkskills.ResolveSkillPaths(skill)
-			if err := frameworkskills.ValidateSkillPaths(paths); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Skill %s valid\n", skill.Metadata.Name)
@@ -143,7 +135,7 @@ func newSkillDoctorCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "doctor <name>",
-		Short: "Diagnose skill compatibility with tools and permissions",
+		Short: "Diagnose skill compatibility with tools",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := ensureWorkspace()
@@ -151,19 +143,15 @@ func newSkillDoctorCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			skillPath := frameworkskills.SkillManifestPath(ws, name)
-			skill, err := manifest.LoadSkillManifest(skillPath)
+			skillPath := frameworkskills.SkillPath(ws, name)
+			skill, err := cfgload.LoadSkillManifest(skillPath)
 			if err != nil {
 				return err
 			}
-			paths := frameworkskills.ResolveSkillPaths(skill)
-			if err := frameworkskills.ValidateSkillPaths(paths); err != nil {
-				return err
-			}
 
-			var agentManifest *manifest.AgentManifest
+			var agentManifest *cfgload.AgentManifest
 			if manifestPath != "" {
-				agentManifest, err = manifest.LoadAgentManifest(manifestPath)
+				agentManifest, err = cfgload.LoadAgentManifest(manifestPath)
 				if err != nil {
 					return err
 				}
@@ -181,8 +169,8 @@ func newSkillDoctorCmd() *cobra.Command {
 			}
 
 			if agentManifest != nil {
-				resolvedSpec := manifest.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
-				resolvedSpec = manifest.ResolveAgentSpec(resolvedSpec)
+				resolvedSpec := cfgload.ApplyManifestDefaultsForAgent(agentManifest.Metadata.Name, agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
+				resolvedSpec = cfgload.ResolveAgentSpec(resolvedSpec)
 				_ = resolvedSpec
 			}
 			for _, bin := range skill.Spec.Requires.Bins {
@@ -231,7 +219,7 @@ func newSkillTestCmd() *cobra.Command {
 			}
 
 			manifestAbs := suite.ResolvePath(suite.Spec.Manifest)
-			agentManifest, err := manifest.LoadAgentManifest(manifestAbs)
+			agentManifest, err := cfgload.LoadAgentManifest(manifestAbs)
 			if err != nil {
 				return err
 			}
@@ -254,6 +242,7 @@ func newSkillTestCmd() *cobra.Command {
 				OutputDir:        outDir,
 				Timeout:          timeout,
 				Sandbox:          sandbox,
+				SharedRoot:       sharedRoot,
 				ModelOverride:    model,
 				EndpointOverride: endpoint,
 			}
@@ -267,39 +256,6 @@ func newSkillTestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
 	cmd.Flags().BoolVar(&sandbox, "sandbox", false, "Run agenttest with sandboxed runtime")
 	return cmd
-}
-
-func createSkillResourceDirs(root string, skill manifest.SkillManifest) error {
-	entries := []string{}
-	if len(skill.Spec.ResourcePaths.Scripts) == 0 {
-		entries = append(entries, "scripts")
-	} else {
-		entries = append(entries, skill.Spec.ResourcePaths.Scripts...)
-	}
-	if len(skill.Spec.ResourcePaths.Resources) == 0 {
-		entries = append(entries, "resources")
-	} else {
-		entries = append(entries, skill.Spec.ResourcePaths.Resources...)
-	}
-	if len(skill.Spec.ResourcePaths.Templates) == 0 {
-		entries = append(entries, "templates")
-	} else {
-		entries = append(entries, skill.Spec.ResourcePaths.Templates...)
-	}
-	for _, entry := range entries {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		path := entry
-		if !filepath.IsAbs(entry) {
-			path = filepath.Join(root, entry)
-		}
-		if err := os.MkdirAll(path, 0o755); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func writeSkillTestSuite(root, name, agentName string, force bool) error {
@@ -316,7 +272,7 @@ func writeSkillTestSuite(root, name, agentName string, force bool) error {
 		},
 		Spec: agenttest.SuiteSpec{
 			AgentName: agentName,
-			Manifest:  filepath.ToSlash(filepath.Join("..", "..", "agent.manifest.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join("..", "..", "agent.yaml")),
 			Workspace: agenttest.WorkspaceSpec{
 				Strategy:        "derived",
 				TemplateProfile: "default",

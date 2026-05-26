@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
@@ -34,7 +34,7 @@ func TestPreparedRunDescriptorLoadRejectsMissingPath(t *testing.T) {
 
 func TestExecutePreparedRunUsesDescriptorWorkspaceAndBackend(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ kind: AgentManifest
 metadata:
   name: euclo
 spec:
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  image: ghcr.io/lexcodex/relurpify/runtime:0.4.1
   runtime: gvisor
   permissions:
     filesystem:
@@ -66,7 +66,7 @@ spec:
 		Metadata:   agenttest.SuiteMeta{Name: "euclo.code"},
 		Spec: agenttest.SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(manifest.DirName, "agent.manifest.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
 			Models: []agenttest.ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
 				Provider: "ollama",

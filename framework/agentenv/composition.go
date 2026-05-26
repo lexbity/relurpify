@@ -7,8 +7,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
-	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/services"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // WorkspaceConfig provides configuration for workspace environment construction.
@@ -45,6 +46,7 @@ type WorkspaceConfig struct {
 	AllowedCapabilities        []core.CapabilitySelector
 	DebugLLM                   bool
 	DebugAgent                 bool
+	Strict                     bool
 	// Agent specification for policy engine and capability registration
 	AgentSpec *agentspec.AgentRuntimeSpec
 	// Permission manager for authorization
@@ -53,6 +55,16 @@ type WorkspaceConfig struct {
 	AgentID string
 	// Telemetry for instrumentation
 	Telemetry core.Telemetry
+	// LoadedConfig contains the resolved config tree produced by cfgload.
+	LoadedConfig *cfgload.AppConfig
+	// ManifestSnapshot contains the selected agent manifest snapshot.
+	ManifestSnapshot *cfgload.AgentManifestSnapshot
+	// ProfileResolution is the pre-resolved model profile selected by the caller.
+	ProfileResolution llm.ProfileResolution
+	// AgentDefinitions are the loaded agent definition overlays selected by the caller.
+	AgentDefinitions map[string]*agentspec.AgentDefinition
+	// SecurityBundle contains the loaded security policy bundle.
+	SecurityBundle *cfgsecurity.Bundle
 	// EventLogFactory creates an event.Log implementation for the workspace.
 	// If nil, no event log is created. This allows apps to inject app-specific
 	// event log implementations (e.g., app/nexus/db) without framework dependencies.
@@ -92,13 +104,12 @@ func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 //
 // Returns WorkspaceEnvironment with framework services populated. ayenitd-specific services
 // (ServiceManager, Scheduler, KnowledgeStore, Retriever, Compiler) are left nil for entry points to populate.
-func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
+func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	securityBundle, err := cfgsecurity.LoadBundle(cfg.Workspace)
-	if err != nil {
-		return nil, fmt.Errorf("load security policies: %w", err)
+	if securityBundle == nil {
+		return nil, fmt.Errorf("security bundle required")
 	}
 
 	// Phase 1: Build capability bundle with permission manager and agent spec

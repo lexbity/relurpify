@@ -8,7 +8,7 @@ import (
 func TestValidationReportFormatsMultipleIssues(t *testing.T) {
 	report := &ValidationReport{}
 	report.Add("relurpify_cfg/workspace.yaml", "paths.state_dir", "/tmp", "must be relative")
-	report.Add("relurpify_cfg/agent.manifest.yaml", "spec.security.run_as_user", 0, "must not be 0 (root)")
+	report.Add("relurpify_cfg/agent.yaml", "spec.security.run_as_user", 0, "must not be 0 (root)")
 
 	got := report.Error()
 	if !strings.Contains(got, "config validation error:") {

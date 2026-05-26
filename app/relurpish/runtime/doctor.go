@@ -11,7 +11,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/templates"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -76,7 +75,7 @@ func (r DoctorReport) Ready() bool {
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
 func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets) DoctorReport {
-	paths := manifest.New(cfg.Workspace)
+	paths := cfgload.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
 		ConfigRoot: paths.ConfigRoot(),
@@ -101,7 +100,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
-		if snapshot, err := manifest.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
+		if snapshot, err := cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
 			report.ManifestError = err.Error()
 		} else {
 			report.ManifestFingerprint = hex.EncodeToString(snapshot.Fingerprint[:])
@@ -112,11 +111,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 			}
 		}
 	}
-	report.ProtectedPaths = manifest.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, cfgload.DefaultWorkspaceConfigPath(cfg.Workspace))
+	report.ProtectedPaths = cfgload.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, cfgload.DefaultWorkspaceConfigPath(cfg.Workspace))
 
-	resolver := templates.NewResolver()
+	resolver := templates.NewResolver(cfg.SharedRoot)
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
-		if starterManifest, err := resolver.ResolveWorkspaceManifestTemplate(); err == nil {
+		if starterManifest, err := resolver.ResolveWorkspaceAgentTemplate(); err == nil {
 			sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
 			shellTemplate, shellErr := resolver.ResolveWorkspaceSecurityTemplate("shell")
 			localToolTemplate, localToolErr := resolver.ResolveWorkspaceSecurityTemplate("localtool")
@@ -154,7 +153,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
-	if reg, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := llm.NewProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
 		if resolution.SourcePath != "" {
 			report.ModelProfilesExists = true
@@ -244,16 +243,16 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("workspace path required")
 	}
-	paths := manifest.New(cfg.Workspace)
+	paths := cfgload.New(cfg.Workspace)
 	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
 		return err
 	}
-	resolver := templates.NewResolver()
+	resolver := templates.NewResolver(cfg.SharedRoot)
 	configTemplate, err := resolver.ResolveWorkspaceConfigTemplate()
 	if err != nil {
 		return fmt.Errorf("resolve workspace config template: %w", err)
 	}
-	manifestTemplate, err := resolver.ResolveWorkspaceManifestTemplate()
+	manifestTemplate, err := resolver.ResolveWorkspaceAgentTemplate()
 	if err != nil {
 		return fmt.Errorf("resolve workspace manifest template: %w", err)
 	}
@@ -273,7 +272,10 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve ingestion security template: %w", err)
 	}
-	workspaceConfigPath := cfgload.DefaultWorkspaceConfigPath(cfg.Workspace)
+	workspaceConfigPath := cfg.ConfigPath
+	if workspaceConfigPath == "" {
+		workspaceConfigPath = cfgload.DefaultWorkspaceStateConfigPath(cfg.Workspace)
+	}
 	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
 		return err
 	}
@@ -379,7 +381,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func summarizeManifestPolicy(m *manifest.AgentManifest) string {
+func summarizeManifestPolicy(m *cfgload.AgentManifest) string {
 	if m == nil {
 		return ""
 	}

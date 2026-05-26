@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +43,8 @@ func TestLoadConsolidatedConfig(t *testing.T) {
 paths:
   state_dir: .relurpify_state
 model:
-  default_name: test-model
+  provider: ollama
+  name: test-model
 sandbox:
   backend: gvisor
 logging:
@@ -58,7 +60,7 @@ telemetry:
 	// 2. security policy files
 	secDir := filepath.Join(cfgDir, "security")
 	require.NoError(t, os.MkdirAll(secDir, 0o755))
-	
+
 	sandboxYAML := `schema: relurpify/policy/sandbox/v1
 read_only_root: true
 protected_paths:
@@ -109,6 +111,9 @@ rules:
 name: ollama
 endpoint: http://localhost:11434
 kind: ollama
+available_models:
+  - test-model
+  - override-model
 `
 	require.NoError(t, os.WriteFile(filepath.Join(providerDir, "ollama.provider.yaml"), []byte(providerYAML), 0o644))
 
@@ -133,13 +138,10 @@ name: test_tool
 family: test
 intent: [test_intent]
 description: A mock test tool
-parameters:
-  - name: input
-    type: string
-    required: true
 execution:
-  backend: go_native
-  implementation: test_tool_impl
+  backend: subprocess
+  command:
+    base: ["echo"]
 capability:
   trust_class: workspace_trusted
   risk_class: [read_only]
@@ -170,7 +172,7 @@ sandbox:
   limits:
     memory: 8Gi
 model:
-  name: "${RELURPIFY_MODEL}"
+  name: "${RELURPIFY_MODEL_NAME}"
 filesystem:
   - action: [fs:read]
     path: "${workspace}/src/**"
@@ -186,7 +188,8 @@ execution:
 	opts := LoadOptions{
 		WorkspaceRoot: tmp,
 		EnvOverrides: []string{
-			"RELURPIFY_MODEL=override-model",
+			"RELURPIFY_MODEL_PROVIDER=ollama",
+			"RELURPIFY_MODEL_NAME=override-model",
 			"RELURPIFY_STRICT=true",
 			"RELURPIFY_LLM_API_KEY=llm-key",
 			"RELURPIFY_NEXUS_TOKEN=nexus-token",
@@ -204,7 +207,8 @@ execution:
 	require.NotNil(t, secrets)
 
 	// Verify workspace configs and overrides
-	require.Equal(t, "override-model", *appConfig.Workspace.Model.DefaultName)
+	require.Equal(t, "ollama", appConfig.Workspace.Model.Provider)
+	require.Equal(t, "override-model", appConfig.Workspace.Model.Name)
 	require.Equal(t, "warn", *appConfig.Workspace.Logging.Level)
 
 	// Verify model providers and profiles
@@ -226,10 +230,12 @@ execution:
 	agent, exists := appConfig.Agents.Agents["euclo"]
 	require.True(t, exists)
 	require.Equal(t, "euclo", agent.Name)
-	require.Equal(t, "8Gi", *agent.Sandbox.Limits.Memory)     // Named overridden base (base was 4Gi)
-	require.Equal(t, "2", *agent.Sandbox.Limits.CPU)         // Inherited from base
-	require.Equal(t, "override-model", *agent.Model.Name)     // Resolved from ${RELURPIFY_MODEL}
-	require.Equal(t, 24, *agent.Execution.MaxIterations)      // Overridden (base was 16)
+	require.Equal(t, "8Gi", *agent.Sandbox.Limits.Memory) // Named overridden base (base was 4Gi)
+	require.Equal(t, "2", *agent.Sandbox.Limits.CPU)      // Inherited from base
+	require.Equal(t, "override-model", agent.Model.Name)  // Resolved from ${RELURPIFY_MODEL_NAME}
+	require.Equal(t, 24, *agent.Execution.MaxIterations)  // Overridden (base was 16)
+	require.NotNil(t, agent.ResolvedModel)
+	require.Equal(t, "override-model", agent.ResolvedModel.Name)
 
 	// Filesystem permissions resolved ${workspace}
 	require.Len(t, agent.Filesystem, 1)
@@ -239,9 +245,26 @@ execution:
 	require.Contains(t, agent.Filesystem[0].Exclude, filepath.Join(tmp, "relurpify_cfg")+"/**")
 }
 
+func TestLoadConsolidatedConfigStrictRejectsUnknownFields(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "relurpify-load-strict-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmp)
+
+	cfgDir := filepath.Join(tmp, "relurpify_cfg")
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "workspace.yaml"), []byte(`schema: relurpify/workspace/v1
+unexpected: true
+`), 0o644))
+
+	_, _, err = Load(LoadOptions{WorkspaceRoot: tmp, EnvOverrides: []string{"RELURPIFY_STRICT=true"}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "field unexpected not found")
+}
+
 func TestResolveVariables(t *testing.T) {
 	env := []string{
-		"RELURPIFY_MODEL=gemma4:e4b",
+		"RELURPIFY_MODEL_PROVIDER=ollama",
+		"RELURPIFY_MODEL_NAME=gemma4:e4b",
 		"OLLAMA_HOST=http://remote-ollama",
 		"CUSTOM_VAR=my-val",
 	}
@@ -252,7 +275,8 @@ func TestResolveVariables(t *testing.T) {
 		err      bool
 	}{
 		{"${workspace}/path", "/home/ws/path", false},
-		{"${RELURPIFY_MODEL}", "gemma4:e4b", false},
+		{"${RELURPIFY_MODEL_PROVIDER}", "ollama", false},
+		{"${RELURPIFY_MODEL_NAME}", "gemma4:e4b", false},
 		{"${OLLAMA_HOST:-localhost}", "http://remote-ollama", false},
 		{"${MISSING_OLLAMA_HOST:-localhost}", "localhost", false},
 		{"${CUSTOM_VAR}", "my-val", false},
@@ -260,7 +284,7 @@ func TestResolveVariables(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		res, err := resolveVariables(tc.input, "/home/ws", env, "default-model")
+		res, err := resolveVariables(tc.input, "/home/ws", env, model.ModelRef{Provider: "ollama", Name: "default-model"})
 		if tc.err {
 			require.Error(t, err)
 		} else {

@@ -244,7 +244,7 @@ metadata:
 
 spec:
   agent_name: euclo               # required — agent to run cases against
-  manifest: relurpify_cfg/agent.manifest.yaml  # required — agent manifest path
+  manifest: relurpify_cfg/agent.yaml  # required — agent manifest path
 
   execution:
     profile: ci-live              # live | record | replay | developer-live | ci-live | ci-replay
@@ -890,7 +890,7 @@ Ollama is not running. Start it: `ollama serve` or `systemctl start ollama`.
 ### "no such model" / model load error
 Model is not pulled: `ollama pull qwen2.5-coder:14b`.
 Model profile selection is automatic once the model is loaded. Profiles are
-resolved from `relurpify_cfg/model_profiles/` using the selected provider and
+resolved from `relurpify_cfg/model/profiles/` using the selected provider and
 model name.
 
 ### Case times out

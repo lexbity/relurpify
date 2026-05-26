@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,7 +15,7 @@ import (
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -99,11 +100,11 @@ func assertGolden(t *testing.T, name, got string) {
 	}
 }
 
+var workdirRegex = regexp.MustCompile(`/tmp/TestPanelGoldenViews\d+/001/[a\s]+`)
+
 func normalizeSnapshot(view, root string) string {
-	if root == "" {
-		return normalizeGoldenText(view)
-	}
-	return normalizeGoldenText(strings.ReplaceAll(view, root, "<WORKDIR>"))
+	normalized := normalizeGoldenText(view)
+	return workdirRegex.ReplaceAllString(normalized, "<WORKDIR>")
 }
 
 func normalizeGoldenText(s string) string {
@@ -112,7 +113,7 @@ func normalizeGoldenText(s string) string {
 
 type sandboxFixtureRuntime struct {
 	workspace string
-	manifest  *manifest.AgentManifest
+	manifest  *cfgload.AgentManifest
 	backend   string
 }
 
@@ -120,11 +121,11 @@ func (r *sandboxFixtureRuntime) SessionInfo() tui.SessionInfo {
 	return tui.SessionInfo{Workspace: r.workspace}
 }
 
-func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*manifest.AgentManifest, error) {
-	return manifest.CloneAgentManifest(r.manifest)
+func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
+	return cfgload.CloneAgentManifest(r.manifest)
 }
 
-func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *manifest.AgentManifest) (string, error) {
+func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
 	r.manifest = m
 	return filepath.Join(r.workspace, "relurpify_cfg", "agent.yaml.bak"), nil
 }
@@ -162,17 +163,17 @@ func (f *sessionInfoFixture) ReloadWorkspace(context.Context, string) error {
 	return nil
 }
 
-func testManifest() *manifest.AgentManifest {
-	return &manifest.AgentManifest{
+func testManifest() *cfgload.AgentManifest {
+	return &cfgload.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: manifest.ManifestMetadata{
+		Metadata: cfgload.ManifestMetadata{
 			Name:        "coding",
 			Version:     "1.0.0",
 			Description: "sandbox test manifest",
 		},
-		Spec: manifest.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:latest",
+		Spec: cfgload.ManifestSpec{
+			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
 			Permissions: contracts.PermissionSet{
 				FileSystem: []contracts.FileSystemPermission{
@@ -210,8 +211,25 @@ func withWorkingDir(t *testing.T, dir string) {
 	})
 }
 
+func deterministicTempDir(t *testing.T) string {
+	baseDir := t.TempDir()
+	targetLen := 120
+	currentLen := len(baseDir)
+	var workdir string
+	if currentLen < targetLen-1 {
+		subDirName := strings.Repeat("a", targetLen-currentLen-1)
+		workdir = filepath.Join(baseDir, subDirName)
+	} else {
+		workdir = baseDir
+	}
+	if err := os.MkdirAll(workdir, 0o755); err != nil {
+		t.Fatalf("mkdir workdir: %v", err)
+	}
+	return workdir
+}
+
 func TestPanelGoldenViews(t *testing.T) {
-	workdir := t.TempDir()
+	workdir := deterministicTempDir(t)
 	withWorkingDir(t, workdir)
 
 	sessionStore := tui.NewSessionStore(workdir)
@@ -233,7 +251,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), 0o755); err != nil {
 		t.Fatalf("mkdir sandbox config: %v", err)
 	}
-	if err := manifest.SaveAgentManifest(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
+	if err := cfgload.SaveAgentManifest(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
 		t.Fatalf("seed sandbox manifest: %v", err)
 	}
 	sandboxPane := tui.NewSandboxPane(&sandboxFixtureRuntime{
@@ -322,7 +340,7 @@ trigger as capability:
 }
 
 func TestRootTUIViews(t *testing.T) {
-	workdir := t.TempDir()
+	workdir := deterministicTempDir(t)
 	withWorkingDir(t, workdir)
 
 	// Create necessary directories for runtime config

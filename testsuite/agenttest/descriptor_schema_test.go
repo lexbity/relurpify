@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 )
 
 func TestPreparedRunDescriptorValidateRequiresCoreFields(t *testing.T) {
@@ -26,7 +26,7 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 		WorkspaceRoot:        ".",
 		RunRoot:              "./relurpify_cfg/test_run/run-1",
 		DerivedWorkspaceRoot: "./derived",
-		ManifestPath:         "./relurpify_cfg/agent.manifest.yaml",
+		ManifestPath:         "./relurpify_cfg/agent.yaml",
 		ConfigPath:           "./relurpify_cfg/config.yaml",
 		AgentsDir:            "./relurpify_cfg/agents",
 		LogsDir:              "./relurpify_cfg/test_run/run-1/execution/logs",
@@ -54,7 +54,7 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 
 func TestPreparedRunDescriptorMatrixSelection(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(manifest.DirName, "agent.manifest.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
 			Models: []ModelSpec{
 				{Name: "model-a", Provider: "ollama", Endpoint: "http://127.0.0.1:11434"},
 				{Name: "model-b", Provider: "lmstudio", Endpoint: "http://127.0.0.1:1234"},

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -27,7 +27,7 @@ func (p *preparedMemoryStore) Close() error {
 
 func prepareCaseMemory(workspace string, suite *Suite, c CaseSpec, telemetry core.Telemetry) (*preparedMemoryStore, error) {
 	spec := resolveMemorySpec(suite, c)
-	paths := manifest.New(workspace)
+	paths := cfgload.New(workspace)
 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func seedCaseState(ctx context.Context, workspace string, store *memory.WorkingM
 	if len(setup.Workflows) == 0 {
 		return nil
 	}
-	return seedWorkflowStore(ctx, filepath.Clean(manifest.New(workspace).WorkflowStateFile()), setup.Workflows)
+	return seedWorkflowStore(ctx, filepath.Clean(cfgload.New(workspace).WorkflowStateFile()), setup.Workflows)
 }
 
 func seedRuntimeMemory(ctx context.Context, store *memory.WorkingMemoryStore, spec MemorySeedSpec) error {

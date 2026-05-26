@@ -634,7 +634,7 @@ func normalizePlannerParamValue(name, alias string, value interface{}) interface
 func plannerParamAliases(name string) []string {
 	switch name {
 	case "path":
-		return []string{"file", "file_path", "target_path", "manifest_path", "database_path", "files", "paths"}
+		return []string{"file", "file_path", "target_path", "database_path", "files", "paths"}
 	case "directory":
 		return []string{"path", "dir", "working_directory", "workdir", "cwd"}
 	case "working_directory":
@@ -1086,7 +1086,7 @@ func plannerTaskPaths(task *core.Task) []string {
 		}
 	}
 	if task.Context != nil {
-		for _, key := range []string{"path", "file", "file_path", "target_path", "manifest_path", "database_path"} {
+		for _, key := range []string{"path", "file", "file_path", "target_path", "database_path"} {
 			if value := strings.TrimSpace(fmt.Sprint(task.Context[key])); value != "" && value != "<nil>" {
 				paths = append(paths, value)
 			}
@@ -1130,7 +1130,7 @@ func repairPlannerStep(registry *capability.Registry, step pl.PlanStep) (pl.Plan
 		if _, hasPattern := step.Params["pattern"]; hasPattern {
 			return step, false, ""
 		}
-		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path", "manifest_path"); path != "" && registry.HasCapability("file_read") {
+		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path"); path != "" && registry.HasCapability("file_read") {
 			step.Tool = "file_read"
 			step.Params = map[string]interface{}{"path": path}
 			return step, true, fmt.Sprintf("rewrote step %s from file_search to file_read using path", plannerStepID(step))
@@ -1155,7 +1155,7 @@ func repairPlannerStep(registry *capability.Registry, step pl.PlanStep) (pl.Plan
 		if _, ok := step.Params["path"]; ok {
 			return step, false, ""
 		}
-		if path := plannerStepParamString(step.Params, "file", "file_path", "target_path", "manifest_path"); path != "" {
+		if path := plannerStepParamString(step.Params, "file", "file_path", "target_path"); path != "" {
 			if step.Params == nil {
 				step.Params = map[string]interface{}{}
 			}

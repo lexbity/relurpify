@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -74,7 +74,7 @@ func newAgentsCreateCmd() *cobra.Command {
 			if model == "" {
 				model = defaultModelName()
 			}
-			path := filepath.Join(frameworkmanifest.New(ws).ConfigRoot(), "agents")
+			path := filepath.Join(cfgload.New(ws).ConfigRoot(), "agents")
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				return err
 			}
@@ -84,18 +84,18 @@ func newAgentsCreateCmd() *cobra.Command {
 			}
 			wsGlob := filepath.ToSlash(filepath.Join(ws, "**"))
 			defaultToolCalling := true
-			manifest := frameworkmanifest.AgentManifest{
+			manifest := cfgload.AgentManifest{
 				APIVersion: "relurpify/v1alpha1",
 				Kind:       "AgentManifest",
-				Metadata: frameworkmanifest.ManifestMetadata{
+				Metadata: cfgload.ManifestMetadata{
 					Name:        name,
 					Version:     "1.0.0",
 					Description: description,
 				},
-				Spec: frameworkmanifest.ManifestSpec{
-					Image:   "ghcr.io/relurpify/runtime:latest",
+				Spec: cfgload.ManifestSpec{
+					Image:   "ghcr.io/lexcodex/relurpify/runtime:0.4.1",
 					Runtime: "gvisor",
-					Defaults: &frameworkmanifest.ManifestDefaults{
+					Defaults: &cfgload.ManifestDefaults{
 						Permissions: &contracts.PermissionSet{
 							FileSystem: []contracts.FileSystemPermission{
 								{Action: contracts.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
@@ -111,20 +111,20 @@ func newAgentsCreateCmd() *cobra.Command {
 								{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
 							},
 						},
-						Resources: &frameworkmanifest.ResourceSpec{
-							Limits: frameworkmanifest.ResourceLimit{
+						Resources: &cfgload.ResourceSpec{
+							Limits: cfgload.ResourceLimit{
 								CPU:    "2",
 								Memory: "4Gi",
 								DiskIO: "500MBps",
 							},
 						},
 					},
-					Security: frameworkmanifest.SecuritySpec{
+					Security: cfgload.SecuritySpec{
 						RunAsUser:       1000,
 						ReadOnlyRoot:    false,
 						NoNewPrivileges: true,
 					},
-					Audit: frameworkmanifest.AuditSpec{
+					Audit: cfgload.AuditSpec{
 						Level:         "verbose",
 						RetentionDays: 7,
 					},
@@ -172,7 +172,7 @@ func newAgentsCreateCmd() *cobra.Command {
 							IncludeDependencies: true,
 						},
 						Metadata: agentspec.AgentMetadata{
-							Author:   os.Getenv("USER"),
+							Author:   cfgload.ResolveAuthorName(),
 							Tags:     []string{"generated"},
 							Priority: 5,
 						},

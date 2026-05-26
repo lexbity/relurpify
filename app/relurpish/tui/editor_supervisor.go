@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -27,6 +26,22 @@ type EditorSupervisor struct {
 	activePath string
 }
 
+var configuredEditor = "vi"
+
+// SetEditor configures the editor command used by TUI helpers.
+func SetEditor(editor string) {
+	editor = strings.TrimSpace(editor)
+	if editor == "" {
+		editor = "vi"
+	}
+	configuredEditor = editor
+}
+
+// EditorPath returns the configured editor command.
+func EditorPath() string {
+	return configuredEditor
+}
+
 // OpenEditor spawns an external editor on the given file path and returns a
 // tea.Cmd that the model or pane can return.  When the editor exits, an
 // EditorExitMsg is sent back through Bubble Tea's event loop so the model can
@@ -35,15 +50,11 @@ func (s *EditorSupervisor) OpenEditor(path string) tea.Cmd {
 	if s == nil {
 		s = &EditorSupervisor{}
 	}
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		editor = "vi"
-	}
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil
 	}
-	cmd := exec.Command(editor, path)
+	cmd := exec.Command(configuredEditor, path)
 	s.mu.Lock()
 	s.activePath = path
 	s.mu.Unlock()
@@ -99,11 +110,7 @@ func (s *EditorSupervisor) IsActive() bool {
 
 // editorPath returns the editor executable path, falling back to "vi".
 func editorPath() string {
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		editor = "vi"
-	}
-	return editor
+	return configuredEditor
 }
 
 // editFileCmd returns a tea.Cmd that opens a file in the configured editor.

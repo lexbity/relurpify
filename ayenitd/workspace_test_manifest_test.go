@@ -53,7 +53,7 @@ spec:
 
 func writeIntegrationManifest(t *testing.T, workspace string) string {
 	t.Helper()
-	path := filepath.Join(workspace, "agent.manifest.yaml")
+	path := filepath.Join(workspace, "agent.yaml")
 	if err := os.WriteFile(path, []byte(integrationManifestYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}

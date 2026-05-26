@@ -4,81 +4,76 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestLoadProfileFile(t *testing.T) {
+func TestLoadProfileDir(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "default.llm.yaml")
-	writeProfileTestFile(t, path, `schema: relurpify/model/profile/v1
+	base := filepath.Join(dir, "relurpify_cfg", "model", "profiles")
+	writeProfileTestFile(t, filepath.Join(base, "default.llm.yaml"), `schema: relurpify/model/profile/v1
 pattern: "*"
 tool_calling:
   intent: auto
   max_concurrent_tools: 4
-  double_encode_args: false
-context:
-  max_tokens: 8192
-  response_reserve_tokens: 512
-generation:
-  temperature: 0.2
-  top_p: 0.9
-`)
-
-	profile, err := LoadProfileFile(path)
-	if err != nil {
-		t.Fatalf("load profile failed: %v", err)
-	}
-	if profile.Pattern != "*" || profile.Context.MaxTokens != 8192 {
-		t.Fatalf("unexpected profile: %#v", profile)
-	}
-}
-
-func TestLoadProfileFileRejectsInvalidIntent(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "bad.llm.yaml")
-	writeProfileTestFile(t, path, `schema: relurpify/model/profile/v1
-pattern: "model*"
-tool_calling:
-  intent: forbidden
 context:
   max_tokens: 1024
 generation:
   temperature: 0.2
   top_p: 0.9
 `)
-	if _, err := LoadProfileFile(path); err == nil {
-		t.Fatal("expected profile load to fail")
-	}
+	writeProfileTestFile(t, filepath.Join(base, "gemma.llm.yaml"), `schema: relurpify/model/profile/v1
+pattern: "gemma*"
+tool_calling:
+  intent: native
+  max_concurrent_tools: 1
+context:
+  max_tokens: 2048
+generation:
+  temperature: 0.1
+  top_p: 0.95
+`)
+
+	profiles, err := LoadProfileDir(base, testDecode)
+	require.NoError(t, err)
+	require.Len(t, profiles, 2)
+	require.Equal(t, "gemma*", profiles[0].Pattern)
+	require.Equal(t, "*", profiles[1].Pattern)
 }
 
-func TestLoadProfileDir(t *testing.T) {
+func TestLoadProfileDirRequiresDefault(t *testing.T) {
 	dir := t.TempDir()
-	writeProfileTestFile(t, filepath.Join(dir, "default.llm.yaml"), `schema: relurpify/model/profile/v1
-pattern: "*"
-tool_calling:
-  intent: auto
-context:
-  max_tokens: 1024
-generation:
-  temperature: 0.2
-  top_p: 0.9
-`)
-	writeProfileTestFile(t, filepath.Join(dir, "gemma.llm.yaml"), `schema: relurpify/model/profile/v1
+	base := filepath.Join(dir, "relurpify_cfg", "model", "profiles")
+	writeProfileTestFile(t, filepath.Join(base, "gemma.llm.yaml"), `schema: relurpify/model/profile/v1
 pattern: "gemma*"
 tool_calling:
   intent: native
 context:
-  max_tokens: 2048
+  max_tokens: 1024
 generation:
-  temperature: 0.2
+  temperature: 0.1
   top_p: 0.9
 `)
-	profiles, err := LoadProfileDir(dir)
-	if err != nil {
-		t.Fatalf("load profile dir failed: %v", err)
+
+	_, err := LoadProfileDir(base, testDecode)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "default.llm.yaml required")
+}
+
+func TestMatchProfile_SpecificBeforeDefault(t *testing.T) {
+	profiles := []*ModelProfileConfig{
+		{Pattern: "gemma*", SourcePath: "relurpify_cfg/model/profiles/gemma.llm.yaml"},
+		{Pattern: "*", SourcePath: "relurpify_cfg/model/profiles/default.llm.yaml"},
 	}
-	if len(profiles) != 2 {
-		t.Fatalf("expected 2 profiles, got %d", len(profiles))
+	require.Equal(t, "gemma*", MatchProfile(profiles, "gemma4:e4b").Pattern)
+}
+
+func TestMatchProfile_FallsBackToDefault(t *testing.T) {
+	profiles := []*ModelProfileConfig{
+		{Pattern: "gemma*", SourcePath: "relurpify_cfg/model/profiles/gemma.llm.yaml"},
+		{Pattern: "*", SourcePath: "relurpify_cfg/model/profiles/default.llm.yaml"},
 	}
+	require.Equal(t, "*", MatchProfile(profiles, "unknown").Pattern)
 }
 
 func writeProfileTestFile(t *testing.T, path, contents string) {

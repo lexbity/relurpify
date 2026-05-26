@@ -14,7 +14,6 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	mcpclient "codeburg.org/lexbit/relurpify/relurpnet/mcp/client"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
@@ -173,7 +172,7 @@ func (r *Runtime) ensureClient(ctx context.Context) (adminClient, error) {
 }
 
 func (r *Runtime) loadConfig() (nexuscfg.Config, error) {
-	paths := manifest.New(r.Workspace)
+	paths := cfgload.New(r.Workspace)
 	configPath := r.ConfigPath
 	if configPath == "" {
 		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")

@@ -134,7 +134,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	}
 	image := r.image
 	if strings.TrimSpace(image) == "" {
-		image = "ghcr.io/relurpify/runtime:latest"
+		image = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)

@@ -2,11 +2,11 @@ schema: relurpify/policy/sandbox/v1
 
 read_only_root: false
 protected_paths:
-  - relurpify_cfg/agent.manifest.yaml
-  - relurpify_cfg/config.yaml
-  - relurpify_cfg/nexus.yaml
-  - relurpify_cfg/policy_rules.yaml
-  - relurpify_cfg/model_profiles
+  - relurpify_cfg/workspace.yaml
+  - relurpify_cfg/security
+  - relurpify_cfg/model/profiles
+  - relurpify_cfg/agents
+  - relurpify_cfg/tools
 no_new_privileges: true
 seccomp_profile: ""
 allowed_env_keys: []

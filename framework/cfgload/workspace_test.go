@@ -14,7 +14,8 @@ func TestLoadWorkspaceConfigAppliesDefaults(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/workspace/v1
 model:
-  default_name: gemma4:e4b
+  provider: ollama
+  name: gemma4:e4b
 sandbox:
   backend: gvisor
 `), 0o644))
@@ -23,7 +24,8 @@ sandbox:
 	require.NoError(t, err)
 	require.Equal(t, filepath.Clean(dir), filepath.Clean(cfg.WorkspaceAbs))
 	require.Equal(t, filepath.Join(dir, ".relurpify_state"), cfg.StateDir())
-	require.Equal(t, "gemma4:e4b", stringValue(cfg.Model.DefaultName))
+	require.Equal(t, "ollama", cfg.Model.Provider)
+	require.Equal(t, "gemma4:e4b", cfg.Model.Name)
 	require.Equal(t, "gvisor", stringValue(cfg.Sandbox.Backend))
 	require.Equal(t, "info", stringValue(cfg.Logging.Level))
 	require.Equal(t, "json", stringValue(cfg.Logging.Format))
@@ -38,7 +40,8 @@ func TestLoadWorkspaceConfigRejectsStrictDefaults(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/workspace/v1
 model:
-  default_name: gemma4:e4b
+  provider: ollama
+  name: gemma4:e4b
 sandbox:
   backend: gvisor
 `), 0o644))

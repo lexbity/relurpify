@@ -29,7 +29,8 @@ func TestValidateConfigTreeCollectsMultipleIssues(t *testing.T) {
 paths:
   state_dir: /tmp/relurpify
 model:
-  default_name: ""
+  provider: ""
+  name: ""
 sandbox:
   backend: invalid
 logging:
@@ -60,7 +61,8 @@ func TestConfigValidateCmdPrintsReport(t *testing.T) {
 paths:
   state_dir: /tmp/relurpify
 model:
-  default_name: ""
+  provider: ""
+  name: ""
 sandbox:
   backend: invalid
 logging:

@@ -3,6 +3,7 @@ package cfgload
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -11,18 +12,15 @@ func TestWorkspaceValidateRejectsInvalidFields(t *testing.T) {
 	backend := "unknown"
 	level := "verbose"
 	format := "yaml"
-	model := ""
 	cfg := WorkspaceConfig{
 		WorkspaceAbs: "/tmp/workspace",
 		Paths:        WorkspacePaths{StateDir: &stateDir},
-		Model:        WorkspaceModel{DefaultName: &model},
 		Sandbox:      WorkspaceSandbox{Backend: &backend},
 		Logging:      WorkspaceLogging{Level: &level, Format: &format},
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "paths.state_dir must be relative")
-	require.Contains(t, err.Error(), "model.default_name required")
 	require.Contains(t, err.Error(), "sandbox.backend must be one of")
 	require.Contains(t, err.Error(), "logging.level must be one of")
 	require.Contains(t, err.Error(), "logging.format must be one of")
@@ -31,7 +29,6 @@ func TestWorkspaceValidateRejectsInvalidFields(t *testing.T) {
 
 func TestWorkspaceValidateRejectsTraversalStateDir(t *testing.T) {
 	stateDir := "../state"
-	model := "gemma4:e4b"
 	backend := "gvisor"
 	level := "info"
 	format := "json"
@@ -39,7 +36,6 @@ func TestWorkspaceValidateRejectsTraversalStateDir(t *testing.T) {
 	cfg := WorkspaceConfig{
 		WorkspaceAbs: "/tmp/workspace",
 		Paths:        WorkspacePaths{StateDir: &stateDir},
-		Model:        WorkspaceModel{DefaultName: &model},
 		Sandbox:      WorkspaceSandbox{Backend: &backend},
 		Logging:      WorkspaceLogging{Level: &level, Format: &format},
 		Audit:        WorkspaceAudit{RetentionDays: &retention},
@@ -51,7 +47,6 @@ func TestWorkspaceValidateRejectsTraversalStateDir(t *testing.T) {
 
 func TestWorkspaceValidateAcceptsValidConfig(t *testing.T) {
 	stateDir := ".relurpify_state"
-	model := "gemma4:e4b"
 	backend := "gvisor"
 	level := "info"
 	format := "json"
@@ -59,10 +54,22 @@ func TestWorkspaceValidateAcceptsValidConfig(t *testing.T) {
 	cfg := WorkspaceConfig{
 		WorkspaceAbs: "/tmp/workspace",
 		Paths:        WorkspacePaths{StateDir: &stateDir},
-		Model:        WorkspaceModel{DefaultName: &model},
 		Sandbox:      WorkspaceSandbox{Backend: &backend},
 		Logging:      WorkspaceLogging{Level: &level, Format: &format},
 		Audit:        WorkspaceAudit{RetentionDays: &retention},
 	}
 	require.NoError(t, cfg.Validate())
+}
+
+func TestWorkspaceValidateModelRef(t *testing.T) {
+	provider := &model.ResolvedProvider{
+		Name:     "ollama",
+		Kind:     "ollama",
+		Endpoint: "http://localhost:11434",
+	}
+	modelName := "gemma4:e4b"
+	cfg := WorkspaceConfig{
+		Model: model.ModelRef{Provider: "ollama", Name: modelName},
+	}
+	require.NoError(t, cfg.ValidateModelRef([]*model.ResolvedProvider{provider}))
 }

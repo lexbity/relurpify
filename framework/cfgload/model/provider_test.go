@@ -4,66 +4,94 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestLoadProviderFile(t *testing.T) {
+func TestLoadProviderDir_Valid(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "ollama.provider.yaml")
-	writeModelTestFile(t, path, `schema: relurpify/model/provider/v1
+	writeModelTestFile(t, filepath.Join(dir, "relurpify_cfg", "model", "provider", "ollama.provider.yaml"), `schema: relurpify/model/provider/v1
 name: ollama
 endpoint: http://localhost:11434
 kind: ollama
-request_timeout_seconds: 120
 available_models:
   - gemma4:e4b
 native_tool_calling: true
 max_concurrent: 2
 `)
+	writeModelTestFile(t, filepath.Join(dir, "relurpify_cfg", "model", "provider", "lmstudio.provider.yaml"), `schema: relurpify/model/provider/v1
+name: lmstudio
+endpoint: http://localhost:1234
+kind: lmstudio
+`)
 
-	provider, err := LoadProviderFile(path)
-	if err != nil {
-		t.Fatalf("load provider failed: %v", err)
-	}
-	if provider.Name != "ollama" || provider.Endpoint != "http://localhost:11434" {
-		t.Fatalf("unexpected provider: %#v", provider)
-	}
+	providers, err := LoadProviderDir(filepath.Join(dir, "relurpify_cfg", "model", "provider"), testDecode)
+	require.NoError(t, err)
+	require.Len(t, providers, 2)
+	names := []string{providers[0].Name, providers[1].Name}
+	require.ElementsMatch(t, []string{"ollama", "lmstudio"}, names)
 }
 
-func TestLoadProviderFileRejectsSecrets(t *testing.T) {
+func TestLoadProviderDir_ForbiddenField(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "openai.provider.yaml")
-	writeModelTestFile(t, path, `schema: relurpify/model/provider/v1
+	writeModelTestFile(t, filepath.Join(dir, "relurpify_cfg", "model", "provider", "openai.provider.yaml"), `schema: relurpify/model/provider/v1
 name: openai
 endpoint: https://example.com
 kind: openai_compatible
 api_key: secret
 `)
 
-	if _, err := LoadProviderFile(path); err == nil {
-		t.Fatal("expected provider load to reject secret field")
-	}
+	_, err := LoadProviderDir(filepath.Join(dir, "relurpify_cfg", "model", "provider"), testDecode)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "field=api_key")
 }
 
-func TestLoadProviderDir(t *testing.T) {
+func TestLoadProviderDir_DuplicateName(t *testing.T) {
 	dir := t.TempDir()
-	writeModelTestFile(t, filepath.Join(dir, "a.provider.yaml"), `schema: relurpify/model/provider/v1
-name: a
+	base := filepath.Join(dir, "relurpify_cfg", "model", "provider")
+	writeModelTestFile(t, filepath.Join(base, "a.provider.yaml"), `schema: relurpify/model/provider/v1
+name: ollama
 endpoint: http://localhost:11434
 kind: ollama
 `)
-	writeModelTestFile(t, filepath.Join(dir, "b.provider.yaml"), `schema: relurpify/model/provider/v1
-name: b
+	writeModelTestFile(t, filepath.Join(base, "b.provider.yaml"), `schema: relurpify/model/provider/v1
+name: ollama
 endpoint: http://localhost:1234
 kind: lmstudio
 `)
 
-	providers, err := LoadProviderDir(dir)
-	if err != nil {
-		t.Fatalf("load provider dir failed: %v", err)
-	}
-	if len(providers) != 2 {
-		t.Fatalf("expected 2 providers, got %d", len(providers))
-	}
+	_, err := LoadProviderDir(base, testDecode)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate provider name")
+}
+
+func TestLoadProviderDir_InvalidURL(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "relurpify_cfg", "model", "provider")
+	writeModelTestFile(t, filepath.Join(base, "bad.provider.yaml"), `schema: relurpify/model/provider/v1
+name: bad
+endpoint: not-a-url
+kind: ollama
+`)
+
+	_, err := LoadProviderDir(base, testDecode)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "endpoint invalid")
+}
+
+func TestLoadProviderDir_MissingDir(t *testing.T) {
+	_, err := LoadProviderDir(filepath.Join(t.TempDir(), "missing"), testDecode)
+	require.Error(t, err)
+}
+
+func TestLoadProviderDir_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "relurpify_cfg", "model", "provider")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+
+	_, err := LoadProviderDir(base, testDecode)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is empty")
 }
 
 func writeModelTestFile(t *testing.T, path, contents string) {

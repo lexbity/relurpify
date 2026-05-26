@@ -37,7 +37,8 @@ func TestNewRootCmdPersistentPreRunLoadsDefaultConfig(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 	yamlContent := `schema: relurpify/workspace/v1
 model:
-  default_name: test-model
+  provider: ollama
+  name: test-model
 sandbox:
   backend: gvisor
 `
@@ -49,7 +50,8 @@ sandbox:
 	require.NoError(t, root.PersistentPreRunE(root, nil))
 	require.Equal(t, cfgload.DefaultWorkspaceConfigPath(workspace), cfgFile)
 	require.NotNil(t, workspaceCfg)
-	require.Equal(t, "test-model", *workspaceCfg.Model.DefaultName)
+	require.Equal(t, "ollama", workspaceCfg.Model.Provider)
+	require.Equal(t, "test-model", workspaceCfg.Model.Name)
 }
 
 func TestNewRootCmdPersistentPreRunLoadsExplicitConfig(t *testing.T) {
@@ -67,7 +69,8 @@ func TestNewRootCmdPersistentPreRunLoadsExplicitConfig(t *testing.T) {
 	explicitPath := filepath.Join(workspace, "custom-workspace.yaml")
 	yamlContent := `schema: relurpify/workspace/v1
 model:
-  default_name: custom-model
+  provider: ollama
+  name: custom-model
 sandbox:
   backend: gvisor
 `
@@ -77,5 +80,6 @@ sandbox:
 	cfgFile = explicitPath
 	require.NoError(t, root.PersistentPreRunE(root, nil))
 	require.NotNil(t, workspaceCfg)
-	require.Equal(t, "custom-model", *workspaceCfg.Model.DefaultName)
+	require.Equal(t, "ollama", workspaceCfg.Model.Provider)
+	require.Equal(t, "custom-model", workspaceCfg.Model.Name)
 }

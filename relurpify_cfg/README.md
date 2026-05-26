@@ -35,7 +35,7 @@ API keys, tokens, and credentials are never fields in config structs that get se
 
 ### 1.6 Paths Are Workspace-Relative
 
-No committed config file contains absolute paths. The variable `${workspace}` is the only path root, resolved to the absolute workspace path during loading. Hardcoded paths like `/home/lex/Public/relurpify/**` are a deployment error, not a config value.
+No committed config file contains absolute paths. The variable `${workspace}` is the only path root, resolved to the absolute workspace path during loading. Hardcoded paths like `${workspace}/**` are a deployment error, not a config value.
 
 ### 1.7 `relurpify_cfg` Is Excluded From Agent Filescopes
 
@@ -68,7 +68,7 @@ relurpify_cfg/
 │       ├── default.llm.yaml            # Baseline model adapter quirks
 │       └── gemma4.llm.yaml
 │
-├── tools/**/*.tool.yaml                #Local tool schemas
+├── tools/**/*.tool.yaml                 # Local tool schemas
 │
 └── agents/
     ├── _base.agent.yaml                # Shared defaults. Merged into all agents.

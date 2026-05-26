@@ -1,0 +1,6 @@
+schema: relurpify/model/provider/v1
+name: lmstudio
+endpoint: http://localhost:1234
+kind: lmstudio
+request_timeout_seconds: 180
+native_tool_calling: false

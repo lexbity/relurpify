@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
@@ -82,7 +82,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 			root = "."
 		}
 		base := "session-" + time.Now().Format("20060102-150405")
-		outPath = filepath.Join(manifest.New(root).ExportsDir(), base+"."+format)
+		outPath = filepath.Join(cfgload.New(root).ExportsDir(), base+"."+format)
 	}
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return "", err
@@ -360,6 +360,5 @@ func (m RootModel) OverlaysForTest() *OverlayStack {
 func (m *RootModel) SwitchActiveAgentForTest(agentName string) error {
 	return m.switchActiveAgent(agentName)
 }
-
 
 

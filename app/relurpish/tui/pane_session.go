@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -291,11 +290,7 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 				path = p.changes[p.changeSel].Path
 			}
 			if path != "" {
-				editor := os.Getenv("EDITOR")
-				if editor == "" {
-					editor = "vi"
-				}
-				return p, tea.ExecProcess(exec.Command(editor, path), func(err error) tea.Msg {
+				return p, tea.ExecProcess(exec.Command(EditorPath(), path), func(err error) tea.Msg {
 					if err != nil {
 						return chatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
 					}

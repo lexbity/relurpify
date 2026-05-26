@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
@@ -18,6 +17,7 @@ type Config struct {
 	Workspace                  string
 	ManifestPath               string
 	AgentsDir                  string
+	SharedRoot                 string
 	MemoryPath                 string
 	LogPath                    string
 	TelemetryPath              string
@@ -34,10 +34,12 @@ type Config struct {
 	ServerAddr                 string
 	RecordingMode              string
 	SandboxBackend             string
+	EnvOverrides               []string
 	Sandbox                    fsandbox.SandboxConfig
 	CommandPolicy              fsandbox.CommandPolicy
 	AuditLimit                 int
 	HITLTimeout                time.Duration
+	Editor                     string
 }
 
 // DefaultConfig infers sensible defaults based on the current working
@@ -55,7 +57,7 @@ func DefaultConfig() Config {
 		LogPath:        ".relurpify_state/logs/relurpish.log",
 		TelemetryPath:  ".relurpify_state/telemetry/telemetry.jsonl",
 		EventsPath:     ".relurpify_state/events.db",
-		ConfigPath:     "relurpify_cfg/workspace.yaml",
+		ConfigPath:     ".relurpify_state/workspace.yaml",
 		ServerAddr:     ":8080",
 		AuditLimit:     512,
 		HITLTimeout:    45 * time.Second,
@@ -81,7 +83,7 @@ func (c *Config) Normalize() error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	c.Workspace = absWorkspace
-	paths := manifest.New(c.Workspace)
+	paths := cfgload.New(c.Workspace)
 	if c.AgentName == "" {
 		c.AgentName = "coding"
 	}
@@ -122,7 +124,7 @@ func (c *Config) Normalize() error {
 		c.EventsPath = filepath.Join(c.Workspace, c.EventsPath)
 	}
 	if c.ConfigPath == "" {
-		c.ConfigPath = cfgload.DefaultWorkspaceConfigPath(c.Workspace)
+		c.ConfigPath = cfgload.DefaultWorkspaceStateConfigPath(c.Workspace)
 	}
 	if !filepath.IsAbs(c.ConfigPath) {
 		c.ConfigPath = filepath.Join(c.Workspace, c.ConfigPath)

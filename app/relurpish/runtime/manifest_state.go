@@ -6,12 +6,11 @@ import (
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 // SaveAgentManifestWithBackup writes the manifest to path after snapshotting
 // the previous file into relurpify_cfg/backups.
-func SaveAgentManifestWithBackup(path string, m *manifest.AgentManifest) (string, error) {
+func SaveAgentManifestWithBackup(path string, m *cfgload.AgentManifest) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("manifest path required")
 	}
@@ -25,7 +24,7 @@ func SaveAgentManifestWithBackup(path string, m *manifest.AgentManifest) (string
 	if err != nil {
 		return "", err
 	}
-	if err := manifest.SaveAgentManifest(path, m); err != nil {
+	if err := cfgload.SaveAgentManifest(path, m); err != nil {
 		return "", err
 	}
 	return backup, nil

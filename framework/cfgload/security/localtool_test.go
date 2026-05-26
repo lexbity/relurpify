@@ -18,7 +18,7 @@ tools:
     execute: ask
 `), 0o644))
 
-	policy, err := LoadLocalToolPolicy(path, workspace)
+	policy, err := LoadLocalToolPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
 	require.Equal(t, "ask", string(policy["git"].Execute))
 }
@@ -33,6 +33,6 @@ tools:
     execute: maybe
 `), 0o644))
 
-	_, err := LoadLocalToolPolicy(path, workspace)
+	_, err := LoadLocalToolPolicy(path, workspace, testDecode)
 	require.Error(t, err)
 }

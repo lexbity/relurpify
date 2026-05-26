@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 )
 
 func TestWorkspaceConfig(t *testing.T) {
@@ -53,6 +56,10 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
+	}
 	cfg := WorkspaceConfig{
 		Workspace:    workspace,
 		SkipASTIndex: true,
@@ -61,7 +68,7 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 
 	// Test with no registration functions
 	regFuncs := AgentRegistrationFuncs{}
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
+	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -126,9 +133,8 @@ func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
 	cfg := WorkspaceConfig{
 		Workspace: "",
 	}
-
 	regFuncs := AgentRegistrationFuncs{}
-	_, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
+	_, err := BuildWorkspaceEnvironment(ctx, cfg, nil, regFuncs)
 	if err == nil {
 		t.Error("BuildWorkspaceEnvironment should return error for empty workspace")
 	}
@@ -139,6 +145,10 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 	called := false
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
+	}
 	cfg := WorkspaceConfig{
 		Workspace:    workspace,
 		SkipASTIndex: true,
@@ -154,7 +164,7 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 		LoadThoughtRecipes:      nil,
 	}
 
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
+	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -176,6 +186,10 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
+	}
 	cfg := WorkspaceConfig{
 		Workspace:    workspace,
 		SkipASTIndex: true,
@@ -190,7 +204,7 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 		LoadThoughtRecipes:      nil,
 	}
 
-	_, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
+	_, err = BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
 	if err == nil {
 		t.Error("BuildWorkspaceEnvironment should return error when registration fails")
 	}
@@ -200,6 +214,10 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
+	}
 	cfg := WorkspaceConfig{
 		Workspace:    workspace,
 		SkipASTIndex: true,
@@ -209,7 +227,7 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	}
 
 	regFuncs := AgentRegistrationFuncs{}
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, regFuncs)
+	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -236,7 +254,7 @@ func TestBuildWorkspaceEnvironmentRequiresSecurityPolicies(t *testing.T) {
 		AgentID:      "test-agent-id",
 	}
 
-	_, err := BuildWorkspaceEnvironment(ctx, cfg, AgentRegistrationFuncs{})
+	_, err := BuildWorkspaceEnvironment(ctx, cfg, nil, AgentRegistrationFuncs{})
 	if err == nil {
 		t.Fatal("expected missing security policies to fail")
 	}
@@ -257,11 +275,11 @@ func writeSecurityPolicyFixtures(t *testing.T, workspace string) {
 	mustWrite("sandbox.policy.yaml", `schema: relurpify/policy/sandbox/v1
 read_only_root: false
 protected_paths:
-  - relurpify_cfg/agent.manifest.yaml
-  - relurpify_cfg/config.yaml
-  - relurpify_cfg/nexus.yaml
-  - relurpify_cfg/policy_rules.yaml
-  - relurpify_cfg/model_profiles
+  - relurpify_cfg/workspace.yaml
+  - relurpify_cfg/security
+  - relurpify_cfg/model/profiles
+  - relurpify_cfg/agents
+  - relurpify_cfg/tools
 no_new_privileges: true
 allowed_env_keys: []
 denied_env_keys: []
@@ -276,7 +294,7 @@ rules:
 `)
 	mustWrite("localtool.policy.yaml", `schema: relurpify/policy/localtool/v1
 tools:
-  git:
+  cli_git:
     execute: ask
 `)
 	mustWrite("workspaceingestion.policy.yaml", `schema: relurpify/policy/ingestion/v1
@@ -289,4 +307,30 @@ rules:
       action: allow
       reason: "Allow workspace ingestion for configured sources"
 `)
+
+	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools", "shell", "fileops")
+	if err := os.MkdirAll(toolsDir, 0o755); err != nil {
+		t.Fatalf("mkdir tools dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(toolsDir, "cli_git.tool.yaml"), []byte(`schema: relurpify/tool/v1
+name: cli_git
+family: fileops
+intent: [inspect, repository]
+description: Runs git with the provided arguments.
+execution:
+  backend: subprocess
+  command:
+    base: ["git"]
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class: [execute]
+  effect_class: [filesystem_read]
+`), 0o644); err != nil {
+		t.Fatalf("write cli_git manifest: %v", err)
+	}
 }

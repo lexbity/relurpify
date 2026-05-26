@@ -15,7 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
@@ -78,9 +77,9 @@ type RuntimeAdapter interface {
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
 	// LoadSandboxManifest returns a mutable clone of the current workspace manifest.
-	LoadSandboxManifest() (*manifest.AgentManifest, error)
+	LoadSandboxManifest() (*cfgload.AgentManifest, error)
 	// SaveSandboxManifest persists a sandbox manifest clone with backup.
-	SaveSandboxManifest(m *manifest.AgentManifest) (string, error)
+	SaveSandboxManifest(m *cfgload.AgentManifest) (string, error)
 	// SandboxBackend returns the active sandbox backend name.
 	SandboxBackend() string
 	// SaveSandboxBackend persists the active sandbox backend in workspace config.
@@ -414,7 +413,7 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace not set")
 	}
-	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
+	path := cfgload.New(workspace).RuntimeProvidersFile()
 	profile, err := cfgload.LoadRuntimeProviderConfig(path)
 	if err != nil {
 		profile = cfgload.RuntimeProviderConfig{}
@@ -838,7 +837,7 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 		return fmt.Errorf("manifest path not set")
 	}
 	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := manifest.CloneAgentManifest(current)
+	clone, err := cfgload.CloneAgentManifest(current)
 	if err != nil {
 		return err
 	}
@@ -861,12 +860,12 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	return nil
 }
 
-func (r *runtimeAdapter) LoadSandboxManifest() (*manifest.AgentManifest, error) {
+func (r *runtimeAdapter) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := manifest.CloneAgentManifest(current)
+	clone, err := cfgload.CloneAgentManifest(current)
 	if err != nil {
 		return nil, err
 	}
@@ -876,10 +875,10 @@ func (r *runtimeAdapter) LoadSandboxManifest() (*manifest.AgentManifest, error) 
 	if r.rt.Config.ManifestPath == "" {
 		return nil, fmt.Errorf("manifest unavailable")
 	}
-	return manifest.LoadAgentManifest(r.rt.Config.ManifestPath)
+	return cfgload.LoadAgentManifest(r.rt.Config.ManifestPath)
 }
 
-func (r *runtimeAdapter) SaveSandboxManifest(m *manifest.AgentManifest) (string, error) {
+func (r *runtimeAdapter) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
 	if r == nil || r.rt == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
@@ -1137,7 +1136,7 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
 	}
 	if r.rt.Config.Workspace != "" {
-		d.ProtectedPaths = manifest.New(r.rt.Config.Workspace).GovernanceRoots(
+		d.ProtectedPaths = cfgload.New(r.rt.Config.Workspace).GovernanceRoots(
 			r.rt.Config.ManifestPath,
 			r.rt.Config.ConfigPath,
 		)
@@ -1150,7 +1149,7 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	return d
 }
 
-func manifestPolicySummary(m *manifest.AgentManifest) string {
+func manifestPolicySummary(m *cfgload.AgentManifest) string {
 	if m == nil {
 		return ""
 	}

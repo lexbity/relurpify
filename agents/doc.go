@@ -3,7 +3,7 @@
 //
 // Framework ownership note:
 //
-// The framework layer owns manifests, workspace/global config schemas,
+// The framework layer owns contfiguration, workspace/global config schemas,
 // effective contract resolution, skill resolution that affects the sandbox
 // envelope, capability admission, and policy compilation.
 //

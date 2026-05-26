@@ -1,7 +1,7 @@
 schema: relurpify/policy/localtool/v1
 
 tools:
-  git:
+  cli_git:
     execute: ask
   bash:
     execute: ask

@@ -10,8 +10,8 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/app/nexus/gateway"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
@@ -47,7 +47,7 @@ type PendingPairingInfo struct {
 }
 
 func Load(ctx context.Context, workspace, configPath string) (Snapshot, error) {
-	paths := frameworkmanifest.New(workspace)
+	paths := cfgload.New(workspace)
 	if configPath == "" {
 		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")
 	}

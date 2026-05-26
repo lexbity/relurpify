@@ -55,10 +55,9 @@ type SandboxPolicy struct {
 	DeniedEnvKeys   []string
 }
 
-// CommandRunnerConfig carries the narrow slice of manifest data needed by the
-// sandbox layer to configure command execution. This struct replaces the
-// previous dependency on *manifest.AgentManifest to prevent platform packages
-// from importing framework/manifest.
+// CommandRunnerConfig carries the narrow slice of runtime config needed by the
+// sandbox layer to configure command execution. It keeps the platform layer
+// independent from higher-level configuration loaders.
 type CommandRunnerConfig struct {
 	Image           string
 	RunAsUser       int

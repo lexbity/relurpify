@@ -39,7 +39,7 @@ func TestReadWriteListFileTools(t *testing.T) {
 
 func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
 	dir := t.TempDir()
-	protected := filepath.Join(dir, "relurpify_cfg", "agent.manifest.yaml")
+	protected := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
 	assert.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
 	assert.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
 

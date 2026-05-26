@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -164,7 +162,7 @@ func (p *AIProviderPane) loadProfile() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
+	path := cfgload.New(workspace).RuntimeProvidersFile()
 	loaded, err := cfgload.LoadRuntimeProviderConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -287,7 +285,7 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "provider save failed: workspace unavailable"}
 		}
-		path := filepath.Join(manifest.New(workspace).ConfigRoot(), "providers.yaml")
+		path := cfgload.New(workspace).RuntimeProvidersFile()
 		profile.LastUpdated = time.Now().Unix()
 		backup, err := cfgload.SaveRuntimeProviderConfigWithBackup(path, profile)
 		if err != nil {

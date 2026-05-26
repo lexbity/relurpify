@@ -39,7 +39,7 @@ func TestBackendValidatePolicyRejectsUnsupportedPolicy(t *testing.T) {
 
 func TestBackendValidatePolicyAcceptsProtectedPathsInsideWorkspace(t *testing.T) {
 	workspace := t.TempDir()
-	protected := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	protected := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(protected), 0o755); err != nil {
 		t.Fatalf("mkdir protected path: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestBackendValidatePolicyAcceptsProtectedPathsInsideWorkspace(t *testing.T)
 
 func TestBackendPolicyRoundTrip(t *testing.T) {
 	workspace := t.TempDir()
-	protected := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	protected := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(protected), 0o755); err != nil {
 		t.Fatalf("mkdir protected path: %v", err)
 	}

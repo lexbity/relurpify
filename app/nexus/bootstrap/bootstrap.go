@@ -6,14 +6,14 @@ import (
 
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
-func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
-	paths := manifest.New(workspace)
+func ResolveConfig(workspace, configPath string) (cfgload.Paths, nexuscfg.Config, error) {
+	paths := cfgload.New(workspace)
 	if configPath == "" {
 		configPath = filepath.Join(paths.ConfigRoot(), "nexus.yaml")
 	}
@@ -24,7 +24,7 @@ func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Confi
 	return paths, cfg, nil
 }
 
-func OpenNodeManager(paths manifest.Paths, cfg nexuscfg.Config) (*fwnode.Manager, *db.SQLiteNodeStore, *db.SQLiteEventLog, error) {
+func OpenNodeManager(paths cfgload.Paths, cfg nexuscfg.Config) (*fwnode.Manager, *db.SQLiteNodeStore, *db.SQLiteEventLog, error) {
 	store, err := db.NewSQLiteNodeStore(paths.NodesFile())
 	if err != nil {
 		return nil, nil, nil, err

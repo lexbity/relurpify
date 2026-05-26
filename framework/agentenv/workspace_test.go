@@ -37,7 +37,7 @@ func TestSetupTelemetryRejectsInvalidLogDir(t *testing.T) {
 	require.NoError(t, os.WriteFile(blocked, []byte("file"), 0o644))
 	_, _, _, err := setupTelemetry(WorkspaceConfig{
 		Workspace:         dir,
-		ManifestPath:      filepath.Join(dir, "agent.manifest.yaml"),
+		ManifestPath:      filepath.Join(dir, "agent.yaml"),
 		InferenceEndpoint: "http://localhost:11434",
 		LogPath:           filepath.Join(blocked, "ayenitd.log"),
 	})

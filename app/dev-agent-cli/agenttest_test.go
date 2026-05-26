@@ -26,7 +26,7 @@ metadata:
   name: euclo.code
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: capability_case
       prompt: hello
@@ -182,7 +182,7 @@ metadata:
   name: euclo.code
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: basic_edit_task
       prompt: hello
@@ -285,7 +285,7 @@ metadata:
   name: euclo.code
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   models:
     - name: qwen2.5-coder:14b
   cases:
@@ -338,7 +338,7 @@ metadata:
   classification: capability
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: basic_edit_task
       prompt: hello

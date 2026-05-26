@@ -1,67 +1,53 @@
 package model
 
 import (
+	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// Profile describes a typed model profile definition.
-type Profile struct {
-	Schema      string `yaml:"schema" json:"schema"`
-	Pattern     string `yaml:"pattern" json:"pattern"`
+// ModelProfileConfig is the canonical model profile definition loaded from relurpify_cfg/model/profiles.
+type ModelProfileConfig struct {
+	Schema      string `yaml:"schema"`
+	Pattern     string `yaml:"pattern"`
 	ToolCalling struct {
-		Intent             string `yaml:"intent" json:"intent"`
-		MaxConcurrentTools int    `yaml:"max_concurrent_tools,omitempty" json:"max_concurrent_tools,omitempty"`
-		DoubleEncodeArgs   bool   `yaml:"double_encode_args,omitempty" json:"double_encode_args,omitempty"`
-	} `yaml:"tool_calling" json:"tool_calling"`
+		Intent             string `yaml:"intent"`
+		MaxConcurrentTools int    `yaml:"max_concurrent_tools"`
+		DoubleEncodeArgs   bool   `yaml:"double_encode_args"`
+	} `yaml:"tool_calling"`
 	Context struct {
-		MaxTokens             int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
-		ResponseReserveTokens int `yaml:"response_reserve_tokens,omitempty" json:"response_reserve_tokens,omitempty"`
-	} `yaml:"context" json:"context"`
+		MaxTokens             int `yaml:"max_tokens"`
+		ResponseReserveTokens int `yaml:"response_reserve_tokens"`
+	} `yaml:"context"`
 	Generation struct {
-		Temperature float64 `yaml:"temperature,omitempty" json:"temperature,omitempty"`
-		TopP        float64 `yaml:"top_p,omitempty" json:"top_p,omitempty"`
-	} `yaml:"generation" json:"generation"`
-	SourcePath string `yaml:"-" json:"-"`
+		Temperature float64 `yaml:"temperature"`
+		TopP        float64 `yaml:"top_p"`
+	} `yaml:"generation"`
+	SourcePath string `yaml:"-"`
 }
 
-// LoadProfileFile loads and validates a single profile file.
-func LoadProfileFile(path string) (*Profile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var profile Profile
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &profile); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
-	}
-	if err := profile.Validate(); err != nil {
-		return nil, err
-	}
-	profile.SourcePath = path
-	return &profile, nil
-}
-
-// LoadProfileDir loads every profile file in a directory in deterministic order.
-func LoadProfileDir(dir string) ([]*Profile, error) {
+// LoadProfileDir loads all *.llm.yaml files from model/profiles/.
+// It returns a hard error if default.llm.yaml is absent.
+func LoadProfileDir(dir string, decode Decoder) ([]*ModelProfileConfig, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, fmt.Errorf("profile dir required")
 	}
-	entries, err := os.ReadDir(dir)
+	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+		return nil, fmt.Errorf("resolve profile dir: %w", err)
 	}
+	entries, err := os.ReadDir(absDir)
+	if err != nil {
+		return nil, fmt.Errorf("read profile dir: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("profile dir %q is empty", absDir)
+	}
+	workspaceRoot := filepath.Clean(filepath.Join(absDir, "..", "..", ".."))
+
 	var paths []string
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -71,44 +57,115 @@ func LoadProfileDir(dir string) ([]*Profile, error) {
 		if !strings.HasSuffix(name, ".llm.yaml") {
 			continue
 		}
-		paths = append(paths, filepath.Join(dir, name))
+		paths = append(paths, filepath.Join(absDir, name))
 	}
 	sort.Strings(paths)
-	out := make([]*Profile, 0, len(paths))
-	for _, path := range paths {
-		profile, err := LoadProfileFile(path)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, profile)
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("profile dir %q contains no *.llm.yaml files", absDir)
 	}
+
+	var errs []error
+	var defaultProfile *ModelProfileConfig
+	out := make([]*ModelProfileConfig, 0, len(paths))
+	for _, path := range paths {
+		body, err := readConfigFile(workspaceRoot, path)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("read %s: %w", path, err))
+			continue
+		}
+		if decode == nil {
+			errs = append(errs, fmt.Errorf("decoder required for %s", path))
+			continue
+		}
+		var profile ModelProfileConfig
+		if _, err := decode(path, body, &profile); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		profile.SourcePath = path
+		if err := profile.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			continue
+		}
+		if isDefaultProfilePath(path) {
+			defaultProfile = &profile
+			continue
+		}
+		out = append(out, &profile)
+	}
+	if defaultProfile == nil {
+		errs = append(errs, fmt.Errorf("default.llm.yaml required in %s", absDir))
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	out = append(out, defaultProfile)
 	return out, nil
 }
 
-// Validate enforces the profile schema contract.
-func (p Profile) Validate() error {
+// MatchProfile returns the first matching profile by glob, falling back to default.llm.yaml.
+func MatchProfile(profiles []*ModelProfileConfig, modelName string) *ModelProfileConfig {
+	modelName = strings.TrimSpace(modelName)
+	if len(profiles) == 0 {
+		return nil
+	}
+	var defaultProfile *ModelProfileConfig
+	for _, profile := range profiles {
+		if profile == nil {
+			continue
+		}
+		if isDefaultProfilePath(profile.SourcePath) {
+			defaultProfile = profile
+			continue
+		}
+		pattern := strings.TrimSpace(profile.Pattern)
+		if pattern == "" {
+			continue
+		}
+		ok, err := filepath.Match(pattern, modelName)
+		if err != nil {
+			continue
+		}
+		if ok {
+			return profile
+		}
+	}
+	return defaultProfile
+}
+
+func (p ModelProfileConfig) Validate() error {
 	if strings.TrimSpace(p.Pattern) == "" {
-		return fmt.Errorf("profile pattern required")
+		return fmt.Errorf("pattern required")
 	}
 	if _, err := filepath.Match(p.Pattern, "model"); err != nil {
-		return fmt.Errorf("profile pattern invalid: %w", err)
+		return fmt.Errorf("pattern invalid: %w", err)
 	}
 	switch strings.ToLower(strings.TrimSpace(p.ToolCalling.Intent)) {
 	case "native", "prompt_based", "auto":
 	default:
-		return fmt.Errorf("profile %q tool_calling.intent invalid", p.Pattern)
+		return fmt.Errorf("tool_calling.intent invalid")
 	}
 	if p.ToolCalling.MaxConcurrentTools < 0 || p.ToolCalling.MaxConcurrentTools > 32 {
-		return fmt.Errorf("profile %q max_concurrent_tools must be in [0,32]", p.Pattern)
+		return fmt.Errorf("tool_calling.max_concurrent_tools must be in [0,32]")
 	}
 	if p.Context.MaxTokens <= 0 {
-		return fmt.Errorf("profile %q context.max_tokens must be positive", p.Pattern)
+		return fmt.Errorf("context.max_tokens must be positive")
 	}
-	if p.Generation.Temperature < 0 || p.Generation.Temperature > 2 || math.IsNaN(p.Generation.Temperature) {
-		return fmt.Errorf("profile %q generation.temperature must be in [0,2]", p.Pattern)
+	if p.Context.ResponseReserveTokens < 0 {
+		return fmt.Errorf("context.response_reserve_tokens must be >= 0")
 	}
-	if p.Generation.TopP < 0 || p.Generation.TopP > 1 || math.IsNaN(p.Generation.TopP) {
-		return fmt.Errorf("profile %q generation.top_p must be in [0,1]", p.Pattern)
+	if p.Generation.Temperature < 0 || p.Generation.Temperature > 2 {
+		return fmt.Errorf("generation.temperature must be in [0,2]")
+	}
+	if p.Generation.TopP < 0 || p.Generation.TopP > 1 {
+		return fmt.Errorf("generation.top_p must be in [0,1]")
+	}
+	if isDefaultProfilePath(p.SourcePath) && strings.TrimSpace(p.Pattern) != "*" {
+		return fmt.Errorf("default.llm.yaml must use pattern \"*\"")
 	}
 	return nil
+}
+
+func isDefaultProfilePath(path string) bool {
+	return strings.EqualFold(filepath.Base(path), "default.llm.yaml")
 }

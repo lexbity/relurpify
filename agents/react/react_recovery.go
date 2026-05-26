@@ -146,7 +146,7 @@ func primaryFailurePath(env *contextdata.Envelope, lastMap map[string]interface{
 			return path
 		}
 	}
-	if path := inferredPathFromObservations(env, "database_path", "manifest_path", "module_path", "workspace_path", "go_mod"); path != "" {
+	if path := inferredPathFromObservations(env, "database_path", "module_path", "workspace_path", "go_mod"); path != "" {
 		return path
 	}
 	_ = lastMap
@@ -238,7 +238,7 @@ func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) str
 						if isSQLiteFailurePath(path) {
 							return path
 						}
-					case "manifest_path", "module_path", "workspace_path", "go_mod":
+					case "module_path", "workspace_path", "go_mod":
 						if strings.HasSuffix(path, ".toml") || strings.HasSuffix(path, ".mod") || strings.HasSuffix(path, ".work") || strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".cfg") || strings.HasSuffix(path, ".txt") || strings.HasSuffix(path, "Cargo.toml") {
 							return path
 						}

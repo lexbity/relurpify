@@ -23,7 +23,7 @@ rules:
       reason: Allow workspace ingestion for configured sources
 `), 0o644))
 
-	rules, err := LoadWorkspaceIngestionPolicy(path, workspace)
+	rules, err := LoadWorkspaceIngestionPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
 	require.Len(t, rules, 1)
 }
@@ -43,6 +43,6 @@ rules:
       reason: broken
 `), 0o644))
 
-	_, err := LoadWorkspaceIngestionPolicy(path, workspace)
+	_, err := LoadWorkspaceIngestionPolicy(path, workspace, testDecode)
 	require.Error(t, err)
 }

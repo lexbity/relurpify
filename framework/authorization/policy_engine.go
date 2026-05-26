@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -25,7 +25,7 @@ type ManifestPolicyEngine struct {
 
 // FromManifestWithConfig constructs a ManifestPolicyEngine for the given agent.
 // agentID identifies the agent in audit logs; manager carries the declared policy.
-func FromManifestWithConfig(m *manifest.AgentManifest, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
+func FromManifestWithConfig(m *cfgload.AgentManifest, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
 	id := agentID
 	if id == "" && m != nil {
 		id = m.Metadata.Name

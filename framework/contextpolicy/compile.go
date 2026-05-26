@@ -1,12 +1,12 @@
 package contextpolicy
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 )
 
 // Compile reads the ContextPolicy section from a resolved manifest and compiles
 // it into a runtime-facing ContextPolicyBundle with system defaults applied.
-func Compile(manifest *manifest.AgentManifest, skills []manifest.ResolvedSkill, defaults *ContextPolicy) (*ContextPolicyBundle, error) {
+func Compile(manifest *cfgload.AgentManifest, skills []cfgload.ResolvedSkill, defaults *ContextPolicy) (*ContextPolicyBundle, error) {
 	if defaults == nil {
 		defaults = DefaultContextPolicy()
 	}
@@ -158,8 +158,8 @@ func Compile(manifest *manifest.AgentManifest, skills []manifest.ResolvedSkill, 
 	return bundle, nil
 }
 
-// convertRateLimitSpec converts a manifest.RateLimitSpec to a RateLimitSpec
-func convertRateLimitSpec(r *manifest.RateLimitSpec) RateLimitSpec {
+// convertRateLimitSpec converts a cfgload.RateLimitSpec to a RateLimitSpec
+func convertRateLimitSpec(r *cfgload.RateLimitSpec) RateLimitSpec {
 	if r == nil {
 		return RateLimitSpec{}
 	}
@@ -169,8 +169,8 @@ func convertRateLimitSpec(r *manifest.RateLimitSpec) RateLimitSpec {
 	}
 }
 
-// convertQuotaSpec converts a manifest.QuotaSpec to a QuotaSpec
-func convertQuotaSpec(q *manifest.QuotaSpec) QuotaSpec {
+// convertQuotaSpec converts a cfgload.QuotaSpec to a QuotaSpec
+func convertQuotaSpec(q *cfgload.QuotaSpec) QuotaSpec {
 	result := QuotaSpec{
 		MaxChunksPerWindow: q.MaxChunksPerWindow,
 		MaxTokensPerWindow: q.MaxTokensPerWindow,

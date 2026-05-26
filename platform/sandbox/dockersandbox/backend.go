@@ -38,7 +38,7 @@ func NewBackend(cfg Config) *Backend {
 		cfg.DockerPath = "docker"
 	}
 	if cfg.Image == "" {
-		cfg.Image = "ghcr.io/relurpify/runtime:latest"
+		cfg.Image = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
 	}
 	if abs, err := filepath.Abs(cfg.Workspace); err == nil && abs != "" {
 		cfg.Workspace = filepath.Clean(abs)

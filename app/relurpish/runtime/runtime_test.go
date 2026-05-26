@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -48,7 +48,7 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 	if cfg.ConfigPath == current.ConfigPath || cfg.ManifestPath == current.ManifestPath {
 		t.Fatalf("workspace paths were not rebound: %#v", cfg)
 	}
-	if want := "/new/workspace/relurpify_cfg/workspace.yaml"; cfg.ConfigPath != want {
+	if want := "/new/workspace/.relurpify_state/workspace.yaml"; cfg.ConfigPath != want {
 		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, want)
 	}
 	if want := "/new/workspace/relurpify_cfg/agents/euclo.yaml"; cfg.ManifestPath != want {
@@ -155,25 +155,25 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	seed := &manifest.AgentManifest{
+	seed := &cfgload.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: manifest.ManifestMetadata{
+		Metadata: cfgload.ManifestMetadata{
 			Name:    "coding",
 			Version: "1.0.0",
 		},
-		Spec: manifest.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:latest",
+		Spec: cfgload.ManifestSpec{
+			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
 			Permissions: contracts.PermissionSet{
 				FileSystem: []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "/workspace/**"}},
 			},
 		},
 	}
-	if err := manifest.SaveAgentManifest(path, seed); err != nil {
+	if err := cfgload.SaveAgentManifest(path, seed); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
-	updated, err := manifest.CloneAgentManifest(seed)
+	updated, err := cfgload.CloneAgentManifest(seed)
 	if err != nil {
 		t.Fatalf("clone manifest: %v", err)
 	}

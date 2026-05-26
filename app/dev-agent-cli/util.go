@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 )
 
 // ensureWorkspace resolves the workspace CLI flag, defaulting to cwd.
@@ -37,16 +37,16 @@ type agentLoadError struct {
 }
 
 type agentRegistry struct {
-	manifests map[string]*frameworkmanifest.AgentManifest
+	manifests map[string]*cfgload.AgentManifest
 	summaries []agentSummary
 	errs      []agentLoadError
 }
 
 func newAgentRegistry() *agentRegistry {
-	return &agentRegistry{manifests: map[string]*frameworkmanifest.AgentManifest{}}
+	return &agentRegistry{manifests: map[string]*cfgload.AgentManifest{}}
 }
 
-func (r *agentRegistry) Get(name string) (*frameworkmanifest.AgentManifest, bool) {
+func (r *agentRegistry) Get(name string) (*cfgload.AgentManifest, bool) {
 	if r == nil {
 		return nil, false
 	}
@@ -75,7 +75,7 @@ func (r *agentRegistry) Errors() []agentLoadError {
 // buildRegistry loads manifests scoped to the workspace.
 func buildRegistry(workspace string) (*agentRegistry, error) {
 	reg := newAgentRegistry()
-	paths := []string{frameworkmanifest.New(workspace).AgentsDir()}
+	paths := []string{cfgload.New(workspace).AgentsDir()}
 	for _, path := range paths {
 		if path == "" {
 			continue
@@ -110,7 +110,7 @@ func buildRegistry(workspace string) (*agentRegistry, error) {
 }
 
 func (r *agentRegistry) load(path string) {
-	loaded, err := frameworkmanifest.LoadAgentManifest(path)
+	loaded, err := cfgload.LoadAgentManifest(path)
 	if err != nil {
 		r.errs = append(r.errs, agentLoadError{Path: path, Error: err.Error()})
 		return
@@ -128,7 +128,7 @@ func (r *agentRegistry) load(path string) {
 	r.summaries = append(r.summaries, summary)
 }
 
-func effectiveAgentSpec(m *frameworkmanifest.AgentManifest, contract *frameworkmanifest.EffectiveAgentContract) *agentspec.AgentRuntimeSpec {
+func effectiveAgentSpec(m *cfgload.AgentManifest, contract *cfgload.EffectiveAgentContract) *agentspec.AgentRuntimeSpec {
 	if contract != nil {
 		return contract.AgentSpec
 	}
@@ -236,7 +236,7 @@ func prettyValue(v interface{}) string {
 
 // sessionDir returns the path where session yaml files live.
 func sessionDir() string {
-	return filepath.Join(frameworkmanifest.New(ensureWorkspace()).ConfigRoot(), "sessions")
+	return filepath.Join(cfgload.New(ensureWorkspace()).ConfigRoot(), "sessions")
 }
 
 // sanitizeName normalizes user-provided identifiers for filenames.

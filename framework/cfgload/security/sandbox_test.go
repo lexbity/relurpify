@@ -22,13 +22,13 @@ denied_env_keys: []
 network_rules: []
 `), 0o644))
 
-	policy, err := LoadSandboxPolicy(path, workspace)
+	policy, err := LoadSandboxPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
 	require.Contains(t, policy.ProtectedPaths, filepath.Clean(filepath.Join(workspace, "relurpify_cfg")))
 	require.Contains(t, policy.ProtectedPaths, filepath.Clean("/tmp/custom"))
 }
 
 func TestLoadSandboxPolicyRejectsMissingFile(t *testing.T) {
-	_, err := LoadSandboxPolicy(SandboxPolicyPath(t.TempDir()), t.TempDir())
+	_, err := LoadSandboxPolicy(SandboxPolicyPath(t.TempDir()), t.TempDir(), testDecode)
 	require.Error(t, err)
 }

@@ -8,7 +8,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	_ "codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 )
 
@@ -87,7 +88,7 @@ rules:
 	}
 	if err := os.WriteFile(filepath.Join(relurpifyCfg, "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
 tools:
-  git:
+  cli_git:
     execute: ask
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -102,6 +103,35 @@ rules:
       action: allow
       reason: Allow workspace ingestion for configured sources
 `), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	toolsDir := filepath.Join(relurpifyCfg, "tools", "shell", "fileops")
+	if err := os.MkdirAll(toolsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(toolsDir, "cli_git.tool.yaml"), []byte(`schema: relurpify/tool/v1
+name: cli_git
+family: fileops
+intent: [inspect, repository]
+description: Runs git with the provided arguments.
+execution:
+  backend: subprocess
+  command:
+    base: ["git"]
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class: [execute]
+  effect_class: [filesystem_read]
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
 		t.Fatal(err)
 	}
 	cfg := agentenv.WorkspaceConfig{
@@ -139,7 +169,7 @@ rules:
 			},
 		},
 	}
-	env, err := agentenv.BuildWorkspaceEnvironment(context.Background(), cfg, euclo.GetRegistrationFuncs())
+	env, err := agentenv.BuildWorkspaceEnvironment(context.Background(), cfg, securityBundle, euclo.GetRegistrationFuncs())
 	if err != nil {
 		t.Fatal(err)
 	}

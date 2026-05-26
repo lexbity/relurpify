@@ -8,18 +8,17 @@ import (
 	"strings"
 )
 
-const sharedRootEnv = "RELURPIFY_SHARED_DIR"
-
 // Resolver discovers installed shared templates and falls back to repo-local
 // development templates while the install model is being phased in.
 type Resolver struct {
-	roots []string
+	roots      []string
+	sharedRoot string
 }
 
-// NewResolver returns a resolver that checks installed shared templates first,
-// then repo-local fallback locations.
-func NewResolver() Resolver {
-	return Resolver{roots: defaultRoots()}
+// NewResolver returns a resolver that checks an explicit shared template root
+// first, then repo-local fallback locations.
+func NewResolver(sharedRoot string) Resolver {
+	return Resolver{roots: defaultRoots(sharedRoot), sharedRoot: sharedRoot}
 }
 
 // SearchRoots returns the ordered template search roots.
@@ -27,26 +26,10 @@ func (r Resolver) SearchRoots() []string {
 	return append([]string(nil), r.roots...)
 }
 
-// SharedRoot returns the preferred machine-local shared directory.
-func SharedRoot() string {
-	if v := os.Getenv(sharedRootEnv); v != "" {
-		return filepath.Clean(v)
-	}
-	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "relurpify")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return filepath.Join(".", ".local", "share", "relurpify")
-	}
-	return filepath.Join(home, ".local", "share", "relurpify")
-}
-
-// ResolveWorkspaceManifestTemplate resolves the generic starter workspace
-// manifest template.
-func (r Resolver) ResolveWorkspaceManifestTemplate() (string, error) {
+// ResolveWorkspaceAgentTemplate resolves the generic starter workspace agent template.
+func (r Resolver) ResolveWorkspaceAgentTemplate() (string, error) {
 	return r.resolve(
-		filepath.Join("templates", "workspace", "agent.manifest.yaml"),
+		filepath.Join("templates", "workspace", "agent.yaml"),
 	)
 }
 
@@ -57,10 +40,10 @@ func (r Resolver) ResolveWorkspaceConfigTemplate() (string, error) {
 	)
 }
 
-// ResolveSkillManifestTemplate resolves the generic skill manifest template.
-func (r Resolver) ResolveSkillManifestTemplate() (string, error) {
+// ResolveSkillTemplate resolves the generic skill template.
+func (r Resolver) ResolveSkillTemplate() (string, error) {
 	return r.resolve(
-		filepath.Join("templates", "skills", "skill.manifest.yaml"),
+		filepath.Join("templates", "skills", "skill.yaml"),
 	)
 }
 
@@ -74,7 +57,7 @@ func (r Resolver) ResolveWorkspaceSecurityTemplate(name string) (string, error) 
 	)
 }
 
-// ResolveStarterAgent resolves a named starter agent manifest template.
+// ResolveStarterAgent resolves a named starter agent template.
 func (r Resolver) ResolveStarterAgent(name string) (string, error) {
 	if name == "" {
 		return "", errors.New("starter agent name required")
@@ -113,8 +96,8 @@ func (r Resolver) resolve(relPaths ...string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-func defaultRoots() []string {
-	roots := []string{SharedRoot()}
+func defaultRoots(sharedRoot string) []string {
+	roots := []string{filepath.Clean(sharedRoot)}
 	if repo := repoRoot(); repo != "" {
 		roots = append(roots, repo)
 	}

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
@@ -161,7 +161,7 @@ metadata:
   name: sample
 spec:
   agent_name: coding
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: smoke
       prompt: summarize
@@ -187,7 +187,7 @@ metadata:
   name: sample
 spec:
   agent_name: euclo
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   cases:
     - name: smoke
       prompt: summarize
@@ -211,8 +211,8 @@ spec:
 
 // TestManifestCoversFileAction verifies permission checking for file actions
 func TestManifestCoversFileAction(t *testing.T) {
-	m := &manifest.AgentManifest{
-		Spec: manifest.ManifestSpec{
+	m := &cfgload.AgentManifest{
+		Spec: cfgload.ManifestSpec{
 			Permissions: contracts.PermissionSet{
 				FileSystem: []contracts.FileSystemPermission{
 					{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
@@ -258,8 +258,8 @@ func TestManifestCoversFileAction(t *testing.T) {
 
 // TestManifestCoversExecutable verifies binary permission checking
 func TestManifestCoversExecutable(t *testing.T) {
-	m := &manifest.AgentManifest{
-		Spec: manifest.ManifestSpec{
+	m := &cfgload.AgentManifest{
+		Spec: cfgload.ManifestSpec{
 			Permissions: contracts.PermissionSet{
 				Executables: []contracts.ExecutablePermission{
 					{Binary: "go"},
@@ -298,8 +298,8 @@ func TestManifestCoversExecutable(t *testing.T) {
 
 // TestManifestCoversNetworkCall verifies network permission checking
 func TestManifestCoversNetworkCall(t *testing.T) {
-	m := &manifest.AgentManifest{
-		Spec: manifest.ManifestSpec{
+	m := &cfgload.AgentManifest{
+		Spec: cfgload.ManifestSpec{
 			Permissions: contracts.PermissionSet{
 				Network: []contracts.NetworkPermission{
 					{Host: "api.example.com", Port: 443},

@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/agents"
@@ -13,9 +12,9 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
@@ -36,9 +35,11 @@ type AgentBootstrapOptions struct {
 	AgentID             string
 	AgentName           string
 	ConfigName          string
-	AgentsDir           string
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	Manifest            *manifest.AgentManifest
+	ManifestSnapshot    *cfgload.AgentManifestSnapshot
+	SecurityBundle      *cfgsecurity.Bundle
+	ProfileResolution   llm.ProfileResolution
+	AgentDefinitions    map[string]*agentspec.AgentDefinition
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               contracts.LanguageModel
@@ -63,10 +64,10 @@ type BootstrappedAgentRuntime struct {
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
 	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	SkillResults         []manifest.SkillResolution
+	SkillResults         []cfgload.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
-	Contract             *manifest.EffectiveAgentContract
-	CompiledPolicy       *manifest.CompiledPolicyBundle
+	Contract             *cfgload.EffectiveAgentContract
+	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 }
 
 // BootstrapAgentRuntime delegates to agentenv.BootstrapAgentRuntime and then
@@ -79,9 +80,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentID:             opts.AgentID,
 		AgentName:           opts.AgentName,
 		ConfigName:          opts.ConfigName,
-		AgentsDir:           opts.AgentsDir,
 		AgentSpec:           opts.AgentSpec,
-		Manifest:            opts.Manifest,
+		ManifestSnapshot:    opts.ManifestSnapshot,
+		SecurityBundle:      opts.SecurityBundle,
+		ProfileResolution:   opts.ProfileResolution,
+		AgentDefinitions:    opts.AgentDefinitions,
 		PermissionManager:   opts.PermissionManager,
 		Runner:              opts.Runner,
 		Model:               opts.Model,
@@ -98,22 +101,8 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if err != nil {
 		return nil, err
 	}
-
-	profileRegistry, err := llm.NewProfileRegistry(manifest.New(workspace).ModelProfilesDir())
-	if err != nil {
-		return nil, fmt.Errorf("load model profiles: %w", err)
-	}
-	provider := ""
-	if boot.AgentSpec != nil {
-		provider = boot.AgentSpec.Model.Provider
-	}
-	modelName := opts.InferenceModel
-	if modelName == "" && boot.AgentConfig != nil {
-		modelName = boot.AgentConfig.Model
-	}
-	profileResolution := profileRegistry.Resolve(provider, modelName)
-	_ = llm.ApplyProfile(boot.Backend, profileResolution.Profile)
-	_ = llm.ApplyProfile(boot.Environment.Model, profileResolution.Profile)
+	_ = llm.ApplyProfile(boot.Backend, opts.ProfileResolution.Profile)
+	_ = llm.ApplyProfile(boot.Environment.Model, opts.ProfileResolution.Profile)
 
 	env := agents.AgentEnvironment{
 		Config:       boot.Environment.Config,
@@ -167,7 +156,7 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg := current
 	cfg.Workspace = workspace
-	paths := manifest.New(workspace)
+	paths := cfgload.New(workspace)
 	agentName := cfg.AgentName
 	if agentName == "" {
 		agentName = "coding"
@@ -178,7 +167,7 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg.LogPath = filepath.Join(cfgload.DefaultWorkspaceStateLogsDir(workspace), "relurpish.log")
 	cfg.TelemetryPath = filepath.Join(cfgload.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
 	cfg.EventsPath = cfgload.DefaultWorkspaceStateEventsFile(workspace)
-	cfg.ConfigPath = cfgload.DefaultWorkspaceConfigPath(workspace)
+	cfg.ConfigPath = cfgload.DefaultWorkspaceStateConfigPath(workspace)
 	return cfg
 }
 
@@ -221,15 +210,4 @@ func graphDBFromIndexManager(indexManager *ast.IndexManager) *graphdb.Engine {
 		return nil
 	}
 	return indexManager.GraphDB
-}
-
-func selectedAgentDefinitionOverlays(agentName string, defs map[string]*agentspec.AgentDefinition) []agentspec.AgentSpecOverlay {
-	if defs == nil {
-		return nil
-	}
-	def, ok := defs[agentName]
-	if !ok || def == nil {
-		return nil
-	}
-	return []agentspec.AgentSpecOverlay{agentspec.AgentSpecOverlayFromSpec(&def.Spec)}
 }

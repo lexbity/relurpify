@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -29,10 +27,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -103,15 +99,18 @@ type MCPElicitationHandler interface {
 
 // New builds a fruntime for the TUI and status surfaces.
 func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, error) {
-	envOverrides := cfgload.LoadEnvOverrides(os.Environ())
+	envOverrides := cfgload.LoadEnvOverrides(cfg.EnvOverrides)
 	if envOverrides.WorkspaceRoot != "" {
 		cfg.Workspace = envOverrides.WorkspaceRoot
 	}
 	if err := cfg.Normalize(); err != nil {
 		return nil, err
 	}
-	if envOverrides.Model != "" {
-		cfg.InferenceModel = envOverrides.Model
+	if envOverrides.ModelProvider != "" {
+		cfg.InferenceProvider = envOverrides.ModelProvider
+	}
+	if envOverrides.ModelName != "" {
+		cfg.InferenceModel = envOverrides.ModelName
 	}
 	if envOverrides.SandboxBackend != "" {
 		cfg.SandboxBackend = envOverrides.SandboxBackend
@@ -122,8 +121,22 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	if envOverrides.LogLevel != "" {
 		cfg.RecordingMode = envOverrides.LogLevel
 	}
+	if cfg.Editor == "" {
+		cfg.Editor = envOverrides.Editor
+	}
+	if cfg.SharedRoot == "" {
+		cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
+	}
 	if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
 		return nil, report
+	}
+
+	loadedConfig, _, err := cfgload.Load(cfgload.LoadOptions{
+		WorkspaceRoot: cfg.Workspace,
+		EnvOverrides:  cfg.EnvOverrides,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("load workspace config bundle: %w", err)
 	}
 
 	// Load workspace YAML to get AllowedCapabilities and Nexus config before
@@ -151,8 +164,21 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
 
-
 	// Delegate all workspace initialization to framework/agentenv.Open().
+	manifestSnapshot, err := cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("load manifest snapshot: %w", err)
+	}
+	securityBundle := loadedConfig.Security
+	profileRegistry, err := llm.NewProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
+	if err != nil {
+		return nil, fmt.Errorf("load model profiles: %w", err)
+	}
+	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
+	agentDefs, err := cfgload.LoadAgentDefinitions(cfg.Workspace, cfg.AgentsDir)
+	if err != nil {
+		return nil, fmt.Errorf("load agent definitions: %w", err)
+	}
 	ws, err := agentenv.Open(ctx, agentenv.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
@@ -172,6 +198,12 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		AuditLimit:                 cfg.AuditLimit,
 		SandboxBackend:             cfg.SandboxBackend,
 		AllowedCapabilities:        allowedCapabilities,
+		Strict:                     envOverrides.Strict,
+		LoadedConfig:               loadedConfig,
+		ManifestSnapshot:           manifestSnapshot,
+		ProfileResolution:          profileResolution,
+		AgentDefinitions:           agentDefs,
+		SecurityBundle:             &securityBundle,
 		EventLogFactory: func(path string) (event.Log, error) {
 			return nexusdb.NewSQLiteEventLog(path)
 		},
@@ -414,7 +446,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manifest.EffectiveAgentContract, compiledPolicy *manifest.CompiledPolicyBundle, agentDefs map[string]*agentspec.AgentDefinition) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgload.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle, agentDefs map[string]*agentspec.AgentDefinition) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -465,48 +497,9 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manife
 	return nil
 }
 
-func toCapabilityCandidates(input []frameworkskills.SkillCapabilityCandidate) []capability.Candidate {
-	out := make([]capability.Candidate, 0, len(input))
-	for _, candidate := range input {
-		out = append(out, capability.Candidate{
-			Descriptor:      candidate.Descriptor,
-			PromptHandler:   candidate.PromptHandler,
-			ResourceHandler: candidate.ResourceHandler,
-		})
-	}
-	return out
-}
-
-// LoadAgentDefinitions scans the directory for YAML files and parses them.
-func LoadAgentDefinitions(dir string) (map[string]*agentspec.AgentDefinition, error) {
-	defs := make(map[string]*agentspec.AgentDefinition)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml")) {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		def, err := agentspec.LoadAgentDefinition(path)
-		if err != nil {
-			if errors.Is(err, agentspec.ErrNotAgentDefinition) {
-				continue
-			}
-			return nil, fmt.Errorf("load %s: %w", entry.Name(), err)
-		}
-		if def.Name == "" {
-			def.Name = strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		}
-		defs[def.Name] = def
-	}
-	return defs, nil
-}
-
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*agentspec.AgentDefinition) agentgraph.WorkflowExecutor {
-	paths := manifest.New(cfg.Workspace)
+	paths := cfgload.New(cfg.Workspace)
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		spec := env.Config.AgentSpec
@@ -541,7 +534,7 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 }
 
 func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
-	paths := manifest.New(cfg.Workspace)
+	paths := cfgload.New(cfg.Workspace)
 	spec := def.Spec
 	if env.Config != nil && env.Config.AgentSpec != nil {
 		spec = *env.Config.AgentSpec
@@ -554,45 +547,36 @@ func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env 
 	return configureBuiltAgent(agent, paths)
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.EffectiveAgentContract, *manifest.CompiledPolicyBundle, map[string]*agentspec.AgentDefinition, error) {
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*cfgload.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, map[string]*agentspec.AgentDefinition, error) {
 	agentDefs := r.Workspace.AgentDefinitions
-	if r.Config.AgentsDir != "" {
-		loaded, err := LoadAgentDefinitions(r.Config.AgentsDir)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, nil, nil, fmt.Errorf("load agent definitions: %w", err)
-		}
-		if loaded != nil {
-			agentDefs = loaded
-		}
-	}
-	effectiveContract, err := manifest.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, manifest.ResolveOptions{
-		AgentOverlays: selectedAgentDefinitionOverlays(name, agentDefs),
+	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, cfgload.ResolveOptions{
+		AgentOverlays: agentspec.AgentSpecOverlaysForName(name, agentDefs),
 	}, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	compiledPolicy, err := manifest.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, nil, nil)
+	compiledPolicy, err := fauthorization.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, nil, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
 	}
 	return effectiveContract, compiledPolicy, agentDefs, nil
 }
 
-func ensureStableSkillCapabilityTopology(current, next *manifest.EffectiveAgentContract) error {
+func ensureStableSkillCapabilityTopology(current, next *cfgload.EffectiveAgentContract) error {
 	return nil
 }
 
-func skillCapabilityIDSet(contract *manifest.EffectiveAgentContract) map[string]struct{} {
+func skillCapabilityIDSet(contract *cfgload.EffectiveAgentContract) map[string]struct{} {
 	_ = contract
 	return nil
 }
 
-func (r *Runtime) syncSkillContextPaths(results []manifest.SkillResolution) {
+func (r *Runtime) syncSkillContextPaths(results []cfgload.SkillResolution) {
 	_ = r
 	_ = results
 }
 
-func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths manifest.Paths) agentgraph.WorkflowExecutor {
+func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths cfgload.Paths) agentgraph.WorkflowExecutor {
 	_ = paths
 	return agent
 }
@@ -835,7 +819,7 @@ func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 	return r.Workspace.Registration.HITL.PendingRequests()
 }
 
-func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *manifest.AgentManifestSnapshot) {
+func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *cfgload.AgentManifestSnapshot) {
 	if eventLog == nil || snapshot == nil {
 		return
 	}

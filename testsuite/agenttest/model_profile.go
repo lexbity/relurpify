@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -21,7 +21,7 @@ type BackendModelProfileProvenance struct {
 }
 
 func resolveCaseModelProfile(targetWorkspace string, execution resolvedCaseExecution) (*BackendModelProfileProvenance, *llm.ModelProfile, error) {
-	registry, err := llm.NewProfileRegistry(manifest.New(targetWorkspace).ModelProfilesDir())
+	registry, err := llm.NewProfileRegistry(cfgload.New(targetWorkspace).ModelProfilesDir())
 	if err != nil {
 		return nil, nil, fmt.Errorf("load model profiles: %w", err)
 	}

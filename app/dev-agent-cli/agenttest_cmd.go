@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"github.com/spf13/cobra"
 )
@@ -94,6 +94,7 @@ func newAgentTestRunCmd() *cobra.Command {
 				Profile:             profile,
 				Strict:              strict,
 				MaxRetries:          maxRetries,
+				SharedRoot:          sharedRoot,
 				ModelOverride:       model,
 				EndpointOverride:    endpoint,
 				MaxIterations:       maxIterations,
@@ -357,6 +358,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 				BootstrapTimeout: bootstrapTimeout,
 				SkipASTIndex:     skipASTIndex,
 				MaxRetries:       maxRetries,
+				SharedRoot:       sharedRoot,
 				ModelOverride:    model,
 				EndpointOverride: endpoint,
 			}
@@ -462,7 +464,7 @@ func discoverSuites(ws, agentName string) []string {
 		return matches
 	}
 	// Fallback: check relurpify_cfg/testsuites/ for locally-added suites.
-	cfgDir := manifest.New(ws).TestsuitesDir()
+			cfgDir := cfgload.New(ws).TestsuitesDir()
 	if _, err := os.Stat(cfgDir); err == nil {
 		matches, _ = filepath.Glob(filepath.Join(cfgDir, pattern))
 	}

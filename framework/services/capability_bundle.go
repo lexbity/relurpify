@@ -14,7 +14,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -137,7 +136,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		newGitCommandToolFn(workspace, "blame", commandRunnerAdapter{runner: runner}),
 	)
 	addTools(platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}, toolRegistry)...)
-	paths := manifest.New(workspace)
+	paths := cfgload.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err

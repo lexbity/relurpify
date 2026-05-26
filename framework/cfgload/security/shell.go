@@ -19,7 +19,7 @@ type shellPolicyFile struct {
 }
 
 // LoadShellPolicy loads and validates the shell policy file.
-func LoadShellPolicy(path, workspace string) (*sandbox.ShellBlacklist, error) {
+func LoadShellPolicy(path, workspace string, decode Decoder) (*sandbox.ShellBlacklist, error) {
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -31,12 +31,11 @@ func LoadShellPolicy(path, workspace string) (*sandbox.ShellBlacklist, error) {
 		return nil, fmt.Errorf("read shell policy %s: %w", path, err)
 	}
 	var file shellPolicyFile
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &file); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
+	if decode == nil {
+		return nil, fmt.Errorf("decoder required")
+	}
+	if _, err := decode(path, data, &file); err != nil {
+		return nil, err
 	}
 	return sandbox.NewShellBlacklist(file.Rules)
 }

@@ -1,6 +1,0 @@
-schema: relurpify/workspace/v1
-model: qwen2.5-coder:14b
-agents:
-  - coding
-allowed_capabilities: []
-last_updated: 0

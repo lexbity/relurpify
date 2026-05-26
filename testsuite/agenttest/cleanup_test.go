@@ -38,7 +38,7 @@ metadata:
   quarantined: false
 spec:
   agent_name: coding
-  manifest: relurpify_cfg/agent.manifest.yaml
+  manifest: relurpify_cfg/agent.yaml
   execution:
     profile: live
   workspace:

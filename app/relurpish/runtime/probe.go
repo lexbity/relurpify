@@ -14,7 +14,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
@@ -190,7 +189,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets cfgload.Sec
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
-	if reg, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := llm.NewProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, selected)
 		report.SelectedProfile = filepath.Base(resolution.SourcePath)
 		if report.SelectedProfile == "." || report.SelectedProfile == "" {
@@ -342,7 +341,7 @@ func summarizeManifest(path string) ManifestSummary {
 	}
 	summary.Exists = true
 	summary.UpdatedAt = info.ModTime()
-	m, err := manifest.LoadAgentManifest(path)
+	m, err := cfgload.LoadAgentManifest(path)
 	if err != nil {
 		summary.Error = err.Error()
 		return summary
@@ -371,7 +370,7 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		ServerActive: r.ServerRunning(),
 	}
 	if env.Workspace != "" {
-		snapshot.ProtectedPaths = manifest.New(env.Workspace).GovernanceRoots(
+		snapshot.ProtectedPaths = cfgload.New(env.Workspace).GovernanceRoots(
 			r.Config.ManifestPath,
 			r.Config.ConfigPath,
 		)

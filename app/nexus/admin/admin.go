@@ -7,12 +7,12 @@ import (
 	nexusbootstrap "codeburg.org/lexbit/relurpify/app/nexus/bootstrap"
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
-func ResolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
+func ResolveConfig(workspace, configPath string) (cfgload.Paths, nexuscfg.Config, error) {
 	return nexusbootstrap.ResolveConfig(workspace, configPath)
 }
 

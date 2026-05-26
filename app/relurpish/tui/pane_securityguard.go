@@ -12,7 +12,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
@@ -184,7 +183,7 @@ func (p *SecurityGuardPane) loadShellRules() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
+	path := filepath.Join(cfgload.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -214,7 +213,7 @@ func (p *SecurityGuardPane) loadGuardRules() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := filepath.Join(manifest.New(workspace).ConfigRoot(), "policy_rules.yaml")
+	path := filepath.Join(cfgload.New(workspace).ConfigRoot(), "policy_rules.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -427,7 +426,7 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 		if workspace == "" {
 			return sandboxPersistedMsg{Err: fmt.Errorf("workspace unavailable")}
 		}
-		paths := manifest.New(workspace)
+		paths := cfgload.New(workspace)
 		shellPath := filepath.Join(paths.ConfigRoot(), "security", "shell.policy.yaml")
 		guardPath := filepath.Join(paths.ConfigRoot(), "policy_rules.yaml")
 		shellBackup, err := cfgload.CreateTimestampedBackup(shellPath)

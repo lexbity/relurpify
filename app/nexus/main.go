@@ -22,8 +22,8 @@ import (
 	"codeburg.org/lexbit/relurpify/app/nexus/gateway"
 	nexusserver "codeburg.org/lexbit/relurpify/app/nexus/server"
 	nexusstatus "codeburg.org/lexbit/relurpify/app/nexus/status"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
@@ -89,7 +89,7 @@ func newStatusCmd(workspace, configPath *string) *cobra.Command {
 	}
 }
 
-func resolveConfig(workspace, configPath string) (manifest.Paths, nexuscfg.Config, error) {
+func resolveConfig(workspace, configPath string) (cfgload.Paths, nexuscfg.Config, error) {
 	return nexusbootstrap.ResolveConfig(workspace, configPath)
 }
 

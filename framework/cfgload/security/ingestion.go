@@ -19,7 +19,7 @@ type workspaceIngestionPolicyFile struct {
 }
 
 // LoadWorkspaceIngestionPolicy loads and validates the workspace ingestion policy file.
-func LoadWorkspaceIngestionPolicy(path, workspace string) ([]core.PolicyRule, error) {
+func LoadWorkspaceIngestionPolicy(path, workspace string, decode Decoder) ([]core.PolicyRule, error) {
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -31,12 +31,11 @@ func LoadWorkspaceIngestionPolicy(path, workspace string) ([]core.PolicyRule, er
 		return nil, fmt.Errorf("read workspace ingestion policy %s: %w", path, err)
 	}
 	var file workspaceIngestionPolicyFile
-	if DecodeWithSchema != nil {
-		if _, err := DecodeWithSchema(path, data, &file); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("DecodeWithSchema not initialized")
+	if decode == nil {
+		return nil, fmt.Errorf("decoder required")
+	}
+	if _, err := decode(path, data, &file); err != nil {
+		return nil, err
 	}
 	if err := validatePolicyRules(file.Rules); err != nil {
 		return nil, err

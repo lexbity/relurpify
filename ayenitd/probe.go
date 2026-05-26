@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -80,7 +80,7 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 }
 
 func checkSQLiteWritable(workspace string) (bool, string) {
-	paths := manifest.New(workspace)
+	paths := cfgload.New(workspace)
 	sessionsDir := paths.SessionsDir()
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		return false, fmt.Sprintf("cannot create sessions dir: %s", err)

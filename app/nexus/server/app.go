@@ -18,9 +18,9 @@ import (
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	nexusgateway "codeburg.org/lexbit/relurpify/app/nexus/gateway"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	relmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
@@ -377,7 +377,7 @@ func (a *NexusApp) ensureFMPPersistence() error {
 	if a == nil || a.FMPService == nil || strings.TrimSpace(a.Workspace) == "" {
 		return nil
 	}
-	paths := relmanifest.New(a.Workspace)
+	paths := cfgload.New(a.Workspace)
 	configRoot := paths.ConfigRoot()
 	if err := os.MkdirAll(configRoot, 0o755); err != nil {
 		return err
@@ -426,7 +426,7 @@ func (a *NexusApp) ensureFMPTransportPolicy() error {
 	if _, ok := policy.NonceStore.(*fwgateway.InMemoryTransportNonceStore); !ok && policy.NonceStore != nil {
 		return nil
 	}
-	paths := relmanifest.New(a.Workspace)
+	paths := cfgload.New(a.Workspace)
 	configRoot := paths.ConfigRoot()
 	if err := os.MkdirAll(configRoot, 0o755); err != nil {
 		return err

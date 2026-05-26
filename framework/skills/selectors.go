@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -13,7 +13,7 @@ type ToolDescriptorRegistry interface {
 	CallableTools() []contracts.Tool
 }
 
-func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []agentspec.CapabilitySelector {
+func skillAllowedCapabilities(skillSpec cfgload.SkillSpec) []agentspec.CapabilitySelector {
 	return agentspec.CloneCapabilitySelectors(skillSpec.AllowedCapabilities)
 }
 
