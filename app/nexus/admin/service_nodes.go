@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
@@ -323,12 +325,13 @@ func (s *service) RevokeNodeEnrollment(ctx context.Context, req RevokeNodeEnroll
 		return RevokeNodeEnrollmentResult{}, notImplemented("revoke node enrollment not implemented", nil)
 	}
 	enrollment, err := s.cfg.Enrollments.GetNodeEnrollment(ctx, tenantID, req.NodeID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return RevokeNodeEnrollmentResult{}, notFound("node enrollment not found", map[string]any{"node_id": req.NodeID})
+	}
 	if err != nil {
 		return RevokeNodeEnrollmentResult{}, internalError("get node enrollment failed", err, map[string]any{"node_id": req.NodeID})
 	}
-	if enrollment == nil {
-		return RevokeNodeEnrollmentResult{}, notFound("node enrollment not found", map[string]any{"node_id": req.NodeID})
-	}
+	_ = enrollment
 	if err := s.cfg.Enrollments.DeleteNodeEnrollment(ctx, tenantID, req.NodeID); err != nil {
 		return RevokeNodeEnrollmentResult{}, internalError("revoke node enrollment failed", err, map[string]any{"node_id": req.NodeID})
 	}

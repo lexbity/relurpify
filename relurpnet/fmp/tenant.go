@@ -2,6 +2,7 @@ package fmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -87,12 +88,13 @@ func (s *Service) AuthorizeResumeActor(ctx context.Context, lineageID string, ac
 	}
 	if s.Nexus.Subjects != nil {
 		subject, err := s.Nexus.Subjects.GetSubject(ctx, actor.TenantID, actor.Kind, actor.ID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return nil, fmt.Errorf("subject %s/%s not found in tenant %s", actor.Kind, actor.ID, actor.TenantID)
+		}
 		if err != nil {
 			return nil, err
 		}
-		if subject == nil {
-			return nil, fmt.Errorf("subject %s/%s not found in tenant %s", actor.Kind, actor.ID, actor.TenantID)
-		}
+		_ = subject
 	}
 	if subjectRefsEqual(actor, lineage.Owner) {
 		return &AuthorizedActor{
@@ -146,11 +148,11 @@ func (s *Service) ensureTenantAndOwner(ctx context.Context, tenantID string, own
 	}
 	if s.Nexus.Tenants != nil {
 		tenant, err := s.Nexus.Tenants.GetTenant(ctx, tenantID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return fmt.Errorf("tenant %s not found", tenantID)
+		}
 		if err != nil {
 			return err
-		}
-		if tenant == nil {
-			return fmt.Errorf("tenant %s not found", tenantID)
 		}
 		if tenant.DisabledAt != nil && !tenant.DisabledAt.After(s.nowUTC()) {
 			return fmt.Errorf("tenant %s disabled", tenantID)
@@ -158,11 +160,11 @@ func (s *Service) ensureTenantAndOwner(ctx context.Context, tenantID string, own
 	}
 	if s.Nexus.Subjects != nil {
 		subject, err := s.Nexus.Subjects.GetSubject(ctx, owner.TenantID, owner.Kind, owner.ID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return fmt.Errorf("owner %s/%s not found in tenant %s", owner.Kind, owner.ID, owner.TenantID)
+		}
 		if err != nil {
 			return err
-		}
-		if subject == nil {
-			return fmt.Errorf("owner %s/%s not found in tenant %s", owner.Kind, owner.ID, owner.TenantID)
 		}
 		if subject.DisabledAt != nil && !subject.DisabledAt.After(s.nowUTC()) {
 			return fmt.Errorf("owner %s/%s disabled", owner.Kind, owner.ID)
@@ -201,11 +203,11 @@ func (s *Service) validateDestinationNode(ctx context.Context, tenantID, nodeID 
 		return nil
 	}
 	enrollment, err := s.Nexus.Nodes.GetNodeEnrollment(ctx, tenantID, nodeID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return fmt.Errorf("node enrollment not found for tenant %s node %s", tenantID, nodeID)
+	}
 	if err != nil {
 		return err
-	}
-	if enrollment == nil {
-		return fmt.Errorf("node enrollment not found for tenant %s node %s", tenantID, nodeID)
 	}
 	if !strings.EqualFold(enrollment.TenantID, tenantID) {
 		return fmt.Errorf("node %s enrolled in tenant %s, not tenant %s", nodeID, enrollment.TenantID, tenantID)

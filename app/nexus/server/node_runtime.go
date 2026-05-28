@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -450,6 +451,9 @@ func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, ident
 	var err error
 	if identities != nil {
 		enrollment, err = identities.GetNodeEnrollment(ctx, tenantID, nodeID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return fwnode.NodeDescriptor{}, fmt.Errorf("node enrollment not found")
+		}
 		if err != nil {
 			return fwnode.NodeDescriptor{}, err
 		}

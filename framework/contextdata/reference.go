@@ -173,6 +173,21 @@ func (b *ReferenceBundle) GetWorkingMemoryRef(taskID, key string) (WorkingMemory
 	return WorkingMemoryReference{}, false
 }
 
+// AddRetrievalReference adds a retrieval result reference to the envelope.
+// Called after graph nodes trigger retrieval operations.
+func (e *Envelope) AddRetrievalReference(ref RetrievalReference) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.References.Retrieval = append(e.References.Retrieval, ref)
+}
+
+// ReferencesSnapshot returns a point-in-time copy of the reference bundle.
+func (e *Envelope) ReferencesSnapshot() ReferenceBundle {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.References.Clone()
+}
+
 func cloneCheckpointReference(ref CheckpointReference) CheckpointReference {
 	if len(ref.WorkingMemoryKeys) > 0 {
 		ref.WorkingMemoryKeys = append([]string(nil), ref.WorkingMemoryKeys...)

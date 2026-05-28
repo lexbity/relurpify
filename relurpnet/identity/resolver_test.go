@@ -14,7 +14,7 @@ type tenantStoreFixture struct {
 func (s tenantStoreFixture) UpsertTenant(context.Context, TenantRecord) error { return nil }
 
 func (s tenantStoreFixture) GetTenant(context.Context, string) (*TenantRecord, error) {
-	return nil, nil
+	return nil, ErrNotFound
 }
 
 func (s tenantStoreFixture) ListTenants(context.Context) ([]TenantRecord, error) {
@@ -28,7 +28,7 @@ type subjectStoreFixture struct {
 func (s subjectStoreFixture) UpsertSubject(context.Context, SubjectRecord) error { return nil }
 
 func (s subjectStoreFixture) GetSubject(context.Context, string, SubjectKind, string) (*SubjectRecord, error) {
-	return nil, nil
+	return nil, ErrNotFound
 }
 
 func (s subjectStoreFixture) ListSubjects(context.Context, string) ([]SubjectRecord, error) {
@@ -45,7 +45,7 @@ func (s subjectStoreFixture) GetExternalIdentity(_ context.Context, tenantID str
 		record := identity
 		return &record, nil
 	}
-	return nil, nil
+	return nil, ErrNotFound
 }
 
 func (s subjectStoreFixture) ListExternalIdentities(context.Context, string) ([]ExternalIdentity, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -99,10 +100,11 @@ func (r *gatewayPrincipalResolverImpl) resolveRecord(ctx context.Context, record
 	}
 	if r.identityStore != nil {
 		subject, err := r.identityStore.GetSubject(ctx, tenantID, subjectKind, record.SubjectID)
-		if err != nil {
+		if errors.Is(err, identity.ErrNotFound) {
+			// Not found is not an error; the token's SubjectRef is used as-is.
+		} else if err != nil {
 			return fwgateway.ConnectionPrincipal{}, err
-		}
-		if subject != nil {
+		} else if subject != nil {
 			principal.Subject = identity.SubjectRef{
 				TenantID: subject.TenantID,
 				Kind:     subject.Kind,

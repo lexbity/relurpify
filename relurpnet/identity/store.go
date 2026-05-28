@@ -2,7 +2,11 @@ package identity
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrNotFound is returned by Get* methods when the requested record does not exist.
+var ErrNotFound = errors.New("identity: not found")
 
 // TenantStore persists tenant records.
 type TenantStore interface {

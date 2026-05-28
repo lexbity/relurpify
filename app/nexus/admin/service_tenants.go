@@ -2,8 +2,11 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 func (s *service) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenantResult, error) {
@@ -18,11 +21,11 @@ func (s *service) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenan
 		return GetTenantResult{AdminResult: resultEnvelope(req.AdminRequest)}, nil
 	}
 	record, err := s.cfg.Tenants.GetTenant(ctx, lookupID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return GetTenantResult{}, notFound("tenant not found", map[string]any{"tenant_id": lookupID})
+	}
 	if err != nil {
 		return GetTenantResult{}, internalError("get tenant failed", err, map[string]any{"tenant_id": lookupID})
-	}
-	if record == nil {
-		return GetTenantResult{}, notFound("tenant not found", map[string]any{"tenant_id": lookupID})
 	}
 	return GetTenantResult{
 		AdminResult: resultEnvelope(req.AdminRequest),
@@ -50,11 +53,11 @@ func (s *service) SetTenantEnabled(ctx context.Context, req SetTenantEnabledRequ
 		return SetTenantEnabledResult{}, notImplemented("set tenant enabled not implemented", nil)
 	}
 	record, err := s.cfg.Tenants.GetTenant(ctx, lookupID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return SetTenantEnabledResult{}, notFound("tenant not found", map[string]any{"tenant_id": lookupID})
+	}
 	if err != nil {
 		return SetTenantEnabledResult{}, internalError("get tenant failed", err, map[string]any{"tenant_id": lookupID})
-	}
-	if record == nil {
-		return SetTenantEnabledResult{}, notFound("tenant not found", map[string]any{"tenant_id": lookupID})
 	}
 	if req.Enabled {
 		record.DisabledAt = nil

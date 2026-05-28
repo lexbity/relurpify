@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -117,12 +118,13 @@ func (s *service) GrantSessionDelegation(ctx context.Context, req GrantSessionDe
 	}
 	if s.cfg.Subjects != nil {
 		subject, err := s.cfg.Subjects.GetSubject(ctx, boundary.TenantID, req.SubjectKind, subjectID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return GrantSessionDelegationResult{}, notFound("subject not found", map[string]any{"subject_kind": req.SubjectKind, "subject_id": subjectID})
+		}
 		if err != nil {
 			return GrantSessionDelegationResult{}, internalError("lookup subject failed", err, map[string]any{"subject_kind": req.SubjectKind, "subject_id": subjectID})
 		}
-		if subject == nil {
-			return GrantSessionDelegationResult{}, notFound("subject not found", map[string]any{"subject_kind": req.SubjectKind, "subject_id": subjectID})
-		}
+		_ = subject
 	}
 	record := core.SessionDelegationRecord{
 		TenantID:   boundary.TenantID,
@@ -250,12 +252,13 @@ func (s *service) BindExternalIdentity(ctx context.Context, req BindExternalIden
 		return BindExternalIdentityResult{}, invalidArgument("subject_kind invalid", map[string]any{"field": "subject_kind", "cause": err.Error()})
 	}
 	subject, err := s.cfg.Subjects.GetSubject(ctx, tenantID, req.SubjectKind, subjectID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return BindExternalIdentityResult{}, notFound("subject not found", map[string]any{"tenant_id": tenantID, "subject_kind": req.SubjectKind, "subject_id": subjectID})
+	}
 	if err != nil {
 		return BindExternalIdentityResult{}, internalError("lookup subject failed", err, map[string]any{"tenant_id": tenantID, "subject_kind": req.SubjectKind, "subject_id": subjectID})
 	}
-	if subject == nil {
-		return BindExternalIdentityResult{}, notFound("subject not found", map[string]any{"tenant_id": tenantID, "subject_kind": req.SubjectKind, "subject_id": subjectID})
-	}
+	_ = subject
 	now := time.Now().UTC()
 	identity := identity.ExternalIdentity{
 		TenantID:      tenantID,
@@ -390,21 +393,21 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 	}
 	if s.cfg.Tenants != nil && s.cfg.Subjects != nil {
 		tenant, err := s.cfg.Tenants.GetTenant(ctx, tenantID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return IssueTokenResult{}, invalidArgument("subject tenant not found", map[string]any{"tenant_id": tenantID})
+		}
 		if err != nil {
 			return IssueTokenResult{}, internalError("lookup tenant failed", err, map[string]any{"tenant_id": tenantID})
-		}
-		if tenant == nil {
-			return IssueTokenResult{}, invalidArgument("subject tenant not found", map[string]any{"tenant_id": tenantID})
 		}
 		if tenant.DisabledAt != nil {
 			return IssueTokenResult{}, invalidArgument("tenant disabled", map[string]any{"tenant_id": tenantID})
 		}
 		subject, err := s.cfg.Subjects.GetSubject(ctx, tenantID, subjectKind, subjectID)
+		if errors.Is(err, identity.ErrNotFound) {
+			return IssueTokenResult{}, invalidArgument("subject not found", map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})
+		}
 		if err != nil {
 			return IssueTokenResult{}, internalError("lookup subject failed", err, map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})
-		}
-		if subject == nil {
-			return IssueTokenResult{}, invalidArgument("subject not found", map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})
 		}
 		if subject.DisabledAt != nil {
 			return IssueTokenResult{}, invalidArgument("subject disabled", map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})

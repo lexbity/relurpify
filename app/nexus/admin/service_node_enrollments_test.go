@@ -88,7 +88,7 @@ func TestRevokeNodeEnrollmentDeletesEnrollment(t *testing.T) {
 	require.Equal(t, "node-x", result.NodeID)
 
 	gone, err := store.GetNodeEnrollment(ctx, "tenant-1", "node-x")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, identity.ErrNotFound)
 	require.Nil(t, gone)
 }
 

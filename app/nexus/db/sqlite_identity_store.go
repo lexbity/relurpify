@@ -112,7 +112,7 @@ func (s *SQLiteIdentityStore) GetTenant(ctx context.Context, tenantID string) (*
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, display_name, created_at, disabled_at FROM tenants WHERE tenant_id = ?`, tenantID)
 	tenant, err := scanTenantRecord(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, identity.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (s *SQLiteIdentityStore) GetSubject(ctx context.Context, tenantID string, k
 		FROM subjects WHERE tenant_id = ? AND subject_kind = ? AND subject_id = ?`, tenantID, string(kind), subjectID)
 	subject, err := scanSubjectRecord(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, identity.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -223,14 +223,14 @@ func (s *SQLiteIdentityStore) GetExternalIdentity(ctx context.Context, tenantID 
 	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, provider, account_id, external_id, subject_kind, subject_id, verified_at, last_seen_at, display_name, provider_label
 		FROM external_identities WHERE tenant_id = ? AND provider = ? AND account_id = ? AND external_id = ?`,
 		tenantID, string(provider), accountID, externalID)
-	identity, err := scanExternalIdentity(row)
+	extID, err := scanExternalIdentity(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, identity.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return identity, nil
+	return extID, nil
 }
 
 func (s *SQLiteIdentityStore) ListExternalIdentities(ctx context.Context, tenantID string) ([]identity.ExternalIdentity, error) {
@@ -242,11 +242,11 @@ func (s *SQLiteIdentityStore) ListExternalIdentities(ctx context.Context, tenant
 	defer rows.Close()
 	var out []identity.ExternalIdentity
 	for rows.Next() {
-		identity, err := scanExternalIdentity(rows)
+		extID, err := scanExternalIdentity(rows)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, *identity)
+		out = append(out, *extID)
 	}
 	return out, rows.Err()
 }
@@ -286,7 +286,7 @@ func (s *SQLiteIdentityStore) GetNodeEnrollment(ctx context.Context, tenantID, n
 		FROM node_enrollments WHERE tenant_id = ? AND node_id = ?`, tenantID, nodeID)
 	enrollment, err := scanNodeEnrollment(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, identity.ErrNotFound
 	}
 	if err != nil {
 		return nil, err

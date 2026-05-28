@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -79,10 +80,11 @@ func (r StoreResolver) ResolveInbound(ctx context.Context, inbound InboundMessag
 	tenantID := normalizeTenantID(r.DefaultTenantID)
 	if r.Subjects != nil {
 		identity, err := r.Subjects.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
-		if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Not found is not an error; continue to cross-tenant lookup.
+		} else if err != nil {
 			return Resolution{}, err
-		}
-		if identity != nil {
+		} else {
 			return Resolution{
 				TenantID: identity.TenantID,
 				Owner:    identity.Subject,
@@ -91,10 +93,11 @@ func (r StoreResolver) ResolveInbound(ctx context.Context, inbound InboundMessag
 			}, nil
 		}
 		identity, err = r.lookupExternalIdentityAcrossTenants(ctx, tenantID, provider, accountID, externalID)
-		if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Not found is not an error; fall through to unbound.
+		} else if err != nil {
 			return Resolution{}, err
-		}
-		if identity != nil {
+		} else {
 			return Resolution{
 				TenantID: identity.TenantID,
 				Owner:    identity.Subject,
@@ -152,7 +155,7 @@ func firstNonEmpty(values ...string) string {
 
 func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, defaultTenantID string, provider ExternalProvider, accountID, externalID string) (*ExternalIdentity, error) {
 	if r.Tenants == nil || r.Subjects == nil {
-		return nil, nil
+		return nil, ErrNotFound
 	}
 	tenants, err := r.Tenants.ListTenants(ctx)
 	if err != nil {
@@ -165,6 +168,9 @@ func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, 
 			continue
 		}
 		identity, err := r.Subjects.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -172,5 +178,5 @@ func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, 
 			return identity, nil
 		}
 	}
-	return nil, nil
+	return nil, ErrNotFound
 }

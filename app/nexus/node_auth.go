@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,11 +41,11 @@ func verifyGatewayNodeChallenge(ctx context.Context, store identity.EnrollmentSt
 		return fmt.Errorf("node id required")
 	}
 	enrollment, err := store.GetNodeEnrollment(ctx, tenantID, nodeID)
+	if errors.Is(err, identity.ErrNotFound) {
+		return fmt.Errorf("node enrollment not found")
+	}
 	if err != nil {
 		return err
-	}
-	if enrollment == nil {
-		return fmt.Errorf("node enrollment not found")
 	}
 	if principal.Actor.ID != "" && principal.Actor.ID != enrollment.NodeID {
 		return fmt.Errorf("principal actor id does not match enrolled node")
