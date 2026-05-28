@@ -5,12 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
+
+// stdoutLimit and stderrLimit are the default caps applied to docker command
+// output when CommandRequest.MaxOutputBytes is 0. These match the defaults in
+// the local command runner.
+const dockerDefaultOutputLimit int64 = 256 * 1024
 
 // Runner executes commands through Docker using the backend's active policy.
 type Runner struct {
@@ -69,23 +76,36 @@ func (r *Runner) Run(ctx context.Context, req sandbox.CommandRequest) (string, s
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
-	execCtx := ctx
-	cancel := func() {}
+	execCtx, cancel := context.WithCancel(ctx)
 	if req.Timeout > 0 {
 		execCtx, cancel = context.WithTimeout(ctx, req.Timeout)
 	}
 	defer cancel()
-	cmd := exec.CommandContext(execCtx, r.backend.config.DockerPath, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd := exec.Command(r.backend.config.DockerPath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	limit := req.MaxOutputBytes
+	if limit <= 0 {
+		limit = dockerDefaultOutputLimit
+	}
+	stdoutBuf := &cappedBuffer{limit: limit}
+	stderrBuf := &cappedBuffer{limit: limit}
+	cmd.Stdout = stdoutBuf
+	cmd.Stderr = stderrBuf
 	if req.Input != "" {
 		cmd.Stdin = strings.NewReader(req.Input)
 	}
-	if err := cmd.Run(); err != nil {
-		return stdout.String(), stderr.String(), err
+	if err := cmd.Start(); err != nil {
+		return "", "", fmt.Errorf("start: %w", err)
 	}
-	return stdout.String(), stderr.String(), nil
+	pid := cmd.Process.Pid
+	go func() {
+		<-execCtx.Done()
+		if pgid, err := syscall.Getpgid(pid); err == nil {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		}
+	}()
+	err = cmd.Wait()
+	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
 func (r *Runner) protectedMounts(paths []string) []string {
@@ -112,6 +132,40 @@ func (r *Runner) protectedMounts(paths []string) []string {
 		seen[path] = struct{}{}
 	}
 	return mounts
+}
+
+// cappedBuffer wraps bytes.Buffer with a write limit. Writes and reads beyond
+// the limit are silently discarded. Both Write and ReadFrom are overridden
+// to enforce the cap.
+type cappedBuffer struct {
+	bytes.Buffer
+	limit int64
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if c.limit <= 0 {
+		return c.Buffer.Write(p)
+	}
+	remaining := c.limit - int64(c.Buffer.Len())
+	if remaining <= 0 {
+		return len(p), nil
+	}
+	if int64(len(p)) > remaining {
+		p = p[:remaining]
+	}
+	return c.Buffer.Write(p)
+}
+
+func (c *cappedBuffer) ReadFrom(r io.Reader) (int64, error) {
+	if c.limit <= 0 {
+		return c.Buffer.ReadFrom(r)
+	}
+	remaining := c.limit - int64(c.Buffer.Len())
+	if remaining <= 0 {
+		_, err := io.Copy(io.Discard, r)
+		return 0, err
+	}
+	return c.Buffer.ReadFrom(io.LimitReader(r, remaining))
 }
 
 func (r *Runner) containerWorkdir(workdir string) (string, error) {

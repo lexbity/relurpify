@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,14 @@ func (t *CommandTool) Parameters() []contracts.ToolParameter {
 	}
 }
 
-func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) (res *contracts.ToolResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("cli_command tool panic recovered: %v", r)
+			res = &contracts.ToolResult{Success: false, Error: "tool panicked — see server logs"}
+			err = nil
+		}
+	}()
 	workdir := mapStringArg(args, "working_directory")
 	stdin := mapStringArg(args, "stdin")
 	executor := execute.NewExecutor(t.basePath, execute.CommandPreset{
@@ -77,7 +85,9 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 		return nil, err
 	}
 	return &contracts.ToolResult{
-		Success: envelope.Success,
+		Success:     envelope.Success,
+		Truncated:   envelope.Truncated,
+		TruncatedAt: envelope.TruncatedAt,
 		Data: map[string]interface{}{
 			"stdout": envelope.Stdout,
 			"stderr": envelope.Stderr,

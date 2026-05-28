@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLocalCommandRunnerDoesNotInheritHostEnvironmentWithoutAllowlist(t *testing.T) {
@@ -49,6 +50,33 @@ func TestLocalCommandRunnerFiltersHostEnvironment(t *testing.T) {
 
 	if got := strings.TrimSpace(stdout); got != "tool-visible||" {
 		t.Fatalf("unexpected child env output: %q", got)
+	}
+}
+
+func TestLocalRunnerTruncatesLargeOutput(t *testing.T) {
+	// Produce hundreds of KB of output via a loop, with a 1KB limit.
+	// The runner's cappedBuffer must only capture up to 1KB. The child
+	// process may be killed by SIGPIPE once we close the read end;
+	// a non-zero exit is acceptable and expected.
+	stdout, stderr, err := NewLocalCommandRunner(t.TempDir(), nil, nil).Run(
+		context.Background(),
+		CommandRequest{
+			Args:           []string{"sh", "-c", "i=0; while [ $i -lt 10000 ]; do printf 'abcdefghij'; i=$((i+1)); done"},
+			Timeout:        5 * time.Second,
+			MaxOutputBytes: 1024,
+		},
+	)
+	// err may be non-nil (SIGPIPE 141) when the process is killed after
+	// we've read enough output. The important thing is that stdout was
+	// captured and truncated.
+	if err != nil {
+		t.Logf("run returned error (acceptable): %v (stderr: %s)", err, stderr)
+	}
+	if len(stdout) > 1024 {
+		t.Fatalf("expected at most 1024 bytes of stdout, got %d", len(stdout))
+	}
+	if len(stdout) < 1024 {
+		t.Logf("stdout was %d bytes (expected ~1024)", len(stdout))
 	}
 }
 

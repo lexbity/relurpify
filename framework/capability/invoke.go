@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -42,7 +44,10 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
 	}
-	result, err := invocable.Invoke(ctx, state, args)
+	var result *contracts.ToolResult
+	result, err = recoverToolPanic(func() (*contracts.ToolResult, error) {
+		return invocable.Invoke(ctx, state, args)
+	})
 	if postErr := r.runPostchecks(entry.descriptor, result); postErr != nil {
 		if result == nil {
 			result = &contracts.ToolResult{Success: false, Error: postErr.Error()}
@@ -91,6 +96,21 @@ func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, sta
 		return nil, fmt.Errorf("capability %s does not support background invocation", entry.descriptor.ID)
 	}
 	return bgHandler.InvokeBackground(ctx, state, args)
+}
+
+// recoverToolPanic wraps a tool invocation and converts any panic into a
+// ToolResult error. The panic value and stack trace are logged but NOT
+// returned to the caller in the ToolResult.Error field to avoid leaking
+// internal implementation details to the LLM.
+func recoverToolPanic(fn func() (*contracts.ToolResult, error)) (res *contracts.ToolResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("tool panic recovered: %v\n%s", r, debug.Stack())
+			res = &contracts.ToolResult{Success: false, Error: "tool panicked — see server logs"}
+			err = nil
+		}
+	}()
+	return fn()
 }
 
 func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {

@@ -684,7 +684,7 @@ func toManifest(entry catalog.ToolCatalogEntry) contracts.ToolManifest {
 	for name, field := range entry.ParameterSchema.Properties {
 		param := contracts.ToolParameter{
 			Name:        name,
-			Type:        field.Type,
+			Type:        contracts.ToolParameterType(field.Type),
 			Description: field.Description,
 			Default:     field.Default,
 		}

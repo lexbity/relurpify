@@ -38,7 +38,7 @@ func TestPersistOutcomeWithNilWorkflowDoesNotPanic(t *testing.T) {
 	if got, ok := core.ResultField(result.Data, "rex.action_log"); !ok || got == nil {
 		t.Fatal("expected action log to be populated")
 	}
-	if agent.LastProof.RouteFamily != route.FamilyArchitect {
-		t.Fatalf("LastProof.RouteFamily = %q, want %q", agent.LastProof.RouteFamily, route.FamilyArchitect)
+	if agent.lastProof.RouteFamily != route.FamilyArchitect {
+		t.Fatalf("lastProof.RouteFamily = %q, want %q", agent.lastProof.RouteFamily, route.FamilyArchitect)
 	}
 }

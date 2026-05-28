@@ -319,7 +319,7 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		PolicyResolver: p.TrustedResolver,
 	}
 	p.Agent.Observer = p.LineageBridge
-	p.Agent.Reconciler = &rexreconcile.FMPBackedReconciler{
+	p.Agent.SetReconciler(&rexreconcile.FMPBackedReconciler{
 		Base:           &rexreconcile.InMemoryReconciler{},
 		ResolveBinding: p.LineageBridge.ResolveReconciliationBinding,
 		ResolveAttempt: func(ctx context.Context, lineageID, attemptID string) (*rexreconcile.AttemptView, error) {
@@ -333,7 +333,7 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 			}, nil
 		},
 		ApplyOutcome: p.LineageBridge.ApplyReconciliationOutcome,
-	}
+	})
 	p.RuntimeEndpoint = &rexnexus.RuntimeEndpoint{
 		DescriptorValue:     p.runtimeDescriptor(),
 		Packager:            packager,

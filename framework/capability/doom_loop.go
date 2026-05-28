@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -272,7 +273,20 @@ func hashArgs(args map[string]any) string {
 	if len(args) == 0 {
 		return "{}"
 	}
-	data, err := json.Marshal(args)
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	type kv struct {
+		K string
+		V any
+	}
+	ordered := make([]kv, len(keys))
+	for i, k := range keys {
+		ordered[i] = kv{k, args[k]}
+	}
+	data, err := json.Marshal(ordered)
 	if err != nil {
 		return fmt.Sprintf("marshal-error:%T", args)
 	}
@@ -294,21 +308,27 @@ func extractModifiedPath(result *contracts.ToolResult) string {
 	if result == nil {
 		return ""
 	}
-	for _, key := range []string{"modified_path", "path", "file_path", "target"} {
-		if path, ok := extractStringFromMap(result.Data, key); ok {
-			return path
+	if result.Data != nil {
+		for _, key := range []string{"modified_path", "path", "file_path", "target"} {
+			if path, ok := extractStringFromMap(result.Data, key); ok {
+				return path
+			}
 		}
-		if path, ok := extractStringFromMap(result.Metadata, key); ok {
-			return path
+		if paths, ok := result.Data["modified_paths"].([]string); ok && len(paths) > 0 {
+			return strings.TrimSpace(paths[0])
+		}
+		if raw, ok := result.Data["modified_paths"].([]any); ok {
+			for _, item := range raw {
+				if path, ok := item.(string); ok && strings.TrimSpace(path) != "" {
+					return strings.TrimSpace(path)
+				}
+			}
 		}
 	}
-	if paths, ok := result.Data["modified_paths"].([]string); ok && len(paths) > 0 {
-		return strings.TrimSpace(paths[0])
-	}
-	if raw, ok := result.Data["modified_paths"].([]any); ok {
-		for _, item := range raw {
-			if path, ok := item.(string); ok && strings.TrimSpace(path) != "" {
-				return strings.TrimSpace(path)
+	if result.Metadata != nil {
+		for _, key := range []string{"modified_path", "path", "file_path", "target"} {
+			if path, ok := extractStringFromMap(result.Metadata, key); ok {
+				return path
 			}
 		}
 	}

@@ -14,6 +14,12 @@ const (
 	ToolBackendMCP        ToolBackend = "mcp"
 )
 
+// ToolRateLimit configures per-tool rate limiting for automatic enforcement.
+type ToolRateLimit struct {
+	PerSecond float64 `yaml:"per_second,omitempty" json:"per_second,omitempty"`
+	Burst     int     `yaml:"burst,omitempty" json:"burst,omitempty"`
+}
+
 // ToolManifest describes a single tool definition loaded from relurpify_cfg.
 type ToolManifest struct {
 	Name          string                 `yaml:"name" json:"name"`
@@ -27,6 +33,7 @@ type ToolManifest struct {
 	Returns       ToolManifestReturns    `yaml:"returns,omitempty" json:"returns,omitempty"`
 	Errors        map[string]string      `yaml:"errors,omitempty" json:"errors,omitempty"`
 	Capability    ToolManifestCapability `yaml:"capability" json:"capability"`
+	RateLimit     *ToolRateLimit         `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	SourcePath    string                 `yaml:"-" json:"-"`
 	CanonicalName string                 `yaml:"-" json:"-"`
 }
@@ -69,6 +76,8 @@ type ToolManifestSandbox struct {
 	AllowedRoot    string `yaml:"allowed_root,omitempty" json:"allowed_root,omitempty"`
 	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
 	NetworkAccess  bool   `yaml:"network_access,omitempty" json:"network_access,omitempty"`
+	AllowFlags     bool   `yaml:"allow_flags,omitempty" json:"allow_flags,omitempty"`
+	MaxOutputBytes int64  `yaml:"max_output_bytes,omitempty" json:"max_output_bytes,omitempty"`
 }
 
 // ToolManifestMCP describes MCP execution routing.

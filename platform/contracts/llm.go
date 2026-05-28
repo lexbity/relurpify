@@ -200,7 +200,7 @@ func LLMToolSpecFromTool(t Tool) LLMToolSpec {
 		var required []string
 		for _, p := range params {
 			prop := &Schema{
-				Type:        p.Type,
+				Type:        string(p.Type),
 				Description: p.Description,
 			}
 			if p.Default != nil {

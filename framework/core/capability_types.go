@@ -424,7 +424,7 @@ func ToolInputSchema(tool contracts.Tool) *contracts.Schema {
 	required := make([]string, 0, len(params))
 	for _, param := range params {
 		schema := &contracts.Schema{
-			Type:        strings.TrimSpace(param.Type),
+			Type:        strings.TrimSpace(string(param.Type)),
 			Description: strings.TrimSpace(param.Description),
 			Default:     param.Default,
 		}

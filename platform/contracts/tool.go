@@ -8,6 +8,19 @@ import (
 	"errors"
 )
 
+// ToolParameterType enumerates the supported JSON Schema-like parameter types
+// that a tool can declare for its arguments.
+type ToolParameterType string
+
+const (
+	ToolParamString  ToolParameterType = "string"
+	ToolParamInteger ToolParameterType = "integer"
+	ToolParamNumber  ToolParameterType = "number"
+	ToolParamBoolean ToolParameterType = "boolean"
+	ToolParamArray   ToolParameterType = "array"
+	ToolParamObject  ToolParameterType = "object"
+)
+
 // Tag constants classify tools for policy enforcement.
 const (
 	TagReadOnly    = "read-only"
@@ -35,7 +48,7 @@ type Tool interface {
 // ToolParameter describes an argument the tool accepts.
 type ToolParameter struct {
 	Name        string
-	Type        string
+	Type        ToolParameterType
 	Description string
 	Required    bool
 	Default     interface{}
@@ -43,10 +56,12 @@ type ToolParameter struct {
 
 // ToolResult is returned by every tool execution.
 type ToolResult struct {
-	Success  bool
-	Data     map[string]interface{}
-	Error    string
-	Metadata map[string]interface{}
+	Success     bool
+	Data        map[string]interface{}
+	Error       string
+	Metadata    map[string]interface{}
+	Truncated   bool  `json:"truncated,omitempty"`
+	TruncatedAt int64 `json:"truncated_at,omitempty"`
 }
 
 // CapabilityExecutionResult is the capability-native name for execution

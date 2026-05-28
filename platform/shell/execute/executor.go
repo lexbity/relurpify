@@ -12,30 +12,41 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
+// defaultMaxOutputBytes is the default output size cap enforced on subprocess
+// stdout and stderr. Content beyond this threshold is truncated and the
+// ResultEnvelope's Truncated flag is set to true.
+const defaultMaxOutputBytes int64 = 256 * 1024
+
 // CommandPreset describes a reusable command wrapper.
 type CommandPreset struct {
-	Name        string
-	Command     string
-	DefaultArgs []string
-	Description string
-	Category    string
-	Tags        []string
-	Timeout     time.Duration
-	AllowStdin  bool
-	WorkdirMode string
+	Name          string
+	Command       string
+	DefaultArgs   []string
+	Description   string
+	Category      string
+	Tags          []string
+	Timeout       time.Duration
+	AllowStdin    bool
+	AllowFlags    bool
+	WorkdirMode   string
+	MaxOutputBytes int64
 }
 
 // ResultEnvelope normalizes execution output for callers.
 type ResultEnvelope struct {
-	Success  bool
-	Stdout   string
-	Stderr   string
-	Error    string
-	Command  []string
-	Workdir  string
-	Preset   string
-	Elapsed  time.Duration
-	Metadata map[string]any
+	Success     bool
+	Stdout      string
+	Stderr      string
+	Error       string
+	Command     []string
+	Workdir     string
+	Preset      string
+	Elapsed     time.Duration
+	Metadata    map[string]any
+	Truncated   bool  `json:"truncated,omitempty"`
+	TruncatedAt int64 `json:"truncated_at,omitempty"`
+	StdoutBytes int64 `json:"stdout_bytes,omitempty"`
+	StderrBytes int64 `json:"stderr_bytes,omitempty"`
 }
 
 // Executor runs a command preset through a contracts.CommandRunner.
@@ -55,6 +66,9 @@ func NewPreset(p CommandPreset) CommandPreset {
 	}
 	if p.WorkdirMode == "" {
 		p.WorkdirMode = "workspace"
+	}
+	if p.MaxOutputBytes == 0 {
+		p.MaxOutputBytes = defaultMaxOutputBytes
 	}
 	return p
 }
@@ -92,9 +106,10 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 	finalArgs = e.prepareArgsForWorkingDir(finalArgs, selectedWorkdir)
 
 	request := contracts.CommandRequest{
-		Workdir: selectedWorkdir,
-		Args:    append([]string{e.Preset.Command}, finalArgs...),
-		Timeout: e.Preset.Timeout,
+		Workdir:        selectedWorkdir,
+		Args:           append([]string{e.Preset.Command}, finalArgs...),
+		Timeout:        e.Preset.Timeout,
+		MaxOutputBytes: e.Preset.MaxOutputBytes,
 	}
 	if e.Preset.AllowStdin && stdin != "" {
 		request.Input = stdin
@@ -102,14 +117,26 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 
 	start := time.Now()
 	stdout, stderr, runErr := e.Runner.Run(ctx, request)
+	limit := e.Preset.MaxOutputBytes
+	stdoutBytes := int64(len(stdout))
+	stderrBytes := int64(len(stderr))
+	stdoutTruncated := limit > 0 && stdoutBytes >= limit
+	stderrTruncated := limit > 0 && stderrBytes >= limit
+	truncated := stdoutTruncated || stderrTruncated
+
 	envelope := &ResultEnvelope{
-		Success: runErr == nil,
-		Stdout:  stdout,
-		Stderr:  stderr,
-		Command: append([]string(nil), request.Args...),
-		Workdir: selectedWorkdir,
-		Preset:  e.Preset.Name,
-		Elapsed: time.Since(start),
+		Success:     runErr == nil,
+		Stdout:      stdout,
+		Stderr:      stderr,
+		Error:       "",
+		Command:     append([]string(nil), request.Args...),
+		Workdir:     selectedWorkdir,
+		Preset:      e.Preset.Name,
+		Elapsed:     time.Since(start),
+		Truncated:   truncated,
+		TruncatedAt: limit,
+		StdoutBytes: stdoutBytes,
+		StderrBytes: stderrBytes,
 		Metadata: map[string]any{
 			"command":  request.Args[0],
 			"args":     append([]string(nil), finalArgs...),

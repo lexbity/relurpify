@@ -108,9 +108,9 @@ func toolParametersFromSchema(schema *contracts.Schema) []contracts.ToolParamete
 			Description: prop.Description,
 			Default:     prop.Default,
 		}
-		param.Type = strings.TrimSpace(prop.Type)
+		param.Type = contracts.ToolParameterType(strings.TrimSpace(prop.Type))
 		if param.Type == "" {
-			param.Type = "string"
+			param.Type = contracts.ToolParamString
 		}
 		_, param.Required = required[name]
 		out = append(out, param)

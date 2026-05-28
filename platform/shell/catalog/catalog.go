@@ -229,7 +229,7 @@ func EntryFromManifest(manifest contracts.ToolManifest) ToolCatalogEntry {
 		var required []string
 		for _, param := range manifest.Parameters {
 			props[NormalizeName(param.Name)] = ToolSchemaField{
-				Type:        param.Type,
+				Type:        string(param.Type),
 				Description: param.Description,
 				Default:     param.Default,
 			}

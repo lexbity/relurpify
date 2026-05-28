@@ -158,7 +158,7 @@ func TestInitializeEnvironmentAndHelpers(t *testing.T) {
 	if err := agent.InitializeEnvironment(env, ""); err != nil {
 		t.Fatalf("InitializeEnvironment: %v", err)
 	}
-	if agent.Workspace == "" || agent.Delegates == nil || agent.Runtime == nil || agent.Reconciler == nil {
+	if agent.workspace == "" || agent.delegates == nil || agent.Runtime == nil || agent.reconciler == nil {
 		t.Fatalf("agent not initialized: %+v", agent)
 	}
 	if err := agent.Initialize(nil); err != nil {

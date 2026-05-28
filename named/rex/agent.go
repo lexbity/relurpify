@@ -31,15 +31,16 @@ import (
 
 // Agent is the Nexus-managed named runtime for rex.
 type Agent struct {
-	Config      *core.Config
 	Environment *agentenv.WorkspaceEnvironment
-	Workspace   string
-	RexConfig   rexconfig.Config
-	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
-	Reconciler  reconcile.Reconciler
 	Observer    state.ExecutionObserver
-	LastProof   proof.ProofSurface
+
+	config      *core.Config
+	workspace   string
+	rexConfig   rexconfig.Config
+	delegates   *delegates.Registry
+	reconciler  reconcile.Reconciler
+	lastProof   proof.ProofSurface
 }
 
 type executionSurfaces struct {
@@ -72,19 +73,19 @@ func NewWithWorkspace(env *agentenv.WorkspaceEnvironment, workspace string) *Age
 
 func (a *Agent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment, workspace string) error {
 	a.Environment = env
-	a.Config = env.Config
-	a.RexConfig = rexconfig.Default()
-	a.Workspace = resolveWorkspaceRoot(workspace)
-	a.Delegates = delegates.NewRegistry(env, a.Workspace)
-	a.Runtime = rexruntime.New(a.RexConfig, env.WorkingMemory)
-	a.Reconciler = &reconcile.InMemoryReconciler{}
+	a.config = env.Config
+	a.rexConfig = rexconfig.Default()
+	a.workspace = resolveWorkspaceRoot(workspace)
+	a.delegates = delegates.NewRegistry(env, a.workspace)
+	a.Runtime = rexruntime.New(a.rexConfig, env.WorkingMemory)
+	a.reconciler = &reconcile.InMemoryReconciler{}
 	return a.Initialize(env.Config)
 }
 
 func (a *Agent) Initialize(cfg *core.Config) error {
-	a.Config = cfg
+	a.config = cfg
 	if a.Runtime == nil {
-		a.Runtime = rexruntime.New(a.RexConfig, a.Environment.WorkingMemory)
+		a.Runtime = rexruntime.New(a.rexConfig, a.Environment.WorkingMemory)
 	}
 	return nil
 }
@@ -104,7 +105,7 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	class := classify.Classify(env)
 	decision := route.Decide(env, class)
 	plan := route.BuildExecutionPlan(decision)
-	delegate, err := a.Delegates.Resolve(plan)
+	delegate, err := a.delegates.Resolve(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 }
 
 func (a *Agent) RuntimeProjection() nexus.Projection {
-	return nexus.BuildProjection(a.Runtime, a.LastProof)
+	return nexus.BuildProjection(a.Runtime, a.lastProof)
 }
 
 func (a *Agent) openSurfaces(ctx context.Context, task *core.Task) executionSurfaces {
@@ -139,7 +140,7 @@ func (a *Agent) openSurfaces(ctx context.Context, task *core.Task) executionSurf
 func (a *Agent) planExecution(ctx context.Context, task *core.Task, env *contextdata.Envelope, surfaces executionSurfaces) (*executionPlan, error) {
 	_ = ctx
 	_ = surfaces
-	if a.Delegates == nil {
+	if a.delegates == nil {
 		return nil, fmt.Errorf("rex delegate registry unavailable")
 	}
 	rexEnv := envelope.Normalize(task, env)
@@ -153,7 +154,7 @@ func (a *Agent) planExecution(ctx context.Context, task *core.Task, env *context
 	if err := enforceCapabilityProjection(env, decision, task); err != nil {
 		return nil, err
 	}
-	delegate, err := a.Delegates.Resolve(routePlan)
+	delegate, err := a.delegates.Resolve(routePlan)
 	if err != nil {
 		return nil, err
 	}
@@ -280,8 +281,8 @@ func (a *Agent) persistOutcome(ctx context.Context, task *core.Task, env *contex
 	state.SetArtifactKinds(env, uniqueStrings(artifactKinds))
 	actionLog := proof.BuildActionLog(plan.Decision, plan.Classification, env)
 	fields["rex.action_log"] = actionLog
-	a.LastProof = proof.BuildProofSurface(plan.Decision, result, env)
-	fields["rex.proof_surface"] = a.LastProof
+	a.lastProof = proof.BuildProofSurface(plan.Decision, result, env)
+	fields["rex.proof_surface"] = a.lastProof
 	fields["rex.completion"] = completion
 	fields[rexkeys.RexWorkflowID] = plan.Identity.WorkflowID
 	fields[rexkeys.RexRunID] = plan.Identity.RunID
@@ -289,7 +290,7 @@ func (a *Agent) persistOutcome(ctx context.Context, task *core.Task, env *contex
 	if surfaces.Workflow == nil {
 		return
 	}
-	if err := persistProof(ctx, surfaces.Workflow, plan.Identity, plan.Decision, a.LastProof, actionLog, completion, env); err != nil {
+	if err := persistProof(ctx, surfaces.Workflow, plan.Identity, plan.Decision, a.lastProof, actionLog, completion, env); err != nil {
 		logOutcomeError("persist proof outcome", err)
 	}
 	status := memory.WorkflowRunStatusCompleted
@@ -336,25 +337,29 @@ func (a *Agent) ManagedAdapter() *nexus.Adapter {
 	return nexus.NewAdapter("rex", a, surfaces.Workflow)
 }
 
+func (a *Agent) SetReconciler(r reconcile.Reconciler) {
+	a.reconciler = r
+}
+
 func (a *Agent) RecordAmbiguity(workflowID, runID, reason string) reconcile.Record {
-	if a.Reconciler == nil {
-		a.Reconciler = &reconcile.InMemoryReconciler{}
+	if a.reconciler == nil {
+		a.reconciler = &reconcile.InMemoryReconciler{}
 	}
-	return a.Reconciler.RecordAmbiguity(workflowID, runID, reason)
+	return a.reconciler.RecordAmbiguity(workflowID, runID, reason)
 }
 
 func (a *Agent) ResolveAmbiguity(record reconcile.Record, outcome reconcile.Outcome, notes string) reconcile.Record {
-	if a.Reconciler == nil {
-		a.Reconciler = &reconcile.InMemoryReconciler{}
+	if a.reconciler == nil {
+		a.reconciler = &reconcile.InMemoryReconciler{}
 	}
-	return a.Reconciler.Resolve(record, outcome, notes)
+	return a.reconciler.Resolve(record, outcome, notes)
 }
 
 func (a *Agent) ShouldRetryAmbiguity(record reconcile.Record) bool {
-	if a.Reconciler == nil {
-		a.Reconciler = &reconcile.InMemoryReconciler{}
+	if a.reconciler == nil {
+		a.reconciler = &reconcile.InMemoryReconciler{}
 	}
-	return a.Reconciler.ShouldRetry(record)
+	return a.reconciler.ShouldRetry(record)
 }
 
 func persistProof(ctx context.Context, store interface {

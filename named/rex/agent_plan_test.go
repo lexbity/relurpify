@@ -26,7 +26,7 @@ func TestPlanExecutionReturnsExpectedPlan(t *testing.T) {
 	}
 	env := testEnv(t)
 	agent := New(env)
-	agent.Runtime = rexruntime.New(agent.RexConfig, planExecutionWorkflowStoreProvider{workflow: store})
+	agent.Runtime = rexruntime.New(agent.rexConfig, planExecutionWorkflowStoreProvider{workflow: store})
 
 	task := &core.Task{
 		ID:          "task-1",

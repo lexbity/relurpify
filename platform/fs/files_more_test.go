@@ -165,7 +165,7 @@ func TestReadFileTool_Metadata(t *testing.T) {
 	params := tool.Parameters()
 	require.Len(t, params, 1)
 	assert.Equal(t, "path", params[0].Name)
-	assert.Equal(t, "string", params[0].Type)
+	assert.Equal(t, contracts.ToolParamString, params[0].Type)
 	assert.True(t, params[0].Required)
 
 	assert.True(t, tool.IsAvailable(context.Background()))

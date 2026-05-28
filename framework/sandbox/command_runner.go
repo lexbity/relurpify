@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -17,16 +19,51 @@ import (
 
 // CommandRequest captures process execution metadata routed through a sandbox.
 type CommandRequest struct {
-	Workdir string
-	Args    []string
-	Env     []string
-	Input   string
-	Timeout time.Duration
+	Workdir        string
+	Args           []string
+	Env            []string
+	Input          string
+	Timeout        time.Duration
+	MaxOutputBytes int64 // 0 = use runner default; -1 = unlimited (unsafe)
 }
 
 // CommandRunner describes a primitive capable of executing commands in a sandbox.
 type CommandRunner interface {
 	Run(ctx context.Context, req CommandRequest) (stdout string, stderr string, err error)
+}
+
+// commandCappedBuffer wraps bytes.Buffer with a write limit. Writes and reads
+// beyond the limit are silently discarded. Both Write and ReadFrom are
+// overridden to enforce the cap.
+type commandCappedBuffer struct {
+	bytes.Buffer
+	limit int64
+}
+
+func (c *commandCappedBuffer) Write(p []byte) (int, error) {
+	if c.limit <= 0 {
+		return c.Buffer.Write(p)
+	}
+	remaining := c.limit - int64(c.Buffer.Len())
+	if remaining <= 0 {
+		return len(p), nil
+	}
+	if int64(len(p)) > remaining {
+		p = p[:remaining]
+	}
+	return c.Buffer.Write(p)
+}
+
+func (c *commandCappedBuffer) ReadFrom(r io.Reader) (int64, error) {
+	if c.limit <= 0 {
+		return c.Buffer.ReadFrom(r)
+	}
+	remaining := c.limit - int64(c.Buffer.Len())
+	if remaining <= 0 {
+		_, err := io.Copy(io.Discard, r)
+		return 0, err
+	}
+	return c.Buffer.ReadFrom(io.LimitReader(r, remaining))
 }
 
 // CommandRunnerProvider lets a sandbox backend supply a specialized runner.
@@ -138,21 +175,36 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
-	execCtx := ctx
-	cancel := func() {}
+	execCtx, cancel := context.WithCancel(ctx)
 	if req.Timeout > 0 {
 		execCtx, cancel = context.WithTimeout(ctx, req.Timeout)
 	}
 	defer cancel()
-	cmd := exec.CommandContext(execCtx, runtimeBinary, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd := exec.Command(runtimeBinary, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	limit := req.MaxOutputBytes
+	if limit <= 0 {
+		limit = 256 * 1024
+	}
+	stdoutBuf := &commandCappedBuffer{limit: limit}
+	stderrBuf := &commandCappedBuffer{limit: limit}
+	cmd.Stdout = stdoutBuf
+	cmd.Stderr = stderrBuf
 	if req.Input != "" {
 		cmd.Stdin = strings.NewReader(req.Input)
 	}
-	err = cmd.Run()
-	return stdout.String(), stderr.String(), err
+	if err := cmd.Start(); err != nil {
+		return "", "", fmt.Errorf("start: %w", err)
+	}
+	pid := cmd.Process.Pid
+	go func() {
+		<-execCtx.Done()
+		if pgid, err := syscall.Getpgid(pid); err == nil {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		}
+	}()
+	err = cmd.Wait()
+	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
 func (r *SandboxCommandRunner) protectedMounts() []string {

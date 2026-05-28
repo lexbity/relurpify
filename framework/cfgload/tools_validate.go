@@ -59,7 +59,7 @@ func validateToolManifestParameters(params []contracts.ToolParameter) error {
 			continue
 		}
 		seen[name] = struct{}{}
-		if strings.TrimSpace(param.Type) == "" {
+		if strings.TrimSpace(string(param.Type)) == "" {
 			problems = append(problems, fmt.Sprintf("parameters[%d].type required", i))
 		}
 	}
