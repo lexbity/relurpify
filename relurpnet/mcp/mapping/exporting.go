@@ -172,6 +172,9 @@ func schemaToMap(schema *contracts.Schema) map[string]any {
 	if len(schema.Properties) > 0 {
 		props := make(map[string]any, len(schema.Properties))
 		for key, prop := range schema.Properties {
+			if prop == nil {
+				continue
+			}
 			props[key] = schemaToMap(prop)
 		}
 		out["properties"] = props
