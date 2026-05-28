@@ -139,7 +139,12 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		return nil, err
 	}
 
-	// Build workspace environment using framework composition root
+	// Build workspace environment using framework composition root.
+	// SandboxBackend defaults to "" → gVisor. If the host has no sandbox
+	// backend (runsc/docker), BuildWorkspaceEnvironment will fail closed
+	// from NewVerifiedCommandRunner → runtime.Verify and this function
+	// returns the error. This is intentional — nexus refuses to start
+	// without a verified sandbox.
 	env, err := agentenv.BuildWorkspaceEnvironment(ctx, agentenv.WorkspaceConfig{
 		Workspace:      workspace,
 		AgentName:      "euclo",

@@ -2,6 +2,7 @@ package agentenv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,29 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
+
+// fakeRunner implements sandbox.CommandRunner for tests.
+type fakeRunner struct{}
+
+func (f *fakeRunner) Run(_ context.Context, _ sandbox.CommandRequest) (string, string, error) {
+	return "", "", nil
+}
+
+var _ sandbox.CommandRunner = (*fakeRunner)(nil)
+
+// TestMain installs a fake command runner for all tests so they don't require
+// a real sandbox backend (runsc/docker) on the host.
+func TestMain(m *testing.M) {
+	old := buildCommandRunner
+	buildCommandRunner = func(_ context.Context, _ WorkspaceConfig, _ *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
+		return &fakeRunner{}, nil
+	}
+	code := m.Run()
+	buildCommandRunner = old
+	os.Exit(code)
+}
 
 func TestWorkspaceConfig(t *testing.T) {
 	cfg := WorkspaceConfig{
@@ -119,13 +142,72 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	}
 }
 
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
+func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
+	ctx := context.Background()
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
 	}
-	return false
+	cfg := WorkspaceConfig{
+		Workspace:    workspace,
+		SkipASTIndex: true,
+		AgentID:      "test-agent-id",
+	}
+
+	regFuncs := AgentRegistrationFuncs{}
+	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	if err != nil {
+		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
+	}
+	if env == nil {
+		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+	}
+
+	// The CommandRunner should be populated via buildCommandRunner (the fake in TestMain)
+	if env.CommandRunner == nil {
+		t.Error("CommandRunner should not be nil")
+	}
+	if _, ok := env.CommandRunner.(*fakeRunner); !ok {
+		t.Errorf("expected *fakeRunner, got %T", env.CommandRunner)
+	}
+
+	if env.IndexManager != nil {
+		_ = env.IndexManager.Close()
+	}
+}
+
+func TestBuildWorkspaceEnvironment_VerifyFailure(t *testing.T) {
+	ctx := context.Background()
+	workspace := t.TempDir()
+	writeSecurityPolicyFixtures(t, workspace)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	if err != nil {
+		t.Fatalf("load security bundle: %v", err)
+	}
+	cfg := WorkspaceConfig{
+		Workspace:    workspace,
+		SkipASTIndex: true,
+		AgentID:      "test-agent-id",
+	}
+
+	expectedErr := errors.New("sandbox verify failed")
+
+	// Override the hook locally for this test.
+	old := buildCommandRunner
+	buildCommandRunner = func(_ context.Context, _ WorkspaceConfig, _ *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
+		return nil, expectedErr
+	}
+	t.Cleanup(func() { buildCommandRunner = old })
+
+	_, err = BuildWorkspaceEnvironment(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
+	if err == nil {
+		t.Fatal("BuildWorkspaceEnvironment should return error when buildCommandRunner fails")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Errorf("error %v does not wrap %v", err, expectedErr)
+	}
 }
 
 func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
@@ -258,6 +340,15 @@ func TestBuildWorkspaceEnvironmentRequiresSecurityPolicies(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing security policies to fail")
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func writeSecurityPolicyFixtures(t *testing.T, workspace string) {

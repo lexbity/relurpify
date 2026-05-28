@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/services"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -91,6 +92,23 @@ func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }
 
+// buildCommandRunner constructs a verified, sandbox-backed CommandRunner for
+// the given workspace configuration and security bundle. It is a variable so
+// tests can inject a fake runner without requiring a real sandbox backend.
+var buildCommandRunner = buildCommandRunnerImpl
+
+func buildCommandRunnerImpl(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
+	sandboxCfg := sandbox.SandboxConfig{}
+	sboxRuntime, err := fauthorization.SelectSandboxRuntime(cfg.SandboxBackend, sandboxCfg, "", cfg.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("select sandbox runtime: %w", err)
+	}
+	policy := fauthorization.BuildSandboxPolicy(nil, append([]string(nil), securityBundle.Sandbox.ProtectedPaths...))
+	return sandbox.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &contracts.CommandRunnerConfig{
+		Workspace: cfg.Workspace,
+	})
+}
+
 // BuildWorkspaceEnvironment constructs a complete WorkspaceEnvironment with all framework services.
 // This is the composition root for environment construction, owned by framework/agentenv
 // rather than ayenitd. Entry points call this function and then wire in ayenitd-specific services.
@@ -112,12 +130,11 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	// Phase 1: Build capability bundle with permission manager and agent spec
-	runner := sandbox.NewLocalCommandRunner(
-		cfg.Workspace,
-		cfgsecurity.SubprocessEnvAllowlist(securityBundle.Sandbox),
-		nil,
-	)
+	// Phase 1: Build verified sandbox runner and capability bundle
+	runner, err := buildCommandRunner(ctx, cfg, securityBundle)
+	if err != nil {
+		return nil, err
+	}
 
 	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, runner, services.CapabilityRegistryOptions{
 		Context:           ctx,

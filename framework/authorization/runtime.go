@@ -116,7 +116,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		}
 	}
 	permissions.AttachRuntime(runtime)
-	policy := buildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
+	policy := BuildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(policy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -153,15 +153,20 @@ func SelectSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, imag
 	}
 }
 
-func buildSandboxPolicy(agentManifest *cfgload.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
-	policy := sandbox.SandboxPolicy{}
+// BuildSandboxPolicy constructs a sandbox policy from an agent manifest and
+// protected paths. Protected paths are always included; manifest-derived
+// rules (network, read-only, no-new-privileges) are added when the manifest
+// is non-nil.
+func BuildSandboxPolicy(agentManifest *cfgload.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
+	policy := sandbox.SandboxPolicy{
+		ProtectedPaths: append([]string(nil), protectedPaths...),
+	}
 	if agentManifest == nil {
 		return policy
 	}
 	policy.NetworkRules = buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
 	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
-	policy.ProtectedPaths = append([]string(nil), protectedPaths...)
 	return policy
 }
 
