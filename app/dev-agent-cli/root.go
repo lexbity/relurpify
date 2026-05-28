@@ -74,6 +74,7 @@ func NewRootCmd() *cobra.Command {
 		newConfigCmd(),
 		newSessionCmd(),
 		newAgentTestCmd(),
+		newToolExecCmd(),
 	)
 	return root
 }
