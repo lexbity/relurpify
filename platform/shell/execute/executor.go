@@ -101,12 +101,12 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 	if path := strings.TrimSpace(workdir); path != "" {
 		selectedWorkdir = resolvePath(e.BasePath, path)
 	}
-	selectedWorkdir, finalArgs, cleanup, err := e.prepareExecution(selectedWorkdir, finalArgs)
+	selectedWorkdir, finalArgs, cleanup, err := CargoIsolationHook(e.BasePath, selectedWorkdir, finalArgs)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
-	finalArgs = e.prepareArgsForWorkingDir(finalArgs, selectedWorkdir)
+	finalArgs = prepareArgsForWorkingDir(finalArgs, selectedWorkdir)
 
 	request := contracts.CommandRequest{
 		Workdir:        selectedWorkdir,
@@ -183,117 +183,6 @@ func resolvePath(base, path string) string {
 		return path
 	}
 	return filepath.Join(base, path)
-}
-
-func (e *Executor) prepareArgsForWorkingDir(args []string, workdir string) []string {
-	if e == nil || e.Preset.Command != "cargo" || workdir == "" {
-		return args
-	}
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--manifest-path" {
-			return args
-		}
-	}
-	manifestPath := filepath.Join(workdir, "Cargo.toml")
-	if _, err := os.Stat(manifestPath); err != nil {
-		return args
-	}
-	if len(args) == 0 {
-		return []string{"--manifest-path", manifestPath}
-	}
-	prepared := make([]string, 0, len(args)+2)
-	if !strings.HasPrefix(args[0], "-") {
-		prepared = append(prepared, args[0], "--manifest-path", manifestPath)
-		prepared = append(prepared, args[1:]...)
-		return prepared
-	}
-	prepared = append(prepared, "--manifest-path", manifestPath)
-	prepared = append(prepared, args...)
-	return prepared
-}
-
-func (e *Executor) prepareExecution(workdir string, args []string) (string, []string, func(), error) {
-	if !e.shouldIsolateCargoRun(workdir, args) {
-		return workdir, args, func() {}, nil
-	}
-	isolated, err := isolateCargoWorkdir(workdir)
-	if err != nil {
-		return workdir, args, func() {}, err
-	}
-	manifestPath := filepath.Join(isolated, "Cargo.toml")
-	return e.BasePath, withManifestPath(args, manifestPath), func() { _ = os.RemoveAll(filepath.Dir(isolated)) }, nil
-}
-
-func (e *Executor) shouldIsolateCargoRun(workdir string, args []string) bool {
-	if e == nil || e.Preset.Command != "cargo" || workdir == "" || len(args) == 0 {
-		return false
-	}
-	subcommand := strings.ToLower(strings.TrimSpace(args[0]))
-	switch subcommand {
-	case "test", "build", "check", "clippy", "metadata":
-	default:
-		return false
-	}
-	manifestPath := filepath.Join(workdir, "Cargo.toml")
-	if _, err := os.Stat(manifestPath); err != nil {
-		return false
-	}
-	return findParentCargoManifest(workdir, e.BasePath) != ""
-}
-
-func findParentCargoManifest(workdir, basePath string) string {
-	basePath = filepath.Clean(basePath)
-	current := filepath.Dir(filepath.Clean(workdir))
-	for {
-		if current == workdir || current == "." || current == string(filepath.Separator) {
-			return ""
-		}
-		manifestPath := filepath.Join(current, "Cargo.toml")
-		if _, err := os.Stat(manifestPath); err == nil {
-			return manifestPath
-		}
-		if current == basePath {
-			return ""
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return ""
-		}
-		current = parent
-	}
-}
-
-func isolateCargoWorkdir(workdir string) (string, error) {
-	tempRoot, err := os.MkdirTemp("", "relurpify-cargo-*")
-	if err != nil {
-		return "", err
-	}
-	target := filepath.Join(tempRoot, filepath.Base(workdir))
-	if err := copyDir(workdir, target); err != nil {
-		_ = os.RemoveAll(tempRoot)
-		return "", err
-	}
-	return target, nil
-}
-
-func withManifestPath(args []string, manifestPath string) []string {
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--manifest-path" {
-			return args
-		}
-	}
-	if len(args) == 0 {
-		return []string{"--manifest-path", manifestPath}
-	}
-	prepared := make([]string, 0, len(args)+2)
-	if !strings.HasPrefix(args[0], "-") {
-		prepared = append(prepared, args[0], "--manifest-path", manifestPath)
-		prepared = append(prepared, args[1:]...)
-		return prepared
-	}
-	prepared = append(prepared, "--manifest-path", manifestPath)
-	prepared = append(prepared, args...)
-	return prepared
 }
 
 func copyDir(src, dst string) error {
