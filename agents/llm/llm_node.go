@@ -118,7 +118,7 @@ func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*co
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    data,
+		Data:    core.NewToolResultPayload(data),
 	}, nil
 }
 

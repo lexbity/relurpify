@@ -48,9 +48,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 		// No results yet (early in execution)
 		return &core.Result{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
-			},
+			}),
 		}, nil
 	}
 
@@ -58,9 +58,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 	if !ok {
 		return &core.Result{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
-			},
+			}),
 		}, nil
 	}
 
@@ -68,9 +68,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 	if len(stepResults) == 0 {
 		return &core.Result{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
-			},
+			}),
 		}, nil
 	}
 
@@ -102,11 +102,11 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 
 		return &core.Result{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"next_node":      "plan",
 				"replan_attempt": n.CurrentAttempt + 1,
 				"failure_ratio":  failureRatio,
-			},
+			}),
 		}, nil
 	}
 
@@ -118,11 +118,11 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 
 	return &core.Result{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"next_node":     "synthesize",
 			"failure_ratio": failureRatio,
 			"steps_failed":  failed,
-		},
+		}),
 	}, nil
 }
 

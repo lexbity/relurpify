@@ -21,7 +21,7 @@ func (n *telemetryAwareTestNode) Type() NodeType { return NodeTypeSystem }
 func (n *telemetryAwareTestNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	n.sink = core.TelemetryFromContext(ctx)
 	n.nilCheck = n.sink == nil
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{}}, nil
+	return &core.Result{NodeID: n.id, Success: true}, nil
 }
 
 func TestGraph_InjectsTelemetryIntoContext(t *testing.T) {

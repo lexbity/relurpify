@@ -10,8 +10,6 @@ These principles ground every decision in this spec. When implementation details
 
 All configuration is read at process startup by a single loader in a single package (`framework/cfgload`). After that boundary, no code anywhere calls `os.Getenv`, reads a file, or resolves a path. Config either entered `AppConfig` at load time or it does not exist.
 
-**Violated today by:** 15+ scattered `os.Getenv` calls, 7 independent config loading paths, `resolveWorkspaceConfigOverrides` silently swallowing errors.
-
 ### 1.2 Fail Fast, Fail Loudly
 
 A missing required file, a schema violation, an unresolved variable, a type error — any of these must halt the process with a specific, actionable error message including the file path and the offending line or key. There are no silent defaults for security-relevant config.

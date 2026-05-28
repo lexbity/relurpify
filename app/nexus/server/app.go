@@ -62,7 +62,7 @@ type NexusApp struct {
 	FMPTransportPolicy   *fwgateway.FMPTransportPolicy
 	StartedAt            time.Time
 	PrincipalResolver    func(context.Context, string) (fwgateway.ConnectionPrincipal, error)
-	VerifyNodeConnection func(context.Context, identity.Store, fwgateway.ConnectionPrincipal, fwgateway.NodeConnectInfo, *websocket.Conn) error
+	VerifyNodeConnection func(context.Context, identity.EnrollmentStore, fwgateway.ConnectionPrincipal, fwgateway.NodeConnectInfo, *websocket.Conn) error
 }
 
 func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
@@ -88,7 +88,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		if err := a.ensureFMPTransportPolicy(); err != nil {
 			return nil, err
 		}
-		wireFMPNexusAdapter(a.FMPService, a.IdentityStore, a.SessionStore)
+		wireFMPNexusAdapter(a.FMPService, a.IdentityStore, a.IdentityStore, a.IdentityStore, a.SessionStore)
 		if a.FMPService.Nexus.Exports == nil {
 			a.FMPService.Nexus.Exports = a.FMPExportStore
 		}
@@ -183,7 +183,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		Log:       a.EventLog,
 		Partition: a.partition(),
 		Router:    router,
-		Resolver:  identity.StoreResolver{Store: a.IdentityStore, DefaultTenantID: DefaultTenantID},
+		Resolver:  identity.StoreResolver{Tenants: a.IdentityStore, Subjects: a.IdentityStore, DefaultTenantID: DefaultTenantID},
 	}
 	manager := a.ChannelManager
 	if manager == nil {
@@ -279,7 +279,9 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		Nodes:         a.NodeStore,
 		NodeManager:   nodeManager,
 		Sessions:      a.SessionStore,
-		Identities:    a.IdentityStore,
+		Tenants:       a.IdentityStore,
+		Subjects:      a.IdentityStore,
+		Enrollments:   a.IdentityStore,
 		Tokens:        a.TokenStore,
 		Policies:      a.PolicyStore,
 		FMPExports:    a.FMPExportStore,
@@ -355,18 +357,18 @@ func (a *NexusApp) gatewayPath() string {
 	return a.Config.Gateway.Path
 }
 
-func wireFMPNexusAdapter(mesh *fwfmp.Service, identities identity.Store, sessions session.Store) {
+func wireFMPNexusAdapter(mesh *fwfmp.Service, tenants identity.TenantStore, subjects identity.SubjectStore, nodes identity.EnrollmentStore, sessions session.Store) {
 	if mesh == nil {
 		return
 	}
 	if mesh.Nexus.Tenants == nil {
-		mesh.Nexus.Tenants = identities
+		mesh.Nexus.Tenants = tenants
 	}
 	if mesh.Nexus.Subjects == nil {
-		mesh.Nexus.Subjects = identities
+		mesh.Nexus.Subjects = subjects
 	}
 	if mesh.Nexus.Nodes == nil {
-		mesh.Nexus.Nodes = identities
+		mesh.Nexus.Nodes = nodes
 	}
 	if mesh.Nexus.Sessions == nil {
 		mesh.Nexus.Sessions = sessions

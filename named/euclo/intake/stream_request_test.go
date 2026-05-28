@@ -8,13 +8,14 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 func TestBuildStreamRequestQueryTemplate(t *testing.T) {
 	templateStr := "failing tests for: {{.Instruction}}"
 	instruction := "the login handler panics"
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, contextstream.ModeBlocking)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBlocking)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -31,7 +32,7 @@ func TestBuildStreamRequestMaxTokens(t *testing.T) {
 	instruction := "fix the bug"
 	maxTokens := 5000
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, maxTokens, contextstream.ModeBlocking)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, maxTokens, contextstream.ModeBlocking)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -46,7 +47,7 @@ func TestBuildStreamRequestNoTemplate(t *testing.T) {
 	templateStr := ""
 	instruction := "do something"
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, contextstream.ModeBlocking)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBlocking)
 
 	if req != nil {
 		t.Error("Expected nil request when template is empty")
@@ -77,7 +78,7 @@ func TestBuildStreamRequestMode(t *testing.T) {
 	instruction := "review code"
 	mode := contextstream.ModeBackground
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, mode)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, mode)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -92,7 +93,7 @@ func TestBuildStreamRequestNoFileAnchors(t *testing.T) {
 	templateStr := "context for: {{.Instruction}}"
 	instruction := "fix the bug"
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, contextstream.ModeBlocking)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBlocking)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -141,7 +142,7 @@ func TestBuildStreamRequestBackgroundModeEnforcement(t *testing.T) {
 	instruction := "fix the bug"
 
 	// Default mode is background
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, contextstream.ModeBackground)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBackground)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -157,7 +158,7 @@ func TestBuildStreamRequestBackgroundModeSafeWithHint(t *testing.T) {
 	templateStr := "context for: {{.Instruction}}"
 	instruction := "fix the bug"
 
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, nil, 1000, contextstream.ModeBackground)
+	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBackground)
 
 	if req == nil {
 		t.Fatal("Expected non-nil request")
@@ -174,7 +175,7 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze the codebase"}, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "task.input", &core.Task{Instruction: "analyze the codebase"})
 	result, err := node.Execute(context.Background(), env)
 
 	if err != nil {
@@ -182,33 +183,33 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	}
 
 	// Check that envelope contains the expected keys
-	if _, ok := env.GetWorkingValue("euclo.task_envelope"); !ok {
+	if _, ok := contextdata.GetTyped[*TaskEnvelope](env, "euclo.task_envelope"); !ok {
 		t.Error("Expected envelope to contain task envelope")
 	}
-	if evidence, ok := env.GetWorkingValue("euclo.intent_evidence"); !ok || evidence == nil {
+	if evidence, ok := contextdata.GetTyped[*intentcontext.IntentEvidence](env, "euclo.intent_evidence"); !ok || evidence == nil {
 		t.Fatal("Expected envelope to contain intent evidence")
 	}
 
-	if _, ok := env.GetWorkingValue("euclo.intent_classification"); !ok {
+	if _, ok := contextdata.GetTyped[*IntentClassification](env, "euclo.intent_classification"); !ok {
 		t.Error("Expected envelope to contain intent classification")
 	}
 
-	if _, ok := env.GetWorkingValue("euclo.family_selection"); !ok {
+	if _, ok := contextdata.GetTyped[string](env, "euclo.family_selection"); !ok {
 		t.Error("Expected envelope to contain family selection")
 	}
 
-	if _, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
+	if _, ok := contextdata.GetTyped[any](env, "euclo.capability_sequence"); ok {
 		t.Fatal("did not expect capability sequence in envelope")
 	}
 
 	// Check result
-	if result.Data["intent_evidence"] == nil {
+	if got, ok := core.ResultField(result.Data, "intent_evidence"); !ok || got == nil {
 		t.Fatal("Expected result data to include intent evidence")
 	}
-	if result.Data["missing_fields"] == nil {
+	if got, ok := core.ResultField(result.Data, "missing_fields"); !ok || got == nil {
 		t.Fatal("Expected result data to include missing fields")
 	}
-	if result.Data["stream_result"] == nil {
+	if got, ok := core.ResultField(result.Data, "stream_result"); !ok || got == nil {
 		t.Fatal("Expected result data to include structured stream result")
 	}
 }

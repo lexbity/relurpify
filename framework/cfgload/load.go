@@ -135,23 +135,6 @@ func resolveNodeVariables(node *yaml.Node, workspace string, env []string, defau
 	return nil
 }
 
-func applyFilesystemSecurityInvariant(agent *AgentConfig, workspaceAbs string) {
-	configExclude := filepath.Join(workspaceAbs, "relurpify_cfg") + "/**"
-	configExcludeAlt := filepath.Join(workspaceAbs, "relurpify_cfg")
-	for i, perm := range agent.Filesystem {
-		hasExclude := false
-		for _, ex := range perm.Exclude {
-			if ex == configExclude || ex == configExcludeAlt {
-				hasExclude = true
-				break
-			}
-		}
-		if !hasExclude {
-			agent.Filesystem[i].Exclude = append(perm.Exclude, configExclude)
-		}
-	}
-}
-
 // Load executes the consolidated configuration loading boundary.
 func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	overrides := LoadEnvOverrides(opts.EnvOverrides)
@@ -261,10 +244,13 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	}
 	sharedRoot := ResolveSharedRoot(overrides.XDGDataHome)
 
-	agentsDir := filepath.Join(absWorkspace, "relurpify_cfg", "agents")
-	agentRegistry, err := LoadAgentRegistry(agentsDir, absWorkspace, opts.EnvOverrides, workspaceCfg.Model, providers, toolRegistry, StrictDecode)
+	if err := resolveAgentModels(workspaceCfg.Agents, workspaceCfg.Model, providers); err != nil {
+		return nil, nil, fmt.Errorf("agent model resolution: %w", err)
+	}
+
+	agentRegistry, err := buildAgentRegistry(workspaceCfg.Agents)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load agent registry: %w", err)
+		return nil, nil, fmt.Errorf("build agent registry: %w", err)
 	}
 
 	appConfig := &AppConfig{
@@ -297,7 +283,7 @@ func ConfigFingerprint(cfg *AppConfig) (string, error) {
 		Security   security.Bundle          `json:"security"`
 		Model      ModelConfig              `json:"model"`
 		Tools      []contracts.ToolManifest `json:"tools"`
-		Agents     map[string]*AgentConfig  `json:"agents"`
+		Agents     []*AgentEntry            `json:"agents"`
 		Editor     string                   `json:"editor"`
 		SharedRoot string                   `json:"shared_root"`
 	}{
@@ -305,7 +291,7 @@ func ConfigFingerprint(cfg *AppConfig) (string, error) {
 		Security:   cfg.Security,
 		Model:      cfg.Model,
 		Tools:      nil,
-		Agents:     cfg.Agents.Agents,
+		Agents:     cfg.Agents.All(),
 		Editor:     cfg.Editor,
 		SharedRoot: cfg.SharedRoot,
 	}

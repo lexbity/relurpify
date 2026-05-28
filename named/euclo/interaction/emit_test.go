@@ -36,7 +36,7 @@ func TestEmitFrame_WritesToEnvelope(t *testing.T) {
 		t.Fatalf("EmitFrame failed: %v", err)
 	}
 
-	got, ok := env.GetWorkingValue(frameStorageKey(0))
+	got, ok := contextdata.GetTyped[*InteractionFrame](env, frameStorageKey(0))
 	if !ok {
 		t.Fatal("expected frame in envelope")
 	}
@@ -86,6 +86,9 @@ func TestEmitFrame_SequenceIncrement(t *testing.T) {
 	}
 	if err := EmitFrame(context.Background(), second, env, nil); err != nil {
 		t.Fatalf("EmitFrame second failed: %v", err)
+	}
+	if got, ok := contextdata.GetTyped[int](env, "euclo.interaction.frame_seq"); !ok || got != 2 {
+		t.Fatalf("expected frame seq 2, got %v (ok=%v)", got, ok)
 	}
 	if first.Seq != 0 {
 		t.Fatalf("expected first seq 0, got %d", first.Seq)

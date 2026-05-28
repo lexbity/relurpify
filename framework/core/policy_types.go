@@ -11,66 +11,66 @@ import (
 
 // PolicyRule is a declarative security rule evaluated at invocation time.
 type PolicyRule struct {
-	ID         string           `json:"id" yaml:"id"`
-	Name       string           `json:"name" yaml:"name"`
-	Priority   int              `json:"priority" yaml:"priority"`
-	Enabled    bool             `json:"enabled" yaml:"enabled"`
-	Conditions PolicyConditions `json:"conditions" yaml:"conditions"`
-	Effect     PolicyEffect     `json:"effect" yaml:"effect"`
+	ID         string           `json:"id"`
+	Name       string           `json:"name"`
+	Priority   int              `json:"priority"`
+	Enabled    bool             `json:"enabled"`
+	Conditions PolicyConditions `json:"conditions"`
+	Effect     PolicyEffect     `json:"effect"`
 }
 
 type PolicyConditions struct {
-	Actors                    []ActorMatch              `json:"actors,omitempty" yaml:"actors,omitempty"`
-	Capabilities              []string                  `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
-	ExportNames               []string                  `json:"export_names,omitempty" yaml:"export_names,omitempty"`
-	SourceDomains             []string                  `json:"source_domains,omitempty" yaml:"source_domains,omitempty"`
-	ContextClasses            []string                  `json:"context_classes,omitempty" yaml:"context_classes,omitempty"`
-	SensitivityClasses        []string                  `json:"sensitivity_classes,omitempty" yaml:"sensitivity_classes,omitempty"`
-	RouteModes                []string                  `json:"route_modes,omitempty" yaml:"route_modes,omitempty"`
-	ProviderKinds             []ProviderKind            `json:"provider_kinds,omitempty" yaml:"provider_kinds,omitempty"`
-	ExternalProviders         []string                  `json:"external_providers,omitempty" yaml:"external_providers,omitempty"`
-	MinRiskClasses            []RiskClass               `json:"min_risk_classes,omitempty" yaml:"min_risk_classes,omitempty"`
-	TrustClasses              []TrustClass              `json:"trust_classes,omitempty" yaml:"trust_classes,omitempty"`
-	CapabilityKinds           []CapabilityKind          `json:"capability_kinds,omitempty" yaml:"capability_kinds,omitempty"`
-	RuntimeFamilies           []CapabilityRuntimeFamily `json:"runtime_families,omitempty" yaml:"runtime_families,omitempty"`
-	EffectClasses             []EffectClass             `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	Partitions                []string                  `json:"partitions,omitempty" yaml:"partitions,omitempty"`
-	ChannelIDs                []string                  `json:"channel_ids,omitempty" yaml:"channel_ids,omitempty"`
-	SessionScopes             []SessionScope            `json:"session_scopes,omitempty" yaml:"session_scopes,omitempty"`
-	SessionOperations         []SessionOperation        `json:"session_operations,omitempty" yaml:"session_operations,omitempty"`
-	RequireOwnership          *bool                     `json:"require_ownership,omitempty" yaml:"require_ownership,omitempty"`
-	RequireDelegation         *bool                     `json:"require_delegation,omitempty" yaml:"require_delegation,omitempty"`
-	RequireExternalBinding    *bool                     `json:"require_external_binding,omitempty" yaml:"require_external_binding,omitempty"`
-	RequireResolvedExternal   *bool                     `json:"require_resolved_external,omitempty" yaml:"require_resolved_external,omitempty"`
-	RequireRestrictedExternal *bool                     `json:"require_restricted_external,omitempty" yaml:"require_restricted_external,omitempty"`
-	TimeWindow                *TimeWindow               `json:"time_window,omitempty" yaml:"time_window,omitempty"`
+	Actors                    []ActorMatch              `yaml:"actors,omitempty"`
+	Capabilities              []string                  `yaml:"capabilities,omitempty"`
+	ExportNames               []string                  `yaml:"export_names,omitempty"`
+	SourceDomains             []string                  `yaml:"source_domains,omitempty"`
+	ContextClasses            []string                  `yaml:"context_classes,omitempty"`
+	SensitivityClasses        []string                  `yaml:"sensitivity_classes,omitempty"`
+	RouteModes                []string                  `yaml:"route_modes,omitempty"`
+	ProviderKinds             []ProviderKind            `yaml:"provider_kinds,omitempty"`
+	ExternalProviders         []string                  `yaml:"external_providers,omitempty"`
+	MinRiskClasses            []RiskClass               `yaml:"min_risk_classes,omitempty"`
+	TrustClasses              []TrustClass              `yaml:"trust_classes,omitempty"`
+	CapabilityKinds           []CapabilityKind          `yaml:"capability_kinds,omitempty"`
+	RuntimeFamilies           []CapabilityRuntimeFamily `yaml:"runtime_families,omitempty"`
+	EffectClasses             []EffectClass             `yaml:"effect_classes,omitempty"`
+	Partitions                []string                  `yaml:"partitions,omitempty"`
+	ChannelIDs                []string                  `yaml:"channel_ids,omitempty"`
+	SessionScopes             []SessionScope            `yaml:"session_scopes,omitempty"`
+	SessionOperations         []SessionOperation        `yaml:"session_operations,omitempty"`
+	RequireOwnership          *bool                     `yaml:"require_ownership,omitempty"`
+	RequireDelegation         *bool                     `yaml:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool                     `yaml:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool                     `yaml:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool                     `yaml:"require_restricted_external,omitempty"`
+	TimeWindow                *TimeWindow               `yaml:"time_window,omitempty"`
 }
 
 type ActorMatch struct {
-	Kind          string   `json:"kind,omitempty" yaml:"kind,omitempty"`
-	IDs           []string `json:"ids,omitempty" yaml:"ids,omitempty"`
-	Authenticated bool     `json:"authenticated,omitempty" yaml:"authenticated,omitempty"`
+	Kind          string   `json:"kind,omitempty"`
+	IDs           []string `json:"ids,omitempty"`
+	Authenticated bool     `json:"authenticated,omitempty"`
 }
 
 type TimeWindow struct {
-	After    string   `json:"after,omitempty" yaml:"after,omitempty"`
-	Before   string   `json:"before,omitempty" yaml:"before,omitempty"`
-	Days     []string `json:"days,omitempty" yaml:"days,omitempty"`
-	Timezone string   `json:"timezone,omitempty" yaml:"timezone,omitempty"`
+	After    string   `json:"after,omitempty"`
+	Before   string   `json:"before,omitempty"`
+	Days     []string `json:"days,omitempty"`
+	Timezone string   `json:"timezone,omitempty"`
 }
 
 type PolicyEffect struct {
-	Action      string     `json:"action" yaml:"action"`
-	Approvers   []string   `json:"approvers,omitempty" yaml:"approvers,omitempty"`
-	ApprovalTTL string     `json:"approval_ttl,omitempty" yaml:"approval_ttl,omitempty"`
-	RateLimit   *RateLimit `json:"rate_limit,omitempty" yaml:"rate_limit,omitempty"`
-	Reason      string     `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Action      string     `yaml:"action"`
+	Approvers   []string   `yaml:"approvers,omitempty"`
+	ApprovalTTL string     `yaml:"approval_ttl,omitempty"`
+	RateLimit   *RateLimit `yaml:"rate_limit,omitempty"`
+	Reason      string     `yaml:"reason,omitempty"`
 }
 
 type RateLimit struct {
-	MaxRequests   int    `json:"max_requests" yaml:"max_requests"`
-	WindowSeconds int    `json:"window_seconds" yaml:"window_seconds"`
-	Per           string `json:"per" yaml:"per"`
+	MaxRequests   int    `yaml:"max_requests"`
+	WindowSeconds int    `yaml:"window_seconds"`
+	Per           string `yaml:"per"`
 }
 
 type PolicyRequest struct {

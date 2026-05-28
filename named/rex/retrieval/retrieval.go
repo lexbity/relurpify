@@ -7,8 +7,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/named/rex/store"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 type Policy struct {
@@ -77,7 +78,7 @@ func ExpandWithWorkflowStore(ctx context.Context, workflowStore any, workflowID 
 // Apply persists expansion into envelope and task context.
 func Apply(env *contextdata.Envelope, task *core.Task, expansion Expansion) *core.Task {
 	if env != nil {
-		env.SetWorkingValue("rex.context_expansion", expansion, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, rexkeys.RexContextExpansion, expansion)
 		if len(expansion.WorkflowRetrieval) > 0 {
 			env.SetWorkingValue("pipeline.workflow_retrieval", expansion.WorkflowRetrieval, contextdata.MemoryClassTask)
 		}

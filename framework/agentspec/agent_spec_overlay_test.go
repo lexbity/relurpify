@@ -58,7 +58,7 @@ func TestAgentSpecOverlayFromSpecClonesCoordinationConfig(t *testing.T) {
 					Name:                    "reviewer",
 					CoordinationRoles:       []CoordinationRole{CoordinationRoleReviewer},
 					CoordinationTaskTypes:   []string{"review"},
-					CoordinationLongRunning: boolPtr(true),
+					CoordinationLongRunning: EnabledStateEnabled,
 				},
 			},
 			ScaleOut: AgentScaleOutPolicy{
@@ -123,8 +123,4 @@ func TestMergeAgentSpecsReplacesCapabilities(t *testing.T) {
 	})
 
 	require.Equal(t, []string{"euclo:cap.ast_query", "euclo:cap.code_review"}, merged.Capabilities.Relurpic)
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }

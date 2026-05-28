@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	manifest "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/state"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 type Health string
@@ -171,6 +172,21 @@ func (m *Manager) Details() Details {
 		DeadLetter:     append([]WorkItem{}, m.deadLetter...),
 		Recoveries:     append([]state.RecoveryCandidate{}, m.recoveries...),
 	}
+}
+
+func (m *Manager) WorkflowStore() *store.SQLiteWorkflowStore {
+	if m == nil {
+		return nil
+	}
+	if provider, ok := m.mem.(interface {
+		WorkflowStore() *store.SQLiteWorkflowStore
+	}); ok {
+		return provider.WorkflowStore()
+	}
+	if workflowStore, ok := m.mem.(*store.SQLiteWorkflowStore); ok {
+		return workflowStore
+	}
+	return nil
 }
 
 func (m *Manager) SetPartitionDetector(detector PartitionDetector) {

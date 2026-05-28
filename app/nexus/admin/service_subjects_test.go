@@ -22,8 +22,10 @@ func TestCreateSubjectThenIssueToken(t *testing.T) {
 	defer tokenStore.Close()
 
 	svc := NewService(ServiceConfig{
-		Identities: identityStore,
-		Tokens:     tokenStore,
+		Tenants:     identityStore,
+		Subjects:    identityStore,
+		Enrollments: identityStore,
+		Tokens:      tokenStore,
 	}).(*service)
 
 	createResult, err := svc.CreateSubject(context.Background(), CreateSubjectRequest{
@@ -62,7 +64,9 @@ func TestBindExternalIdentity(t *testing.T) {
 	defer identityStore.Close()
 
 	svc := NewService(ServiceConfig{
-		Identities: identityStore,
+		Tenants:     identityStore,
+		Subjects:    identityStore,
+		Enrollments: identityStore,
 	}).(*service)
 
 	_, err = svc.CreateSubject(context.Background(), CreateSubjectRequest{

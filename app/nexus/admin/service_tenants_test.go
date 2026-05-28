@@ -16,7 +16,7 @@ func newTenantTestSvc(t *testing.T) (*service, *db.SQLiteIdentityStore) {
 	identityStore, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { identityStore.Close() })
-	return NewService(ServiceConfig{Identities: identityStore}).(*service), identityStore
+	return NewService(ServiceConfig{Tenants: identityStore, Subjects: identityStore, Enrollments: identityStore}).(*service), identityStore
 }
 
 func TestGetTenantReturnsTenantInfo(t *testing.T) {
@@ -145,8 +145,10 @@ func TestIssueTokenBlockedForDisabledTenant(t *testing.T) {
 	}))
 
 	svc := NewService(ServiceConfig{
-		Identities: identityStore,
-		Tokens:     tokenStore,
+		Tenants:     identityStore,
+		Subjects:    identityStore,
+		Enrollments: identityStore,
+		Tokens:      tokenStore,
 	}).(*service)
 
 	_, err = svc.IssueToken(ctx, IssueTokenRequest{

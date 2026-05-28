@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
@@ -24,7 +25,7 @@ func TestTelemetryNodeExecute(t *testing.T) {
 	node := NewTelemetryNode("telemetry1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+	state.SetExecutionCompleted(env, true)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -60,14 +61,14 @@ func TestTelemetryNodeWritesToEnvelope(t *testing.T) {
 	node := NewTelemetryNode("telemetry1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+	state.SetExecutionCompleted(env, true)
 
 	_, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	category, ok := env.GetWorkingValue("euclo.outcome.category")
+	category, ok := state.GetOutcomeCategory(env)
 	if !ok {
 		t.Error("Expected outcome.category in envelope")
 	}
@@ -76,7 +77,7 @@ func TestTelemetryNodeWritesToEnvelope(t *testing.T) {
 		t.Errorf("Expected outcome.category success, got %v", category)
 	}
 
-	reason, ok := env.GetWorkingValue("euclo.outcome.reason")
+	reason, ok := contextdata.GetTyped[string](env, "euclo.outcome.reason")
 	if !ok {
 		t.Error("Expected outcome.reason in envelope")
 	}
@@ -90,7 +91,7 @@ func TestTelemetryNodeIncompleteExecution(t *testing.T) {
 	node := NewTelemetryNode("telemetry1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.execution.completed", false, contextdata.MemoryClassTask)
+	state.SetExecutionCompleted(env, false)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -320,9 +321,9 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 	node.telemetry = NewEucloTelemetry(sink)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.projection.plan_id", "plan-1", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.projection.mutation_result", &graphdb.MutationResult{
+	state.SetExecutionCompleted(env, true)
+	contextdata.SetTyped(env, "euclo.projection.plan_id", "plan-1")
+	contextdata.SetTyped(env, "euclo.projection.mutation_result", &graphdb.MutationResult{
 		StableID:     "mutation-1",
 		Scope:        graphdb.MutationScopeProjection,
 		Status:       graphdb.MutationStatusCreated,
@@ -330,7 +331,7 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 		CreatedIDs:   []string{"node-1"},
 		RecordIDs:    []string{"node-1"},
 		StateVersion: 3,
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -369,8 +370,8 @@ func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
 	node.telemetry = NewEucloTelemetry(sink)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, "euclo.thoughtrecipe.intent.clarify", contextdata.MemoryClassTask)
+	state.SetExecutionCompleted(env, true)
+	contextdata.SetTyped(env, intentcontext.ClarificationActiveThoughtRecipeKey, "euclo.thoughtrecipe.intent.clarify")
 
 	if _, err := node.Execute(context.Background(), env); err != nil {
 		t.Fatalf("Execute failed: %v", err)

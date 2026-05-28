@@ -8,17 +8,17 @@ import (
 // AdminTokenRecord is the persistent metadata for a runtime-issued admin token.
 // Defined here to avoid import cycles with framework/authorization.
 type AdminTokenRecord struct {
-	ID          string      `json:"id" yaml:"id"`
-	Name        string      `json:"name,omitempty" yaml:"name,omitempty"`
-	TenantID    string      `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	SubjectKind SubjectKind `json:"subject_kind,omitempty" yaml:"subject_kind,omitempty"`
-	SubjectID   string      `json:"subject_id,omitempty" yaml:"subject_id,omitempty"`
-	TokenHash   string      `json:"-" yaml:"token_hash"`
-	Scopes      []string    `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-	IssuedAt    time.Time   `json:"issued_at" yaml:"issued_at"`
-	ExpiresAt   *time.Time  `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
-	LastUsedAt  *time.Time  `json:"last_used_at,omitempty" yaml:"last_used_at,omitempty"`
-	RevokedAt   *time.Time  `json:"revoked_at,omitempty" yaml:"revoked_at,omitempty"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name,omitempty"`
+	TenantID    string      `json:"tenant_id,omitempty"`
+	SubjectKind SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID   string      `json:"subject_id,omitempty"`
+	TokenHash   string      `json:"-"`
+	Scopes      []string    `json:"scopes,omitempty"`
+	IssuedAt    time.Time   `json:"issued_at"`
+	ExpiresAt   *time.Time  `json:"expires_at,omitempty"`
+	LastUsedAt  *time.Time  `json:"last_used_at,omitempty"`
+	RevokedAt   *time.Time  `json:"revoked_at,omitempty"`
 }
 
 // TokenLookupStore resolves a presented bearer token hash to the stored token

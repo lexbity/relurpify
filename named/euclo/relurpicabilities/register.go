@@ -56,6 +56,16 @@ var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
 	}},
 }
 
+// AllCapabilityIDs returns the canonical list of euclo:cap.* IDs defined by
+// the blueprint table. Callers use this to verify declared lists stay in sync.
+func AllCapabilityIDs() []string {
+	ids := make([]string, len(eucloRelurpicCapabilityBlueprints))
+	for i, bp := range eucloRelurpicCapabilityBlueprints {
+		ids[i] = bp.ID
+	}
+	return ids
+}
+
 // RegisterAll registers only the Euclo relurpic capability handlers declared
 // by the active agent spec.
 func RegisterAll(env agentenv.WorkspaceEnvironment, declared []string) error {

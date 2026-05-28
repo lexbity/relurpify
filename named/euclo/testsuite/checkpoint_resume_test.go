@@ -41,7 +41,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	seedTask(firstEnv, task.Instruction, "resume.go")
 	runPreIngestion(t, firstEnv, dir, []string{"resume.go"})
 	firstEnv.RequestCheckpoint("materialize for resume", 5, true)
-	firstEnv.SetWorkingValue("euclo.stream_result", nil, contextdata.MemoryClassTask)
+	euclostate.SetStreamResult(firstEnv, nil)
 	if err := graph.Execute(ctxWithTrigger(context.Background()), firstEnv); err != nil {
 		t.Fatalf("first execute failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 
 	firstEnv := contextdata.NewEnvelope(task.ID, "session-resume-thoughtrecipe")
 	seedTask(firstEnv, task.Instruction, "thoughtrecipe.go")
-	firstEnv.SetWorkingValue("euclo.thoughtrecipe_id", "euclo.thoughtrecipe.review", contextdata.MemoryClassTask)
+	euclostate.SetThoughtRecipeID(firstEnv, "euclo.thoughtrecipe.review")
 	runPreIngestion(t, firstEnv, dir, []string{"thoughtrecipe.go"})
 	firstEnv.RequestCheckpoint("materialize thoughtrecipe resume", 7, true)
 	if err := graph.Execute(ctxWithTrigger(context.Background()), firstEnv); err != nil {
@@ -150,7 +150,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		if err := json.Unmarshal(raw, &thoughtrecipeID); err != nil {
 			t.Fatalf("rehydrate thoughtrecipe id: %v", err)
 		}
-		rehydrated.SetWorkingValue("euclo.thoughtrecipe_id", thoughtrecipeID, contextdata.MemoryClassTask)
+		euclostate.SetThoughtRecipeID(rehydrated, thoughtrecipeID)
 	}
 
 	if err := graph.SetStart("euclo.capability_classify"); err != nil {

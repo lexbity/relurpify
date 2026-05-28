@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 )
 
@@ -86,7 +87,8 @@ ask user:
 	}
 
 	runNode := NewThoughtRecipeStepNode("review_flow.run", agentenv.WorkspaceEnvironment{PromptRegistry: promptRegistry}, plan.Steps[0])
-	runTask, err := runNode.buildTask(nil)
+	runEnv := contextdata.NewEnvelope("task-review-flow", "")
+	runTask, err := runNode.buildTask(runEnv)
 	if err != nil {
 		t.Fatalf("buildTask(run): %v", err)
 	}
@@ -98,7 +100,7 @@ ask user:
 	}
 
 	askNode := NewThoughtRecipeStepNode("review_flow.ask", agentenv.WorkspaceEnvironment{PromptRegistry: promptRegistry}, plan.Steps[1])
-	askTask, err := askNode.buildTask(nil)
+	askTask, err := askNode.buildTask(contextdata.NewEnvelope("task-review-flow", ""))
 	if err != nil {
 		t.Fatalf("buildTask(ask): %v", err)
 	}

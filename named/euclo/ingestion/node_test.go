@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
@@ -22,11 +24,11 @@ func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
+	state.SetTaskEnvelope(env, &intake.TaskEnvelope{
 		TaskID:        "task-1",
 		SessionID:     "session-1",
 		ExplicitFiles: []string{"note.txt"},
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -35,22 +37,22 @@ func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got := result.Data["mode"]; got != IngestionModeFilesOnly {
+	if got, ok := core.ResultField(result.Data, "mode"); !ok || got != IngestionModeFilesOnly {
 		t.Fatalf("unexpected mode: %v", got)
 	}
-	if got := result.Data["user_files_ingested"]; got != 0 {
+	if got, ok := core.ResultField(result.Data, "user_files_ingested"); !ok || got != 0 {
 		t.Fatalf("expected user file count 0, got %v", got)
 	}
-	if got := result.Data["session_pins_ingested"]; got != 0 {
+	if got, ok := core.ResultField(result.Data, "session_pins_ingested"); !ok || got != 0 {
 		t.Fatalf("expected session pin count 0, got %v", got)
 	}
-	if got := result.Data["chunks_created"]; got == 0 {
+	if got, ok := core.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
 		t.Fatal("expected chunks to be created")
 	}
-	if _, ok := env.GetWorkingValue("euclo.ingestion_result"); !ok {
+	if _, ok := contextdata.GetTyped[*IngestionResult](env, "euclo.ingestion_result"); !ok {
 		t.Fatal("expected ingestion result in envelope")
 	}
-	if _, ok := env.GetWorkingValue("euclo.ingested.file." + sanitize("note.txt")); !ok {
+	if _, ok := contextdata.GetTyped[map[string]any](env, "euclo.ingested.file."+sanitize("note.txt")); !ok {
 		t.Fatal("expected per-file summary in envelope")
 	}
 }
@@ -65,10 +67,10 @@ func TestIngestionNodeFullScanUsesWorkspaceScanner(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
+	state.SetTaskEnvelope(env, &intake.TaskEnvelope{
 		TaskID:    "task-2",
 		SessionID: "session-2",
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -77,10 +79,10 @@ func TestIngestionNodeFullScanUsesWorkspaceScanner(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got := result.Data["files_scanned"]; got == 0 {
+	if got, ok := core.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
 		t.Fatal("expected files_scanned to be populated")
 	}
-	if got := result.Data["chunks_created"]; got == 0 {
+	if got, ok := core.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
 		t.Fatal("expected chunks_created to be populated")
 	}
 }
@@ -103,11 +105,11 @@ func TestIngestionNodeIncrementalScanUsesGitDiff(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-3", "session-3")
-	env.SetWorkingValue("euclo.task_envelope", &intake.TaskEnvelope{
+	state.SetTaskEnvelope(env, &intake.TaskEnvelope{
 		TaskID:           "task-3",
 		SessionID:        "session-3",
 		IncrementalSince: strings.TrimSpace(base),
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -116,10 +118,10 @@ func TestIngestionNodeIncrementalScanUsesGitDiff(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got := result.Data["since_ref"]; got != strings.TrimSpace(base) {
+	if got, ok := core.ResultField(result.Data, "since_ref"); !ok || got != strings.TrimSpace(base) {
 		t.Fatalf("unexpected since_ref: %v", got)
 	}
-	if got := result.Data["files_scanned"]; got == 0 {
+	if got, ok := core.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
 		t.Fatal("expected files_scanned to be populated")
 	}
 }
@@ -135,7 +137,7 @@ func TestIngestionNodeHandlesMissingTaskEnvelope(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result")
 	}
-	if got := result.Data["skipped"]; got != true {
+	if got, ok := core.ResultField(result.Data, "skipped"); !ok || got != true {
 		t.Fatalf("expected skipped result, got %v", got)
 	}
 }

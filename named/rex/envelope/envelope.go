@@ -48,18 +48,18 @@ func Normalize(task *core.Task, envelope *contextdata.Envelope) Envelope {
 	}
 	if envelope != nil {
 		if env.WorkflowID == "" {
-			if val, ok := envelope.GetWorkingValue(rexkeys.RexWorkflowID); ok {
-				env.WorkflowID = strings.TrimSpace(fmt.Sprint(val))
+			if id, ok := contextdata.GetTyped[string](envelope, rexkeys.RexWorkflowID); ok {
+				env.WorkflowID = strings.TrimSpace(id)
 			}
 		}
 		if env.RunID == "" {
-			if val, ok := envelope.GetWorkingValue(rexkeys.RexRunID); ok {
-				env.RunID = strings.TrimSpace(fmt.Sprint(val))
+			if id, ok := contextdata.GetTyped[string](envelope, rexkeys.RexRunID); ok {
+				env.RunID = strings.TrimSpace(id)
 			}
 		}
 		if env.ResumedRoute == "" {
-			if val, ok := envelope.GetWorkingValue("rex.route"); ok {
-				env.ResumedRoute = strings.TrimSpace(fmt.Sprint(val))
+			if route, ok := contextdata.GetTyped[string](envelope, rexkeys.RexRoute); ok {
+				env.ResumedRoute = strings.TrimSpace(route)
 			}
 		}
 	}

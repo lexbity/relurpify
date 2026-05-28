@@ -216,15 +216,23 @@ func (f *fixtureController) setTools(tools []protocol.Tool) {
 func (f *fixtureController) close() {}
 
 type requestHandlerStub struct {
-	sampling    *protocol.CreateMessageResult
-	elicitation *protocol.ElicitationResult
+	sampling      *protocol.CreateMessageResult
+	elicitation   *protocol.ElicitationResult
+	samplingFn    func(context.Context, protocol.CreateMessageParams) (*protocol.CreateMessageResult, error)
+	elicitationFn func(context.Context, protocol.ElicitationParams) (*protocol.ElicitationResult, error)
 }
 
-func (r requestHandlerStub) HandleSamplingRequest(context.Context, protocol.CreateMessageParams) (*protocol.CreateMessageResult, error) {
+func (r requestHandlerStub) HandleSamplingRequest(ctx context.Context, params protocol.CreateMessageParams) (*protocol.CreateMessageResult, error) {
+	if r.samplingFn != nil {
+		return r.samplingFn(ctx, params)
+	}
 	return r.sampling, nil
 }
 
-func (r requestHandlerStub) HandleElicitationRequest(context.Context, protocol.ElicitationParams) (*protocol.ElicitationResult, error) {
+func (r requestHandlerStub) HandleElicitationRequest(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error) {
+	if r.elicitationFn != nil {
+		return r.elicitationFn(ctx, params)
+	}
 	return r.elicitation, nil
 }
 
@@ -269,6 +277,40 @@ func TestClientHandlesSamplingAndElicitationRequests(t *testing.T) {
 	require.NoError(t, controller.request("elicitation/create", protocol.ElicitationParams{
 		Message: "Need details",
 	}))
+}
+
+func TestClientServerRequestUsesLoopContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	process, controller := newFixtureProcess()
+	defer controller.close()
+	client, err := ConnectStdio(ctx, pipeLauncher{process: process}, StdioConfig{
+		Command:    "fixture-mcp",
+		ProviderID: "remote-mcp",
+		SessionID:  "remote-mcp:primary",
+		LocalPeer:  protocol.PeerInfo{Name: "relurpify", Version: "dev"},
+	})
+	require.NoError(t, err)
+	defer client.Close()
+
+	observed := make(chan error, 1)
+	client.SetRequestHandler(requestHandlerStub{
+		samplingFn: func(ctx context.Context, params protocol.CreateMessageParams) (*protocol.CreateMessageResult, error) {
+			observed <- ctx.Err()
+			return nil, ctx.Err()
+		},
+	})
+
+	cancel()
+	require.NoError(t, controller.request("sampling/createMessage", protocol.CreateMessageParams{
+		Messages: []protocol.SamplingMessage{{Role: "user", Content: protocol.ContentBlock{Type: "text", Text: "cancel"}}},
+	}))
+
+	select {
+	case err := <-observed:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("expected request handler to observe canceled context")
+	}
 }
 
 func TestClientSubscribeAndUnsubscribeResourceUpdatesSession(t *testing.T) {

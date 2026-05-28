@@ -166,11 +166,9 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 	if err != nil {
 		return nil, fmt.Errorf("goalcon: execute: %w", err)
 	}
-	if result.Data == nil {
-		result.Data = map[string]any{}
-	}
-	result.Data["search_depth"] = planResult.Depth
-	result.Data["unsatisfied_count"] = len(planResult.Unsatisfied)
+	fields := core.ResultFields(result.Data)
+	fields["search_depth"] = planResult.Depth
+	fields["unsatisfied_count"] = len(planResult.Unsatisfied)
 
 	// Record plan execution metrics if metrics recorder available
 	if a.MetricsRecorder != nil {
@@ -182,7 +180,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 	if a.AuditTrail != nil {
 		collector := NewProvenanceCollector(planResult.Plan, nil, a.AuditTrail)
 		provenance := collector.BuildProvenance()
-		result.Data["provenance"] = provenance
+		fields["provenance"] = provenance
 
 		// Optionally persist to MemoryStore
 		if a.Memory != nil {
@@ -196,6 +194,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 		}
 	}
 
+	result.Data = core.NewToolResultPayload(fields)
 	return result, nil
 }
 
@@ -246,7 +245,7 @@ func (n *noopAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return g, nil
 }
 func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{Success: true, Data: map[string]any{}}, nil
+	return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, nil
 }
 
 // streamMode returns the streaming mode, defaulting to blocking.

@@ -144,7 +144,7 @@ func (e *StepExecutor) Execute(ctx context.Context, req StepExecutionRequest) *S
 	}
 
 	result.Success = toolResult.Success
-	result.Output = toolResult.Data
+	result.Output = core.ResultFields(toolResult.Data)
 
 	// Update world state based on success
 	if result.Success && req.Context != nil {
@@ -193,13 +193,13 @@ func (e *StepExecutor) executeToolStep(
 	// In Phase 5+, would actually invoke the capability via agent
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"step_id":     step.ID,
 			"tool":        step.Tool,
 			"capability":  cap.Name,
 			"executed":    true,
 			"placeholder": true, // Indicates this is not a real execution
-		},
+		}),
 	}, nil
 }
 
@@ -227,7 +227,7 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 	// Convert core.Result to contracts.ToolResult for the envelope
 	toolResultEnv := &contracts.ToolResult{
 		Success: toolResult.Success,
-		Data:    toolResult.Data,
+		Data:    core.ResultFields(toolResult.Data),
 		Error:   "",
 	}
 	if strings.TrimSpace(toolResult.Error) != "" {

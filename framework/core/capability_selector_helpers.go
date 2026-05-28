@@ -2,7 +2,10 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
 // CloneCapabilitySelectors returns a deep copy of selector slices so callers
@@ -50,14 +53,6 @@ func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
 	if selector.CoordinationExecutionModes != nil {
 		selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
 	}
-	if selector.CoordinationLongRunning != nil {
-		value := *selector.CoordinationLongRunning
-		selector.CoordinationLongRunning = &value
-	}
-	if selector.CoordinationDirectInsertion != nil {
-		value := *selector.CoordinationDirectInsertion
-		selector.CoordinationDirectInsertion = &value
-	}
 	return selector
 }
 
@@ -91,8 +86,8 @@ func capabilitySelectorKey(selector CapabilitySelector) string {
 		strings.Join(coordinationRolesToStrings(selector.CoordinationRoles), ",") + "|" +
 		strings.Join(selector.CoordinationTaskTypes, ",") + "|" +
 		strings.Join(coordinationExecutionModesToStrings(selector.CoordinationExecutionModes), ",") + "|" +
-		boolPointerKey(selector.CoordinationLongRunning) + "|" +
-		boolPointerKey(selector.CoordinationDirectInsertion)
+		enabledStateKey(selector.CoordinationLongRunning) + "|" +
+		enabledStateKey(selector.CoordinationDirectInsertion)
 }
 
 func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
@@ -151,14 +146,8 @@ func coordinationExecutionModesToStrings(values []CoordinationExecutionMode) []s
 	return out
 }
 
-func boolPointerKey(value *bool) string {
-	if value == nil {
-		return ""
-	}
-	if *value {
-		return "true"
-	}
-	return "false"
+func enabledStateKey(value agentspec.EnabledState) string {
+	return strconv.Itoa(int(value))
 }
 
 // ValidateCapabilitySelector checks the legacy selector for obvious structural
@@ -177,8 +166,8 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 		len(selector.CoordinationRoles) == 0 &&
 		len(selector.CoordinationTaskTypes) == 0 &&
 		len(selector.CoordinationExecutionModes) == 0 &&
-		selector.CoordinationLongRunning == nil &&
-		selector.CoordinationDirectInsertion == nil {
+		selector.CoordinationLongRunning == agentspec.EnabledStateUnset &&
+		selector.CoordinationDirectInsertion == agentspec.EnabledStateUnset {
 		return fmt.Errorf("selector must declare at least one match field")
 	}
 	for _, tag := range append([]string{}, selector.Tags...) {
@@ -244,6 +233,16 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 		default:
 			return fmt.Errorf("coordination execution mode %s invalid", mode)
 		}
+	}
+	switch selector.CoordinationLongRunning {
+	case agentspec.EnabledStateUnset, agentspec.EnabledStateEnabled, agentspec.EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination long_running state %d invalid", selector.CoordinationLongRunning)
+	}
+	switch selector.CoordinationDirectInsertion {
+	case agentspec.EnabledStateUnset, agentspec.EnabledStateEnabled, agentspec.EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination direct_insertion state %d invalid", selector.CoordinationDirectInsertion)
 	}
 	return nil
 }

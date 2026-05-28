@@ -13,9 +13,6 @@ func ResolveIntent(classification *ScoredClassification, envelope *TaskEnvelope,
 	if classification == nil {
 		classification = &ScoredClassification{}
 	}
-	if envelope == nil {
-		envelope = &TaskEnvelope{}
-	}
 
 	intent := &IntentClassification{
 		WinningFamily:        classification.WinningFamily,

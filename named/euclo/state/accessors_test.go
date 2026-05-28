@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
-	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 )
 
@@ -15,7 +15,7 @@ func TestGetStringHandlesNilAndTypeMismatch(t *testing.T) {
 	}
 
 	env := contextdata.NewEnvelope("task", "session")
-	env.SetWorkingValue(KeyContextHint, 123, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyContextHint, 123)
 	if got := GetString(env, KeyContextHint); got != "" {
 		t.Fatalf("expected empty string for non-string value, got %q", got)
 	}
@@ -93,8 +93,8 @@ func TestIntentEvidenceAccessorsRoundTrip(t *testing.T) {
 
 func TestRouteResolutionAccessorRoundTrip(t *testing.T) {
 	env := contextdata.NewEnvelope("task", "session")
-	resolution := &orchestrate.RouteResolution{
-		RouteKind:                 orchestrate.RouteKindIntent,
+	resolution := &euclotypes.RouteResolution{
+		RouteKind:                 euclotypes.RouteKindIntent,
 		ThoughtRecipeID:           "euclo.thoughtrecipe.intent.clarify",
 		ResolutionSource:          "registry",
 		ClarificationStateVersion: 11,

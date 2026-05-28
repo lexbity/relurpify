@@ -38,7 +38,7 @@ func TestLoadConsolidatedConfig(t *testing.T) {
 	cfgDir := filepath.Join(tmp, "relurpify_cfg")
 	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
 
-	// 1. workspace.yaml
+	// 1. workspace.yaml — includes the agents: section (no separate agent files)
 	wsYAML := `schema: relurpify/workspace/v1
 paths:
   state_dir: .relurpify_state
@@ -54,6 +54,11 @@ audit:
   retention_days: 14
 telemetry:
   enabled: false
+agents:
+  - name: euclo
+    filesystem:
+      - action: [fs:read]
+        path: "${workspace}/src/**"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "workspace.yaml"), []byte(wsYAML), 0o644))
 
@@ -149,40 +154,7 @@ capability:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(toolsDir, "test.tool.yaml"), []byte(toolYAML), 0o644))
 
-	// 5. agents definitions
-	agentsDir := filepath.Join(cfgDir, "agents")
-	require.NoError(t, os.MkdirAll(agentsDir, 0o755))
-
-	baseAgentYAML := `schema: relurpify/agent/v1
-kind: base
-sandbox:
-  runtime: gvisor
-  limits:
-    cpu: "2"
-    memory: 4Gi
-execution:
-  max_iterations: 16
-`
-	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "_base.agent.yaml"), []byte(baseAgentYAML), 0o644))
-
-	eucloAgentYAML := `schema: relurpify/agent/v1
-kind: agent
-name: euclo
-sandbox:
-  limits:
-    memory: 8Gi
-model:
-  name: "${RELURPIFY_MODEL_NAME}"
-filesystem:
-  - action: [fs:read]
-    path: "${workspace}/src/**"
-capabilities:
-  tools:
-    - test_tool
-execution:
-  max_iterations: 24
-`
-	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "euclo.yaml"), []byte(eucloAgentYAML), 0o644))
+	// 5. agents are declared inline in workspace.yaml (no separate agent files)
 
 	// Run Load consolidated config
 	opts := LoadOptions{
@@ -226,23 +198,16 @@ execution:
 	require.True(t, ok)
 	require.Equal(t, "test_tool", tool.Name)
 
-	// Verify agent merging and variable resolution
-	agent, exists := appConfig.Agents.Agents["euclo"]
+	// Verify agent registry built from workspace.yaml agents: section
+	agent, exists := appConfig.Agents.Get("euclo")
 	require.True(t, exists)
 	require.Equal(t, "euclo", agent.Name)
-	require.Equal(t, "8Gi", *agent.Sandbox.Limits.Memory) // Named overridden base (base was 4Gi)
-	require.Equal(t, "2", *agent.Sandbox.Limits.CPU)      // Inherited from base
-	require.Equal(t, "override-model", agent.Model.Name)  // Resolved from ${RELURPIFY_MODEL_NAME}
-	require.Equal(t, 24, *agent.Execution.MaxIterations)  // Overridden (base was 16)
 	require.NotNil(t, agent.ResolvedModel)
 	require.Equal(t, "override-model", agent.ResolvedModel.Name)
 
-	// Filesystem permissions resolved ${workspace}
+	// Filesystem path resolved from ${workspace}
 	require.Len(t, agent.Filesystem, 1)
 	require.Equal(t, filepath.Join(tmp, "src")+"/**", agent.Filesystem[0].Path)
-
-	// Excludes are appended with the security invariant
-	require.Contains(t, agent.Filesystem[0].Exclude, filepath.Join(tmp, "relurpify_cfg")+"/**")
 }
 
 func TestLoadConsolidatedConfigStrictRejectsUnknownFields(t *testing.T) {
@@ -294,24 +259,33 @@ func TestResolveVariables(t *testing.T) {
 	}
 }
 
-func TestAgentFilesystemSecurityInvariant(t *testing.T) {
-	agent := &AgentConfig{
-		Filesystem: []AgentFilesystemPerm{
-			{
-				Action: []string{"fs:read"},
-				Path:   "/workspace/src",
+func TestInjectConfigProtection(t *testing.T) {
+	agents := []AgentEntry{
+		{
+			Name: "readonly",
+			Filesystem: []FilesystemRule{
+				{Action: []FilesystemAction{FSRead}, Path: "/workspace/src"},
 			},
-			{
-				Action:  []string{"fs:write"},
-				Path:    "/workspace/dest",
-				Exclude: []string{"/workspace/relurpify_cfg/**"},
+		},
+		{
+			Name: "writer",
+			Filesystem: []FilesystemRule{
+				{
+					Action:  []FilesystemAction{FSWrite},
+					Path:    "/workspace/dest",
+					Exclude: []string{"/workspace/relurpify_cfg/**"},
+				},
 			},
 		},
 	}
 
-	applyFilesystemSecurityInvariant(agent, "/workspace")
-	require.Len(t, agent.Filesystem, 2)
-	require.Contains(t, agent.Filesystem[0].Exclude, "/workspace/relurpify_cfg/**")
-	require.Contains(t, agent.Filesystem[1].Exclude, "/workspace/relurpify_cfg/**")
-	require.Len(t, agent.Filesystem[1].Exclude, 1) // Ensure no duplicate excludes
+	injectConfigProtection(agents, "/workspace")
+
+	// Read-only rule: no injection
+	require.Empty(t, agents[0].Filesystem[0].Exclude)
+
+	// Write rule with existing exclude: no duplicate, .git injected
+	require.Contains(t, agents[1].Filesystem[0].Exclude, "/workspace/relurpify_cfg/**")
+	require.Contains(t, agents[1].Filesystem[0].Exclude, "/workspace/.git/**")
+	require.Len(t, agents[1].Filesystem[0].Exclude, 2) // relurpify_cfg (pre-existing) + .git (injected)
 }

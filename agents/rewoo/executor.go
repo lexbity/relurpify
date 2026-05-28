@@ -147,7 +147,11 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 	}
 	if err == nil {
 		if toolResult != nil {
-			result.Output = toolResult.Data
+			output := make(map[string]any, len(toolResult.Data))
+			for key, value := range toolResult.Data {
+				output[key] = value
+			}
+			result.Output = output
 		}
 		return result, nil
 	}

@@ -8,21 +8,21 @@ import (
 
 // TenantRecord is the durable metadata for a tenant isolation boundary.
 type TenantRecord struct {
-	ID          string     `json:"id" yaml:"id"`
-	DisplayName string     `json:"display_name,omitempty" yaml:"display_name,omitempty"`
-	CreatedAt   time.Time  `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	DisabledAt  *time.Time `json:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
+	ID          string     `json:"id"`
+	DisplayName string     `json:"display_name,omitempty"`
+	CreatedAt   time.Time  `json:"created_at,omitempty"`
+	DisabledAt  *time.Time `json:"disabled_at,omitempty"`
 }
 
 // SubjectRecord is the durable metadata for a tenant-scoped subject.
 type SubjectRecord struct {
-	TenantID    string      `json:"tenant_id" yaml:"tenant_id"`
-	Kind        SubjectKind `json:"kind" yaml:"kind"`
-	ID          string      `json:"id" yaml:"id"`
-	DisplayName string      `json:"display_name,omitempty" yaml:"display_name,omitempty"`
-	Roles       []string    `json:"roles,omitempty" yaml:"roles,omitempty"`
-	CreatedAt   time.Time   `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	DisabledAt  *time.Time  `json:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
+	TenantID    string      `json:"tenant_id"`
+	Kind        SubjectKind `json:"kind"`
+	ID          string      `json:"id"`
+	DisplayName string      `json:"display_name,omitempty"`
+	Roles       []string    `json:"roles,omitempty"`
+	CreatedAt   time.Time   `json:"created_at,omitempty"`
+	DisabledAt  *time.Time  `json:"disabled_at,omitempty"`
 }
 
 func (t TenantRecord) Validate() error {

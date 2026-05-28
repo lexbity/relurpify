@@ -23,9 +23,6 @@ func TestBootstrapStartupStateInitializesWorkspaceTemplates(t *testing.T) {
 	if _, err := os.Stat(cfg.ConfigPath); err != nil {
 		t.Fatalf("config file not created: %v", err)
 	}
-	if _, err := os.Stat(cfg.ManifestPath); err != nil {
-		t.Fatalf("manifest file not created: %v", err)
-	}
 	if state.Report.NeedsInitialization() {
 		t.Fatalf("report still needs initialization: %#v", state.Report)
 	}
@@ -55,7 +52,7 @@ func TestBootstrapStartupStatePreservesInitializedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap startup state: %v", err)
 	}
-	if !state.Report.ConfigExists || !state.Report.ManifestExists {
+	if !state.Report.ConfigExists {
 		t.Fatalf("expected initialized report, got %#v", state.Report)
 	}
 	if _, err := os.Stat(cfg.ConfigPath); err != nil {

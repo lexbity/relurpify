@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 type backgroundContinuationNode struct{}
@@ -20,21 +21,18 @@ func (n *backgroundContinuationNode) ID() string { return "euclo.background.resu
 func (n *backgroundContinuationNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 func (n *backgroundContinuationNode) Execute(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	if env == nil {
-		return nil, nil
-	}
-	if _, ok := env.GetWorkingValue("euclo.background.job_id"); !ok {
+	if euclostate.GetBackgroundJobID(env) == "" {
 		return &core.Result{NodeID: n.ID(), Success: false}, nil
 	}
-	env.SetWorkingValue("euclo.background.resume_completed", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.final_response", "background work resumed and completed", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.completed", true, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.background.resume_completed", true)
+	contextdata.SetTyped(env, "euclo.final_response", "background work resumed and completed")
+	euclostate.SetExecutionCompleted(env, true)
 	return &core.Result{
 		NodeID:  n.ID(),
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"final_response": "background work resumed and completed",
-		},
+		}),
 	}, nil
 }
 
@@ -51,8 +49,8 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 		WithWriter(writer)
 
 	env := contextdata.NewEnvelope("task-background", "session-background")
-	env.SetWorkingValue("task.input", &core.Task{ID: "task-background", Instruction: "run background work"}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.payload", map[string]any{"mode": "long-run"}, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, &core.Task{ID: "task-background", Instruction: "run background work"})
+	contextdata.SetTyped(env, euclostate.KeyBackgroundJobPayload, map[string]any{"mode": "long-run"})
 
 	if result, err := backgroundNode.Execute(context.Background(), env); err != nil {
 		t.Fatalf("background submit failed: %v", err)
@@ -61,7 +59,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 	}
 
 	env.RequestCheckpoint("persist background continuation", 5, true)
-	env.SetWorkingValue("euclo.background.job_state", string(jobs.JobStateQueued), contextdata.MemoryClassTask)
+	euclostate.SetBackgroundJobState(env, string(jobs.JobStateQueued))
 	if result, err := checkpointNode.Execute(context.Background(), env); err != nil {
 		t.Fatalf("checkpoint failed: %v", err)
 	} else if result == nil || !result.Success {
@@ -89,35 +87,35 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 		if err := json.Unmarshal(raw, &jobID); err != nil {
 			t.Fatalf("rehydrate job id: %v", err)
 		}
-		resumed.SetWorkingValue("euclo.background.job_id", jobID, contextdata.MemoryClassTask)
+		euclostate.SetBackgroundJobID(resumed, jobID)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.background.job_kind"]; ok {
 		var jobKind string
 		if err := json.Unmarshal(raw, &jobKind); err != nil {
 			t.Fatalf("rehydrate job kind: %v", err)
 		}
-		resumed.SetWorkingValue("euclo.background.job_kind", jobKind, contextdata.MemoryClassTask)
+		euclostate.SetBackgroundJobKind(resumed, jobKind)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.background.job_completed"]; ok {
 		var completed bool
 		if err := json.Unmarshal(raw, &completed); err != nil {
 			t.Fatalf("rehydrate completion flag: %v", err)
 		}
-		resumed.SetWorkingValue("euclo.background.job_completed", completed, contextdata.MemoryClassTask)
+		euclostate.SetBackgroundJobCompleted(resumed, completed)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.background.job_completion"]; ok {
 		var completion map[string]any
 		if err := json.Unmarshal(raw, &completion); err != nil {
 			t.Fatalf("rehydrate completion payload: %v", err)
 		}
-		resumed.SetWorkingValue("euclo.background.job_completion", completion, contextdata.MemoryClassTask)
+		euclostate.SetBackgroundJobCompletion(resumed, completion)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.background.job_submitted"]; ok {
 		var submitted bool
 		if err := json.Unmarshal(raw, &submitted); err != nil {
 			t.Fatalf("rehydrate submission flag: %v", err)
 		}
-		resumed.SetWorkingValue("euclo.background.job_submitted", submitted, contextdata.MemoryClassTask)
+		euclostate.SetBackgroundJobSubmitted(resumed, submitted)
 	}
 	resumed.AddCheckpointReference(contextdata.CheckpointReference{
 		CheckpointID:      artifact.ArtifactID,

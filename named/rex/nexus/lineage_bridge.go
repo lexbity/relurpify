@@ -170,41 +170,39 @@ func (b *LineageBridge) AfterExecute(ctx context.Context, workflowID, runID stri
 }
 
 func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID string, task *core.Task, env *contextdata.Envelope, now time.Time) (*LineageBinding, error) {
-	if env != nil {
-		lineageID := ""
-		if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
+	lineageID := ""
+	if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
+		lineageID = strings.TrimSpace(fmt.Sprint(val))
+	}
+	if lineageID == "" {
+		if val, ok := env.GetWorkingValue(rexkeys.RexFMPLineageID); ok {
 			lineageID = strings.TrimSpace(fmt.Sprint(val))
 		}
-		if lineageID == "" {
-			if val, ok := env.GetWorkingValue(rexkeys.RexFMPLineageID); ok {
-				lineageID = strings.TrimSpace(fmt.Sprint(val))
-			}
+	}
+	if lineageID != "" {
+		attemptID := ""
+		if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
+			attemptID = strings.TrimSpace(fmt.Sprint(val))
 		}
-		if lineageID != "" {
-			attemptID := ""
-			if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
+		if attemptID == "" {
+			if val, ok := env.GetWorkingValue(rexkeys.RexFMPAttemptID); ok {
 				attemptID = strings.TrimSpace(fmt.Sprint(val))
 			}
-			if attemptID == "" {
-				if val, ok := env.GetWorkingValue(rexkeys.RexFMPAttemptID); ok {
-					attemptID = strings.TrimSpace(fmt.Sprint(val))
-				}
-			}
-			if attemptID == "" {
-				attemptID = runID
-			}
-			sessionID := ""
-			if val, ok := env.GetWorkingValue(rexkeys.GatewaySessionID); ok {
-				sessionID = strings.TrimSpace(fmt.Sprint(val))
-			}
-			return &LineageBinding{
-				LineageID: lineageID,
-				AttemptID: attemptID,
-				RuntimeID: b.runtimeID(),
-				SessionID: sessionID,
-				UpdatedAt: now,
-			}, nil
 		}
+		if attemptID == "" {
+			attemptID = runID
+		}
+		sessionID := ""
+		if val, ok := env.GetWorkingValue(rexkeys.GatewaySessionID); ok {
+			sessionID = strings.TrimSpace(fmt.Sprint(val))
+		}
+		return &LineageBinding{
+			LineageID: lineageID,
+			AttemptID: attemptID,
+			RuntimeID: b.runtimeID(),
+			SessionID: sessionID,
+			UpdatedAt: now,
+		}, nil
 	}
 	binding, err := b.readBinding(ctx, workflowID, runID)
 	if err != nil || binding != nil {
@@ -221,7 +219,7 @@ func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID str
 	if sessionID == "" {
 		return nil, nil
 	}
-	lineageID := "rex-lineage:" + workflowID
+	lineageID = "rex-lineage:" + workflowID
 	lineage, err := b.Service.CreateLineageFromSession(ctx, fwfmp.SessionLineageRequest{
 		LineageID:                lineageID,
 		SessionID:                sessionID,
@@ -293,23 +291,21 @@ func (b *LineageBridge) readBinding(ctx context.Context, workflowID, runID strin
 }
 
 func (b *LineageBridge) bindingFromEnvelope(ctx context.Context, workflowID, runID string, env *contextdata.Envelope) (*LineageBinding, error) {
-	if env != nil {
-		lineageID := ""
-		if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
-			lineageID = strings.TrimSpace(fmt.Sprint(val))
-		}
-		attemptID := ""
-		if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
-			attemptID = strings.TrimSpace(fmt.Sprint(val))
-		}
-		if lineageID != "" && attemptID != "" {
-			return &LineageBinding{
-				LineageID: lineageID,
-				AttemptID: attemptID,
-				RuntimeID: b.runtimeID(),
-				UpdatedAt: b.nowUTC(),
-			}, nil
-		}
+	lineageID := ""
+	if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
+		lineageID = strings.TrimSpace(fmt.Sprint(val))
+	}
+	attemptID := ""
+	if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
+		attemptID = strings.TrimSpace(fmt.Sprint(val))
+	}
+	if lineageID != "" && attemptID != "" {
+		return &LineageBinding{
+			LineageID: lineageID,
+			AttemptID: attemptID,
+			RuntimeID: b.runtimeID(),
+			UpdatedAt: b.nowUTC(),
+		}, nil
 	}
 	return b.readBinding(ctx, workflowID, runID)
 }
@@ -569,9 +565,6 @@ func (b *LineageBridge) executionSessionID(ctx context.Context, task *core.Task,
 }
 
 func envelopeString(env *contextdata.Envelope, key string) string {
-	if env == nil {
-		return ""
-	}
 	if val, ok := env.GetWorkingValue(key); ok {
 		return strings.TrimSpace(fmt.Sprint(val))
 	}
@@ -579,12 +572,10 @@ func envelopeString(env *contextdata.Envelope, key string) string {
 }
 
 func sessionIDFromEnvelope(env *contextdata.Envelope, task *core.Task) string {
-	if env != nil {
-		for _, key := range []string{rexkeys.GatewaySessionID, rexkeys.SessionID} {
-			if val, ok := env.GetWorkingValue(key); ok {
-				if value := strings.TrimSpace(fmt.Sprint(val)); value != "" {
-					return value
-				}
+	for _, key := range []string{rexkeys.GatewaySessionID, rexkeys.SessionID} {
+		if val, ok := env.GetWorkingValue(key); ok {
+			if value := strings.TrimSpace(fmt.Sprint(val)); value != "" {
+				return value
 			}
 		}
 	}

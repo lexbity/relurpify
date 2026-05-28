@@ -161,14 +161,14 @@ func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string
 		Context:     map[string]any{},
 		Metadata:    map[string]any{},
 	}
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, task)
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, task)
 	taskEnvelope := &intake.TaskEnvelope{
 		TaskID:    env.TaskID,
 		SessionID: env.SessionID,
 		UserFiles: append([]string(nil), userFiles...),
 	}
 	euclostate.SetTaskEnvelope(env, taskEnvelope)
-	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
 	return task
 }
 
@@ -192,7 +192,7 @@ func runPreIngestion(t *testing.T, env *contextdata.Envelope, workspace string, 
 
 func mustStringValue(t *testing.T, env *contextdata.Envelope, key string) string {
 	t.Helper()
-	value, ok := env.GetWorkingValue(key)
+	value, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		t.Fatalf("missing envelope value %q", key)
 	}
@@ -205,7 +205,7 @@ func mustStringValue(t *testing.T, env *contextdata.Envelope, key string) string
 
 func mustBoolValue(t *testing.T, env *contextdata.Envelope, key string) bool {
 	t.Helper()
-	value, ok := env.GetWorkingValue(key)
+	value, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		t.Fatalf("missing envelope value %q", key)
 	}

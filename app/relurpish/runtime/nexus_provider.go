@@ -204,15 +204,16 @@ func formatNexusResult(result *core.Result) string {
 	if strings.TrimSpace(result.Error) != "" {
 		return result.Error
 	}
+	fields := core.ResultFields(result.Data)
 	for _, key := range []string{"response", "summary", "message", "result"} {
-		if value, ok := result.Data[key]; ok {
+		if value, ok := fields[key]; ok {
 			if text := strings.TrimSpace(fmt.Sprint(value)); text != "" {
 				return text
 			}
 		}
 	}
-	if len(result.Data) > 0 {
-		data, err := json.Marshal(result.Data)
+	if len(fields) > 0 {
+		data, err := json.Marshal(fields)
 		if err == nil {
 			return string(data)
 		}

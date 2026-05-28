@@ -452,7 +452,7 @@ func (n *noopAgent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
 	return g, nil
 }
 func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{Success: true, Data: map[string]any{}}, nil
+	return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, nil
 }
 
 func taskID(task *core.Task) string {
@@ -478,10 +478,14 @@ func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store any, workflowID, 
 }
 
 func resultData(result *core.Result) any {
-	if result == nil || len(result.Data) == 0 {
+	if result == nil {
 		return nil
 	}
-	return result.Data
+	fields := core.ResultFields(result.Data)
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
 }
 
 func resultErrorText(result *core.Result) string {

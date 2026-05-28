@@ -82,13 +82,13 @@ func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc Capab
 			return false
 		}
 	}
-	if selector.CoordinationLongRunning != nil {
-		if desc.Coordination == nil || desc.Coordination.LongRunning != *selector.CoordinationLongRunning {
+	if selector.CoordinationLongRunning != agentspec.EnabledStateUnset {
+		if desc.Coordination == nil || desc.Coordination.LongRunning != EnabledState(selector.CoordinationLongRunning) {
 			return false
 		}
 	}
-	if selector.CoordinationDirectInsertion != nil {
-		if desc.Coordination == nil || desc.Coordination.DirectInsertionAllowed != *selector.CoordinationDirectInsertion {
+	if selector.CoordinationDirectInsertion != agentspec.EnabledStateUnset {
+		if desc.Coordination == nil || desc.Coordination.DirectInsertionAllowed != EnabledState(selector.CoordinationDirectInsertion) {
 			return false
 		}
 	}

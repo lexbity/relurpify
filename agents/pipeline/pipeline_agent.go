@@ -105,10 +105,10 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, env *conte
 	env.SetWorkingValue("pipeline.results_summary", summarizePipelineResults(results), contextdata.MemoryClassTask)
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"stage_results": results,
 			"final_output":  final,
-		},
+		}),
 	}, nil
 }
 

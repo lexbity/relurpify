@@ -9,13 +9,13 @@ import (
 )
 
 type RuntimeSafetySpec struct {
-	MaxCallsPerCapability     int   `yaml:"max_calls_per_capability,omitempty" json:"max_calls_per_capability,omitempty"`
-	MaxCallsPerProvider       int   `yaml:"max_calls_per_provider,omitempty" json:"max_calls_per_provider,omitempty"`
-	MaxBytesPerSession        int   `yaml:"max_bytes_per_session,omitempty" json:"max_bytes_per_session,omitempty"`
-	MaxOutputTokensSession    int   `yaml:"max_output_tokens_per_session,omitempty" json:"max_output_tokens_per_session,omitempty"`
-	MaxSubprocessesPerSession int   `yaml:"max_subprocesses_per_session,omitempty" json:"max_subprocesses_per_session,omitempty"`
-	MaxNetworkRequestsSession int   `yaml:"max_network_requests_per_session,omitempty" json:"max_network_requests_per_session,omitempty"`
-	RedactSensitiveMetadata   *bool `yaml:"redact_sensitive_metadata,omitempty" json:"redact_sensitive_metadata,omitempty"`
+	MaxCallsPerCapability     int   `json:"max_calls_per_capability,omitempty"`
+	MaxCallsPerProvider       int   `json:"max_calls_per_provider,omitempty"`
+	MaxBytesPerSession        int   `json:"max_bytes_per_session,omitempty"`
+	MaxOutputTokensSession    int   `json:"max_output_tokens_per_session,omitempty"`
+	MaxSubprocessesPerSession int   `json:"max_subprocesses_per_session,omitempty"`
+	MaxNetworkRequestsSession int   `json:"max_network_requests_per_session,omitempty"`
+	RedactSensitiveMetadata   *bool `json:"redact_sensitive_metadata,omitempty"`
 }
 
 func (s RuntimeSafetySpec) Validate() error {
@@ -175,9 +175,9 @@ func EstimatePayloadTokens(values ...interface{}) int {
 }
 
 type RevocationSnapshot struct {
-	Capabilities map[string]string `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
-	Providers    map[string]string `json:"providers,omitempty" yaml:"providers,omitempty"`
-	Sessions     map[string]string `json:"sessions,omitempty" yaml:"sessions,omitempty"`
+	Capabilities map[string]string `json:"capabilities,omitempty"`
+	Providers    map[string]string `json:"providers,omitempty"`
+	Sessions     map[string]string `json:"sessions,omitempty"`
 }
 
 func cloneRevocationSnapshot(input RevocationSnapshot) RevocationSnapshot {

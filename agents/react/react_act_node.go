@@ -122,7 +122,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				result := &core.Result{
 					NodeID:  n.id,
 					Success: overallSuccess,
-					Data:    results,
+					Data:    core.NewToolResultPayload(results),
 					Metadata: map[string]any{
 						"capability_results": envelopes,
 					},
@@ -190,7 +190,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: res.Success,
-		Data:    res.Data,
+		Data:    core.NewToolResultPayload(res.Data),
 		Metadata: map[string]any{
 			"capability_result": envelope,
 		},

@@ -64,8 +64,9 @@ func reportFromPreparedRun(desc *agenttest.PreparedRunDescriptor, workspace stri
 		BackendEndpoint:        desc.BackendEndpoint,
 		Services:               serviceIDs,
 	}
-	if result != nil && len(result.Data) > 0 {
-		if projection, ok := result.Data["projection"]; ok {
+	if result != nil {
+		fields := core.ResultFields(result.Data)
+		if projection, ok := fields["projection"]; ok {
 			report.Projection = projection
 		}
 	}

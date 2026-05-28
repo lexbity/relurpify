@@ -8,6 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func buildTestRegistry(names ...string) AgentRegistry {
+	entries := make([]AgentEntry, len(names))
+	for i, n := range names {
+		entries[i] = AgentEntry{Name: n}
+	}
+	reg, _ := buildAgentRegistry(entries)
+	return *reg
+}
+
 func TestConfigFingerprintDeterministic(t *testing.T) {
 	left := &AppConfig{
 		Workspace: WorkspaceConfig{WorkspaceAbs: "/tmp/workspace"},
@@ -22,12 +31,7 @@ func TestConfigFingerprintDeterministic(t *testing.T) {
 			},
 			ordered: []string{"alpha", "beta"},
 		},
-		Agents: AgentRegistry{
-			Agents: map[string]*AgentConfig{
-				"beta":  {Name: "beta"},
-				"alpha": {Name: "alpha"},
-			},
-		},
+		Agents:     buildTestRegistry("alpha", "beta"),
 		Editor:     "vim",
 		SharedRoot: "/tmp/shared",
 	}
@@ -44,12 +48,7 @@ func TestConfigFingerprintDeterministic(t *testing.T) {
 			},
 			ordered: []string{"alpha", "beta"},
 		},
-		Agents: AgentRegistry{
-			Agents: map[string]*AgentConfig{
-				"alpha": {Name: "alpha"},
-				"beta":  {Name: "beta"},
-			},
-		},
+		Agents:     buildTestRegistry("alpha", "beta"),
 		Editor:     "vim",
 		SharedRoot: "/tmp/shared",
 	}
@@ -64,22 +63,14 @@ func TestConfigFingerprintDeterministic(t *testing.T) {
 
 func TestConfigFingerprintChangesOnEdit(t *testing.T) {
 	base := &AppConfig{
-		Workspace: WorkspaceConfig{WorkspaceAbs: "/tmp/workspace"},
-		Agents: AgentRegistry{
-			Agents: map[string]*AgentConfig{
-				"alpha": {Name: "alpha"},
-			},
-		},
+		Workspace:  WorkspaceConfig{WorkspaceAbs: "/tmp/workspace"},
+		Agents:     buildTestRegistry("alpha"),
 		Editor:     "vim",
 		SharedRoot: "/tmp/shared",
 	}
 	changed := &AppConfig{
-		Workspace: WorkspaceConfig{WorkspaceAbs: "/tmp/workspace"},
-		Agents: AgentRegistry{
-			Agents: map[string]*AgentConfig{
-				"alpha": {Name: "alpha"},
-			},
-		},
+		Workspace:  WorkspaceConfig{WorkspaceAbs: "/tmp/workspace"},
+		Agents:     buildTestRegistry("alpha"),
 		Editor:     "nvim",
 		SharedRoot: "/tmp/shared",
 	}

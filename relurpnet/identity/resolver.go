@@ -54,7 +54,8 @@ type Resolver interface {
 }
 
 type StoreResolver struct {
-	Store           Store
+	Tenants         TenantStore
+	Subjects        SubjectStore
 	DefaultTenantID string
 }
 
@@ -76,8 +77,8 @@ func (r StoreResolver) ResolveInbound(ctx context.Context, inbound InboundMessag
 		}, nil
 	}
 	tenantID := normalizeTenantID(r.DefaultTenantID)
-	if r.Store != nil {
-		identity, err := r.Store.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
+	if r.Subjects != nil {
+		identity, err := r.Subjects.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
 		if err != nil {
 			return Resolution{}, err
 		}
@@ -150,10 +151,10 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, defaultTenantID string, provider ExternalProvider, accountID, externalID string) (*ExternalIdentity, error) {
-	if r.Store == nil {
+	if r.Tenants == nil || r.Subjects == nil {
 		return nil, nil
 	}
-	tenants, err := r.Store.ListTenants(ctx)
+	tenants, err := r.Tenants.ListTenants(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +164,7 @@ func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, 
 		if tenantID == defaultTenantID {
 			continue
 		}
-		identity, err := r.Store.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
+		identity, err := r.Subjects.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
 		if err != nil {
 			return nil, err
 		}

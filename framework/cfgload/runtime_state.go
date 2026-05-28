@@ -9,27 +9,28 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"gopkg.in/yaml.v3"
 )
 
 // RuntimeCapabilitySelector mirrors the persisted capability selector shape
 // without depending on framework/core or agentspec.
 type RuntimeCapabilitySelector struct {
-	ID                          string   `yaml:"id,omitempty"`
-	Name                        string   `yaml:"name,omitempty"`
-	Kind                        string   `yaml:"kind,omitempty"`
-	RuntimeFamilies             []string `yaml:"runtime_families,omitempty"`
-	Tags                        []string `yaml:"tags,omitempty"`
-	ExcludeTags                 []string `yaml:"exclude_tags,omitempty"`
-	SourceScopes                []string `yaml:"source_scopes,omitempty"`
-	TrustClasses                []string `yaml:"trust_classes,omitempty"`
-	RiskClasses                 []string `yaml:"risk_classes,omitempty"`
-	EffectClasses               []string `yaml:"effect_classes,omitempty"`
-	CoordinationRoles           []string `yaml:"coordination_roles,omitempty"`
-	CoordinationTaskTypes       []string `yaml:"coordination_task_types,omitempty"`
-	CoordinationExecutionModes  []string `yaml:"coordination_execution_modes,omitempty"`
-	CoordinationLongRunning     *bool    `yaml:"coordination_long_running,omitempty"`
-	CoordinationDirectInsertion *bool    `yaml:"coordination_direct_insertion,omitempty"`
+	ID                          string                 `yaml:"id,omitempty"`
+	Name                        string                 `yaml:"name,omitempty"`
+	Kind                        string                 `yaml:"kind,omitempty"`
+	RuntimeFamilies             []string               `yaml:"runtime_families,omitempty"`
+	Tags                        []string               `yaml:"tags,omitempty"`
+	ExcludeTags                 []string               `yaml:"exclude_tags,omitempty"`
+	SourceScopes                []string               `yaml:"source_scopes,omitempty"`
+	TrustClasses                []string               `yaml:"trust_classes,omitempty"`
+	RiskClasses                 []string               `yaml:"risk_classes,omitempty"`
+	EffectClasses               []string               `yaml:"effect_classes,omitempty"`
+	CoordinationRoles           []string               `yaml:"coordination_roles,omitempty"`
+	CoordinationTaskTypes       []string               `yaml:"coordination_task_types,omitempty"`
+	CoordinationExecutionModes  []string               `yaml:"coordination_execution_modes,omitempty"`
+	CoordinationLongRunning     agentspec.EnabledState `yaml:"coordination_long_running,omitempty"`
+	CoordinationDirectInsertion agentspec.EnabledState `yaml:"coordination_direct_insertion,omitempty"`
 }
 
 // RuntimeWorkspaceConfig captures persisted workspace preferences under relurpify_cfg.

@@ -96,18 +96,20 @@ func preservePlannerExecutionResult(env *contextdata.Envelope, result *core.Resu
 	if env == nil || result == nil {
 		return
 	}
-	if result.Data == nil {
-		result.Data = map[string]any{}
+	fields := core.ResultFields(result.Data)
+	if fields == nil {
+		fields = map[string]any{}
 	}
 	if raw, ok := env.GetWorkingValue("planner.results"); ok {
-		result.Data["results"] = raw
+		fields["results"] = raw
 	}
 	if raw, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
-		result.Data["skipped_tools"] = raw
+		fields["skipped_tools"] = raw
 	}
 	if summary := strings.TrimSpace(envGetString(env, "planner.summary")); summary != "" {
-		result.Data["summary"] = summary
+		fields["summary"] = summary
 	}
+	result.Data = core.NewToolResultPayload(fields)
 }
 
 func mirrorPlannerSummaryReference(env *contextdata.Envelope) {
@@ -394,12 +396,12 @@ Use string step ids (UUID-safe).
 		scope.Set("planner.plan", plan, core.MemoryClassWorking)
 		scope.Set("planner.plan_adjustments", adjustments, core.MemoryClassWorking)
 	}
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{
 		"plan":        plan,
 		"plan_steps":  plan.Steps,
 		"files":       plan.Files,
 		"adjustments": adjustments,
-	}}, nil
+	})}, nil
 }
 
 func formatPlannerWorkflowRetrieval(payload map[string]any) string {
@@ -570,7 +572,7 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 		if err != nil {
 			return nil, err
 		}
-		stepResults = append(stepResults, map[string]interface{}{
+		stepResults = append(stepResults, map[string]any{
 			"id":     step.ID,
 			"output": result.Data,
 		})
@@ -580,10 +582,10 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 	if len(skippedTools) > 0 {
 		env.SetWorkingValue("planner.skipped_tools", skippedTools, contextdata.MemoryClassTask)
 	}
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{
 		"results":       stepResults,
 		"skipped_tools": skippedTools,
-	}}, nil
+	})}, nil
 }
 
 func normalizePlannerStepParams(registry *capability.Registry, toolName string, params map[string]interface{}) map[string]interface{} {
@@ -673,9 +675,9 @@ func (n *plannerVerifyNode) Execute(ctx context.Context, env *contextdata.Envelo
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"summary": summary,
-		},
+		}),
 	}, nil
 }
 

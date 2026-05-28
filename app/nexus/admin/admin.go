@@ -39,7 +39,7 @@ func ApprovePairing(ctx context.Context, workspace, configPath, pairingCode stri
 	}
 	if pairing != nil {
 		enrollment := nodeEnrollmentFromPairing(*pairing)
-		if err := upsertTenantAndSubject(ctx, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
+		if err := upsertTenantAndSubject(ctx, identityStore, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
 			return err
 		}
 		if err := identityStore.UpsertNodeEnrollment(ctx, enrollment); err != nil {

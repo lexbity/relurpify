@@ -83,10 +83,10 @@ func (n *blackboardLoadNode) Execute(_ context.Context, state *contextdata.Envel
 	})
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"goal_count":   len(bb.Goals),
 			"memory_count": memoryCount,
-		},
+		}),
 	}, nil
 }
 
@@ -124,7 +124,7 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.E
 			"cycle":       cycle,
 			"termination": "goal_satisfied",
 		})
-		return &core.Result{Success: true, Data: map[string]any{"next": "bb_done"}}, nil
+		return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{"next": "bb_done"})}, nil
 	}
 	if cycle >= maxCycles {
 		envelopeSet(state, contextKeyControllerNext, "bb_done")
@@ -134,7 +134,7 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.E
 			"max_cycles":  maxCycles,
 			"termination": "cycle_limit",
 		})
-		return &core.Result{Success: true, Data: map[string]any{"next": "bb_done"}}, nil
+		return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{"next": "bb_done"})}, nil
 	}
 	eligible := n.controller.eligibleSources(bb)
 	names := make([]string, 0, len(eligible))
@@ -157,7 +157,7 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.E
 			"termination": "stuck",
 			"eligible":    names,
 		})
-		return &core.Result{Success: true, Data: map[string]any{"next": "bb_done"}}, nil
+		return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{"next": "bb_done"})}, nil
 	}
 	selected := eligible[0]
 	resolved := ResolveKnowledgeSource(selected)
@@ -176,11 +176,11 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.E
 	})
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"next":            "bb_dispatch",
 			"selected_source": resolved.Spec.Name,
 			"cycle":           cycle + 1,
-		},
+		}),
 	}, nil
 }
 
@@ -251,10 +251,10 @@ func (n *blackboardDispatchNode) Execute(ctx context.Context, state *contextdata
 	})
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"source":   resolved.Spec.Name,
 			"priority": resolved.Spec.Priority,
-		},
+		}),
 	}, nil
 }
 

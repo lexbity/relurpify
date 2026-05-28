@@ -29,6 +29,7 @@ type WorkspaceConfig struct {
 	Logging   WorkspaceLogging   `yaml:"logging"`
 	Audit     WorkspaceAudit     `yaml:"audit"`
 	Telemetry WorkspaceTelemetry `yaml:"telemetry"`
+	Agents    []AgentEntry       `yaml:"agents,omitempty"`
 
 	SourcePath   string                  `yaml:"-"`
 	Workspace    string                  `yaml:"-"`
@@ -126,6 +127,9 @@ func LoadWorkspaceConfig(path, workspace string, opts WorkspaceLoadOptions) (*Wo
 	if err := cfg.applyDefaults(opts.Strict); err != nil {
 		return nil, err
 	}
+	// Resolve ${workspace} in agent filesystem paths then inject config protection.
+	resolveAgentPaths(cfg.Agents, absWorkspace)
+	injectConfigProtection(cfg.Agents, absWorkspace)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -165,7 +169,7 @@ func (c *WorkspaceConfig) applyDefaults(strict bool) error {
 	applyStringDefault("logging.level", &c.Logging.Level, "info")
 	applyStringDefault("logging.format", &c.Logging.Format, "json")
 	applyIntDefault("audit.retention_days", &c.Audit.RetentionDays, 7)
-	applyBoolDefault("telemetry.enabled", &c.Telemetry.Enabled, true)
+	applyBoolDefault("telemetry.enabled", &c.Telemetry.Enabled, false)
 
 	if strict && len(c.DefaultsUsed) > 0 {
 		keys := make([]string, 0, len(c.DefaultsUsed))

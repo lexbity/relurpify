@@ -114,7 +114,7 @@ func TestSnapshotForPrincipalIncludesRexSnapshot(t *testing.T) {
 type fakeRexRuntime struct{}
 
 func (fakeRexRuntime) Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{Success: true, Data: map[string]any{"ok": true}}, nil
+	return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{"ok": true})}, nil
 }
 
 func (fakeRexRuntime) RuntimeProjection() rexnexus.Projection {

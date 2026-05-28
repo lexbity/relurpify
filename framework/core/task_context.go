@@ -19,9 +19,9 @@ type taskContextKey struct{}
 
 // TaskContext carries the current task metadata through the execution context.
 type TaskContext struct {
-	ID          string   `json:"id,omitempty" yaml:"id,omitempty"`
-	Type        TaskType `json:"type,omitempty" yaml:"type,omitempty"`
-	Instruction string   `json:"instruction,omitempty" yaml:"instruction,omitempty"`
+	ID          string   `json:"id,omitempty"`
+	Type        TaskType `json:"type,omitempty"`
+	Instruction string   `json:"instruction,omitempty"`
 }
 
 // WithTaskContext annotates a context with task metadata.

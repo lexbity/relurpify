@@ -29,25 +29,25 @@ const (
 )
 
 type ProviderDescriptor struct {
-	ID                 string                  `json:"id" yaml:"id"`
-	Kind               ProviderKind            `json:"kind" yaml:"kind"`
-	ConfiguredSource   string                  `json:"configured_source,omitempty" yaml:"configured_source,omitempty"`
-	ActivationScope    string                  `json:"activation_scope,omitempty" yaml:"activation_scope,omitempty"`
-	TrustBaseline      TrustClass              `json:"trust_baseline,omitempty" yaml:"trust_baseline,omitempty"`
-	RecoverabilityMode RecoverabilityMode      `json:"recoverability_mode,omitempty" yaml:"recoverability_mode,omitempty"`
-	SupportsHealth     bool                    `json:"supports_health,omitempty" yaml:"supports_health,omitempty"`
-	Security           ProviderSecurityProfile `json:"security,omitempty" yaml:"security,omitempty"`
+	ID                 string                  `json:"id"`
+	Kind               ProviderKind            `json:"kind"`
+	ConfiguredSource   string                  `json:"configured_source,omitempty"`
+	ActivationScope    string                  `json:"activation_scope,omitempty"`
+	TrustBaseline      TrustClass              `json:"trust_baseline,omitempty"`
+	RecoverabilityMode RecoverabilityMode      `json:"recoverability_mode,omitempty"`
+	SupportsHealth     bool                    `json:"supports_health,omitempty"`
+	Security           ProviderSecurityProfile `json:"security,omitempty"`
 }
 
 type ProviderConfig struct {
-	ID              string             `json:"id" yaml:"id"`
-	Kind            ProviderKind       `json:"kind" yaml:"kind"`
-	Enabled         bool               `json:"enabled" yaml:"enabled"`
-	Target          string             `json:"target,omitempty" yaml:"target,omitempty"`
-	ActivationScope string             `json:"activation_scope,omitempty" yaml:"activation_scope,omitempty"`
-	TrustBaseline   TrustClass         `json:"trust_baseline,omitempty" yaml:"trust_baseline,omitempty"`
-	Recoverability  RecoverabilityMode `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	Config          map[string]any     `json:"config,omitempty" yaml:"config,omitempty"`
+	ID              string             `json:"id"`
+	Kind            ProviderKind       `json:"kind"`
+	Enabled         bool               `json:"enabled"`
+	Target          string             `json:"target,omitempty"`
+	ActivationScope string             `json:"activation_scope,omitempty"`
+	TrustBaseline   TrustClass         `json:"trust_baseline,omitempty"`
+	Recoverability  RecoverabilityMode `json:"recoverability,omitempty"`
+	Config          map[string]any     `json:"config,omitempty"`
 }
 
 type ProviderOriginKind string
@@ -58,53 +58,53 @@ const (
 )
 
 type ProviderSecurityProfile struct {
-	Origin                     ProviderOriginKind `json:"origin,omitempty" yaml:"origin,omitempty"`
-	HoldsCredentials           bool               `json:"holds_credentials,omitempty" yaml:"holds_credentials,omitempty"`
-	CredentialDomains          []string           `json:"credential_domains,omitempty" yaml:"credential_domains,omitempty"`
-	SafeForDirectInsertion     bool               `json:"safe_for_direct_insertion,omitempty" yaml:"safe_for_direct_insertion,omitempty"`
-	RequiresFrameworkMediation bool               `json:"requires_framework_mediation,omitempty" yaml:"requires_framework_mediation,omitempty"`
+	Origin                     ProviderOriginKind `json:"origin,omitempty"`
+	HoldsCredentials           bool               `json:"holds_credentials,omitempty"`
+	CredentialDomains          []string           `json:"credential_domains,omitempty"`
+	SafeForDirectInsertion     bool               `json:"safe_for_direct_insertion,omitempty"`
+	RequiresFrameworkMediation bool               `json:"requires_framework_mediation,omitempty"`
 }
 
 type ProviderSession struct {
-	ID             string                 `json:"id" yaml:"id"`
-	ProviderID     string                 `json:"provider_id" yaml:"provider_id"`
-	CapabilityIDs  []string               `json:"capability_ids,omitempty" yaml:"capability_ids,omitempty"`
-	WorkflowID     string                 `json:"workflow_id,omitempty" yaml:"workflow_id,omitempty"`
-	TaskID         string                 `json:"task_id,omitempty" yaml:"task_id,omitempty"`
-	TrustClass     TrustClass             `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	Recoverability RecoverabilityMode     `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	CreatedAt      string                 `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	LastActivityAt string                 `json:"last_activity_at,omitempty" yaml:"last_activity_at,omitempty"`
-	Health         string                 `json:"health,omitempty" yaml:"health,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	ID             string                 `json:"id"`
+	ProviderID     string                 `json:"provider_id"`
+	CapabilityIDs  []string               `json:"capability_ids,omitempty"`
+	WorkflowID     string                 `json:"workflow_id,omitempty"`
+	TaskID         string                 `json:"task_id,omitempty"`
+	TrustClass     TrustClass             `json:"trust_class,omitempty"`
+	Recoverability RecoverabilityMode     `json:"recoverability,omitempty"`
+	CreatedAt      string                 `json:"created_at,omitempty"`
+	LastActivityAt string                 `json:"last_activity_at,omitempty"`
+	Health         string                 `json:"health,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type ProviderHealthSnapshot struct {
-	Status   string                 `json:"status,omitempty" yaml:"status,omitempty"`
-	Message  string                 `json:"message,omitempty" yaml:"message,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Status   string                 `json:"status,omitempty"`
+	Message  string                 `json:"message,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type ProviderSnapshot struct {
-	ProviderID      string                 `json:"provider_id" yaml:"provider_id"`
-	Recoverability  RecoverabilityMode     `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	Descriptor      ProviderDescriptor     `json:"descriptor" yaml:"descriptor"`
-	Health          ProviderHealthSnapshot `json:"health,omitempty" yaml:"health,omitempty"`
-	CapabilityIDs   []string               `json:"capability_ids,omitempty" yaml:"capability_ids,omitempty"`
-	WorkflowID      string                 `json:"workflow_id,omitempty" yaml:"workflow_id,omitempty"`
-	TaskID          string                 `json:"task_id,omitempty" yaml:"task_id,omitempty"`
-	Metadata        map[string]any         `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	State           any                    `json:"state,omitempty" yaml:"state,omitempty"`
-	CapturedAt      string                 `json:"captured_at,omitempty" yaml:"captured_at,omitempty"`
-	LastRecoveryErr string                 `json:"last_recovery_error,omitempty" yaml:"last_recovery_error,omitempty"`
+	ProviderID      string                 `json:"provider_id"`
+	Recoverability  RecoverabilityMode     `json:"recoverability,omitempty"`
+	Descriptor      ProviderDescriptor     `json:"descriptor"`
+	Health          ProviderHealthSnapshot `json:"health,omitempty"`
+	CapabilityIDs   []string               `json:"capability_ids,omitempty"`
+	WorkflowID      string                 `json:"workflow_id,omitempty"`
+	TaskID          string                 `json:"task_id,omitempty"`
+	Metadata        map[string]any         `json:"metadata,omitempty"`
+	State           any                    `json:"state,omitempty"`
+	CapturedAt      string                 `json:"captured_at,omitempty"`
+	LastRecoveryErr string                 `json:"last_recovery_error,omitempty"`
 }
 
 type ProviderSessionSnapshot struct {
-	Session         ProviderSession `json:"session" yaml:"session"`
-	State           any             `json:"state,omitempty" yaml:"state,omitempty"`
-	Metadata        map[string]any  `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	CapturedAt      string          `json:"captured_at,omitempty" yaml:"captured_at,omitempty"`
-	LastRecoveryErr string          `json:"last_recovery_error,omitempty" yaml:"last_recovery_error,omitempty"`
+	Session         ProviderSession `json:"session"`
+	State           any             `json:"state,omitempty"`
+	Metadata        map[string]any  `json:"metadata,omitempty"`
+	CapturedAt      string          `json:"captured_at,omitempty"`
+	LastRecoveryErr string          `json:"last_recovery_error,omitempty"`
 }
 
 type CapabilityRegistrar interface {

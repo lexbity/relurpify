@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type checkpointRepoStub struct {
@@ -161,7 +162,7 @@ func TestCheckpointNodeSkipsWhenNoRequestOrStream(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected skipped success result, got %#v", result)
 	}
-	if got := result.Data["checkpoint_created"]; got != false {
+	if got, _ := core.ResultField(result.Data, "checkpoint_created"); got != false {
 		t.Fatalf("expected checkpoint_created false, got %v", got)
 	}
 }

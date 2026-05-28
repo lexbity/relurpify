@@ -11,7 +11,7 @@ import (
 
 // EmitFrame writes a frame to the envelope and publishes to the event log.
 func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.Envelope, eventLog core.Telemetry) error {
-	if frame == nil || env == nil {
+	if frame == nil {
 		return nil
 	}
 
@@ -55,9 +55,6 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 
 // getNextFrameSeq gets the next frame sequence number from the envelope.
 func getNextFrameSeq(env *contextdata.Envelope) int {
-	if env == nil {
-		return 0
-	}
 	seqVal, ok := env.GetWorkingValue("euclo.interaction.frame_seq")
 	if !ok {
 		return 0

@@ -12,9 +12,9 @@ import (
 
 	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
@@ -67,7 +67,10 @@ func executePreparedRunAgentTask(ctx context.Context, ws *agentenv.Workspace, de
 		return nil, err
 	}
 
-	agent := namedfactory.InstantiateByName(ws.Environment.Config.Name, ws.Environment.Config.Workspace, ws.Environment)
+	agent, err := namedfactory.InstantiateByName(ws.Environment.Config.Name, ws.Environment.Config.Workspace, ws.Environment)
+	if err != nil {
+		return nil, err
+	}
 	if agent == nil {
 		return nil, fmt.Errorf("agent %s unavailable", ws.Environment.Config.Name)
 	}

@@ -90,12 +90,11 @@ func TestValidateCapabilitySelectorAcceptsRuntimeFamilyMatching(t *testing.T) {
 }
 
 func TestValidateCapabilitySelectorAcceptsCoordinationFields(t *testing.T) {
-	longRunning := true
 	err := ValidateCapabilitySelector(CapabilitySelector{
 		CoordinationRoles:          []CoordinationRole{CoordinationRoleReviewer},
 		CoordinationTaskTypes:      []string{"review"},
 		CoordinationExecutionModes: []CoordinationExecutionMode{CoordinationExecutionModeBackgroundAgent},
-		CoordinationLongRunning:    &longRunning,
+		CoordinationLongRunning:    EnabledStateEnabled,
 	})
 	require.NoError(t, err)
 }
@@ -171,8 +170,6 @@ func TestSkillSelectorMatchesDescriptor(t *testing.T) {
 }
 
 func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
-	longRunning := true
-	directInsertion := false
 	spec := &AgentRuntimeSpec{
 		AllowedCapabilities: []CapabilitySelector{{
 			RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyProvider},
@@ -180,8 +177,8 @@ func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
 			CoordinationRoles:           []CoordinationRole{CoordinationRolePlanner},
 			CoordinationTaskTypes:       []string{"plan"},
 			CoordinationExecutionModes:  []CoordinationExecutionMode{CoordinationExecutionModeSessionBacked},
-			CoordinationLongRunning:     &longRunning,
-			CoordinationDirectInsertion: &directInsertion,
+			CoordinationLongRunning:     EnabledStateEnabled,
+			CoordinationDirectInsertion: EnabledStateDisabled,
 		}},
 	}
 
@@ -196,17 +193,15 @@ func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
 	selectors[0].Tags[0] = "mutated"
 	selectors[0].CoordinationRoles[0] = CoordinationRoleReviewer
 	selectors[0].CoordinationTaskTypes[0] = "review"
-	*selectors[0].CoordinationLongRunning = false
+	selectors[0].CoordinationLongRunning = EnabledStateDisabled
 	require.Equal(t, []CapabilityRuntimeFamily{CapabilityRuntimeFamilyProvider}, spec.AllowedCapabilities[0].RuntimeFamilies)
 	require.Equal(t, []string{"lang:go"}, spec.AllowedCapabilities[0].Tags)
 	require.Equal(t, []CoordinationRole{CoordinationRolePlanner}, spec.AllowedCapabilities[0].CoordinationRoles)
 	require.Equal(t, []string{"plan"}, spec.AllowedCapabilities[0].CoordinationTaskTypes)
-	require.True(t, *spec.AllowedCapabilities[0].CoordinationLongRunning)
+	require.Equal(t, EnabledStateEnabled, spec.AllowedCapabilities[0].CoordinationLongRunning)
 }
 
 func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
-	longRunning := true
-	directInsertion := false
 	input := []CapabilitySelector{{
 		ID:                          "selector-1",
 		Name:                        "reviewer",
@@ -221,8 +216,8 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 		CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
 		CoordinationTaskTypes:       []string{"review"},
 		CoordinationExecutionModes:  []CoordinationExecutionMode{CoordinationExecutionModeBackgroundAgent},
-		CoordinationLongRunning:     &longRunning,
-		CoordinationDirectInsertion: &directInsertion,
+		CoordinationLongRunning:     EnabledStateEnabled,
+		CoordinationDirectInsertion: EnabledStateDisabled,
 	}}
 
 	cloned := CloneCapabilitySelectors(input)
@@ -238,8 +233,8 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 	cloned[0].CoordinationRoles[0] = CoordinationRolePlanner
 	cloned[0].CoordinationTaskTypes[0] = "plan"
 	cloned[0].CoordinationExecutionModes[0] = CoordinationExecutionModeSessionBacked
-	*cloned[0].CoordinationLongRunning = false
-	*cloned[0].CoordinationDirectInsertion = true
+	cloned[0].CoordinationLongRunning = EnabledStateDisabled
+	cloned[0].CoordinationDirectInsertion = EnabledStateEnabled
 
 	require.Equal(t, CapabilityRuntimeFamilyRelurpic, input[0].RuntimeFamilies[0])
 	require.Equal(t, "lang:go", input[0].Tags[0])
@@ -251,19 +246,18 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 	require.Equal(t, CoordinationRoleReviewer, input[0].CoordinationRoles[0])
 	require.Equal(t, "review", input[0].CoordinationTaskTypes[0])
 	require.Equal(t, CoordinationExecutionModeBackgroundAgent, input[0].CoordinationExecutionModes[0])
-	require.True(t, *input[0].CoordinationLongRunning)
-	require.False(t, *input[0].CoordinationDirectInsertion)
+	require.Equal(t, EnabledStateEnabled, input[0].CoordinationLongRunning)
+	require.Equal(t, EnabledStateDisabled, input[0].CoordinationDirectInsertion)
 }
 
 func TestMergeCapabilitySelectorsDeduplicatesAndDeepCopies(t *testing.T) {
-	longRunning := true
 	base := []CapabilitySelector{{
 		Name:                        "reviewer",
 		RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
 		Tags:                        []string{"lang:go"},
 		CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
-		CoordinationLongRunning:     &longRunning,
-		CoordinationDirectInsertion: selectorBoolPtr(false),
+		CoordinationLongRunning:     EnabledStateEnabled,
+		CoordinationDirectInsertion: EnabledStateDisabled,
 	}}
 	extra := []CapabilitySelector{
 		{
@@ -271,8 +265,8 @@ func TestMergeCapabilitySelectorsDeduplicatesAndDeepCopies(t *testing.T) {
 			RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
 			Tags:                        []string{"lang:go"},
 			CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
-			CoordinationLongRunning:     selectorBoolPtr(true),
-			CoordinationDirectInsertion: selectorBoolPtr(false),
+			CoordinationLongRunning:     EnabledStateEnabled,
+			CoordinationDirectInsertion: EnabledStateDisabled,
 		},
 		{
 			Name:            "planner",
@@ -291,10 +285,6 @@ func TestMergeCapabilitySelectorsDeduplicatesAndDeepCopies(t *testing.T) {
 
 	require.Equal(t, "lang:go", base[0].Tags[0])
 	require.Equal(t, CapabilityRuntimeFamilyProvider, extra[1].RuntimeFamilies[0])
-}
-
-func selectorBoolPtr(value bool) *bool {
-	return &value
 }
 
 func TestMergeAgentSpecsPreservesNilCapabilitySelectorSlices(t *testing.T) {

@@ -10,9 +10,6 @@ import (
 // ResumeFrame reconstructs the pending frame from the envelope on restart.
 // It scans envelope working memory for the highest-seq frame with nil RespondedAt.
 func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
-	if env == nil {
-		return nil, false
-	}
 	// Get the highest sequence number
 	seqVal, ok := env.GetWorkingValue("euclo.interaction.frame_seq")
 	if !ok {

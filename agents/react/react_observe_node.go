@@ -47,10 +47,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		result := &core.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"diagnostic": "Conclusion: " + summary,
 				"complete":   true,
-			},
+			}),
 		}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
@@ -71,10 +71,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		result := &core.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"diagnostic": diagnostic.String(),
 				"complete":   false,
-			},
+			}),
 		}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
@@ -146,10 +146,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"diagnostic": diagnostic.String(),
 			"complete":   completed,
-		},
+		}),
 	}
 	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 	return result, nil
@@ -170,10 +170,10 @@ func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, sum
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"diagnostic": diagnostic.String(),
 			"complete":   true,
-		},
+		}),
 	}
 	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 	return result

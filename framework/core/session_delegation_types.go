@@ -10,10 +10,10 @@ import (
 
 // DelegationSubjectRef identifies a subject granted delegation permissions.
 type DelegationSubjectRef struct {
-	Kind       string `json:"kind" yaml:"kind"`
-	ID         string `json:"id" yaml:"id"`
-	ProviderID string `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	TenantID   string `json:"tenant_id" yaml:"tenant_id"`
+	Kind       string `json:"kind"`
+	ID         string `json:"id"`
+	ProviderID string `json:"provider_id,omitempty"`
+	TenantID   string `json:"tenant_id"`
 }
 
 func (s DelegationSubjectRef) Validate() error {
@@ -58,12 +58,12 @@ func (s DelegationSubjectRef) Matches(actor identity.EventActor) bool {
 // SessionDelegationRecord grants a tenant-scoped subject permission to act on a
 // session they do not own for specific session operations.
 type SessionDelegationRecord struct {
-	TenantID   string               `json:"tenant_id" yaml:"tenant_id"`
-	SessionID  string               `json:"session_id" yaml:"session_id"`
-	Grantee    DelegationSubjectRef `json:"grantee" yaml:"grantee"`
-	Operations []SessionOperation   `json:"operations,omitempty" yaml:"operations,omitempty"`
-	CreatedAt  time.Time            `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	ExpiresAt  time.Time            `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	TenantID   string               `json:"tenant_id"`
+	SessionID  string               `json:"session_id"`
+	Grantee    DelegationSubjectRef `json:"grantee"`
+	Operations []SessionOperation   `json:"operations,omitempty"`
+	CreatedAt  time.Time            `json:"created_at,omitempty"`
+	ExpiresAt  time.Time            `json:"expires_at,omitempty"`
 }
 
 func (r SessionDelegationRecord) Validate() error {

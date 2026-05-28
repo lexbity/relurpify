@@ -83,25 +83,7 @@ func ValidateWorkspaceTree(workspace string) *cfgload.ValidationReport {
 		report.Add("relurpify_cfg/tools", "", "", err.Error())
 	}
 
-	// 5. Validate agents
-	agentsDir := filepath.Join(cfgRoot, "agents")
-	toolManifests, toolErr := cfgload.LoadToolManifests(filepath.Join(cfgRoot, "tools"))
-	var toolRegistry *cfgload.ToolRegistry
-	if toolErr == nil {
-		policy, policyErr := security.LoadLocalToolPolicy("", absWorkspace, cfgload.StrictDecode)
-		if policyErr != nil {
-			report.Add("relurpify_cfg/security/localtool.policy.yaml", "", "", policyErr.Error())
-		} else if toolRegistry, toolErr = cfgload.BuildRegistry(toolManifests, policy, nil); toolErr != nil {
-			report.Add("relurpify_cfg/tools", "", "", toolErr.Error())
-		}
-	}
-	workspaceDefault := model.ModelRef{}
-	if workspaceCfg != nil {
-		workspaceDefault = workspaceCfg.Model
-	}
-	if _, err := cfgload.LoadAgentRegistry(agentsDir, absWorkspace, nil, workspaceDefault, providers, toolRegistry, cfgload.StrictDecode); err != nil {
-		report.Add("relurpify_cfg/agents", "", "", err.Error())
-	}
+	// 5. Validate agents (declared in workspace.yaml agents: section; validated by LoadWorkspaceConfig)
 
 	// 6. Audit codebase for config/environment boundary violations
 	auditCodebaseBoundary(absWorkspace, report)

@@ -168,17 +168,10 @@ type reflectionReviewPayload struct {
 }
 
 func hasReviewContext(env *contextdata.Envelope) bool {
-	if env == nil {
-		return false
-	}
 	return len(env.References.Retrieval) > 0 || len(env.WorkingData) > 0
 }
 
 func buildReviewContext(env *contextdata.Envelope) (string, int) {
-	if env == nil {
-		return "", 0
-	}
-
 	var parts []string
 	fileCount := 0
 
@@ -253,8 +246,8 @@ func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contex
 	if scopedEnv == nil {
 		scopedEnv = contextdata.NewEnvelope("euclo.code_review", "session")
 	}
-	scopedEnv.SetWorkingValue("code_review.focus", focus, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("code_review.context", contextText, contextdata.MemoryClassTask)
+	contextdata.SetTyped(scopedEnv, "code_review.focus", focus)
+	contextdata.SetTyped(scopedEnv, "code_review.context", contextText)
 
 	task := buildReflectionReviewTask(focus, contextText)
 	runtimeEnv := h.env
@@ -310,20 +303,15 @@ func parseCodeReviewResponse(raw string) ([]map[string]interface{}, string, bool
 }
 
 func extractReflectionReview(env *contextdata.Envelope) ([]map[string]interface{}, string, bool) {
-	if env == nil {
-		return nil, "", false
-	}
-	if review, ok := env.GetWorkingValue("reflection.review"); ok {
+	if review, ok := contextdata.GetTyped[any](env, "reflection.review"); ok {
 		if findings, summary, ok := decodeReflectionReview(review); ok {
 			return findings, summary, true
 		}
 	}
-	if result, ok := env.GetWorkingValue("reflection.last_result"); ok {
-		if coreResult, ok := result.(*core.Result); ok && coreResult != nil {
-			if review, ok := coreResult.Data["review"]; ok {
-				if findings, summary, ok := decodeReflectionReview(review); ok {
-					return findings, summary, true
-				}
+	if result, ok := contextdata.GetTyped[*core.Result](env, "reflection.last_result"); ok && result != nil {
+		if review, ok := core.ResultField(result.Data, "review"); ok {
+			if findings, summary, ok := decodeReflectionReview(review); ok {
+				return findings, summary, true
 			}
 		}
 	}
@@ -389,9 +377,6 @@ func heuristicReviewFindings(contextText, focus string) []map[string]interface{}
 }
 
 func writeCodeReviewReferences(env *contextdata.Envelope, findings []map[string]interface{}) {
-	if env == nil {
-		return
-	}
 	for i, finding := range findings {
 		file, _ := finding["file"].(string)
 		if strings.TrimSpace(file) == "" {

@@ -201,14 +201,14 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 	}
 
 	scopedEnv := contextdata.NewEnvelope("euclo.diff_summary", "session")
-	scopedEnv.SetWorkingValue("diff.base_ref", baseRef, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.head_ref", headRef, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.scope", scope, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.stat", statOut, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.changed_files", changedFiles, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.additions", additions, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.deletions", deletions, contextdata.MemoryClassTask)
-	scopedEnv.SetWorkingValue("diff.risk_areas", riskAreas, contextdata.MemoryClassTask)
+	contextdata.SetTyped(scopedEnv, "diff.base_ref", baseRef)
+	contextdata.SetTyped(scopedEnv, "diff.head_ref", headRef)
+	contextdata.SetTyped(scopedEnv, "diff.scope", scope)
+	contextdata.SetTyped(scopedEnv, "diff.stat", statOut)
+	contextdata.SetTyped(scopedEnv, "diff.changed_files", changedFiles)
+	contextdata.SetTyped(scopedEnv, "diff.additions", additions)
+	contextdata.SetTyped(scopedEnv, "diff.deletions", deletions)
+	contextdata.SetTyped(scopedEnv, "diff.risk_areas", riskAreas)
 
 	task := &core.Task{
 		ID:          "euclo:cap.diff_summary",
@@ -234,12 +234,12 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 	if summary := summaryFromReActResult(scopedEnv, result); summary != "" {
 		return summary, nil
 	}
-	if result != nil && result.Data != nil {
-		if summary, ok := result.Data["summary"].(string); ok && strings.TrimSpace(summary) != "" {
-			return summary, nil
+	if result != nil {
+		if summary, ok := core.ResultField(result.Data, "summary"); ok && strings.TrimSpace(fmt.Sprint(summary)) != "" {
+			return fmt.Sprint(summary), nil
 		}
-		if text, ok := result.Data["text"].(string); ok && strings.TrimSpace(text) != "" {
-			return text, nil
+		if text, ok := core.ResultField(result.Data, "text"); ok && strings.TrimSpace(fmt.Sprint(text)) != "" {
+			return fmt.Sprint(text), nil
 		}
 	}
 	return "", nil
@@ -281,23 +281,25 @@ Payload:
 
 func summaryFromReActResult(env *contextdata.Envelope, result *core.Result) string {
 	if env != nil {
-		if summary, ok := env.GetWorkingValue("react.synthetic_summary"); ok {
-			if s, ok := summary.(string); ok && strings.TrimSpace(s) != "" {
-				return strings.TrimSpace(s)
-			}
+		if summary, ok := contextdata.GetTyped[string](env, "react.synthetic_summary"); ok && strings.TrimSpace(summary) != "" {
+			return strings.TrimSpace(summary)
 		}
-		if output, ok := env.GetWorkingValue("react.final_output"); ok {
+		if output, ok := contextdata.GetTyped[map[string]interface{}](env, "react.final_output"); ok {
 			if s := reactSummaryFromValue(output); s != "" {
 				return s
 			}
 		}
 	}
-	if result != nil && result.Data != nil {
-		if s := strings.TrimSpace(fmt.Sprint(result.Data["summary"])); s != "" && s != "<nil>" {
-			return s
+	if result != nil {
+		if s, ok := core.ResultField(result.Data, "summary"); ok {
+			if trimmed := strings.TrimSpace(fmt.Sprint(s)); trimmed != "" && trimmed != "<nil>" {
+				return trimmed
+			}
 		}
-		if s := strings.TrimSpace(fmt.Sprint(result.Data["text"])); s != "" && s != "<nil>" {
-			return s
+		if s, ok := core.ResultField(result.Data, "text"); ok {
+			if trimmed := strings.TrimSpace(fmt.Sprint(s)); trimmed != "" && trimmed != "<nil>" {
+				return trimmed
+			}
 		}
 	}
 	return ""

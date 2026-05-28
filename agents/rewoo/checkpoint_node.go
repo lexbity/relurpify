@@ -52,9 +52,9 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 
 	return &core.Result{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"checkpoint_requested": true,
 			"phase":                n.phase,
-		},
+		}),
 	}, nil
 }

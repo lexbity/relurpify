@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 type checkpointArtifactRepo struct {
@@ -145,7 +146,7 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	seedTask(env, "add a cache to the handler", "checkpoint.go")
 	runPreIngestion(t, env, dir, []string{"checkpoint.go"})
 	env.RequestCheckpoint("materialize after streaming", 9, true)
-	env.SetWorkingValue("euclo.stream_result", &contextstream.Result{
+	euclostate.SetStreamResult(env, &contextstream.Result{
 		Request: contextstream.Request{
 			ID:   "stream-checkpoint",
 			Mode: contextstream.ModeBlocking,
@@ -156,7 +157,7 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 		},
 		StartedAt:   time.Now().Add(-1 * time.Minute),
 		CompletedAt: time.Now(),
-	}, contextdata.MemoryClassTask)
+	})
 
 	telemetry := &recordingTelemetry{}
 	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
@@ -191,7 +192,7 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 
 func mustWorkingValue(t *testing.T, env *contextdata.Envelope, key string) any {
 	t.Helper()
-	value, ok := env.GetWorkingValue(key)
+	value, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		t.Fatalf("missing envelope value %q", key)
 	}

@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -28,7 +29,7 @@ func TestGateNodeExecute(t *testing.T) {
 	}
 
 	// Check that decision was written to envelope
-	permitted, ok := env.GetWorkingValue("euclo.policy.mutation_permitted")
+	permitted, ok := contextdata.GetTyped[bool](env, policyMutationKey)
 	if !ok {
 		t.Error("Expected mutation_permitted in envelope")
 	}
@@ -47,7 +48,7 @@ func TestGateNodeAllowWritesDecision(t *testing.T) {
 		VerificationRequired: true,
 		ReasonCodes:          []string{"read_only_family"},
 	}
-	env.SetWorkingValue(policyDecisionKey, decision, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, policyDecisionKey, decision)
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -56,7 +57,7 @@ func TestGateNodeAllowWritesDecision(t *testing.T) {
 	if result["decision"] != "allow" {
 		t.Fatalf("expected allow decision, got %v", result["decision"])
 	}
-	got, ok := env.GetWorkingValue(policyDecisionKey)
+	got, ok := contextdata.GetTyped[*PolicyDecision](env, policyDecisionKey)
 	if !ok || got == nil {
 		t.Fatal("expected policy decision written to envelope")
 	}
@@ -65,12 +66,12 @@ func TestGateNodeAllowWritesDecision(t *testing.T) {
 func TestGateNodeDeny(t *testing.T) {
 	node := NewGateNode("gate1", NewEvaluator())
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue(policyDecisionKey, &PolicyDecision{
+	contextdata.SetTyped(env, policyDecisionKey, &PolicyDecision{
 		MutationPermitted:    false,
 		HITLRequired:         false,
 		VerificationRequired: false,
 		ReasonCodes:          []string{"edit_not_permitted"},
-	}, contextdata.MemoryClassTask)
+	})
 
 	if _, err := node.Execute(context.Background(), env); err == nil {
 		t.Fatal("expected deny error")
@@ -81,12 +82,12 @@ func TestGateNodeAskWithBroker(t *testing.T) {
 	broker := authorization.NewHITLBroker(250 * time.Millisecond)
 	node := NewGateNode("gate1", NewEvaluator()).WithHITLBroker(broker).WithTelemetry(&gateTelemetrySink{})
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue(policyDecisionKey, &PolicyDecision{
+	contextdata.SetTyped(env, policyDecisionKey, &PolicyDecision{
 		MutationPermitted:    false,
 		HITLRequired:         true,
 		VerificationRequired: false,
 		ReasonCodes:          []string{"mutating_family"},
-	}, contextdata.MemoryClassTask)
+	})
 
 	events, cancel := broker.Subscribe(1)
 	defer cancel()
@@ -112,10 +113,10 @@ func TestGateNodeAskWithBroker(t *testing.T) {
 	if result["decision"] != "ask_approved" {
 		t.Fatalf("expected ask_approved decision, got %v", result["decision"])
 	}
-	if got, ok := env.GetWorkingValue(policyHITLTriggeredKey); !ok || got != true {
+	if got, ok := contextdata.GetTyped[bool](env, policyHITLTriggeredKey); !ok || got != true {
 		t.Fatalf("expected hitl triggered true, got %v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue(policyHITLResponseKey); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[*interaction.HITLResponse](env, policyHITLResponseKey); !ok || got == nil {
 		t.Fatalf("expected hitl response written, got %v (ok=%v)", got, ok)
 	}
 }
@@ -124,12 +125,12 @@ func TestGateNodeAskWithPermissionManagerFallback(t *testing.T) {
 	pm := &stubPermissionManager{}
 	node := NewGateNode("gate1", NewEvaluator()).WithPermissionManager(pm)
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue(policyDecisionKey, &PolicyDecision{
+	contextdata.SetTyped(env, policyDecisionKey, &PolicyDecision{
 		MutationPermitted:    false,
 		HITLRequired:         true,
 		VerificationRequired: false,
 		ReasonCodes:          []string{"mutating_family"},
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -173,22 +174,22 @@ func TestGateNodeDecisionWritten(t *testing.T) {
 	}
 
 	// Check all decision fields are written to envelope
-	_, ok := env.GetWorkingValue("euclo.policy.mutation_permitted")
+	_, ok := contextdata.GetTyped[bool](env, policyMutationKey)
 	if !ok {
 		t.Error("Expected mutation_permitted in envelope")
 	}
 
-	_, ok = env.GetWorkingValue("euclo.policy.hitl_required")
+	_, ok = contextdata.GetTyped[bool](env, policyHITLRequiredKey)
 	if !ok {
 		t.Error("Expected hitl_required in envelope")
 	}
 
-	_, ok = env.GetWorkingValue("euclo.policy.verification_required")
+	_, ok = contextdata.GetTyped[bool](env, policyVerificationKey)
 	if !ok {
 		t.Error("Expected verification_required in envelope")
 	}
 
-	_, ok = env.GetWorkingValue("euclo.policy.reason_codes")
+	_, ok = contextdata.GetTyped[[]string](env, policyReasonCodesKey)
 	if !ok {
 		t.Error("Expected reason_codes in envelope")
 	}

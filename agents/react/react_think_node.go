@@ -44,9 +44,9 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: map[string]interface{}{
+			Data: core.NewToolResultPayload(map[string]any{
 				"decision": decision,
-			},
+			}),
 		}, nil
 	}
 	var resp *contracts.LLMResponse
@@ -104,9 +104,9 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"decision": decision,
-		},
+		}),
 	}, nil
 }
 

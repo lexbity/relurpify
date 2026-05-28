@@ -94,11 +94,15 @@ func rootHandleCompact(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 // "final_output" (ReActAgent), "text" (compressed summary), "summary" (PlannerAgent).
 // Used as a fallback when the streamed builder text is empty.
 func extractCompactSummary(result *core.Result) string {
-	if result == nil || result.Data == nil {
+	if result == nil {
+		return ""
+	}
+	fields := core.ResultFields(result.Data)
+	if len(fields) == 0 {
 		return ""
 	}
 	for _, key := range []string{"final_output", "text", "summary"} {
-		if v, ok := result.Data[key]; ok {
+		if v, ok := fields[key]; ok {
 			if s, ok := v.(string); ok {
 				if trimmed := strings.TrimSpace(s); trimmed != "" {
 					return trimmed

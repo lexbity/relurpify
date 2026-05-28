@@ -124,9 +124,9 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) 
 	return &core.Result{
 		NodeID:  n.name,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"text": resp.Text,
-		},
+		}),
 	}, nil
 }
 
@@ -172,7 +172,7 @@ func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope)
 	return &core.Result{
 		NodeID:  n.name,
 		Success: success,
-		Data:    data,
+		Data:    core.NewToolResultPayload(data),
 		Error: func() string {
 			if execErr != nil {
 				return execErr.Error()
@@ -202,8 +202,8 @@ func (n *stateConditionalNode) Execute(ctx context.Context, state *contextdata.E
 	return &core.Result{
 		NodeID:  n.name,
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"next": next,
-		},
+		}),
 	}, nil
 }

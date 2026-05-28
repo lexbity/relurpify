@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	nodeKindPattern     graphdb.NodeKind = "pattern_record"
-	nodeKindComment     graphdb.NodeKind = "pattern_comment"
-	edgeKindSupersedes  graphdb.EdgeKind = "supersedes"
-	edgeKindHasComment  graphdb.EdgeKind = "has_comment"
+	nodeKindPattern    graphdb.NodeKind = "pattern_record"
+	nodeKindComment    graphdb.NodeKind = "pattern_comment"
+	edgeKindSupersedes graphdb.EdgeKind = "supersedes"
+	edgeKindHasComment graphdb.EdgeKind = "has_comment"
 )
 
 // GraphDBPatternStore implements PatternStore using graphdb.Engine.
@@ -171,8 +171,7 @@ func (s *GraphDBPatternStore) Supersede(ctx context.Context, oldID string, repla
 		return fmt.Errorf("pattern record %q not found", oldID)
 	}
 
-	// Save the replacement first
-	replacement.ID = replacement.ID // ensure it has its own ID
+	// Save the replacement first.
 	if err := s.Save(ctx, replacement); err != nil {
 		return fmt.Errorf("save replacement pattern: %w", err)
 	}
@@ -187,9 +186,9 @@ func (s *GraphDBPatternStore) Supersede(ctx context.Context, oldID string, repla
 
 	// Create supersession edge
 	edge := graphdb.EdgeRecord{
-		SourceID: oldID,
-		TargetID: replacement.ID,
-		Kind:     edgeKindSupersedes,
+		SourceID:  oldID,
+		TargetID:  replacement.ID,
+		Kind:      edgeKindSupersedes,
 		CreatedAt: time.Now().UTC().UnixNano(),
 	}
 	return s.Graph.LinkEdges([]graphdb.EdgeRecord{edge})

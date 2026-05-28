@@ -101,26 +101,34 @@ func BuildFromSpec(env agentenv.WorkspaceEnvironment, spec agentspec.AgentRuntim
 	}
 }
 
-func InstantiateByName(workspace, name string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
+func InstantiateByName(workspace, name string, env agentenv.WorkspaceEnvironment) (agentgraph.WorkflowExecutor, error) {
 	if agent, ok := instantiateRegisteredNamedAgent(workspace, name, env); ok {
-		return agent
+		if agent == nil {
+			return nil, fmt.Errorf("named agent %q constructor returned nil", name)
+		}
+		return agent, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "rex":
 		agent := rex.NewWithWorkspace(&env, workspace)
-		_ = agent.Initialize(env.Config)
-		return agent
+		if err := agent.Initialize(env.Config); err != nil {
+			return nil, err
+		}
+		return agent, nil
 	case "euclo":
 		agent := euclo.New(env)
 		// Don't call Initialize here - euclo calls it lazily in Execute()
-		return agent
+		return agent, nil
 	}
 	agent, err := BuildFromSpec(env, agentspec.AgentRuntimeSpec{Implementation: name})
 	if err != nil {
 		agent = rex.NewWithWorkspace(&env, workspace)
-		_ = agent.Initialize(env.Config)
+		if initErr := agent.Initialize(env.Config); initErr != nil {
+			return nil, initErr
+		}
+		return agent, nil
 	}
-	return agent
+	return agent, nil
 }
 
 func ApplyManifestDefaults(spec *agentspec.AgentRuntimeSpec) *agentspec.AgentRuntimeSpec {

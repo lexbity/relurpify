@@ -51,7 +51,4 @@ func TestEnforceCapabilityProjectionBranches(t *testing.T) {
 	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyPlanner, Mode: "planning"}, &core.Task{Type: string(core.TaskTypeCodeGeneration)}); err == nil {
 		t.Fatalf("expected task class rejection")
 	}
-	if err := enforceCapabilityProjection(nil, route.RouteDecision{}, nil); err != nil {
-		t.Fatalf("nil env should be ignored: %v", err)
-	}
 }

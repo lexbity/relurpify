@@ -490,7 +490,6 @@ func normalizePreparedRunOverlays(overlays []PreparedRunOverlay) []PreparedRunOv
 	out := make([]PreparedRunOverlay, 0, len(overlays))
 	for _, overlay := range overlays {
 		overlay.Path = filepath.Clean(strings.TrimSpace(overlay.Path))
-		overlay.Content = overlay.Content
 		overlay.Mode = strings.TrimSpace(overlay.Mode)
 		if overlay.Path == "" {
 			continue

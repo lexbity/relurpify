@@ -146,7 +146,7 @@ func TestInvokeCapability_NilRegistry(t *testing.T) {
 	if result.Success != false {
 		t.Fatalf("expected success=false, got %v", result.Success)
 	}
-	if result.Data["error"] != "capability registry unavailable" {
-		t.Fatalf("expected registry error, got %v", result.Data["error"])
+	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
+		t.Fatalf("expected registry error, got %v", got)
 	}
 }

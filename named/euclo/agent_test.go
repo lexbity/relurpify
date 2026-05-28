@@ -11,8 +11,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -107,22 +107,22 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 
 	seedTaskEnvelope(envelope, task)
 
-	if got, ok := envelope.GetWorkingValue("task.input"); !ok || got != task {
+	if got, ok := contextdata.GetTyped[*core.Task](envelope, "task.input"); !ok || got != task {
 		t.Fatalf("expected task.input to be seeded with task pointer, got=%v ok=%v", got, ok)
 	}
-	if got, ok := envelope.GetWorkingValue("task.id"); !ok || got != task.ID {
+	if got, ok := contextdata.GetTyped[string](envelope, "task.id"); !ok || got != task.ID {
 		t.Fatalf("expected task.id = %q, got=%v ok=%v", task.ID, got, ok)
 	}
-	if got, ok := envelope.GetWorkingValue("task.instruction"); !ok || got != task.Instruction {
+	if got, ok := contextdata.GetTyped[string](envelope, "task.instruction"); !ok || got != task.Instruction {
 		t.Fatalf("expected task.instruction = %q, got=%v ok=%v", task.Instruction, got, ok)
 	}
-	if got, ok := envelope.GetWorkingValue("task.type"); !ok || got != task.Type {
+	if got, ok := contextdata.GetTyped[string](envelope, "task.type"); !ok || got != task.Type {
 		t.Fatalf("expected task.type = %q, got=%v ok=%v", task.Type, got, ok)
 	}
-	if got, ok := envelope.GetWorkingValue("task.context"); !ok || !reflect.DeepEqual(got, task.Context) {
+	if got, ok := contextdata.GetTyped[map[string]any](envelope, "task.context"); !ok || !reflect.DeepEqual(got, task.Context) {
 		t.Fatalf("expected task.context to be seeded, got=%v ok=%v", got, ok)
 	}
-	if got, ok := envelope.GetWorkingValue("task.metadata"); !ok || !reflect.DeepEqual(got, task.Metadata) {
+	if got, ok := contextdata.GetTyped[map[string]any](envelope, "task.metadata"); !ok || !reflect.DeepEqual(got, task.Metadata) {
 		t.Fatalf("expected task.metadata to be seeded, got=%v ok=%v", got, ok)
 	}
 }
@@ -164,7 +164,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 	if start != "euclo.dispatch" {
 		t.Fatalf("expected resume classification to start at dispatch, got %q", start)
 	}
-	if _, ok := envelope.GetWorkingValue(state.KeyResumeClassification); !ok {
+	if _, ok := state.GetResumeClassification(envelope); !ok {
 		t.Fatal("expected resume classification to be seeded before graph build")
 	}
 }
@@ -217,7 +217,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 	classification := &intake.IntentClassification{WinningFamily: "analysis"}
-	routeSelection := &orchestrate.RouteSelection{RouteKind: "capability", CapabilityID: "debug"}
+	routeSelection := &euclotypes.RouteSelection{RouteKind: "capability", CapabilityID: "debug"}
 	state.SetIntentClassification(envelope, classification)
 	state.SetRouteSelection(envelope, routeSelection)
 
@@ -226,7 +226,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	resumedClassification, ok := envelope.GetWorkingValue(state.KeyResumeClassification)
+	resumedClassification, ok := state.GetResumeClassification(envelope)
 	if !ok {
 		t.Fatal("expected resume classification to be written during BuildGraph")
 	}
@@ -234,7 +234,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 		t.Fatalf("resume classification = %p, want %p", resumedClassification, classification)
 	}
 
-	resumedRoute, ok := envelope.GetWorkingValue(state.KeyResumeRoute)
+	resumedRoute, ok := state.GetResumeRoute(envelope)
 	if !ok {
 		t.Fatal("expected resume route to be written during BuildGraph")
 	}

@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
@@ -30,7 +31,7 @@ func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 		core.EventType("euclo.route.completed"),
 		core.EventType("euclo.execution.complete"),
 	})
-	if strings.TrimSpace(mustStringValue(t, env, "euclo.outcome.category")) != "success" {
+	if got, _ := euclostate.GetOutcomeCategory(env); strings.TrimSpace(got) != "success" {
 		t.Fatal("expected success outcome")
 	}
 }

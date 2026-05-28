@@ -91,10 +91,10 @@ func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	return &core.Result{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"steps_run":    len(results),
 			"steps_ok":     stepsOK,
 			"steps_failed": stepsFailed,
-		},
+		}),
 	}, nil
 }

@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
@@ -58,10 +59,6 @@ func (n *IntakePipelineNode) Contract() agentgraph.NodeContract {
 
 // Execute performs the intake pipeline as a coordinator-only stage.
 func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	if env == nil {
-		return nil, fmt.Errorf("intake pipeline %q requires an envelope", n.id)
-	}
-
 	task, err := taskFromEnvelope(env)
 	if err != nil {
 		return nil, err
@@ -119,21 +116,22 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		"mixed_intent":   intent.MixedIntent,
 	}
 
-	env.SetWorkingValue("euclo.task_envelope", taskEnvelope, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.intent_evidence", intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyTaskEnvelope, taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyIntentEvidence, intentEvidence, contextdata.MemoryClassTask)
 	env.SetWorkingValue(intentcontext.IntentEvidenceKey, intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyIntentInterpretation, interpretation, contextdata.MemoryClassTask)
 	env.SetWorkingValue(intentcontext.IntentInterpretationKey, interpretation, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.intent_classification", intent, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.family_selection", familySelection, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.negative_constraints", taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyIntentClassification, intent, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyFamilySelection, scoredClassification.WinningFamily, contextdata.MemoryClassTask)
+	env.SetWorkingValue(euclokeys.KeyNegativeConstraints, taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
 	if streamResult != nil {
-		env.SetWorkingValue("euclo.stream_result", streamResult, contextdata.MemoryClassTask)
+		env.SetWorkingValue(euclokeys.KeyStreamResult, streamResult, contextdata.MemoryClassTask)
 	}
 
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"winning_family":         scoredClassification.WinningFamily,
 			"confidence":             scoredClassification.Confidence,
 			"ambiguous":              scoredClassification.Ambiguous,
@@ -146,7 +144,7 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 			"missing_fields":         missingFields(intentEvidence),
 			"classification_source":  intent.ClassificationSource,
 			"family_selection":       familySelection,
-		},
+		}),
 	}, nil
 }
 
@@ -201,7 +199,7 @@ func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr
 }
 
 func taskFromEnvelope(env *contextdata.Envelope) (*core.Task, error) {
-	for _, key := range []string{"task.input", "euclo.task.input", "euclo.task"} {
+	for _, key := range []string{euclokeys.KeyTaskInputLegacy, euclokeys.KeyTaskInput, euclokeys.KeyTaskRaw} {
 		if value, ok := env.GetWorkingValue(key); ok {
 			task, ok := value.(*core.Task)
 			if !ok {
@@ -238,8 +236,8 @@ func serializeStreamResult(result *contextstream.Result) string {
 }
 
 func missingFields(evidence *intentcontext.IntentEvidence) []string {
-	if evidence == nil || len(evidence.MissingFields) == 0 {
+	if evidence == nil {
 		return nil
 	}
-	return append([]string(nil), evidence.MissingFields...)
+	return evidence.MissingFields
 }

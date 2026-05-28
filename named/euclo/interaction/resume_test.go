@@ -44,8 +44,8 @@ func TestResumeFrame_FrameKeyFormat(t *testing.T) {
 	frame := NewOutcomeFeedbackFrame("task-1", "session-1", "done")
 	frame.Seq = 128
 
-	env.SetWorkingValue(frameStorageKey(128), frame, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction.frame_seq", 129, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, frameStorageKey(128), frame)
+	contextdata.SetTyped(env, "euclo.interaction.frame_seq", 129)
 
 	got, ok := ResumeFrame(env)
 	if !ok {

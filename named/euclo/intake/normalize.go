@@ -81,10 +81,6 @@ func NormalizeTaskEnvelope(task *core.Task, resume *ResumeState) (*TaskEnvelope,
 // BuildIntentEvidence derives a structured evidence record from a normalized task envelope.
 // The record is always populated when an envelope is present, even if some fields remain missing.
 func BuildIntentEvidence(envelope *TaskEnvelope) *intentcontext.IntentEvidence {
-	if envelope == nil {
-		return nil
-	}
-
 	evidence := &intentcontext.IntentEvidence{
 		ActionType:          inferActionType(envelope),
 		Target:              inferTarget(envelope),
@@ -202,9 +198,6 @@ func extractNegativeConstraintSeeds(instruction string) []string {
 }
 
 func inferActionType(envelope *TaskEnvelope) string {
-	if envelope == nil {
-		return ""
-	}
 	candidates := []string{
 		strings.ToLower(strings.TrimSpace(envelope.TaskType)),
 		strings.ToLower(strings.TrimSpace(envelope.FollowUpHint)),
@@ -237,9 +230,6 @@ func inferActionType(envelope *TaskEnvelope) string {
 }
 
 func inferTarget(envelope *TaskEnvelope) string {
-	if envelope == nil {
-		return ""
-	}
 	files := append([]string(nil), envelope.ExplicitFiles...)
 	files = append(files, envelope.UserFiles...)
 	files = append(files, envelope.SessionPins...)
@@ -260,9 +250,6 @@ func inferTarget(envelope *TaskEnvelope) string {
 }
 
 func inferScope(envelope *TaskEnvelope) string {
-	if envelope == nil {
-		return "unknown"
-	}
 	files := append([]string(nil), envelope.ExplicitFiles...)
 	files = append(files, envelope.UserFiles...)
 	files = append(files, envelope.SessionPins...)
@@ -283,9 +270,6 @@ func inferScope(envelope *TaskEnvelope) string {
 }
 
 func inferRiskLevel(envelope *TaskEnvelope) string {
-	if envelope == nil {
-		return "unknown"
-	}
 	switch inferActionType(envelope) {
 	case "review", "explain", "analyze", "clarify":
 		return "low"
@@ -329,9 +313,6 @@ func inferExpectedVerb(envelope *TaskEnvelope) string {
 }
 
 func collectContextHints(envelope *TaskEnvelope) []string {
-	if envelope == nil {
-		return nil
-	}
 	hints := []string{
 		strings.TrimSpace(envelope.ContextHint),
 		strings.TrimSpace(envelope.FamilyHint),
@@ -354,9 +335,6 @@ func collectContextHints(envelope *TaskEnvelope) []string {
 }
 
 func collectEvidenceReasonCodes(envelope *TaskEnvelope) []string {
-	if envelope == nil {
-		return nil
-	}
 	var codes []string
 	if action := inferActionType(envelope); action != "" {
 		codes = append(codes, "action:"+action)

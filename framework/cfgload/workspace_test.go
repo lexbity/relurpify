@@ -30,7 +30,7 @@ sandbox:
 	require.Equal(t, "info", stringValue(cfg.Logging.Level))
 	require.Equal(t, "json", stringValue(cfg.Logging.Format))
 	require.Equal(t, 7, *cfg.Audit.RetentionDays)
-	require.True(t, *cfg.Telemetry.Enabled)
+	require.False(t, *cfg.Telemetry.Enabled)
 	require.NotEmpty(t, cfg.DefaultsUsed)
 }
 

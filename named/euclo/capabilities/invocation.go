@@ -38,9 +38,7 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 		return &core.Result{
 			NodeID:  capID,
 			Success: false,
-			Data: map[string]any{
-				"error": "capability registry unavailable",
-			},
+			Data:    core.NewErrorResultPayload("capability registry unavailable"),
 		}, fmt.Errorf("capability registry unavailable")
 	}
 
@@ -49,18 +47,14 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 		return &core.Result{
 			NodeID:  capID,
 			Success: false,
-			Data: map[string]any{
-				"error": err.Error(),
-			},
+			Data:    core.NewErrorResultPayload(err.Error()),
 		}, err
 	}
 	if toolResult == nil {
 		return &core.Result{
 			NodeID:  capID,
 			Success: false,
-			Data: map[string]any{
-				"error": fmt.Sprintf("registry returned nil result for capability %s", capID),
-			},
+			Data:    core.NewErrorResultPayload(fmt.Sprintf("registry returned nil result for capability %s", capID)),
 		}, fmt.Errorf("registry returned nil result for capability %s", capID)
 	}
 
@@ -71,7 +65,7 @@ func InvokeCapability(ctx context.Context, capID string, task *core.Task, env *c
 	return &core.Result{
 		NodeID:  capID,
 		Success: toolResult.Success,
-		Data:    toolResult.Data,
+		Data:    core.NewToolResultPayload(toolResult.Data),
 	}, resultErr
 }
 
@@ -80,9 +74,7 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 	if len(capabilityIDs) == 0 {
 		return &core.Result{
 			Success: false,
-			Data: map[string]any{
-				"error": "no capabilities to invoke",
-			},
+			Data:    core.NewErrorResultPayload("no capabilities to invoke"),
 		}, fmt.Errorf("no capabilities to invoke")
 	}
 
@@ -95,10 +87,10 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 		}
 		return &core.Result{
 			Success: true,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"sequence_operator": "AND",
 				"capabilities":      capabilityIDs,
-			},
+			}),
 		}, nil
 	}
 
@@ -113,16 +105,12 @@ func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, opera
 		}
 		return &core.Result{
 			Success: false,
-			Data: map[string]any{
-				"error": "all capabilities in OR sequence failed",
-			},
+			Data:    core.NewErrorResultPayload("all capabilities in OR sequence failed"),
 		}, lastError
 	}
 
 	return &core.Result{
 		Success: false,
-		Data: map[string]any{
-			"error": fmt.Sprintf("unknown operator: %s", operator),
-		},
+		Data:    core.NewErrorResultPayload(fmt.Sprintf("unknown operator: %s", operator)),
 	}, fmt.Errorf("unknown operator: %s", operator)
 }

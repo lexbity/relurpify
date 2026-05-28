@@ -83,15 +83,15 @@ type CapabilitySelector = agentspec.CapabilitySelector
 type SkillCapabilitySelector = agentspec.SkillCapabilitySelector
 
 type CapabilitySource struct {
-	ProviderID string          `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	Scope      CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
-	SessionID  string          `json:"session_id,omitempty" yaml:"session_id,omitempty"`
+	ProviderID string          `json:"provider_id,omitempty"`
+	Scope      CapabilityScope `json:"scope,omitempty"`
+	SessionID  string          `json:"session_id,omitempty"`
 }
 
 type AvailabilitySpec struct {
-	Available bool              `json:"available" yaml:"available"`
-	Reason    string            `json:"reason,omitempty" yaml:"reason,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Available bool              `json:"available"`
+	Reason    string            `json:"reason,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 // Schema is re-exported from platform/contracts for backward compatibility.
@@ -118,40 +118,56 @@ const (
 	CoordinationExecutionModeBackgroundAgent = agentspec.CoordinationExecutionModeBackgroundAgent
 )
 
+type EnabledState int
+
+const (
+	EnabledStateUnset EnabledState = iota
+	EnabledStateEnabled
+	EnabledStateDisabled
+)
+
+func (s EnabledState) IsSet() bool {
+	return s != EnabledStateUnset
+}
+
+func (s EnabledState) IsEnabled() bool {
+	return s == EnabledStateEnabled
+}
+
 // CoordinationTargetMetadata is the framework-owned metadata block for
 // capability-based delegation targets.
 type CoordinationTargetMetadata struct {
-	Target                 bool                        `json:"target,omitempty" yaml:"target,omitempty"`
-	Role                   CoordinationRole            `json:"role,omitempty" yaml:"role,omitempty"`
-	TaskTypes              []string                    `json:"task_types,omitempty" yaml:"task_types,omitempty"`
-	ExecutionModes         []CoordinationExecutionMode `json:"execution_modes,omitempty" yaml:"execution_modes,omitempty"`
-	LongRunning            bool                        `json:"long_running,omitempty" yaml:"long_running,omitempty"`
-	MaxDepth               int                         `json:"max_depth,omitempty" yaml:"max_depth,omitempty"`
-	MaxRuntimeSeconds      int                         `json:"max_runtime_seconds,omitempty" yaml:"max_runtime_seconds,omitempty"`
-	DirectInsertionAllowed bool                        `json:"direct_insertion_allowed,omitempty" yaml:"direct_insertion_allowed,omitempty"`
-	ExpectedInput          *Schema                     `json:"expected_input,omitempty" yaml:"expected_input,omitempty"`
-	ExpectedOutput         *Schema                     `json:"expected_output,omitempty" yaml:"expected_output,omitempty"`
+	Target                 bool                        `json:"target,omitempty"`
+	Role                   CoordinationRole            `json:"role,omitempty"`
+	TaskTypes              []string                    `json:"task_types,omitempty"`
+	ExecutionModes         []CoordinationExecutionMode `json:"execution_modes,omitempty"`
+	LongRunning            EnabledState                `json:"long_running,omitempty"`
+	MaxDepth               int                         `json:"max_depth,omitempty"`
+	MaxRuntimeSeconds      int                         `json:"max_runtime_seconds,omitempty"`
+	DirectInsertionAllowed EnabledState                `json:"direct_insertion_allowed,omitempty"`
+	ExpectedInput          *Schema                     `json:"expected_input,omitempty"`
+	ExpectedOutput         *Schema                     `json:"expected_output,omitempty"`
 }
 
 type CapabilityDescriptor struct {
-	ID              string                      `json:"id" yaml:"id"`
-	Kind            CapabilityKind              `json:"kind" yaml:"kind"`
-	RuntimeFamily   CapabilityRuntimeFamily     `json:"runtime_family,omitempty" yaml:"runtime_family,omitempty"`
-	Name            string                      `json:"name" yaml:"name"`
-	Version         string                      `json:"version,omitempty" yaml:"version,omitempty"`
-	Description     string                      `json:"description,omitempty" yaml:"description,omitempty"`
-	Category        string                      `json:"category,omitempty" yaml:"category,omitempty"`
-	Tags            []string                    `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Source          CapabilitySource            `json:"source,omitempty" yaml:"source,omitempty"`
-	TrustClass      TrustClass                  `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	RiskClasses     []RiskClass                 `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
-	EffectClasses   []EffectClass               `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	SessionAffinity string                      `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
-	InputSchema     *Schema                     `json:"input_schema,omitempty" yaml:"input_schema,omitempty"`
-	OutputSchema    *Schema                     `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
-	Availability    AvailabilitySpec            `json:"availability,omitempty" yaml:"availability,omitempty"`
-	Coordination    *CoordinationTargetMetadata `json:"coordination,omitempty" yaml:"coordination,omitempty"`
-	Annotations     map[string]any              `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	ID              string                      `json:"id"`
+	Kind            CapabilityKind              `json:"kind"`
+	RuntimeFamily   CapabilityRuntimeFamily     `json:"runtime_family,omitempty"`
+	Name            string                      `json:"name"`
+	Version         string                      `json:"version,omitempty"`
+	Description     string                      `json:"description,omitempty"`
+	Category        string                      `json:"category,omitempty"`
+	Tags            []string                    `json:"tags,omitempty"`
+	Source          CapabilitySource            `json:"source,omitempty"`
+	TrustClass      TrustClass                  `json:"trust_class,omitempty"`
+	RiskClasses     []RiskClass                 `json:"risk_classes,omitempty"`
+	EffectClasses   []EffectClass               `json:"effect_classes,omitempty"`
+	SessionAffinity string                      `json:"session_affinity,omitempty"`
+	InputSchema     *Schema                     `json:"input_schema,omitempty"`
+	OutputSchema    *Schema                     `json:"output_schema,omitempty"`
+	Availability    AvailabilitySpec            `json:"availability,omitempty"`
+	Coordination    *CoordinationTargetMetadata `json:"coordination,omitempty"`
+	Annotations     map[string]any              `json:"annotations,omitempty"`
 }
 
 type ContentBlock interface {
@@ -159,57 +175,57 @@ type ContentBlock interface {
 }
 
 type TextContentBlock struct {
-	Text       string            `json:"text" yaml:"text"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	Text       string            `json:"text"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (TextContentBlock) ContentType() string { return "text" }
 
 type StructuredContentBlock struct {
-	Data       any               `json:"data" yaml:"data"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	Data       any               `json:"data"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (StructuredContentBlock) ContentType() string { return "structured" }
 
 type ResourceLinkContentBlock struct {
-	URI        string            `json:"uri" yaml:"uri"`
-	Name       string            `json:"name,omitempty" yaml:"name,omitempty"`
-	MIMEType   string            `json:"mime_type,omitempty" yaml:"mime_type,omitempty"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	URI        string            `json:"uri"`
+	Name       string            `json:"name,omitempty"`
+	MIMEType   string            `json:"mime_type,omitempty"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (ResourceLinkContentBlock) ContentType() string { return "resource-link" }
 
 type EmbeddedResourceContentBlock struct {
-	Resource   any               `json:"resource" yaml:"resource"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	Resource   any               `json:"resource"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (EmbeddedResourceContentBlock) ContentType() string { return "embedded-resource" }
 
 type BinaryReferenceContentBlock struct {
-	Ref        string            `json:"ref" yaml:"ref"`
-	MIMEType   string            `json:"mime_type,omitempty" yaml:"mime_type,omitempty"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	Ref        string            `json:"ref"`
+	MIMEType   string            `json:"mime_type,omitempty"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (BinaryReferenceContentBlock) ContentType() string { return "binary-reference" }
 
 type ErrorContentBlock struct {
-	Code       string            `json:"code,omitempty" yaml:"code,omitempty"`
-	Message    string            `json:"message" yaml:"message"`
-	Provenance ContentProvenance `json:"provenance,omitempty" yaml:"provenance,omitempty"`
+	Code       string            `json:"code,omitempty"`
+	Message    string            `json:"message"`
+	Provenance ContentProvenance `json:"provenance,omitempty"`
 }
 
 func (ErrorContentBlock) ContentType() string { return "error" }
 
 type ContentProvenance struct {
-	CapabilityID string             `json:"capability_id,omitempty" yaml:"capability_id,omitempty"`
-	ProviderID   string             `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	TrustClass   TrustClass         `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	Disposition  ContentDisposition `json:"disposition,omitempty" yaml:"disposition,omitempty"`
-	Derivation   *DerivationChain   `json:"derivation,omitempty" yaml:"derivation,omitempty"` // NEW: transformation history
+	CapabilityID string             `json:"capability_id,omitempty"`
+	ProviderID   string             `json:"provider_id,omitempty"`
+	TrustClass   TrustClass         `json:"trust_class,omitempty"`
+	Disposition  ContentDisposition `json:"disposition,omitempty"`
+	Derivation   *DerivationChain   `json:"derivation,omitempty"` // NEW: transformation history
 }
 
 type CapabilityDescriptorProvider interface {
@@ -577,13 +593,23 @@ func ValidateCoordinationTargetMetadata(metadata *CoordinationTargetMetadata) er
 			return fmt.Errorf("coordination execution mode %s invalid", mode)
 		}
 	}
+	switch metadata.LongRunning {
+	case EnabledStateUnset, EnabledStateEnabled, EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination long_running state %d invalid", metadata.LongRunning)
+	}
+	switch metadata.DirectInsertionAllowed {
+	case EnabledStateUnset, EnabledStateEnabled, EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination direct_insertion state %d invalid", metadata.DirectInsertionAllowed)
+	}
 	if metadata.MaxDepth < 0 {
 		return fmt.Errorf("coordination max_depth cannot be negative")
 	}
 	if metadata.MaxRuntimeSeconds < 0 {
 		return fmt.Errorf("coordination max_runtime_seconds cannot be negative")
 	}
-	if metadata.LongRunning && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeBackgroundAgent) && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeSessionBacked) {
+	if metadata.LongRunning == EnabledStateEnabled && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeBackgroundAgent) && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeSessionBacked) {
 		return fmt.Errorf("long-running coordination targets must be session-backed or background-service")
 	}
 	if metadata.Role == CoordinationRoleBackgroundAgent && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeBackgroundAgent) {
@@ -653,7 +679,7 @@ func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, d
 		clone.ExpectedOutput = cloneSchema(clone.ExpectedOutput)
 	}
 	if clone.Role == CoordinationRoleBackgroundAgent {
-		clone.LongRunning = true
+		clone.LongRunning = EnabledStateEnabled
 		if !containsCoordinationExecutionMode(clone.ExecutionModes, CoordinationExecutionModeBackgroundAgent) {
 			clone.ExecutionModes = append(clone.ExecutionModes, CoordinationExecutionModeBackgroundAgent)
 			clone.ExecutionModes = normalizeCoordinationExecutionModes(clone.ExecutionModes)

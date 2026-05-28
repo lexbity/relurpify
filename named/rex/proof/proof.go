@@ -80,24 +80,22 @@ func BuildActionLog(decision route.RouteDecision, class classify.Classification,
 		{Kind: "route", Message: "resolved rex route", Timestamp: now, Metadata: map[string]any{"family": decision.Family, "mode": decision.Mode, "profile": decision.Profile}},
 		{Kind: "classification", Message: "classified rex task", Timestamp: now, Metadata: map[string]any{"intent": class.Intent, "risk": class.RiskLevel, "read_only": class.ReadOnly}},
 	}
-	if env != nil {
-		if val, ok := env.GetWorkingValue(rexkeys.RexWorkflowID); ok {
-			if workflowID := strings.TrimSpace(fmt.Sprint(val)); workflowID != "" {
-				log = append(log, ActionLogEntry{Kind: "identity", Message: "resolved rex workflow identity", Timestamp: now, Metadata: map[string]any{rexkeys.WorkflowID: workflowID}})
-			}
+	if workflowID, ok := contextdata.GetTyped[string](env, rexkeys.RexWorkflowID); ok {
+		if workflowID = strings.TrimSpace(workflowID); workflowID != "" {
+			log = append(log, ActionLogEntry{Kind: "identity", Message: "resolved rex workflow identity", Timestamp: now, Metadata: map[string]any{rexkeys.WorkflowID: workflowID}})
 		}
-		if raw, ok := env.GetWorkingValue("rex.context_expansion"); ok && raw != nil {
-			log = append(log, ActionLogEntry{Kind: "retrieval", Message: "expanded rex context", Timestamp: now, Metadata: map[string]any{"payload": raw}})
-		}
-		if raw, ok := env.GetWorkingValue("pipeline.workflow_retrieval"); ok && raw != nil {
-			log = append(log, ActionLogEntry{Kind: "workflow_retrieval", Message: "loaded rex workflow retrieval context", Timestamp: now, Metadata: map[string]any{"payload": raw}})
-		}
-		if raw, ok := env.GetWorkingValue("rex.verification"); ok && raw != nil {
-			log = append(log, ActionLogEntry{Kind: "verification", Message: "normalized rex verification evidence", Timestamp: now, Metadata: map[string]any{"payload": raw}})
-		}
-		if raw, ok := env.GetWorkingValue("rex.success_gate"); ok && raw != nil {
-			log = append(log, ActionLogEntry{Kind: "success_gate", Message: "evaluated rex completion gate", Timestamp: now, Metadata: map[string]any{"payload": raw}})
-		}
+	}
+	if expansion, ok := contextdata.GetTyped[any](env, rexkeys.RexContextExpansion); ok {
+		log = append(log, ActionLogEntry{Kind: "retrieval", Message: "expanded rex context", Timestamp: now, Metadata: map[string]any{"payload": expansion}})
+	}
+	if raw, ok := env.GetWorkingValue("pipeline.workflow_retrieval"); ok && raw != nil {
+		log = append(log, ActionLogEntry{Kind: "workflow_retrieval", Message: "loaded rex workflow retrieval context", Timestamp: now, Metadata: map[string]any{"payload": raw}})
+	}
+	if evidence, ok := contextdata.GetTyped[VerificationEvidenceRecord](env, rexkeys.RexVerification); ok {
+		log = append(log, ActionLogEntry{Kind: "verification", Message: "normalized rex verification evidence", Timestamp: now, Metadata: map[string]any{"payload": evidence}})
+	}
+	if gate, ok := contextdata.GetTyped[SuccessGateResult](env, rexkeys.RexSuccessGate); ok {
+		log = append(log, ActionLogEntry{Kind: "success_gate", Message: "evaluated rex completion gate", Timestamp: now, Metadata: map[string]any{"payload": gate}})
 	}
 	return log
 }
@@ -111,40 +109,28 @@ func BuildProofSurface(decision route.RouteDecision, result *core.Result, env *c
 		VerificationStatus: verificationStatus(env),
 		CompletionAllowed:  result == nil || result.Error == "",
 	}
-	if env != nil {
-		if evidence := VerificationEvidence(env); evidence.EvidencePresent {
-			proof.VerificationEvidence = true
-			proof.VerificationSource = evidence.Source
-		}
-		if gate, ok := env.GetWorkingValue("rex.success_gate"); ok && gate != nil {
-			if typed, ok := gate.(SuccessGateResult); ok {
-				proof.SuccessGateReason = typed.Reason
-				proof.CompletionAllowed = typed.Allowed && proof.CompletionAllowed
-			}
-		}
-		if attempts, ok := env.GetWorkingValue("rex.recovery_attempts"); ok {
-			if count, ok := attempts.(int); ok {
-				proof.RecoveryCount = count
-			}
-		}
-		if raw, ok := env.GetWorkingValue("rex.artifact_kinds"); ok {
-			switch typed := raw.(type) {
-			case []string:
-				proof.ArtifactKinds = append([]string{}, typed...)
-			}
-		}
-		if raw, ok := env.GetWorkingValue("pipeline.workflow_retrieval"); ok && raw != nil {
-			proof.WorkflowRetrieval = true
-		}
+	if evidence := VerificationEvidence(env); evidence.EvidencePresent {
+		proof.VerificationEvidence = true
+		proof.VerificationSource = evidence.Source
+	}
+	if gate, ok := contextdata.GetTyped[SuccessGateResult](env, rexkeys.RexSuccessGate); ok {
+		proof.SuccessGateReason = gate.Reason
+		proof.CompletionAllowed = gate.Allowed && proof.CompletionAllowed
+	}
+	if count, ok := contextdata.GetTyped[int](env, rexkeys.RexRecoveryAttempts); ok {
+		proof.RecoveryCount = count
+	}
+	if kinds, ok := contextdata.GetTyped[[]string](env, rexkeys.RexArtifactKinds); ok {
+		proof.ArtifactKinds = append([]string{}, kinds...)
+	}
+	if raw, ok := env.GetWorkingValue("pipeline.workflow_retrieval"); ok && raw != nil {
+		proof.WorkflowRetrieval = true
 	}
 	return proof
 }
 
 // VerificationEvidence normalizes raw verification state from delegate execution.
 func VerificationEvidence(env *contextdata.Envelope) VerificationEvidenceRecord {
-	if env == nil {
-		return VerificationEvidenceRecord{Status: "not_verified", Source: "absent"}
-	}
 	if raw, ok := env.GetWorkingValue("pipeline.verify"); ok && raw != nil {
 		evidence := verificationEvidenceFromRaw(raw)
 		if evidence.Status != "" {
@@ -169,34 +155,28 @@ func EvaluateCompletion(decision route.RouteDecision, class classify.Classificat
 	evidence := VerificationEvidence(env)
 	if !decision.RequireProof {
 		gate := SuccessGateResult{Allowed: true, Reason: "proof_not_required"}
-		if env != nil {
-			env.SetWorkingValue("rex.verification_policy", ResolveVerificationPolicy(decision, class), contextdata.MemoryClassTask)
-			env.SetWorkingValue("rex.verification", evidence, contextdata.MemoryClassTask)
-			env.SetWorkingValue("rex.success_gate", gate, contextdata.MemoryClassTask)
-			env.SetWorkingValue("rex.verification_status", evidence.Status, contextdata.MemoryClassTask)
-		}
+		contextdata.SetTyped(env, rexkeys.RexVerificationPolicy, ResolveVerificationPolicy(decision, class))
+		contextdata.SetTyped(env, rexkeys.RexVerification, evidence)
+		contextdata.SetTyped(env, rexkeys.RexSuccessGate, gate)
+		contextdata.SetTyped(env, rexkeys.RexVerificationStatus, evidence.Status)
 		return CompletionDecision{Allowed: true, Reason: gate.Reason}
 	}
 	policy := ResolveVerificationPolicy(decision, class)
 	if class.ReadOnly {
 		if !evidence.EvidencePresent {
 			gate := SuccessGateResult{Allowed: true, Reason: "inspection-only"}
-			if env != nil {
-				env.SetWorkingValue("rex.verification_policy", policy, contextdata.MemoryClassTask)
-				env.SetWorkingValue("rex.verification", evidence, contextdata.MemoryClassTask)
-				env.SetWorkingValue("rex.success_gate", gate, contextdata.MemoryClassTask)
-				env.SetWorkingValue("rex.verification_status", evidence.Status, contextdata.MemoryClassTask)
-			}
+			contextdata.SetTyped(env, rexkeys.RexVerificationPolicy, policy)
+			contextdata.SetTyped(env, rexkeys.RexVerification, evidence)
+			contextdata.SetTyped(env, rexkeys.RexSuccessGate, gate)
+			contextdata.SetTyped(env, rexkeys.RexVerificationStatus, evidence.Status)
 			return CompletionDecision{Allowed: true, Reason: gate.Reason}
 		}
 	}
 	gate := EvaluateSuccessGate(policy, evidence)
-	if env != nil {
-		env.SetWorkingValue("rex.verification_policy", policy, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rex.verification", evidence, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rex.success_gate", gate, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rex.verification_status", evidence.Status, contextdata.MemoryClassTask)
-	}
+	contextdata.SetTyped(env, rexkeys.RexVerificationPolicy, policy)
+	contextdata.SetTyped(env, rexkeys.RexVerification, evidence)
+	contextdata.SetTyped(env, rexkeys.RexSuccessGate, gate)
+	contextdata.SetTyped(env, rexkeys.RexVerificationStatus, evidence.Status)
 	return CompletionDecision{
 		Allowed: gate.Allowed,
 		Reason:  gate.Reason,
@@ -225,21 +205,11 @@ func ResolveVerificationPolicy(decision route.RouteDecision, class classify.Clas
 }
 
 func verificationStatus(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
+	if evidence, ok := contextdata.GetTyped[VerificationEvidenceRecord](env, rexkeys.RexVerification); ok {
+		return strings.TrimSpace(evidence.Status)
 	}
-	if raw, ok := env.GetWorkingValue("rex.verification"); ok && raw != nil {
-		if payload, ok := raw.(map[string]any); ok {
-			if status, ok := payload["status"].(string); ok {
-				return strings.TrimSpace(status)
-			}
-		}
-		if typed, ok := raw.(VerificationEvidenceRecord); ok {
-			return strings.TrimSpace(typed.Status)
-		}
-	}
-	if val, ok := env.GetWorkingValue("rex.verification_status"); ok {
-		return strings.TrimSpace(fmt.Sprint(val))
+	if status, ok := contextdata.GetTyped[string](env, rexkeys.RexVerificationStatus); ok {
+		return strings.TrimSpace(status)
 	}
 	return ""
 }

@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
@@ -77,8 +78,10 @@ func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node-bg", result.NodeID)
-	require.Equal(t, "background", result.Data["mode"])
-	require.Equal(t, "stream-node-bg.stream", result.Data["contextstream_job_id"])
+	mode, _ := core.ResultField(result.Data, "mode")
+	require.Equal(t, "background", mode)
+	jobID, _ := core.ResultField(result.Data, "contextstream_job_id")
+	require.Equal(t, "stream-node-bg.stream", jobID)
 
 	require.Eventually(t, func() bool {
 		ids := env.StreamedChunkIDs()

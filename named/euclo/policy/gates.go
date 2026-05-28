@@ -99,10 +99,6 @@ func (n *GateNode) Type() string {
 
 // Execute performs policy enforcement.
 func (n *GateNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[string]any, error) {
-	if env == nil {
-		return nil, fmt.Errorf("gate %q requires an envelope", n.id)
-	}
-
 	decision := n.readDecision(env)
 	if decision == nil {
 		return nil, fmt.Errorf("gate %q could not determine policy decision", n.id)
@@ -115,9 +111,9 @@ func (n *GateNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[
 		response, err := n.handleHITL(ctx, env, decision)
 		if err != nil {
 			n.writeHITLState(env, false, nil)
-			env.SetWorkingValue("euclo.outcome.category", "hitl_rejected", contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.outcome.reason", err.Error(), contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.outcome.completed", false, contextdata.MemoryClassTask)
+			contextdata.SetTyped(env, "euclo.outcome.category", "hitl_rejected")
+			contextdata.SetTyped(env, "euclo.outcome.reason", err.Error())
+			contextdata.SetTyped(env, "euclo.outcome.completed", false)
 			return nil, err
 		}
 		n.writeHITLState(env, true, response)
@@ -134,13 +130,8 @@ func (n *GateNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[
 }
 
 func (n *GateNode) readDecision(env *contextdata.Envelope) *PolicyDecision {
-	if env == nil {
-		return nil
-	}
-	if v, ok := env.GetWorkingValue(policyDecisionKey); ok {
-		if decision, ok := v.(*PolicyDecision); ok && decision != nil {
-			return decision
-		}
+	if decision, ok := contextdata.GetTyped[*PolicyDecision](env, policyDecisionKey); ok && decision != nil {
+		return decision
 	}
 	if n == nil || n.evaluator == nil {
 		return nil
@@ -149,9 +140,6 @@ func (n *GateNode) readDecision(env *contextdata.Envelope) *PolicyDecision {
 }
 
 func (n *GateNode) policyContextFromEnvelope(env *contextdata.Envelope) *PolicyContext {
-	if env == nil {
-		return &PolicyContext{}
-	}
 	return &PolicyContext{
 		FamilyID:             getString(env, "euclo.family_selection"),
 		EditPermitted:        getBool(env, "euclo.task_envelope.edit_permitted"),
@@ -162,26 +150,23 @@ func (n *GateNode) policyContextFromEnvelope(env *contextdata.Envelope) *PolicyC
 }
 
 func (n *GateNode) writeDecision(env *contextdata.Envelope, decision *PolicyDecision) {
-	if env == nil || decision == nil {
+	if decision == nil {
 		return
 	}
-	env.SetWorkingValue(policyDecisionKey, decision, contextdata.MemoryClassTask)
-	env.SetWorkingValue(policyMutationKey, decision.MutationPermitted, contextdata.MemoryClassTask)
-	env.SetWorkingValue(policyHITLRequiredKey, decision.HITLRequired, contextdata.MemoryClassTask)
-	env.SetWorkingValue(policyVerificationKey, decision.VerificationRequired, contextdata.MemoryClassTask)
-	env.SetWorkingValue(policyReasonCodesKey, append([]string(nil), decision.ReasonCodes...), contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, policyDecisionKey, decision)
+	contextdata.SetTyped(env, policyMutationKey, decision.MutationPermitted)
+	contextdata.SetTyped(env, policyHITLRequiredKey, decision.HITLRequired)
+	contextdata.SetTyped(env, policyVerificationKey, decision.VerificationRequired)
+	contextdata.SetTyped(env, policyReasonCodesKey, append([]string(nil), decision.ReasonCodes...))
 }
 
 func (n *GateNode) writeHITLState(env *contextdata.Envelope, triggered bool, response *interaction.HITLResponse) {
-	if env == nil {
-		return
-	}
-	env.SetWorkingValue(policyHITLTriggeredKey, triggered, contextdata.MemoryClassTask)
-	env.SetWorkingValue(policyHITLResponseKey, response, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, policyHITLTriggeredKey, triggered)
+	contextdata.SetTyped(env, policyHITLResponseKey, response)
 }
 
 func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, decision *PolicyDecision) (*interaction.HITLResponse, error) {
-	if env == nil || decision == nil {
+	if decision == nil {
 		return nil, fmt.Errorf("gate %q missing policy decision", n.id)
 	}
 
@@ -265,9 +250,6 @@ func (n *GateNode) riskLevel(decision *PolicyDecision) authorization.RiskLevel {
 }
 
 func (n *GateNode) resourceID(env *contextdata.Envelope) string {
-	if env == nil {
-		return strings.TrimSpace(n.agentID)
-	}
 	if id := strings.TrimSpace(env.TaskID); id != "" {
 		return id
 	}
@@ -282,49 +264,21 @@ func (n *GateNode) telemetry() core.Telemetry {
 }
 
 func getString(env *contextdata.Envelope, key string) string {
-	if env == nil {
-		return ""
-	}
-	v, ok := env.GetWorkingValue(key)
-	if !ok {
-		return ""
-	}
-	s, _ := v.(string)
-	return strings.TrimSpace(s)
+	v, _ := contextdata.GetTyped[string](env, key)
+	return strings.TrimSpace(v)
 }
 
 func getBool(env *contextdata.Envelope, key string) bool {
-	if env == nil {
-		return false
-	}
-	v, ok := env.GetWorkingValue(key)
-	if !ok {
-		return false
-	}
-	switch typed := v.(type) {
-	case bool:
-		return typed
-	case string:
-		return strings.EqualFold(strings.TrimSpace(typed), "true")
-	default:
-		return false
-	}
+	v, _ := contextdata.GetTyped[bool](env, key)
+	return v
 }
 
 func getStringSlice(env *contextdata.Envelope, key string) []string {
-	if env == nil {
-		return nil
-	}
-	v, ok := env.GetWorkingValue(key)
+	v, ok := contextdata.GetTyped[[]string](env, key)
 	if !ok {
 		return nil
 	}
-	switch typed := v.(type) {
-	case []string:
-		return append([]string(nil), typed...)
-	default:
-		return nil
-	}
+	return append([]string(nil), v...)
 }
 
 func firstNonEmpty(values ...string) string {

@@ -1,72 +1,169 @@
 package state
 
+import "codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
+
 // Envelope working memory keys used by Euclo.
 // All keys are prefixed with "euclo." for namespacing.
 const (
 	// Task and Intake
-	KeyTaskEnvelope         = "euclo.task_envelope"         // *intake.TaskEnvelope
-	KeyIntentClassification = "euclo.intent_classification" // *intake.IntentClassification
-	KeyIntentEvidence       = "euclo.intent_evidence"       // *intentcontext.IntentEvidence
-	KeyIntentInterpretation = "euclo.intent_interpretation" // *intentcontext.IntentInterpretation
-	KeyRouteSelection       = "euclo.route_selection"       // *orchestrate.RouteSelection
-	KeyRouteResolution      = "euclo.route_resolution"      // *orchestrate.RouteResolution
+	KeyTaskEnvelope         = euclokeys.KeyTaskEnvelope
+	KeyIntentClassification = euclokeys.KeyIntentClassification
+	KeyIntentEvidence       = euclokeys.KeyIntentEvidence
+	KeyIntentInterpretation = euclokeys.KeyIntentInterpretation
+	KeyRouteSelection       = euclokeys.KeyRouteSelection
+	KeyRouteResolution      = euclokeys.KeyRouteResolution
 
 	// User Hints
-	KeyContextHint     = "euclo.context_hint"     // string
-	KeyWorkspaceScopes = "euclo.workspace_scopes" // []string
-	KeySessionHint     = "euclo.session_hint"     // string
-	KeyFollowUpHint    = "euclo.follow_up_hint"   // string
-	KeyAgentModeHint   = "euclo.agent_mode_hint"  // string
+	KeyContextHint     = euclokeys.KeyContextHint
+	KeyWorkspaceScopes = euclokeys.KeyWorkspaceScopes
+	KeySessionHint     = euclokeys.KeySessionHint
+	KeyFollowUpHint    = euclokeys.KeyFollowUpHint
+	KeyAgentModeHint   = euclokeys.KeyAgentModeHint
 
 	// Ingestion
-	KeyUserSelectedFiles   = "euclo.user_selected_files"   // []string
-	KeyExplicitIngestPaths = "euclo.explicit_ingest_paths" // []string
-	KeyIncrementalSinceRef = "euclo.incremental_since_ref" // string (commit hash)
-	KeyIngestPolicy        = "euclo.ingest_policy"         // string ("files_only", "incremental", "full")
+	KeyUserSelectedFiles   = euclokeys.KeyUserSelectedFiles
+	KeyExplicitIngestPaths = euclokeys.KeyExplicitIngestPaths
+	KeyIncrementalSinceRef = euclokeys.KeyIncrementalSinceRef
+	KeyIngestPolicy        = euclokeys.KeyIngestPolicy
 
-	// Intent Signals (used during classification)
-	KeyIntentSignals = "euclo.intent_signals" // map[string]float64 (family scores)
-	KeyFamilyScores  = "euclo.family_scores"  // map[string]float64
+	// Intent Signals
+	KeyIntentSignals = euclokeys.KeyIntentSignals
+	KeyFamilyScores  = euclokeys.KeyFamilyScores
 
-	// Thought ThoughtRecipe
-	KeyThoughtRecipeID      = "euclo.thoughtrecipe_id"      // string
-	KeyThoughtRecipeVersion = "euclo.thoughtrecipe_version" // string
+	// Thought Recipe
+	KeyThoughtRecipeID      = euclokeys.KeyThoughtRecipeID
+	KeyThoughtRecipeVersion = euclokeys.KeyThoughtRecipeVersion
 
 	// Policy
-	KeyPolicyDecision = "euclo.policy_decision" // *policy.PolicyDecision
-	KeyHITLTriggered  = "euclo.hitl_triggered"  // bool
-	KeyHITLResponse   = "euclo.hitl_response"   // *interaction.HITLResponse
+	KeyPolicyDecision = euclokeys.KeyPolicyDecision
+	KeyHITLTriggered  = euclokeys.KeyHITLTriggered
+	KeyHITLResponse   = euclokeys.KeyHITLResponse
 
 	// Execution
-	KeyDryRunMode       = "euclo.dry_run_mode"      // bool
-	KeyOutcomeCategory  = "euclo.outcome_category"  // string
-	KeyOutcomeArtifacts = "euclo.outcome_artifacts" // []string
-	KeyOutcomeTelemetry = "euclo.outcome_telemetry" // map[string]any
+	KeyDryRunMode       = euclokeys.KeyDryRunMode
+	KeyOutcomeCategory  = euclokeys.KeyOutcomeCategory
+	KeyOutcomeArtifacts = euclokeys.KeyOutcomeArtifacts
+	KeyOutcomeTelemetry = euclokeys.KeyOutcomeTelemetry
 
-	// Resume (for session restoration)
-	KeyResumeClassification = "euclo.resume.classification" // *intake.IntentClassification
-	KeyResumeRoute          = "euclo.resume.route"          // *orchestrate.RouteSelection
+	// Resume
+	KeyResumeClassification = euclokeys.KeyResumeClassification
+	KeyResumeRoute          = euclokeys.KeyResumeRoute
 
 	// Dispatch routing
-	KeyDispatchRouteKind = "euclo.dispatch.route_kind" // string ("thoughtrecipe" or "capability")
+	KeyDispatchRouteKind = euclokeys.KeyDispatchRouteKind
 
 	// Stream
-	KeyStreamResult     = "euclo.stream_result"      // *contextstream.Result
-	KeyStreamTokenUsage = "euclo.stream_token_usage" // int
+	KeyStreamResult     = euclokeys.KeyStreamResult
+	KeyStreamTokenUsage = euclokeys.KeyStreamTokenUsage
 
-	// Interaction Frames (accumulated during execution)
-	KeyFrameHistory = "euclo.frame_history" // []string (frame IDs)
+	// Interaction Frames
+	KeyFrameHistory = euclokeys.KeyFrameHistory
 
 	// Jobs and Records
-	KeyJobRecords      = "euclo.job_records"      // []JobRecord
-	KeyIngestionResult = "euclo.ingestion_result" // *ingestion.Result
+	KeyJobRecords      = euclokeys.KeyJobRecords
+	KeyIngestionResult = euclokeys.KeyIngestionResult
 
-	// ThoughtRecipe capture keys (dynamic pattern: euclo.thoughtrecipe.{thoughtrecipeID}.{captureName})
-	KeyThoughtRecipePrefix = "euclo.thoughtrecipe."
+	// ThoughtRecipe capture prefix
+	KeyThoughtRecipePrefix = euclokeys.KeyThoughtRecipePrefix
 
 	// Negative constraints
-	KeyNegativeConstraints = "euclo.negative_constraints" // []string
+	KeyNegativeConstraints = euclokeys.KeyNegativeConstraints
 
-	// Family selection (for resume)
-	KeyFamilySelection = "euclo.family_selection" // string
+	// Family selection
+	KeyFamilySelection = euclokeys.KeyFamilySelection
+)
+
+// Route dispatch detail keys — written by the dispatcher alongside KeyRouteSelection.
+// Callers should prefer the typed accessors in route_state.go over raw string access.
+const (
+	KeyRouteContinuation   = euclokeys.KeyRouteContinuation
+	KeyRouteCandidateCount = euclokeys.KeyRouteCandidateCount
+	KeyRouteFallbackTaken  = euclokeys.KeyRouteFallbackTaken
+	KeyRouteFallbackID     = euclokeys.KeyRouteFallbackID
+	KeyRouteSkillFilter    = euclokeys.KeyRouteSkillFilter
+	KeyRouteOutcome        = euclokeys.KeyRouteOutcome
+	KeyRouteTelemetryOff   = euclokeys.KeyRouteTelemetryOff
+	KeySkillFilter         = euclokeys.KeySkillFilter
+)
+
+// Background job state keys — written and read by BackgroundJobNode.
+// Callers should prefer the typed accessors in background_state.go.
+const (
+	KeyBackgroundJobID         = euclokeys.KeyBackgroundJobID
+	KeyBackgroundJobQueue      = euclokeys.KeyBackgroundJobQueue
+	KeyBackgroundJobKind       = euclokeys.KeyBackgroundJobKind
+	KeyBackgroundJobSubmitted  = euclokeys.KeyBackgroundJobSubmitted
+	KeyBackgroundJobState      = euclokeys.KeyBackgroundJobState
+	KeyBackgroundJobCompleted  = euclokeys.KeyBackgroundJobCompleted
+	KeyBackgroundJobCompletion = euclokeys.KeyBackgroundJobCompletion
+	KeyBackgroundJobSpec       = euclokeys.KeyBackgroundJobSpec
+	KeyBackgroundJobPayload    = euclokeys.KeyBackgroundJobPayload
+)
+
+// Execution progress keys — written by capability_executor and recipe_executor.
+// Callers should prefer the typed accessors in execution_state.go.
+const (
+	KeyExecutionKind          = euclokeys.KeyExecutionKind
+	KeyExecutionCapabilityID  = euclokeys.KeyExecutionCapabilityID
+	KeyExecutionCompleted     = euclokeys.KeyExecutionCompleted
+	KeyExecutionThoughtRecipe = euclokeys.KeyExecutionThoughtRecipe
+)
+
+// Interaction frame state keys.
+// Callers should prefer the typed accessors in interaction_state.go.
+const (
+	KeyInteractionFrameSeq           = euclokeys.KeyInteractionFrameSeq
+	KeyInteractionFrameRequested     = euclokeys.KeyInteractionFrameRequested
+	KeyInteractionClarificationFrame = euclokeys.KeyInteractionClarificationFrame
+	KeyInteractionResumeNodeID       = euclokeys.KeyInteractionResumeNodeID
+	KeyInteractionPause              = euclokeys.KeyInteractionPause
+)
+
+// Ask / HITL prompt keys — written by the clarification flow.
+const (
+	KeyAskQuestion     = euclokeys.KeyAskQuestion
+	KeyAskChoices      = euclokeys.KeyAskChoices
+	KeyAskChoiceSource = euclokeys.KeyAskChoiceSource
+)
+
+// Miscellaneous execution control keys.
+const (
+	KeyDone                 = euclokeys.KeyDone
+	KeyForkBranch           = euclokeys.KeyForkBranch
+	KeyCapabilityClassified = euclokeys.KeyCapabilityClassified
+	KeyExecutionMerged      = euclokeys.KeyExecutionMerged
+	KeyFamilySelected       = euclokeys.KeyFamilySelected
+	KeyStreamRequested      = euclokeys.KeyStreamRequested
+	KeyCapabilityID         = euclokeys.KeyCapabilityID
+)
+
+// Policy defaults seeded before gate evaluation.
+const (
+	KeyTaskEnvelopeEditPermitted  = euclokeys.KeyTaskEnvelopeEditPermitted
+	KeyPolicyRiskLevel            = euclokeys.KeyPolicyRiskLevel
+	KeyPolicyVerificationRequired = euclokeys.KeyPolicyVerificationRequired
+)
+
+// Task input — multi-key pattern; all three are set together.
+const (
+	KeyTaskRaw         = euclokeys.KeyTaskRaw
+	KeyTaskInput       = euclokeys.KeyTaskInput
+	KeyTaskInputLegacy = euclokeys.KeyTaskInputLegacy
+)
+
+// Clarification sub-keys written by clarification.go and recipe_executor.go.
+const (
+	KeyClarificationNextThoughtRecipeID = euclokeys.KeyClarificationNextThoughtRecipeID
+	KeyClarificationUnresolved          = euclokeys.KeyClarificationUnresolved
+	KeyClarificationUnresolvedReason    = euclokeys.KeyClarificationUnresolvedReason
+	KeyClarificationGateResult          = euclokeys.KeyClarificationGateResult
+	KeyClarificationFrame               = euclokeys.KeyClarificationFrame
+)
+
+// Ingestion result keys written by IngestionNode.
+const (
+	KeyIngestionUserFilesCount   = euclokeys.KeyIngestionUserFilesCount
+	KeyIngestionSessionPinsCount = euclokeys.KeyIngestionSessionPinsCount
+	KeyIngestedFilePrefix        = euclokeys.KeyIngestedFilePrefix
+	KeyIngestedPinPrefix         = euclokeys.KeyIngestedPinPrefix
 )

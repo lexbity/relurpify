@@ -83,13 +83,13 @@ func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		return nil, err
 	}
 	if err := g.AddEdge(decision.ID(), run.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
-		revise, _ := env.GetWorkingValue("reflection.revise")
+		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
 		return revise == true
 	}, false); err != nil {
 		return nil, err
 	}
 	if err := g.AddEdge(decision.ID(), done.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
-		revise, _ := env.GetWorkingValue("reflection.revise")
+		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
 		return revise != true
 	}, false); err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func (n *reflectionDelegateNode) Execute(ctx context.Context, env *contextdata.E
 		return nil, err
 	}
 	env.Merge(child)
-	env.SetHandleScoped("reflection.last_result", result, taskScope(n.task, env))
+	contextdata.SetTyped(env, scopedResultKey(taskScope(n.task, env), "reflection.last_result"), result)
 	return result, nil
 }
 
@@ -159,8 +159,8 @@ Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), com
 	if err != nil {
 		return nil, err
 	}
-	env.SetWorkingValue("reflection.review", review, contextdata.MemoryClassTask)
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"review": review}}, nil
+	contextdata.SetTyped(env, "reflection.review", review)
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"review": review})}, nil
 }
 
 type reflectionDecisionNode struct {
@@ -179,18 +179,19 @@ func (n *reflectionDecisionNode) Type() graph.NodeType {
 // Execute inspects review feedback and decides if another delegate iteration
 // should run.
 func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	reviewVal, _ := env.GetWorkingValue("reflection.review")
-	review, _ := reviewVal.(reviewPayload)
-	iterVal, _ := env.GetWorkingValue("reflection.iteration")
-	iter, _ := iterVal.(int)
+	review, _ := contextdata.GetTyped[reviewPayload](env, "reflection.review")
+	iter, _ := contextdata.GetTyped[int](env, "reflection.iteration")
 	iter++
-	env.SetWorkingValue("reflection.iteration", iter, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "reflection.iteration", iter)
 	assessment := reflectionAssessmentForReview(n.agent, env, review)
-	env.SetWorkingValue("reflection.assessment", assessment, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "reflection.assessment", assessment)
 	approve := review.Approve && assessment.Allowed
 	revise := !approve && iter < n.agent.maxIterations
-	env.SetWorkingValue("reflection.revise", revise, contextdata.MemoryClassTask)
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
+	contextdata.SetTyped(env, "reflection.revise", revise)
+	return &core.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data: core.NewToolResultPayload(map[string]any{
 		"revise":                 revise,
 		"issue_score":            assessment.IssueScore,
 		"approval_threshold":     assessment.ApprovalThreshold,
@@ -198,7 +199,8 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.E
 		"blocking_reasons":       append([]string{}, assessment.BlockingReasons...),
 		"blocking_issue_count":   assessment.BlockingIssueCount,
 		"unresolved_issue_count": assessment.UnresolvedIssueCount,
-	}}, nil
+		}),
+	}, nil
 }
 
 type reviewPayload struct {
@@ -233,17 +235,22 @@ func resolveResultHandle(env *contextdata.Envelope, key string) *core.Result {
 	if env == nil {
 		return nil
 	}
-	if value, ok := env.GetHandle(key); ok {
-		if res, ok := value.(*core.Result); ok {
-			return res
-		}
+	if value, ok := contextdata.GetTyped[*core.Result](env, key); ok {
+		return value
 	}
-	if value, ok := env.GetWorkingValue(key); ok {
-		if res, ok := value.(*core.Result); ok {
-			return res
+	if scoped := scopedResultKey(taskScope(nil, env), key); scoped != "" {
+		if value, ok := contextdata.GetTyped[*core.Result](env, scoped); ok {
+			return value
 		}
 	}
 	return nil
+}
+
+func scopedResultKey(scope, key string) string {
+	if scope == "" {
+		return ""
+	}
+	return scope + ":" + key
 }
 
 func taskScope(task *core.Task, env *contextdata.Envelope) string {
@@ -251,17 +258,17 @@ func taskScope(task *core.Task, env *contextdata.Envelope) string {
 		return task.ID
 	}
 	if env != nil {
+		if env.TaskID != "" {
+			return env.TaskID
+		}
 		return envGetString(env, "task.id")
 	}
 	return ""
 }
 
 func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
-	}
-	return ""
+	val, _ := contextdata.GetTyped[string](env, key)
+	return val
 }
 
 func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
@@ -341,8 +348,8 @@ func compactResultForReview(result *core.Result) map[string]any {
 	if strings.TrimSpace(result.Error) != "" {
 		data["error"] = truncateReflectionString(result.Error)
 	}
-	if len(result.Data) > 0 {
-		data["data"] = compactReflectionValue(result.Data, 0)
+	if fields := core.ResultFields(result.Data); len(fields) > 0 {
+		data["data"] = compactReflectionValue(fields, 0)
 	}
 	return data
 }
@@ -468,8 +475,8 @@ func hasVerificationEvidence(env *contextdata.Envelope) bool {
 	if env == nil {
 		return false
 	}
-	if raw, ok := env.GetWorkingValue("react.tool_observations"); ok && raw != nil {
-		if observations, ok := raw.([]reactpkg.ToolObservation); ok {
+	if observations, ok := contextdata.GetTyped[[]reactpkg.ToolObservation](env, "react.tool_observations"); ok {
+		if observations != nil {
 			for _, obs := range observations {
 				if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
 					return true

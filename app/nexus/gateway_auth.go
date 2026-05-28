@@ -16,10 +16,10 @@ import (
 type gatewayPrincipalResolverImpl struct {
 	staticBindings []identity.StaticTokenBinding
 	tokenStore     nexusadmin.TokenStore
-	identityStore  identity.Store
+	identityStore  identity.SubjectStore
 }
 
-func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.Store) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
+func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.SubjectStore) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -182,7 +182,7 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, identityStore identity.Store, token string) (identity.AuthenticatedPrincipal, error) {
+func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, identityStore identity.SubjectStore, token string) (identity.AuthenticatedPrincipal, error) {
 	resolver := gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore)
 	if strings.TrimSpace(token) != "" {
 		if resolver == nil {

@@ -120,7 +120,7 @@ func (a *ChainerAgent) executeChain(ctx context.Context, task *core.Task, env *c
 			data[link.OutputKey] = value
 		}
 	}
-	return &core.Result{Success: true, Data: data}, nil
+	return &core.Result{Success: true, Data: core.NewToolResultPayload(data)}, nil
 }
 
 func (a *ChainerAgent) resolveChain(task *core.Task) (*Chain, error) {

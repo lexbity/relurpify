@@ -15,7 +15,6 @@ var defaultSchemaKinds = []string{
 	"model/provider",
 	"model/profile",
 	"tool",
-	"agent",
 	"skill",
 }
 

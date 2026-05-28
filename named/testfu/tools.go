@@ -87,7 +87,7 @@ func (t *agentTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{Success: result.Success, Data: map[string]interface{}(result.Data)}, nil
+	return &contracts.ToolResult{Success: result.Success, Data: core.ResultFields(result.Data)}, nil
 }
 func (t *agentTool) IsAvailable(context.Context) bool { return true }
 func (t *agentTool) Permissions() contracts.ToolPermissions {

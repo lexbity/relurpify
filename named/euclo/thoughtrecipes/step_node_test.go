@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -84,12 +85,13 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	if !result.Success {
 		t.Fatalf("expected success, got %+v", result)
 	}
-	if got := result.Data["capability_id"]; got != "euclo:cap.ast_query" {
+	if got, _ := core.ResultField(result.Data, "capability_id"); got != "euclo:cap.ast_query" {
 		t.Fatalf("expected capability_id in result, got %v", got)
 	}
-	output, ok := result.Data["output"].(map[string]interface{})
+	outputValue, ok := core.ResultField(result.Data, "output")
+	output, ok := outputValue.(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected output map, got %T", result.Data["output"])
+		t.Fatalf("expected output map, got %T", outputValue)
 	}
 	if output["answer"] != "ok" {
 		t.Fatalf("expected output answer ok, got %v", output["answer"])
@@ -436,9 +438,9 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 	result := &core.Result{
 		NodeID:  "delegate.step.execute",
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"result": "child summary",
-		},
+		}),
 	}
 	if err := node.writeDelegationCaptures(parent, child, result); err != nil {
 		t.Fatalf("writeDelegationCaptures failed: %v", err)
@@ -477,7 +479,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first execute failed: %v", err)
 	}
-	if first == nil || first.Data["paused"] != true {
+	if first == nil || func() bool { v, _ := core.ResultField(first.Data, "paused"); return v != true }() {
 		t.Fatalf("expected paused ask result, got %+v", first)
 	}
 	frameValue, ok := env.GetWorkingValue(askFrameKey(step.ID))
@@ -501,13 +503,13 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second execute failed: %v", err)
 	}
-	if second == nil || second.Data["answer"] != "refactor" {
+	if second == nil || func() bool { v, _ := core.ResultField(second.Data, "answer"); return v != "refactor" }() {
 		t.Fatalf("expected answered ask result, got %+v", second)
 	}
 	if got, ok := env.GetWorkingValue("state.intent"); !ok || got != "refactor" {
 		t.Fatalf("expected captured state.intent refactor, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue("euclo.interaction.resume_node_id"); !ok || got != "" {
-		t.Fatalf("expected resume node cleared, got %#v (ok=%v)", got, ok)
+	if got := state.GetInteractionResumeNodeID(env); got != "" {
+		t.Fatalf("expected resume node cleared, got %#v", got)
 	}
 }

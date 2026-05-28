@@ -108,7 +108,7 @@ func ConnectStdio(ctx context.Context, launcher stdio.Launcher, cfg StdioConfig)
 		pending:    make(map[string]chan rpcResponse),
 		readerDone: make(chan error, 1),
 	}
-	go client.readLoop()
+	go client.readLoop(ctx)
 	if err := client.session.MarkTransportEstablished(); err != nil {
 		_ = client.Close()
 		return nil, err
@@ -256,6 +256,10 @@ func (c *Client) call(ctx context.Context, method string, params any, result any
 	}
 	id := fmt.Sprintf("%d", c.nextID.Add(1))
 	respCh := make(chan rpcResponse, 1)
+	paramsData, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
@@ -276,7 +280,7 @@ func (c *Client) call(ctx context.Context, method string, params any, result any
 		JSONRPC: "2.0",
 		ID:      id,
 		Method:  method,
-		Params:  mustMarshal(params),
+		Params:  paramsData,
 	}); err != nil {
 		return err
 	}
@@ -295,6 +299,10 @@ func (c *Client) call(ctx context.Context, method string, params any, result any
 }
 
 func (c *Client) notify(ctx context.Context, method string, params any) error {
+	paramsData, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -302,7 +310,7 @@ func (c *Client) notify(ctx context.Context, method string, params any) error {
 		return c.writeEnvelope(rpcEnvelope{
 			JSONRPC: "2.0",
 			Method:  method,
-			Params:  mustMarshal(params),
+			Params:  paramsData,
 		})
 	}
 }
@@ -312,7 +320,7 @@ func (c *Client) writeEnvelope(envelope rpcEnvelope) error {
 	return encoder.Encode(envelope)
 }
 
-func (c *Client) readLoop() {
+func (c *Client) readLoop(ctx context.Context) {
 	reader := bufio.NewReader(c.transport.Reader())
 	decoder := json.NewDecoder(reader)
 	for {
@@ -340,7 +348,7 @@ func (c *Client) readLoop() {
 			continue
 		}
 		if envelope.Method != "" && envelope.ID != "" {
-			c.handleServerRequest(envelope)
+			c.handleServerRequest(ctx, envelope)
 			continue
 		}
 		if envelope.Method != "" && envelope.ID == "" {
@@ -354,7 +362,7 @@ func (c *Client) readLoop() {
 	}
 }
 
-func (c *Client) handleServerRequest(envelope rpcEnvelope) {
+func (c *Client) handleServerRequest(ctx context.Context, envelope rpcEnvelope) {
 	c.mu.Lock()
 	handler := c.requests
 	c.mu.Unlock()
@@ -373,7 +381,7 @@ func (c *Client) handleServerRequest(envelope rpcEnvelope) {
 			_ = c.writeEnvelope(rpcEnvelope{JSONRPC: "2.0", ID: envelope.ID, Error: &rpcError{Code: -32602, Message: err.Error()}})
 			return
 		}
-		result, err := handler.HandleSamplingRequest(context.Background(), params)
+		result, err := handler.HandleSamplingRequest(ctx, params)
 		if err != nil {
 			_ = c.writeEnvelope(rpcEnvelope{JSONRPC: "2.0", ID: envelope.ID, Error: &rpcError{Code: -32010, Message: err.Error()}})
 			return
@@ -385,7 +393,7 @@ func (c *Client) handleServerRequest(envelope rpcEnvelope) {
 			_ = c.writeEnvelope(rpcEnvelope{JSONRPC: "2.0", ID: envelope.ID, Error: &rpcError{Code: -32602, Message: err.Error()}})
 			return
 		}
-		result, err := handler.HandleElicitationRequest(context.Background(), params)
+		result, err := handler.HandleElicitationRequest(ctx, params)
 		if err != nil {
 			_ = c.writeEnvelope(rpcEnvelope{JSONRPC: "2.0", ID: envelope.ID, Error: &rpcError{Code: -32011, Message: err.Error()}})
 			return
@@ -409,13 +417,14 @@ func (c *Client) failPending(err error) {
 	}
 }
 
+// mustMarshal marshals trusted internal values and panics if encoding fails.
 func mustMarshal(value any) json.RawMessage {
 	if value == nil {
 		return json.RawMessage(`{}`)
 	}
 	data, err := json.Marshal(value)
 	if err != nil {
-		return json.RawMessage(`{}`)
+		panic(err)
 	}
 	return data
 }

@@ -30,9 +30,6 @@ func (s *EnvelopeStateStore) Read(ctx context.Context, env *contextdata.Envelope
 	if s == nil {
 		s = &EnvelopeStateStore{}
 	}
-	if env == nil {
-		return nil, fmt.Errorf("clarification state read: nil envelope")
-	}
 	value, ok := env.GetWorkingValue(ClarificationStateKey)
 	if !ok || value == nil {
 		return NewState(env.TaskID, env.SessionID), nil
@@ -54,9 +51,6 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 	_ = ctx
 	if s == nil {
 		s = &EnvelopeStateStore{}
-	}
-	if env == nil {
-		return fmt.Errorf("clarification state write: nil envelope")
 	}
 	if state == nil {
 		return fmt.Errorf("clarification state write: nil state")
@@ -111,9 +105,6 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 }
 
 func (s *EnvelopeStateStore) readCurrent(env *contextdata.Envelope) (*ClarificationState, error) {
-	if env == nil {
-		return nil, fmt.Errorf("clarification state read: nil envelope")
-	}
 	value, ok := env.GetWorkingValue(ClarificationStateKey)
 	if !ok || value == nil {
 		return nil, nil

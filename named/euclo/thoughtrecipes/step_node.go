@@ -29,11 +29,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 const (
 	executionCapabilityIDKey = "execution_capability_id"
-	eucloCapabilityIDKey      = "euclo.execution.capability_id"
+	eucloCapabilityIDKey     = "euclo.execution.capability_id"
 )
 
 // ThoughtRecipeStepNode executes a compiled thoughtrecipe step by delegating to the matching
@@ -65,9 +66,6 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
-	if env == nil {
-		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
-	}
 
 	if strings.TrimSpace(n.step.CapabilityID) != "" {
 		return n.executeCapability(ctx, env)
@@ -93,11 +91,11 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 		result = &core.Result{
 			NodeID:  n.id,
 			Success: execErr == nil,
-			Data:    map[string]any{},
+			Data:    core.NewToolResultPayload(map[string]any{}),
 		}
 	}
 	if result.Data == nil {
-		result.Data = map[string]any{}
+		result.Data = core.NewToolResultPayload(map[string]any{})
 	}
 	if execErr != nil {
 		result.Success = false
@@ -107,10 +105,10 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 	if err := n.writeCaptures(env, result); err != nil {
 		return result, err
 	}
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".result", result.Data, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".success", result.Success, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", result.Data)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".success", result.Success)
 	if result.Error != "" {
-		env.SetWorkingValue("euclo.execution.step."+n.step.ID+".error", result.Error, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".error", result.Error)
 	}
 
 	if execErr != nil {
@@ -124,9 +122,6 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
-	}
-	if env == nil {
-		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
 	}
 
 	childEnv := n.buildDelegationEnvelope(env)
@@ -144,11 +139,11 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 		result = &core.Result{
 			NodeID:  n.id,
 			Success: execErr == nil,
-			Data:    map[string]any{},
+			Data:    core.NewToolResultPayload(map[string]any{}),
 		}
 	}
 	if result.Data == nil {
-		result.Data = map[string]any{}
+		result.Data = core.NewToolResultPayload(map[string]any{})
 	}
 	if execErr != nil {
 		result.Success = false
@@ -159,15 +154,15 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 		return result, err
 	}
 	n.writeStepMetadata(env)
-	env.SetWorkingValue("euclo.execution.delegate."+n.step.ID+".child_task_id", childEnv.TaskID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.delegate."+n.step.ID+".parent_task_id", env.TaskID, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".child_task_id", childEnv.TaskID)
+	contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".parent_task_id", env.TaskID)
 	if len(n.step.Sources) > 0 {
-		env.SetWorkingValue("euclo.execution.delegate."+n.step.ID+".sources", append([]string(nil), n.step.Sources...), contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".sources", append([]string(nil), n.step.Sources...))
 	}
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".result", result.Data, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".success", result.Success, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", result.Data)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".success", result.Success)
 	if result.Error != "" {
-		env.SetWorkingValue("euclo.execution.step."+n.step.ID+".error", result.Error, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".error", result.Error)
 	}
 
 	if execErr != nil {
@@ -180,9 +175,6 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
-	if env == nil {
-		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
-	}
 
 	frame, created := n.ensureAskFrame(env)
 	if frame == nil {
@@ -194,18 +186,19 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 			if err := interaction.EmitFrame(ctx, frame, env, core.TelemetryFromContext(ctx)); err != nil {
 				return nil, err
 			}
-			env.SetWorkingValue(askFrameKey(n.step.ID), frame, contextdata.MemoryClassTask)
+			// envelope: intentional dynamic key — ask frames are keyed by step ID.
+			contextdata.SetTyped(env, askFrameKey(n.step.ID), frame)
 		}
-		env.SetWorkingValue("euclo.interaction.frame_requested", true, contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.interaction.resume_node_id", n.id, contextdata.MemoryClassTask)
+		state.SetInteractionFrameRequested(env, true)
+		state.SetInteractionResumeNodeID(env, n.id)
 		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"paused":   true,
 				"frame_id": frame.ID,
 				"question": n.step.Question,
-			},
+			}),
 			Metadata: map[string]any{
 				"euclo.interaction.pause": true,
 				"frame_id":                frame.ID,
@@ -217,33 +210,32 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"answer":        answer,
 			"selected_slot": answer,
 			"frame_id":      frame.ID,
-		},
+		}),
 	}
 	if frame.Response != nil && len(frame.Response.ExtraData) > 0 {
-		result.Data["response"] = frame.Response.ExtraData
+		fields := core.ResultFields(result.Data)
+		fields["response"] = frame.Response.ExtraData
+		result.Data = core.NewToolResultPayload(fields)
 	}
 	if err := n.writeCaptures(env, result); err != nil {
 		return result, err
 	}
 	n.writeStepMetadata(env)
-	env.SetWorkingValue("euclo.interaction.resume_node_id", "", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
-	env.SetWorkingValue(askFrameKey(n.step.ID), frame, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".result", result.Data, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".success", true, contextdata.MemoryClassTask)
+	state.SetInteractionResumeNodeID(env, "")
+	state.SetInteractionFrameRequested(env, false)
+	contextdata.SetTyped(env, askFrameKey(n.step.ID), frame)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", result.Data)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".success", true)
 	return result, nil
 }
 
 func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
-	}
-	if env == nil {
-		return nil, fmt.Errorf("thoughtrecipe step node %q missing envelope", n.id)
 	}
 	n.writeStepMetadata(env)
 	writeCapabilityMetadata(env, n.step.ID, n.step.CapabilityID)
@@ -288,7 +280,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: success,
-		Data:    data,
+		Data:    core.NewToolResultPayload(data),
 	}
 	if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
 		result.Error = msg
@@ -297,10 +289,10 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	if err := n.writeCaptures(env, result); err != nil {
 		return result, err
 	}
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".result", data, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+n.step.ID+".success", success, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", data)
+	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".success", success)
 	if result.Error != "" {
-		env.SetWorkingValue("euclo.execution.step."+n.step.ID+".error", result.Error, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".error", result.Error)
 	}
 
 	return result, nil
@@ -374,7 +366,7 @@ func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*core.Task
 	}
 	if strings.EqualFold(strings.TrimSpace(n.step.Type), "delegate") {
 		task.Context["euclo.delegate.source_keys"] = append([]string(nil), n.step.Sources...)
-		if parentID, ok := env.GetWorkingValue("euclo.delegate.parent_task_id"); ok {
+		if parentID, ok := contextdata.GetTyped[string](env, "euclo.delegate.parent_task_id"); ok {
 			task.Context["euclo.delegate.parent_task_id"] = parentID
 		}
 		task.Context["euclo.delegate.child_task_id"] = env.TaskID
@@ -429,14 +421,12 @@ func (n *ThoughtRecipeStepNode) buildDelegationEnvelope(parent *contextdata.Enve
 }
 
 func (n *ThoughtRecipeStepNode) ensureAskFrame(env *contextdata.Envelope) (*interaction.InteractionFrame, bool) {
-	if env == nil || n == nil {
+	if n == nil {
 		return nil, false
 	}
 	key := askFrameKey(n.step.ID)
-	if v, ok := env.GetWorkingValue(key); ok {
-		if frame, ok := v.(*interaction.InteractionFrame); ok && frame != nil {
-			return frame, false
-		}
+	if frame, ok := contextdata.GetTyped[*interaction.InteractionFrame](env, key); ok && frame != nil {
+		return frame, false
 	}
 	choices := n.askChoices(env)
 	frame := interaction.NewAskUserFrame(env.TaskID, env.SessionID, n.step.Question, choices)
@@ -444,7 +434,8 @@ func (n *ThoughtRecipeStepNode) ensureAskFrame(env *contextdata.Envelope) (*inte
 	frame.Payload["step_type"] = n.step.Type
 	frame.Payload["choice_source"] = n.step.ChoiceSource
 	frame.Payload["frame_key"] = key
-	env.SetWorkingValue(key, frame, contextdata.MemoryClassTask)
+	// envelope: intentional dynamic key — ask frames are keyed by step ID.
+	contextdata.SetTyped(env, key, frame)
 	return frame, true
 }
 
@@ -455,7 +446,7 @@ func (n *ThoughtRecipeStepNode) askChoices(env *contextdata.Envelope) []string {
 	if len(n.step.Choices) > 0 {
 		return append([]string(nil), n.step.Choices...)
 	}
-	if strings.TrimSpace(n.step.ChoiceSource) == "" || env == nil {
+	if strings.TrimSpace(n.step.ChoiceSource) == "" {
 		return nil
 	}
 	data := thoughtrecipeTemplateData(env, n.step)
@@ -498,7 +489,7 @@ func (n *ThoughtRecipeStepNode) writeDelegationCaptures(parent, child *contextda
 	}
 	sourceData := child.Snapshot()
 	if len(n.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, result.Data)
+		_, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, core.ResultFields(result.Data))
 		return err
 	}
 	return n.writeCaptures(parent, result)
@@ -629,59 +620,54 @@ func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string
 }
 
 func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
-	if env == nil {
-		return
-	}
 	base := "euclo.execution.step." + n.step.ID
-	env.SetWorkingValue(base+".id", n.step.ID, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".type", n.step.Type, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".paradigm", n.step.Paradigm, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".goal", n.step.Goal, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".question", n.step.Question, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".prompt_id", n.step.PromptID, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".mutation", n.step.Mutation, contextdata.MemoryClassTask)
-	env.SetWorkingValue(base+".hitl", n.step.HITL, contextdata.MemoryClassTask)
+	// envelope: intentional dynamic key — step metadata is namespaced by step ID.
+	contextdata.SetTyped(env, base+".id", n.step.ID)
+	contextdata.SetTyped(env, base+".type", n.step.Type)
+	contextdata.SetTyped(env, base+".paradigm", n.step.Paradigm)
+	contextdata.SetTyped(env, base+".goal", n.step.Goal)
+	contextdata.SetTyped(env, base+".question", n.step.Question)
+	contextdata.SetTyped(env, base+".prompt_id", n.step.PromptID)
+	contextdata.SetTyped(env, base+".mutation", n.step.Mutation)
+	contextdata.SetTyped(env, base+".hitl", n.step.HITL)
 	if len(n.step.Sources) > 0 {
-		env.SetWorkingValue(base+".sources", append([]string(nil), n.step.Sources...), contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".sources", append([]string(nil), n.step.Sources...))
 	}
 	if len(n.step.Choices) > 0 {
-		env.SetWorkingValue(base+".choices", append([]string(nil), n.step.Choices...), contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".choices", append([]string(nil), n.step.Choices...))
 	}
 	if strings.TrimSpace(n.step.ChoiceSource) != "" {
-		env.SetWorkingValue(base+".choice_source", n.step.ChoiceSource, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".choice_source", n.step.ChoiceSource)
 	}
 	if len(n.step.Directives) > 0 {
-		env.SetWorkingValue(base+".directives", append([]string(nil), n.step.Directives...), contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".directives", append([]string(nil), n.step.Directives...))
 	}
 	if strings.TrimSpace(n.step.CapabilityID) != "" {
-		env.SetWorkingValue(base+".capability_id", n.step.CapabilityID, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".capability_id", n.step.CapabilityID)
 	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
-		env.SetWorkingValue(base+".clarification_type", n.step.Type, contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_config", cfg, contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_schema_id", cfg.OutputSchemaID, contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_validation_mode", cfg.ValidationMode, contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_required_fields", append([]string(nil), cfg.RequiredFields...), contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_allowed_statuses", append([]intentcontext.ClarificationStepStatus(nil), cfg.AllowedStatuses...), contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_state_write_keys", append([]string(nil), cfg.StateWriteKeys...), contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_projection_policy", cfg.ProjectionPolicy, contextdata.MemoryClassTask)
-		env.SetWorkingValue(base+".clarification_requery_on_success", cfg.RequeryOnSuccess, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, base+".clarification_type", n.step.Type)
+		contextdata.SetTyped(env, base+".clarification_config", cfg)
+		contextdata.SetTyped(env, base+".clarification_schema_id", cfg.OutputSchemaID)
+		contextdata.SetTyped(env, base+".clarification_validation_mode", cfg.ValidationMode)
+		contextdata.SetTyped(env, base+".clarification_required_fields", append([]string(nil), cfg.RequiredFields...))
+		contextdata.SetTyped(env, base+".clarification_allowed_statuses", append([]intentcontext.ClarificationStepStatus(nil), cfg.AllowedStatuses...))
+		contextdata.SetTyped(env, base+".clarification_state_write_keys", append([]string(nil), cfg.StateWriteKeys...))
+		contextdata.SetTyped(env, base+".clarification_projection_policy", cfg.ProjectionPolicy)
+		contextdata.SetTyped(env, base+".clarification_requery_on_success", cfg.RequeryOnSuccess)
 	}
 }
 
 func writeCapabilityMetadata(env *contextdata.Envelope, stepID, capabilityID string) {
-	if env == nil || strings.TrimSpace(capabilityID) == "" {
+	if strings.TrimSpace(capabilityID) == "" {
 		return
 	}
-	env.SetWorkingValue(eucloCapabilityIDKey, capabilityID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.execution.step."+stepID+".capability_id", capabilityID, contextdata.MemoryClassTask)
+	state.SetExecutionCapabilityID(env, capabilityID)
+	// envelope: intentional dynamic key — capability metadata is namespaced by step ID.
+	contextdata.SetTyped(env, "euclo.execution.step."+stepID+".capability_id", capabilityID)
 }
 
 func clarificationRuntimeState(env *contextdata.Envelope) map[string]any {
-	if env == nil {
-		return map[string]any{}
-	}
-
 	state := make(map[string]any)
 	if current, err := intentcontext.NewStateStore().Read(context.Background(), env); err == nil && current != nil {
 		state[intentcontext.ClarificationStateKey] = current.Clone()
@@ -777,15 +763,8 @@ func turnIDs(turns []intentcontext.ClarificationTurn) []string {
 }
 
 func mustRouteKind(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue("euclo.dispatch.route_kind"); ok {
-		if s, ok := v.(string); ok {
-			return strings.TrimSpace(s)
-		}
-	}
-	return ""
+	v, _ := contextdata.GetTyped[string](env, "euclo.dispatch.route_kind")
+	return strings.TrimSpace(v)
 }
 
 func (n *ThoughtRecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) map[string]any {
@@ -999,11 +978,11 @@ func (n *ThoughtRecipeStepNode) rewooOptions() rewooagent.RewooOptions {
 }
 
 func (n *ThoughtRecipeStepNode) writeCaptures(env *contextdata.Envelope, result *core.Result) error {
-	if n == nil || env == nil || result == nil {
+	if n == nil || result == nil {
 		return nil
 	}
 	if len(n.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindings(env, n.step.CaptureBindings, result.Data)
+		_, err := ApplyCaptureBindings(env, n.step.CaptureBindings, core.ResultFields(result.Data))
 		return err
 	}
 	return nil

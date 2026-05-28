@@ -17,22 +17,22 @@ type CapabilityHandler interface {
 // PromptMessage is a framework-owned prompt message shape used by runtime
 // prompt capabilities without forcing MCP protocol types into the core model.
 type PromptMessage struct {
-	Role    string         `json:"role,omitempty" yaml:"role,omitempty"`
-	Content []ContentBlock `json:"content,omitempty" yaml:"content,omitempty"`
+	Role    string         `json:"role,omitempty"`
+	Content []ContentBlock `json:"content,omitempty"`
 }
 
 // PromptRenderResult captures the rendered prompt payload for a prompt
 // capability invocation.
 type PromptRenderResult struct {
-	Description string          `json:"description,omitempty" yaml:"description,omitempty"`
-	Messages    []PromptMessage `json:"messages,omitempty" yaml:"messages,omitempty"`
-	Metadata    map[string]any  `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Messages    []PromptMessage `json:"messages,omitempty"`
+	Metadata    map[string]any  `json:"metadata,omitempty"`
 }
 
 // ResourceReadResult captures a framework-owned resource read response.
 type ResourceReadResult struct {
-	Contents []ContentBlock `json:"contents,omitempty" yaml:"contents,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Contents []ContentBlock `json:"contents,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // InvocableCapabilityHandler is implemented by capability kinds that can be

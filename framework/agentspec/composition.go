@@ -2,6 +2,7 @@ package agentspec
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -121,14 +122,6 @@ func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
 	if selector.CoordinationExecutionModes != nil {
 		selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
 	}
-	if selector.CoordinationLongRunning != nil {
-		value := *selector.CoordinationLongRunning
-		selector.CoordinationLongRunning = &value
-	}
-	if selector.CoordinationDirectInsertion != nil {
-		value := *selector.CoordinationDirectInsertion
-		selector.CoordinationDirectInsertion = &value
-	}
 	return selector
 }
 
@@ -160,8 +153,8 @@ func capabilitySelectorKey(selector CapabilitySelector) string {
 		strings.Join(coordinationRolesToStrings(selector.CoordinationRoles), ",") + "|" +
 		strings.Join(selector.CoordinationTaskTypes, ",") + "|" +
 		strings.Join(coordinationExecutionModesToStrings(selector.CoordinationExecutionModes), ",") + "|" +
-		boolPointerKey(selector.CoordinationLongRunning) + "|" +
-		boolPointerKey(selector.CoordinationDirectInsertion)
+		enabledStateKey(selector.CoordinationLongRunning) + "|" +
+		enabledStateKey(selector.CoordinationDirectInsertion)
 }
 
 func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
@@ -218,4 +211,8 @@ func coordinationExecutionModesToStrings(values []CoordinationExecutionMode) []s
 		out = append(out, string(value))
 	}
 	return out
+}
+
+func enabledStateKey(value EnabledState) string {
+	return strconv.Itoa(int(value))
 }

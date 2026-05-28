@@ -290,6 +290,15 @@ func SaveAgentManifest(path string, m *AgentManifest) error {
 	return WriteWithSchema(path, "relurpify/agent/v1", m)
 }
 
+// manifestSchemaRegistry returns a schema registry that includes the legacy
+// agent manifest schema kind alongside current kinds. Used only for loading
+// runtime manifest files that were written with schema: relurpify/agent/v1.
+func manifestSchemaRegistry() *SchemaRegistry {
+	reg := NewSchemaRegistry()
+	_ = reg.Register("agent", 1)
+	return reg
+}
+
 // LoadAgentManifestSnapshot parses, validates, and fingerprints a manifest file.
 func LoadAgentManifestSnapshot(path string) (*AgentManifestSnapshot, error) {
 	data, err := os.ReadFile(path)
@@ -297,7 +306,7 @@ func LoadAgentManifestSnapshot(path string) (*AgentManifestSnapshot, error) {
 		return nil, err
 	}
 	var loaded AgentManifest
-	if _, err := DecodeWithSchema(path, data, NewSchemaRegistry(), &loaded); err != nil {
+	if _, err := DecodeWithSchema(path, data, manifestSchemaRegistry(), &loaded); err != nil {
 		return nil, err
 	}
 	if err := loaded.Validate(); err != nil {

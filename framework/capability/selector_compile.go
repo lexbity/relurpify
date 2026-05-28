@@ -20,8 +20,8 @@ type descriptorProfile struct {
 	coordinationRole            core.CoordinationRole
 	coordinationTaskTypes       map[string]struct{}
 	coordinationExecutionModes  map[core.CoordinationExecutionMode]struct{}
-	coordinationLongRunning     bool
-	coordinationDirectInsertion bool
+	coordinationLongRunning     agentspec.EnabledState
+	coordinationDirectInsertion agentspec.EnabledState
 	hasCoordination             bool
 	classLabels                 []string
 }
@@ -40,8 +40,8 @@ type compiledSelector struct {
 	coordinationRoles           map[core.CoordinationRole]struct{}
 	coordinationTaskTypes       map[string]struct{}
 	coordinationExecutionModes  map[core.CoordinationExecutionMode]struct{}
-	coordinationLongRunning     *bool
-	coordinationDirectInsertion *bool
+	coordinationLongRunning     agentspec.EnabledState
+	coordinationDirectInsertion agentspec.EnabledState
 }
 
 type compiledCapabilityPolicy struct {
@@ -81,8 +81,8 @@ func buildDescriptorProfile(desc core.CapabilityDescriptor) descriptorProfile {
 	if desc.Coordination != nil {
 		profile.hasCoordination = true
 		profile.coordinationRole = desc.Coordination.Role
-		profile.coordinationLongRunning = desc.Coordination.LongRunning
-		profile.coordinationDirectInsertion = desc.Coordination.DirectInsertionAllowed
+		profile.coordinationLongRunning = agentspec.EnabledState(desc.Coordination.LongRunning)
+		profile.coordinationDirectInsertion = agentspec.EnabledState(desc.Coordination.DirectInsertionAllowed)
 		if len(desc.Coordination.TaskTypes) > 0 {
 			profile.coordinationTaskTypes = make(map[string]struct{}, len(desc.Coordination.TaskTypes))
 			for _, taskType := range desc.Coordination.TaskTypes {
@@ -217,13 +217,13 @@ func compiledSelectorMatches(selector compiledSelector, profile descriptorProfil
 			return false
 		}
 	}
-	if selector.coordinationLongRunning != nil {
-		if !profile.hasCoordination || profile.coordinationLongRunning != *selector.coordinationLongRunning {
+	if selector.coordinationLongRunning != agentspec.EnabledStateUnset {
+		if !profile.hasCoordination || profile.coordinationLongRunning != selector.coordinationLongRunning {
 			return false
 		}
 	}
-	if selector.coordinationDirectInsertion != nil {
-		if !profile.hasCoordination || profile.coordinationDirectInsertion != *selector.coordinationDirectInsertion {
+	if selector.coordinationDirectInsertion != agentspec.EnabledStateUnset {
+		if !profile.hasCoordination || profile.coordinationDirectInsertion != selector.coordinationDirectInsertion {
 			return false
 		}
 	}

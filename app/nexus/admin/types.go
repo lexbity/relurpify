@@ -233,7 +233,9 @@ type ServiceConfig struct {
 	Nodes         fwnode.NodeStore
 	NodeManager   *fwnode.Manager
 	Sessions      netsession.Store
-	Identities    identity.Store
+	Tenants       identity.TenantStore
+	Subjects      identity.SubjectStore
+	Enrollments   identity.EnrollmentStore
 	Tokens        TokenStore
 	Policies      PolicyRuleStore
 	FMPExports    TenantFMPExportStore

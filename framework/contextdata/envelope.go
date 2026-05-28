@@ -93,12 +93,10 @@ func NewEnvelope(taskID, sessionID string) *Envelope {
 }
 
 // SetWorkingValue stores a value in working memory.
+//
+// Deprecated: use SetTyped or TypedOverlay instead.
 // This is the primary write path for graph nodes.
 func (e *Envelope) SetWorkingValue(key string, value any, class MemoryClass) {
-	if e == nil {
-		return
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -133,11 +131,9 @@ func (e *Envelope) SetWorkingValue(key string, value any, class MemoryClass) {
 }
 
 // GetWorkingValue retrieves a value from working memory.
+//
+// Deprecated: use GetTyped or TypedOverlay instead.
 func (e *Envelope) GetWorkingValue(key string) (any, bool) {
-	if e == nil {
-		return nil, false
-	}
-
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -150,10 +146,6 @@ func (e *Envelope) GetWorkingValue(key string) (any, bool) {
 
 // DeleteWorkingValue removes a value from working memory.
 func (e *Envelope) DeleteWorkingValue(key string) {
-	if e == nil {
-		return
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -175,9 +167,6 @@ func (e *Envelope) DeleteWorkingValue(key string) {
 // ClearWorkingData removes all working memory entries for this envelope's task.
 // This is called by StateModeFresh paradigms at Execute entry.
 func (e *Envelope) ClearWorkingData() {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.WorkingData == nil {
@@ -206,9 +195,6 @@ func (e *Envelope) ClearWorkingData() {
 // RequestCheckpoint sets a checkpoint request on the envelope.
 // The graph runtime materializes the checkpoint when processing this envelope.
 func (e *Envelope) RequestCheckpoint(reason string, priority int, evictMemory bool) {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.CheckpointRequest = &CheckpointRequest{
@@ -223,9 +209,6 @@ func (e *Envelope) RequestCheckpoint(reason string, priority int, evictMemory bo
 // ClearCheckpointRequest removes any pending checkpoint request.
 // Called by the compiler after materializing the checkpoint.
 func (e *Envelope) ClearCheckpointRequest() {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.CheckpointRequest = nil
@@ -234,9 +217,6 @@ func (e *Envelope) ClearCheckpointRequest() {
 // AddRetrievalReference adds a retrieval result reference to the envelope.
 // Called after graph nodes trigger retrieval operations.
 func (e *Envelope) AddRetrievalReference(ref RetrievalReference) {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.References.Retrieval = append(e.References.Retrieval, ref)
@@ -245,9 +225,6 @@ func (e *Envelope) AddRetrievalReference(ref RetrievalReference) {
 // AddStreamedContextReference adds a streamed context chunk reference.
 // This is primarily called by the compiler during context assembly.
 func (e *Envelope) AddStreamedContextReference(ref ChunkReference) {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.References.StreamedContext = append(e.References.StreamedContext, ref)
@@ -255,9 +232,6 @@ func (e *Envelope) AddStreamedContextReference(ref ChunkReference) {
 
 // AddCheckpointReference adds a checkpoint reference to the envelope.
 func (e *Envelope) AddCheckpointReference(ref CheckpointReference) {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.References.Checkpoints = append(e.References.Checkpoints, cloneCheckpointReference(ref))
@@ -266,9 +240,6 @@ func (e *Envelope) AddCheckpointReference(ref CheckpointReference) {
 // StreamedChunkIDs returns the IDs of all chunks in the streamed context.
 // This is read-only data assembled by the compiler.
 func (e *Envelope) StreamedChunkIDs() []ChunkID {
-	if e == nil {
-		return nil
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -281,9 +252,6 @@ func (e *Envelope) StreamedChunkIDs() []ChunkID {
 
 // WorkingMemoryKeys returns all keys in the working memory for this envelope's task.
 func (e *Envelope) WorkingMemoryKeys() []string {
-	if e == nil {
-		return nil
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -298,9 +266,6 @@ func (e *Envelope) WorkingMemoryKeys() []string {
 
 // IsEmpty returns true if the envelope has no working data and no references.
 func (e *Envelope) IsEmpty() bool {
-	if e == nil {
-		return true
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return len(e.WorkingData) == 0 && e.References.IsEmpty()
@@ -308,9 +273,6 @@ func (e *Envelope) IsEmpty() bool {
 
 // WorkingDataSnapshot returns a point-in-time copy of working memory data.
 func (e *Envelope) WorkingDataSnapshot() map[string]any {
-	if e == nil {
-		return nil
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.WorkingData == nil {
@@ -325,9 +287,6 @@ func (e *Envelope) WorkingDataSnapshot() map[string]any {
 
 // ReferencesSnapshot returns a point-in-time copy of the reference bundle.
 func (e *Envelope) ReferencesSnapshot() ReferenceBundle {
-	if e == nil {
-		return ReferenceBundle{}
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.References.Clone()
@@ -335,9 +294,6 @@ func (e *Envelope) ReferencesSnapshot() ReferenceBundle {
 
 // AssemblyMetadataSnapshot returns a point-in-time copy of the assembly metadata.
 func (e *Envelope) AssemblyMetadataSnapshot() AssemblyMeta {
-	if e == nil {
-		return AssemblyMeta{}
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.AssemblyMetadata
@@ -345,9 +301,6 @@ func (e *Envelope) AssemblyMetadataSnapshot() AssemblyMeta {
 
 // SetAssemblyMetadata replaces the assembly metadata.
 func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
-	if e == nil {
-		return
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.AssemblyMetadata = meta
@@ -394,9 +347,6 @@ func (e *Envelope) Snapshot() map[string]any {
 
 // Clone returns a deep copy of the envelope.
 func (e *Envelope) Clone() *Envelope {
-	if e == nil {
-		return nil
-	}
 	workingData := e.WorkingDataSnapshot()
 	refs := e.ReferencesSnapshot()
 	e.mu.RLock()
@@ -467,9 +417,6 @@ func (e *Envelope) HandoffClone() *Envelope {
 // HandoffSnapshot returns a filtered envelope using the supplied policy.
 // It keeps the task/session boundary intact while dropping unlisted state.
 func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
-	if e == nil {
-		return nil
-	}
 	workingData := e.WorkingDataSnapshot()
 	refs := e.ReferencesSnapshot()
 	snapshot := &Envelope{
@@ -585,7 +532,7 @@ func hasWorkingPrefix(key string, prefixes []string) bool {
 // Merge merges working data from another envelope into this one.
 // Source envelope data takes precedence on conflicts.
 func (e *Envelope) Merge(other *Envelope) {
-	if e == nil || other == nil {
+	if other == nil {
 		return
 	}
 	otherWorkingData := other.WorkingDataSnapshot()
@@ -620,19 +567,17 @@ func (e *Envelope) Merge(other *Envelope) {
 }
 
 // SetHandleScoped stores a value with a scope identifier.
+//
+// Deprecated: use TypedOverlay with an explicit scoped key instead.
 func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
-	if e == nil {
-		return
-	}
 	scopedKey := fmt.Sprintf("%s:%s", scope, key)
 	e.SetWorkingValue(scopedKey, value, MemoryClassTask)
 }
 
 // GetHandle retrieves a scoped value.
+//
+// Deprecated: use TypedOverlay with an explicit scoped key instead.
 func (e *Envelope) GetHandle(key string) (any, bool) {
-	if e == nil {
-		return nil, false
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.WorkingData == nil {
@@ -656,17 +601,11 @@ func (e *Envelope) GetHandle(key string) (any, bool) {
 
 // SetExecutionPhase sets the current execution phase.
 func (e *Envelope) SetExecutionPhase(phase string) {
-	if e == nil {
-		return
-	}
 	e.SetWorkingValue("_execution_phase", phase, MemoryClassTask)
 }
 
 // GetExecutionPhase returns the current execution phase.
 func (e *Envelope) GetExecutionPhase() string {
-	if e == nil {
-		return ""
-	}
 	val, _ := e.GetWorkingValue("_execution_phase")
 	if s, ok := val.(string); ok {
 		return s
@@ -676,9 +615,6 @@ func (e *Envelope) GetExecutionPhase() string {
 
 // AddInteraction adds an interaction record to the envelope.
 func (e *Envelope) AddInteraction(interaction map[string]any) {
-	if e == nil {
-		return
-	}
 	key := "_interactions"
 	var interactions []map[string]any
 	if val, ok := e.GetWorkingValue(key); ok {
@@ -692,9 +628,6 @@ func (e *Envelope) AddInteraction(interaction map[string]any) {
 
 // GetInteractions returns all interactions recorded in the envelope.
 func (e *Envelope) GetInteractions() []map[string]any {
-	if e == nil {
-		return nil
-	}
 	val, _ := e.GetWorkingValue("_interactions")
 	if arr, ok := val.([]map[string]any); ok {
 		return arr
@@ -704,9 +637,6 @@ func (e *Envelope) GetInteractions() []map[string]any {
 
 // StringSliceFromContext extracts a string slice from working memory.
 func (e *Envelope) StringSliceFromContext(key string) []string {
-	if e == nil {
-		return nil
-	}
 	val, _ := e.GetWorkingValue(key)
 	if arr, ok := val.([]string); ok {
 		return arr
@@ -725,9 +655,6 @@ func (e *Envelope) StringSliceFromContext(key string) []string {
 
 // String returns a summary of the envelope for logging.
 func (e *Envelope) String() string {
-	if e == nil {
-		return "<nil envelope>"
-	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return fmt.Sprintf("Envelope{TaskID:%s NodeID:%s Working:%d Streamed:%d Retrieval:%d}",

@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/classify"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/delegates"
 	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 	"codeburg.org/lexbit/relurpify/named/rex/nexus"
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
 	"codeburg.org/lexbit/relurpify/named/rex/retrieval"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
@@ -42,11 +42,29 @@ type Agent struct {
 	LastProof   proof.ProofSurface
 }
 
+type executionSurfaces struct {
+	Runtime  *rexruntime.Manager
+	Workflow *store.SQLiteWorkflowStore
+}
+
+type executionPlan struct {
+	Identity       state.Identity
+	Classification classify.Classification
+	Decision       route.RouteDecision
+	RoutePlan      route.ExecutionPlan
+	Delegate       delegates.Delegate
+	EventSuffix    string
+	ExecutionTask  *core.Task
+}
+
 func New(env *agentenv.WorkspaceEnvironment) *Agent {
 	return NewWithWorkspace(env, "")
 }
 
 func NewWithWorkspace(env *agentenv.WorkspaceEnvironment, workspace string) *Agent {
+	if env == nil {
+		panic("rex workspace environment required")
+	}
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env, workspace)
 	return agent
@@ -94,59 +112,120 @@ func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 }
 
 func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
-	var execErr error
-	var result *core.Result
-	if env == nil {
-		env = contextdata.NewEnvelope(task.ID, "")
+	surfaces := a.openSurfaces(ctx, task)
+	plan, err := a.planExecution(ctx, task, env, surfaces)
+	if err != nil {
+		return nil, err
+	}
+	return a.runExecution(ctx, task, env, plan, surfaces)
+}
+
+func (a *Agent) RuntimeProjection() nexus.Projection {
+	return nexus.BuildProjection(a.Runtime, a.LastProof)
+}
+
+func (a *Agent) openSurfaces(ctx context.Context, task *core.Task) executionSurfaces {
+	_ = ctx
+	_ = task
+	if a.Runtime == nil {
+		return executionSurfaces{}
+	}
+	return executionSurfaces{
+		Runtime:  a.Runtime,
+		Workflow: a.Runtime.WorkflowStore(),
+	}
+}
+
+func (a *Agent) planExecution(ctx context.Context, task *core.Task, env *contextdata.Envelope, surfaces executionSurfaces) (*executionPlan, error) {
+	_ = ctx
+	_ = surfaces
+	if a.Delegates == nil {
+		return nil, fmt.Errorf("rex delegate registry unavailable")
 	}
 	rexEnv := envelope.Normalize(task, env)
 	class := classify.Classify(rexEnv)
 	decision := route.Decide(rexEnv, class)
-	execPlan := route.BuildExecutionPlan(decision)
+	routePlan := route.BuildExecutionPlan(decision)
 	identity := state.ComputeIdentity(rexEnv)
-	env.SetWorkingValue(rexkeys.RexWorkflowID, identity.WorkflowID, contextdata.MemoryClassTask)
-	env.SetWorkingValue(rexkeys.RexRunID, identity.RunID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("rex.route", decision.Family, contextdata.MemoryClassTask)
+	state.SetEnvelopeWorkflowID(env, identity.WorkflowID)
+	state.SetEnvelopeRunID(env, identity.RunID)
+	state.SetResumedRoute(env, decision.Family)
+	if err := enforceCapabilityProjection(env, decision, task); err != nil {
+		return nil, err
+	}
+	delegate, err := a.Delegates.Resolve(routePlan)
+	if err != nil {
+		return nil, err
+	}
+	return &executionPlan{
+		Identity:       identity,
+		Classification: class,
+		Decision:       decision,
+		RoutePlan:      routePlan,
+		Delegate:       delegate,
+		EventSuffix:    executionEventSuffix(env),
+		ExecutionTask:  task,
+	}, nil
+}
+
+func (a *Agent) runExecution(ctx context.Context, task *core.Task, env *contextdata.Envelope, plan *executionPlan, surfaces executionSurfaces) (*core.Result, error) {
+	var result *core.Result
+	var execErr error
 	if a.Observer != nil {
-		if err := a.Observer.BeforeExecute(ctx, identity.WorkflowID, identity.RunID, task, env); err != nil {
-			execErr = err
+		if err := a.Observer.BeforeExecute(ctx, plan.Identity.WorkflowID, plan.Identity.RunID, task, env); err != nil {
 			return nil, err
 		}
 		defer func() {
-			_ = a.Observer.AfterExecute(ctx, identity.WorkflowID, identity.RunID, task, env, result, execErr)
+			_ = a.Observer.AfterExecute(ctx, plan.Identity.WorkflowID, plan.Identity.RunID, task, env, result, execErr)
 		}()
 	}
-	finishRuntime := a.Runtime.BeginExecution(identity.WorkflowID, identity.RunID)
-	defer func() {
-		finishRuntime(execErr)
-	}()
+	if surfaces.Runtime != nil {
+		finishRuntime := surfaces.Runtime.BeginExecution(plan.Identity.WorkflowID, plan.Identity.RunID)
+		defer func() {
+			finishRuntime(execErr)
+		}()
+	}
+	result, execErr = a.runDelegate(ctx, task, env, plan, surfaces)
+	completion := proof.EvaluateCompletion(plan.Decision, plan.Classification, env)
+	if result != nil && !completion.Allowed {
+		result.Success = false
+		blockErr := fmt.Errorf("rex completion blocked: %s", completion.Reason)
+		result.Error = blockErr.Error()
+		execErr = blockErr
+	}
+	a.persistOutcome(ctx, task, env, plan, result, surfaces)
+	if !completion.Allowed {
+		return result, execErr
+	}
+	if execErr != nil {
+		return result, execErr
+	}
+	return result, nil
+}
 
-	surfaces := state.ResolveRuntimeSurfaces(a.Environment.WorkingMemory)
-	eventSuffix := ""
-	if val, ok := env.GetWorkingValue(rexkeys.RexEventID); ok {
-		eventSuffix = fmt.Sprint(val)
+func (a *Agent) runDelegate(ctx context.Context, task *core.Task, env *contextdata.Envelope, plan *executionPlan, surfaces executionSurfaces) (*core.Result, error) {
+	if plan == nil {
+		return nil, fmt.Errorf("execution plan required")
 	}
-	if eventSuffix == "" {
-		eventSuffix = "runtime"
-	}
+	executionTask := plan.ExecutionTask
 	if surfaces.Workflow != nil {
-		if err := state.EnsureWorkflowRun(ctx, surfaces.Workflow, identity, task, decision.Mode); err != nil {
-			execErr = err
+		if err := state.EnsureWorkflowRun(ctx, surfaces.Workflow, plan.Identity, task, plan.Decision.Mode); err != nil {
 			return nil, err
 		}
-		_ = surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
-			EventID:    identity.RunID + ":" + eventSuffix + ":start",
-			WorkflowID: identity.WorkflowID,
-			RunID:      identity.RunID,
+		if err := surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
+			EventID:    plan.Identity.RunID + ":" + plan.EventSuffix + ":start",
+			WorkflowID: plan.Identity.WorkflowID,
+			RunID:      plan.Identity.RunID,
 			EventType:  "rex.run.started",
 			Message:    "rex execution started",
-			Metadata:   map[string]any{"route": decision.Family, "mode": decision.Mode, "profile": decision.Profile},
+			Metadata:   map[string]any{"route": plan.Decision.Family, "mode": plan.Decision.Mode, "profile": plan.Decision.Profile},
 			CreatedAt:  time.Now().UTC(),
-		})
+		}); err != nil {
+			logOutcomeError("append workflow start event", err)
+		}
 	}
-	executionTask := task
-	if execPlan.RequireRetrieval && surfaces.Workflow != nil {
-		expansion, err := retrieval.ExpandWithWorkflowStore(ctx, surfaces.Workflow, identity.WorkflowID, task, env, decision)
+	if plan.RoutePlan.RequireRetrieval && surfaces.Workflow != nil {
+		expansion, err := retrieval.ExpandWithWorkflowStore(ctx, surfaces.Workflow, plan.Identity.WorkflowID, task, env, plan.Decision)
 		if err == nil {
 			executionTask = retrieval.Apply(env, task, expansion)
 			artifactKinds := []string{"rex.proof_surface", "rex.action_log", "rex.completion"}
@@ -156,84 +235,100 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 			if len(expansion.WorkflowRetrieval) > 0 {
 				artifactKinds = append(artifactKinds, "rex.workflow_retrieval")
 			}
-			env.SetWorkingValue("rex.artifact_kinds", artifactKinds, contextdata.MemoryClassTask)
-			if surfaces.Workflow != nil {
-				_ = persistContextExpansion(ctx, surfaces.Workflow, identity, expansion)
+			state.SetArtifactKinds(env, artifactKinds)
+			if err := persistContextExpansion(ctx, surfaces.Workflow, plan.Identity, expansion); err != nil {
+				logOutcomeError("persist context expansion", err)
 			}
 		}
 	}
-	if err := enforceCapabilityProjection(env, decision, task); err != nil {
-		execErr = err
-		return nil, err
+	if plan.Delegate == nil {
+		return nil, fmt.Errorf("rex delegate unavailable")
 	}
-	delegate, err := a.Delegates.Resolve(execPlan)
+	result, err := plan.Delegate.Execute(ctx, executionTask, env)
+	if result == nil {
+		result = &core.Result{Success: err == nil}
+	}
 	if err != nil {
-		execErr = err
-		return nil, err
+		result.Success = false
+		result.Error = err.Error()
 	}
-	result, err = delegate.Execute(ctx, executionTask, env)
-	completion := proof.EvaluateCompletion(decision, class, env)
+	plan.ExecutionTask = executionTask
+	return result, err
+}
+
+func (a *Agent) persistOutcome(ctx context.Context, task *core.Task, env *contextdata.Envelope, plan *executionPlan, result *core.Result, surfaces executionSurfaces) {
+	_ = task
+	if plan == nil {
+		return
+	}
+	if result == nil {
+		result = &core.Result{}
+	}
+	fields := core.ResultFields(result.Data)
+	if fields == nil {
+		fields = map[string]any{}
+		result.Data = core.NewToolResultPayload(fields)
+	}
+	completion := proof.EvaluateCompletion(plan.Decision, plan.Classification, env)
 	artifactKinds := []string{"rex.proof_surface", "rex.action_log", "rex.completion", "rex.verification_policy", "rex.success_gate"}
 	if verification := proof.VerificationEvidence(env); verification.EvidencePresent {
 		artifactKinds = append(artifactKinds, "rex.verification")
 	}
-	if raw, ok := env.GetWorkingValue("rex.artifact_kinds"); ok {
-		if existing, ok := raw.([]string); ok {
-			artifactKinds = append(existing, artifactKinds...)
-		}
+	if existing := state.ArtifactKinds(env); len(existing) > 0 {
+		artifactKinds = append(existing, artifactKinds...)
 	}
-	env.SetWorkingValue("rex.artifact_kinds", uniqueStrings(artifactKinds), contextdata.MemoryClassTask)
-	actionLog := proof.BuildActionLog(decision, class, env)
-	if result == nil {
-		result = &core.Result{Success: err == nil, Data: map[string]any{}}
+	state.SetArtifactKinds(env, uniqueStrings(artifactKinds))
+	actionLog := proof.BuildActionLog(plan.Decision, plan.Classification, env)
+	fields["rex.action_log"] = actionLog
+	a.LastProof = proof.BuildProofSurface(plan.Decision, result, env)
+	fields["rex.proof_surface"] = a.LastProof
+	fields["rex.completion"] = completion
+	fields[rexkeys.RexWorkflowID] = plan.Identity.WorkflowID
+	fields[rexkeys.RexRunID] = plan.Identity.RunID
+	fields["rex.route"] = plan.Decision.Family
+	if surfaces.Workflow == nil {
+		return
 	}
-	if result.Data == nil {
-		result.Data = map[string]any{}
+	if err := persistProof(ctx, surfaces.Workflow, plan.Identity, plan.Decision, a.LastProof, actionLog, completion, env); err != nil {
+		logOutcomeError("persist proof outcome", err)
 	}
-	result.Data["rex.action_log"] = actionLog
-	a.LastProof = proof.BuildProofSurface(decision, result, env)
-	result.Data["rex.proof_surface"] = a.LastProof
-	result.Data["rex.completion"] = completion
-	result.Data[rexkeys.RexWorkflowID] = identity.WorkflowID
-	result.Data[rexkeys.RexRunID] = identity.RunID
-	result.Data["rex.route"] = decision.Family
-	if surfaces.Workflow != nil {
-		_ = persistProof(ctx, surfaces.Workflow, identity, decision, a.LastProof, actionLog, completion, env)
-		status := memory.WorkflowRunStatusCompleted
-		var finishedAt *time.Time
-		now := time.Now().UTC()
-		finishedAt = &now
-		if err != nil || !completion.Allowed {
-			status = memory.WorkflowRunStatusFailed
-		}
-		_ = surfaces.Workflow.UpdateRunStatus(ctx, identity.RunID, status, finishedAt)
-		_, _ = surfaces.Workflow.UpdateWorkflowStatus(ctx, identity.WorkflowID, 0, status, "")
-		_ = surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
-			EventID:    identity.RunID + ":" + eventSuffix + ":finish",
-			WorkflowID: identity.WorkflowID,
-			RunID:      identity.RunID,
-			EventType:  "rex.run.finished",
-			Message:    "rex execution finished",
-			Metadata:   map[string]any{"route": decision.Family, "allowed": completion.Allowed, "success": result.Success},
-			CreatedAt:  now,
-		})
-	}
-	if !completion.Allowed {
+	status := memory.WorkflowRunStatusCompleted
+	now := time.Now().UTC()
+	finishedAt := &now
+	if result.Error != "" || !completion.Allowed {
+		status = memory.WorkflowRunStatusFailed
 		result.Success = false
-		blockErr := fmt.Errorf("rex completion blocked: %s", completion.Reason)
-		result.Error = blockErr.Error()
-		execErr = blockErr
-		return result, blockErr
 	}
-	if err != nil {
-		result.Error = err.Error()
+	if err := surfaces.Workflow.UpdateRunStatus(ctx, plan.Identity.RunID, status, finishedAt); err != nil {
+		logOutcomeError("update run status", err)
 	}
-	execErr = err
-	return result, err
+	if _, err := surfaces.Workflow.UpdateWorkflowStatus(ctx, plan.Identity.WorkflowID, 0, status, ""); err != nil {
+		logOutcomeError("update workflow status", err)
+	}
+	// best-effort: workflow event loss is acceptable
+	_ = surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
+		EventID:    plan.Identity.RunID + ":" + plan.EventSuffix + ":finish",
+		WorkflowID: plan.Identity.WorkflowID,
+		RunID:      plan.Identity.RunID,
+		EventType:  "rex.run.finished",
+		Message:    "rex execution finished",
+		Metadata:   map[string]any{"route": plan.Decision.Family, "allowed": completion.Allowed, "success": result.Success},
+		CreatedAt:  now,
+	})
 }
 
-func (a *Agent) RuntimeProjection() nexus.Projection {
-	return nexus.BuildProjection(a.Runtime, a.LastProof)
+func executionEventSuffix(env *contextdata.Envelope) string {
+	if id := state.EventID(env); id != "" {
+		return id
+	}
+	return "runtime"
+}
+
+func logOutcomeError(step string, err error) {
+	if err == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "rex %s: %v\n", step, err)
 }
 
 func (a *Agent) ManagedAdapter() *nexus.Adapter {
@@ -242,9 +337,6 @@ func (a *Agent) ManagedAdapter() *nexus.Adapter {
 }
 
 func (a *Agent) RecordAmbiguity(workflowID, runID, reason string) reconcile.Record {
-	if a == nil {
-		return reconcile.Record{}
-	}
 	if a.Reconciler == nil {
 		a.Reconciler = &reconcile.InMemoryReconciler{}
 	}
@@ -252,9 +344,6 @@ func (a *Agent) RecordAmbiguity(workflowID, runID, reason string) reconcile.Reco
 }
 
 func (a *Agent) ResolveAmbiguity(record reconcile.Record, outcome reconcile.Outcome, notes string) reconcile.Record {
-	if a == nil {
-		return record
-	}
 	if a.Reconciler == nil {
 		a.Reconciler = &reconcile.InMemoryReconciler{}
 	}
@@ -262,9 +351,6 @@ func (a *Agent) ResolveAmbiguity(record reconcile.Record, outcome reconcile.Outc
 }
 
 func (a *Agent) ShouldRetryAmbiguity(record reconcile.Record) bool {
-	if a == nil {
-		return false
-	}
 	if a.Reconciler == nil {
 		a.Reconciler = &reconcile.InMemoryReconciler{}
 	}
@@ -318,8 +404,8 @@ func persistProof(ctx context.Context, store interface {
 	}); err != nil {
 		return err
 	}
-	if raw, ok := env.GetWorkingValue("rex.verification_policy"); ok && raw != nil {
-		payload, err := json.Marshal(raw)
+	if policy, ok := contextdata.GetTyped[proof.VerificationPolicy](env, rexkeys.RexVerificationPolicy); ok {
+		payload, err := json.Marshal(policy)
 		if err != nil {
 			return err
 		}
@@ -338,8 +424,8 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := env.GetWorkingValue("rex.verification"); ok && raw != nil {
-		payload, err := json.Marshal(raw)
+	if evidence, ok := contextdata.GetTyped[proof.VerificationEvidenceRecord](env, rexkeys.RexVerification); ok {
+		payload, err := json.Marshal(evidence)
 		if err != nil {
 			return err
 		}
@@ -358,8 +444,8 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := env.GetWorkingValue("rex.success_gate"); ok && raw != nil {
-		payload, err := json.Marshal(raw)
+	if gate, ok := contextdata.GetTyped[proof.SuccessGateResult](env, rexkeys.RexSuccessGate); ok {
+		payload, err := json.Marshal(gate)
 		if err != nil {
 			return err
 		}

@@ -2,10 +2,11 @@ package state
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 )
 
@@ -13,494 +14,346 @@ import (
 
 // GetTaskEnvelope retrieves the normalized task envelope.
 func GetTaskEnvelope(env *contextdata.Envelope) (*intake.TaskEnvelope, bool) {
-	v, ok := env.GetWorkingValue(KeyTaskEnvelope)
-	if !ok {
-		return nil, false
-	}
-	te, ok := v.(*intake.TaskEnvelope)
-	return te, ok
+	return contextdata.GetTyped[*intake.TaskEnvelope](env, KeyTaskEnvelope)
 }
 
 // SetTaskEnvelope stores the normalized task envelope.
 func SetTaskEnvelope(env *contextdata.Envelope, te *intake.TaskEnvelope) {
-	env.SetWorkingValue(KeyTaskEnvelope, te, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyTaskEnvelope, te)
 }
 
 // GetIntentClassification retrieves the classification result.
 func GetIntentClassification(env *contextdata.Envelope) (*intake.IntentClassification, bool) {
-	v, ok := env.GetWorkingValue(KeyIntentClassification)
-	if !ok {
-		return nil, false
-	}
-	ic, ok := v.(*intake.IntentClassification)
-	return ic, ok
+	return contextdata.GetTyped[*intake.IntentClassification](env, KeyIntentClassification)
 }
 
 // SetIntentClassification stores the classification result.
 func SetIntentClassification(env *contextdata.Envelope, ic *intake.IntentClassification) {
-	env.SetWorkingValue(KeyIntentClassification, ic, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIntentClassification, ic)
 }
 
 // GetIntentEvidence retrieves the structured evidence record.
 func GetIntentEvidence(env *contextdata.Envelope) (*intentcontext.IntentEvidence, bool) {
-	if env == nil {
-		return nil, false
-	}
-	v, ok := env.GetWorkingValue(KeyIntentEvidence)
-	if !ok {
-		return nil, false
-	}
-	evidence, ok := v.(*intentcontext.IntentEvidence)
-	return evidence, ok
+	return contextdata.GetTyped[*intentcontext.IntentEvidence](env, KeyIntentEvidence)
 }
 
 // SetIntentEvidence stores the structured evidence record.
+// Writes to both KeyIntentEvidence and the intentcontext canonical key so
+// clarification state readers see the same value without a second write.
 func SetIntentEvidence(env *contextdata.Envelope, evidence *intentcontext.IntentEvidence) {
-	env.SetWorkingValue(KeyIntentEvidence, evidence, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIntentEvidence, evidence)
+	contextdata.SetTyped(env, intentcontext.IntentEvidenceKey, evidence)
 }
 
 // GetIntentInterpretation retrieves the structured interpretation record.
 func GetIntentInterpretation(env *contextdata.Envelope) (*intentcontext.IntentInterpretation, bool) {
-	if env == nil {
-		return nil, false
-	}
-	v, ok := env.GetWorkingValue(KeyIntentInterpretation)
-	if !ok {
-		return nil, false
-	}
-	interpretation, ok := v.(*intentcontext.IntentInterpretation)
-	return interpretation, ok
+	return contextdata.GetTyped[*intentcontext.IntentInterpretation](env, KeyIntentInterpretation)
 }
 
 // SetIntentInterpretation stores the structured interpretation record.
+// Writes to both KeyIntentInterpretation and the intentcontext canonical key.
 func SetIntentInterpretation(env *contextdata.Envelope, interpretation *intentcontext.IntentInterpretation) {
-	env.SetWorkingValue(KeyIntentInterpretation, interpretation, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIntentInterpretation, interpretation)
+	contextdata.SetTyped(env, intentcontext.IntentInterpretationKey, interpretation)
 }
 
 // GetRouteSelection retrieves the resolved route.
-func GetRouteSelection(env *contextdata.Envelope) (*orchestrate.RouteSelection, bool) {
-	v, ok := env.GetWorkingValue(KeyRouteSelection)
-	if !ok {
-		return nil, false
-	}
-	rs, ok := v.(*orchestrate.RouteSelection)
-	return rs, ok
+func GetRouteSelection(env *contextdata.Envelope) (*euclotypes.RouteSelection, bool) {
+	return contextdata.GetTyped[*euclotypes.RouteSelection](env, KeyRouteSelection)
 }
 
 // SetRouteSelection stores the resolved route.
-func SetRouteSelection(env *contextdata.Envelope, rs *orchestrate.RouteSelection) {
-	env.SetWorkingValue(KeyRouteSelection, rs, contextdata.MemoryClassTask)
+func SetRouteSelection(env *contextdata.Envelope, rs *euclotypes.RouteSelection) {
+	contextdata.SetTyped(env, KeyRouteSelection, rs)
 }
 
 // GetRouteResolution retrieves the selected route resolution record.
-func GetRouteResolution(env *contextdata.Envelope) (*orchestrate.RouteResolution, bool) {
-	if env == nil {
-		return nil, false
-	}
-	v, ok := env.GetWorkingValue(KeyRouteResolution)
-	if !ok {
-		return nil, false
-	}
-	resolution, ok := v.(*orchestrate.RouteResolution)
-	return resolution, ok
+func GetRouteResolution(env *contextdata.Envelope) (*euclotypes.RouteResolution, bool) {
+	return contextdata.GetTyped[*euclotypes.RouteResolution](env, KeyRouteResolution)
 }
 
 // SetRouteResolution stores the selected route resolution record.
-func SetRouteResolution(env *contextdata.Envelope, resolution *orchestrate.RouteResolution) {
-	env.SetWorkingValue(KeyRouteResolution, resolution, contextdata.MemoryClassTask)
+// Writes to both KeyRouteResolution and the intentcontext canonical key.
+func SetRouteResolution(env *contextdata.Envelope, resolution *euclotypes.RouteResolution) {
+	contextdata.SetTyped(env, KeyRouteResolution, resolution)
+	contextdata.SetTyped(env, intentcontext.RouteResolutionKey, resolution)
 }
 
 // --- User Hints ---
 
 // GetContextHint retrieves the context hint override.
 func GetContextHint(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyContextHint)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyContextHint)
 }
 
 // SetContextHint stores the context hint override.
 func SetContextHint(env *contextdata.Envelope, hint string) {
-	env.SetWorkingValue(KeyContextHint, hint, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyContextHint, hint)
 }
 
 // GetWorkspaceScopes retrieves the workspace scopes.
 func GetWorkspaceScopes(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyWorkspaceScopes)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]string)
-	return s, ok
+	return contextdata.GetTyped[[]string](env, KeyWorkspaceScopes)
 }
 
 // SetWorkspaceScopes stores the workspace scopes.
 func SetWorkspaceScopes(env *contextdata.Envelope, scopes []string) {
-	env.SetWorkingValue(KeyWorkspaceScopes, scopes, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyWorkspaceScopes, scopes)
 }
 
 // GetSessionHint retrieves the session hint.
 func GetSessionHint(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeySessionHint)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeySessionHint)
 }
 
 // SetSessionHint stores the session hint.
 func SetSessionHint(env *contextdata.Envelope, hint string) {
-	env.SetWorkingValue(KeySessionHint, hint, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeySessionHint, hint)
 }
 
 // GetFollowUpHint retrieves the follow-up hint.
 func GetFollowUpHint(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyFollowUpHint)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyFollowUpHint)
 }
 
 // SetFollowUpHint stores the follow-up hint.
 func SetFollowUpHint(env *contextdata.Envelope, hint string) {
-	env.SetWorkingValue(KeyFollowUpHint, hint, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyFollowUpHint, hint)
 }
 
 // GetAgentModeHint retrieves the agent mode hint.
 func GetAgentModeHint(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyAgentModeHint)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyAgentModeHint)
 }
 
 // SetAgentModeHint stores the agent mode hint.
 func SetAgentModeHint(env *contextdata.Envelope, hint string) {
-	env.SetWorkingValue(KeyAgentModeHint, hint, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyAgentModeHint, hint)
 }
 
 // GetString retrieves a string value from the envelope working memory.
 func GetString(env *contextdata.Envelope, key string) string {
-	if env == nil {
-		return ""
-	}
-	v, ok := env.GetWorkingValue(key)
+	v, ok := contextdata.GetTyped[string](env, key)
 	if !ok {
 		return ""
 	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
+	return v
 }
 
 // --- Ingestion ---
 
 // GetUserSelectedFiles retrieves the user-selected files.
 func GetUserSelectedFiles(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyUserSelectedFiles)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]string)
-	return s, ok
+	return contextdata.GetTyped[[]string](env, KeyUserSelectedFiles)
 }
 
 // SetUserSelectedFiles stores the user-selected files.
 func SetUserSelectedFiles(env *contextdata.Envelope, files []string) {
-	env.SetWorkingValue(KeyUserSelectedFiles, files, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyUserSelectedFiles, files)
 }
 
 // GetExplicitIngestPaths retrieves explicit ingest paths.
 func GetExplicitIngestPaths(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyExplicitIngestPaths)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]string)
-	return s, ok
+	return contextdata.GetTyped[[]string](env, KeyExplicitIngestPaths)
 }
 
 // SetExplicitIngestPaths stores explicit ingest paths.
 func SetExplicitIngestPaths(env *contextdata.Envelope, paths []string) {
-	env.SetWorkingValue(KeyExplicitIngestPaths, paths, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyExplicitIngestPaths, paths)
 }
 
 // GetIncrementalSinceRef retrieves the incremental since ref.
 func GetIncrementalSinceRef(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyIncrementalSinceRef)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyIncrementalSinceRef)
 }
 
 // SetIncrementalSinceRef stores the incremental since ref.
 func SetIncrementalSinceRef(env *contextdata.Envelope, ref string) {
-	env.SetWorkingValue(KeyIncrementalSinceRef, ref, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIncrementalSinceRef, ref)
 }
 
 // GetIngestPolicy retrieves the ingest policy.
 func GetIngestPolicy(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyIngestPolicy)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyIngestPolicy)
 }
 
 // SetIngestPolicy stores the ingest policy.
 func SetIngestPolicy(env *contextdata.Envelope, policy string) {
-	env.SetWorkingValue(KeyIngestPolicy, policy, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIngestPolicy, policy)
 }
 
 // --- Intent Signals ---
 
 // GetIntentSignals retrieves family scores from classification.
 func GetIntentSignals(env *contextdata.Envelope) (map[string]float64, bool) {
-	v, ok := env.GetWorkingValue(KeyIntentSignals)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.(map[string]float64)
-	return s, ok
+	return contextdata.GetTyped[map[string]float64](env, KeyIntentSignals)
 }
 
 // SetIntentSignals stores family scores from classification.
 func SetIntentSignals(env *contextdata.Envelope, scores map[string]float64) {
-	env.SetWorkingValue(KeyIntentSignals, scores, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyIntentSignals, scores)
 }
 
 // SetThoughtRecipeID stores the thoughtrecipe ID.
 func SetThoughtRecipeID(env *contextdata.Envelope, id string) {
-	env.SetWorkingValue(KeyThoughtRecipeID, id, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyThoughtRecipeID, id)
 }
 
 // --- Thought ThoughtRecipe ---
 
 // GetThoughtRecipeID retrieves the thoughtrecipe ID.
 func GetThoughtRecipeID(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyThoughtRecipeID)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyThoughtRecipeID)
 }
 
 // GetThoughtRecipeVersion retrieves the thoughtrecipe version.
 func GetThoughtRecipeVersion(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyThoughtRecipeVersion)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyThoughtRecipeVersion)
 }
 
 // SetThoughtRecipeVersion stores the thoughtrecipe version.
 func SetThoughtRecipeVersion(env *contextdata.Envelope, version string) {
-	env.SetWorkingValue(KeyThoughtRecipeVersion, version, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyThoughtRecipeVersion, version)
 }
 
 // --- Policy ---
 
 // GetHITLTriggered retrieves whether HITL was triggered.
 func GetHITLTriggered(env *contextdata.Envelope) (bool, bool) {
-	v, ok := env.GetWorkingValue(KeyHITLTriggered)
-	if !ok {
-		return false, false
-	}
-	b, ok := v.(bool)
-	return b, ok
+	return contextdata.GetTyped[bool](env, KeyHITLTriggered)
 }
 
 // GetHITLResponse retrieves the HITL response.
 func GetHITLResponse(env *contextdata.Envelope) (*interaction.HITLResponse, bool) {
-	v, ok := env.GetWorkingValue(KeyHITLResponse)
-	if !ok {
-		return nil, false
-	}
-	resp, ok := v.(*interaction.HITLResponse)
-	return resp, ok
+	return contextdata.GetTyped[*interaction.HITLResponse](env, KeyHITLResponse)
 }
 
 // SetHITLResponse stores the HITL response.
 func SetHITLResponse(env *contextdata.Envelope, resp *interaction.HITLResponse) {
-	env.SetWorkingValue(KeyHITLResponse, resp, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyHITLResponse, resp)
 }
 
 // SetHITLTriggered stores whether HITL was triggered.
 func SetHITLTriggered(env *contextdata.Envelope, triggered bool) {
-	env.SetWorkingValue(KeyHITLTriggered, triggered, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyHITLTriggered, triggered)
 }
 
 // GetPolicyDecision retrieves the policy decision.
 func GetPolicyDecision(env *contextdata.Envelope) (*policy.PolicyDecision, bool) {
-	v, ok := env.GetWorkingValue(KeyPolicyDecision)
-	if !ok {
-		return nil, false
-	}
-	pd, ok := v.(*policy.PolicyDecision)
-	return pd, ok
+	return contextdata.GetTyped[*policy.PolicyDecision](env, KeyPolicyDecision)
 }
 
 // SetPolicyDecision stores the policy decision.
 func SetPolicyDecision(env *contextdata.Envelope, pd *policy.PolicyDecision) {
-	env.SetWorkingValue(KeyPolicyDecision, pd, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyPolicyDecision, pd)
 }
 
 // --- Execution ---
 
 // GetDryRunMode retrieves dry run mode.
 func GetDryRunMode(env *contextdata.Envelope) (bool, bool) {
-	v, ok := env.GetWorkingValue(KeyDryRunMode)
-	if !ok {
-		return false, false
-	}
-	b, ok := v.(bool)
-	return b, ok
+	return contextdata.GetTyped[bool](env, KeyDryRunMode)
 }
 
 // SetDryRunMode stores dry run mode.
 func SetDryRunMode(env *contextdata.Envelope, dryRun bool) {
-	env.SetWorkingValue(KeyDryRunMode, dryRun, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyDryRunMode, dryRun)
 }
 
 // GetOutcomeCategory retrieves the outcome category.
 func GetOutcomeCategory(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyOutcomeCategory)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyOutcomeCategory)
 }
 
 // SetOutcomeCategory stores the outcome category.
 func SetOutcomeCategory(env *contextdata.Envelope, category string) {
-	env.SetWorkingValue(KeyOutcomeCategory, category, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyOutcomeCategory, category)
 }
 
 // GetOutcomeArtifacts retrieves outcome artifacts.
 func GetOutcomeArtifacts(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyOutcomeArtifacts)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]string)
-	return s, ok
+	return contextdata.GetTyped[[]string](env, KeyOutcomeArtifacts)
 }
 
 // SetOutcomeArtifacts stores outcome artifacts.
 func SetOutcomeArtifacts(env *contextdata.Envelope, artifacts []string) {
-	env.SetWorkingValue(KeyOutcomeArtifacts, artifacts, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyOutcomeArtifacts, artifacts)
 }
 
 // GetOutcomeTelemetry retrieves outcome telemetry.
 func GetOutcomeTelemetry(env *contextdata.Envelope) (map[string]any, bool) {
-	v, ok := env.GetWorkingValue(KeyOutcomeTelemetry)
-	if !ok {
-		return nil, false
-	}
-	m, ok := v.(map[string]any)
-	return m, ok
+	return contextdata.GetTyped[map[string]any](env, KeyOutcomeTelemetry)
 }
 
 // SetOutcomeTelemetry stores outcome telemetry.
 func SetOutcomeTelemetry(env *contextdata.Envelope, telemetry map[string]any) {
-	env.SetWorkingValue(KeyOutcomeTelemetry, telemetry, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyOutcomeTelemetry, telemetry)
 }
 
 // --- Resume (Session Restoration) ---
 
 // GetResumeClassification retrieves the resume classification.
 func GetResumeClassification(env *contextdata.Envelope) (*intake.IntentClassification, bool) {
-	v, ok := env.GetWorkingValue(KeyResumeClassification)
-	if !ok {
-		return nil, false
-	}
-	ic, ok := v.(*intake.IntentClassification)
-	return ic, ok
+	return contextdata.GetTyped[*intake.IntentClassification](env, KeyResumeClassification)
 }
 
 // SetResumeClassification stores the resume classification.
 func SetResumeClassification(env *contextdata.Envelope, ic *intake.IntentClassification) {
-	env.SetWorkingValue(KeyResumeClassification, ic, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyResumeClassification, ic)
 }
 
 // GetResumeRoute retrieves the resume route.
-func GetResumeRoute(env *contextdata.Envelope) (*orchestrate.RouteSelection, bool) {
-	v, ok := env.GetWorkingValue(KeyResumeRoute)
-	if !ok {
-		return nil, false
-	}
-	rs, ok := v.(*orchestrate.RouteSelection)
-	return rs, ok
+func GetResumeRoute(env *contextdata.Envelope) (*euclotypes.RouteSelection, bool) {
+	return contextdata.GetTyped[*euclotypes.RouteSelection](env, KeyResumeRoute)
 }
 
 // SetResumeRoute stores the resume route.
-func SetResumeRoute(env *contextdata.Envelope, rs *orchestrate.RouteSelection) {
-	env.SetWorkingValue(KeyResumeRoute, rs, contextdata.MemoryClassTask)
+func SetResumeRoute(env *contextdata.Envelope, rs *euclotypes.RouteSelection) {
+	contextdata.SetTyped(env, KeyResumeRoute, rs)
 }
 
 // --- Stream ---
 
 // GetStreamTokenUsage retrieves stream token usage.
 func GetStreamTokenUsage(env *contextdata.Envelope) (int, bool) {
-	v, ok := env.GetWorkingValue(KeyStreamTokenUsage)
-	if !ok {
-		return 0, false
-	}
-	n, ok := v.(int)
-	return n, ok
+	return contextdata.GetTyped[int](env, KeyStreamTokenUsage)
 }
 
 // SetStreamTokenUsage stores stream token usage.
 func SetStreamTokenUsage(env *contextdata.Envelope, usage int) {
-	env.SetWorkingValue(KeyStreamTokenUsage, usage, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyStreamTokenUsage, usage)
+}
+
+// GetStreamResult retrieves the context stream result produced at intake.
+func GetStreamResult(env *contextdata.Envelope) (*contextstream.Result, bool) {
+	return contextdata.GetTyped[*contextstream.Result](env, KeyStreamResult)
+}
+
+// SetStreamResult stores the context stream result produced at intake.
+func SetStreamResult(env *contextdata.Envelope, result *contextstream.Result) {
+	contextdata.SetTyped(env, KeyStreamResult, result)
 }
 
 // GetDispatchRouteKind retrieves the dispatch route kind.
 func GetDispatchRouteKind(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyDispatchRouteKind)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyDispatchRouteKind)
 }
 
 // SetDispatchRouteKind stores the dispatch route kind.
 func SetDispatchRouteKind(env *contextdata.Envelope, kind string) {
-	env.SetWorkingValue(KeyDispatchRouteKind, kind, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyDispatchRouteKind, kind)
 }
 
 // --- Frame History ---
 
 // GetFrameHistory retrieves the frame history.
 func GetFrameHistory(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyFrameHistory)
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]string)
-	return s, ok
+	return contextdata.GetTyped[[]string](env, KeyFrameHistory)
 }
 
 // SetFrameHistory stores the frame history.
 func SetFrameHistory(env *contextdata.Envelope, frames []string) {
-	env.SetWorkingValue(KeyFrameHistory, frames, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyFrameHistory, frames)
 }
 
 // AppendFrameID appends a frame ID to the history.
@@ -514,17 +367,12 @@ func AppendFrameID(env *contextdata.Envelope, frameID string) {
 
 // GetJobRecords retrieves the job history.
 func GetJobRecords(env *contextdata.Envelope) ([]JobRecord, bool) {
-	v, ok := env.GetWorkingValue(KeyJobRecords)
-	if !ok {
-		return nil, false
-	}
-	records, ok := v.([]JobRecord)
-	return records, ok
+	return contextdata.GetTyped[[]JobRecord](env, KeyJobRecords)
 }
 
 // SetJobRecords stores the job history.
 func SetJobRecords(env *contextdata.Envelope, records []JobRecord) {
-	env.SetWorkingValue(KeyJobRecords, records, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyJobRecords, records)
 }
 
 // AppendJobRecord appends a job record to the history.
@@ -538,32 +386,22 @@ func AppendJobRecord(env *contextdata.Envelope, record JobRecord) {
 
 // GetNegativeConstraints retrieves the negative constraint seeds.
 func GetNegativeConstraints(env *contextdata.Envelope) ([]string, bool) {
-	v, ok := env.GetWorkingValue(KeyNegativeConstraints)
-	if !ok {
-		return nil, false
-	}
-	constraints, ok := v.([]string)
-	return constraints, ok
+	return contextdata.GetTyped[[]string](env, KeyNegativeConstraints)
 }
 
 // SetNegativeConstraints stores the negative constraint seeds.
 func SetNegativeConstraints(env *contextdata.Envelope, constraints []string) {
-	env.SetWorkingValue(KeyNegativeConstraints, constraints, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyNegativeConstraints, constraints)
 }
 
 // --- Family Selection (Resume) ---
 
 // GetFamilySelection retrieves the selected family.
 func GetFamilySelection(env *contextdata.Envelope) (string, bool) {
-	v, ok := env.GetWorkingValue(KeyFamilySelection)
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
+	return contextdata.GetTyped[string](env, KeyFamilySelection)
 }
 
 // SetFamilySelection stores the selected family.
 func SetFamilySelection(env *contextdata.Envelope, family string) {
-	env.SetWorkingValue(KeyFamilySelection, family, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, KeyFamilySelection, family)
 }

@@ -312,11 +312,11 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, err
 		}
 		if result == nil {
-			result = &core.Result{NodeID: current, Success: true, Data: map[string]interface{}{}}
+			result = &core.Result{NodeID: current, Success: true}
 		}
 		result.NodeID = current
 		lastResult = result
-		for key, value := range result.Data {
+		for key, value := range core.ResultFields(result.Data) {
 			env.SetWorkingValue(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
 		g.emit(core.Event{
@@ -641,9 +641,7 @@ func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]interface{}{
-			"next": to,
-		},
+		Data:    core.NewToolResultPayload(map[string]any{"next": to}),
 	}, nil
 }
 
@@ -735,16 +733,12 @@ func errorFromString(err string) error {
 
 func resultFromToolExecution(nodeID string, res *contracts.ToolResult) *core.Result {
 	if res == nil {
-		return &core.Result{NodeID: nodeID, Success: true, Data: map[string]interface{}{}}
-	}
-	data := res.Data
-	if data == nil {
-		data = map[string]interface{}{}
+		return &core.Result{NodeID: nodeID, Success: true}
 	}
 	return &core.Result{
 		NodeID:   nodeID,
 		Success:  res.Success,
-		Data:     data,
+		Data:     core.NewToolResultPayload(res.Data),
 		Metadata: res.Metadata,
 		Error:    res.Error,
 	}

@@ -103,11 +103,11 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &core.Result{
 		Success: allPassed,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"report":       report,
 			"passed":       allPassed,
 			"failed_cases": failedCases,
-		},
+		}),
 	}, nil
 }
 
@@ -132,14 +132,14 @@ func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contex
 	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &core.Result{
 		Success: allPassed,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"report":        suiteReports,
 			"passed":        allPassed,
 			"total_passed":  totalPassed,
 			"total_failed":  totalFailed,
 			"total_skipped": totalSkipped,
 			"failed_cases":  failedCases,
-		},
+		}),
 	}, nil
 }
 

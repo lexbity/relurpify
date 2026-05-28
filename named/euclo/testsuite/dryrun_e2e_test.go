@@ -8,7 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -55,7 +57,7 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-dryrun", "session-dryrun")
 	seedTask(env, "add a cache to the handler", "dryrun.go")
-	env.SetWorkingValue("euclo.dry_run_mode", true, contextdata.MemoryClassTask)
+	euclostate.SetDryRunMode(env, true)
 	runPreIngestion(t, env, dir, []string{"dryrun.go"})
 	telemetry := &recordingTelemetry{}
 
@@ -66,7 +68,7 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	if got := mustStringValue(t, env, "euclo.route.outcome"); got != "dry_run" {
 		t.Fatalf("route outcome = %q, want dry_run", got)
 	}
-	if got := mustStringValue(t, env, "euclo.outcome.category"); got != "success" {
+	if got, _ := euclostate.GetOutcomeCategory(env); got != "success" {
 		t.Fatalf("outcome category = %q, want success", got)
 	}
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
@@ -100,11 +102,11 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-dryrun-thoughtrecipe", "session-dryrun-thoughtrecipe")
 	seedTask(env, "review the auth package", "review.go")
-	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
+	euclostate.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: thoughtrecipeID,
-	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.dry_run_mode", true, contextdata.MemoryClassTask)
+	})
+	euclostate.SetDryRunMode(env, true)
 	runPreIngestion(t, env, dir, []string{"review.go"})
 	telemetry := &recordingTelemetry{}
 
@@ -115,18 +117,14 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	if got := mustStringValue(t, env, "euclo.route.outcome"); got != "dry_run" {
 		t.Fatalf("route outcome = %q, want dry_run", got)
 	}
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*orchestrate.RouteSelection)
+	routeSelection, ok := euclostate.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+		t.Fatalf("expected *RouteSelection, got %#v", routeSelection)
 	}
 	if routeSelection.RouteKind != "thoughtrecipe" || routeSelection.ThoughtRecipeID != thoughtrecipeID {
 		t.Fatalf("route selection = %+v, want thoughtrecipe %s", routeSelection, thoughtrecipeID)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.kind"); ok {
+	if got := euclostate.GetExecutionKind(env); got != "" {
 		t.Fatalf("expected no execution.kind during dry run, got %v", got)
 	}
 	if !mustBoolValue(t, env, "euclo.execution.completed") {

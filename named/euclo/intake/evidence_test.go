@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 func TestBuildIntentEvidenceFromNormalizedEnvelope(t *testing.T) {
@@ -74,10 +75,10 @@ func TestBuildIntentEvidenceFlagsMissingFields(t *testing.T) {
 func TestIntakePipelineWritesEvidenceToEnvelope(t *testing.T) {
 	node := NewIntakePipelineNode("test-intake", nil, 128, contextstream.ModeBlocking, nil)
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("task.input", &core.Task{
+	contextdata.SetTyped(env, "task.input", &core.Task{
 		ID:          "task-1",
 		Instruction: "Please review named/euclo/intake/types.go",
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -86,13 +87,13 @@ func TestIntakePipelineWritesEvidenceToEnvelope(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result")
 	}
-	if got, ok := env.GetWorkingValue("euclo.intent_evidence"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[*intentcontext.IntentEvidence](env, "euclo.intent_evidence"); !ok || got == nil {
 		t.Fatal("expected intent evidence in envelope")
 	}
-	if got, ok := result.Data["intent_evidence"]; !ok || got == nil {
+	if got, ok := core.ResultField(result.Data, "intent_evidence"); !ok || got == nil {
 		t.Fatal("expected intent evidence in result data")
 	}
-	if got, ok := result.Data["missing_fields"]; !ok || got == nil {
+	if got, ok := core.ResultField(result.Data, "missing_fields"); !ok || got == nil {
 		t.Fatal("expected missing fields in result data")
 	}
 }

@@ -15,10 +15,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/spf13/cobra"
@@ -212,7 +212,10 @@ func newStartCmd() *cobra.Command {
 				return err
 			}
 			workspace.Environment.Config = cfg
-			agent := instantiateNamedAgentFn(runtimeCfg.Workspace, agentName, workspace.Environment)
+			agent, err := instantiateNamedAgentFn(runtimeCfg.Workspace, agentName, workspace.Environment)
+			if err != nil {
+				return err
+			}
 			if agent == nil {
 				return fmt.Errorf("agent %s unavailable", agentName)
 			}

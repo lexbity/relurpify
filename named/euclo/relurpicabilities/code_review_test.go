@@ -64,7 +64,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 	handler := NewCodeReviewHandler(agentenv.WorkspaceEnvironment{Model: model})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("code", "todo: remove stub", contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "code", "todo: remove stub")
 
 	result, err := handler.Invoke(context.Background(), env, map[string]interface{}{"focus": "style"})
 	if err != nil {
@@ -98,7 +98,7 @@ func TestCodeReviewHandlerModelErrorFallsBack(t *testing.T) {
 	})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("code", "TODO: refactor this stub", contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "code", "TODO: refactor this stub")
 
 	result, err := handler.Invoke(context.Background(), env, map[string]interface{}{"focus": "all"})
 	if err != nil {

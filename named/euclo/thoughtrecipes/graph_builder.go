@@ -617,10 +617,7 @@ func scopedGroupNodeID(groupID, kind string) string {
 }
 
 func envBool(env *contextdata.Envelope, key string) bool {
-	if env == nil {
-		return false
-	}
-	value, ok := env.GetWorkingValue(key)
+	value, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		return false
 	}
@@ -667,8 +664,9 @@ func (n *thoughtrecipeStageNode) Type() agentgraph.NodeType { return agentgraph.
 func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
 	if env != nil && n.data != nil {
+		// envelope: intentional dynamic key — stage metadata is keyed by stage ID and field name.
 		for key, value := range n.data {
-			env.SetWorkingValue("euclo.execution.stage."+n.id+"."+key, value, contextdata.MemoryClassTask)
+			contextdata.SetTyped(env, "euclo.execution.stage."+n.id+"."+key, value)
 		}
 		switch n.op {
 		case "gate":
@@ -680,26 +678,29 @@ func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.E
 			if hitl, _ := n.data["hitl"].(string); strings.TrimSpace(hitl) != "" && strings.TrimSpace(hitl) != "never" {
 				hitlRequired = true
 			}
-			env.SetWorkingValue("euclo.policy.mutation_permitted", mutationPermitted, contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.policy.hitl_required", hitlRequired, contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.policy.verification_required", !mutationPermitted || hitlRequired, contextdata.MemoryClassTask)
+			contextdata.SetTyped(env, "euclo.policy.mutation_permitted", mutationPermitted)
+			contextdata.SetTyped(env, "euclo.policy.hitl_required", hitlRequired)
+			contextdata.SetTyped(env, "euclo.policy.verification_required", !mutationPermitted || hitlRequired)
 		case "condition":
 			matched := evaluateThoughtRecipeCondition(env, fmt.Sprint(n.data["condition"]))
-			env.SetWorkingValue(conditionResultKey(fmt.Sprint(n.data["group_id"])), matched, contextdata.MemoryClassTask)
+			// envelope: intentional dynamic key — condition result is scoped by group ID.
+			contextdata.SetTyped(env, conditionResultKey(fmt.Sprint(n.data["group_id"])), matched)
 			n.data["condition_met"] = matched
 		case "route":
-			env.SetWorkingValue("euclo.execution.route."+sanitizeComponent(fmt.Sprint(n.data["group_id"])), true, contextdata.MemoryClassTask)
+			// envelope: intentional dynamic key — route state is scoped by group ID.
+			contextdata.SetTyped(env, "euclo.execution.route."+sanitizeComponent(fmt.Sprint(n.data["group_id"])), true)
 		case "route_condition":
 			matched := evaluateRoutePredicate(env, n.data["predicate"])
 			branchID := fmt.Sprint(n.data["branch_id"])
-			env.SetWorkingValue(routeConditionResultKey(fmt.Sprint(n.data["group_id"]), branchID), matched, contextdata.MemoryClassTask)
+			// envelope: intentional dynamic key — route condition results are scoped by group and branch.
+			contextdata.SetTyped(env, routeConditionResultKey(fmt.Sprint(n.data["group_id"]), branchID), matched)
 			n.data["condition_met"] = matched
 		}
 	}
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    n.data,
+		Data:    core.NewToolResultPayload(n.data),
 	}, nil
 }
 
@@ -854,14 +855,11 @@ func routeConditionFalse(groupID, branchID string) agentgraph.ConditionFunc {
 }
 
 func lookupThoughtRecipeConditionValue(env *contextdata.Envelope, key string) any {
-	if env == nil {
-		return nil
-	}
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil
 	}
-	if value, ok := env.GetWorkingValue(key); ok {
+	if value, ok := contextdata.GetTyped[any](env, key); ok {
 		return value
 	}
 	return nil

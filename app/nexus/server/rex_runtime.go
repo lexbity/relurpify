@@ -447,7 +447,7 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 	out := &contracts.CapabilityExecutionResult{Success: err == nil, Data: map[string]any{}}
 	if result != nil {
 		out.Success = result.Success
-		out.Data = result.Data
+		out.Data = core.ResultFields(result.Data)
 		out.Metadata = result.Metadata
 		if strings.TrimSpace(result.Error) != "" {
 			out.Error = result.Error

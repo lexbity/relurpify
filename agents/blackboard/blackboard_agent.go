@@ -255,13 +255,13 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 
 	return &core.Result{
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"artifacts":       artifactSummaries,
 			"artifact_count":  0,
 			"fact_count":      0,
 			"issue_count":     0,
 			"completed_count": 0,
-		},
+		}),
 	}, nil
 }
 

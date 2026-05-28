@@ -107,13 +107,13 @@ spec:
 		return &core.Result{
 			Success: true,
 			NodeID:  "node-1",
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"projection": map[string]any{
 					"plan_id":   "plan-1",
 					"stable_id": "mutation-1",
 					"status":    "updated",
 				},
-			},
+			}),
 		}, nil
 	}
 

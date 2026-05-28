@@ -138,7 +138,7 @@ func (n *rewooPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		return nil, err
 	}
 	env.SetWorkingValue("rewoo.plan", plan, contextdata.MemoryClassTask)
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]any{"plan_steps": len(plan.Steps)}}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"plan_steps": len(plan.Steps)})}, nil
 }
 
 type rewooExecuteNode struct {
@@ -169,13 +169,13 @@ func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelop
 			NodeID:  n.id,
 			Success: false,
 			Error:   err.Error(),
-			Data:    map[string]any{"step_results": results},
+			Data:    core.NewToolResultPayload(map[string]any{"step_results": results}),
 		}, err
 	}
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    map[string]any{"step_results": results},
+		Data:    core.NewToolResultPayload(map[string]any{"step_results": results}),
 	}, nil
 }
 

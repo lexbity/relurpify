@@ -71,9 +71,9 @@ func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*cor
 	// Return result to graph
 	return &core.Result{
 		Success: result.Success,
-		Data: map[string]interface{}{
+		Data: core.NewToolResultPayload(map[string]any{
 			"step_result": result,
-		},
+		}),
 	}, err
 }
 

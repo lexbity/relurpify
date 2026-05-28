@@ -232,7 +232,7 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 		FMPTransportPolicy: transportPolicy,
 		StartedAt:          time.Now().UTC(),
 		PrincipalResolver:  gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
-		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
+		VerifyNodeConnection: func(ctx context.Context, store identity.EnrollmentStore, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
 		},
 	}).Handler(ctx)
@@ -403,7 +403,9 @@ func newAdminMCPCmd(workspace, configPath *string) *cobra.Command {
 				Nodes:        nodeStore,
 				NodeManager:  nodeManager,
 				Sessions:     sessionStore,
-				Identities:   identityStore,
+				Tenants:      identityStore,
+				Subjects:     identityStore,
+				Enrollments:  identityStore,
 				Tokens:       tokenStore,
 				Policies:     policyStore,
 				Events:       eventLog,
@@ -481,7 +483,7 @@ func newNodePairCmd(workspace, configPath *string) *cobra.Command {
 				}
 				if pairing != nil {
 					enrollment := nodeEnrollmentFromPairing(*pairing)
-					if err := upsertTenantAndSubject(ctx, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
+					if err := upsertTenantAndSubject(ctx, identityStore, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
 						return err
 					}
 					if err := identityStore.UpsertNodeEnrollment(ctx, enrollment); err != nil {

@@ -13,7 +13,8 @@ import (
 func TestValidateWorkspaceTreeRepoRoot(t *testing.T) {
 	report := ValidateWorkspaceTree(repoRoot(t))
 	require.False(t, report.HasErrors(), report.Error())
-	require.FileExists(t, filepath.Join(repoRoot(t), "relurpify_cfg", "agents", "_base.agent.yaml"))
+	// Agents are declared in workspace.yaml; relurpify_cfg/agents/ no longer exists.
+	require.NoDirExists(t, filepath.Join(repoRoot(t), "relurpify_cfg", "agents"))
 }
 
 func repoRoot(t *testing.T) string {
@@ -64,7 +65,6 @@ func TestValidateWorkspaceTreeCatchesBoundaryViolations(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(cfgRoot, "model", "provider"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(cfgRoot, "model", "profiles"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(cfgRoot, "tools"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(cfgRoot, "agents"), 0o755))
 
 	// Write mock workspace.yaml
 	require.NoError(t, os.WriteFile(filepath.Join(cfgRoot, "workspace.yaml"), []byte(`schema: relurpify/workspace/v1

@@ -105,7 +105,7 @@ func TestAgentExecuteBuildsProofSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if _, ok := result.Data["rex.proof_surface"]; !ok {
+	if _, ok := core.ResultField(result.Data, "rex.proof_surface"); !ok {
 		t.Fatalf("missing proof surface")
 	}
 }
@@ -219,15 +219,20 @@ func TestAgentReconcilerWrappersAndPersistProof(t *testing.T) {
 
 func TestAgentNilReceiverWrappersAndPersistenceHelpers(t *testing.T) {
 	var agent *Agent
-	if got := agent.RecordAmbiguity("wf-1", "run-1", "reason"); got != (reconcile.Record{}) {
-		t.Fatalf("expected zero record from nil agent, got %+v", got)
+	assertPanics := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("expected %s to panic", name)
+			}
+		}()
+		fn()
 	}
-	if got := agent.ResolveAmbiguity(reconcile.Record{ID: "r"}, reconcile.OutcomeVerified, "notes"); got.ID != "r" {
-		t.Fatalf("expected passthrough resolve from nil agent, got %+v", got)
-	}
-	if agent.ShouldRetryAmbiguity(reconcile.Record{ID: "r"}) {
-		t.Fatalf("expected nil agent to not retry")
-	}
+	assertPanics("RecordAmbiguity", func() { _ = agent.RecordAmbiguity("wf-1", "run-1", "reason") })
+	assertPanics("ResolveAmbiguity", func() {
+		_ = agent.ResolveAmbiguity(reconcile.Record{ID: "r"}, reconcile.OutcomeVerified, "notes")
+	})
+	assertPanics("ShouldRetryAmbiguity", func() { _ = agent.ShouldRetryAmbiguity(reconcile.Record{ID: "r"}) })
 
 	env2 := contextdata.NewEnvelope("wf", "")
 	if err := persistProof(context.Background(), nil, state.Identity{WorkflowID: "wf", RunID: "run"}, route.RouteDecision{}, proof.ProofSurface{}, nil, proof.CompletionDecision{}, env2); err != nil {

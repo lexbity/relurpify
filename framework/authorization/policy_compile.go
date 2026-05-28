@@ -254,7 +254,7 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.Poli
 	legacy := selector
 	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
 		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
-		selector.CoordinationLongRunning != nil || selector.CoordinationDirectInsertion != nil {
+		selector.CoordinationLongRunning != agentspec.EnabledStateUnset || selector.CoordinationDirectInsertion != agentspec.EnabledStateUnset {
 		return core.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}
 	conditions := core.PolicyConditions{

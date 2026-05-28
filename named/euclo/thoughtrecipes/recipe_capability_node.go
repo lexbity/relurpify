@@ -1,0 +1,107 @@
+package thoughtrecipe
+
+import (
+	"context"
+	"fmt"
+
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// RecipeCapabilityNode is a graph node that registers a compiled thought recipe
+// as a session-local capability on the execution envelope. It must run before
+// any node that invokes the registered capability ID.
+type RecipeCapabilityNode struct {
+	id           string
+	capabilityID string
+	plan         *ExecutionPlan
+	env          agentenv.WorkspaceEnvironment
+}
+
+// NewRecipeCapabilityNode creates a node that registers the given execution
+// plan as a session capability identified by capabilityID.
+func NewRecipeCapabilityNode(id, capabilityID string, plan *ExecutionPlan, env agentenv.WorkspaceEnvironment) *RecipeCapabilityNode {
+	return &RecipeCapabilityNode{
+		id:           id,
+		capabilityID: capabilityID,
+		plan:         plan,
+		env:          env,
+	}
+}
+
+// ID returns the node identifier.
+func (n *RecipeCapabilityNode) ID() string { return n.id }
+
+// Type returns the node type.
+func (n *RecipeCapabilityNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
+
+// Execute registers the recipe as a session capability on the envelope.
+func (n *RecipeCapabilityNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	if n.plan == nil {
+		return &core.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: execution plan is nil", n.id)
+	}
+	if n.capabilityID == "" {
+		return &core.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: capability id is required", n.id)
+	}
+	handler := newRecipeCapabilityHandler(n.capabilityID, n.plan, n.env)
+	if err := capability.RegisterSessionCapability(env, n.capabilityID, handler); err != nil {
+		return &core.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: register session capability: %w", n.id, err)
+	}
+	return &core.Result{NodeID: n.id, Success: true}, nil
+}
+
+// recipeCapabilityHandler implements core.InvocableCapabilityHandler for a
+// compiled thought recipe. Each Invoke call builds a fresh recipe graph and
+// executes it with the caller's envelope.
+type recipeCapabilityHandler struct {
+	capabilityID string
+	plan         *ExecutionPlan
+	env          agentenv.WorkspaceEnvironment
+}
+
+func newRecipeCapabilityHandler(capabilityID string, plan *ExecutionPlan, env agentenv.WorkspaceEnvironment) *recipeCapabilityHandler {
+	return &recipeCapabilityHandler{
+		capabilityID: capabilityID,
+		plan:         plan,
+		env:          env,
+	}
+}
+
+func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
+	name := h.capabilityID
+	if h.plan != nil && h.plan.ThoughtRecipe != nil && h.plan.ThoughtRecipe.Name != "" {
+		name = h.plan.ThoughtRecipe.Name
+	}
+	return core.CapabilityDescriptor{
+		ID:            h.capabilityID,
+		Kind:          core.CapabilityKindTool,
+		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Name:          name,
+		Source:        core.CapabilitySource{Scope: core.CapabilityScopeWorkspace},
+		Availability:  core.AvailabilitySpec{Available: true},
+	}
+}
+
+func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+	if h.plan == nil {
+		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
+	}
+	graph, err := BuildThoughtRecipeGraph(h.plan, h.env, nil)
+	if err != nil {
+		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
+	}
+	result, err := graph.Execute(ctx, env)
+	if err != nil {
+		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execute: %w", h.capabilityID, err)
+	}
+	success := result != nil && result.Success
+	data := map[string]any{}
+	if result != nil && result.Data != nil {
+		data = core.ResultFields(result.Data)
+	}
+	return &contracts.CapabilityExecutionResult{Success: success, Data: data}, nil
+}

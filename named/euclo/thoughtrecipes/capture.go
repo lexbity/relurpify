@@ -47,18 +47,12 @@ func CaptureSourceValue(binding CaptureBinding, resultData map[string]any, envDa
 // ApplyCaptureBindings writes the capture bindings to the envelope and returns
 // the destinations that were updated.
 func ApplyCaptureBindings(env *contextdata.Envelope, bindings []CaptureBinding, resultData map[string]any) ([]string, error) {
-	if env == nil {
-		return nil, fmt.Errorf("envelope is nil")
-	}
 	return ApplyCaptureBindingsFromSnapshot(env, env.Snapshot(), bindings, resultData)
 }
 
 // ApplyCaptureBindingsFromSnapshot writes capture bindings using the supplied
 // source snapshot for lookups and the destination envelope for writes.
 func ApplyCaptureBindingsFromSnapshot(env *contextdata.Envelope, sourceData map[string]any, bindings []CaptureBinding, resultData map[string]any) ([]string, error) {
-	if env == nil {
-		return nil, fmt.Errorf("envelope is nil")
-	}
 	if len(bindings) == 0 {
 		return nil, nil
 	}
@@ -81,7 +75,8 @@ func ApplyCaptureBindingsFromSnapshot(env *contextdata.Envelope, sourceData map[
 				return nil, fmt.Errorf("%s:%d:%d: direct forwarding requires a reference source", binding.GetSpan().Start.File, binding.GetSpan().Start.Line, binding.GetSpan().Start.Column)
 			}
 		}
-		env.SetWorkingValue(dest, value, contextdata.MemoryClassTask)
+		// envelope: intentional dynamic key — capture destinations are user-defined.
+		contextdata.SetTyped(env, dest, value)
 		writes = append(writes, dest)
 	}
 	return writes, nil

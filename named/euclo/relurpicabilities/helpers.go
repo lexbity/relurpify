@@ -194,7 +194,7 @@ func traceEntries(callees, callers []*ast.Node) []map[string]interface{} {
 
 // writeRetrievalReferences writes retrieval references to the envelope for AST query results.
 func writeRetrievalReferences(env *contextdata.Envelope, query string, nodes []*ast.Node) {
-	if env == nil || len(nodes) == 0 {
+	if len(nodes) == 0 {
 		return
 	}
 

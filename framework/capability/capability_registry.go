@@ -944,6 +944,9 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 		}
 		return r.delegate.InvokeCapability(ctx, state, idOrName, args)
 	}
+	if sessionHandler, ok := LookupSessionCapability(state, idOrName); ok {
+		return sessionHandler.Invoke(ctx, state, args)
+	}
 	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
 	if err != nil {
 		return nil, err

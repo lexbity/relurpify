@@ -181,9 +181,6 @@ type ScoredClassification struct {
 
 // ClassifyTaskScored performs tier-1 classification using signal scoring.
 func ClassifyTaskScored(envelope *TaskEnvelope, registry *families.KeywordFamilyRegistry, thoughtrecipeKeywords map[string][]string) *ScoredClassification {
-	if envelope == nil {
-		envelope = &TaskEnvelope{}
-	}
 	// Collect signals
 	signals := CollectSignals(envelope, thoughtrecipeKeywords, registry)
 

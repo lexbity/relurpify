@@ -27,7 +27,7 @@ func normalizeTenantID(tenantID string) string {
 	return tenantID
 }
 
-func verifyGatewayNodeChallenge(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn nodeChallengeConn) error {
+func verifyGatewayNodeChallenge(ctx context.Context, store identity.EnrollmentStore, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn nodeChallengeConn) error {
 	if store == nil {
 		return fmt.Errorf("identity store unavailable")
 	}

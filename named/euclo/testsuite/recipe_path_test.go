@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -27,10 +29,10 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-thoughtrecipe", "session-thoughtrecipe")
 	seedTask(env, "review the auth package", "review.go")
-	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
+	euclostate.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "euclo.thoughtrecipe.review",
-	}, contextdata.MemoryClassTask)
+	})
 	runPreIngestion(t, env, dir, []string{"review.go"})
 
 	if err := graph.Execute(ctxWithTrigger(context.Background()), env); err != nil {
@@ -49,7 +51,7 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
 		t.Fatal("expected thoughtrecipe execution to complete")
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.capability_id"); ok && got != "" {
+	if got, ok := contextdata.GetTyped[any](env, euclostate.KeyExecutionCapabilityID); ok && got != "" {
 		t.Fatalf("expected thoughtrecipe-only execution, got capability id %v", got)
 	}
 }

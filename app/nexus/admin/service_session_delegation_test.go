@@ -44,8 +44,10 @@ func TestGrantSessionDelegation(t *testing.T) {
 	}))
 
 	svc := NewService(ServiceConfig{
-		Sessions:   sessionStore,
-		Identities: identityStore,
+		Sessions:    sessionStore,
+		Tenants:     identityStore,
+		Subjects:    identityStore,
+		Enrollments: identityStore,
 	}).(*service)
 	result, err := svc.GrantSessionDelegation(context.Background(), GrantSessionDelegationRequest{
 		AdminRequest: AdminRequest{

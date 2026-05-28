@@ -8,8 +8,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
@@ -27,24 +29,16 @@ func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*orchestrate.RouteSelection)
+	routeSelection, ok := state.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+		t.Fatalf("expected *RouteSelection, got %#v", routeSelection)
 	}
-	if routeSelection.RouteKind != orchestrate.RouteKindIntent || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.intent.clarify" {
+	if routeSelection.RouteKind != euclotypes.RouteKindIntent || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.intent.clarify" {
 		t.Fatalf("unexpected clarification route selection: %+v", routeSelection)
 	}
-	resolution, ok := env.GetWorkingValue("euclo.route_resolution")
-	if !ok {
-		t.Fatal("expected route_resolution in envelope")
-	}
-	routeResolution, ok := resolution.(*orchestrate.RouteResolution)
+	routeResolution, ok := state.GetRouteResolution(env)
 	if !ok || routeResolution == nil {
-		t.Fatalf("expected *RouteResolution, got %T", resolution)
+		t.Fatalf("expected *RouteResolution, got %#v", routeResolution)
 	}
 	if routeResolution.ResolutionSource != "clarification" {
 		t.Fatalf("route resolution source = %q, want clarification", routeResolution.ResolutionSource)
@@ -55,14 +49,10 @@ func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 	if got := mustStringValue(t, env, "euclo.execution.thoughtrecipe_id"); got != "euclo.thoughtrecipe.intent.clarify" {
 		t.Fatalf("execution thoughtrecipe id = %q, want clarification thoughtrecipe", got)
 	}
-	if frameValue, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); !ok {
-		t.Fatal("expected clarification frame in envelope")
-	} else if frame, ok := frameValue.(*orchestrate.ClarificationFrame); !ok || frame == nil || !frame.Pending() {
+	if frameValue, ok := contextdata.GetTyped[*orchestrate.ClarificationFrame](env, state.KeyClarificationFrame); !ok || frameValue == nil || !frameValue.Pending() {
 		t.Fatalf("unexpected clarification frame: %#v", frameValue)
 	}
-	if gateValue, ok := env.GetWorkingValue("euclo.clarification.gate_result"); !ok {
-		t.Fatal("expected clarification gate result in envelope")
-	} else if gate, ok := gateValue.(map[string]any); !ok || gate["decision"] != "clarify" {
+	if gateValue, ok := state.GetClarificationGateResult(env); !ok || gateValue["decision"] != "clarify" {
 		t.Fatalf("unexpected gate result: %#v", gateValue)
 	}
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
@@ -94,12 +84,12 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-interaction", "session-interaction")
 	seedTask(env, "implement and review the handler", "mixed.go")
-	env.SetWorkingValue("euclo.policy_decision", &policy.PolicyDecision{
+	state.SetPolicyDecision(env, &policy.PolicyDecision{
 		MutationPermitted:    false,
 		HITLRequired:         true,
 		VerificationRequired: false,
 		ReasonCodes:          []string{"approval_required"},
-	}, contextdata.MemoryClassTask)
+	})
 	runPreIngestion(t, env, dir, []string{"mixed.go"})
 
 	done := make(chan struct{})

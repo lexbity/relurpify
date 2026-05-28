@@ -21,33 +21,33 @@ const (
 
 // SessionSelector matches session-oriented requests during policy evaluation.
 type SessionSelector struct {
-	Partitions                []string           `yaml:"partitions,omitempty" json:"partitions,omitempty"`
-	ChannelIDs                []string           `yaml:"channel_ids,omitempty" json:"channel_ids,omitempty"`
-	Scopes                    []SessionScope     `yaml:"scopes,omitempty" json:"scopes,omitempty"`
-	TrustClasses              []TrustClass       `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
-	Operations                []SessionOperation `yaml:"operations,omitempty" json:"operations,omitempty"`
-	ActorKinds                []string           `yaml:"actor_kinds,omitempty" json:"actor_kinds,omitempty"`
-	ActorIDs                  []string           `yaml:"actor_ids,omitempty" json:"actor_ids,omitempty"`
-	ExternalProviders         []string           `yaml:"external_providers,omitempty" json:"external_providers,omitempty"`
-	RequireOwnership          *bool              `yaml:"require_ownership,omitempty" json:"require_ownership,omitempty"`
-	RequireDelegation         *bool              `yaml:"require_delegation,omitempty" json:"require_delegation,omitempty"`
-	RequireExternalBinding    *bool              `yaml:"require_external_binding,omitempty" json:"require_external_binding,omitempty"`
-	RequireResolvedExternal   *bool              `yaml:"require_resolved_external,omitempty" json:"require_resolved_external,omitempty"`
-	RequireRestrictedExternal *bool              `yaml:"require_restricted_external,omitempty" json:"require_restricted_external,omitempty"`
-	AuthenticatedOnly         *bool              `yaml:"authenticated_only,omitempty" json:"authenticated_only,omitempty"`
+	Partitions                []string           `json:"partitions,omitempty"`
+	ChannelIDs                []string           `json:"channel_ids,omitempty"`
+	Scopes                    []SessionScope     `json:"scopes,omitempty"`
+	TrustClasses              []TrustClass       `json:"trust_classes,omitempty"`
+	Operations                []SessionOperation `json:"operations,omitempty"`
+	ActorKinds                []string           `json:"actor_kinds,omitempty"`
+	ActorIDs                  []string           `json:"actor_ids,omitempty"`
+	ExternalProviders         []string           `json:"external_providers,omitempty"`
+	RequireOwnership          *bool              `json:"require_ownership,omitempty"`
+	RequireDelegation         *bool              `json:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool              `json:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool              `json:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool              `json:"require_restricted_external,omitempty"`
+	AuthenticatedOnly         *bool              `json:"authenticated_only,omitempty"`
 }
 
 // SessionPolicy configures access to session-scoped operations.
 type SessionPolicy struct {
-	ID          string                         `yaml:"id" json:"id"`
-	Name        string                         `yaml:"name" json:"name"`
-	Priority    int                            `yaml:"priority,omitempty" json:"priority,omitempty"`
-	Enabled     bool                           `yaml:"enabled" json:"enabled"`
-	Selector    SessionSelector                `yaml:"selector" json:"selector"`
-	Effect      agentspec.AgentPermissionLevel `yaml:"effect" json:"effect"`
-	Approvers   []string                       `yaml:"approvers,omitempty" json:"approvers,omitempty"`
-	ApprovalTTL string                         `yaml:"approval_ttl,omitempty" json:"approval_ttl,omitempty"`
-	Reason      string                         `yaml:"reason,omitempty" json:"reason,omitempty"`
+	ID          string                         `json:"id"`
+	Name        string                         `json:"name"`
+	Priority    int                            `json:"priority,omitempty"`
+	Enabled     bool                           `json:"enabled"`
+	Selector    SessionSelector                `json:"selector"`
+	Effect      agentspec.AgentPermissionLevel `json:"effect"`
+	Approvers   []string                       `json:"approvers,omitempty"`
+	ApprovalTTL string                         `json:"approval_ttl,omitempty"`
+	Reason      string                         `json:"reason,omitempty"`
 }
 
 // ValidateSessionPolicy validates a session policy definition.

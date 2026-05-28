@@ -462,10 +462,10 @@ func validateDelegationTargetPolicy(request core.DelegationRequest, target core.
 	if target.RuntimeFamily == core.CapabilityRuntimeFamilyProvider && target.Source.Scope == core.CapabilityScopeRemote && !coordination.AllowRemoteDelegation {
 		return fmt.Errorf("remote delegation to %s is not allowed", target.Name)
 	}
-	if target.Coordination.LongRunning && !coordination.AllowBackgroundDelegation {
+	if target.Coordination.LongRunning == core.EnabledStateEnabled && !coordination.AllowBackgroundDelegation {
 		return fmt.Errorf("background delegation to %s is not allowed", target.Name)
 	}
-	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.Coordination.ExecutionModes) && !target.Coordination.LongRunning {
+	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.Coordination.ExecutionModes) && target.Coordination.LongRunning != core.EnabledStateEnabled {
 		return fmt.Errorf("delegation target %s is not background-capable", target.Name)
 	}
 	if requestPrefersBackground(request) && !coordination.AllowBackgroundDelegation {
@@ -537,7 +537,7 @@ func buildDelegationResult(request core.DelegationRequest, target core.Capabilit
 	}
 	envelope := core.NewCapabilityResultEnvelope(target, result, core.ContentDispositionRaw, snapshot, core.ApprovalBindingFromDelegation(request, delegationResult))
 	decision := core.EffectiveInsertionDecision(spec, envelope)
-	if target.Coordination != nil && !target.Coordination.DirectInsertionAllowed && decision.Action == core.InsertionActionDirect {
+	if target.Coordination != nil && target.Coordination.DirectInsertionAllowed != core.EnabledStateEnabled && decision.Action == core.InsertionActionDirect {
 		decision.Action = core.InsertionActionSummarized
 		decision.Reason = "coordination target requires summarized insertion"
 	}
@@ -696,7 +696,7 @@ func shouldRunDelegationInBackground(target core.CapabilityDescriptor, requested
 	if target.Coordination == nil {
 		return false
 	}
-	if target.Coordination.LongRunning {
+	if target.Coordination.LongRunning == core.EnabledStateEnabled {
 		return true
 	}
 	return requested && containsBackgroundExecutionMode(target.Coordination.ExecutionModes)

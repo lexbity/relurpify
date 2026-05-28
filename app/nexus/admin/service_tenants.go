@@ -14,10 +14,10 @@ func (s *service) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenan
 	if _, err := authorizeTenant(req.Principal, lookupID); err != nil {
 		return GetTenantResult{}, err
 	}
-	if s.cfg.Identities == nil {
+	if s.cfg.Tenants == nil {
 		return GetTenantResult{AdminResult: resultEnvelope(req.AdminRequest)}, nil
 	}
-	record, err := s.cfg.Identities.GetTenant(ctx, lookupID)
+	record, err := s.cfg.Tenants.GetTenant(ctx, lookupID)
 	if err != nil {
 		return GetTenantResult{}, internalError("get tenant failed", err, map[string]any{"tenant_id": lookupID})
 	}
@@ -46,10 +46,10 @@ func (s *service) SetTenantEnabled(ctx context.Context, req SetTenantEnabledRequ
 	if _, err := authorizeTenant(req.Principal, lookupID); err != nil {
 		return SetTenantEnabledResult{}, err
 	}
-	if s.cfg.Identities == nil {
+	if s.cfg.Tenants == nil {
 		return SetTenantEnabledResult{}, notImplemented("set tenant enabled not implemented", nil)
 	}
-	record, err := s.cfg.Identities.GetTenant(ctx, lookupID)
+	record, err := s.cfg.Tenants.GetTenant(ctx, lookupID)
 	if err != nil {
 		return SetTenantEnabledResult{}, internalError("get tenant failed", err, map[string]any{"tenant_id": lookupID})
 	}
@@ -62,7 +62,7 @@ func (s *service) SetTenantEnabled(ctx context.Context, req SetTenantEnabledRequ
 		now := time.Now().UTC()
 		record.DisabledAt = &now
 	}
-	if err := s.cfg.Identities.UpsertTenant(ctx, *record); err != nil {
+	if err := s.cfg.Tenants.UpsertTenant(ctx, *record); err != nil {
 		return SetTenantEnabledResult{}, internalError("set tenant enabled failed", err, map[string]any{"tenant_id": lookupID})
 	}
 	return SetTenantEnabledResult{

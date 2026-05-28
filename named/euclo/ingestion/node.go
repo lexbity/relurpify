@@ -53,13 +53,9 @@ func (n *IngestionNode) Contract() agentgraph.NodeContract {
 
 // Execute runs the configured ingestion mode.
 func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	if env == nil {
-		return nil, fmt.Errorf("ingestion node %q missing envelope", n.id)
-	}
-
 	taskEnvelope := taskEnvelopeFromEnv(env)
 	if taskEnvelope == nil {
-		result := &core.Result{NodeID: n.id, Success: true, Data: map[string]any{"skipped": true}}
+		result := &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"skipped": true})}
 		return result, nil
 	}
 
@@ -91,19 +87,19 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		if err := n.ingestExplicitFiles(ctx, env, taskEnvelope, store, result, summary); err != nil {
 			result.Error = err.Error()
 			n.writeSummary(env, result, summary, err)
-			return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
+			return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
 		}
 	case IngestionModeIncremental, IngestionModeFull:
 		if err := n.ingestWorkspace(ctx, env, taskEnvelope, store, result, summary, mode); err != nil {
 			result.Error = err.Error()
 			n.writeSummary(env, result, summary, err)
-			return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
+			return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
 		}
 	default:
 		err := fmt.Errorf("unknown ingestion mode: %s", mode)
 		result.Error = err.Error()
 		n.writeSummary(env, result, summary, err)
-		return &core.Result{NodeID: n.id, Success: false, Data: summary, Error: err.Error()}, err
+		return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
 	}
 
 	if mode == IngestionModeFilesOnly {
@@ -118,7 +114,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	n.writeSummary(env, result, summary, nil)
-	return &core.Result{NodeID: n.id, Success: true, Data: summary}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(summary)}, nil
 }
 
 func (n *IngestionNode) resolveMode(task *intake.TaskEnvelope) IngestionMode {
@@ -261,9 +257,6 @@ func (n *IngestionNode) resolvePath(root, filePath string) string {
 }
 
 func (n *IngestionNode) writeSummary(env *contextdata.Envelope, result *IngestionResult, summary map[string]any, err error) {
-	if env == nil {
-		return
-	}
 	env.SetWorkingValue("euclo.ingestion_result", result, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.ingestion.summary", summary, contextdata.MemoryClassTask)
 	if err != nil {
@@ -272,9 +265,6 @@ func (n *IngestionNode) writeSummary(env *contextdata.Envelope, result *Ingestio
 }
 
 func (n *IngestionNode) storeFileSummary(env *contextdata.Envelope, path string, ingestResult *frameworkingestion.IngestResult) {
-	if env == nil {
-		return
-	}
 	key := "euclo.ingested.file." + sanitize(path)
 	env.SetWorkingValue(key, map[string]any{
 		"chunks_committed":   ingestResult.ChunksCommitted,
@@ -284,9 +274,6 @@ func (n *IngestionNode) storeFileSummary(env *contextdata.Envelope, path string,
 }
 
 func taskEnvelopeFromEnv(env *contextdata.Envelope) *intake.TaskEnvelope {
-	if env == nil {
-		return nil
-	}
 	if value, ok := env.GetWorkingValue("euclo.task_envelope"); ok {
 		if task, ok := value.(*intake.TaskEnvelope); ok {
 			return task

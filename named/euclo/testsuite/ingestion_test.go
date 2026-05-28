@@ -6,8 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -31,7 +32,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-file-grounding", "session-file-grounding")
 	seedTask(env, "review the auth package", "review.go")
-	env.SetWorkingValue("task.input", &core.Task{
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, &core.Task{
 		ID:          "task-file-grounding",
 		Type:        "euclo",
 		Instruction: "review the auth package",
@@ -39,45 +40,42 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 			"euclo.user_files": []string{"review.go"},
 		},
 		Metadata: map[string]any{},
-	}, contextdata.MemoryClassTask)
+	})
+	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, &core.Task{
+		ID:          "task-file-grounding",
+		Type:        "euclo",
+		Instruction: "review the auth package",
+		Context: map[string]any{
+			"euclo.user_files": []string{"review.go"},
+		},
+		Metadata: map[string]any{},
+	})
 	runPreIngestion(t, env, dir, []string{"review.go"})
 
 	if err := graph.Execute(context.Background(), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
-	evidenceValue, ok := env.GetWorkingValue("euclo.intent_evidence")
+	evidenceValue, ok := euclostate.GetIntentEvidence(env)
 	if !ok {
 		t.Fatal("expected intent evidence in envelope")
 	}
-	evidence, ok := evidenceValue.(*intentcontext.IntentEvidence)
-	if !ok || evidence == nil {
-		t.Fatalf("expected *IntentEvidence, got %T", evidenceValue)
+	if len(evidenceValue.UserFiles) == 0 || evidenceValue.UserFiles[0] != "review.go" {
+		t.Fatalf("user files = %#v, want review.go", evidenceValue.UserFiles)
 	}
-	if len(evidence.UserFiles) == 0 || evidence.UserFiles[0] != "review.go" {
-		t.Fatalf("user files = %#v, want review.go", evidence.UserFiles)
-	}
-	interpretationValue, ok := env.GetWorkingValue(intentcontext.IntentInterpretationKey)
+	interpretationValue, ok := euclostate.GetIntentInterpretation(env)
 	if !ok {
 		t.Fatal("expected intent interpretation in envelope")
 	}
-	interpretation, ok := interpretationValue.(*intentcontext.IntentInterpretation)
-	if !ok || interpretation == nil {
-		t.Fatalf("expected *IntentInterpretation, got %T", interpretationValue)
-	}
-	if interpretation.Target == "" {
+	if interpretationValue.Target == "" {
 		t.Fatal("expected grounded interpretation target")
 	}
-	selectionValue, ok := env.GetWorkingValue("euclo.route_selection")
+	selectionValue, ok := euclostate.GetRouteSelection(env)
 	if !ok {
 		t.Fatal("expected route_selection in envelope")
 	}
-	routeSelection, ok := selectionValue.(*orchestrate.RouteSelection)
-	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selectionValue)
-	}
-	if routeSelection.RouteKind != orchestrate.RouteKindThoughtRecipe || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.review" {
-		t.Fatalf("unexpected route selection: %+v", routeSelection)
+	if selectionValue.RouteKind != euclotypes.RouteKindThoughtRecipe || selectionValue.ThoughtRecipeID != "euclo.thoughtrecipe.review" {
+		t.Fatalf("unexpected route selection: %+v", selectionValue)
 	}
 	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "thoughtrecipe" {
 		t.Fatalf("execution kind = %q, want thoughtrecipe", got)
@@ -85,7 +83,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 	if got := mustStringValue(t, env, "euclo.execution.thoughtrecipe_id"); got != "euclo.thoughtrecipe.review" {
 		t.Fatalf("execution thoughtrecipe id = %q, want euclo.thoughtrecipe.review", got)
 	}
-	if frameValue, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); ok && frameValue != nil {
+	if frameValue, ok := contextdata.GetTyped[any](env, euclostate.KeyClarificationFrame); ok && frameValue != nil {
 		t.Fatalf("expected grounding to avoid clarification frame, got %#v", frameValue)
 	}
 }

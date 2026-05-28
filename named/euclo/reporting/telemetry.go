@@ -2,13 +2,13 @@ package reporting
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // EucloTelemetry wraps core.Telemetry with typed Emit helpers.
@@ -141,16 +141,10 @@ func (n *TelemetryNode) Type() string {
 
 // Execute collects and reports telemetry data.
 func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) (map[string]any, error) {
-	if env == nil {
-		return nil, errors.New("envelope is nil")
-	}
-
-	completedVal, _ := env.GetWorkingValue("euclo.execution.completed")
-	completed, _ := completedVal.(bool)
-	blockedVal, _ := env.GetWorkingValue("euclo.policy.blocked")
-	blocked, _ := blockedVal.(bool)
+	completed, _ := contextdata.GetTyped[bool](env, "euclo.execution.completed")
+	blocked, _ := contextdata.GetTyped[bool](env, "euclo.policy.blocked")
 	errorCount := 0
-	if v, ok := env.GetWorkingValue("euclo.execution.error_count"); ok {
+	if v, ok := contextdata.GetTyped[any](env, "euclo.execution.error_count"); ok {
 		switch value := v.(type) {
 		case int:
 			errorCount = value
@@ -162,69 +156,64 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	outcome := ClassifyOutcome(completed, errorCount, blocked)
-	env.SetWorkingValue("euclo.outcome.category", string(outcome.Category), contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.outcome.reason", outcome.Reason, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.outcome.completed", outcome.Completed, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.outcome_telemetry", map[string]any{
+	state.SetOutcomeCategory(env, string(outcome.Category))
+	contextdata.SetTyped(env, "euclo.outcome.reason", outcome.Reason)
+	contextdata.SetTyped(env, "euclo.outcome.completed", outcome.Completed)
+	state.SetOutcomeTelemetry(env, map[string]any{
 		"category":    string(outcome.Category),
 		"reason":      outcome.Reason,
 		"completed":   outcome.Completed,
 		"error_count": outcome.ErrorCount,
 		"blocked":     blocked,
-	}, contextdata.MemoryClassTask)
+	})
 
-	if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
-		if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
-			env.SetWorkingValue("euclo.outcome_telemetry.projection", map[string]any{
-				"stable_id":      mutation.StableID,
-				"scope":          string(mutation.Scope),
-				"status":         string(mutation.Status),
-				"reason":         mutation.Reason,
-				"created_ids":    append([]string(nil), mutation.CreatedIDs...),
-				"updated_ids":    append([]string(nil), mutation.UpdatedIDs...),
-				"annotated_ids":  append([]string(nil), mutation.AnnotatedIDs...),
-				"superseded_ids": append([]string(nil), mutation.SupersededIDs...),
-				"matched_ids":    append([]string(nil), mutation.MatchedIDs...),
-				"rejected_ids":   append([]string(nil), mutation.RejectedIDs...),
-				"conflict_ids":   append([]string(nil), mutation.ConflictIDs...),
-				"record_ids":     append([]string(nil), mutation.RecordIDs...),
-				"details":        mutation.Details,
-			}, contextdata.MemoryClassTask)
-		}
+	if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {
+		contextdata.SetTyped(env, "euclo.outcome_telemetry.projection", map[string]any{
+			"stable_id":      mutation.StableID,
+			"scope":          string(mutation.Scope),
+			"status":         string(mutation.Status),
+			"reason":         mutation.Reason,
+			"created_ids":    append([]string(nil), mutation.CreatedIDs...),
+			"updated_ids":    append([]string(nil), mutation.UpdatedIDs...),
+			"annotated_ids":  append([]string(nil), mutation.AnnotatedIDs...),
+			"superseded_ids": append([]string(nil), mutation.SupersededIDs...),
+			"matched_ids":    append([]string(nil), mutation.MatchedIDs...),
+			"rejected_ids":   append([]string(nil), mutation.RejectedIDs...),
+			"conflict_ids":   append([]string(nil), mutation.ConflictIDs...),
+			"record_ids":     append([]string(nil), mutation.RecordIDs...),
+			"details":        mutation.Details,
+		})
 	}
 
 	tel := n.telemetry
 	if tel == nil {
 		tel = NewEucloTelemetry(core.TelemetryFromContext(ctx))
 	}
-	planID, _ := env.GetWorkingValue("euclo.projection.plan_id")
-	planIDStr, _ := planID.(string)
+	planIDStr, _ := contextdata.GetTyped[string](env, "euclo.projection.plan_id")
 	if tel != nil {
-		if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
-			if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
-				tel.EmitProjectionCompleted(ctx, EventProjectionCompleted{
-					EventHeader: EventHeader{
-						TaskID:     env.TaskID,
-						SessionID:  env.SessionID,
-						Seq:        0,
-						OccurredAt: time.Now().UTC(),
-					},
-					PlanID:           planIDStr,
-					MutationStableID: mutation.StableID,
-					MutationScope:    string(mutation.Scope),
-					MutationStatus:   string(mutation.Status),
-					Reason:           mutation.Reason,
-					CreatedIDs:       append([]string(nil), mutation.CreatedIDs...),
-					UpdatedIDs:       append([]string(nil), mutation.UpdatedIDs...),
-					AnnotatedIDs:     append([]string(nil), mutation.AnnotatedIDs...),
-					SupersededIDs:    append([]string(nil), mutation.SupersededIDs...),
-					MatchedIDs:       append([]string(nil), mutation.MatchedIDs...),
-					RejectedIDs:      append([]string(nil), mutation.RejectedIDs...),
-					ConflictIDs:      append([]string(nil), mutation.ConflictIDs...),
-					RecordIDs:        append([]string(nil), mutation.RecordIDs...),
-					Details:          mutation.Details,
-				})
-			}
+		if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {
+			tel.EmitProjectionCompleted(ctx, EventProjectionCompleted{
+				EventHeader: EventHeader{
+					TaskID:     env.TaskID,
+					SessionID:  env.SessionID,
+					Seq:        0,
+					OccurredAt: time.Now().UTC(),
+				},
+				PlanID:           planIDStr,
+				MutationStableID: mutation.StableID,
+				MutationScope:    string(mutation.Scope),
+				MutationStatus:   string(mutation.Status),
+				Reason:           mutation.Reason,
+				CreatedIDs:       append([]string(nil), mutation.CreatedIDs...),
+				UpdatedIDs:       append([]string(nil), mutation.UpdatedIDs...),
+				AnnotatedIDs:     append([]string(nil), mutation.AnnotatedIDs...),
+				SupersededIDs:    append([]string(nil), mutation.SupersededIDs...),
+				MatchedIDs:       append([]string(nil), mutation.MatchedIDs...),
+				RejectedIDs:      append([]string(nil), mutation.RejectedIDs...),
+				ConflictIDs:      append([]string(nil), mutation.ConflictIDs...),
+				RecordIDs:        append([]string(nil), mutation.RecordIDs...),
+				Details:          mutation.Details,
+			})
 		}
 		tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 			EventHeader: EventHeader{
@@ -260,27 +249,25 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		"outcome_reason":   outcome.Reason,
 		"completed":        outcome.Completed,
 	}
-	if v, ok := env.GetWorkingValue("euclo.projection.mutation_result"); ok {
-		if mutation, ok := v.(*graphdb.MutationResult); ok && mutation != nil {
-			report["projection"] = map[string]any{
-				"plan_id":         planIDStr,
-				"stable_id":       mutation.StableID,
-				"scope":           string(mutation.Scope),
-				"status":          string(mutation.Status),
-				"reason":          mutation.Reason,
-				"created_ids":     append([]string(nil), mutation.CreatedIDs...),
-				"updated_ids":     append([]string(nil), mutation.UpdatedIDs...),
-				"annotated_ids":   append([]string(nil), mutation.AnnotatedIDs...),
-				"superseded_ids":  append([]string(nil), mutation.SupersededIDs...),
-				"matched_ids":     append([]string(nil), mutation.MatchedIDs...),
-				"rejected_ids":    append([]string(nil), mutation.RejectedIDs...),
-				"conflict_ids":    append([]string(nil), mutation.ConflictIDs...),
-				"record_ids":      append([]string(nil), mutation.RecordIDs...),
-				"state_version":   mutation.StateVersion,
-				"applied_at":      mutation.AppliedAt,
-				"idempotency_key": mutation.IdempotencyKey,
-				"details":         mutation.Details,
-			}
+	if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {
+		report["projection"] = map[string]any{
+			"plan_id":         planIDStr,
+			"stable_id":       mutation.StableID,
+			"scope":           string(mutation.Scope),
+			"status":          string(mutation.Status),
+			"reason":          mutation.Reason,
+			"created_ids":     append([]string(nil), mutation.CreatedIDs...),
+			"updated_ids":     append([]string(nil), mutation.UpdatedIDs...),
+			"annotated_ids":   append([]string(nil), mutation.AnnotatedIDs...),
+			"superseded_ids":  append([]string(nil), mutation.SupersededIDs...),
+			"matched_ids":     append([]string(nil), mutation.MatchedIDs...),
+			"rejected_ids":    append([]string(nil), mutation.RejectedIDs...),
+			"conflict_ids":    append([]string(nil), mutation.ConflictIDs...),
+			"record_ids":      append([]string(nil), mutation.RecordIDs...),
+			"state_version":   mutation.StateVersion,
+			"applied_at":      mutation.AppliedAt,
+			"idempotency_key": mutation.IdempotencyKey,
+			"details":         mutation.Details,
 		}
 	}
 
@@ -293,43 +280,28 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 }
 
 func shouldEmitClarificationCompletion(env *contextdata.Envelope) bool {
-	if env == nil {
-		return false
-	}
-	if _, ok := env.GetWorkingValue("euclo.clarification.request"); ok {
+	if _, ok := contextdata.GetTyped[any](env, "euclo.clarification.request"); ok {
 		return true
 	}
-	if _, ok := env.GetWorkingValue("euclo.clarification.projection"); ok {
+	if _, ok := contextdata.GetTyped[any](env, "euclo.clarification.projection"); ok {
 		return true
 	}
-	if _, ok := env.GetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey); ok {
+	if _, ok := contextdata.GetTyped[any](env, intentcontext.ClarificationActiveThoughtRecipeKey); ok {
 		return true
 	}
 	return false
 }
 
 func clarificationThoughtRecipeIDFromEnv(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey); ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
+	v, _ := contextdata.GetTyped[string](env, intentcontext.ClarificationActiveThoughtRecipeKey)
+	return v
 }
 
 func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
-	if env == nil {
-		return 0
+	if state, ok := contextdata.GetTyped[*intentcontext.ClarificationState](env, "euclo.intent.clarification.state"); ok && state != nil {
+		return state.StateVersion
 	}
-	if v, ok := env.GetWorkingValue("euclo.intent.clarification.state"); ok {
-		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
-			return state.StateVersion
-		}
-	}
-	if v, ok := env.GetWorkingValue("euclo.clarification.state_version"); ok {
+	if v, ok := contextdata.GetTyped[any](env, "euclo.clarification.state_version"); ok {
 		switch n := v.(type) {
 		case uint64:
 			return n

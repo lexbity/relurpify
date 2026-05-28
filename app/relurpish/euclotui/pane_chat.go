@@ -1046,9 +1046,9 @@ func summarizeResult(res *core.Result) string {
 	} else {
 		b.WriteString("false")
 	}
-	if len(res.Data) > 0 {
+	if fields := core.ResultFields(res.Data); len(fields) > 0 {
 		b.WriteString("\nData: ")
-		b.WriteString(fmt.Sprintf("%v", res.Data))
+		b.WriteString(fmt.Sprintf("%v", fields))
 	}
 	if strings.TrimSpace(res.Error) != "" {
 		b.WriteString("\nError: ")
@@ -1058,11 +1058,15 @@ func summarizeResult(res *core.Result) string {
 }
 
 func extractCompactSummary(result *core.Result) string {
-	if result == nil || result.Data == nil {
+	if result == nil {
+		return ""
+	}
+	fields := core.ResultFields(result.Data)
+	if len(fields) == 0 {
 		return ""
 	}
 	for _, key := range []string{"final_output", "text", "summary"} {
-		if v, ok := result.Data[key]; ok {
+		if v, ok := fields[key]; ok {
 			if s, ok := v.(string); ok {
 				if trimmed := strings.TrimSpace(s); trimmed != "" {
 					return trimmed
@@ -1094,11 +1098,15 @@ func structuredResultFromCore(res *core.Result) *tui.StructuredResult {
 }
 
 func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
-	if res == nil || len(res.Data) == 0 {
+	if res == nil {
+		return nil
+	}
+	fields := core.ResultFields(res.Data)
+	if len(fields) == 0 {
 		return nil
 	}
 	for _, key := range []string{"result", "tool_result", "capability_result"} {
-		raw, ok := res.Data[key]
+		raw, ok := fields[key]
 		if !ok || raw == nil {
 			continue
 		}

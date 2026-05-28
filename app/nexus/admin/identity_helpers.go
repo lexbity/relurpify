@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
-func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID string, kind identity.SubjectKind, subjectID, displayName string, roles []string, createdAt time.Time) error {
-	if store == nil {
+func upsertTenantAndSubject(ctx context.Context, tenants identity.TenantStore, subjects identity.SubjectStore, tenantID string, kind identity.SubjectKind, subjectID, displayName string, roles []string, createdAt time.Time) error {
+	if tenants == nil || subjects == nil {
 		return nil
 	}
 	tenantID = strings.TrimSpace(tenantID)
@@ -20,14 +20,14 @@ func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID 
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	if err := store.UpsertTenant(ctx, identity.TenantRecord{
+	if err := tenants.UpsertTenant(ctx, identity.TenantRecord{
 		ID:          tenantID,
 		DisplayName: tenantID,
 		CreatedAt:   createdAt,
 	}); err != nil {
 		return err
 	}
-	return store.UpsertSubject(ctx, identity.SubjectRecord{
+	return subjects.UpsertSubject(ctx, identity.SubjectRecord{
 		TenantID:    tenantID,
 		Kind:        kind,
 		ID:          subjectID,

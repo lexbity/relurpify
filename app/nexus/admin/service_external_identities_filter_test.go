@@ -40,7 +40,7 @@ func TestListExternalIdentitiesSubjectKindFilter(t *testing.T) {
 		LastSeenAt: now,
 	}))
 
-	svc := NewService(ServiceConfig{Identities: identityStore}).(*service)
+	svc := NewService(ServiceConfig{Tenants: identityStore, Subjects: identityStore, Enrollments: identityStore}).(*service)
 
 	// Filter by subject kind — only users
 	result, err := svc.ListExternalIdentities(ctx, ListExternalIdentitiesRequest{
@@ -84,7 +84,7 @@ func TestListExternalIdentitiesSubjectIDFilter(t *testing.T) {
 		LastSeenAt: now,
 	}))
 
-	svc := NewService(ServiceConfig{Identities: identityStore}).(*service)
+	svc := NewService(ServiceConfig{Tenants: identityStore, Subjects: identityStore, Enrollments: identityStore}).(*service)
 
 	result, err := svc.ListExternalIdentities(ctx, ListExternalIdentitiesRequest{
 		AdminRequest: AdminRequest{
@@ -120,7 +120,7 @@ func TestListExternalIdentitiesNoFilterReturnsAll(t *testing.T) {
 		}))
 	}
 
-	svc := NewService(ServiceConfig{Identities: identityStore}).(*service)
+	svc := NewService(ServiceConfig{Tenants: identityStore, Subjects: identityStore, Enrollments: identityStore}).(*service)
 
 	result, err := svc.ListExternalIdentities(ctx, ListExternalIdentitiesRequest{
 		AdminRequest: AdminRequest{

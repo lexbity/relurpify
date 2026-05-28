@@ -7,7 +7,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
@@ -24,10 +26,10 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-resume", "session-resume")
 	seedTask(env, "add a cache to the handler", "resume.go")
-	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
-		RouteKind:    orchestrate.RouteKindCapability,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: capabilityID,
-	}, contextdata.MemoryClassTask)
+	})
 
 	firstTelemetry := &recordingTelemetry{}
 	if err := missingGraph.Execute(core.WithTelemetry(context.Background(), firstTelemetry), env); err == nil {
@@ -37,13 +39,13 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 		t.Fatalf("expected route unavailable warning, got %v", firstTelemetry.types())
 	}
 
-	resolutionValue, ok := env.GetWorkingValue("euclo.route_resolution")
+	resolutionValue, ok := state.GetRouteResolution(env)
 	if !ok {
 		t.Fatal("expected route_resolution in envelope")
 	}
-	resolution, ok := resolutionValue.(*orchestrate.RouteResolution)
-	if !ok || resolution == nil {
-		t.Fatalf("expected *RouteResolution, got %T", resolutionValue)
+	resolution := resolutionValue
+	if resolution == nil {
+		t.Fatalf("expected *RouteResolution, got %#v", resolutionValue)
 	}
 	if resolution.ResolutionSource != "unresolved" {
 		t.Fatalf("resolution source = %q, want unresolved", resolution.ResolutionSource)
@@ -78,9 +80,9 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
 		t.Fatal("expected execution to complete after resume")
 	}
-	if resolutionValue, ok := env.GetWorkingValue("euclo.route_resolution"); !ok {
+	if resolutionValue, ok := state.GetRouteResolution(env); !ok {
 		t.Fatal("expected route_resolution to remain available after resume")
-	} else if resumedResolution, ok := resolutionValue.(*orchestrate.RouteResolution); !ok || resumedResolution == nil || resumedResolution.ResolutionSource != "registry" {
+	} else if resolutionValue == nil || resolutionValue.ResolutionSource != "registry" {
 		t.Fatalf("unexpected resumed route resolution: %#v", resolutionValue)
 	}
 }

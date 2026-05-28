@@ -27,9 +27,6 @@ func enforceCapabilityProjection(env *contextdata.Envelope, decision route.Route
 }
 
 func capabilityProjectionFromEnvelope(env *contextdata.Envelope) (fmp.CapabilityEnvelope, bool) {
-	if env == nil {
-		return fmp.CapabilityEnvelope{}, false
-	}
 	raw, ok := env.GetWorkingValue("fmp.capability_projection")
 	if !ok || raw == nil {
 		return fmp.CapabilityEnvelope{}, false

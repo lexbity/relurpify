@@ -28,9 +28,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 	if plan == nil || len(plan.Steps) == 0 {
 		return &Result{
 			Success: true,
-			Data: map[string]any{
-				"steps_completed": 0,
-			},
+			Data: core.NewToolResultPayload(map[string]any{"steps_completed": 0}),
 		}, nil
 	}
 	if err := validatePlanDependencies(plan); err != nil {
@@ -103,9 +101,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 
 	return &Result{
 		Success: true,
-		Data: map[string]any{
-			"steps_completed": len(completedSteps),
-		},
+		Data: core.NewToolResultPayload(map[string]any{"steps_completed": len(completedSteps)}),
 	}, nil
 }
 

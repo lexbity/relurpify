@@ -138,7 +138,7 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *context
 	}
 	if result == nil {
 		decision.Mode = "capability"
-		return &core.Result{Success: true, Data: map[string]any{}}, decision, true, nil
+		return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, decision, true, nil
 	}
 	var execErr error
 	if result.Error != "" {
@@ -147,7 +147,7 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *context
 	decision.Mode = "capability"
 	coreResult := &core.Result{
 		Success:  result.Success,
-		Data:     cloneAnyMap(result.Data),
+		Data:     core.NewToolResultPayload(cloneAnyMap(result.Data)),
 		Metadata: cloneAnyMap(result.Metadata),
 		Error:    result.Error,
 	}

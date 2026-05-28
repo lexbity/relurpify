@@ -268,7 +268,7 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	trigger := &MockStreamTrigger{}
 	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
-	env.SetWorkingValue("task.input", &core.Task{Instruction: "analyze code"}, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "task.input", &core.Task{Instruction: "analyze code"})
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -276,13 +276,13 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	if result == nil {
 		t.Error("Result is nil")
 	}
-	if _, ok := env.GetWorkingValue("euclo.capability_sequence"); ok {
+	if _, ok := contextdata.GetTyped[any](env, "euclo.capability_sequence"); ok {
 		t.Fatal("did not expect capability sequence to be written by intake")
 	}
-	if got, ok := env.GetWorkingValue("euclo.intent_classification"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[*IntentClassification](env, "euclo.intent_classification"); !ok || got == nil {
 		t.Fatal("expected intent classification to be written")
 	}
-	if got := result.Data["stream_result"]; got == nil {
+	if got, ok := core.ResultField(result.Data, "stream_result"); !ok || got == nil {
 		t.Fatal("expected structured stream result in result data")
 	}
 }

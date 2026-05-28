@@ -174,12 +174,12 @@ func (s *service) ApprovePairing(ctx context.Context, req ApprovePairingRequest)
 	if pairing != nil {
 		result.NodeID = pairing.Cred.DeviceID
 		result.PairedAt = pairing.Cred.IssuedAt
-		if s.cfg.Identities != nil {
+		if s.cfg.Tenants != nil && s.cfg.Subjects != nil {
 			enrollment := nodeEnrollmentFromPairing(*pairing)
-			if err := upsertTenantAndSubject(ctx, s.cfg.Identities, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
+			if err := upsertTenantAndSubject(ctx, s.cfg.Tenants, s.cfg.Subjects, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
 				return ApprovePairingResult{}, internalError("persist subject failed", err, map[string]any{"code": req.Code})
 			}
-			if err := s.cfg.Identities.UpsertNodeEnrollment(ctx, enrollment); err != nil {
+			if err := s.cfg.Enrollments.UpsertNodeEnrollment(ctx, enrollment); err != nil {
 				return ApprovePairingResult{}, internalError("persist node enrollment failed", err, map[string]any{"code": req.Code})
 			}
 			if s.cfg.Nodes != nil {
@@ -238,8 +238,8 @@ func (s *service) ListTenants(ctx context.Context, req ListTenantsRequest) (List
 		tenants = applyPage(tenants, req.Page)
 		return ListTenantsResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(tenants)), Tenants: tenants}, nil
 	}
-	if s.cfg.Identities != nil {
-		records, err := s.cfg.Identities.ListTenants(ctx)
+	if s.cfg.Tenants != nil {
+		records, err := s.cfg.Tenants.ListTenants(ctx)
 		if err != nil {
 			return ListTenantsResult{}, internalError("list tenants failed", err, nil)
 		}
@@ -286,10 +286,10 @@ func (s *service) ListNodeEnrollments(ctx context.Context, req ListNodeEnrollmen
 	if err != nil {
 		return ListNodeEnrollmentsResult{}, err
 	}
-	if s.cfg.Identities == nil {
+	if s.cfg.Enrollments == nil {
 		return ListNodeEnrollmentsResult{AdminResult: resultEnvelope(req.AdminRequest)}, nil
 	}
-	enrollments, err := s.cfg.Identities.ListNodeEnrollments(ctx, tenantID)
+	enrollments, err := s.cfg.Enrollments.ListNodeEnrollments(ctx, tenantID)
 	if err != nil {
 		return ListNodeEnrollmentsResult{}, internalError("list node enrollments failed", err, map[string]any{"tenant_id": tenantID})
 	}
@@ -318,17 +318,17 @@ func (s *service) RevokeNodeEnrollment(ctx context.Context, req RevokeNodeEnroll
 	if err != nil {
 		return RevokeNodeEnrollmentResult{}, err
 	}
-	if s.cfg.Identities == nil {
+	if s.cfg.Enrollments == nil {
 		return RevokeNodeEnrollmentResult{}, notImplemented("revoke node enrollment not implemented", nil)
 	}
-	enrollment, err := s.cfg.Identities.GetNodeEnrollment(ctx, tenantID, req.NodeID)
+	enrollment, err := s.cfg.Enrollments.GetNodeEnrollment(ctx, tenantID, req.NodeID)
 	if err != nil {
 		return RevokeNodeEnrollmentResult{}, internalError("get node enrollment failed", err, map[string]any{"node_id": req.NodeID})
 	}
 	if enrollment == nil {
 		return RevokeNodeEnrollmentResult{}, notFound("node enrollment not found", map[string]any{"node_id": req.NodeID})
 	}
-	if err := s.cfg.Identities.DeleteNodeEnrollment(ctx, tenantID, req.NodeID); err != nil {
+	if err := s.cfg.Enrollments.DeleteNodeEnrollment(ctx, tenantID, req.NodeID); err != nil {
 		return RevokeNodeEnrollmentResult{}, internalError("revoke node enrollment failed", err, map[string]any{"node_id": req.NodeID})
 	}
 	return RevokeNodeEnrollmentResult{AdminResult: resultEnvelope(req.AdminRequest), NodeID: req.NodeID}, nil

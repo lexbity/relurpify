@@ -19,65 +19,65 @@ const (
 // DelegationRequest is the framework-owned contract for handing work from one
 // coordinated capability/agent target to another.
 type DelegationRequest struct {
-	ID                 string         `json:"id" yaml:"id"`
-	WorkflowID         string         `json:"workflow_id,omitempty" yaml:"workflow_id,omitempty"`
-	TaskID             string         `json:"task_id,omitempty" yaml:"task_id,omitempty"`
-	CallerAgentID      string         `json:"caller_agent_id,omitempty" yaml:"caller_agent_id,omitempty"`
-	CallerCapabilityID string         `json:"caller_capability_id,omitempty" yaml:"caller_capability_id,omitempty"`
-	TargetCapabilityID string         `json:"target_capability_id" yaml:"target_capability_id"`
-	TargetProviderID   string         `json:"target_provider_id,omitempty" yaml:"target_provider_id,omitempty"`
-	TargetSessionID    string         `json:"target_session_id,omitempty" yaml:"target_session_id,omitempty"`
-	TaskType           string         `json:"task_type" yaml:"task_type"`
-	Instruction        string         `json:"instruction" yaml:"instruction"`
-	ResourceRefs       []string       `json:"resource_refs,omitempty" yaml:"resource_refs,omitempty"`
-	ExpectedResult     *Schema        `json:"expected_result,omitempty" yaml:"expected_result,omitempty"`
-	Depth              int            `json:"depth,omitempty" yaml:"depth,omitempty"`
-	PolicySnapshotID   string         `json:"policy_snapshot_id,omitempty" yaml:"policy_snapshot_id,omitempty"`
-	ApprovalRequired   bool           `json:"approval_required,omitempty" yaml:"approval_required,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	CreatedAt          time.Time      `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	ID                 string         `json:"id"`
+	WorkflowID         string         `json:"workflow_id,omitempty"`
+	TaskID             string         `json:"task_id,omitempty"`
+	CallerAgentID      string         `json:"caller_agent_id,omitempty"`
+	CallerCapabilityID string         `json:"caller_capability_id,omitempty"`
+	TargetCapabilityID string         `json:"target_capability_id"`
+	TargetProviderID   string         `json:"target_provider_id,omitempty"`
+	TargetSessionID    string         `json:"target_session_id,omitempty"`
+	TaskType           string         `json:"task_type"`
+	Instruction        string         `json:"instruction"`
+	ResourceRefs       []string       `json:"resource_refs,omitempty"`
+	ExpectedResult     *Schema        `json:"expected_result,omitempty"`
+	Depth              int            `json:"depth,omitempty"`
+	PolicySnapshotID   string         `json:"policy_snapshot_id,omitempty"`
+	ApprovalRequired   bool           `json:"approval_required,omitempty"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	CreatedAt          time.Time      `json:"created_at,omitempty"`
 }
 
 // DelegationResult is the framework-owned result record for delegated work.
 type DelegationResult struct {
-	DelegationID       string             `json:"delegation_id" yaml:"delegation_id"`
-	TargetCapabilityID string             `json:"target_capability_id,omitempty" yaml:"target_capability_id,omitempty"`
-	ProviderID         string             `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	SessionID          string             `json:"session_id,omitempty" yaml:"session_id,omitempty"`
-	State              DelegationState    `json:"state" yaml:"state"`
-	Success            bool               `json:"success" yaml:"success"`
-	Data               map[string]any     `json:"data,omitempty" yaml:"data,omitempty"`
-	ResourceRefs       []string           `json:"resource_refs,omitempty" yaml:"resource_refs,omitempty"`
-	Diagnostics        []string           `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
-	Provenance         ContentProvenance  `json:"provenance,omitempty" yaml:"provenance,omitempty"`
-	Disposition        ContentDisposition `json:"disposition,omitempty" yaml:"disposition,omitempty"`
-	Insertion          InsertionDecision  `json:"insertion,omitempty" yaml:"insertion,omitempty"`
-	Metadata           map[string]any     `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	RecordedAt         time.Time          `json:"recorded_at,omitempty" yaml:"recorded_at,omitempty"`
-	CompletedAt        time.Time          `json:"completed_at,omitempty" yaml:"completed_at,omitempty"`
+	DelegationID       string             `json:"delegation_id"`
+	TargetCapabilityID string             `json:"target_capability_id,omitempty"`
+	ProviderID         string             `json:"provider_id,omitempty"`
+	SessionID          string             `json:"session_id,omitempty"`
+	State              DelegationState    `json:"state"`
+	Success            bool               `json:"success"`
+	Data               map[string]any     `json:"data,omitempty"`
+	ResourceRefs       []string           `json:"resource_refs,omitempty"`
+	Diagnostics        []string           `json:"diagnostics,omitempty"`
+	Provenance         ContentProvenance  `json:"provenance,omitempty"`
+	Disposition        ContentDisposition `json:"disposition,omitempty"`
+	Insertion          InsertionDecision  `json:"insertion,omitempty"`
+	Metadata           map[string]any     `json:"metadata,omitempty"`
+	RecordedAt         time.Time          `json:"recorded_at,omitempty"`
+	CompletedAt        time.Time          `json:"completed_at,omitempty"`
 }
 
 // DelegationSnapshot is the runtime-owned lifecycle record for an admitted
 // delegation.
 type DelegationSnapshot struct {
-	Request        DelegationRequest  `json:"request" yaml:"request"`
-	Result         *DelegationResult  `json:"result,omitempty" yaml:"result,omitempty"`
-	State          DelegationState    `json:"state" yaml:"state"`
-	TrustClass     TrustClass         `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	Recoverability RecoverabilityMode `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	Background     bool               `json:"background,omitempty" yaml:"background,omitempty"`
-	Metadata       map[string]any     `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	StartedAt      time.Time          `json:"started_at,omitempty" yaml:"started_at,omitempty"`
-	UpdatedAt      time.Time          `json:"updated_at,omitempty" yaml:"updated_at,omitempty"`
+	Request        DelegationRequest  `json:"request"`
+	Result         *DelegationResult  `json:"result,omitempty"`
+	State          DelegationState    `json:"state"`
+	TrustClass     TrustClass         `json:"trust_class,omitempty"`
+	Recoverability RecoverabilityMode `json:"recoverability,omitempty"`
+	Background     bool               `json:"background,omitempty"`
+	Metadata       map[string]any     `json:"metadata,omitempty"`
+	StartedAt      time.Time          `json:"started_at,omitempty"`
+	UpdatedAt      time.Time          `json:"updated_at,omitempty"`
 }
 
 type DelegationFilter struct {
-	WorkflowID         string            `json:"workflow_id,omitempty" yaml:"workflow_id,omitempty"`
-	TaskID             string            `json:"task_id,omitempty" yaml:"task_id,omitempty"`
-	TargetCapabilityID string            `json:"target_capability_id,omitempty" yaml:"target_capability_id,omitempty"`
-	TargetProviderID   string            `json:"target_provider_id,omitempty" yaml:"target_provider_id,omitempty"`
-	TargetSessionID    string            `json:"target_session_id,omitempty" yaml:"target_session_id,omitempty"`
-	States             []DelegationState `json:"states,omitempty" yaml:"states,omitempty"`
+	WorkflowID         string            `json:"workflow_id,omitempty"`
+	TaskID             string            `json:"task_id,omitempty"`
+	TargetCapabilityID string            `json:"target_capability_id,omitempty"`
+	TargetProviderID   string            `json:"target_provider_id,omitempty"`
+	TargetSessionID    string            `json:"target_session_id,omitempty"`
+	States             []DelegationState `json:"states,omitempty"`
 }
 
 func (r DelegationRequest) Validate() error {

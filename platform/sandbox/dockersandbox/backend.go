@@ -159,10 +159,14 @@ func (b *Backend) RunConfig() sandbox.SandboxConfig {
 // NewCommandRunner builds the Docker-specific command runner used by the
 // framework when this backend is selected.
 func (b *Backend) NewCommandRunner(config *contracts.CommandRunnerConfig) (sandbox.CommandRunner, error) {
-	clone := *b
+	clone := &Backend{
+		config:   b.config,
+		verified: b.verified,
+		policy:   b.policy,
+	}
 	clone.config.Workspace = config.Workspace
 	clone.config.Image = config.Image
-	return NewRunner(&clone)
+	return NewRunner(clone)
 }
 
 func (b *Backend) validateProtectedPath(path string) error {

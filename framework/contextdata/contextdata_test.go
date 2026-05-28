@@ -584,12 +584,6 @@ func TestEnvelopeString(t *testing.T) {
 	if s == "" || s == "<nil envelope>" {
 		t.Error("expected non-empty string representation")
 	}
-
-	// Nil envelope
-	var nilEnv *Envelope
-	if nilEnv.String() != "<nil envelope>" {
-		t.Error("expected nil envelope string representation")
-	}
 }
 
 func TestMemoryClassConstants(t *testing.T) {
@@ -677,11 +671,6 @@ func TestStreamedChunkIDs(t *testing.T) {
 	}
 
 	// Nil envelope
-	var nilEnv *Envelope
-	ids = nilEnv.StreamedChunkIDs()
-	if ids != nil {
-		t.Error("expected nil from nil envelope")
-	}
 }
 
 func TestWorkingMemoryKeys(t *testing.T) {
@@ -701,11 +690,6 @@ func TestWorkingMemoryKeys(t *testing.T) {
 	}
 
 	// Nil envelope
-	var nilEnv *Envelope
-	keys = nilEnv.WorkingMemoryKeys()
-	if keys != nil {
-		t.Error("expected nil from nil envelope")
-	}
 }
 
 // Phase 1 edge-case tests per migration spec
@@ -789,32 +773,27 @@ func TestValidateBranchMergeEmptySlice(t *testing.T) {
 	}
 }
 
-func TestNilEnvelopeMethods(t *testing.T) {
-	// All methods that accept *Envelope should handle nil gracefully
+func TestNilEnvelopeMethodsPanic(t *testing.T) {
+	assertPanics := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("expected %s to panic", name)
+			}
+		}()
+		fn()
+	}
+
 	var nilEnv *Envelope
-
-	// Methods that should return without panic
-	nilEnv.SetWorkingValue("key", "value", MemoryClassEphemeral)
-	nilEnv.DeleteWorkingValue("key")
-	nilEnv.RequestCheckpoint("reason", 1, true)
-	nilEnv.ClearCheckpointRequest()
-	nilEnv.AddRetrievalReference(RetrievalReference{})
-	nilEnv.AddStreamedContextReference(ChunkReference{})
-
-	// Methods that should return zero values
-	if val, ok := nilEnv.GetWorkingValue("key"); ok || val != nil {
-		t.Error("expected GetWorkingValue to return (nil, false) for nil envelope")
-	}
-	if ids := nilEnv.StreamedChunkIDs(); ids != nil {
-		t.Error("expected StreamedChunkIDs to return nil for nil envelope")
-	}
-	if keys := nilEnv.WorkingMemoryKeys(); keys != nil {
-		t.Error("expected WorkingMemoryKeys to return nil for nil envelope")
-	}
-	if !nilEnv.IsEmpty() {
-		t.Error("expected IsEmpty to return true for nil envelope")
-	}
-	if snap := nilEnv.Snapshot(); snap != nil {
-		t.Error("expected Snapshot to return nil for nil envelope")
-	}
+	assertPanics("SetWorkingValue", func() { nilEnv.SetWorkingValue("key", "value", MemoryClassEphemeral) })
+	assertPanics("DeleteWorkingValue", func() { nilEnv.DeleteWorkingValue("key") })
+	assertPanics("RequestCheckpoint", func() { nilEnv.RequestCheckpoint("reason", 1, true) })
+	assertPanics("ClearCheckpointRequest", func() { nilEnv.ClearCheckpointRequest() })
+	assertPanics("AddRetrievalReference", func() { nilEnv.AddRetrievalReference(RetrievalReference{}) })
+	assertPanics("AddStreamedContextReference", func() { nilEnv.AddStreamedContextReference(ChunkReference{}) })
+	assertPanics("GetWorkingValue", func() { _, _ = nilEnv.GetWorkingValue("key") })
+	assertPanics("StreamedChunkIDs", func() { _ = nilEnv.StreamedChunkIDs() })
+	assertPanics("WorkingMemoryKeys", func() { _ = nilEnv.WorkingMemoryKeys() })
+	assertPanics("IsEmpty", func() { _ = nilEnv.IsEmpty() })
+	assertPanics("Snapshot", func() { _ = nilEnv.Snapshot() })
 }

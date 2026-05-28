@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 )
 
@@ -21,10 +23,10 @@ func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-capability", "session-capability")
 	seedTask(env, "add a cache to the handler", "handler.go")
-	env.SetWorkingValue("euclo.route_selection", &orchestrate.RouteSelection{
-		RouteKind:    orchestrate.RouteKindCapability,
+	euclostate.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: handler.id,
-	}, contextdata.MemoryClassTask)
+	})
 	runPreIngestion(t, env, dir, []string{"handler.go"})
 
 	if err := graph.Execute(context.Background(), env); err != nil {
@@ -34,16 +36,12 @@ func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {
 	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "capability" {
 		t.Fatalf("execution kind = %q, want capability", got)
 	}
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
+	selection, ok := euclostate.GetRouteSelection(env)
 	if !ok {
 		t.Fatal("expected route_selection in envelope")
 	}
-	routeSelection, ok := selection.(*orchestrate.RouteSelection)
-	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
-	}
-	if routeSelection.RouteKind != orchestrate.RouteKindCapability || routeSelection.CapabilityID != handler.id {
-		t.Fatalf("unexpected capability route selection: %+v", routeSelection)
+	if selection.RouteKind != euclotypes.RouteKindCapability || selection.CapabilityID != handler.id {
+		t.Fatalf("unexpected capability route selection: %+v", selection)
 	}
 	if got := mustStringValue(t, env, "euclo.execution.capability_id"); got != handler.id {
 		t.Fatalf("execution capability id = %q, want %q", got, handler.id)

@@ -117,13 +117,14 @@ func htnResultSummary(result *core.Result, execErr error) string {
 	if result == nil {
 		return "step completed"
 	}
-	if text := strings.TrimSpace(fmt.Sprint(result.Data["text"])); text != "" && text != "<nil>" {
+	fields := core.ResultFields(result.Data)
+	if text := strings.TrimSpace(fmt.Sprint(fields["text"])); text != "" && text != "<nil>" {
 		return text
 	}
-	if len(result.Data) == 0 {
+	if len(fields) == 0 {
 		return "step completed"
 	}
-	return fmt.Sprint(result.Data)
+	return fmt.Sprint(fields)
 }
 
 // htnStatus returns a status string for metadata based on whether execution failed.

@@ -49,7 +49,7 @@ type DoctorReport struct {
 }
 
 func (r DoctorReport) HasBlockingIssues() bool {
-	if !r.ConfigExists || !r.ManifestExists {
+	if !r.ConfigExists {
 		return true
 	}
 	if r.ConfigError != "" || r.ManifestError != "" || r.ModelProfilesError != "" || r.StarterTemplatesError != "" {
@@ -64,7 +64,7 @@ func (r DoctorReport) HasBlockingIssues() bool {
 }
 
 func (r DoctorReport) NeedsInitialization() bool {
-	return !r.WorkspacePresent || !r.ConfigExists || !r.ManifestExists
+	return !r.WorkspacePresent || !r.ConfigExists
 }
 
 // Ready reports whether the workspace can start without landing in the Doctor tab.
@@ -252,10 +252,6 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve workspace config template: %w", err)
 	}
-	manifestTemplate, err := resolver.ResolveWorkspaceAgentTemplate()
-	if err != nil {
-		return fmt.Errorf("resolve workspace manifest template: %w", err)
-	}
 	sandboxTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
 	if err != nil {
 		return fmt.Errorf("resolve sandbox security template: %w", err)
@@ -277,9 +273,6 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		workspaceConfigPath = cfgload.DefaultWorkspaceStateConfigPath(cfg.Workspace)
 	}
 	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
-		return err
-	}
-	if err := copyTemplateFile(manifestTemplate, cfg.ManifestPath, cfg.Workspace, overwrite); err != nil {
 		return err
 	}
 	securityDir := filepath.Join(paths.ConfigRoot(), "security")

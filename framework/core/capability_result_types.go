@@ -47,26 +47,26 @@ const (
 )
 
 type InsertionDecision struct {
-	Action           InsertionAction `json:"action" yaml:"action"`
-	Reason           string          `json:"reason,omitempty" yaml:"reason,omitempty"`
-	RequiresHITL     bool            `json:"requires_hitl,omitempty" yaml:"requires_hitl,omitempty"`
-	PolicySnapshotID string          `json:"policy_snapshot_id,omitempty" yaml:"policy_snapshot_id,omitempty"`
+	Action           InsertionAction `json:"action"`
+	Reason           string          `json:"reason,omitempty"`
+	RequiresHITL     bool            `json:"requires_hitl,omitempty"`
+	PolicySnapshotID string          `json:"policy_snapshot_id,omitempty"`
 }
 
 type ContentBlockInsertion struct {
-	ContentType string            `json:"content_type,omitempty" yaml:"content_type,omitempty"`
-	Decision    InsertionDecision `json:"decision" yaml:"decision"`
+	ContentType string            `json:"content_type,omitempty"`
+	Decision    InsertionDecision `json:"decision"`
 }
 
 type ApprovalBinding struct {
-	CapabilityID   string        `json:"capability_id,omitempty" yaml:"capability_id,omitempty"`
-	CapabilityName string        `json:"capability_name,omitempty" yaml:"capability_name,omitempty"`
-	ProviderID     string        `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	SessionID      string        `json:"session_id,omitempty" yaml:"session_id,omitempty"`
-	EffectClasses  []EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	TargetResource string        `json:"target_resource,omitempty" yaml:"target_resource,omitempty"`
-	TaskID         string        `json:"task_id,omitempty" yaml:"task_id,omitempty"`
-	WorkflowID     string        `json:"workflow_id,omitempty" yaml:"workflow_id,omitempty"`
+	CapabilityID   string        `json:"capability_id,omitempty"`
+	CapabilityName string        `json:"capability_name,omitempty"`
+	ProviderID     string        `json:"provider_id,omitempty"`
+	SessionID      string        `json:"session_id,omitempty"`
+	EffectClasses  []EffectClass `json:"effect_classes,omitempty"`
+	TargetResource string        `json:"target_resource,omitempty"`
+	TaskID         string        `json:"task_id,omitempty"`
+	WorkflowID     string        `json:"workflow_id,omitempty"`
 }
 
 func (b ApprovalBinding) PermissionMetadata() map[string]string {
@@ -108,30 +108,30 @@ func (b ApprovalBinding) PermissionMetadata() map[string]string {
 }
 
 type PolicySnapshot struct {
-	ID                 string                                    `json:"id" yaml:"id"`
-	CapturedAt         time.Time                                 `json:"captured_at" yaml:"captured_at"`
-	AgentID            string                                    `json:"agent_id,omitempty" yaml:"agent_id,omitempty"`
-	ToolPolicies       map[string]agentspec.ToolPolicy           `json:"tool_policies,omitempty" yaml:"tool_policies,omitempty"`
-	CapabilityPolicies []agentspec.CapabilityPolicy              `json:"capability_policies,omitempty" yaml:"capability_policies,omitempty"`
-	ExposurePolicies   []agentspec.CapabilityExposurePolicy      `json:"exposure_policies,omitempty" yaml:"exposure_policies,omitempty"`
-	InsertionPolicies  []agentspec.CapabilityInsertionPolicy     `json:"insertion_policies,omitempty" yaml:"insertion_policies,omitempty"`
-	GlobalPolicies     map[string]agentspec.AgentPermissionLevel `json:"global_policies,omitempty" yaml:"global_policies,omitempty"`
-	ProviderPolicies   map[string]agentspec.ProviderPolicy       `json:"provider_policies,omitempty" yaml:"provider_policies,omitempty"`
-	RuntimeSafety      *agentspec.RuntimeSafetySpec              `json:"runtime_safety,omitempty" yaml:"runtime_safety,omitempty"`
-	Revocations        RevocationSnapshot                        `json:"revocations,omitempty" yaml:"revocations,omitempty"`
+	ID                 string                                    `json:"id"`
+	CapturedAt         time.Time                                 `json:"captured_at"`
+	AgentID            string                                    `json:"agent_id,omitempty"`
+	ToolPolicies       map[string]agentspec.ToolPolicy           `json:"tool_policies,omitempty"`
+	CapabilityPolicies []agentspec.CapabilityPolicy              `json:"capability_policies,omitempty"`
+	ExposurePolicies   []agentspec.CapabilityExposurePolicy      `json:"exposure_policies,omitempty"`
+	InsertionPolicies  []agentspec.CapabilityInsertionPolicy     `json:"insertion_policies,omitempty"`
+	GlobalPolicies     map[string]agentspec.AgentPermissionLevel `json:"global_policies,omitempty"`
+	ProviderPolicies   map[string]agentspec.ProviderPolicy       `json:"provider_policies,omitempty"`
+	RuntimeSafety      *agentspec.RuntimeSafetySpec              `json:"runtime_safety,omitempty"`
+	Revocations        RevocationSnapshot                        `json:"revocations,omitempty"`
 }
 
 type CapabilityResultEnvelope struct {
-	Descriptor      CapabilityDescriptor    `json:"descriptor" yaml:"descriptor"`
-	Result          *contracts.ToolResult   `json:"result,omitempty" yaml:"result,omitempty"`
-	ContentBlocks   []ContentBlock          `json:"-" yaml:"-"`
-	BlockInsertions []ContentBlockInsertion `json:"block_insertions,omitempty" yaml:"block_insertions,omitempty"`
-	Provenance      ContentProvenance       `json:"provenance,omitempty" yaml:"provenance,omitempty"`
-	Disposition     ContentDisposition      `json:"disposition,omitempty" yaml:"disposition,omitempty"`
-	Insertion       InsertionDecision       `json:"insertion,omitempty" yaml:"insertion,omitempty"`
-	Approval        *ApprovalBinding        `json:"approval,omitempty" yaml:"approval,omitempty"`
-	Policy          *PolicySnapshot         `json:"policy,omitempty" yaml:"policy,omitempty"`
-	RecordedAt      time.Time               `json:"recorded_at" yaml:"recorded_at"`
+	Descriptor      CapabilityDescriptor    `json:"descriptor"`
+	Result          *contracts.ToolResult   `json:"result,omitempty"`
+	ContentBlocks   []ContentBlock          `json:"-"`
+	BlockInsertions []ContentBlockInsertion `json:"block_insertions,omitempty"`
+	Provenance      ContentProvenance       `json:"provenance,omitempty"`
+	Disposition     ContentDisposition      `json:"disposition,omitempty"`
+	Insertion       InsertionDecision       `json:"insertion,omitempty"`
+	Approval        *ApprovalBinding        `json:"approval,omitempty"`
+	Policy          *PolicySnapshot         `json:"policy,omitempty"`
+	RecordedAt      time.Time               `json:"recorded_at"`
 }
 
 func NewCapabilityResultEnvelope(descriptor CapabilityDescriptor, result *contracts.ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding) *CapabilityResultEnvelope {

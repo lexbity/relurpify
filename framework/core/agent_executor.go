@@ -19,7 +19,7 @@ type Task struct {
 // Result captures the outcome of a task execution.
 type Result struct {
 	Success  bool
-	Data     map[string]interface{}
+	Data     ResultPayload
 	Error    string
 	Metadata map[string]interface{} // Result metadata
 	NodeID   string                 // Node identifier

@@ -49,7 +49,6 @@ func TestSchemaRegistryRejectsUnknownAndUnsupported(t *testing.T) {
 func TestSchemaRegistryKnownKindsAreSorted(t *testing.T) {
 	reg := NewSchemaRegistry()
 	require.Equal(t, []string{
-		"agent",
 		"model/profile",
 		"model/provider",
 		"policy/ingestion",

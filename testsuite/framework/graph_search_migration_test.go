@@ -74,7 +74,7 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 		t.Fatalf("edge tool->gate: %v", err)
 	}
 	if err := g.AddEdge(gate.ID(), terminal.ID(), func(result *core.Result, _ *contextdata.Envelope) bool {
-		next, _ := result.Data["next"].(string)
+		next, _ := core.ResultField(result.Data, "next")
 		return next == "done"
 	}, false); err != nil {
 		t.Fatalf("edge gate->done: %v", err)
@@ -252,10 +252,10 @@ func (n *migrationPlannerNode) Execute(ctx context.Context, state *contextdata.E
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"next":    "run-tool",
 			"message": n.message,
-		},
+		}),
 	}, nil
 }
 
@@ -276,11 +276,12 @@ func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdat
 	if err != nil {
 		return nil, err
 	}
-	if result != nil && result.Data != nil {
-		if status, ok := result.Data["status"].(string); ok {
+	if result != nil {
+		fields := result.Data
+		if status, ok := fields["status"].(string); ok {
 			state.SetWorkingValue(n.toolName+".status", status, contextdata.MemoryClassTask)
 		}
-		if content, ok := result.Data["content"].(string); ok {
+		if content, ok := fields["content"].(string); ok {
 			state.SetWorkingValue(n.toolName+".content", content, contextdata.MemoryClassTask)
 		}
 	}
@@ -288,9 +289,9 @@ func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdat
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"next": "done",
-		},
+		}),
 	}, nil
 }
 
@@ -311,7 +312,7 @@ func (n *migrationGateNode) Execute(ctx context.Context, state *contextdata.Enve
 			return nil, fmt.Errorf("expected envelope key %q to carry a non-empty value", n.expectedKey)
 		}
 	}
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]any{"next": "done"}}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"next": "done"})}, nil
 }
 
 type migrationVectorStore struct {

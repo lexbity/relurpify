@@ -43,10 +43,10 @@ type CoordinationTargetMetadata struct {
 	Role                   CoordinationRole            `json:"role,omitempty" yaml:"role,omitempty"`
 	TaskTypes              []string                    `json:"task_types,omitempty" yaml:"task_types,omitempty"`
 	ExecutionModes         []CoordinationExecutionMode `json:"execution_modes,omitempty" yaml:"execution_modes,omitempty"`
-	LongRunning            bool                        `json:"long_running,omitempty" yaml:"long_running,omitempty"`
+	LongRunning            EnabledState                `json:"long_running,omitempty" yaml:"long_running,omitempty"`
 	MaxDepth               int                         `json:"max_depth,omitempty" yaml:"max_depth,omitempty"`
 	MaxRuntimeSeconds      int                         `json:"max_runtime_seconds,omitempty" yaml:"max_runtime_seconds,omitempty"`
-	DirectInsertionAllowed bool                        `json:"direct_insertion_allowed,omitempty" yaml:"direct_insertion_allowed,omitempty"`
+	DirectInsertionAllowed EnabledState                `json:"direct_insertion_allowed,omitempty" yaml:"direct_insertion_allowed,omitempty"`
 }
 
 type CapabilityDescriptor struct {
@@ -121,6 +121,22 @@ const (
 	CoordinationExecutionModeSessionBacked   CoordinationExecutionMode = "session-backed"
 	CoordinationExecutionModeBackgroundAgent CoordinationExecutionMode = "background-service"
 )
+
+type EnabledState int
+
+const (
+	EnabledStateUnset EnabledState = iota
+	EnabledStateEnabled
+	EnabledStateDisabled
+)
+
+func (s EnabledState) IsSet() bool {
+	return s != EnabledStateUnset
+}
+
+func (s EnabledState) IsEnabled() bool {
+	return s == EnabledStateEnabled
+}
 
 type InsertionAction string
 

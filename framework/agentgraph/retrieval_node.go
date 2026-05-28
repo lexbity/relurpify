@@ -121,7 +121,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    map[string]any{"result": result},
+		Data:    core.NewToolResultPayload(map[string]any{"result": result}),
 	}, nil
 }
 

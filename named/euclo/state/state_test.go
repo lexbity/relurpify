@@ -5,8 +5,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
-	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 )
 
 // === Phase 2 Unit Tests ===
@@ -123,7 +123,7 @@ func TestSetGetIntentClassification(t *testing.T) {
 func TestSetGetRouteSelection(t *testing.T) {
 	env := contextdata.NewEnvelope("test-task", "test-session")
 
-	rs := &orchestrate.RouteSelection{
+	rs := &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "thoughtrecipe-123",
 		CapabilityID:    "",
@@ -209,8 +209,8 @@ func TestSetGetIntentInterpretation(t *testing.T) {
 func TestSetGetRouteResolution(t *testing.T) {
 	env := contextdata.NewEnvelope("test-task", "test-session")
 
-	resolution := &orchestrate.RouteResolution{
-		RouteKind:                 orchestrate.RouteKindCapability,
+	resolution := &euclotypes.RouteResolution{
+		RouteKind:                 euclotypes.RouteKindCapability,
 		CapabilityID:              "euclo:cap.ast_query",
 		ResolutionSource:          "deterministic",
 		FallbackTaken:             true,

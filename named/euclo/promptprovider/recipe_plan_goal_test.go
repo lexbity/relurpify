@@ -34,8 +34,8 @@ func TestThoughtRecipePlanGoalProviderRendersClarificationStateView(t *testing.T
 		ConfidenceNote: "deterministic interpretation from request evidence",
 		ReasonCodes:    []string{"action:analyze"},
 	}
-	env.SetWorkingValue(intentcontext.IntentEvidenceKey, evidence, contextdata.MemoryClassTask)
-	env.SetWorkingValue(intentcontext.IntentInterpretationKey, interpretation, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, intentcontext.IntentEvidenceKey, evidence)
+	contextdata.SetTyped(env, intentcontext.IntentInterpretationKey, interpretation)
 	if err := intentcontext.NewStateStore().Write(nil, env, clarificationState); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}

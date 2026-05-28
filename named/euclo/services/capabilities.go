@@ -2,11 +2,30 @@ package services
 
 import (
 	"fmt"
-	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
+
+// eucloCapabilities is the full self-declared capability set for euclo.
+// It is registered unconditionally at initialization; availability of each
+// capability is computed at registration time from required tool presence.
+var eucloCapabilities = []string{
+	"euclo:cap.test_run",
+	"euclo:cap.ast_query",
+	"euclo:cap.symbol_trace",
+	"euclo:cap.call_graph",
+	"euclo:cap.blame_trace",
+	"euclo:cap.bisect",
+	"euclo:cap.code_review",
+	"euclo:cap.diff_summary",
+	"euclo:cap.layer_check",
+	"euclo:cap.targeted_refactor",
+	"euclo:cap.rename_symbol",
+	"euclo:cap.api_compat",
+	"euclo:cap.boundary_report",
+	"euclo:cap.coverage_check",
+}
 
 // defaultCapabilityRegistrar implements CapabilityRegistrar using Euclo's relurpic capabilities.
 type defaultCapabilityRegistrar struct{}
@@ -15,32 +34,5 @@ func (r *defaultCapabilityRegistrar) RegisterAll(env agentenv.WorkspaceEnvironme
 	if env.Registry == nil {
 		return fmt.Errorf("capability registry is nil")
 	}
-	if env.Config == nil || env.Config.AgentSpec == nil {
-		return fmt.Errorf("agent spec required for relurpic capability registration")
-	}
-	declared := declaredRelurpicCapabilities(env.Config.AgentSpec.Capabilities.Relurpic)
-	if len(declared) == 0 {
-		return fmt.Errorf("capabilities.relurpic required")
-	}
-	return relurpicabilities.RegisterAll(env, declared)
-}
-
-func declaredRelurpicCapabilities(input []string) []string {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(input))
-	out := make([]string, 0, len(input))
-	for _, id := range input {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out
+	return relurpicabilities.RegisterAll(env, eucloCapabilities)
 }

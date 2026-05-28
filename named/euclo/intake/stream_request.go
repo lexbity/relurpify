@@ -86,9 +86,6 @@ func BuildStreamRequestWithTemplate(templateStr, instruction string, envelope *T
 }
 
 func buildQueryAnchors(envelope *TaskEnvelope) []retrieval.AnchorRef {
-	if envelope == nil {
-		return nil
-	}
 	anchors := make([]retrieval.AnchorRef, 0, len(envelope.UserFiles)+len(envelope.SessionPins))
 	for _, filePath := range envelope.UserFiles {
 		filePath = strings.TrimSpace(filePath)

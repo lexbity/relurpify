@@ -61,21 +61,21 @@ const (
 
 // SubjectRef is the canonical internal identity for ownership and authorization.
 type SubjectRef struct {
-	TenantID string      `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	Kind     SubjectKind `json:"kind" yaml:"kind"`
-	ID       string      `json:"id" yaml:"id"`
+	TenantID string      `json:"tenant_id,omitempty"`
+	Kind     SubjectKind `json:"kind"`
+	ID       string      `json:"id"`
 }
 
 // AuthenticatedPrincipal is the resolved runtime principal after authn.
 type AuthenticatedPrincipal struct {
-	TenantID      string     `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	Subject       SubjectRef `json:"subject" yaml:"subject"`
-	AuthMethod    AuthMethod `json:"auth_method" yaml:"auth_method"`
-	SessionID     string     `json:"session_id,omitempty" yaml:"session_id,omitempty"`
-	Scopes        []string   `json:"scopes,omitempty" yaml:"scopes,omitempty"`
-	Authenticated bool       `json:"authenticated" yaml:"authenticated"`
-	IssuedAt      time.Time  `json:"issued_at,omitempty" yaml:"issued_at,omitempty"`
-	ExpiresAt     time.Time  `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	TenantID      string     `json:"tenant_id,omitempty"`
+	Subject       SubjectRef `json:"subject"`
+	AuthMethod    AuthMethod `json:"auth_method"`
+	SessionID     string     `json:"session_id,omitempty"`
+	Scopes        []string   `json:"scopes,omitempty"`
+	Authenticated bool       `json:"authenticated"`
+	IssuedAt      time.Time  `json:"issued_at,omitempty"`
+	ExpiresAt     time.Time  `json:"expires_at,omitempty"`
 }
 
 // ConnectionPrincipal is the resolved runtime principal for a gateway connection.
@@ -90,38 +90,38 @@ type ConnectionPrincipal struct {
 
 // ExternalIdentity binds a provider identity to a tenant-scoped subject.
 type ExternalIdentity struct {
-	TenantID      string           `json:"tenant_id" yaml:"tenant_id"`
-	Provider      ExternalProvider `json:"provider" yaml:"provider"`
-	AccountID     string           `json:"account_id,omitempty" yaml:"account_id,omitempty"`
-	ExternalID    string           `json:"external_id" yaml:"external_id"`
-	Subject       SubjectRef       `json:"subject" yaml:"subject"`
-	VerifiedAt    time.Time        `json:"verified_at,omitempty" yaml:"verified_at,omitempty"`
-	LastSeenAt    time.Time        `json:"last_seen_at,omitempty" yaml:"last_seen_at,omitempty"`
-	DisplayName   string           `json:"display_name,omitempty" yaml:"display_name,omitempty"`
-	ProviderLabel string           `json:"provider_label,omitempty" yaml:"provider_label,omitempty"`
+	TenantID      string           `json:"tenant_id"`
+	Provider      ExternalProvider `json:"provider"`
+	AccountID     string           `json:"account_id,omitempty"`
+	ExternalID    string           `json:"external_id"`
+	Subject       SubjectRef       `json:"subject"`
+	VerifiedAt    time.Time        `json:"verified_at,omitempty"`
+	LastSeenAt    time.Time        `json:"last_seen_at,omitempty"`
+	DisplayName   string           `json:"display_name,omitempty"`
+	ProviderLabel string           `json:"provider_label,omitempty"`
 }
 
 // ExternalSessionBinding captures how an internal session maps to an external conversation.
 type ExternalSessionBinding struct {
-	Provider       ExternalProvider `json:"provider" yaml:"provider"`
-	AccountID      string           `json:"account_id,omitempty" yaml:"account_id,omitempty"`
-	ChannelID      string           `json:"channel_id,omitempty" yaml:"channel_id,omitempty"`
-	ConversationID string           `json:"conversation_id,omitempty" yaml:"conversation_id,omitempty"`
-	ThreadID       string           `json:"thread_id,omitempty" yaml:"thread_id,omitempty"`
-	ExternalUserID string           `json:"external_user_id,omitempty" yaml:"external_user_id,omitempty"`
+	Provider       ExternalProvider `json:"provider"`
+	AccountID      string           `json:"account_id,omitempty"`
+	ChannelID      string           `json:"channel_id,omitempty"`
+	ConversationID string           `json:"conversation_id,omitempty"`
+	ThreadID       string           `json:"thread_id,omitempty"`
+	ExternalUserID string           `json:"external_user_id,omitempty"`
 }
 
 // NodeEnrollment is the durable, server-assigned pairing record for a node.
 type NodeEnrollment struct {
-	TenantID       string     `json:"tenant_id" yaml:"tenant_id"`
-	NodeID         string     `json:"node_id" yaml:"node_id"`
-	Owner          SubjectRef `json:"owner" yaml:"owner"`
-	TrustClass     TrustClass `json:"trust_class" yaml:"trust_class"`
-	PublicKey      []byte     `json:"public_key,omitempty" yaml:"public_key,omitempty"`
-	KeyID          string     `json:"key_id,omitempty" yaml:"key_id,omitempty"`
-	PairedAt       time.Time  `json:"paired_at,omitempty" yaml:"paired_at,omitempty"`
-	LastVerifiedAt time.Time  `json:"last_verified_at,omitempty" yaml:"last_verified_at,omitempty"`
-	AuthMethod     AuthMethod `json:"auth_method,omitempty" yaml:"auth_method,omitempty"`
+	TenantID       string     `json:"tenant_id"`
+	NodeID         string     `json:"node_id"`
+	Owner          SubjectRef `json:"owner"`
+	TrustClass     TrustClass `json:"trust_class"`
+	PublicKey      []byte     `json:"public_key,omitempty"`
+	KeyID          string     `json:"key_id,omitempty"`
+	PairedAt       time.Time  `json:"paired_at,omitempty"`
+	LastVerifiedAt time.Time  `json:"last_verified_at,omitempty"`
+	AuthMethod     AuthMethod `json:"auth_method,omitempty"`
 }
 
 func (k SubjectKind) Validate() error {

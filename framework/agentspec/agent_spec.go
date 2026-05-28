@@ -191,8 +191,8 @@ type CapabilitySelector struct {
 	CoordinationRoles           []CoordinationRole          `yaml:"coordination_roles,omitempty" json:"coordination_roles,omitempty"`
 	CoordinationTaskTypes       []string                    `yaml:"coordination_task_types,omitempty" json:"coordination_task_types,omitempty"`
 	CoordinationExecutionModes  []CoordinationExecutionMode `yaml:"coordination_execution_modes,omitempty" json:"coordination_execution_modes,omitempty"`
-	CoordinationLongRunning     *bool                       `yaml:"coordination_long_running,omitempty" json:"coordination_long_running,omitempty"`
-	CoordinationDirectInsertion *bool                       `yaml:"coordination_direct_insertion,omitempty" json:"coordination_direct_insertion,omitempty"`
+	CoordinationLongRunning     EnabledState                `yaml:"coordination_long_running,omitempty" json:"coordination_long_running,omitempty"`
+	CoordinationDirectInsertion EnabledState                `yaml:"coordination_direct_insertion,omitempty" json:"coordination_direct_insertion,omitempty"`
 }
 
 // ProviderPolicy configures activation defaults and trust metadata for provider-backed capabilities.
@@ -656,8 +656,8 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 		len(selector.CoordinationRoles) == 0 &&
 		len(selector.CoordinationTaskTypes) == 0 &&
 		len(selector.CoordinationExecutionModes) == 0 &&
-		selector.CoordinationLongRunning == nil &&
-		selector.CoordinationDirectInsertion == nil {
+		selector.CoordinationLongRunning == EnabledStateUnset &&
+		selector.CoordinationDirectInsertion == EnabledStateUnset {
 		return fmt.Errorf("selector must declare at least one match field")
 	}
 	for _, tag := range append([]string{}, selector.Tags...) {
@@ -729,6 +729,16 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 		default:
 			return fmt.Errorf("coordination execution mode %s invalid", mode)
 		}
+	}
+	switch selector.CoordinationLongRunning {
+	case EnabledStateUnset, EnabledStateEnabled, EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination long_running state %d invalid", selector.CoordinationLongRunning)
+	}
+	switch selector.CoordinationDirectInsertion {
+	case EnabledStateUnset, EnabledStateEnabled, EnabledStateDisabled:
+	default:
+		return fmt.Errorf("coordination direct_insertion state %d invalid", selector.CoordinationDirectInsertion)
 	}
 	return nil
 }

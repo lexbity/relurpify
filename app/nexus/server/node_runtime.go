@@ -48,7 +48,7 @@ func (c *websocketRPCConn) Close() error {
 	return c.conn.Close()
 }
 
-func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn, rexRuntime rexRuntimeView) error {
+func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.EnrollmentStore, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn, rexRuntime rexRuntimeView) error {
 	if manager == nil {
 		return fmt.Errorf("node manager unavailable")
 	}
@@ -435,7 +435,7 @@ func runtimeRegistrationSignatureFromValues(nodeID, runtimeID, runtimeVersion, p
 	return strings.Join(parts, ":")
 }
 
-func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
+func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.EnrollmentStore, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
 	tenantID := NormalizeTenantID(principal.Actor.TenantID)
 	nodeID := frame.NodeID
 	if nodeID == "" {
@@ -486,7 +486,7 @@ func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, ident
 	return nodeDesc, nil
 }
 
-func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
+func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager, identities identity.EnrollmentStore, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (fwnode.NodeDescriptor, error) {
 	return connectedNodeDescriptor(ctx, manager, identities, principal, frame)
 }
 

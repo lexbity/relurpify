@@ -20,6 +20,8 @@ relurpify/
 /app/relurpish/runtime/relurpify_cfg/
 /devdocs
 
+.claudeignore
+
 /REFERENCE_ONLY
 *.db
 

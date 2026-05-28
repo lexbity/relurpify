@@ -115,8 +115,8 @@ func (s *service) GrantSessionDelegation(ctx context.Context, req GrantSessionDe
 	if err := req.SubjectKind.Validate(); err != nil {
 		return GrantSessionDelegationResult{}, invalidArgument("subject_kind invalid", map[string]any{"field": "subject_kind", "cause": err.Error()})
 	}
-	if s.cfg.Identities != nil {
-		subject, err := s.cfg.Identities.GetSubject(ctx, boundary.TenantID, req.SubjectKind, subjectID)
+	if s.cfg.Subjects != nil {
+		subject, err := s.cfg.Subjects.GetSubject(ctx, boundary.TenantID, req.SubjectKind, subjectID)
 		if err != nil {
 			return GrantSessionDelegationResult{}, internalError("lookup subject failed", err, map[string]any{"subject_kind": req.SubjectKind, "subject_id": subjectID})
 		}
@@ -147,8 +147,8 @@ func (s *service) ListSubjects(ctx context.Context, req ListSubjectsRequest) (Li
 	}
 	subjects := make([]SubjectInfo, 0)
 	seen := map[string]struct{}{}
-	if s.cfg.Identities != nil {
-		records, err := s.cfg.Identities.ListSubjects(ctx, tenantID)
+	if s.cfg.Subjects != nil {
+		records, err := s.cfg.Subjects.ListSubjects(ctx, tenantID)
 		if err != nil {
 			return ListSubjectsResult{}, internalError("list subjects failed", err, map[string]any{"tenant_id": tenantID})
 		}
@@ -163,22 +163,24 @@ func (s *service) ListSubjects(ctx context.Context, req ListSubjectsRequest) (Li
 				Roles:       append([]string(nil), record.Roles...),
 			})
 		}
-		enrollments, err := s.cfg.Identities.ListNodeEnrollments(ctx, tenantID)
-		if err != nil {
-			return ListSubjectsResult{}, internalError("list subjects failed", err, map[string]any{"tenant_id": tenantID})
-		}
-		for _, enrollment := range enrollments {
-			key := string(enrollment.Owner.Kind) + ":" + enrollment.Owner.ID
-			if _, ok := seen[key]; ok {
-				continue
+		if s.cfg.Enrollments != nil {
+			enrollments, err := s.cfg.Enrollments.ListNodeEnrollments(ctx, tenantID)
+			if err != nil {
+				return ListSubjectsResult{}, internalError("list subjects failed", err, map[string]any{"tenant_id": tenantID})
 			}
-			seen[key] = struct{}{}
-			subjects = append(subjects, SubjectInfo{
-				TenantID:    enrollment.Owner.TenantID,
-				Kind:        enrollment.Owner.Kind,
-				ID:          enrollment.Owner.ID,
-				DisplayName: enrollment.Owner.ID,
-			})
+			for _, enrollment := range enrollments {
+				key := string(enrollment.Owner.Kind) + ":" + enrollment.Owner.ID
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				subjects = append(subjects, SubjectInfo{
+					TenantID:    enrollment.Owner.TenantID,
+					Kind:        enrollment.Owner.Kind,
+					ID:          enrollment.Owner.ID,
+					DisplayName: enrollment.Owner.ID,
+				})
+			}
 		}
 	}
 	subjects = applyPage(subjects, req.Page)
@@ -186,7 +188,7 @@ func (s *service) ListSubjects(ctx context.Context, req ListSubjectsRequest) (Li
 }
 
 func (s *service) CreateSubject(ctx context.Context, req CreateSubjectRequest) (CreateSubjectResult, error) {
-	if s.cfg.Identities == nil {
+	if s.cfg.Tenants == nil || s.cfg.Subjects == nil {
 		return CreateSubjectResult{}, notImplemented("create subject not implemented", nil)
 	}
 	subjectID := strings.TrimSpace(req.SubjectID)
@@ -206,7 +208,7 @@ func (s *service) CreateSubject(ctx context.Context, req CreateSubjectRequest) (
 		return CreateSubjectResult{}, invalidArgument("subject_kind invalid", map[string]any{"field": "subject_kind", "cause": err.Error()})
 	}
 	now := time.Now().UTC()
-	if err := upsertTenantAndSubject(ctx, s.cfg.Identities, tenantID, subjectKind, subjectID, req.DisplayName, req.Roles, now); err != nil {
+	if err := upsertTenantAndSubject(ctx, s.cfg.Tenants, s.cfg.Subjects, tenantID, subjectKind, subjectID, req.DisplayName, req.Roles, now); err != nil {
 		return CreateSubjectResult{}, internalError("persist subject failed", err, map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})
 	}
 	return CreateSubjectResult{
@@ -222,7 +224,7 @@ func (s *service) CreateSubject(ctx context.Context, req CreateSubjectRequest) (
 }
 
 func (s *service) BindExternalIdentity(ctx context.Context, req BindExternalIdentityRequest) (BindExternalIdentityResult, error) {
-	if s.cfg.Identities == nil {
+	if s.cfg.Subjects == nil {
 		return BindExternalIdentityResult{}, notImplemented("bind external identity not implemented", nil)
 	}
 	externalID := strings.TrimSpace(req.ExternalID)
@@ -247,7 +249,7 @@ func (s *service) BindExternalIdentity(ctx context.Context, req BindExternalIden
 	if err := req.SubjectKind.Validate(); err != nil {
 		return BindExternalIdentityResult{}, invalidArgument("subject_kind invalid", map[string]any{"field": "subject_kind", "cause": err.Error()})
 	}
-	subject, err := s.cfg.Identities.GetSubject(ctx, tenantID, req.SubjectKind, subjectID)
+	subject, err := s.cfg.Subjects.GetSubject(ctx, tenantID, req.SubjectKind, subjectID)
 	if err != nil {
 		return BindExternalIdentityResult{}, internalError("lookup subject failed", err, map[string]any{"tenant_id": tenantID, "subject_kind": req.SubjectKind, "subject_id": subjectID})
 	}
@@ -266,7 +268,7 @@ func (s *service) BindExternalIdentity(ctx context.Context, req BindExternalIden
 		DisplayName:   strings.TrimSpace(req.DisplayName),
 		ProviderLabel: strings.TrimSpace(req.ProviderLabel),
 	}
-	if err := s.cfg.Identities.UpsertExternalIdentity(ctx, identity); err != nil {
+	if err := s.cfg.Subjects.UpsertExternalIdentity(ctx, identity); err != nil {
 		return BindExternalIdentityResult{}, internalError("persist external identity failed", err, map[string]any{"tenant_id": tenantID, "provider": req.Provider, "external_id": externalID})
 	}
 	return BindExternalIdentityResult{
@@ -280,9 +282,13 @@ func (s *service) ListExternalIdentities(ctx context.Context, req ListExternalId
 	if err != nil {
 		return ListExternalIdentitiesResult{}, err
 	}
-	identities, err := s.cfg.Identities.ListExternalIdentities(ctx, tenantID)
-	if err != nil {
-		return ListExternalIdentitiesResult{}, internalError("list external identities failed", err, map[string]any{"tenant_id": tenantID})
+	var identities []identity.ExternalIdentity
+	if s.cfg.Subjects != nil {
+		var err error
+		identities, err = s.cfg.Subjects.ListExternalIdentities(ctx, tenantID)
+		if err != nil {
+			return ListExternalIdentitiesResult{}, internalError("list external identities failed", err, map[string]any{"tenant_id": tenantID})
+		}
 	}
 	if req.SubjectKind != "" || strings.TrimSpace(req.SubjectID) != "" {
 		filtered := identities[:0]
@@ -382,8 +388,8 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 		Scopes:      append([]string(nil), req.Scopes...),
 		IssuedAt:    time.Now().UTC(),
 	}
-	if s.cfg.Identities != nil {
-		tenant, err := s.cfg.Identities.GetTenant(ctx, tenantID)
+	if s.cfg.Tenants != nil && s.cfg.Subjects != nil {
+		tenant, err := s.cfg.Tenants.GetTenant(ctx, tenantID)
 		if err != nil {
 			return IssueTokenResult{}, internalError("lookup tenant failed", err, map[string]any{"tenant_id": tenantID})
 		}
@@ -393,7 +399,7 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 		if tenant.DisabledAt != nil {
 			return IssueTokenResult{}, invalidArgument("tenant disabled", map[string]any{"tenant_id": tenantID})
 		}
-		subject, err := s.cfg.Identities.GetSubject(ctx, tenantID, subjectKind, subjectID)
+		subject, err := s.cfg.Subjects.GetSubject(ctx, tenantID, subjectKind, subjectID)
 		if err != nil {
 			return IssueTokenResult{}, internalError("lookup subject failed", err, map[string]any{"tenant_id": tenantID, "subject_kind": subjectKind, "subject_id": subjectID})
 		}

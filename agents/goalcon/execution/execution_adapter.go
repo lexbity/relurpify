@@ -112,10 +112,10 @@ func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *con
 	if a.plan == nil || len(a.plan.Steps) == 0 {
 		return &core.Result{
 			Success: true,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"steps_executed":  0,
 				"steps_succeeded": 0,
-			},
+			}),
 		}, nil
 	}
 
@@ -144,7 +144,7 @@ func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *con
 
 	return &core.Result{
 		Success: allSucceeded,
-		Data:    output,
+		Data:    core.NewToolResultPayload(output),
 	}, nil
 }
 
@@ -177,9 +177,9 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if n.executor == nil || n.executor.plan == nil {
 		return &core.Result{
 			Success: false,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"error": "executor or plan is nil",
-			},
+			}),
 		}, nil
 	}
 
@@ -195,9 +195,9 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if step == nil {
 		return &core.Result{
 			Success: false,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"error": fmt.Sprintf("step not found: %s", n.stepID),
-			},
+			}),
 		}, nil
 	}
 
@@ -216,12 +216,12 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	return &core.Result{
 		NodeID:  n.stepID,
 		Success: result.Success,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"tool":     result.ToolName,
 			"duration": result.Duration.String(),
 			"output":   result.Output,
 			"error":    result.Error,
-		},
+		}),
 	}, nil
 }
 
@@ -262,20 +262,20 @@ func (a *ExecutionAdapter) ExecutePlan(
 	if a == nil || plan == nil {
 		return &core.Result{
 			Success: false,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"error": "adapter or plan is nil",
-			},
+			}),
 		}
 	}
 
 	if len(plan.Steps) == 0 {
 		return &core.Result{
 			Success: true,
-			Data: map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"steps_executed":  0,
 				"steps_succeeded": 0,
 				"summary":         "No steps to execute",
-			},
+			}),
 		}
 	}
 
@@ -313,7 +313,7 @@ func (a *ExecutionAdapter) ExecutePlan(
 
 	return &core.Result{
 		Success: allSucceeded,
-		Data:    output,
+		Data:    core.NewToolResultPayload(output),
 	}
 }
 

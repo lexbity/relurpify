@@ -19,6 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -38,7 +39,7 @@ type Agent struct {
 
 	// resume state: populated by Execute before calling BuildGraph
 	resumeClassification *intake.IntentClassification
-	resumeRouteSelection *orchestrate.RouteSelection
+	resumeRouteSelection *euclotypes.RouteSelection
 }
 
 // New creates a new Euclo agent with the given workspace environment and options.
@@ -200,7 +201,7 @@ func workspaceRootPath(env agentenv.WorkspaceEnvironment) string {
 }
 
 func seedTaskEnvelope(env *contextdata.Envelope, task *core.Task) {
-	if env == nil || task == nil {
+	if task == nil {
 		return
 	}
 	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
@@ -245,9 +246,6 @@ func (a *Agent) captureResumeState(env *contextdata.Envelope) {
 }
 
 func (a *Agent) seedResumeState(env *contextdata.Envelope) {
-	if env == nil {
-		return
-	}
 	if a.resumeClassification != nil {
 		env.SetWorkingValue(euclostate.KeyResumeClassification, a.resumeClassification, contextdata.MemoryClassTask)
 		euclostate.SetIntentClassification(env, a.resumeClassification)
@@ -258,7 +256,7 @@ func (a *Agent) seedResumeState(env *contextdata.Envelope) {
 	}
 }
 
-func (a *Agent) resumeStateSnapshot() (*intake.IntentClassification, *orchestrate.RouteSelection) {
+func (a *Agent) resumeStateSnapshot() (*intake.IntentClassification, *euclotypes.RouteSelection) {
 	a.resumeMu.Lock()
 	defer a.resumeMu.Unlock()
 	return a.resumeClassification, a.resumeRouteSelection
