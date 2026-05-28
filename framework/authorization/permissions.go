@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -88,8 +87,10 @@ const hitlRateMax = 10
 // hitlRateWindow is the sliding window duration for HITL rate limiting.
 const hitlRateWindow = time.Minute
 
-// globRegexCache caches compiled glob-to-regex patterns to avoid recompiling on every match.
-var globRegexCache sync.Map // map[string]*regexp.Regexp
+// globRegexCache caches compiled glob-to-regex patterns using a bounded LRU.
+// The process-global sync.Map was replaced to prevent memory exhaustion from
+// adversarial or deeply-nested glob patterns.
+var globRegexCache = newCompiledGlobCache(256)
 
 // hitlRateBucket tracks the number of HITL requests within a rolling time window.
 type hitlRateBucket struct {
@@ -1113,16 +1114,9 @@ func matchGlob(pattern, value string) bool {
 		return ok
 	}
 	regexPattern := globToRegex(pattern)
-	var regex *regexp.Regexp
-	if cached, ok := globRegexCache.Load(regexPattern); ok {
-		regex = cached.(*regexp.Regexp)
-	} else {
-		compiled, err := regexp.Compile(regexPattern)
-		if err != nil {
-			return false
-		}
-		globRegexCache.Store(regexPattern, compiled)
-		regex = compiled
+	regex, err := globRegexCache.get(regexPattern)
+	if err != nil {
+		return false
 	}
 	return regex.MatchString(value)
 }

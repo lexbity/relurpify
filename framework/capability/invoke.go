@@ -7,6 +7,7 @@ import (
 	"log"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
@@ -48,10 +49,12 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 	if entry.legacyTool != nil {
 		_ = contracts.RedactArgs(args, entry.legacyTool.Parameters())
 	}
+	startTime := time.Now()
 	var result *contracts.ToolResult
 	result, err = recoverToolPanic(func() (*contracts.ToolResult, error) {
 		return invocable.Invoke(ctx, state, args)
 	})
+	callDuration := time.Since(startTime)
 	if postErr := r.runPostchecks(entry.descriptor, result); postErr != nil {
 		if result == nil {
 			result = &contracts.ToolResult{Success: false, Error: postErr.Error()}
@@ -62,6 +65,13 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 		if err == nil {
 			err = postErr
 		}
+	}
+	if r.metrics != nil {
+		r.metrics.RecordCall(
+			err == nil && result != nil && result.Success,
+			callDuration,
+			result != nil && result.Truncated,
+		)
 	}
 	return result, err
 }
@@ -137,6 +147,9 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 	if err := r.runPrechecks(entry.descriptor, args); err != nil {
 		var doomErr *DoomLoopError
 		if errors.As(err, &doomErr) {
+			if r.metrics != nil {
+				r.metrics.RecordDoomLoop()
+			}
 			proceed, guideErr := r.handleDoomLoopGuidance(ctx, *doomErr)
 			if guideErr != nil {
 				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, guideErr)

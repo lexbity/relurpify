@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -64,6 +65,7 @@ type CapabilityRegistry struct {
 	modelProfile        *contracts.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
+	metrics         *telemetry.ToolCallMetrics
 	delegate        *CapabilityRegistry
 	toolIDAllowlist map[string]struct{}
 }
@@ -78,6 +80,17 @@ func NewRegistry() *CapabilityRegistry {
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
 		safety:              newRuntimeSafetyController(),
 	}
+}
+
+// SetMetrics attaches a metrics collector to the registry. A nil value is a
+// valid no-op (default behaviour before this method is called).
+func (r *CapabilityRegistry) SetMetrics(metrics *telemetry.ToolCallMetrics) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.metrics = metrics
+	r.mu.Unlock()
 }
 
 // UseToolAdmission configures manifest-driven tool gating for legacy tool registration.
