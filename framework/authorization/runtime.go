@@ -100,6 +100,11 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	)
 	if agentManifest.Spec.Policies != nil {
 		if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
+			if string(policy) == "allow" {
+				return nil, errors.New(
+					"agent spec sets default_policy=allow which is not permitted; " +
+						"use default_policy=ask for HITL or declare explicit permissions")
+			}
 			permissions.SetDefaultPolicy(policy)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -22,6 +23,63 @@ import (
 )
 
 const permissionMatchAll = "**"
+
+// privateRanges contains IP subnets that must never be reachable by tool
+// network calls. This is a hard-coded mandatory denylist that cannot be
+// bypassed by agent configuration. It protects cloud metadata endpoints,
+// loopback interfaces, and internal RFC-1918 addresses from SSRF.
+var privateRanges []*net.IPNet
+
+func init() {
+	cidrs := []string{
+		"127.0.0.0/8",    // IPv4 loopback
+		"::1/128",        // IPv6 loopback
+		"10.0.0.0/8",     // RFC-1918 class A
+		"172.16.0.0/12",  // RFC-1918 class B
+		"192.168.0.0/16", // RFC-1918 class C
+		"169.254.0.0/16", // Link-local / cloud metadata (AWS/GCP/Azure)
+		"fc00::/7",       // IPv6 unique-local
+		"fe80::/10",      // IPv6 link-local
+	}
+	privateRanges = make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, subnet, err := net.ParseCIDR(cidr)
+		if err == nil {
+			privateRanges = append(privateRanges, subnet)
+		}
+	}
+}
+
+// IsPrivateOrLoopbackHost reports whether the given hostname or IP address
+// resolves to a private, loopback, or link-local address range. This check
+// is mandatory and cannot be bypassed by agent configuration. If the host
+// cannot be resolved it is treated as public (safe default for unknown hosts).
+func IsPrivateOrLoopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return isPrivateIP(ip)
+	}
+	// Hostname — resolve to IPs
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return false // unresolvable names are treated as public
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPrivateIP(ip net.IP) bool {
+	for _, block := range privateRanges {
+		if block.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
 // hitlRateMax is the maximum HITL requests per key within hitlRateWindow before
 // subsequent requests are rejected with a rate-limit error.
@@ -208,14 +266,7 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 				Resource: agentID,
 			}, "deny", "tool exceeds declared permissions", map[string]interface{}{"undeclared": undeclared})
 			return fmt.Errorf("tool %s exceeds agent permissions: %s", tool.Name(), strings.Join(undeclared, "; "))
-		case agentspec.AgentPermissionAllow:
-			m.emitPolicyDecision(ctx, contracts.PermissionDescriptor{
-				Type:     contracts.PermissionTypeHITL,
-				Action:   fmt.Sprintf("tool:%s", tool.Name()),
-				Resource: agentID,
-			}, "allow", "undeclared permissions allowed by default policy", map[string]interface{}{"undeclared": undeclared})
-			// undeclared permissions are explicitly allowed — proceed
-		default: // agentspec.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
 			m.emitPolicyDecision(ctx, contracts.PermissionDescriptor{
 				Type:         contracts.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", tool.Name()),
@@ -339,12 +390,9 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			Resource: clean,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionAllow:
-			m.log(ctx, agentID, desc, "granted (default allow)", nil)
-			return nil
 		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "not declared")
-		default: // agentspec.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -382,12 +430,9 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			Resource: binary,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionAllow:
-			m.log(ctx, agentID, desc, "granted (default allow)", nil)
-			return nil
 		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "binary not declared")
-		default: // agentspec.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -429,6 +474,16 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 
 // CheckNetwork validates network access.
 func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, direction string, protocol string, host string, port int) error {
+	// Hard mandatory block: private, loopback, and link-local IPs are never
+	// reachable regardless of agent configuration. This prevents SSRF to
+	// cloud metadata services, localhost services, and internal networks.
+	if IsPrivateOrLoopbackHost(host) {
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeNetwork,
+			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
+			Resource: host,
+		}, "private, loopback, or link-local addresses are blocked")
+	}
 	perm := m.findNetworkPermission(direction, protocol, host, port)
 	if perm == nil {
 		desc := contracts.PermissionDescriptor{
@@ -437,12 +492,9 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			Resource: host,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionAllow:
-			m.log(ctx, agentID, desc, "granted (default allow)", nil)
-			return nil
 		case agentspec.AgentPermissionDeny:
 			return m.deny(ctx, agentID, desc, "network scope missing")
-		default: // agentspec.AgentPermissionAsk
+		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}

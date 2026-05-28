@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -69,20 +68,19 @@ func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []co
 	}
 	observations := make([]toolObservation, 0, len(calls))
 	for _, call := range calls {
-		tool, ok := index[call.Name]
-		if !ok {
+		if _, ok := index[call.Name]; !ok {
 			return observations, fmt.Errorf("pipeline tool %s not allowed for stage", call.Name)
 		}
 		var (
 			result *contracts.ToolResult
 			err    error
 		)
-		if invoker != nil {
-			result, err = invoker.InvokeCapability(ctx, env, call.Name, call.Args)
-		} else {
-			log.Printf("deprecated: pipeline tool call %q executed without capability invoker", call.Name)
-			result, err = tool.Execute(ctx, call.Args)
+		if invoker == nil {
+			return observations, fmt.Errorf(
+				"pipeline stage: capability invoker required — "+
+					"direct tool.Execute() bypass has been removed")
 		}
+		result, err = invoker.InvokeCapability(ctx, env, call.Name, call.Args)
 		if err != nil {
 			return observations, err
 		}
