@@ -44,6 +44,10 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
 	}
+	// Redact sensitive argument values before any logging or telemetry.
+	if entry.legacyTool != nil {
+		_ = contracts.RedactArgs(args, entry.legacyTool.Parameters())
+	}
 	var result *contracts.ToolResult
 	result, err = recoverToolPanic(func() (*contracts.ToolResult, error) {
 		return invocable.Invoke(ctx, state, args)

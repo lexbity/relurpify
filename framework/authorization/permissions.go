@@ -1030,6 +1030,34 @@ func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc contrac
 	logger(ctx, desc, effect, reason, fields)
 }
 
+// sensitivePathPatterns are substrings that indicate a file path may contain
+// sensitive data warranting redaction from audit records.
+var sensitivePathPatterns = []string{
+	".env",
+	".ssh",
+	"secret",
+	"token",
+	"credential",
+	"password",
+	"key.pem",
+	"id_rsa",
+	"id_ed25519",
+}
+
+// redactSensitivePath replaces path components matching sensitive patterns
+// with "[REDACTED]" for audit-safe logging.
+func redactSensitivePath(path string) string {
+	lower := strings.ToLower(path)
+	for _, pattern := range sensitivePathPatterns {
+		if strings.Contains(lower, pattern) {
+			// Return a placeholder instead of the full path to avoid
+			// leaking the sensitive location or its context.
+			return "[REDACTED_PATH]"
+		}
+	}
+	return path
+}
+
 // log forwards permission decisions to the configured audit sink to provide a
 // tamper-evident trail of runtime behavior.
 func (m *PermissionManager) log(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, result string, fields map[string]interface{}) {
@@ -1041,7 +1069,7 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc contra
 		AgentID:     agentID,
 		Action:      desc.Action,
 		Type:        string(desc.Type),
-		Permission:  desc.Resource,
+		Permission:  redactSensitivePath(desc.Resource),
 		Result:      result,
 		Metadata:    core.RedactMetadataMap(fields),
 		Correlation: agentID,

@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -83,35 +84,6 @@ func BuildToolExecutionPlan(entry ToolManifest, args map[string]any) (ToolResolu
 	}, nil
 }
 
-// ValidateToolArguments ensures the invocation payload only references fields
-// declared by the manifest.
-func ValidateToolArguments(entry ToolManifest, args map[string]any) error {
-	if len(entry.Parameters) == 0 {
-		return nil
-	}
-	declared := make(map[string]struct{}, len(entry.Parameters))
-	for _, param := range entry.Parameters {
-		name := NormalizeToolName(param.Name)
-		if name != "" {
-			declared[name] = struct{}{}
-		}
-	}
-	for key := range args {
-		if key == "args" || key == "working_directory" || key == "stdin" {
-			continue
-		}
-		if _, ok := declared[NormalizeToolName(key)]; !ok {
-			return fmt.Errorf("unknown parameter %q", key)
-		}
-	}
-	for _, param := range entry.Parameters {
-		if param.Required && !hasKeyNormalized(args, param.Name) {
-			return fmt.Errorf("missing required parameter %q", NormalizeToolName(param.Name))
-		}
-	}
-	return nil
-}
-
 // ToolWorkdirMode reports whether a tool may accept a caller-supplied workdir.
 func ToolWorkdirMode(entry ToolManifest) string {
 	if entry.Execution.SupportsWorkdir {
@@ -163,6 +135,121 @@ func StringArg(args map[string]any, key string) string {
 		return strings.TrimSpace(s)
 	}
 	return strings.TrimSpace(fmt.Sprint(raw))
+}
+
+// coerceParameterValue attempts to coerce a runtime value to the type declared
+// by a ToolParameter. Safe coercions (e.g. numeric string to int64) succeed;
+// unsafe ones (e.g. non-numeric string to int64) return an error. The original
+// value is returned unchanged when the type is not recognised or already matches.
+func coerceParameterValue(param ToolParameter, v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	switch param.Type {
+	case ToolParamString:
+		switch val := v.(type) {
+		case string:
+			return val, nil
+		default:
+			return fmt.Sprint(val), nil
+		}
+	case ToolParamInteger:
+		switch val := v.(type) {
+		case int64:
+			return val, nil
+		case int:
+			return int64(val), nil
+		case float64:
+			if val != float64(int64(val)) {
+				return nil, fmt.Errorf("cannot coerce float64 %v to integer: lossy conversion", val)
+			}
+			return int64(val), nil
+		case string:
+			n, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot coerce string %q to integer: %w", val, err)
+			}
+			return n, nil
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to integer", v)
+		}
+	case ToolParamNumber:
+		switch val := v.(type) {
+		case float64:
+			return val, nil
+		case int64:
+			return float64(val), nil
+		case int:
+			return float64(val), nil
+		case string:
+			f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot coerce string %q to number: %w", val, err)
+			}
+			return f, nil
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to number", v)
+		}
+	case ToolParamBoolean:
+		switch val := v.(type) {
+		case bool:
+			return val, nil
+		case string:
+			switch strings.ToLower(strings.TrimSpace(val)) {
+			case "true", "1", "yes":
+				return true, nil
+			case "false", "0", "no":
+				return false, nil
+			default:
+				return nil, fmt.Errorf("cannot coerce string %q to boolean", val)
+			}
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to boolean", v)
+		}
+	default:
+		// Unknown/unsupported type — pass through unchanged
+		return v, nil
+	}
+}
+
+// ValidateToolArguments ensures the invocation payload only references fields
+// declared by the manifest and coerces values to the declared types where
+// possible. The args map is mutated in place with coerced values.
+func ValidateToolArguments(entry ToolManifest, args map[string]any) error {
+	if len(entry.Parameters) == 0 {
+		return nil
+	}
+	declared := make(map[string]struct{}, len(entry.Parameters))
+	for _, param := range entry.Parameters {
+		name := NormalizeToolName(param.Name)
+		if name != "" {
+			declared[name] = struct{}{}
+		}
+	}
+	for key := range args {
+		if key == "args" || key == "working_directory" || key == "stdin" {
+			continue
+		}
+		if _, ok := declared[NormalizeToolName(key)]; !ok {
+			return fmt.Errorf("unknown parameter %q", key)
+		}
+	}
+	for _, param := range entry.Parameters {
+		raw, hasKey := args[NormalizeToolName(param.Name)]
+		if param.Required {
+			if !hasKey || raw == nil {
+				return fmt.Errorf("missing required parameter %q", NormalizeToolName(param.Name))
+			}
+		}
+		if hasKey && raw != nil {
+			coerced, err := coerceParameterValue(param, raw)
+			if err != nil {
+				return fmt.Errorf("parameter %q: %w", NormalizeToolName(param.Name), err)
+			}
+			args[NormalizeToolName(param.Name)] = coerced
+		}
+	}
+	return nil
 }
 
 func cloneAnyMap(in map[string]any) map[string]any {
