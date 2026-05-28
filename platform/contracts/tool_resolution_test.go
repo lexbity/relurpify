@@ -1,10 +1,38 @@
 package contracts
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func FuzzValidateToolArguments(f *testing.F) {
+	manifest := ToolManifest{
+		Parameters: []ToolParameter{
+			{Name: "path", Type: ToolParamString, Required: true},
+			{Name: "count", Type: ToolParamInteger},
+			{Name: "verbose", Type: ToolParamBoolean},
+		},
+	}
+	seeds := []string{
+		`{"path": "src", "count": 42, "verbose": true}`,
+		`{"path": "/tmp/test"}`,
+		`{"path": "", "count": 0, "verbose": false}`,
+		`{}`,
+		`{"path": "x", "extra": 1}`,
+	}
+	for _, s := range seeds {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var args map[string]any
+		if err := json.Unmarshal(data, &args); err != nil {
+			return // invalid JSON is not a crash
+		}
+		_ = ValidateToolArguments(manifest, args)
+	})
+}
 
 func TestBuildToolExecutionPlan(t *testing.T) {
 	manifest := ToolManifest{

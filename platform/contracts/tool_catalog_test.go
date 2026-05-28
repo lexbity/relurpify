@@ -129,6 +129,30 @@ func TestToolManifestRateLimit(t *testing.T) {
 	require.Equal(t, 10, decoded.RateLimit.Burst)
 }
 
+func FuzzNormalizeToolName(f *testing.F) {
+	seeds := []string{
+		"  CLI-Git  ",
+		"shell.query",
+		"tool name",
+		"simple",
+		"UPPER_CASE",
+		"dots.and.dashes",
+		"",
+		"___",
+		"a",
+		"123",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, name string) {
+		result := NormalizeToolName(name)
+		if result != "" && len(result) > len(name) {
+			t.Errorf("NormalizeToolName(%q) = %q (len %d), expected len <= %d", name, result, len(result), len(name))
+		}
+	})
+}
+
 func TestCommandRequestMaxOutputBytes(t *testing.T) {
 	req := CommandRequest{
 		Args:           []string{"echo", "hello"},
