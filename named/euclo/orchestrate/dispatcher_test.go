@@ -6,6 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestDispatcherExecute(t *testing.T) {
@@ -22,15 +24,11 @@ func TestDispatcherExecute(t *testing.T) {
 		t.Fatal("Expected result to be non-nil")
 	}
 
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("Expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*RouteSelection)
+	routeSelection, ok := state.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("Expected *RouteSelection, got %T", selection)
+		t.Fatalf("Expected *euclotypes.RouteSelection, got %#v", routeSelection)
 	}
-	if routeSelection.RouteKind != RouteKindIntent {
+	if routeSelection.RouteKind != euclotypes.RouteKindIntent {
 		t.Errorf("Expected route selection intent, got %v", routeSelection.RouteKind)
 	}
 	if routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {

@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 func TestClarificationFrameToInteractionFrame(t *testing.T) {
 	resume := &interaction.ClarificationResumeMetadata{
 		ActiveThoughtRecipeID: clarificationThoughtRecipeID,
 		ResumeNodeID:          "resume-node-1",
-		RouteKind:             RouteKindIntent,
+		RouteKind:             euclotypes.RouteKindIntent,
 		RouteID:               clarificationThoughtRecipeID,
 		StateVersion:          4,
 		Unresolved:            true,

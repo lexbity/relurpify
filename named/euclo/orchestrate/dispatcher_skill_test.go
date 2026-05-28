@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestDispatcherExecuteSkillFilterNarrowsCandidates(t *testing.T) {
@@ -38,7 +39,7 @@ func TestDispatcherExecuteSkillFilterNarrowsCandidates(t *testing.T) {
 		WithWorkspace(workspace).
 		WithCapabilityRegistry(reg)
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.skill_filter", "bundle", contextdata.MemoryClassTask)
+	state.SetSkillFilter(env, "bundle")
 
 	result, err := dispatcher.Execute(context.Background(), env)
 	if err != nil {
@@ -47,14 +48,14 @@ func TestDispatcherExecuteSkillFilterNarrowsCandidates(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result")
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.skill_filter"); !ok || got != "bundle" {
-		t.Fatalf("expected skill filter recorded in envelope, got %v (ok=%v)", got, ok)
+	if got := state.GetRouteSkillFilter(env); got != "bundle" {
+		t.Fatalf("expected skill filter recorded in envelope, got %v", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.candidate_count"); !ok || got != 2 {
+	if got, ok := state.GetRouteCandidateCount(env); !ok || got != 2 {
 		t.Fatalf("expected 2 allowed candidates, got %v (ok=%v)", got, ok)
 	}
-	if result.Data["skill_filter"] != "bundle" {
-		t.Fatalf("expected skill filter in result, got %v", result.Data["skill_filter"])
+	if got, ok := core.ResultField(result.Data, "skill_filter"); !ok || got != "bundle" {
+		t.Fatalf("expected skill filter in result, got %v", got)
 	}
 }
 
@@ -64,7 +65,7 @@ func TestDispatcherExecuteSkillFilterUnknownSkill(t *testing.T) {
 		WithWorkspace(workspace).
 		WithCapabilityRegistry(capability.NewCapabilityRegistry())
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.skill_filter", "missing-skill", contextdata.MemoryClassTask)
+	state.SetSkillFilter(env, "missing-skill")
 
 	_, err := dispatcher.Execute(context.Background(), env)
 	if err == nil {
@@ -83,7 +84,7 @@ func TestDispatcherExecuteSkillFilterEmptyAllowedCapabilities(t *testing.T) {
 		WithWorkspace(workspace).
 		WithCapabilityRegistry(capability.NewCapabilityRegistry())
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.skill_filter", "empty-bundle", contextdata.MemoryClassTask)
+	state.SetSkillFilter(env, "empty-bundle")
 
 	_, err := dispatcher.Execute(context.Background(), env)
 	if err == nil {

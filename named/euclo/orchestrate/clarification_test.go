@@ -9,7 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T) {
@@ -21,21 +23,21 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 		Context:     map[string]any{},
 		Metadata:    map[string]any{},
 	}
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.intent_classification", &intake.IntentClassification{
+	contextdata.SetTyped(env, "task.input", task)
+	state.SetIntentClassification(env, &intake.IntentClassification{
 		WinningFamily: "implementation",
 		FamilyCandidates: []families.FamilyCandidate{
 			{FamilyID: "implementation"},
 			{FamilyID: "review"},
 		},
-	}, contextdata.MemoryClassTask)
-	state := intentcontext.NewState("task-clarify", "session-clarify")
-	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
+	})
+	clarificationState := intentcontext.NewState("task-clarify", "session-clarify")
+	clarificationState.Ambiguity = &intentcontext.AmbiguityCharacterization{
 		Kind:       intentcontext.AmbiguityKindMultiMatch,
 		Confidence: 0.25,
 		Rationale:  "multiple plausible targets",
 	}
-	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, clarificationState); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 
@@ -50,44 +52,36 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	if result == nil || !result.Success {
 		t.Fatalf("expected successful clarification request, got %+v", result)
 	}
-	if _, ok := env.GetWorkingValue(clarificationRequestKey); !ok {
+	if _, ok := contextdata.GetTyped[any](env, clarificationRequestKey); !ok {
 		t.Fatal("expected clarification request in envelope")
 	}
-	if got, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); !ok {
+	if got, ok := contextdata.GetTyped[*ClarificationFrame](env, "euclo.interaction.clarification_frame"); !ok {
 		t.Fatal("expected clarification frame in envelope")
-	} else if frame, ok := got.(*ClarificationFrame); !ok || frame == nil || !frame.Pending() {
+	} else if frame := got; frame == nil || !frame.Pending() {
 		t.Fatalf("unexpected clarification frame: %#v", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.clarification.gate_result"); !ok {
+	if got, ok := contextdata.GetTyped[map[string]any](env, state.KeyClarificationGateResult); !ok {
 		t.Fatal("expected clarification gate result in envelope")
-	} else if result, ok := got.(map[string]any); !ok || result["decision"] != "clarify" {
+	} else if result := got; result["decision"] != "clarify" {
 		t.Fatalf("unexpected gate result: %#v", got)
 	}
 	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != clarificationThoughtRecipeID {
 		t.Fatalf("active thoughtrecipe id = %q, want %q", got, clarificationThoughtRecipeID)
 	}
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*RouteSelection)
+	routeSelection, ok := state.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+		t.Fatalf("expected *euclotypes.RouteSelection, got %#v", routeSelection)
 	}
-	if routeSelection.RouteKind != RouteKindIntent || routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {
+	if routeSelection.RouteKind != euclotypes.RouteKindIntent || routeSelection.ThoughtRecipeID != clarificationThoughtRecipeID {
 		t.Fatalf("unexpected route selection: %+v", routeSelection)
 	}
-	if frameValue, ok := env.GetWorkingValue("euclo.interaction.clarification_frame"); !ok {
-		t.Fatal("expected clarification frame in envelope")
-	} else if clarificationFrame, ok := frameValue.(*ClarificationFrame); !ok || clarificationFrame == nil {
-		t.Fatalf("expected *ClarificationFrame, got %T", frameValue)
-	} else if interactionFrame := clarificationFrame.ToInteractionFrame(); interactionFrame == nil || interactionFrame.Type != interaction.FrameIntentClarification {
+	if frameValue, ok := contextdata.GetTyped[*ClarificationFrame](env, "euclo.interaction.clarification_frame"); !ok || frameValue == nil {
+		t.Fatalf("expected *ClarificationFrame, got %#v", frameValue)
+	} else if interactionFrame := frameValue.ToInteractionFrame(); interactionFrame == nil || interactionFrame.Type != interaction.FrameIntentClarification {
 		t.Fatalf("unexpected interaction frame: %#v", interactionFrame)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
-		t.Fatal("expected route continuation metadata in envelope")
-	} else if meta, ok := got.(*RouteContinuation); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
-		t.Fatalf("unexpected route continuation metadata: %#v", got)
+	if meta, ok := state.GetRouteContinuation(env); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route continuation metadata: %#v", meta)
 	}
 	updated, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
@@ -106,14 +100,14 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 
 func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T) {
 	env := contextdata.NewEnvelope("task-handoff", "session-handoff")
-	state := intentcontext.NewState("task-handoff", "session-handoff")
-	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
+	clarificationState := intentcontext.NewState("task-handoff", "session-handoff")
+	clarificationState.Ambiguity = &intentcontext.AmbiguityCharacterization{
 		Kind:              intentcontext.AmbiguityKindMultiMatch,
 		Confidence:        0.2,
 		Rationale:         "multiple plausible review targets",
 		CandidateFamilies: []string{"review"},
 	}
-	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, clarificationState); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 
@@ -141,26 +135,18 @@ func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T)
 	if updated == nil || updated.ActiveThoughtRecipeID != "euclo.thoughtrecipe.code_review" {
 		t.Fatalf("expected persisted active thoughtrecipe id, got %#v", updated)
 	}
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*RouteSelection)
+	routeSelection, ok := state.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+		t.Fatalf("expected *euclotypes.RouteSelection, got %#v", routeSelection)
 	}
-	if routeSelection.RouteKind != RouteKindThoughtRecipe || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.code_review" {
+	if routeSelection.RouteKind != euclotypes.RouteKindThoughtRecipe || routeSelection.ThoughtRecipeID != "euclo.thoughtrecipe.code_review" {
 		t.Fatalf("route selection = %+v, want thoughtrecipe handoff", routeSelection)
 	}
-	continuation, ok := env.GetWorkingValue("euclo.route.continuation")
-	if !ok {
-		t.Fatal("expected route continuation metadata in envelope")
-	}
-	meta, ok := continuation.(*RouteContinuation)
+	meta, ok := state.GetRouteContinuation(env)
 	if !ok || meta == nil {
-		t.Fatalf("expected *RouteContinuation, got %T", continuation)
+		t.Fatalf("expected *euclotypes.RouteContinuation, got %#v", meta)
 	}
-	if !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review" || meta.TargetRouteKind != RouteKindThoughtRecipe {
+	if !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review" || meta.TargetRouteKind != euclotypes.RouteKindThoughtRecipe {
 		t.Fatalf("unexpected continuation metadata: %+v", meta)
 	}
 }

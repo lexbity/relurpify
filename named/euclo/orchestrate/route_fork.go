@@ -8,6 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // RouteForkNode branches execution based on the resolved root route selection.
@@ -29,10 +31,6 @@ func (f *RouteForkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeC
 // Execute resolves the branch name and returns the next node identifier.
 func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
-	if env == nil {
-		return nil, fmt.Errorf("route fork %q requires an envelope", f.id)
-	}
-
 	routeKind := routeKindFromEnvelope(env)
 	routeKind = strings.TrimSpace(routeKind)
 	if routeKind == "" {
@@ -41,27 +39,24 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	branch := "capability_execution"
 	next := "euclo.execute_capability"
-	if IsThoughtRecipeRouteKind(routeKind) || IsIntentRouteKind(routeKind) {
+	if euclotypes.IsThoughtRecipeRouteKind(routeKind) || euclotypes.IsIntentRouteKind(routeKind) {
 		branch = "thoughtrecipe_execution"
 		next = "euclo.execute_thoughtrecipe"
 	}
-	env.SetWorkingValue("euclo.fork.branch", branch, contextdata.MemoryClassTask)
+	euclostate.SetForkBranch(env, branch)
 	return &core.Result{
 		NodeID:  f.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"branch":     branch,
 			"route_kind": routeKind,
 			"next":       next,
 			"next_node":  next,
-		},
+		}),
 	}, nil
 }
 
 func routeKindFromEnvelope(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
 	if selection := routeSelectionFromEnvelope(env); selection != nil {
 		if routeKind := strings.TrimSpace(selection.RouteKind); routeKind != "" {
 			return routeKind

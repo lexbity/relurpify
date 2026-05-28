@@ -9,7 +9,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 type telemetrySink struct {
@@ -74,13 +77,9 @@ func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.
 	if result.RouteID != desc.ID {
 		t.Fatalf("expected route %q, got %q", desc.ID, result.RouteID)
 	}
-	selection, ok := env.GetWorkingValue("euclo.route_selection")
-	if !ok {
-		t.Fatal("expected route_selection in envelope")
-	}
-	routeSelection, ok := selection.(*RouteSelection)
+	routeSelection, ok := state.GetRouteSelection(env)
 	if !ok || routeSelection == nil {
-		t.Fatalf("expected *RouteSelection, got %T", selection)
+		t.Fatalf("expected *euclotypes.RouteSelection, got %#v", routeSelection)
 	}
 	if routeSelection.RouteKind != "capability" || routeSelection.CapabilityID != desc.ID {
 		t.Fatalf("unexpected route selection: %+v", routeSelection)
@@ -111,22 +110,22 @@ func TestDispatch_ExplicitThoughtRecipeRoute_SelectsRequestedThoughtRecipe(t *te
 
 func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.intent_classification", &intake.IntentClassification{
+	state.SetIntentClassification(env, &intake.IntentClassification{
 		Ambiguous:  true,
 		Confidence: 0.2,
-	}, contextdata.MemoryClassTask)
+	})
 	req := routeRequestFromEnvelope(env)
 	if req.ThoughtRecipeID != clarificationThoughtRecipeID {
 		t.Fatalf("route request thoughtrecipe id = %q, want %q", req.ThoughtRecipeID, clarificationThoughtRecipeID)
 	}
-	if got := routeKindFromRequest(req); got != RouteKindIntent {
+	if got := routeKindFromRequest(req); got != euclotypes.RouteKindIntent {
 		t.Fatalf("route kind from request = %q, want intent; request=%+v", got, req)
 	}
 	directResult, directErr := Dispatch(context.Background(), env, req, nil, nil)
 	if directErr != nil {
 		t.Fatalf("direct Dispatch failed: %v", directErr)
 	}
-	if directResult.RouteKind != RouteKindIntent {
+	if directResult.RouteKind != euclotypes.RouteKindIntent {
 		t.Fatalf("direct dispatch route kind = %q, want intent", directResult.RouteKind)
 	}
 
@@ -138,17 +137,13 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *t
 	if resultCore == nil {
 		t.Fatal("expected result")
 	}
-	if got, ok := env.GetWorkingValue("euclo.route_selection"); !ok {
-		t.Fatal("expected route selection in envelope")
-	} else if selection, ok := got.(*RouteSelection); !ok || selection == nil || selection.RouteKind != RouteKindIntent || selection.ThoughtRecipeID != clarificationThoughtRecipeID {
-		t.Fatalf("unexpected route selection: %#v", got)
+	if selection, ok := state.GetRouteSelection(env); !ok || selection == nil || selection.RouteKind != euclotypes.RouteKindIntent || selection.ThoughtRecipeID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route selection: %#v", selection)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
-		t.Fatal("expected route continuation in envelope")
-	} else if meta, ok := got.(*RouteContinuation); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
-		t.Fatalf("unexpected route continuation: %#v", got)
+	if meta, ok := state.GetRouteContinuation(env); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != clarificationThoughtRecipeID {
+		t.Fatalf("unexpected route continuation: %#v", meta)
 	}
-	if got := mustStringRouteValue(t, env, "euclo.dispatch.route_kind"); got != RouteKindIntent {
+	if got := mustStringRouteValue(t, env, "euclo.dispatch.route_kind"); got != euclotypes.RouteKindIntent {
 		t.Fatalf("dispatch route kind = %q, want intent", got)
 	}
 }
@@ -178,7 +173,7 @@ func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 	}
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.family_selection", "query", contextdata.MemoryClassTask)
+	state.SetFamilySelection(env, "query")
 
 	result, err := Dispatch(context.Background(), env, RouteRequest{FamilyID: "query"}, reg, nil)
 	if err != nil {
@@ -329,10 +324,8 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 	} else {
 		t.Fatalf("expected unresolved dispatch, got result %+v", result)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route_resolution"); !ok {
-		t.Fatal("expected route resolution in envelope")
-	} else if resolution, ok := got.(*RouteResolution); !ok || resolution == nil || resolution.RouteID() != primary.ID {
-		t.Fatalf("expected unresolved route resolution for %q, got %#v", primary.ID, got)
+	if resolution, ok := state.GetRouteResolution(env); !ok || resolution == nil || resolution.RouteID() != primary.ID {
+		t.Fatalf("expected unresolved route resolution for %q, got %#v", primary.ID, resolution)
 	}
 }
 

@@ -13,10 +13,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -36,9 +37,6 @@ const (
 )
 
 func needsClarificationRoute(env *contextdata.Envelope) bool {
-	if env == nil {
-		return false
-	}
 	if v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); ok {
 		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
 			if strings.TrimSpace(state.ActiveThoughtRecipeID) != "" {
@@ -49,37 +47,28 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 			}
 		}
 	}
-	if v, ok := env.GetWorkingValue("euclo.intent_evidence"); ok {
-		if evidence, ok := v.(*intentcontext.IntentEvidence); ok && evidence != nil {
-			if evidence.RequiresClarification || len(evidence.MissingFields) > 0 {
-				return true
-			}
+	if evidence, ok := euclostate.GetIntentEvidence(env); ok && evidence != nil {
+		if evidence.RequiresClarification || len(evidence.MissingFields) > 0 {
+			return true
 		}
 	}
-	if v, ok := env.GetWorkingValue("euclo.intent_interpretation"); ok {
-		if interpretation, ok := v.(*intentcontext.IntentInterpretation); ok && interpretation != nil {
-			if len(interpretation.MissingInfo) > 0 {
-				return true
-			}
+	if interpretation, ok := euclostate.GetIntentInterpretation(env); ok && interpretation != nil {
+		if len(interpretation.MissingInfo) > 0 {
+			return true
 		}
 	}
 	return false
 }
 
 func clarificationRouteRequested(env *contextdata.Envelope) bool {
-	if env == nil {
-		return false
-	}
 	if _, ok := env.GetWorkingValue(clarificationRequestKey); ok {
 		return true
 	}
 	if needsClarificationRoute(env) {
 		return true
 	}
-	if v, ok := env.GetWorkingValue("euclo.route_selection"); ok {
-		if selection, ok := v.(*RouteSelection); ok && selection != nil {
-			return strings.TrimSpace(selection.ThoughtRecipeID) == clarificationThoughtRecipeID
-		}
+	if selection, ok := euclostate.GetRouteSelection(env); ok && selection != nil {
+		return strings.TrimSpace(selection.ThoughtRecipeID) == clarificationThoughtRecipeID
 	}
 	return false
 }
@@ -111,9 +100,6 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 	_ = ctx
 	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
-		if env == nil {
-			return nil, err
-		}
 		state = intentcontext.NewState(env.TaskID, env.SessionID)
 	}
 	if state == nil {
@@ -156,10 +142,10 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		if env != nil {
 			env.SetWorkingValue(clarificationRequestKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
-			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, nil)
 			if frame != nil {
-				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
 				}
@@ -191,10 +177,10 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			env.SetWorkingValue(clarificationGroundingKey, grounding, contextdata.MemoryClassTask)
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
-			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, grounding)
 			if frame != nil {
-				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
 				}
@@ -220,7 +206,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		if env != nil {
 			env.SetWorkingValue(clarificationProjectionKey, plan, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
-			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		emitClarificationProjected(ctx, env, state, plan)
 		result["projection_plan"] = plan
@@ -229,10 +215,10 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		if env != nil {
 			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
-			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, nil)
 			if frame != nil {
-				env.SetWorkingValue("euclo.interaction.clarification_frame", frame, contextdata.MemoryClassTask)
+				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
 				}
@@ -248,17 +234,17 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
 				return nil, err
 			}
-			env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", nextThoughtRecipeID, contextdata.MemoryClassTask)
+			euclostate.SetClarificationNextThoughtRecipeID(env, nextThoughtRecipeID)
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
-			routeKind := RouteKindForThoughtRecipeID(nextThoughtRecipeID)
-			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			routeKind := euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID)
+			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		if env != nil && nextThoughtRecipeID == "" {
-			env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", "", contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.clarification.unresolved", true, contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.clarification.unresolved_reason", "missing handoff target", contextdata.MemoryClassTask)
+			euclostate.SetClarificationNextThoughtRecipeID(env, "")
+			euclostate.SetClarificationUnresolved(env, true)
+			euclostate.SetClarificationUnresolvedReason(env, "missing handoff target")
 			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
-			setRouteSelectionContinuation(env, RouteKindIntent, clarificationThoughtRecipeID, RouteKindIntent, clarificationThoughtRecipeID)
+			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		if nextThoughtRecipeID == "" {
 			emitClarificationGateResult(ctx, env, state, false, "unresolved", "missing handoff target")
@@ -287,10 +273,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 }
 
 func instructionFromEnvelope(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue("task.input"); ok {
+	if v, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
 		if task, ok := v.(*core.Task); ok && task != nil {
 			return strings.TrimSpace(task.Instruction)
 		}
@@ -424,25 +407,22 @@ func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState,
 }
 
 func setRouteSelectionContinuation(env *contextdata.Envelope, targetRouteKind, targetRouteID, sourceRouteKind, sourceRouteID string) {
-	if env == nil {
-		return
-	}
 	routeKind := strings.TrimSpace(targetRouteKind)
 	routeID := strings.TrimSpace(targetRouteID)
 	sourceKind := strings.TrimSpace(sourceRouteKind)
 	sourceID := strings.TrimSpace(sourceRouteID)
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	euclostate.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       routeKind,
 		ThoughtRecipeID: routeID,
-	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.route.continuation", &RouteContinuation{
+	})
+	euclostate.SetRouteContinuation(env, &euclotypes.RouteContinuation{
 		SharedContext:         true,
 		SourceRouteKind:       sourceKind,
 		SourceRouteID:         sourceID,
 		TargetRouteKind:       routeKind,
 		TargetRouteID:         routeID,
 		ActiveThoughtRecipeID: routeID,
-	}, contextdata.MemoryClassTask)
+	})
 }
 
 func clarificationFrameFromState(state *intentcontext.ClarificationState, req *contextstream.Request, grounding map[string]any) *ClarificationFrame {
@@ -458,7 +438,7 @@ func clarificationFrameFromState(state *intentcontext.ClarificationState, req *c
 	}
 	resume := &interaction.ClarificationResumeMetadata{
 		ActiveThoughtRecipeID: clarificationThoughtRecipeID,
-		RouteKind:             RouteKindIntent,
+		RouteKind:             euclotypes.RouteKindIntent,
 		RouteID:               clarificationThoughtRecipeID,
 		StateVersion:          state.StateVersion,
 		Unresolved:            len(choices) == 0 || len(missingFields) > 0,
@@ -475,7 +455,7 @@ func clarificationFrameChoicesFromState(state *intentcontext.ClarificationState)
 }
 
 func seedClarificationAmbiguityFromEnvelope(state *intentcontext.ClarificationState, env *contextdata.Envelope) {
-	if state == nil || env == nil {
+	if state == nil {
 		return
 	}
 	candidateFamilies := stateCandidateFamiliesFromEnvelope(env)
@@ -503,9 +483,6 @@ func seedClarificationAmbiguityFromEnvelope(state *intentcontext.ClarificationSt
 }
 
 func stateCandidateFamiliesFromEnvelope(env *contextdata.Envelope) []string {
-	if env == nil {
-		return nil
-	}
 	seen := make(map[string]struct{})
 	familiesOut := make([]string, 0, 4)
 	addFamily := func(family string) {
@@ -519,15 +496,13 @@ func stateCandidateFamiliesFromEnvelope(env *contextdata.Envelope) []string {
 		seen[family] = struct{}{}
 		familiesOut = append(familiesOut, family)
 	}
-	if v, ok := env.GetWorkingValue("euclo.intent_classification"); ok {
-		if classification, ok := v.(*intake.IntentClassification); ok && classification != nil {
-			for _, candidate := range classification.FamilyCandidates {
-				addFamily(candidate.FamilyID)
-			}
-			addFamily(classification.WinningFamily)
+	if classification, ok := euclostate.GetIntentClassification(env); ok && classification != nil {
+		for _, candidate := range classification.FamilyCandidates {
+			addFamily(candidate.FamilyID)
 		}
+		addFamily(classification.WinningFamily)
 	}
-	if v, ok := env.GetWorkingValue("euclo.family_selection"); ok {
+	if v, ok := env.GetWorkingValue(euclostate.KeyFamilySelection); ok {
 		switch value := v.(type) {
 		case map[string]any:
 			if winning, ok := value["winning_family"].(string); ok {
@@ -537,11 +512,7 @@ func stateCandidateFamiliesFromEnvelope(env *contextdata.Envelope) []string {
 			addFamily(value)
 		}
 	}
-	if v, ok := env.GetWorkingValue("euclo.family.selected"); ok {
-		if family, ok := v.(string); ok {
-			addFamily(family)
-		}
-	}
+	addFamily(euclostate.GetFamilySelected(env))
 	return familiesOut
 }
 
@@ -722,16 +693,14 @@ func emitClarificationGateResult(ctx context.Context, env *contextdata.Envelope,
 		Passed:   passed,
 		Decision: strings.TrimSpace(decision),
 	})
-	if env != nil {
-		env.SetWorkingValue("euclo.clarification.gate_result", map[string]any{
-			"gate_id":    clarificationCapabilityID,
-			"passed":     passed,
-			"decision":   strings.TrimSpace(decision),
-			"reason":     strings.TrimSpace(reason),
-			"task_id":    taskID,
-			"session_id": sessionID,
-		}, contextdata.MemoryClassTask)
-	}
+	euclostate.SetClarificationGateResult(env, map[string]any{
+		"gate_id":    clarificationCapabilityID,
+		"passed":     passed,
+		"decision":   strings.TrimSpace(decision),
+		"reason":     strings.TrimSpace(reason),
+		"task_id":    taskID,
+		"session_id": sessionID,
+	})
 }
 
 func emitClarificationStarted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, req *contextstream.Request) {

@@ -6,35 +6,33 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestForkNodeThoughtRecipeBranch(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:       RouteKindThoughtRecipe,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:       euclotypes.RouteKindThoughtRecipe,
 		ThoughtRecipeID: "thoughtrecipe.intent.review",
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result.Data["branch"] != "thoughtrecipe_execution" {
-		t.Errorf("Expected branch thoughtrecipe_execution, got %v", result.Data["branch"])
+	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
+		t.Errorf("Expected branch thoughtrecipe_execution, got %v", got)
 	}
 
-	branch, ok := env.GetWorkingValue("euclo.fork.branch")
-	if !ok {
-		t.Error("Expected fork.branch in envelope")
-	}
-
-	if branch != "thoughtrecipe_execution" {
+	if branch := state.GetForkBranch(env); branch != "thoughtrecipe_execution" {
 		t.Errorf("Expected fork.branch thoughtrecipe_execution, got %v", branch)
 	}
-	if got, ok := result.Data["next"].(string); !ok || got != "euclo.execute_thoughtrecipe" {
+	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
 		t.Fatalf("expected next euclo.execute_thoughtrecipe, got %v (ok=%v)", got, ok)
 	}
 }
@@ -43,29 +41,24 @@ func TestForkNodeCapabilityBranch(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:    RouteKindCapability,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: "euclo:cap.review",
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result.Data["branch"] != "capability_execution" {
-		t.Errorf("Expected branch capability_execution, got %v", result.Data["branch"])
+	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "capability_execution" {
+		t.Errorf("Expected branch capability_execution, got %v", got)
 	}
 
-	branch, ok := env.GetWorkingValue("euclo.fork.branch")
-	if !ok {
-		t.Error("Expected fork.branch in envelope")
-	}
-
-	if branch != "capability_execution" {
+	if branch := state.GetForkBranch(env); branch != "capability_execution" {
 		t.Errorf("Expected fork.branch capability_execution, got %v", branch)
 	}
-	if got, ok := result.Data["next"].(string); !ok || got != "euclo.execute_capability" {
+	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_capability" {
 		t.Fatalf("expected next euclo.execute_capability, got %v (ok=%v)", got, ok)
 	}
 }
@@ -74,20 +67,20 @@ func TestForkNodeIntentBranchUsesThoughtRecipeExecution(t *testing.T) {
 	fork := NewRouteForkNode("fork1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:       RouteKindIntent,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:       euclotypes.RouteKindIntent,
 		ThoughtRecipeID: clarificationThoughtRecipeID,
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := fork.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if result.Data["branch"] != "thoughtrecipe_execution" {
-		t.Errorf("Expected branch thoughtrecipe_execution for intent route, got %v", result.Data["branch"])
+	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
+		t.Errorf("Expected branch thoughtrecipe_execution for intent route, got %v", got)
 	}
-	if got, ok := result.Data["next"].(string); !ok || got != "euclo.execute_thoughtrecipe" {
+	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
 		t.Fatalf("expected next euclo.execute_thoughtrecipe, got %v (ok=%v)", got, ok)
 	}
 }

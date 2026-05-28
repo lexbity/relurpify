@@ -1,10 +1,14 @@
 package orchestrate
 
-import "testing"
+import (
+	"testing"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+)
 
 func TestRouteResolutionRouteIDPrefersThoughtRecipe(t *testing.T) {
-	resolution := &RouteResolution{
-		RouteKind:       RouteKindIntent,
+	resolution := &euclotypes.RouteResolution{
+		RouteKind:       euclotypes.RouteKindIntent,
 		ThoughtRecipeID: "euclo.thoughtrecipe.intent.clarify",
 		CapabilityID:    "euclo:cap.ast_query",
 	}
@@ -15,7 +19,7 @@ func TestRouteResolutionRouteIDPrefersThoughtRecipe(t *testing.T) {
 }
 
 func TestRouteResolutionNormalizeTrimsAndDropsEmptyReasons(t *testing.T) {
-	resolution := &RouteResolution{
+	resolution := &euclotypes.RouteResolution{
 		RouteKind:        " capability ",
 		ThoughtRecipeID:  " ",
 		CapabilityID:     " euclo:cap.ast_query ",
@@ -40,13 +44,13 @@ func TestRouteResolutionNormalizeTrimsAndDropsEmptyReasons(t *testing.T) {
 }
 
 func TestRouteSelectionAndResolutionAreDistinctRecords(t *testing.T) {
-	selection := &RouteSelection{
-		RouteKind:       RouteKindCapability,
+	selection := &euclotypes.RouteSelection{
+		RouteKind:       euclotypes.RouteKindCapability,
 		CapabilityID:    "euclo:cap.ast_query",
 		ThoughtRecipeID: "",
 	}
-	resolution := &RouteResolution{
-		RouteKind:                 RouteKindCapability,
+	resolution := &euclotypes.RouteResolution{
+		RouteKind:                 euclotypes.RouteKindCapability,
 		CapabilityID:              "euclo:cap.ast_query",
 		ResolutionSource:          "deterministic",
 		ClarificationStateVersion: 3,

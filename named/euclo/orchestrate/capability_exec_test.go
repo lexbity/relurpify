@@ -6,6 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestCapabilityExecutionNodeExecute(t *testing.T) {
@@ -13,10 +16,10 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:    "capability",
 		CapabilityID: "debug",
-	}, contextdata.MemoryClassTask)
+	})
 
 	result, err := node.Execute(context.Background(), env)
 	if result == nil {
@@ -28,7 +31,7 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	if result.Success {
 		t.Fatalf("Expected failure, got success result: %+v", result)
 	}
-	if got := result.Data["error"]; got != "capability registry unavailable" {
+	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
 		t.Fatalf("Expected registry error, got %v", got)
 	}
 }
@@ -54,18 +57,18 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 	node.registry = nil
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:    "capability",
 		CapabilityID: "debug",
-	}, contextdata.MemoryClassTask)
+	})
 
 	_, err := node.Execute(context.Background(), env)
 	if err == nil {
 		t.Fatal("Expected error")
 	}
 
-	kind, ok := env.GetWorkingValue("euclo.execution.kind")
-	if !ok {
+	kind := state.GetExecutionKind(env)
+	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
 
@@ -73,11 +76,10 @@ func TestCapabilityExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Errorf("Expected execution.kind capability, got %v", kind)
 	}
 
-	completed, ok := env.GetWorkingValue("euclo.execution.completed")
+	completed, ok := contextdata.GetTyped[bool](env, state.KeyExecutionCompleted)
 	if !ok {
 		t.Error("Expected execution.completed in envelope")
 	}
-
 	if completed != false {
 		t.Errorf("Expected execution.completed false, got %v", completed)
 	}

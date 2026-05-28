@@ -10,7 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -63,9 +65,6 @@ func (n *ThoughtRecipeExecutorNode) Type() agentgraph.NodeType { return agentgra
 // Execute resolves the route's thoughtrecipe and executes it as a subgraph.
 func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	_ = ctx
-	if env == nil {
-		return nil, fmt.Errorf("thoughtrecipe executor missing envelope")
-	}
 	if n.registry == nil {
 		n.registry = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
@@ -80,9 +79,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data: map[string]any{
-				"error": "thoughtrecipe not found: " + thoughtrecipeID,
-			},
+			Data:    core.NewErrorResultPayload("thoughtrecipe not found: " + thoughtrecipeID),
 		}, fmt.Errorf("thoughtrecipe not found: %s", thoughtrecipeID)
 	}
 
@@ -91,9 +88,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data: map[string]any{
-				"error": "compiled plan not found for thoughtrecipe: " + thoughtrecipeID,
-			},
+			Data:    core.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + thoughtrecipeID),
 		}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", thoughtrecipeID)
 	}
 
@@ -102,9 +97,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		return &core.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data: map[string]any{
-				"error": err.Error(),
-			},
+			Data:    core.NewErrorResultPayload(err.Error()),
 		}, err
 	}
 
@@ -113,9 +106,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 			return &core.Result{
 				NodeID:  n.id,
 				Success: false,
-				Data: map[string]any{
-					"error": err.Error(),
-				},
+				Data:    core.NewErrorResultPayload(err.Error()),
 			}, err
 		}
 	}
@@ -128,9 +119,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 				return &core.Result{
 					NodeID:  n.id,
 					Success: false,
-					Data: map[string]any{
-						"error": "compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID,
-					},
+					Data:    core.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID),
 				}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", nextThoughtRecipeID)
 			}
 			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.env, n.ingestionPipeline)
@@ -138,13 +127,11 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 				return &core.Result{
 					NodeID:  n.id,
 					Success: false,
-					Data: map[string]any{
-						"error": nextErr.Error(),
-					},
+					Data:    core.NewErrorResultPayload(nextErr.Error()),
 				}, nextErr
 			}
 			if env != nil {
-				setRouteSelectionContinuation(env, RouteKindForThoughtRecipeID(nextThoughtRecipeID), nextThoughtRecipeID, RouteKindForThoughtRecipeID(thoughtrecipeID), thoughtrecipeID)
+				setRouteSelectionContinuation(env, euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID), nextThoughtRecipeID, euclotypes.RouteKindForThoughtRecipeID(thoughtrecipeID), thoughtrecipeID)
 				env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
 			}
 			nextResult, nextErr := nextGraph.Execute(ctx, env)
@@ -155,57 +142,40 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 				err = nextErr
 			}
 			if env != nil {
-				env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", "", contextdata.MemoryClassTask)
+				euclostate.SetClarificationNextThoughtRecipeID(env, "")
 				thoughtrecipeID = nextThoughtRecipeID
 			}
 		}
 	}
 	if env != nil {
-		env.SetWorkingValue("euclo.execution.kind", "thoughtrecipe", contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.execution.thoughtrecipe_id", thoughtrecipeID, contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.execution.completed", err == nil && subResult != nil && subResult.Success, contextdata.MemoryClassTask)
+		euclostate.SetExecutionKind(env, euclostate.ExecutionKindThoughtRecipe)
+		euclostate.SetExecutionThoughtRecipeID(env, thoughtrecipeID)
+		euclostate.SetExecutionCompleted(env, err == nil && subResult != nil && subResult.Success)
 	}
 	if subResult == nil {
-		subResult = &core.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
+		subResult = &core.Result{NodeID: n.id, Success: err == nil}
 	}
 	subResult.NodeID = n.id
 	return subResult, err
 }
 
 func resumeNodeIDFromEnvelope(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue("euclo.interaction.resume_node_id"); ok {
-		if s, ok := v.(string); ok {
-			return strings.TrimSpace(s)
-		}
-	}
-	return ""
+	return strings.TrimSpace(euclostate.GetInteractionResumeNodeID(env))
 }
 
 func thoughtrecipeIDFromEnvelope(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue("euclo.route_selection"); ok {
-		if selection, ok := v.(*RouteSelection); ok && selection != nil {
-			if strings.TrimSpace(selection.ThoughtRecipeID) != "" {
-				return strings.TrimSpace(selection.ThoughtRecipeID)
-			}
+	if selection, ok := euclostate.GetRouteSelection(env); ok && selection != nil {
+		if id := strings.TrimSpace(selection.ThoughtRecipeID); id != "" {
+			return id
 		}
 	}
 	return ""
 }
 
 func nextClarificationThoughtRecipeID(env *contextdata.Envelope, currentThoughtRecipeID string) string {
-	if env == nil {
-		return ""
-	}
-	if v, ok := env.GetWorkingValue("euclo.clarification.next_thoughtrecipe_id"); ok {
-		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" && strings.TrimSpace(s) != strings.TrimSpace(currentThoughtRecipeID) {
-			return strings.TrimSpace(s)
-		}
+	next := strings.TrimSpace(euclostate.GetClarificationNextThoughtRecipeID(env))
+	if next != "" && next != strings.TrimSpace(currentThoughtRecipeID) {
+		return next
 	}
 	return ""
 }

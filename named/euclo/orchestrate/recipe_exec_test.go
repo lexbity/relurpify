@@ -15,7 +15,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -63,10 +65,10 @@ func TestThoughtRecipeExecutionNodeExecute(t *testing.T) {
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
-	}, contextdata.MemoryClassTask)
+	})
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
@@ -104,10 +106,10 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec-missing-plan")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
-	}, contextdata.MemoryClassTask)
+	})
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewCapabilityRegistry(),
@@ -136,8 +138,8 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 	if result == nil || result.Success {
 		t.Fatalf("expected failed result, got %+v", result)
 	}
-	if result.Data["error"] != "compiled plan not found for thoughtrecipe: fix-bug" {
-		t.Fatalf("unexpected error payload: %#v", result.Data["error"])
+	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "compiled plan not found for thoughtrecipe: fix-bug" {
+		t.Fatalf("unexpected error payload: %#v", got)
 	}
 }
 
@@ -161,10 +163,10 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec1")
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
-	}, contextdata.MemoryClassTask)
+	})
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
@@ -189,8 +191,8 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	kind, ok := env.GetWorkingValue("euclo.execution.kind")
-	if !ok {
+	kind := state.GetExecutionKind(env)
+	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
 
@@ -198,8 +200,8 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Errorf("Expected execution.kind thoughtrecipe, got %v", kind)
 	}
 
-	completed, ok := env.GetWorkingValue("euclo.execution.completed")
-	if !ok {
+	completed := state.GetExecutionCompleted(env)
+	if !completed {
 		t.Error("Expected execution.completed in envelope")
 	}
 
@@ -207,8 +209,8 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Errorf("Expected execution.completed true, got %v", completed)
 	}
 
-	thoughtrecipeKind, ok := env.GetWorkingValue("euclo.execution.kind")
-	if !ok {
+	thoughtrecipeKind := state.GetExecutionKind(env)
+	if thoughtrecipeKind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
 
@@ -216,8 +218,8 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		t.Errorf("Expected execution.kind thoughtrecipe, got %v", thoughtrecipeKind)
 	}
 
-	thoughtrecipeID, ok := env.GetWorkingValue("euclo.execution.thoughtrecipe_id")
-	if !ok {
+	thoughtrecipeID := state.GetExecutionThoughtRecipeID(env)
+	if thoughtrecipeID == "" {
 		t.Error("Expected execution.thoughtrecipe_id in envelope")
 	}
 
@@ -230,19 +232,19 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec-handoff")
 
 	env := contextdata.NewEnvelope("task-handoff", "session-handoff")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: clarificationThoughtRecipeID,
-	}, contextdata.MemoryClassTask)
+	})
 
-	state := intentcontext.NewState("task-handoff", "session-handoff")
-	state.Ambiguity = &intentcontext.AmbiguityCharacterization{
+	clarificationState := intentcontext.NewState("task-handoff", "session-handoff")
+	clarificationState.Ambiguity = &intentcontext.AmbiguityCharacterization{
 		Kind:              intentcontext.AmbiguityKindMultiMatch,
 		Confidence:        0.2,
 		Rationale:         "review target unclear",
 		CandidateFamilies: []string{"review"},
 	}
-	if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.Background(), env, clarificationState); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
@@ -267,7 +269,7 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 		Name:     "code review custom",
 		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "code review custom"},
 	})
-	env.SetWorkingValue("euclo.clarification.next_thoughtrecipe_id", "euclo.thoughtrecipe.code_review.custom", contextdata.MemoryClassTask)
+	state.SetClarificationNextThoughtRecipeID(env, "euclo.thoughtrecipe.code_review.custom")
 
 	result, err := node.Execute(ctxWithTrigger(context.Background()), env)
 	if err != nil {
@@ -276,13 +278,11 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected successful thoughtrecipe execution, got %+v", result)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.thoughtrecipe_id"); !ok || got != "euclo.thoughtrecipe.code_review.custom" {
-		t.Fatalf("expected nested thoughtrecipe execution to set thoughtrecipe_id, got %#v (ok=%v)", got, ok)
+	if got := state.GetExecutionThoughtRecipeID(env); got != "euclo.thoughtrecipe.code_review.custom" {
+		t.Fatalf("expected nested thoughtrecipe execution to set thoughtrecipe_id, got %#v", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.route.continuation"); !ok {
-		t.Fatal("expected continuation metadata in envelope")
-	} else if meta, ok := got.(*RouteContinuation); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review.custom" {
-		t.Fatalf("unexpected continuation metadata: %#v", got)
+	if meta, ok := state.GetRouteContinuation(env); !ok || meta == nil || !meta.SharedContext || meta.TargetRouteID != "euclo.thoughtrecipe.code_review.custom" {
+		t.Fatalf("unexpected continuation metadata: %#v", meta)
 	}
 	if got := mustEnvelopeString(t, env, intentcontext.ClarificationActiveThoughtRecipeKey); got != "euclo.thoughtrecipe.code_review.custom" {
 		t.Fatalf("expected active thoughtrecipe id to follow handoff, got %q", got)
@@ -446,10 +446,10 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	}
 
 	taskEnv := contextdata.NewEnvelope("task-scope", "session-scope")
-	taskEnv.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(taskEnv, &euclotypes.RouteSelection{
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: plan.ThoughtRecipe.ID,
-	}, contextdata.MemoryClassTask)
+	})
 
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec").
 		WithWorkspaceEnvironment(env).
@@ -650,11 +650,11 @@ run reviewer:
 	if !capHandler.called {
 		t.Fatal("expected direct capability invocation")
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.capability_id"); !ok || got != "euclo:cap.code_review" {
-		t.Fatalf("capability id = %#v, want euclo:cap.code_review (ok=%v)", got, ok)
+	if got := state.GetExecutionCapabilityID(env); got != "euclo:cap.code_review" {
+		t.Fatalf("capability id = %#v, want euclo:cap.code_review", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.kind"); !ok || got != "thoughtrecipe" {
-		t.Fatalf("execution kind = %#v, want thoughtrecipe (ok=%v)", got, ok)
+	if got := state.GetExecutionKind(env); got != "thoughtrecipe" {
+		t.Fatalf("execution kind = %#v, want thoughtrecipe", got)
 	}
 }
 
@@ -709,7 +709,7 @@ run reviewer:
 	if !capHandler.called {
 		t.Fatal("expected direct capability invocation")
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.capability_id"); !ok || got != "euclo:cap.code_review" {
-		t.Fatalf("capability id = %#v, want euclo:cap.code_review (ok=%v)", got, ok)
+	if got := state.GetExecutionCapabilityID(env); got != "euclo:cap.code_review" {
+		t.Fatalf("capability id = %#v, want euclo:cap.code_review", got)
 	}
 }

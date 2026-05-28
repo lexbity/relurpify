@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/capabilities"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // CapabilityExecutionNode executes a selected capability through the framework registry.
@@ -44,11 +45,9 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 	_ = ctx
 	capabilityID := "euclo:cap.ast_query"
 	if env != nil {
-		if v, ok := env.GetWorkingValue("euclo.route_selection"); ok {
-			if selection, ok := v.(*RouteSelection); ok && selection != nil {
-				if strings.TrimSpace(selection.CapabilityID) != "" {
-					capabilityID = strings.TrimSpace(selection.CapabilityID)
-				}
+		if selection, ok := euclostate.GetRouteSelection(env); ok && selection != nil {
+			if strings.TrimSpace(selection.CapabilityID) != "" {
+				capabilityID = strings.TrimSpace(selection.CapabilityID)
 			}
 		}
 	}
@@ -83,12 +82,12 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env, n.registry)
 	}
 	if env != nil {
-		env.SetWorkingValue("euclo.execution.kind", "capability", contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.execution.capability_id", capabilityID, contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.execution.completed", result != nil && result.Success, contextdata.MemoryClassTask)
+		euclostate.SetExecutionKind(env, euclostate.ExecutionKindCapability)
+		euclostate.SetExecutionCapabilityID(env, capabilityID)
+		euclostate.SetExecutionCompleted(env, result != nil && result.Success)
 	}
 	if result == nil {
-		result = &core.Result{NodeID: n.id, Success: err == nil, Data: map[string]any{}}
+		result = &core.Result{NodeID: n.id, Success: err == nil}
 	}
 	result.NodeID = n.id
 	return result, err

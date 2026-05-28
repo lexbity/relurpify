@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 type recordingSubmitter struct {
@@ -52,7 +53,7 @@ func TestBackgroundJobNodeSubmitsJobAndInvokesCompletionHook(t *testing.T) {
 		WithDefaultKind("euclo.background.build")
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.background.payload", map[string]any{"action": "build"}, contextdata.MemoryClassTask)
+	contextdata.SetTyped(env, "euclo.background.payload", map[string]any{"action": "build"})
 
 	var hookCalled bool
 	node.WithCompletionHook(func(_ context.Context, job jobs.Job, data map[string]any) {
@@ -75,13 +76,13 @@ func TestBackgroundJobNodeSubmitsJobAndInvokesCompletionHook(t *testing.T) {
 	if !hookCalled {
 		t.Fatal("expected completion hook to be called")
 	}
-	if got := result.Data["job_started"]; got != true {
+	if got, ok := core.ResultField(result.Data, "job_started"); !ok || got != true {
 		t.Fatalf("expected job_started true, got %v", got)
 	}
-	if got := result.Data["job_id"]; got != "job-1" {
+	if got, ok := core.ResultField(result.Data, "job_id"); !ok || got != "job-1" {
 		t.Fatalf("unexpected job id: %v", got)
 	}
-	if got := result.Data["job_completed"]; got != true {
+	if got, ok := core.ResultField(result.Data, "job_completed"); !ok || got != true {
 		t.Fatalf("expected job_completed true, got %v", got)
 	}
 	if submitter.spec.Kind != "euclo.background.build" {
@@ -90,10 +91,10 @@ func TestBackgroundJobNodeSubmitsJobAndInvokesCompletionHook(t *testing.T) {
 	if submitter.spec.Queue != "background" {
 		t.Fatalf("unexpected queue: %s", submitter.spec.Queue)
 	}
-	if _, ok := env.GetWorkingValue("euclo.background.job_submitted"); !ok {
+	if !state.GetBackgroundJobSubmitted(env) {
 		t.Fatal("expected submission marker in envelope")
 	}
-	if _, ok := env.GetWorkingValue("euclo.background.job_completed"); !ok {
+	if !state.GetBackgroundJobCompleted(env) {
 		t.Fatal("expected completion marker in envelope")
 	}
 }
@@ -106,8 +107,8 @@ func TestBackgroundJobNodeEmitsTelemetry(t *testing.T) {
 		WithTelemetry(reporting.NewEucloTelemetry(telemetry))
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	env.SetWorkingValue("euclo.background.kind", "euclo.background.test", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.payload", map[string]any{"target": "test"}, contextdata.MemoryClassTask)
+	state.SetBackgroundJobKind(env, "euclo.background.test")
+	contextdata.SetTyped(env, "euclo.background.payload", map[string]any{"target": "test"})
 
 	_, err := node.Execute(core.WithTelemetry(context.Background(), telemetry), env)
 	if err != nil {

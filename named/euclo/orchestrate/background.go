@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // BackgroundJobNode submits work to the framework job boundary and records
@@ -94,9 +95,6 @@ func (n *BackgroundJobNode) Type() agentgraph.NodeType {
 
 // Execute submits a background job and records submission/completion metadata.
 func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	if env == nil {
-		return nil, fmt.Errorf("background job node %q missing envelope", n.id)
-	}
 	if n.submitter == nil {
 		return nil, fmt.Errorf("background job node %q missing submitter", n.id)
 	}
@@ -111,11 +109,11 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 
 	submittedAt := time.Now().UTC()
-	env.SetWorkingValue("euclo.background.job_id", job.ID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.job_queue", spec.Queue, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.job_kind", spec.Kind, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.job_submitted", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.job_state", string(job.State), contextdata.MemoryClassTask)
+	euclostate.SetBackgroundJobID(env, job.ID)
+	euclostate.SetBackgroundJobQueue(env, spec.Queue)
+	euclostate.SetBackgroundJobKind(env, spec.Kind)
+	euclostate.SetBackgroundJobSubmitted(env, true)
+	euclostate.SetBackgroundJobState(env, string(job.State))
 
 	tel := n.telemetry
 	if tel == nil {
@@ -145,8 +143,8 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if n.completionHook != nil {
 		n.completionHook(ctx, *job, completionData)
 	}
-	env.SetWorkingValue("euclo.background.job_completed", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.background.job_completion", completionData, contextdata.MemoryClassTask)
+	euclostate.SetBackgroundJobCompleted(env, true)
+	euclostate.SetBackgroundJobCompletion(env, completionData)
 
 	if tel != nil {
 		tel.EmitJobCompleted(ctx, reporting.EventJobCompleted{
@@ -165,7 +163,7 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"job_started":   true,
 			"job_submitted": true,
 			"job_id":        job.ID,
@@ -173,15 +171,12 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 			"job_kind":      spec.Kind,
 			"job_state":     string(job.State),
 			"job_completed": true,
-		},
+		}),
 	}, nil
 }
 
 func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.JobSpec, error) {
-	if env == nil {
-		return jobs.JobSpec{}, fmt.Errorf("background job node %q missing envelope", n.id)
-	}
-	if value, ok := env.GetWorkingValue("euclo.background.job_spec"); ok {
+	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobSpec); ok {
 		switch spec := value.(type) {
 		case jobs.JobSpec:
 			if err := spec.Validate(); err != nil {
@@ -200,23 +195,23 @@ func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.JobSpe
 	}
 
 	queue := n.defaultQueue
-	if value, ok := env.GetWorkingValue("euclo.background.queue"); ok {
+	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobQueue); ok {
 		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
 			queue = strings.TrimSpace(s)
 		}
 	}
 	kind := n.defaultKind
-	if value, ok := env.GetWorkingValue("euclo.background.kind"); ok {
+	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobKind); ok {
 		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
 			kind = strings.TrimSpace(s)
 		}
 	}
 	payload := n.defaultPayload
-	if value, ok := env.GetWorkingValue("euclo.background.payload"); ok {
+	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobPayload); ok {
 		payload = value
 	}
 	if payload == nil {
-		if task, ok := env.GetWorkingValue("task.input"); ok {
+		if task, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
 			payload = task
 		}
 	}

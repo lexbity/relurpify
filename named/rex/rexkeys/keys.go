@@ -29,4 +29,13 @@ const (
 	RexWorkloadClass = "rex.workload_class"
 
 	SessionID = "session_id"
+
+	RexRoute              = "rex.route"
+	RexArtifactKinds      = "rex.artifact_kinds"
+	RexContextExpansion   = "rex.context_expansion"
+	RexVerificationPolicy = "rex.verification_policy"
+	RexVerification       = "rex.verification"
+	RexSuccessGate        = "rex.success_gate"
+	RexVerificationStatus = "rex.verification_status"
+	RexRecoveryAttempts   = "rex.recovery_attempts"
 )

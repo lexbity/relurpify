@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // IngestionNode ingests user files and session pins into the envelope.
@@ -37,15 +38,15 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: map[string]any{
+		Data:    core.NewToolResultPayload(map[string]any{
 			"user_files_ingested":   0,
 			"session_pins_ingested": 0,
 			"skipped":               true,
-		},
+		}),
 	}
 
 	// Get task envelope from working memory.
-	taskEnvelopeVal, ok := env.GetWorkingValue("euclo.task_envelope")
+	taskEnvelopeVal, ok := env.GetWorkingValue(euclostate.KeyTaskEnvelope)
 	if !ok {
 		return result, nil
 	}
@@ -54,27 +55,26 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	if !ok {
 		return result, nil
 	}
-	result.Data["skipped"] = false
+	fields := core.ResultFields(result.Data)
+	fields["skipped"] = false
 
 	// Ingest user files
 	userFiles := taskEnvelope.UserFiles
 	for _, filePath := range userFiles {
-		ingestedContent := "stub_ingested_content_for_" + filePath
-		env.SetWorkingValue("euclo.ingested.file."+filePath, ingestedContent, contextdata.MemoryClassTask)
+		euclostate.SetIngestedFile(env, filePath, "stub_ingested_content_for_"+filePath)
 	}
 
 	// Ingest session pins
 	sessionPins := taskEnvelope.SessionPins
 	for _, filePath := range sessionPins {
-		ingestedContent := "stub_ingested_content_for_" + filePath
-		env.SetWorkingValue("euclo.ingested.pin."+filePath, ingestedContent, contextdata.MemoryClassTask)
+		euclostate.SetIngestedPin(env, filePath, "stub_ingested_content_for_"+filePath)
 	}
 
 	// Write ingestion metadata
-	env.SetWorkingValue("euclo.ingestion.user_files_count", len(userFiles), contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.ingestion.session_pins_count", len(sessionPins), contextdata.MemoryClassTask)
+	euclostate.SetIngestionUserFilesCount(env, len(userFiles))
+	euclostate.SetIngestionSessionPinsCount(env, len(sessionPins))
 
-	result.Data["user_files_ingested"] = len(userFiles)
-	result.Data["session_pins_ingested"] = len(sessionPins)
+	fields["user_files_ingested"] = len(userFiles)
+	fields["session_pins_ingested"] = len(sessionPins)
 	return result, nil
 }

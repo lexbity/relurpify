@@ -8,16 +8,18 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestRootGraphExecute(t *testing.T) {
 	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:    RouteKindCapability,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: "euclo:cap.ast_query",
-	}, contextdata.MemoryClassTask)
+	})
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -25,17 +27,12 @@ func TestRootGraphExecute(t *testing.T) {
 	}
 
 	// Verify that execution completed
-	completed, ok := env.GetWorkingValue("euclo.execution.completed")
-	if !ok {
+	if !state.GetExecutionCompleted(env) {
 		t.Error("Expected execution.completed in envelope")
 	}
 
-	if completed != true {
-		t.Errorf("Expected execution.completed true, got %v", completed)
-	}
-
 	// Verify outcome was classified
-	category, ok := env.GetWorkingValue("euclo.outcome.category")
+	category, ok := state.GetOutcomeCategory(env)
 	if !ok {
 		t.Error("Expected outcome.category in envelope")
 	}
@@ -59,10 +56,10 @@ func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:    RouteKindCapability,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: "euclo:cap.ast_query",
-	}, contextdata.MemoryClassTask)
+	})
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -70,8 +67,8 @@ func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 	}
 
 	// Verify execution path was taken (stub defaults to capability)
-	kind, ok := env.GetWorkingValue("euclo.execution.kind")
-	if !ok {
+	kind := state.GetExecutionKind(env)
+	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
 
@@ -84,10 +81,10 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
 		RouteKind:    "capability",
 		CapabilityID: "euclo:cap.ast_query",
-	}, contextdata.MemoryClassTask)
+	})
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -95,8 +92,8 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 	}
 
 	// Verify capability execution path was taken
-	kind, ok := env.GetWorkingValue("euclo.execution.kind")
-	if !ok {
+	kind := state.GetExecutionKind(env)
+	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
 
@@ -109,10 +106,10 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	env.SetWorkingValue("euclo.route_selection", &RouteSelection{
-		RouteKind:    RouteKindCapability,
+	state.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:    euclotypes.RouteKindCapability,
 		CapabilityID: "euclo:cap.ast_query",
-	}, contextdata.MemoryClassTask)
+	})
 
 	err := graph.Execute(context.Background(), env)
 	if err != nil {
@@ -120,12 +117,12 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 	}
 
 	// Verify policy decision was made
-	permitted, ok := env.GetWorkingValue("euclo.policy.mutation_permitted")
+	decision, ok := state.GetPolicyDecision(env)
 	if !ok {
 		t.Error("Expected policy.mutation_permitted in envelope")
 	}
 
-	if permitted == nil {
+	if decision == nil {
 		t.Error("Expected non-nil policy.mutation_permitted")
 	}
 }
