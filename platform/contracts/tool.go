@@ -40,6 +40,26 @@ type StreamingTool interface {
 	ExecuteStream(ctx context.Context, args map[string]interface{}) (<-chan ToolChunk, error)
 }
 
+// RollbackToken identifies a completed tool invocation for rollback.
+type RollbackToken struct {
+	InvocationID string
+	ToolName     string
+	Args         map[string]interface{}
+	Result       *ToolResult
+}
+
+// RevertibleTool is an optional extension for Tool implementations that support
+// undoing or compensating for a completed execution. Register the rollback
+// token returned by InvokeCapability and call RollbackCapability to undo.
+//
+//	if rt, ok := tool.(RevertibleTool); ok { rt.Rollback(ctx, token) }
+type RevertibleTool interface {
+	Tool
+	// Rollback undoes the effect of a previous Execute call identified by
+	// the given token. Implementations should be idempotent.
+	Rollback(ctx context.Context, token RollbackToken) error
+}
+
 // Tag constants classify tools for policy enforcement.
 const (
 	TagReadOnly    = "read-only"

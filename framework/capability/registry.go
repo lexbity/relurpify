@@ -65,6 +65,8 @@ type CapabilityRegistry struct {
 	modelProfile        *contracts.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
+	rollbackTokens  map[string]contracts.RollbackToken
+	rollbackMu      sync.Mutex
 	metrics         *telemetry.ToolCallMetrics
 	delegate        *CapabilityRegistry
 	toolIDAllowlist map[string]struct{}
@@ -79,6 +81,7 @@ func NewRegistry() *CapabilityRegistry {
 		localToolNameIndex:  make(map[string]string),
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
 		safety:              newRuntimeSafetyController(),
+		rollbackTokens:      make(map[string]contracts.RollbackToken),
 	}
 }
 

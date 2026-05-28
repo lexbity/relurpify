@@ -2,6 +2,8 @@ package capability
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -73,6 +75,15 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 			result != nil && result.Truncated,
 		)
 	}
+	// Store rollback token for revertible tools
+	if err == nil && result != nil && result.Success {
+		if tok := r.storeRollbackTokenLocked(idOrName, args, result); tok != "" {
+			if result.Metadata == nil {
+				result.Metadata = make(map[string]interface{})
+			}
+			result.Metadata["rollback_token"] = tok
+		}
+	}
 	return result, err
 }
 
@@ -110,6 +121,67 @@ func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, sta
 		return nil, fmt.Errorf("capability %s does not support background invocation", entry.descriptor.ID)
 	}
 	return bgHandler.InvokeBackground(ctx, state, args)
+}
+
+// newRollbackID generates a unique identifier for a rollback token.
+func newRollbackID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return "rbk-" + hex.EncodeToString(b)
+}
+
+// storeRollbackTokenLocked records a rollback token for the invocation if the
+// underlying tool implements RevertibleTool. Returns the token ID or empty
+// string if rollback is not supported.
+func (r *CapabilityRegistry) storeRollbackTokenLocked(toolName string, args map[string]any, result *contracts.ToolResult) string {
+	r.rollbackMu.Lock()
+	defer r.rollbackMu.Unlock()
+	tok := newRollbackID()
+	r.rollbackTokens[tok] = contracts.RollbackToken{
+		InvocationID: tok,
+		ToolName:     toolName,
+		Args:         cloneArgs(args),
+		Result:       result,
+	}
+	return tok
+}
+
+func cloneArgs(args map[string]any) map[string]any {
+	if args == nil {
+		return nil
+	}
+	out := make(map[string]any, len(args))
+	for k, v := range args {
+		out[k] = v
+	}
+	return out
+}
+
+// RollbackCapability undoes a previous tool invocation identified by the
+// rollback token. Returns an error if the token is not found, the underlying
+// tool does not support rollback, or the rollback itself fails.
+func (r *CapabilityRegistry) RollbackCapability(ctx context.Context, tokenID string) error {
+	r.rollbackMu.Lock()
+	token, ok := r.rollbackTokens[tokenID]
+	if ok {
+		delete(r.rollbackTokens, tokenID)
+	}
+	r.rollbackMu.Unlock()
+	if !ok {
+		return fmt.Errorf("rollback token %q not found", tokenID)
+	}
+	entry, err := r.capabilityEntry(token.ToolName)
+	if err != nil {
+		return fmt.Errorf("rollback: %w", err)
+	}
+	if entry.legacyTool == nil {
+		return fmt.Errorf("rollback not supported for %q: not a legacy tool", token.ToolName)
+	}
+	rt, ok := entry.legacyTool.(contracts.RevertibleTool)
+	if !ok {
+		return fmt.Errorf("rollback not supported for tool %q", token.ToolName)
+	}
+	return rt.Rollback(ctx, token)
 }
 
 // recoverToolPanic wraps a tool invocation and converts any panic into a

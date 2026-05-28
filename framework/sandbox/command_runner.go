@@ -25,6 +25,7 @@ type CommandRequest struct {
 	Input          string
 	Timeout        time.Duration
 	MaxOutputBytes int64 // 0 = use runner default; -1 = unlimited (unsafe)
+	UsePTY         bool  // allocate a pseudo-terminal for the subprocess
 }
 
 // CommandRunner describes a primitive capable of executing commands in a sandbox.
