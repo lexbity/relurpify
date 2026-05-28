@@ -77,9 +77,16 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	agentManifest.Spec.Permissions = effectivePerms
 	agentManifest.Spec.Resources = effectiveResources
-	runtime, err := selectSandboxRuntime(cfg, agentManifest)
+	image := cfg.Image
+	if image == "" && agentManifest != nil {
+		image = agentManifest.Spec.Image
+	}
+	runtime, err := SelectSandboxRuntime(cfg.Backend, cfg.Sandbox, image, cfg.BaseFS)
 	if err != nil {
 		return nil, err
+	}
+	if err := runtime.Verify(ctx); err != nil {
+		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := core.NewInMemoryAuditLogger(cfg.AuditLimit)
@@ -127,22 +134,22 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}, nil
 }
 
-func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *cfgload.AgentManifest) (sandbox.SandboxRuntime, error) {
-	switch strings.ToLower(strings.TrimSpace(cfg.Backend)) {
+// SelectSandboxRuntime returns a sandbox runtime for the given backend.
+// Supported backends: "" (defaults to gvisor), "gvisor", "docker".
+// Unsupported backends ("local", "none", or any unknown value) return an error.
+// This is the central, policy-resolved chokepoint for obtaining a sandbox runtime.
+func SelectSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string) (sandbox.SandboxRuntime, error) {
+	switch strings.ToLower(strings.TrimSpace(backend)) {
 	case "", "gvisor":
-		return sandbox.NewSandboxRuntime(cfg.Sandbox), nil
+		return sandbox.NewSandboxRuntime(sandboxCfg), nil
 	case "docker":
-		image := cfg.Image
-		if image == "" && agentManifest != nil {
-			image = agentManifest.Spec.Image
-		}
 		return dockersandbox.NewBackend(dockersandbox.Config{
-			DockerPath: cfg.Sandbox.ContainerRuntime,
+			DockerPath: sandboxCfg.ContainerRuntime,
 			Image:      image,
-			Workspace:  cfg.BaseFS,
+			Workspace:  workspace,
 		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported sandbox backend %q", cfg.Backend)
+		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: gvisor, docker)", backend)
 	}
 }
 
