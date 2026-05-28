@@ -20,22 +20,36 @@ type ToolRateLimit struct {
 	Burst     int     `yaml:"burst,omitempty" json:"burst,omitempty"`
 }
 
+// ToolManifestComposition defines sub-tools executed sequentially for
+// composite tool definitions.
+type ToolManifestComposition struct {
+	Steps []ToolManifestCompositionStep `yaml:"steps,omitempty" json:"steps,omitempty"`
+}
+
+// ToolManifestCompositionStep is a single sub-step within a composite tool.
+type ToolManifestCompositionStep struct {
+	Tool  string         `yaml:"tool" json:"tool"`
+	Args  map[string]any `yaml:"args,omitempty" json:"args,omitempty"`
+	Alias string         `yaml:"alias,omitempty" json:"alias,omitempty"` // variable name for step output
+}
+
 // ToolManifest describes a single tool definition loaded from relurpify_cfg.
 type ToolManifest struct {
-	Name          string                 `yaml:"name" json:"name"`
-	Version       string                 `yaml:"version,omitempty" json:"version,omitempty"`
-	Family        string                 `yaml:"family,omitempty" json:"family,omitempty"`
-	Intent        []string               `yaml:"intent,omitempty" json:"intent,omitempty"`
-	Description   string                 `yaml:"description,omitempty" json:"description,omitempty"`
-	Guidance      ToolManifestGuidance   `yaml:"guidance,omitempty" json:"guidance,omitempty"`
-	Parameters    []ToolParameter        `yaml:"parameters,omitempty" json:"parameters,omitempty"`
-	Execution     ToolManifestExecution  `yaml:"execution" json:"execution"`
-	Returns       ToolManifestReturns    `yaml:"returns,omitempty" json:"returns,omitempty"`
-	Errors        map[string]string      `yaml:"errors,omitempty" json:"errors,omitempty"`
-	Capability    ToolManifestCapability `yaml:"capability" json:"capability"`
-	RateLimit     *ToolRateLimit         `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
-	SourcePath    string                 `yaml:"-" json:"-"`
-	CanonicalName string                 `yaml:"-" json:"-"`
+	Name          string                    `yaml:"name" json:"name"`
+	Version       string                    `yaml:"version,omitempty" json:"version,omitempty"`
+	Family        string                    `yaml:"family,omitempty" json:"family,omitempty"`
+	Intent        []string                  `yaml:"intent,omitempty" json:"intent,omitempty"`
+	Description   string                    `yaml:"description,omitempty" json:"description,omitempty"`
+	Guidance      ToolManifestGuidance      `yaml:"guidance,omitempty" json:"guidance,omitempty"`
+	Parameters    []ToolParameter           `yaml:"parameters,omitempty" json:"parameters,omitempty"`
+	Execution     ToolManifestExecution     `yaml:"execution" json:"execution"`
+	Returns       ToolManifestReturns       `yaml:"returns,omitempty" json:"returns,omitempty"`
+	Errors        map[string]string         `yaml:"errors,omitempty" json:"errors,omitempty"`
+	Capability    ToolManifestCapability    `yaml:"capability" json:"capability"`
+	RateLimit     *ToolRateLimit            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	Composition   *ToolManifestComposition  `yaml:"composition,omitempty" json:"composition,omitempty"`
+	SourcePath    string                    `yaml:"-" json:"-"`
+	CanonicalName string                    `yaml:"-" json:"-"`
 }
 
 // ToolManifestGuidance captures agent-facing usage hints.

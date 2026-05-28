@@ -21,6 +21,25 @@ const (
 	ToolParamObject  ToolParameterType = "object"
 )
 
+// ToolChunk represents a single piece of streaming output from a tool that
+// implements the StreamingTool interface. Chunks are delivered in order over
+// a channel; the final chunk carries Done=true.
+type ToolChunk struct {
+	Data   map[string]interface{} `json:"data,omitempty"`
+	Error  string                 `json:"error,omitempty"`
+	Done   bool                   `json:"done"`
+	SeqNum int                    `json:"seq_num,omitempty"`
+}
+
+// StreamingTool is an optional extension for Tool implementations that support
+// streaming their output incrementally. Use a type assertion to check:
+//
+//	if st, ok := tool.(StreamingTool); ok { ... }
+type StreamingTool interface {
+	Tool
+	ExecuteStream(ctx context.Context, args map[string]interface{}) (<-chan ToolChunk, error)
+}
+
 // Tag constants classify tools for policy enforcement.
 const (
 	TagReadOnly    = "read-only"

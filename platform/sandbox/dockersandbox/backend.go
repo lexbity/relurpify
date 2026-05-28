@@ -17,9 +17,10 @@ import (
 
 // Config controls the Docker sandbox backend.
 type Config struct {
-	DockerPath string
-	Image      string
-	Workspace  string
+	DockerPath  string
+	Image       string
+	ImageDigest string // SHA256 digest for image pinning, e.g. "sha256:abc123..."
+	Workspace   string
 }
 
 // Backend implements the backend-neutral sandbox policy contract using Docker.

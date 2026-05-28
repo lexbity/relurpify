@@ -74,6 +74,16 @@ func (r *Runner) Run(ctx context.Context, req sandbox.CommandRequest) (string, s
 	if image == "" {
 		image = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
 	}
+	// When a digest is configured, pin the image reference to that digest
+	// to prevent mutable tag attacks. If the image already includes a
+	// digest suffix we respect it; otherwise append @digest.
+	if digest := strings.TrimSpace(r.backend.config.ImageDigest); digest != "" {
+		if strings.Contains(image, "@") {
+			image = strings.SplitN(image, "@", 2)[0] + "@" + digest
+		} else {
+			image = image + "@" + digest
+		}
+	}
 	args = append(args, image)
 	args = append(args, req.Args...)
 	execCtx, cancel := context.WithCancel(ctx)
