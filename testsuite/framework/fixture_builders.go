@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -633,11 +634,11 @@ func clonePolicyRule(rule core.PolicyRule) core.PolicyRule {
 		RouteModes:                append([]string(nil), rule.Conditions.RouteModes...),
 		ProviderKinds:             append([]core.ProviderKind(nil), rule.Conditions.ProviderKinds...),
 		ExternalProviders:         append([]string(nil), rule.Conditions.ExternalProviders...),
-		MinRiskClasses:            append([]core.RiskClass(nil), rule.Conditions.MinRiskClasses...),
-		TrustClasses:              append([]core.TrustClass(nil), rule.Conditions.TrustClasses...),
-		CapabilityKinds:           append([]core.CapabilityKind(nil), rule.Conditions.CapabilityKinds...),
-		RuntimeFamilies:           append([]core.CapabilityRuntimeFamily(nil), rule.Conditions.RuntimeFamilies...),
-		EffectClasses:             append([]core.EffectClass(nil), rule.Conditions.EffectClasses...),
+		MinRiskClasses:            append([]agentspec.RiskClass(nil), rule.Conditions.MinRiskClasses...),
+		TrustClasses:              append([]agentspec.TrustClass(nil), rule.Conditions.TrustClasses...),
+		CapabilityKinds:           append([]agentspec.CapabilityKind(nil), rule.Conditions.CapabilityKinds...),
+		RuntimeFamilies:           append([]agentspec.CapabilityRuntimeFamily(nil), rule.Conditions.RuntimeFamilies...),
+		EffectClasses:             append([]agentspec.EffectClass(nil), rule.Conditions.EffectClasses...),
 		Partitions:                append([]string(nil), rule.Conditions.Partitions...),
 		ChannelIDs:                append([]string(nil), rule.Conditions.ChannelIDs...),
 		SessionScopes:             append([]core.SessionScope(nil), rule.Conditions.SessionScopes...),

@@ -145,7 +145,7 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interfa
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *RustCargoTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *RustCargoTestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
@@ -220,7 +220,7 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interf
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *RustCargoCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *RustCargoCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:rust", "build", "verification", "diagnostics"}

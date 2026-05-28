@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -28,22 +29,22 @@ func NewCoverageCheckHandler(env agentenv.WorkspaceEnvironment) *CoverageCheckHa
 func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.coverage_check",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Coverage Check",
 		Version:       "1.0.0",
 		Description:   "Runs test coverage analysis and reports per-package coverage percentages",
 		Category:      "verification",
 		Tags:          []string{"testing", "coverage", "shell", "tool"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassExecute},
-		EffectClasses: []core.EffectClass{core.EffectClassProcessSpawn},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
+		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"package": {
 					Type:        "string",
 					Description: "Go package path to check (default: ./...)",
@@ -54,9 +55,9 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 				},
 			},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if coverage run completed",
@@ -68,7 +69,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 				"packages": {
 					Type:        "array",
 					Description: "Per-package coverage results",
-					Items:       &core.Schema{Type: "object"},
+					Items:       &contracts.Schema{Type: "object"},
 				},
 				"coverage": {
 					Type:        "object",

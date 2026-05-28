@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
 )
 
 type RecipientKeyRecord struct {

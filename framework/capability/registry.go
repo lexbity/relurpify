@@ -1,21 +1,16 @@
-// Package capability implements the central capability registry for the agent framework.
 package capability
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 // PermissionAware allows tools to receive the permission manager for fine-grained
@@ -36,6 +31,9 @@ type SandboxScopeAware interface {
 	SetSandboxScope(scope *sandbox.FileScopePolicy)
 }
 
+// Registry is an alias for CapabilityRegistry.
+type Registry = CapabilityRegistry
+
 // CapabilityRegistry maintains framework-owned capability descriptors plus the
 // narrowed local-tool runtime and temporary model-bridge shims used during the
 // migration away from generic tool-shaped invocation.
@@ -52,7 +50,7 @@ type CapabilityRegistry struct {
 	agentSpec           *agentspec.AgentRuntimeSpec
 	sandboxScope        *sandbox.FileScopePolicy
 	runtimePolicy       *compiledRuntimePolicy
-	allowedCapabilities []core.CapabilitySelector
+	allowedCapabilities []agentspec.CapabilitySelector
 	allowedMatchers     []compiledSelector
 	toolPolicies        map[string]agentspec.ToolPolicy
 	capabilityPolicies  []agentspec.CapabilityPolicy
@@ -66,15 +64,12 @@ type CapabilityRegistry struct {
 	modelProfile        *contracts.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
-	// delegate and toolIDAllowlist support scoped views returned by WithAllowlist.
-	// When delegate is non-nil, this registry defers all operations to delegate
-	// while filtering ModelCallableTools/InvokeCapability to toolIDAllowlist.
 	delegate        *CapabilityRegistry
-	toolIDAllowlist map[string]struct{} // nil = allow all (only meaningful when delegate != nil)
+	toolIDAllowlist map[string]struct{}
 }
 
-// NewCapabilityRegistry builds a capability registry instance.
-func NewCapabilityRegistry() *CapabilityRegistry {
+// NewRegistry builds a capability registry instance.
+func NewRegistry() *CapabilityRegistry {
 	return &CapabilityRegistry{
 		capabilities:        make(map[string]core.CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
@@ -129,34 +124,26 @@ func (r *CapabilityRegistry) isAllowlisted(id string) bool {
 	return ok
 }
 
-// AddPrecheck appends a pre-invocation guard to the registry.
-func (r *CapabilityRegistry) AddPrecheck(p InvocationPrecheck) {
-	if r == nil || p == nil {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.prechecks = append(r.prechecks, p)
+type capabilityEntry struct {
+	descriptor core.CapabilityDescriptor
+	profile    descriptorProfile
+	handler    core.CapabilityHandler
+	legacyTool contracts.Tool
+	providerID string
+	sessionID  string
 }
 
-// AddPostcheck appends a post-invocation hook to the registry.
-func (r *CapabilityRegistry) AddPostcheck(p PostInvocationHook) {
-	if r == nil || p == nil {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.postchecks = append(r.postchecks, p)
+type RegistrationBatchItem struct {
+	Descriptor       core.CapabilityDescriptor
+	InvocableHandler core.InvocableCapabilityHandler
+	PromptHandler    core.PromptCapabilityHandler
+	ResourceHandler  core.ResourceCapabilityHandler
+	LegacyTool       contracts.Tool
 }
 
-// SetGuidanceBroker configures optional guidance routing for recoverable precheck failures.
-func (r *CapabilityRegistry) SetGuidanceBroker(broker RecoveryGuidanceBroker) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.guidanceBroker = broker
+type admissionEvent struct {
+	descriptor core.CapabilityDescriptor
+	exposure   core.CapabilityExposure
 }
 
 func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
@@ -324,28 +311,6 @@ func (r *CapabilityRegistry) registerEntryLocked(desc core.CapabilityDescriptor,
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = entry
 	r.indexEntryLocked(desc.ID, entry)
-}
-
-type capabilityEntry struct {
-	descriptor core.CapabilityDescriptor
-	profile    descriptorProfile
-	handler    core.CapabilityHandler
-	legacyTool contracts.Tool
-	providerID string
-	sessionID  string
-}
-
-type RegistrationBatchItem struct {
-	Descriptor       core.CapabilityDescriptor
-	InvocableHandler core.InvocableCapabilityHandler
-	PromptHandler    core.PromptCapabilityHandler
-	ResourceHandler  core.ResourceCapabilityHandler
-	LegacyTool       contracts.Tool
-}
-
-type admissionEvent struct {
-	descriptor core.CapabilityDescriptor
-	exposure   core.CapabilityExposure
 }
 
 // RegisterCapability adds a non-tool capability descriptor to the shared registry.
@@ -556,7 +521,7 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool contracts.To
 		}
 	}
 	desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), tool))
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyLocalTool {
 		return core.CapabilityDescriptor{}, nil, fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
 	}
 	normalizedName := normalizeComparable(tool.Name())
@@ -655,97 +620,6 @@ func (r *CapabilityRegistry) InspectableTools() []contracts.Tool {
 	return res
 }
 
-// ModelCallableTools returns callable local tools for agent-internal use such
-// as phase filtering and budget enforcement. Only local contracts.Tool implementations
-// are included; non-local capabilities appear in ModelCallableLLMToolSpecs.
-func (r *CapabilityRegistry) ModelCallableTools() []contracts.Tool {
-	if r == nil {
-		return nil
-	}
-	if r.delegate != nil {
-		all := r.delegate.ModelCallableTools()
-		if r.toolIDAllowlist == nil {
-			return all
-		}
-		filtered := make([]contracts.Tool, 0, len(all))
-		for _, t := range all {
-			if desc, ok := r.delegate.GetCapability(t.Name()); ok {
-				if r.isAllowlisted(desc.ID) {
-					filtered = append(filtered, t)
-				}
-			}
-		}
-		return filtered
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	entries := r.localToolEntriesLocked()
-	res := make([]contracts.Tool, 0, len(entries))
-	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
-			continue
-		}
-		if !toolAvailableForPrompt(entry.legacyTool) {
-			continue
-		}
-		res = append(res, entry.legacyTool)
-	}
-	return res
-}
-
-// ModelCallableLLMToolSpecs returns the provider-agnostic tool specs for all
-// callable capabilities: local tools and non-local invocable capabilities
-// (provider-backed, Relurpic). This is what callers should pass to
-// LanguageModel.ChatWithTools — Ollama-specific formatting is handled in
-// platform/llm, not here.
-func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec {
-	if r == nil {
-		return nil
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	res := make([]contracts.LLMToolSpec, 0, len(r.entries))
-	for _, entry := range r.entries {
-		if entry == nil {
-			continue
-		}
-		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
-			continue
-		}
-		if entry.legacyTool != nil {
-			if !toolAvailableForPrompt(entry.legacyTool) {
-				continue
-			}
-			res = append(res, contracts.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
-		} else if _, ok := entry.handler.(core.InvocableCapabilityHandler); ok {
-			res = append(res, core.LLMToolSpecFromDescriptor(entry.descriptor))
-		}
-	}
-	return res
-}
-
-func toolAvailableForPrompt(tool contracts.Tool) bool {
-	if tool == nil {
-		return false
-	}
-	return tool.IsAvailable(context.Background())
-}
-
-// GetModelTool resolves a callable local tool by name for post-LLM dispatch.
-func (r *CapabilityRegistry) GetModelTool(name string) (contracts.Tool, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	name = r.normalizeToolNameLocked(name)
-	entry, ok := r.localToolEntryByNameLocked(name)
-	if !ok || entry == nil || entry.legacyTool == nil {
-		return nil, false
-	}
-	if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
-		return nil, false
-	}
-	return entry.legacyTool, true
-}
-
 // GetCapability resolves a tool by either capability ID or public name.
 func (r *CapabilityRegistry) GetCapability(idOrName string) (core.CapabilityDescriptor, bool) {
 	if r == nil {
@@ -807,7 +681,7 @@ func (r *CapabilityRegistry) CallableCapabilities() []core.CapabilityDescriptor 
 
 // CoordinationTargets returns admitted, non-hidden coordination target
 // capabilities that match all provided selectors.
-func (r *CapabilityRegistry) CoordinationTargets(selectors ...core.CapabilitySelector) []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.CapabilitySelector) []core.CapabilityDescriptor {
 	if r == nil {
 		return nil
 	}
@@ -853,7 +727,7 @@ func (r *CapabilityRegistry) InspectableCapabilities() []core.CapabilityDescript
 // registry policies, but only keeps tools that match the predicate.
 func (r *CapabilityRegistry) CloneFiltered(keep func(contracts.Tool) bool) *CapabilityRegistry {
 	if r == nil {
-		return NewCapabilityRegistry()
+		return NewRegistry()
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -881,7 +755,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(contracts.Tool) bool) *Capa
 	}
 	clone.refreshRuntimePolicyLocked()
 	for id, capability := range r.capabilities {
-		if capability.Kind == core.CapabilityKindTool {
+		if capability.Kind == agentspec.CapabilityKindTool {
 			continue
 		}
 		clone.capabilities[id] = capability
@@ -927,314 +801,9 @@ func cloneTool(tool contracts.Tool, registry *CapabilityRegistry) contracts.Tool
 	return tool
 }
 
-// InvokeCapability executes an invocable capability by capability ID or public name.
-func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error) {
-	if r == nil {
-		return nil, fmt.Errorf("registry unavailable")
-	}
-	if r.delegate != nil {
-		if r.toolIDAllowlist != nil {
-			desc, ok := r.delegate.GetCapability(idOrName)
-			if !ok {
-				return nil, fmt.Errorf("capability %s not found", idOrName)
-			}
-			if !r.isAllowlisted(desc.ID) {
-				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
-			}
-		}
-		return r.delegate.InvokeCapability(ctx, state, idOrName, args)
-	}
-	if sessionHandler, ok := LookupSessionCapability(state, idOrName); ok {
-		return sessionHandler.Invoke(ctx, state, args)
-	}
-	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
-	if err != nil {
-		return nil, err
-	}
-	invocable, ok := entry.handler.(core.InvocableCapabilityHandler)
-	if !ok {
-		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
-	}
-	result, err := invocable.Invoke(ctx, state, args)
-	if postErr := r.runPostchecks(entry.descriptor, result); postErr != nil {
-		if result == nil {
-			result = &contracts.ToolResult{Success: false, Error: postErr.Error()}
-		} else {
-			result.Success = false
-			result.Error = postErr.Error()
-		}
-		if err == nil {
-			err = postErr
-		}
-	}
-	return result, err
-}
-
-// InvokeCapabilityBackground submits a long-running capability invocation to
-// the framework job queue and returns a handle the caller can use to track the
-// job. The capability handler must implement core.BackgroundCapabilityHandler;
-// if it does not, this method returns an error — callers that want synchronous
-// execution should use InvokeCapability instead.
-//
-// The handler is responsible for building the jobs.JobSpec and calling
-// env.JobSubmitter.Submit from inside InvokeBackground. The registry provides
-// only lookup, admission, and postchecks — it does not own the JobSpec shape.
-func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.BackgroundInvocationHandle, error) {
-	if r == nil {
-		return nil, fmt.Errorf("registry unavailable")
-	}
-	if r.delegate != nil {
-		if r.toolIDAllowlist != nil {
-			desc, ok := r.delegate.GetCapability(idOrName)
-			if !ok {
-				return nil, fmt.Errorf("capability %s not found", idOrName)
-			}
-			if !r.isAllowlisted(desc.ID) {
-				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
-			}
-		}
-		return r.delegate.InvokeCapabilityBackground(ctx, state, idOrName, args)
-	}
-	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
-	if err != nil {
-		return nil, err
-	}
-	bgHandler, ok := entry.handler.(core.BackgroundCapabilityHandler)
-	if !ok {
-		return nil, fmt.Errorf("capability %s does not support background invocation", entry.descriptor.ID)
-	}
-	return bgHandler.InvokeBackground(ctx, state, args)
-}
-
-// RenderPrompt executes a runtime-backed prompt capability by capability ID or public name.
-func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.PromptRenderResult, error) {
-	if r == nil {
-		return nil, fmt.Errorf("registry unavailable")
-	}
-	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
-	if err != nil {
-		return nil, err
-	}
-	promptHandler, ok := entry.handler.(core.PromptCapabilityHandler)
-	if !ok {
-		return nil, fmt.Errorf("capability %s is not a prompt handler", entry.descriptor.ID)
-	}
-	return promptHandler.RenderPrompt(ctx, state, args)
-}
-
-// ReadResource executes a runtime-backed resource capability by capability ID or public name.
-func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdata.Envelope, idOrName string) (*core.ResourceReadResult, error) {
-	if r == nil {
-		return nil, fmt.Errorf("registry unavailable")
-	}
-	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, nil)
-	if err != nil {
-		return nil, err
-	}
-	resourceHandler, ok := entry.handler.(core.ResourceCapabilityHandler)
-	if !ok {
-		return nil, fmt.Errorf("capability %s is not a resource handler", entry.descriptor.ID)
-	}
-	return resourceHandler.ReadResource(ctx, state)
-}
-
-func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {
-	entry, err := r.capabilityEntry(idOrName)
-	if err != nil {
-		return nil, err
-	}
-	if aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler); ok {
-		if availability := aware.Availability(ctx, state); !availability.Available {
-			reason := strings.TrimSpace(availability.Reason)
-			if reason == "" {
-				reason = "capability unavailable"
-			}
-			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, reason)
-		}
-	}
-	if err := r.enforceCapabilityPolicy(ctx, entry); err != nil {
-		return nil, err
-	}
-	if err := r.runPrechecks(entry.descriptor, args); err != nil {
-		var doomErr *DoomLoopError
-		if errors.As(err, &doomErr) {
-			proceed, guideErr := r.handleDoomLoopGuidance(ctx, *doomErr)
-			if guideErr != nil {
-				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, guideErr)
-			}
-			if proceed {
-				return entry, nil
-			}
-		}
-		return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, err)
-	}
-	return entry, nil
-}
-
-func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {
-	desc := entry.descriptor
-	r.mu.RLock()
-	policyEngine := r.policyEngine
-	agentID := r.registeredAgentID
-	manager := r.permissionManager
-	r.mu.RUnlock()
-	_, err := authorization.EnforcePolicyRequest(ctx, policyEngine, core.PolicyRequest{
-		Target:         core.PolicyTargetCapability,
-		Actor:          identity.EventActor{Kind: "agent", ID: agentID},
-		CapabilityID:   desc.ID,
-		CapabilityName: desc.Name,
-		CapabilityKind: desc.Kind,
-		RuntimeFamily:  desc.RuntimeFamily,
-		ProviderKind:   providerKindForDescriptor(desc),
-		TrustClass:     desc.TrustClass,
-		RiskClasses:    desc.RiskClasses,
-		EffectClasses:  desc.EffectClasses,
-	}, authorization.ApprovalRequest{
-		AgentID: agentID,
-		Manager: manager,
-		Permission: contracts.PermissionDescriptor{
-			Type:         contracts.PermissionTypeCapability,
-			Action:       "capability:" + desc.Name,
-			Resource:     desc.ID,
-			RequiresHITL: true,
-		},
-		Justification:      "capability policy approval",
-		Scope:              authorization.GrantScopeSession,
-		Risk:               authorization.RiskLevelMedium,
-		MissingManagerErr:  "approval required but permission manager unavailable",
-		DenyReasonFallback: "denied by policy",
-	})
-	if err != nil {
-		return fmt.Errorf("capability %s blocked: %w", desc.ID, err)
-	}
-	return nil
-}
-
-func (r *CapabilityRegistry) runPrechecks(desc core.CapabilityDescriptor, args map[string]interface{}) error {
-	r.mu.RLock()
-	prechecks := append([]InvocationPrecheck{}, r.prechecks...)
-	r.mu.RUnlock()
-	for _, precheck := range prechecks {
-		if err := precheck.Check(desc, args); err != nil {
-			return fmt.Errorf("capability %s blocked: %w", desc.ID, err)
-		}
-	}
-	return nil
-}
-
-func (r *CapabilityRegistry) runPostchecks(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
-	r.mu.RLock()
-	postchecks := append([]PostInvocationHook{}, r.postchecks...)
-	r.mu.RUnlock()
-	for _, postcheck := range postchecks {
-		if err := postcheck.Record(desc, result); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *CapabilityRegistry) handleDoomLoopGuidance(ctx context.Context, doomErr DoomLoopError) (bool, error) {
-	r.mu.RLock()
-	broker := r.guidanceBroker
-	r.mu.RUnlock()
-	if broker == nil {
-		return false, &doomErr
-	}
-	decision, err := broker.RequestRecovery(ctx, RecoveryGuidanceRequest{
-		Title:       "Execution loop detected",
-		Description: describeLoop(doomErr),
-		Context: map[string]any{
-			"doom_loop_kind": doomErr.Kind,
-			"call_count":     doomErr.CallCount,
-			"evidence":       append([]string(nil), doomErr.Evidence...),
-		},
-	})
-	if err != nil {
-		return false, err
-	}
-	switch decision.ChoiceID {
-	case "continue":
-		return true, nil
-	case "skip":
-		return false, fmt.Errorf("doom loop skipped by user")
-	case "replan":
-		return false, fmt.Errorf("doom loop requires replanning")
-	case "stop", "":
-		fallthrough
-	default:
-		return false, &doomErr
-	}
-}
-
-func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	idOrName = r.normalizeToolNameLocked(idOrName)
-	if entry, ok := r.entries[idOrName]; ok {
-		return entry, nil
-	}
-	if ids := r.capabilityNameIndex[normalizeComparable(idOrName)]; len(ids) > 0 {
-		for _, id := range ids {
-			if entry, ok := r.entries[id]; ok {
-				return entry, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("capability %s not found", idOrName)
-}
-
-// CapabilityAvailable reports whether a registered capability is currently available for invocation.
-func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state *contextdata.Envelope, idOrName string) bool {
-	if r == nil {
-		return false
-	}
-	entry, err := r.capabilityEntry(idOrName)
-	if err != nil || entry == nil {
-		return false
-	}
-	aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler)
-	if !ok {
-		return true
-	}
-	return aware.Availability(ctx, state).Available
-}
-
-// InvocableCapabilities returns non-hidden capability descriptors with an invocable runtime handler.
-func (r *CapabilityRegistry) InvocableCapabilities() []core.CapabilityDescriptor {
-	if r == nil {
-		return nil
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	res := make([]core.CapabilityDescriptor, 0, len(r.entries))
-	for _, entry := range r.entries {
-		if entry == nil || entry.handler == nil {
-			continue
-		}
-		if _, ok := entry.handler.(core.InvocableCapabilityHandler); !ok {
-			continue
-		}
-		if r.effectiveExposureLocked(entry.descriptor) == core.CapabilityExposureHidden {
-			continue
-		}
-		res = append(res, entry.descriptor)
-	}
-	return res
-}
-
 func validateCoordinationDescriptor(desc core.CapabilityDescriptor) error {
 	if err := core.ValidateCoordinationTargetMetadata(desc.Coordination); err != nil {
 		return fmt.Errorf("coordination metadata invalid for %s: %w", desc.ID, err)
 	}
 	return nil
-}
-
-func providerKindForDescriptor(desc core.CapabilityDescriptor) core.ProviderKind {
-	switch desc.Source.Scope {
-	case core.CapabilityScopeProvider, core.CapabilityScopeRemote:
-		return core.ProviderKindNodeDevice
-	default:
-		return core.ProviderKindBuiltin
-	}
 }

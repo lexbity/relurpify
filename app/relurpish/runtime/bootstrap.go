@@ -48,7 +48,7 @@ type AgentBootstrapOptions struct {
 	Telemetry           core.Telemetry
 	SkipASTIndex        bool
 	MaxIterations       int
-	AllowedCapabilities []core.CapabilitySelector
+	AllowedCapabilities []agentspec.CapabilitySelector
 	DebugLLM            bool
 	DebugAgent          bool
 	AgentLifecycle      agentlifecycle.Repository

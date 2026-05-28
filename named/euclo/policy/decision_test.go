@@ -6,11 +6,11 @@ import (
 
 func TestEvaluateRouteMutatingFamily(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "implementation",
-		EditPermitted:     true,
+		FamilyID:             "implementation",
+		EditPermitted:        true,
 		RequiresVerification: false,
-		RiskLevel:         "medium",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "medium",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)
@@ -30,11 +30,11 @@ func TestEvaluateRouteMutatingFamily(t *testing.T) {
 
 func TestEvaluateRouteMutatingFamilyNoEditPermission(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "implementation",
-		EditPermitted:     false,
+		FamilyID:             "implementation",
+		EditPermitted:        false,
 		RequiresVerification: false,
-		RiskLevel:         "medium",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "medium",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)
@@ -50,11 +50,11 @@ func TestEvaluateRouteMutatingFamilyNoEditPermission(t *testing.T) {
 
 func TestEvaluateRouteReadOnlyFamily(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "debug",
-		EditPermitted:     false,
+		FamilyID:             "debug",
+		EditPermitted:        false,
 		RequiresVerification: false,
-		RiskLevel:         "low",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "low",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)
@@ -70,11 +70,11 @@ func TestEvaluateRouteReadOnlyFamily(t *testing.T) {
 
 func TestEvaluateRouteHighRisk(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "migration",
-		EditPermitted:     true,
+		FamilyID:             "migration",
+		EditPermitted:        true,
 		RequiresVerification: false,
-		RiskLevel:         "high",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "high",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)
@@ -90,11 +90,11 @@ func TestEvaluateRouteHighRisk(t *testing.T) {
 
 func TestEvaluateRouteVerificationRequired(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "debug",
-		EditPermitted:     false,
+		FamilyID:             "debug",
+		EditPermitted:        false,
 		RequiresVerification: true,
-		RiskLevel:         "low",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "low",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)
@@ -106,11 +106,11 @@ func TestEvaluateRouteVerificationRequired(t *testing.T) {
 
 func TestEvaluateRouteReasonCodes(t *testing.T) {
 	ctx := &PolicyContext{
-		FamilyID:          "implementation",
-		EditPermitted:     true,
+		FamilyID:             "implementation",
+		EditPermitted:        true,
 		RequiresVerification: true,
-		RiskLevel:         "high",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "high",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := EvaluateRoute(ctx)

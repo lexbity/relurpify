@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	relurpnet "codeburg.org/lexbit/relurpify/relurpnet"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
@@ -141,24 +142,24 @@ type ExportDescriptor struct {
 }
 
 type LineageRecord struct {
-	LineageID                string                    `json:"lineage_id" yaml:"lineage_id"`
-	TenantID                 string                    `json:"tenant_id" yaml:"tenant_id"`
-	ParentLineageID          string                    `json:"parent_lineage_id,omitempty" yaml:"parent_lineage_id,omitempty"`
-	TaskClass                string                    `json:"task_class" yaml:"task_class"`
-	ContextClass             string                    `json:"context_class" yaml:"context_class"`
-	CurrentOwnerAttempt      string                    `json:"current_owner_attempt,omitempty" yaml:"current_owner_attempt,omitempty"`
-	CurrentOwnerRuntime      string                    `json:"current_owner_runtime,omitempty" yaml:"current_owner_runtime,omitempty"`
-	CapabilityEnvelope       CapabilityEnvelope        `json:"capability_envelope,omitempty" yaml:"capability_envelope,omitempty"`
-	SensitivityClass         SensitivityClass          `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
-	AllowedFederationTargets []string                  `json:"allowed_federation_targets,omitempty" yaml:"allowed_federation_targets,omitempty"`
-	Owner                    identity.SubjectRef       `json:"owner" yaml:"owner"`
-	SessionID                string                    `json:"session_id,omitempty" yaml:"session_id,omitempty"`
+	LineageID                string                           `json:"lineage_id" yaml:"lineage_id"`
+	TenantID                 string                           `json:"tenant_id" yaml:"tenant_id"`
+	ParentLineageID          string                           `json:"parent_lineage_id,omitempty" yaml:"parent_lineage_id,omitempty"`
+	TaskClass                string                           `json:"task_class" yaml:"task_class"`
+	ContextClass             string                           `json:"context_class" yaml:"context_class"`
+	CurrentOwnerAttempt      string                           `json:"current_owner_attempt,omitempty" yaml:"current_owner_attempt,omitempty"`
+	CurrentOwnerRuntime      string                           `json:"current_owner_runtime,omitempty" yaml:"current_owner_runtime,omitempty"`
+	CapabilityEnvelope       CapabilityEnvelope               `json:"capability_envelope,omitempty" yaml:"capability_envelope,omitempty"`
+	SensitivityClass         SensitivityClass                 `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
+	AllowedFederationTargets []string                         `json:"allowed_federation_targets,omitempty" yaml:"allowed_federation_targets,omitempty"`
+	Owner                    identity.SubjectRef              `json:"owner" yaml:"owner"`
+	SessionID                string                           `json:"session_id,omitempty" yaml:"session_id,omitempty"`
 	SessionBinding           *identity.ExternalSessionBinding `json:"session_binding,omitempty" yaml:"session_binding,omitempty"`
 	Delegations              []core.SessionDelegationRecord   `json:"delegations,omitempty" yaml:"delegations,omitempty"`
-	TrustClass               core.TrustClass           `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	CreatedAt                time.Time                 `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	UpdatedAt                time.Time                 `json:"updated_at,omitempty" yaml:"updated_at,omitempty"`
-	LineageVersion           int64                     `json:"lineage_version,omitempty" yaml:"lineage_version,omitempty"`
+	TrustClass               agentspec.TrustClass             `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
+	CreatedAt                time.Time                        `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	UpdatedAt                time.Time                        `json:"updated_at,omitempty" yaml:"updated_at,omitempty"`
+	LineageVersion           int64                            `json:"lineage_version,omitempty" yaml:"lineage_version,omitempty"`
 }
 
 type AttemptRecord struct {
@@ -298,9 +299,9 @@ type TransferRefusal struct {
 
 type NodeAdvertisement struct {
 	TrustDomain string                   `json:"trust_domain" yaml:"trust_domain"`
-	Node        relurpnet.NodeDescriptor  `json:"node" yaml:"node"`
-	Locality    string                    `json:"locality,omitempty" yaml:"locality,omitempty"`
-	Health      relurpnet.NodeHealth      `json:"health,omitempty" yaml:"health,omitempty"`
+	Node        relurpnet.NodeDescriptor `json:"node" yaml:"node"`
+	Locality    string                   `json:"locality,omitempty" yaml:"locality,omitempty"`
+	Health      relurpnet.NodeHealth     `json:"health,omitempty" yaml:"health,omitempty"`
 	ExpiresAt   time.Time                `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
 	Signature   string                   `json:"signature,omitempty" yaml:"signature,omitempty"`
 }

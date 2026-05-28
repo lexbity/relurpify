@@ -26,33 +26,37 @@ func (f *baseSurfaceFake) RegisterTabs(reg *TabRegistry) {
 	reg.Register(TabDefinition{ID: TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})
 }
 func (f *baseSurfaceFake) RegisterCommands(*CommandRegistry) {}
-func (f *baseSurfaceFake) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner { return nil }
-func (f *baseSurfaceFake) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface            { return nil }
+func (f *baseSurfaceFake) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
+	return nil
+}
+func (f *baseSurfaceFake) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+	return nil
+}
 func (f *baseSurfaceFake) NewRegion1(RuntimeAdapter, *AgentContext, *Session, *SessionStore, *NotificationQueue) Region1Surface {
 	return f
 }
-func (f *baseSurfaceFake) InitialTab() TabID { return TabWelcome }
-func (f *baseSurfaceFake) InitialSubTab(TabID) SubTabID { return "" }
-func (f *baseSurfaceFake) RenderNotification(item NotificationItem) string { return item.Msg }
+func (f *baseSurfaceFake) InitialTab() TabID                                              { return TabWelcome }
+func (f *baseSurfaceFake) InitialSubTab(TabID) SubTabID                                   { return "" }
+func (f *baseSurfaceFake) RenderNotification(item NotificationItem) string                { return item.Msg }
 func (f *baseSurfaceFake) HandleFrame(_ context.Context, _ *RootModel, _ SurfaceFrameMsg) {}
 
-func (f *baseSurfaceFake) SetSize(int, int)                     {}
-func (f *baseSurfaceFake) SetStore(*SessionStore)               {}
-func (f *baseSurfaceFake) SetActiveTab(id TabID)                { f.activeTab = id }
-func (f *baseSurfaceFake) SetFilter(filter string)              { f.filter = filter }
-func (f *baseSurfaceFake) Refresh()                              {}
+func (f *baseSurfaceFake) SetSize(int, int)                             {}
+func (f *baseSurfaceFake) SetStore(*SessionStore)                       {}
+func (f *baseSurfaceFake) SetActiveTab(id TabID)                        { f.activeTab = id }
+func (f *baseSurfaceFake) SetFilter(filter string)                      { f.filter = filter }
+func (f *baseSurfaceFake) Refresh()                                     {}
 func (f *baseSurfaceFake) Update(msg tea.Msg) (Region1Surface, tea.Cmd) { return f, nil }
-func (f *baseSurfaceFake) View() string                         { return f.filter + "|" + string(f.activeTab) }
-func (f *baseSurfaceFake) HandleInputSubmit(string) tea.Cmd     { return nil }
-func (f *baseSurfaceFake) Cleanup()                             {}
-func (f *baseSurfaceFake) FocusFilescopes()                     {}
-func (f *baseSurfaceFake) OpenSecurityGuard()                   { f.activeTab = TabSecurityGuard }
-func (f *baseSurfaceFake) OpenAIProvider()                      { f.activeTab = TabAIProvider }
-func (f *baseSurfaceFake) OpenKeybindings()                     { f.activeTab = TabKeybindings }
-func (f *baseSurfaceFake) OpenDoctor()                          { f.activeTab = TabDoctor }
-func (f *baseSurfaceFake) DoctorReport() DoctorReport           { return f.report }
-func (f *baseSurfaceFake) SetDoctorReport(report DoctorReport)  { f.report = report }
-func (f *baseSurfaceFake) SetDoctorStatus(status string)        { f.status = status }
+func (f *baseSurfaceFake) View() string                                 { return f.filter + "|" + string(f.activeTab) }
+func (f *baseSurfaceFake) HandleInputSubmit(string) tea.Cmd             { return nil }
+func (f *baseSurfaceFake) Cleanup()                                     {}
+func (f *baseSurfaceFake) FocusFilescopes()                             {}
+func (f *baseSurfaceFake) OpenSecurityGuard()                           { f.activeTab = TabSecurityGuard }
+func (f *baseSurfaceFake) OpenAIProvider()                              { f.activeTab = TabAIProvider }
+func (f *baseSurfaceFake) OpenKeybindings()                             { f.activeTab = TabKeybindings }
+func (f *baseSurfaceFake) OpenDoctor()                                  { f.activeTab = TabDoctor }
+func (f *baseSurfaceFake) DoctorReport() DoctorReport                   { return f.report }
+func (f *baseSurfaceFake) SetDoctorReport(report DoctorReport)          { f.report = report }
+func (f *baseSurfaceFake) SetDoctorStatus(status string)                { f.status = status }
 
 // noneSurfaceFactory returns a SurfaceFactory that always resolves to "none".
 func noneSurfaceFactory() SurfaceFactory {

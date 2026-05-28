@@ -159,17 +159,17 @@ func hydrateWorkflowRetrieval(ctx context.Context, provider workflowArtifactList
 	texts := make([]string, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		entry := map[string]any{
-			"artifact_id":    artifact.ArtifactID,
-			"kind":           artifact.Kind,
-			"content_type":   artifact.ContentType,
-			"summary_text":   artifact.SummaryText,
-			"storage_kind":   artifact.StorageKind,
-			"created_at":     artifact.CreatedAt,
-			"run_id":         artifact.RunID,
-			"workflow_id":    artifact.WorkflowID,
+			"artifact_id":     artifact.ArtifactID,
+			"kind":            artifact.Kind,
+			"content_type":    artifact.ContentType,
+			"summary_text":    artifact.SummaryText,
+			"storage_kind":    artifact.StorageKind,
+			"created_at":      artifact.CreatedAt,
+			"run_id":          artifact.RunID,
+			"workflow_id":     artifact.WorkflowID,
 			"raw_size_bytes":  artifact.RawSizeBytes,
-			"compression":    artifact.CompressionMethod,
-			"summary_meta":   artifact.SummaryMetadata,
+			"compression":     artifact.CompressionMethod,
+			"summary_meta":    artifact.SummaryMetadata,
 			"inline_raw_text": artifact.InlineRawText,
 		}
 		if text := strings.TrimSpace(firstNonEmpty(artifact.SummaryText, artifact.InlineRawText)); text != "" {

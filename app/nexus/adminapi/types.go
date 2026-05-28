@@ -3,6 +3,7 @@ package adminapi
 import (
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
@@ -90,7 +91,7 @@ type FMPContinuationInfo struct {
 	ContextClass        string                `json:"context_class"`
 	Owner               identity.SubjectRef   `json:"owner"`
 	SessionID           string                `json:"session_id,omitempty"`
-	TrustClass          core.TrustClass       `json:"trust_class,omitempty"`
+	TrustClass          agentspec.TrustClass  `json:"trust_class,omitempty"`
 	CurrentOwnerAttempt string                `json:"current_owner_attempt,omitempty"`
 	CurrentOwnerRuntime string                `json:"current_owner_runtime,omitempty"`
 	LineageVersion      int64                 `json:"lineage_version,omitempty"`
@@ -615,14 +616,14 @@ type SetTenantEnabledResult struct {
 }
 
 type NodeEnrollmentInfo struct {
-	TenantID       string              `json:"tenant_id"`
-	NodeID         string              `json:"node_id"`
-	Owner          identity.SubjectRef `json:"owner"`
-	TrustClass     core.TrustClass     `json:"trust_class"`
-	KeyID          string              `json:"key_id,omitempty"`
-	PairedAt       time.Time           `json:"paired_at"`
-	LastVerifiedAt time.Time           `json:"last_verified_at,omitempty"`
-	AuthMethod     identity.AuthMethod `json:"auth_method,omitempty"`
+	TenantID       string               `json:"tenant_id"`
+	NodeID         string               `json:"node_id"`
+	Owner          identity.SubjectRef  `json:"owner"`
+	TrustClass     agentspec.TrustClass `json:"trust_class"`
+	KeyID          string               `json:"key_id,omitempty"`
+	PairedAt       time.Time            `json:"paired_at"`
+	LastVerifiedAt time.Time            `json:"last_verified_at,omitempty"`
+	AuthMethod     identity.AuthMethod  `json:"auth_method,omitempty"`
 }
 
 type ListNodeEnrollmentsRequest struct {

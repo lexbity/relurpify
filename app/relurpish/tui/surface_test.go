@@ -100,23 +100,23 @@ func (s *fakeSurface) InitialTab() TabID                                        
 func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             { return "" }
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
-func (s *fakeSurface) DoctorReport() DoctorReport                                 { return s.doctorReport }
-func (s *fakeSurface) SetDoctorReport(report DoctorReport)                        { s.doctorReport = report }
-func (s *fakeSurface) SetDoctorStatus(status string)                              { s.doctorStatus = status }
-func (s *fakeSurface) SetSize(int, int)                                           {}
-func (s *fakeSurface) SetStore(*SessionStore)                                    {}
-func (s *fakeSurface) SetActiveTab(TabID)                                        {}
-func (s *fakeSurface) SetFilter(string)                                          {}
-func (s *fakeSurface) Refresh()                                                  {}
-func (s *fakeSurface) Update(msg tea.Msg) (Region1Surface, tea.Cmd)              { return s, nil }
-func (s *fakeSurface) View() string                                              { return "" }
-func (s *fakeSurface) HandleInputSubmit(string) tea.Cmd                          { return nil }
-func (s *fakeSurface) Cleanup()                                                  {}
-func (s *fakeSurface) FocusFilescopes()                                          {}
-func (s *fakeSurface) OpenSecurityGuard()                                        {}
-func (s *fakeSurface) OpenAIProvider()                                           {}
-func (s *fakeSurface) OpenKeybindings()                                           {}
-func (s *fakeSurface) OpenDoctor()                                               {}
+func (s *fakeSurface) DoctorReport() DoctorReport                               { return s.doctorReport }
+func (s *fakeSurface) SetDoctorReport(report DoctorReport)                      { s.doctorReport = report }
+func (s *fakeSurface) SetDoctorStatus(status string)                            { s.doctorStatus = status }
+func (s *fakeSurface) SetSize(int, int)                                         {}
+func (s *fakeSurface) SetStore(*SessionStore)                                   {}
+func (s *fakeSurface) SetActiveTab(TabID)                                       {}
+func (s *fakeSurface) SetFilter(string)                                         {}
+func (s *fakeSurface) Refresh()                                                 {}
+func (s *fakeSurface) Update(msg tea.Msg) (Region1Surface, tea.Cmd)             { return s, nil }
+func (s *fakeSurface) View() string                                             { return "" }
+func (s *fakeSurface) HandleInputSubmit(string) tea.Cmd                         { return nil }
+func (s *fakeSurface) Cleanup()                                                 {}
+func (s *fakeSurface) FocusFilescopes()                                         {}
+func (s *fakeSurface) OpenSecurityGuard()                                       {}
+func (s *fakeSurface) OpenAIProvider()                                          {}
+func (s *fakeSurface) OpenKeybindings()                                         {}
+func (s *fakeSurface) OpenDoctor()                                              {}
 
 type countingFactory struct {
 	shared        AgentSurface

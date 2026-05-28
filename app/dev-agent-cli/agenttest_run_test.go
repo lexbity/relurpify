@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )

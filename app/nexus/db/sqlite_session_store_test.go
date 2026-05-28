@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestSQLiteSessionStoreListBoundariesFiltersExpiredRows(t *testing.T) {
 		ActorID:        "user-1",
 		ChannelID:      "telegram",
 		PeerID:         "peer-1",
-		TrustClass:     core.TrustClassWorkspaceTrusted,
+		TrustClass:     agentspec.TrustClassWorkspaceTrusted,
 		CreatedAt:      time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
 		LastActivityAt: time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
 	}))
@@ -39,7 +40,7 @@ func TestSQLiteSessionStoreListBoundariesFiltersExpiredRows(t *testing.T) {
 		ActorID:        "user-2",
 		ChannelID:      "telegram",
 		PeerID:         "peer-2",
-		TrustClass:     core.TrustClassWorkspaceTrusted,
+		TrustClass:     agentspec.TrustClassWorkspaceTrusted,
 		CreatedAt:      time.Date(2026, 3, 1, 10, 30, 0, 0, time.UTC),
 		LastActivityAt: time.Date(2026, 3, 1, 11, 30, 0, 0, time.UTC),
 	}))
@@ -111,7 +112,7 @@ func TestSQLiteSessionStorePersistsTenantOwnerAndBinding(t *testing.T) {
 		ChannelID:      "discord",
 		PeerID:         "conv-1",
 		Binding:        &core.SessionBinding{Provider: "discord", ProviderID: "guild-1", AccountID: "guild-1", ChannelID: "channel-1", ConversationID: "conv-1", ThreadID: "thread-1", ExternalUserID: "discord-user-1"},
-		TrustClass:     core.TrustClassRemoteApproved,
+		TrustClass:     agentspec.TrustClassRemoteApproved,
 		CreatedAt:      now,
 		LastActivityAt: now,
 	}))
@@ -143,7 +144,7 @@ func TestSQLiteSessionStoreGetBoundaryBySessionID(t *testing.T) {
 		Scope:          core.SessionScopePerChannelPeer,
 		ChannelID:      "discord",
 		PeerID:         "channel-1",
-		TrustClass:     core.TrustClassRemoteApproved,
+		TrustClass:     agentspec.TrustClassRemoteApproved,
 		CreatedAt:      now,
 		LastActivityAt: now,
 	}))

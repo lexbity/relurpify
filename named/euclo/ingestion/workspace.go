@@ -15,9 +15,9 @@ type WorkspaceIngestionPolicy struct {
 // DefaultWorkspacePolicy returns the default workspace ingestion policy.
 func DefaultWorkspacePolicy() *WorkspaceIngestionPolicy {
 	return &WorkspaceIngestionPolicy{
-		Mode:          IngestionModeFilesOnly,
-		IncludeGlobs:  []string{},
-		ExcludeGlobs:  []string{"vendor/**", ".git/**", "node_modules/**"},
+		Mode:         IngestionModeFilesOnly,
+		IncludeGlobs: []string{},
+		ExcludeGlobs: []string{"vendor/**", ".git/**", "node_modules/**"},
 	}
 }
 

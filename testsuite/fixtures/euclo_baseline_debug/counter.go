@@ -1,5 +1,5 @@
 package euclobaselinedebug
 
 func Increment(n int) int {
-  return n - 1
+	return n - 1
 }

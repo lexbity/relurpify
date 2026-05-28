@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
 )
 
 type ChunkTransferManager interface {
@@ -16,12 +15,12 @@ type ChunkTransferManager interface {
 }
 
 type ChunkTransferSession struct {
-	TransferID   string            `json:"transfer_id" yaml:"transfer_id"`
-	ManifestRef  string            `json:"manifest_ref" yaml:"manifest_ref"`
+	TransferID   string       `json:"transfer_id" yaml:"transfer_id"`
+	ManifestRef  string       `json:"manifest_ref" yaml:"manifest_ref"`
 	TransferMode TransferMode `json:"transfer_mode" yaml:"transfer_mode"`
-	TotalChunks  int               `json:"total_chunks" yaml:"total_chunks"`
-	WindowSize   int               `json:"window_size,omitempty" yaml:"window_size,omitempty"`
-	ExpiresAt    time.Time         `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	TotalChunks  int          `json:"total_chunks" yaml:"total_chunks"`
+	WindowSize   int          `json:"window_size,omitempty" yaml:"window_size,omitempty"`
+	ExpiresAt    time.Time    `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
 }
 
 type ChunkFrame struct {

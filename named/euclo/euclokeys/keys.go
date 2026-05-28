@@ -115,8 +115,8 @@ const (
 
 // Ask / HITL prompt keys.
 const (
-	KeyAskQuestion    = "euclo.ask.question"
-	KeyAskChoices     = "euclo.ask.choices"
+	KeyAskQuestion     = "euclo.ask.question"
+	KeyAskChoices      = "euclo.ask.choices"
 	KeyAskChoiceSource = "euclo.ask.choice_source"
 )
 

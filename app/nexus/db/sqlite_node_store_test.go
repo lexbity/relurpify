@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
@@ -102,13 +103,13 @@ func TestSQLiteNodeStorePersistsTenantOwnerAndCredentialMetadata(t *testing.T) {
 		TenantID:   "tenant-1",
 		Name:       "Node One",
 		Platform:   relurpnet.NodePlatformLinux,
-		TrustClass: core.TrustClassWorkspaceTrusted,
+		TrustClass: agentspec.TrustClassWorkspaceTrusted,
 		Owner:      identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindNode, ID: "node-1"},
 		PairedAt:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 		ApprovedCapabilities: []core.CapabilityDescriptor{{
 			ID:   "camera.capture",
 			Name: "camera.capture",
-			Kind: core.CapabilityKindTool,
+			Kind: agentspec.CapabilityKindTool,
 		}},
 	}))
 	require.NoError(t, store.SaveCredential(context.Background(), node.NodeCredential{

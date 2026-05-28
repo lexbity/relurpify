@@ -104,7 +104,7 @@ func (e *ManifestPolicyEngine) resumeFallbackDecision(req core.PolicyRequest) co
 
 func (e *ManifestPolicyEngine) capabilityFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
 	switch req.TrustClass {
-	case core.TrustClassBuiltinTrusted, core.TrustClassWorkspaceTrusted:
+	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
 		return core.PolicyDecisionAllow("workspace trusted")
 	default:
 		switch e.manager.DefaultPolicy() {

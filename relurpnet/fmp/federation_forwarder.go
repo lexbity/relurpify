@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 )
 
 type FederatedExportHandler func(context.Context, GatewayForwardRequest) (*GatewayForwardResult, error)

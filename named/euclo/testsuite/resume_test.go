@@ -18,7 +18,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 
 	const capabilityID = "euclo:cap.resume_route"
 
-	missingCaps := capability.NewCapabilityRegistry()
+	missingCaps := capability.NewRegistry()
 	missingGraph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(missingCaps)),
 		orchestrate.WithCapabilityRegistry(missingCaps),

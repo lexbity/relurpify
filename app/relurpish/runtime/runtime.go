@@ -143,7 +143,7 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	// calling ayenitd.Open — Open will handle model/agent-name overrides
 	// internally, but AllowedCapabilities is a runtime-level concern.
 	var workspaceCfg cfgload.RuntimeWorkspaceConfig
-	var allowedCapabilities []core.CapabilitySelector
+	var allowedCapabilities []agentspec.CapabilitySelector
 	if cfg.ConfigPath != "" {
 		if loaded, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded

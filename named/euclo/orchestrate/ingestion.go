@@ -38,7 +38,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"user_files_ingested":   0,
 			"session_pins_ingested": 0,
 			"skipped":               true,

@@ -22,7 +22,7 @@ var ErrDelegationNotFound = errors.New("delegation not found")
 type DelegationCapabilityRegistry interface {
 	CapturePolicySnapshot() *core.PolicySnapshot
 	GetCoordinationTarget(idOrName string) (core.CapabilityDescriptor, bool)
-	CoordinationTargets(selectors ...core.CapabilitySelector) []core.CapabilityDescriptor
+	CoordinationTargets(selectors ...agentspec.CapabilitySelector) []core.CapabilityDescriptor
 	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
 }
 
@@ -52,14 +52,14 @@ type DelegationExecutionOptions struct {
 	WorkflowRunID    string
 	WorkflowStepID   string
 	CallerAgentID    string
-	CallerTrust      core.TrustClass
+	CallerTrust      agentspec.TrustClass
 	Recoverability   core.RecoverabilityMode
 	Background       bool
 	Metadata         map[string]any
 }
 
 type DelegationStartOptions struct {
-	TrustClass     core.TrustClass
+	TrustClass     agentspec.TrustClass
 	Recoverability core.RecoverabilityMode
 	Background     bool
 	PolicySnapshot *core.PolicySnapshot
@@ -430,13 +430,13 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 		}
 		return target, nil
 	}
-	selectors := make([]core.CapabilitySelector, 0, len(coordination.DelegationTargetSelectors))
+	selectors := make([]agentspec.CapabilitySelector, 0, len(coordination.DelegationTargetSelectors))
 	for _, selector := range coordination.DelegationTargetSelectors {
 		selectors = append(selectors, selector)
 	}
 	candidates := registry.CoordinationTargets(selectors...)
 	for _, candidate := range candidates {
-		if !core.SelectorMatchesDescriptor(core.CapabilitySelector{
+		if !core.SelectorMatchesDescriptor(agentspec.CapabilitySelector{
 			CoordinationTaskTypes: []string{request.TaskType},
 		}, candidate) {
 			continue
@@ -459,7 +459,7 @@ func validateDelegationTargetPolicy(request core.DelegationRequest, target core.
 	if coordination.MaxDelegationDepth > 0 && request.Depth > coordination.MaxDelegationDepth {
 		return fmt.Errorf("delegation depth %d exceeds max %d", request.Depth, coordination.MaxDelegationDepth)
 	}
-	if target.RuntimeFamily == core.CapabilityRuntimeFamilyProvider && target.Source.Scope == core.CapabilityScopeRemote && !coordination.AllowRemoteDelegation {
+	if target.RuntimeFamily == agentspec.CapabilityRuntimeFamilyProvider && target.Source.Scope == agentspec.CapabilityScopeRemote && !coordination.AllowRemoteDelegation {
 		return fmt.Errorf("remote delegation to %s is not allowed", target.Name)
 	}
 	if target.Coordination.LongRunning == core.EnabledStateEnabled && !coordination.AllowBackgroundDelegation {
@@ -495,30 +495,30 @@ func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationR
 	}
 	// TODO: Implement resource projection via lifecycle repository in Phase 4
 	// For now, skip resource summaries
-	role := core.CoordinationRole("")
+	role := agentspec.CoordinationRole("")
 	if target.Coordination != nil {
 		role = target.Coordination.Role
 	}
 	switch role {
-	case core.CoordinationRoleArchitect:
+	case agentspec.CoordinationRoleArchitect:
 		args["context_summary"] = ""
-	case core.CoordinationRoleReviewer:
+	case agentspec.CoordinationRoleReviewer:
 		args["artifact_summary"] = ""
 		args["acceptance_criteria"] = normalizeStringArray(args["acceptance_criteria"])
-	case core.CoordinationRoleVerifier:
+	case agentspec.CoordinationRoleVerifier:
 		args["artifact_summary"] = ""
 		if criteria, ok := args["verification_criteria"]; ok {
 			args["verification_criteria"] = normalizeStringArray(criteria)
 		} else {
 			args["verification_criteria"] = normalizeStringArray(args["acceptance_criteria"])
 		}
-	case core.CoordinationRoleExecutor:
+	case agentspec.CoordinationRoleExecutor:
 		args["args"] = normalizeArgumentMap(args["args"])
 	}
 	return args, nil
 }
 
-func buildDelegationResult(request core.DelegationRequest, target core.CapabilityDescriptor, result *contracts.ToolResult, invokeErr error, snapshot *core.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust core.TrustClass) *core.DelegationResult {
+func buildDelegationResult(request core.DelegationRequest, target core.CapabilityDescriptor, result *contracts.ToolResult, invokeErr error, snapshot *core.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust agentspec.TrustClass) *core.DelegationResult {
 	if invokeErr != nil {
 		failed := core.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, target.TrustClass, core.DelegationStateFailed, false, nil, snapshot)
 		failed.Diagnostics = []string{invokeErr.Error()}
@@ -649,7 +649,7 @@ func effectiveDelegationState(env *contextdata.Envelope) *contextdata.Envelope {
 	return contextdata.NewEnvelope("default", "default")
 }
 
-func delegationRequestedRole(request core.DelegationRequest) core.CoordinationRole {
+func delegationRequestedRole(request core.DelegationRequest) agentspec.CoordinationRole {
 	if request.Metadata == nil {
 		return ""
 	}
@@ -661,13 +661,13 @@ func delegationRequestedRole(request core.DelegationRequest) core.CoordinationRo
 	if strings.EqualFold(role, "<nil>") {
 		return ""
 	}
-	return core.CoordinationRole(role)
+	return agentspec.CoordinationRole(role)
 }
 
-func containsBackgroundExecutionMode(modes []core.CoordinationExecutionMode) bool {
+func containsBackgroundExecutionMode(modes []agentspec.CoordinationExecutionMode) bool {
 	for _, mode := range modes {
 		switch mode {
-		case core.CoordinationExecutionModeBackgroundAgent, core.CoordinationExecutionModeSessionBacked:
+		case agentspec.CoordinationExecutionModeBackgroundAgent, agentspec.CoordinationExecutionModeSessionBacked:
 			return true
 		}
 	}
@@ -759,7 +759,7 @@ func normalizeArgumentMap(value any) map[string]any {
 	return map[string]any{}
 }
 
-func requiresCrossTrustApproval(callerTrust, targetTrust core.TrustClass, spec *agentspec.AgentRuntimeSpec, request core.DelegationRequest) bool {
+func requiresCrossTrustApproval(callerTrust, targetTrust agentspec.TrustClass, spec *agentspec.AgentRuntimeSpec, request core.DelegationRequest) bool {
 	if request.ApprovalRequired {
 		return true
 	}

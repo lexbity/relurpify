@@ -346,8 +346,6 @@ func TestProviderProvenanceForExecution(t *testing.T) {
 	}
 }
 
-
-
 func TestApplySetupGitInitCreatesCommittedBaseline(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")

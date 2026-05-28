@@ -30,8 +30,8 @@ type Adapter interface {
 
 // Record represents a persisted record with schema metadata.
 type Record struct {
-	Metadata SchemaMetadata    `json:"metadata"`
-	Data     json.RawMessage   `json:"data"`
+	Metadata SchemaMetadata  `json:"metadata"`
+	Data     json.RawMessage `json:"data"`
 }
 
 // MarshalRecord serializes a domain record with schema metadata.

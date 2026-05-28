@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -12,7 +13,7 @@ type OperatorSpec struct {
 	Instruction          string
 	Executor             string
 	DependsOn            []string
-	RequiredCapabilities []core.CapabilitySelector
+	RequiredCapabilities []agentspec.CapabilitySelector
 }
 
 // MethodSpec describes the resolved method without executable functions.
@@ -22,7 +23,7 @@ type MethodSpec struct {
 	Priority             int
 	OperatorCount        int
 	SubtaskCount         int
-	RequiredCapabilities []core.CapabilitySelector
+	RequiredCapabilities []agentspec.CapabilitySelector
 }
 
 // ResolvedMethod is a method with all operators resolved and validated.
@@ -51,8 +52,8 @@ func ResolveMethod(method Method) ResolvedMethod {
 		if executor == "" {
 			executor = ExecutorReact
 		}
-		required := []core.CapabilitySelector{{
-			Kind: core.CapabilityKindTool,
+		required := []agentspec.CapabilitySelector{{
+			Kind: agentspec.CapabilityKindTool,
 			Name: capabilityTargetForOperator(executor),
 		}}
 		op := OperatorSpec{
@@ -74,12 +75,12 @@ func ResolveMethod(method Method) ResolvedMethod {
 // dedupeSelectors removes duplicates from a capability selector slice while
 // preserving order. Two selectors are considered duplicates if they have the
 // same Kind and Name.
-func dedupeSelectors(selectors []core.CapabilitySelector) []core.CapabilitySelector {
+func dedupeSelectors(selectors []agentspec.CapabilitySelector) []agentspec.CapabilitySelector {
 	if len(selectors) == 0 {
 		return nil
 	}
 	seen := make(map[string]struct{})
-	var result []core.CapabilitySelector
+	var result []agentspec.CapabilitySelector
 	for _, sel := range selectors {
 		key := string(sel.Kind) + ":" + sel.Name
 		if _, ok := seen[key]; !ok {

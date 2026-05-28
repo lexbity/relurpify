@@ -43,7 +43,7 @@ type WorkspaceConfig struct {
 	MemoryPath                 string
 	SkipASTIndex               bool
 	MaxIterations              int
-	AllowedCapabilities        []core.CapabilitySelector
+	AllowedCapabilities        []agentspec.CapabilitySelector
 	DebugLLM                   bool
 	DebugAgent                 bool
 	Strict                     bool

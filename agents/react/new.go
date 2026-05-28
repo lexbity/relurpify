@@ -5,7 +5,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 )
 
-
 type Option func(*ReActAgent)
 
 func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *ReActAgent {

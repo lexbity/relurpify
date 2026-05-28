@@ -43,7 +43,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -72,7 +72,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -134,7 +134,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 	if err := agent.Initialize(nil); err != nil {
@@ -177,7 +177,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -205,7 +205,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 	t.Skip("Phase 1: Resume state handling is stubbed; will be fully implemented in Phase 14")
 
 	env := agentenv.WorkspaceEnvironment{
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -252,7 +252,7 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	agent := New(env)
 

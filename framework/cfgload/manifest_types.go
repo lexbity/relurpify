@@ -695,4 +695,3 @@ func LoadSkillList(workspace string, names []string) []*SkillManifest {
 	}
 	return loaded
 }
-

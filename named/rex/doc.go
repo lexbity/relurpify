@@ -13,7 +13,7 @@
 //   - OriginPeer: event came from an authenticated enrolled peer node.
 //   - OriginExternal: event came from an unauthenticated external source.
 //
-// framework/core.TrustClass — governs capability execution authorization
+// framework/agentspec.TrustClass — governs capability execution authorization
 // inside the agent runtime. Rex passes this through from the framework when
 // constructing tasks and contexts, but does not define it. See framework/core
 // for the full definition.

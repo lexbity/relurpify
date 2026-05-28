@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -26,22 +27,22 @@ func NewLayerCheckHandler(env agentenv.WorkspaceEnvironment) *LayerCheckHandler 
 func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.layer_check",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Layer Check",
 		Version:       "1.0.0",
 		Description:   "Checks import boundaries between architectural layers for violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "read-only"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"layer": {
 					Type:        "string",
 					Description: `Layer to check: "framework" | "agents" | "named" | "app" | "all" (default: "all")`,
@@ -52,9 +53,9 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				},
 			},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if check completed",
@@ -66,7 +67,7 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"violations": {
 					Type:        "array",
 					Description: "Import boundary violations",
-					Items:       &core.Schema{Type: "object"},
+					Items:       &contracts.Schema{Type: "object"},
 				},
 				"layer": {
 					Type:        "string",

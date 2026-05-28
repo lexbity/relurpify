@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
-		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var sqliteExtensions = []string{".db", ".sqlite", ".sqlite3"}
@@ -121,7 +121,9 @@ func (t *SQLiteSchemaInspectTool) Execute(ctx context.Context, args map[string]i
 func (t *SQLiteSchemaInspectTool) IsAvailable(ctx context.Context) bool {
 	return t.inner.IsAvailable(ctx)
 }
-func (t *SQLiteSchemaInspectTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *SQLiteSchemaInspectTool) Permissions() contracts.ToolPermissions {
+	return t.inner.Permissions()
+}
 func (t *SQLiteSchemaInspectTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:sqlite", "schema", "verification", "recovery"}
 }
@@ -186,7 +188,7 @@ func (t *SQLiteQueryTool) Execute(ctx context.Context, args map[string]interface
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *SQLiteQueryTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *SQLiteQueryTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *SQLiteQueryTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *SQLiteQueryTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:sqlite", "query", "verification"}
@@ -257,7 +259,9 @@ func (t *SQLiteIntegrityCheckTool) Execute(ctx context.Context, args map[string]
 func (t *SQLiteIntegrityCheckTool) IsAvailable(ctx context.Context) bool {
 	return t.inner.IsAvailable(ctx)
 }
-func (t *SQLiteIntegrityCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *SQLiteIntegrityCheckTool) Permissions() contracts.ToolPermissions {
+	return t.inner.Permissions()
+}
 func (t *SQLiteIntegrityCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:sqlite", "integrity-check", "verification", "diagnostics"}
 }

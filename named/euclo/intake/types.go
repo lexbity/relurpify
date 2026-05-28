@@ -1,7 +1,9 @@
 package intake
 
-import "codeburg.org/lexbit/relurpify/named/euclo/families"
-import "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+import (
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+)
 
 // IntentClassification holds the result of tier-1 and tier-2 classification.
 // To be fully implemented in Phase 4 and 6.

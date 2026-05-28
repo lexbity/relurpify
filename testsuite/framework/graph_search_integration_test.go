@@ -248,15 +248,15 @@ type stateSetterNode struct {
 func (n *stateSetterNode) ID() string           { return n.id }
 func (n *stateSetterNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-	func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-		env.SetWorkingValue(n.key, n.value, contextdata.MemoryClassTask)
-		return &core.Result{
-			NodeID: n.id,
-			Data: core.NewToolResultPayload(map[string]any{
-				"next": "continue",
-			}),
-		}, nil
-	}
+func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	env.SetWorkingValue(n.key, n.value, contextdata.MemoryClassTask)
+	return &core.Result{
+		NodeID: n.id,
+		Data: core.NewToolResultPayload(map[string]any{
+			"next": "continue",
+		}),
+	}, nil
+}
 
 func (n *stateSetterNode) Category() string                      { return "test" }
 func (n *stateSetterNode) Description() string                   { return "sets a value in the envelope" }
@@ -285,13 +285,13 @@ func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope
 			Message: "value mismatch in envelope",
 		}
 	}
-		return &core.Result{
-			NodeID: n.id,
-			Data: core.NewToolResultPayload(map[string]any{
-				"next": "continue",
-			}),
-		}, nil
-	}
+	return &core.Result{
+		NodeID: n.id,
+		Data: core.NewToolResultPayload(map[string]any{
+			"next": "continue",
+		}),
+	}, nil
+}
 
 func (n *stateReaderNode) Category() string                      { return "test" }
 func (n *stateReaderNode) Description() string                   { return "reads and validates a value in the envelope" }
@@ -310,13 +310,13 @@ func (n *stateModifierNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 func (n *stateModifierNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
 	env.SetWorkingValue(n.key, n.modifyValue, contextdata.MemoryClassTask)
-		return &core.Result{
-			NodeID: n.id,
-			Data: core.NewToolResultPayload(map[string]any{
-				"next": "continue",
-			}),
-		}, nil
-	}
+	return &core.Result{
+		NodeID: n.id,
+		Data: core.NewToolResultPayload(map[string]any{
+			"next": "continue",
+		}),
+	}, nil
+}
 
 func (n *stateModifierNode) Category() string                      { return "test" }
 func (n *stateModifierNode) Description() string                   { return "modifies a value in the envelope" }

@@ -8,7 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -142,16 +141,16 @@ func newAgentsCreateCmd() *cobra.Command {
 						Capabilities: agentspec.AgentCapabilitiesSpec{
 							Relurpic: defaultRelurpicCapabilities(name),
 						},
-						AllowedCapabilities: []core.CapabilitySelector{
-							{Name: "file_read", Kind: core.CapabilityKindTool},
-							{Name: "file_write", Kind: core.CapabilityKindTool},
-							{Name: "file_edit", Kind: core.CapabilityKindTool},
-							{Name: "file_list", Kind: core.CapabilityKindTool},
-							{Name: "file_search", Kind: core.CapabilityKindTool},
-							{Name: "file_create", Kind: core.CapabilityKindTool},
-							{Name: "search_find_similar", Kind: core.CapabilityKindTool},
-							{Name: "search_semantic", Kind: core.CapabilityKindTool},
-							{Name: "query_ast", Kind: core.CapabilityKindTool},
+						AllowedCapabilities: []agentspec.CapabilitySelector{
+							{Name: "file_read", Kind: agentspec.CapabilityKindTool},
+							{Name: "file_write", Kind: agentspec.CapabilityKindTool},
+							{Name: "file_edit", Kind: agentspec.CapabilityKindTool},
+							{Name: "file_list", Kind: agentspec.CapabilityKindTool},
+							{Name: "file_search", Kind: agentspec.CapabilityKindTool},
+							{Name: "file_create", Kind: agentspec.CapabilityKindTool},
+							{Name: "search_find_similar", Kind: agentspec.CapabilityKindTool},
+							{Name: "search_semantic", Kind: agentspec.CapabilityKindTool},
+							{Name: "query_ast", Kind: agentspec.CapabilityKindTool},
 						},
 						Bash: agentspec.AgentBashPermissions{
 							Default:       agentspec.AgentPermissionAsk,

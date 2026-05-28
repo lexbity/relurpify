@@ -11,12 +11,12 @@ import (
 // SQLiteWorkflowStore is a SQLite-backed implementation of WorkflowStore.
 // This is a stub implementation for compilation; full persistence to be implemented.
 type SQLiteWorkflowStore struct {
-	mu         sync.RWMutex
-	workflows  map[string]WorkflowRecord
-	runs       map[string]WorkflowRunRecord
-	bindings   map[string]LineageBindingRecord
-	artifacts  map[string]WorkflowArtifactRecord
-	events     []WorkflowEventRecord
+	mu        sync.RWMutex
+	workflows map[string]WorkflowRecord
+	runs      map[string]WorkflowRunRecord
+	bindings  map[string]LineageBindingRecord
+	artifacts map[string]WorkflowArtifactRecord
+	events    []WorkflowEventRecord
 }
 
 // GetWorkflow retrieves a workflow by ID.

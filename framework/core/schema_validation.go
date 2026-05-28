@@ -5,18 +5,20 @@ import (
 	"math"
 	"reflect"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ValidateValueAgainstSchema performs lightweight runtime validation for the
 // framework-owned schema subset used by tool and capability descriptors.
-func ValidateValueAgainstSchema(value any, schema *Schema) error {
+func ValidateValueAgainstSchema(value any, schema *contracts.Schema) error {
 	if schema == nil {
 		return nil
 	}
 	return validateValueAgainstSchema(value, schema, "$")
 }
 
-func validateValueAgainstSchema(value any, schema *Schema, path string) error {
+func validateValueAgainstSchema(value any, schema *contracts.Schema, path string) error {
 	if schema == nil {
 		return nil
 	}

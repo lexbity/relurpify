@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-		platformshell "codeburg.org/lexbit/relurpify/platform/shell"
+	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
 )

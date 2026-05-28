@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -25,8 +26,8 @@ func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Env
 	return core.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Availability:  core.AvailabilitySpec{Available: true},
 	}
 }
@@ -88,7 +89,7 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	writeWorkspaceFile(t, dir, "review.go", "package demo\n")
 
 	thoughtrecipeID := "euclo.thoughtrecipe.review"
-	caps := capability.NewCapabilityRegistry()
+	caps := capability.NewRegistry()
 	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
 		ID:       thoughtrecipeID,
 		Name:     "review",
@@ -138,7 +139,7 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 
 func capabilityRegistryWithHandler(t *testing.T, handler *countingCapabilityHandler) *capability.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterInvocableCapability(handler); err != nil {
 		t.Fatalf("register handler: %v", err)
 	}

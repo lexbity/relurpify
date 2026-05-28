@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -47,7 +48,7 @@ type ExecutionCapabilityCatalogSnapshot struct {
 	modelCallableTools     []contracts.Tool
 	modelCallableToolSpecs []contracts.LLMToolSpec
 	policySnapshot         *core.PolicySnapshot
-	allowedCapabilities    []core.CapabilitySelector
+	allowedCapabilities    []agentspec.CapabilitySelector
 }
 
 // CaptureExecutionCatalogSnapshot compiles an execution-scoped descriptive
@@ -223,7 +224,7 @@ func (s *ExecutionCapabilityCatalogSnapshot) PolicySnapshot() *core.PolicySnapsh
 }
 
 // AllowedCapabilities returns the admitted capability selectors active for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) AllowedCapabilities() []core.CapabilitySelector {
+func (s *ExecutionCapabilityCatalogSnapshot) AllowedCapabilities() []agentspec.CapabilitySelector {
 	if s == nil {
 		return nil
 	}

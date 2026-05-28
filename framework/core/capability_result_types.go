@@ -59,14 +59,14 @@ type ContentBlockInsertion struct {
 }
 
 type ApprovalBinding struct {
-	CapabilityID   string        `json:"capability_id,omitempty"`
-	CapabilityName string        `json:"capability_name,omitempty"`
-	ProviderID     string        `json:"provider_id,omitempty"`
-	SessionID      string        `json:"session_id,omitempty"`
-	EffectClasses  []EffectClass `json:"effect_classes,omitempty"`
-	TargetResource string        `json:"target_resource,omitempty"`
-	TaskID         string        `json:"task_id,omitempty"`
-	WorkflowID     string        `json:"workflow_id,omitempty"`
+	CapabilityID   string                  `json:"capability_id,omitempty"`
+	CapabilityName string                  `json:"capability_name,omitempty"`
+	ProviderID     string                  `json:"provider_id,omitempty"`
+	SessionID      string                  `json:"session_id,omitempty"`
+	EffectClasses  []agentspec.EffectClass `json:"effect_classes,omitempty"`
+	TargetResource string                  `json:"target_resource,omitempty"`
+	TaskID         string                  `json:"task_id,omitempty"`
+	WorkflowID     string                  `json:"workflow_id,omitempty"`
 }
 
 func (b ApprovalBinding) PermissionMetadata() map[string]string {
@@ -174,13 +174,13 @@ func ApplyInsertionDecision(envelope *CapabilityResultEnvelope, decision Inserti
 
 func DefaultInsertionDecision(descriptor CapabilityDescriptor, disposition ContentDisposition) InsertionDecision {
 	switch descriptor.TrustClass {
-	case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted:
+	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
 		return InsertionDecision{Action: InsertionActionDirect, Reason: "trusted capability output allowed for direct insertion"}
-	case TrustClassLLMGenerated, TrustClassToolResult:
+	case agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult:
 		return InsertionDecision{Action: InsertionActionSummarized, Reason: "generated capability output requires summarized insertion"}
-	case TrustClassRemoteApproved:
+	case agentspec.TrustClassRemoteApproved:
 		return InsertionDecision{Action: InsertionActionSummarized, Reason: "remote-approved capability output requires summarized insertion"}
-	case TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared:
+	case agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassRemoteDeclared:
 		return InsertionDecision{Action: InsertionActionMetadataOnly, Reason: "untrusted capability output defaults to metadata-only insertion"}
 	}
 	switch disposition {

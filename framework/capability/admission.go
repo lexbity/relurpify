@@ -3,6 +3,7 @@ package capability
 import (
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -10,7 +11,7 @@ import (
 type AdmissionResult struct {
 	CapabilityID   string
 	CapabilityName string
-	Kind           core.CapabilityKind
+	Kind           agentspec.CapabilityKind
 	Admitted       bool
 	Reason         string
 }
@@ -26,7 +27,7 @@ type Candidate struct {
 
 // AdmitCandidates admits capability candidates against the final selector set
 // and records explicit results.
-func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []core.CapabilitySelector) ([]AdmissionResult, error) {
+func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []agentspec.CapabilitySelector) ([]AdmissionResult, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}
@@ -68,7 +69,7 @@ func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []core.
 
 // EvaluateCandidates evaluates capability candidates against the final selector
 // set without mutating the registry.
-func EvaluateCandidates(candidates []Candidate, allowed []core.CapabilitySelector) []AdmissionResult {
+func EvaluateCandidates(candidates []Candidate, allowed []agentspec.CapabilitySelector) []AdmissionResult {
 	results := make([]AdmissionResult, 0, len(candidates))
 	for _, candidate := range candidates {
 		desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
@@ -94,7 +95,7 @@ func EvaluateCandidates(candidates []Candidate, allowed []core.CapabilitySelecto
 	return results
 }
 
-func matchesAnySelector(selectors []core.CapabilitySelector, desc core.CapabilityDescriptor) bool {
+func matchesAnySelector(selectors []agentspec.CapabilitySelector, desc core.CapabilityDescriptor) bool {
 	if len(selectors) == 0 {
 		return true
 	}

@@ -55,5 +55,3 @@ func TestResolveCaseExecutionRejectsEscapingTapePath(t *testing.T) {
 		t.Fatal("expected escaping tape path to fail")
 	}
 }
-
-

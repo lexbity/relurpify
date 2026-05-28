@@ -17,7 +17,7 @@ type KnowledgeSourceSpec struct {
 	Name                 string
 	Priority             int
 	CooldownCycles       int
-	RequiredCapabilities []core.CapabilitySelector
+	RequiredCapabilities []agentspec.CapabilitySelector
 	Contract             graph.NodeContract
 }
 
@@ -70,14 +70,14 @@ func ResolveKnowledgeSource(source KnowledgeSource) ResolvedKnowledgeSource {
 			spec.CooldownCycles = declared.CooldownCycles
 		}
 		if len(declared.RequiredCapabilities) > 0 {
-			spec.RequiredCapabilities = append([]core.CapabilitySelector(nil), declared.RequiredCapabilities...)
+			spec.RequiredCapabilities = append([]agentspec.CapabilitySelector(nil), declared.RequiredCapabilities...)
 		}
 		if hasKnowledgeSourceContract(declared.Contract) {
 			spec.Contract = declared.Contract
 		}
 	}
 	if spec.Contract.RequiredCapabilities == nil && len(spec.RequiredCapabilities) > 0 {
-		spec.Contract.RequiredCapabilities = append([]core.CapabilitySelector(nil), spec.RequiredCapabilities...)
+		spec.Contract.RequiredCapabilities = append([]agentspec.CapabilitySelector(nil), spec.RequiredCapabilities...)
 	}
 	if !hasStateBoundaryPolicy(spec.Contract.ContextPolicy) {
 		spec.Contract.ContextPolicy = defaultKnowledgeSourceContract().ContextPolicy

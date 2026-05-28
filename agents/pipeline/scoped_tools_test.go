@@ -68,7 +68,7 @@ func pipelineToolCapabilityID(name string) string {
 }
 
 func TestResolveStageToolsRespectsScopedRegistry(t *testing.T) {
-	reg := frameworktools.NewCapabilityRegistry()
+	reg := frameworktools.NewRegistry()
 	if err := reg.RegisterLegacyTool(scopedPipelineTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}

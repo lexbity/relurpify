@@ -74,7 +74,7 @@ func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
 				}},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 
 	err := RegisterAll(env, []string{"euclo:cap.test_run", "euclo:cap.does_not_exist"})
@@ -93,7 +93,7 @@ func TestRegisterAllValidRegistryNoError(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 
 	err := RegisterAll(env, declaredRelurpicIDs)
@@ -103,7 +103,7 @@ func TestRegisterAllValidRegistryNoError(t *testing.T) {
 }
 
 func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	env := agentenv.WorkspaceEnvironment{
 		Config: &core.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
@@ -146,7 +146,7 @@ func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 }
 
 func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
 
@@ -189,7 +189,7 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 }
 
 func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 
 	env := agentenv.WorkspaceEnvironment{
@@ -224,16 +224,16 @@ func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
 }
 
 func TestComputeAvailability_EmptyRequirements(t *testing.T) {
-	if got := computeAvailability(capability.NewCapabilityRegistry(), nil); !got.Available {
+	if got := computeAvailability(capability.NewRegistry(), nil); !got.Available {
 		t.Fatalf("expected empty requirements to be available, got %#v", got)
 	}
 }
 
 func TestComputeAvailability_NonCallableToolCounts(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
 	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{Name: "file_write"},
+		Selector: agentspec.CapabilitySelector{Name: "file_write"},
 		Access:   core.CapabilityExposureHidden,
 	}})
 

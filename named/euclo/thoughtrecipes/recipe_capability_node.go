@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -78,10 +79,10 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextda
 	}
 	return core.CapabilityDescriptor{
 		ID:            h.capabilityID,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          name,
-		Source:        core.CapabilitySource{Scope: core.CapabilityScopeWorkspace},
+		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeWorkspace},
 		Availability:  core.AvailabilitySpec{Available: true},
 	}
 }

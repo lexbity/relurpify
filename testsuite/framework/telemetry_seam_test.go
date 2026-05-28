@@ -299,7 +299,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata: map[string]interface{}{"status": "success"},
+				Metadata:  map[string]interface{}{"status": "success"},
 			},
 			{
 				Type:      core.EventToolCall,
@@ -307,7 +307,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata: map[string]interface{}{"status": "failed"},
+				Metadata:  map[string]interface{}{"status": "failed"},
 			},
 			{
 				Type:      core.EventToolCall,
@@ -315,7 +315,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata: map[string]interface{}{"status": "success"},
+				Metadata:  map[string]interface{}{"status": "success"},
 			},
 		}
 

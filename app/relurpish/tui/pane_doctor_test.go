@@ -49,10 +49,10 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 	}
 
 	controller.SetDoctorReport(DoctorReport{
-		WorkspacePresent:     true,
-		ConfigExists:         true,
-		ManifestExists:       true,
-		ModelProfilesExists:  true,
+		WorkspacePresent:      true,
+		ConfigExists:          true,
+		ManifestExists:        true,
+		ModelProfilesExists:   true,
 		StarterTemplatesReady: true,
 		Dependencies: []runtimesvc.DependencyStatus{
 			{Name: "starter-templates", Available: true},

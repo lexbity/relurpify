@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -21,13 +22,13 @@ type PreflightIssue struct {
 }
 
 type PlacementDecision struct {
-	NodeID                 string                    `json:"node_id,omitempty" yaml:"node_id,omitempty"`
-	RequiredSelector       core.CapabilitySelector   `json:"required_selector,omitempty" yaml:"required_selector,omitempty"`
-	Preference             PlacementPreference       `json:"preference,omitempty" yaml:"preference,omitempty"`
-	SelectedCapabilityID   string                    `json:"selected_capability_id,omitempty" yaml:"selected_capability_id,omitempty"`
-	SelectedCapability     core.CapabilityDescriptor `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
-	CandidateCapabilityIDs []string                  `json:"candidate_capability_ids,omitempty" yaml:"candidate_capability_ids,omitempty"`
-	Reason                 string                    `json:"reason,omitempty" yaml:"reason,omitempty"`
+	NodeID                 string                       `json:"node_id,omitempty" yaml:"node_id,omitempty"`
+	RequiredSelector       agentspec.CapabilitySelector `json:"required_selector,omitempty" yaml:"required_selector,omitempty"`
+	Preference             PlacementPreference          `json:"preference,omitempty" yaml:"preference,omitempty"`
+	SelectedCapabilityID   string                       `json:"selected_capability_id,omitempty" yaml:"selected_capability_id,omitempty"`
+	SelectedCapability     core.CapabilityDescriptor    `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
+	CandidateCapabilityIDs []string                     `json:"candidate_capability_ids,omitempty" yaml:"candidate_capability_ids,omitempty"`
+	Reason                 string                       `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 type PreflightReport struct {
@@ -121,7 +122,7 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	return report, err
 }
 
-func preflightPlacementDecision(nodeID string, selector core.CapabilitySelector, contract NodeContract, descriptors []core.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
+func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySelector, contract NodeContract, descriptors []core.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
 	decision := PlacementDecision{
 		NodeID:           nodeID,
 		RequiredSelector: selector,
@@ -157,7 +158,7 @@ func preflightPlacementDecision(nodeID string, selector core.CapabilitySelector,
 	return decision, nil
 }
 
-func matchingDescriptors(selector core.CapabilitySelector, descriptors []core.CapabilityDescriptor) []core.CapabilityDescriptor {
+func matchingDescriptors(selector agentspec.CapabilitySelector, descriptors []core.CapabilityDescriptor) []core.CapabilityDescriptor {
 	out := make([]core.CapabilityDescriptor, 0, len(descriptors))
 	for _, desc := range descriptors {
 		if core.SelectorMatchesDescriptor(selector, desc) {
@@ -219,7 +220,7 @@ func placementReason(preference PlacementPreference, desc core.CapabilityDescrip
 	return "selected highest-trust lowest-risk matching capability"
 }
 
-func selectorString(selector core.CapabilitySelector) string {
+func selectorString(selector agentspec.CapabilitySelector) string {
 	if selector.ID != "" {
 		return selector.ID
 	}
@@ -241,7 +242,7 @@ func blockingPreflightError(issues []PreflightIssue) error {
 	return nil
 }
 
-func riskExceeds(max core.RiskClass, actual []core.RiskClass) bool {
+func riskExceeds(max agentspec.RiskClass, actual []agentspec.RiskClass) bool {
 	if max == "" {
 		return false
 	}
@@ -254,7 +255,7 @@ func riskExceeds(max core.RiskClass, actual []core.RiskClass) bool {
 	return false
 }
 
-func maxRiskRank(risks []core.RiskClass) int {
+func maxRiskRank(risks []agentspec.RiskClass) int {
 	max := 0
 	for _, risk := range risks {
 		if rank := riskRank(risk); rank > max {
@@ -264,38 +265,38 @@ func maxRiskRank(risks []core.RiskClass) int {
 	return max
 }
 
-func riskRank(risk core.RiskClass) int {
+func riskRank(risk agentspec.RiskClass) int {
 	switch risk {
-	case core.RiskClassReadOnly:
+	case agentspec.RiskClassReadOnly:
 		return 1
-	case core.RiskClassSessioned:
+	case agentspec.RiskClassSessioned:
 		return 2
-	case core.RiskClassNetwork:
+	case agentspec.RiskClassNetwork:
 		return 3
-	case core.RiskClassExecute:
+	case agentspec.RiskClassExecute:
 		return 4
-	case core.RiskClassCredentialed:
+	case agentspec.RiskClassCredentialed:
 		return 5
-	case core.RiskClassExfiltration:
+	case agentspec.RiskClassExfiltration:
 		return 6
-	case core.RiskClassDestructive:
+	case agentspec.RiskClassDestructive:
 		return 7
 	default:
 		return 0
 	}
 }
 
-func trustRank(trust core.TrustClass) int {
+func trustRank(trust agentspec.TrustClass) int {
 	switch trust {
-	case core.TrustClassRemoteDeclared:
+	case agentspec.TrustClassRemoteDeclared:
 		return 1
-	case core.TrustClassProviderLocalUntrusted:
+	case agentspec.TrustClassProviderLocalUntrusted:
 		return 2
-	case core.TrustClassRemoteApproved:
+	case agentspec.TrustClassRemoteApproved:
 		return 3
-	case core.TrustClassWorkspaceTrusted:
+	case agentspec.TrustClassWorkspaceTrusted:
 		return 4
-	case core.TrustClassBuiltinTrusted:
+	case agentspec.TrustClassBuiltinTrusted:
 		return 5
 	default:
 		return 0

@@ -75,7 +75,7 @@ func TestInvokeCapability_NilTask(t *testing.T) {
 func TestInvokeCapability_TaskContext(t *testing.T) {
 	registry := &mockRegistry{}
 	task := &core.Task{
-		Data:    map[string]any{},
+		Data: map[string]any{},
 		Context: map[string]any{
 			"query": "test",
 		},

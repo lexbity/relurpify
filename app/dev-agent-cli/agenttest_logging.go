@@ -39,4 +39,3 @@ func (l *preparedRunLogger) Close() error {
 	}
 	return l.file.Close()
 }
-

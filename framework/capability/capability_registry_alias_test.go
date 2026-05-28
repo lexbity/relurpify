@@ -3,17 +3,18 @@ package capability
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	desc := core.CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
@@ -32,20 +33,20 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 	descList := core.CapabilityDescriptor{
 		ID:            "cap:file_list",
 		Name:          "file_list",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 	descTests := core.CapabilityDescriptor{
 		ID:            "cap:exec_run_tests",
 		Name:          "exec_run_tests",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 	descCreate := core.CapabilityDescriptor{
 		ID:            "cap:file_create",
 		Name:          "file_create",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 	if err := reg.RegisterCapability(descList); err != nil {
 		t.Fatalf("register file_list: %v", err)
@@ -86,12 +87,12 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 }
 
 func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	desc := core.CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
@@ -122,7 +123,7 @@ func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
 }
 
 func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 
 	// Register some canonical capabilities
 	canonicals := []string{
@@ -147,8 +148,8 @@ func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
 		desc := core.CapabilityDescriptor{
 			ID:            "cap:" + name,
 			Name:          name,
-			Kind:          core.CapabilityKindTool,
-			RuntimeFamily: core.CapabilityRuntimeFamilyLocalTool,
+			Kind:          agentspec.CapabilityKindTool,
+			RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 		}
 		if err := reg.RegisterCapability(desc); err != nil {
 			t.Fatalf("register capability %q: %v", name, err)

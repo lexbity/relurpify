@@ -91,8 +91,8 @@ func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (c
 		Enabled:  true,
 		Conditions: core.PolicyConditions{
 			Capabilities:    []string{toolName},
-			CapabilityKinds: []core.CapabilityKind{core.CapabilityKindTool},
-			RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyLocalTool},
+			CapabilityKinds: []agentspec.CapabilityKind{agentspec.CapabilityKindTool},
+			RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyLocalTool},
 		},
 		Effect: permissionLevelToEffect(policy.Execute, ""),
 	}, true
@@ -139,7 +139,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 			Partitions:                append([]string{}, policy.Selector.Partitions...),
 			ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
 			Scopes:                    convertSessionScopes(policy.Selector.Scopes),
-			TrustClasses:              append([]core.TrustClass{}, policy.Selector.TrustClasses...),
+			TrustClasses:              append([]agentspec.TrustClass{}, policy.Selector.TrustClasses...),
 			Operations:                convertSessionOperations(policy.Selector.Operations),
 			ActorKinds:                append([]string{}, policy.Selector.ActorKinds...),
 			ActorIDs:                  append([]string{}, policy.Selector.ActorIDs...),
@@ -160,7 +160,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 		return core.PolicyRule{}, err
 	}
 	conditions := core.PolicyConditions{
-		TrustClasses:              append([]core.TrustClass{}, corePolicy.Selector.TrustClasses...),
+		TrustClasses:              append([]agentspec.TrustClass{}, corePolicy.Selector.TrustClasses...),
 		Partitions:                append([]string{}, corePolicy.Selector.Partitions...),
 		ChannelIDs:                append([]string{}, corePolicy.Selector.ChannelIDs...),
 		SessionScopes:             append([]core.SessionScope{}, corePolicy.Selector.Scopes...),
@@ -236,14 +236,14 @@ func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*cor
 		Effect:   permissionLevelToEffect(level, ""),
 	}
 	switch key {
-	case string(core.TrustClassBuiltinTrusted), string(core.TrustClassWorkspaceTrusted), string(core.TrustClassProviderLocalUntrusted), string(core.TrustClassRemoteDeclared), string(core.TrustClassRemoteApproved):
-		rule.Conditions.TrustClasses = []core.TrustClass{core.TrustClass(key)}
-	case string(core.RiskClassReadOnly), string(core.RiskClassDestructive), string(core.RiskClassExecute), string(core.RiskClassNetwork), string(core.RiskClassCredentialed), string(core.RiskClassExfiltration), string(core.RiskClassSessioned):
-		rule.Conditions.MinRiskClasses = []core.RiskClass{core.RiskClass(key)}
-	case string(core.CapabilityRuntimeFamilyLocalTool), string(core.CapabilityRuntimeFamilyProvider), string(core.CapabilityRuntimeFamilyRelurpic):
-		rule.Conditions.RuntimeFamilies = []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamily(key)}
-	case string(core.EffectClassFilesystemMutation), string(core.EffectClassProcessSpawn), string(core.EffectClassNetworkEgress), string(core.EffectClassCredentialUse), string(core.EffectClassExternalState), string(core.EffectClassSessionCreation), string(core.EffectClassContextInsertion):
-		rule.Conditions.EffectClasses = []core.EffectClass{core.EffectClass(key)}
+	case string(agentspec.TrustClassBuiltinTrusted), string(agentspec.TrustClassWorkspaceTrusted), string(agentspec.TrustClassProviderLocalUntrusted), string(agentspec.TrustClassRemoteDeclared), string(agentspec.TrustClassRemoteApproved):
+		rule.Conditions.TrustClasses = []agentspec.TrustClass{agentspec.TrustClass(key)}
+	case string(agentspec.RiskClassReadOnly), string(agentspec.RiskClassDestructive), string(agentspec.RiskClassExecute), string(agentspec.RiskClassNetwork), string(agentspec.RiskClassCredentialed), string(agentspec.RiskClassExfiltration), string(agentspec.RiskClassSessioned):
+		rule.Conditions.MinRiskClasses = []agentspec.RiskClass{agentspec.RiskClass(key)}
+	case string(agentspec.CapabilityRuntimeFamilyLocalTool), string(agentspec.CapabilityRuntimeFamilyProvider), string(agentspec.CapabilityRuntimeFamilyRelurpic):
+		rule.Conditions.RuntimeFamilies = []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamily(key)}
+	case string(agentspec.EffectClassFilesystemMutation), string(agentspec.EffectClassProcessSpawn), string(agentspec.EffectClassNetworkEgress), string(agentspec.EffectClassCredentialUse), string(agentspec.EffectClassExternalState), string(agentspec.EffectClassSessionCreation), string(agentspec.EffectClassContextInsertion):
+		rule.Conditions.EffectClasses = []agentspec.EffectClass{agentspec.EffectClass(key)}
 	default:
 		return nil, fmt.Errorf("unsupported global policy class %q", key)
 	}
@@ -258,10 +258,10 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.Poli
 		return core.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}
 	conditions := core.PolicyConditions{
-		TrustClasses:    append([]core.TrustClass{}, legacy.TrustClasses...),
-		MinRiskClasses:  append([]core.RiskClass{}, legacy.RiskClasses...),
-		RuntimeFamilies: append([]core.CapabilityRuntimeFamily{}, legacy.RuntimeFamilies...),
-		EffectClasses:   append([]core.EffectClass{}, legacy.EffectClasses...),
+		TrustClasses:    append([]agentspec.TrustClass{}, legacy.TrustClasses...),
+		MinRiskClasses:  append([]agentspec.RiskClass{}, legacy.RiskClasses...),
+		RuntimeFamilies: append([]agentspec.CapabilityRuntimeFamily{}, legacy.RuntimeFamilies...),
+		EffectClasses:   append([]agentspec.EffectClass{}, legacy.EffectClasses...),
 	}
 	if legacy.ID != "" {
 		conditions.Capabilities = append(conditions.Capabilities, legacy.ID)
@@ -270,7 +270,7 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.Poli
 		conditions.Capabilities = append(conditions.Capabilities, legacy.Name)
 	}
 	if legacy.Kind != "" {
-		conditions.CapabilityKinds = []core.CapabilityKind{legacy.Kind}
+		conditions.CapabilityKinds = []agentspec.CapabilityKind{legacy.Kind}
 	}
 	return conditions, nil
 }

@@ -62,10 +62,10 @@ func TestSchemaMetadataValidate(t *testing.T) {
 	now := time.Now().UTC()
 
 	tests := []struct {
-		name    string
+		name     string
 		metadata SchemaMetadata
-		wantErr bool
-		errMsg  string
+		wantErr  bool
+		errMsg   string
 	}{
 		{
 			name: "valid metadata",

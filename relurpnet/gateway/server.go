@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -647,7 +648,7 @@ func nodeIDForConnection(frame connectFrame, principal ConnectionPrincipal) stri
 
 func nodeTrustClassForConnection(principal ConnectionPrincipal) string {
 	if principal.Authenticated {
-		return string(core.TrustClassRemoteApproved)
+		return string(agentspec.TrustClassRemoteApproved)
 	}
 	return ""
 }

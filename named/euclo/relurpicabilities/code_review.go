@@ -11,6 +11,7 @@ import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -30,31 +31,31 @@ func NewCodeReviewHandler(env agentenv.WorkspaceEnvironment) *CodeReviewHandler 
 func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Code Review",
 		Version:       "1.0.0",
 		Description:   "Reviews code for correctness, security, style, and architecture issues",
 		Category:      "review_synthesis",
 		Tags:          []string{"review", "llm", "relurpic"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"focus": {
 					Type:        "string",
 					Description: `Review focus: "correctness" | "security" | "style" | "architecture" | "all" (default: "all")`,
 				},
 			},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if review completed",
@@ -62,7 +63,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"findings": {
 					Type:        "array",
 					Description: "Review findings",
-					Items:       &core.Schema{Type: "object"},
+					Items:       &contracts.Schema{Type: "object"},
 				},
 				"summary": {
 					Type:        "string",

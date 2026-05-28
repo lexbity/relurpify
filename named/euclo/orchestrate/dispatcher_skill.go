@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/skills"
 )
 
-func applySkillFilterToRegistry(workspace, skillName string, caps *capability.CapabilityRegistry) (*capability.CapabilityRegistry, error) {
+func applySkillFilterToRegistry(workspace, skillName string, caps *capability.Registry) (*capability.Registry, error) {
 	workspace = strings.TrimSpace(workspace)
 	skillName = strings.TrimSpace(skillName)
 	if skillName == "" {

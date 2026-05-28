@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -25,22 +26,22 @@ func NewCallGraphHandler(env agentenv.WorkspaceEnvironment) *CallGraphHandler {
 func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.call_graph",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Call Graph",
 		Version:       "1.0.0",
 		Description:   "Traverses call relationships to build a structured graph of nodes and edges",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "graph", "read-only"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"entry_point": {
 					Type:        "string",
 					Description: "Symbol name to use as entry point for graph traversal",
@@ -56,9 +57,9 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 			},
 			Required: []string{"entry_point"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if graph built successfully",
@@ -70,14 +71,14 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 				"nodes": {
 					Type:        "array",
 					Description: "Graph nodes",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},
 				"edges": {
 					Type:        "array",
 					Description: "Graph edges",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},

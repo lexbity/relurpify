@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
@@ -267,7 +267,7 @@ func TestFMPTypesValidationCoverage(t *testing.T) {
 	if err := (NodeAdvertisement{}).Validate(); err == nil {
 		t.Fatal("expected node advertisement error")
 	}
-	if err := (NodeAdvertisement{TrustDomain: "trust", Node: relurpnet.NodeDescriptor{ID: "node", Name: "node", Platform: relurpnet.NodePlatformLinux, TenantID: "tenant", TrustClass: core.TrustClassRemoteApproved}}).Validate(); err != nil {
+	if err := (NodeAdvertisement{TrustDomain: "trust", Node: relurpnet.NodeDescriptor{ID: "node", Name: "node", Platform: relurpnet.NodePlatformLinux, TenantID: "tenant", TrustClass: agentspec.TrustClassRemoteApproved}}).Validate(); err != nil {
 		t.Fatalf("unexpected valid node advertisement error: %v", err)
 	}
 	if err := (RuntimeAdvertisement{}).Validate(); err == nil {

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -25,7 +26,7 @@ type ProvenanceRecord struct {
 	LinkName        string
 	ToolID          string
 	InsertionAction core.InsertionAction
-	TrustClass      core.TrustClass
+	TrustClass      agentspec.TrustClass
 	ApprovedBy      string // User/system identifier (if approval required)
 	PolicySnapshot  string // Policy ID or description
 	ResultSummary   string // Brief description of result

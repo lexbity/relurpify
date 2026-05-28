@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -59,10 +60,10 @@ func (r *EucloCapabilityRegistry) RegisterCapability(desc core.CapabilityDescrip
 
 	desc = core.NormalizeCapabilityDescriptor(desc)
 	if desc.RuntimeFamily == "" {
-		desc.RuntimeFamily = core.CapabilityRuntimeFamilyRelurpic
+		desc.RuntimeFamily = agentspec.CapabilityRuntimeFamilyRelurpic
 	}
 	if desc.Kind == "" {
-		desc.Kind = core.CapabilityKindTool
+		desc.Kind = agentspec.CapabilityKindTool
 	}
 	if desc.Name == "" {
 		desc.Name = desc.ID
@@ -198,8 +199,8 @@ func (r *EucloCapabilityRegistry) loadBuiltins() {
 			}
 			r.capabilities[capID] = core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 				ID:            capID,
-				Kind:          core.CapabilityKindTool,
-				RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+				Kind:          agentspec.CapabilityKindTool,
+				RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 				Name:          capabilityDisplayName(capID),
 				Description:   family.Name + " capability",
 				Category:      family.ID,

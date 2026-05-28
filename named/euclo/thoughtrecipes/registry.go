@@ -224,10 +224,10 @@ func (r *ThoughtRecipeRegistry) ResolveBestMatch(explicitID string, tokens ...st
 	}
 
 	var (
-		bestEntry ThoughtRecipeEntry
-		bestScore int
+		bestEntry   ThoughtRecipeEntry
+		bestScore   int
 		bestReasons []string
-		tied bool
+		tied        bool
 	)
 	for _, key := range r.order {
 		entry, ok := r.thoughtrecipes[key]

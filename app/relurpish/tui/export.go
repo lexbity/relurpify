@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -360,5 +360,3 @@ func (m RootModel) OverlaysForTest() *OverlayStack {
 func (m *RootModel) SwitchActiveAgentForTest(agentName string) error {
 	return m.switchActiveAgent(agentName)
 }
-
-

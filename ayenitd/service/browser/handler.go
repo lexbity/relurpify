@@ -72,18 +72,18 @@ func (h *browserCapability) SetPermissionManager(manager *fauthorization.Permiss
 func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	desc := core.CapabilityDescriptor{
 		ID:          "tool:browser",
-		Kind:        core.CapabilityKindTool,
+		Kind:        agentspec.CapabilityKindTool,
 		Name:        "browser",
 		Version:     "v1",
 		Description: "Controls a browser session via a single action-dispatch tool.",
 		Category:    "browser",
 		Source: core.CapabilitySource{
 			ProviderID: "browser",
-			Scope:      core.CapabilityScopeProvider,
+			Scope:      agentspec.CapabilityScopeProvider,
 		},
-		TrustClass:    core.TrustClassProviderLocalUntrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassNetwork, core.RiskClassSessioned, core.RiskClassExfiltration},
-		EffectClasses: []core.EffectClass{core.EffectClassNetworkEgress, core.EffectClassContextInsertion, core.EffectClassSessionCreation},
+		TrustClass:    agentspec.TrustClassProviderLocalUntrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassNetwork, agentspec.RiskClassSessioned, agentspec.RiskClassExfiltration},
+		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassNetworkEgress, agentspec.EffectClassContextInsertion, agentspec.EffectClassSessionCreation},
 		InputSchema:   browserInputSchema(),
 		Availability: core.AvailabilitySpec{
 			Available: true,
@@ -95,10 +95,10 @@ func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) c
 	return core.NormalizeCapabilityDescriptor(desc)
 }
 
-func browserInputSchema() *core.Schema {
-	return &core.Schema{
+func browserInputSchema() *contracts.Schema {
+	return &contracts.Schema{
 		Type: "object",
-		Properties: map[string]*core.Schema{
+		Properties: map[string]*contracts.Schema{
 			"action":     {Type: "string"},
 			"session_id": {Type: "string"},
 			"backend":    {Type: "string", Default: defaultBrowserBackend},

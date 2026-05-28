@@ -319,11 +319,11 @@ func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-		if len(args) == 0 {
-			current := ""
-			if m.sharedSess != nil {
-				current = m.sharedSess.Model
-			}
+	if len(args) == 0 {
+		current := ""
+		if m.sharedSess != nil {
+			current = m.sharedSess.Model
+		}
 		available := ""
 		if m.runtime != nil {
 			if models, err := m.runtime.InferenceModels(context.Background()); err == nil && len(models) > 0 {
@@ -434,9 +434,9 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	case "run":
 		id, cmdArgs := recipeCommandTarget(args[1:])
 		if id == "" {
-		if selected := m.library.SelectedID(); selected != "" {
-			id = selected
-		}
+			if selected := m.library.SelectedID(); selected != "" {
+				id = selected
+			}
 		}
 		if id == "" {
 			m.addSystemMessage("Usage: /recipe run <recipe-id> [params...]")

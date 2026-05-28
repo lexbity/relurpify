@@ -45,7 +45,7 @@ func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.Works
 
 	env := agentenv.WorkspaceEnvironment{
 		Config:        &core.Config{},
-		Registry:      capability.NewCapabilityRegistry(),
+		Registry:      capability.NewRegistry(),
 		IndexManager:  manager,
 		CommandPolicy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
 		FileScope:     sandbox.NewFileScopePolicy(tmpDir, nil),
@@ -67,8 +67,8 @@ func TestPhase12Descriptors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, core.CapabilityKindTool, tc.desc.Kind)
-			require.Equal(t, core.CapabilityRuntimeFamilyRelurpic, tc.desc.RuntimeFamily)
+			require.Equal(t, agentspec.CapabilityKindTool, tc.desc.Kind)
+			require.Equal(t, agentspec.CapabilityRuntimeFamilyRelurpic, tc.desc.RuntimeFamily)
 		})
 	}
 }
@@ -86,7 +86,7 @@ func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 				}},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 	require.NoError(t, RegisterAll(env, env.Config.AgentSpec.Capabilities.Relurpic))
 	for _, id := range []string{

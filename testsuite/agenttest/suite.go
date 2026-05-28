@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -295,15 +295,15 @@ type TokenBudgetHint struct {
 }
 
 type CaseOverrideSpec struct {
-	MaxIterations        int                       `yaml:"max_iterations,omitempty"`
-	BootstrapTimeout     string                    `yaml:"bootstrap_timeout,omitempty"`
-	Model                *ModelSpec                `yaml:"model,omitempty"`
-	Recording            *RecordingSpec            `yaml:"recording,omitempty"`
-	Workspace            *WorkspaceSpec            `yaml:"workspace,omitempty"`
-	Memory               *MemorySpec               `yaml:"memory,omitempty"`
-	ExtraEnv             map[string]string         `yaml:"extra_env,omitempty"`
-	AllowedCapabilities  []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
-	RestrictCapabilities bool                      `yaml:"restrict_capabilities,omitempty"`
+	MaxIterations        int                            `yaml:"max_iterations,omitempty"`
+	BootstrapTimeout     string                         `yaml:"bootstrap_timeout,omitempty"`
+	Model                *ModelSpec                     `yaml:"model,omitempty"`
+	Recording            *RecordingSpec                 `yaml:"recording,omitempty"`
+	Workspace            *WorkspaceSpec                 `yaml:"workspace,omitempty"`
+	Memory               *MemorySpec                    `yaml:"memory,omitempty"`
+	ExtraEnv             map[string]string              `yaml:"extra_env,omitempty"`
+	AllowedCapabilities  []agentspec.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
+	RestrictCapabilities bool                           `yaml:"restrict_capabilities,omitempty"`
 }
 
 type MemorySpec struct {
@@ -337,23 +337,23 @@ type DeclarativeMemorySeedSpec struct {
 }
 
 type ProceduralMemorySeedSpec struct {
-	RoutineID              string                    `yaml:"routine_id"`
-	Scope                  string                    `yaml:"scope,omitempty"`
-	Kind                   string                    `yaml:"kind,omitempty"`
-	Name                   string                    `yaml:"name,omitempty"`
-	Description            string                    `yaml:"description,omitempty"`
-	Summary                string                    `yaml:"summary,omitempty"`
-	WorkflowID             string                    `yaml:"workflow_id,omitempty"`
-	TaskID                 string                    `yaml:"task_id,omitempty"`
-	ProjectID              string                    `yaml:"project_id,omitempty"`
-	BodyRef                string                    `yaml:"body_ref,omitempty"`
-	InlineBody             string                    `yaml:"inline_body,omitempty"`
-	CapabilityDependencies []core.CapabilitySelector `yaml:"capability_dependencies,omitempty"`
-	VerificationMetadata   map[string]any            `yaml:"verification_metadata,omitempty"`
-	PolicySnapshotID       string                    `yaml:"policy_snapshot_id,omitempty"`
-	Verified               bool                      `yaml:"verified,omitempty"`
-	Version                int                       `yaml:"version,omitempty"`
-	ReuseCount             int                       `yaml:"reuse_count,omitempty"`
+	RoutineID              string                         `yaml:"routine_id"`
+	Scope                  string                         `yaml:"scope,omitempty"`
+	Kind                   string                         `yaml:"kind,omitempty"`
+	Name                   string                         `yaml:"name,omitempty"`
+	Description            string                         `yaml:"description,omitempty"`
+	Summary                string                         `yaml:"summary,omitempty"`
+	WorkflowID             string                         `yaml:"workflow_id,omitempty"`
+	TaskID                 string                         `yaml:"task_id,omitempty"`
+	ProjectID              string                         `yaml:"project_id,omitempty"`
+	BodyRef                string                         `yaml:"body_ref,omitempty"`
+	InlineBody             string                         `yaml:"inline_body,omitempty"`
+	CapabilityDependencies []agentspec.CapabilitySelector `yaml:"capability_dependencies,omitempty"`
+	VerificationMetadata   map[string]any                 `yaml:"verification_metadata,omitempty"`
+	PolicySnapshotID       string                         `yaml:"policy_snapshot_id,omitempty"`
+	Verified               bool                           `yaml:"verified,omitempty"`
+	Version                int                            `yaml:"version,omitempty"`
+	ReuseCount             int                            `yaml:"reuse_count,omitempty"`
 }
 
 type WorkflowSeedSpec struct {

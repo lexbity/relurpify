@@ -9,8 +9,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 type captureTelemetry struct {

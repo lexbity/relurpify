@@ -43,7 +43,7 @@ func ProbeWorkspace(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend ll
 	})
 
 	// 3. Inference backend reachable
-		inferenceOk, inferenceMsg := checkInferenceBackend(cfg, secrets, backend)
+	inferenceOk, inferenceMsg := checkInferenceBackend(cfg, secrets, backend)
 	results = append(results, ProbeResult{
 		Name:     "inference_backend",
 		Required: true,

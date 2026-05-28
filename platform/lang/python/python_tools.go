@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
-		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var pythonProjectMarkers = []string{
@@ -230,7 +230,7 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interfac
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *PythonPytestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *PythonPytestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
@@ -312,7 +312,7 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *PythonUnittestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *PythonUnittestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
@@ -394,7 +394,9 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context) bool {
 	return t.inner.IsAvailable(ctx)
 }
-func (t *PythonCompileCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonCompileCheckTool) Permissions() contracts.ToolPermissions {
+	return t.inner.Permissions()
+}
 func (t *PythonCompileCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}
 }

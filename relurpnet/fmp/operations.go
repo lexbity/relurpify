@@ -54,19 +54,19 @@ type InMemoryOperationalLimiter struct {
 }
 
 type ManifestDebugView struct {
-	ContextID        string                `json:"context_id" yaml:"context_id"`
-	LineageID        string                `json:"lineage_id" yaml:"lineage_id"`
-	AttemptID        string                `json:"attempt_id" yaml:"attempt_id"`
-	ContextClass     string                `json:"context_class" yaml:"context_class"`
-	SchemaVersion    string                `json:"schema_version" yaml:"schema_version"`
-	SizeBytes        int64                 `json:"size_bytes,omitempty" yaml:"size_bytes,omitempty"`
-	ChunkCount       int                   `json:"chunk_count,omitempty" yaml:"chunk_count,omitempty"`
+	ContextID        string           `json:"context_id" yaml:"context_id"`
+	LineageID        string           `json:"lineage_id" yaml:"lineage_id"`
+	AttemptID        string           `json:"attempt_id" yaml:"attempt_id"`
+	ContextClass     string           `json:"context_class" yaml:"context_class"`
+	SchemaVersion    string           `json:"schema_version" yaml:"schema_version"`
+	SizeBytes        int64            `json:"size_bytes,omitempty" yaml:"size_bytes,omitempty"`
+	ChunkCount       int              `json:"chunk_count,omitempty" yaml:"chunk_count,omitempty"`
 	SensitivityClass SensitivityClass `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
 	TransferMode     TransferMode     `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
 	EncryptionMode   EncryptionMode   `json:"encryption_mode,omitempty" yaml:"encryption_mode,omitempty"`
-	RecipientCount   int                   `json:"recipient_count,omitempty" yaml:"recipient_count,omitempty"`
-	ObjectRefCount   int                   `json:"object_ref_count,omitempty" yaml:"object_ref_count,omitempty"`
-	CreationTime     time.Time             `json:"creation_time,omitempty" yaml:"creation_time,omitempty"`
+	RecipientCount   int              `json:"recipient_count,omitempty" yaml:"recipient_count,omitempty"`
+	ObjectRefCount   int              `json:"object_ref_count,omitempty" yaml:"object_ref_count,omitempty"`
+	CreationTime     time.Time        `json:"creation_time,omitempty" yaml:"creation_time,omitempty"`
 }
 
 type SealedContextDebugView struct {
@@ -84,7 +84,7 @@ type TransferDebugView struct {
 	OfferID     string                 `json:"offer_id,omitempty" yaml:"offer_id,omitempty"`
 	LeaseID     string                 `json:"lease_id,omitempty" yaml:"lease_id,omitempty"`
 	RuntimeID   string                 `json:"runtime_id,omitempty" yaml:"runtime_id,omitempty"`
-	RouteMode   RouteMode         `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
+	RouteMode   RouteMode              `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
 	Manifest    ManifestDebugView      `json:"manifest" yaml:"manifest"`
 	Sealed      SealedContextDebugView `json:"sealed" yaml:"sealed"`
 }

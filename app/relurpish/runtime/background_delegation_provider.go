@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -36,7 +37,7 @@ func (p *backgroundDelegationProvider) Descriptor() core.ProviderDescriptor {
 		ID:                 backgroundDelegationProviderID,
 		Kind:               core.ProviderKindAgentRuntime,
 		ActivationScope:    "runtime",
-		TrustBaseline:      core.TrustClassBuiltinTrusted,
+		TrustBaseline:      agentspec.TrustClassBuiltinTrusted,
 		RecoverabilityMode: core.RecoverabilityInProcess,
 		SupportsHealth:     true,
 		Security: core.ProviderSecurityProfile{

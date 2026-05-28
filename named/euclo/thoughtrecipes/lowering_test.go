@@ -448,7 +448,7 @@ run writer:
   goal "Inspect again."
 `)
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -29,8 +30,8 @@ func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env *contextdata
 	return core.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Availability:  core.AvailabilitySpec{Available: true},
 	}
 }
@@ -51,7 +52,7 @@ func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Env
 }
 
 func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	handler := &stubCapabilityHandler{id: "euclo:cap.ast_query"}
 	if err := reg.RegisterInvocableCapability(handler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
@@ -205,7 +206,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 }
 
 func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_read", available: true}); err != nil {
 		t.Fatalf("register file_read: %v", err)
 	}

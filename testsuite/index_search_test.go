@@ -66,8 +66,8 @@ type astCodeIndex struct {
 	store *ast.SQLiteStore
 }
 
-func (a *astCodeIndex) GetFileMetadata(string) (any, bool)                     { return nil, false }
-func (a *astCodeIndex) ListFiles() []string                                    { return nil }
+func (a *astCodeIndex) GetFileMetadata(string) (any, bool)                       { return nil, false }
+func (a *astCodeIndex) ListFiles() []string                                      { return nil }
 func (a *astCodeIndex) GetSymbolsByName(string) ([]search.SymbolLocation, error) { return nil, nil }
 func (a *astCodeIndex) GetSymbolDefinition(string) (*search.SymbolLocation, error) {
 	return nil, nil
@@ -75,11 +75,11 @@ func (a *astCodeIndex) GetSymbolDefinition(string) (*search.SymbolLocation, erro
 func (a *astCodeIndex) GetSymbolReferences(string) ([]search.SymbolLocation, error) {
 	return nil, nil
 }
-func (a *astCodeIndex) GetFileDependencies(string) []string                         { return nil }
-func (a *astCodeIndex) GetDependents(string) []string                               { return nil }
-func (a *astCodeIndex) GetChunksForFile(string) []*search.CodeChunk                 { return nil }
-func (a *astCodeIndex) GetChunkByID(string) (*search.CodeChunk, bool)               { return nil, false }
-func (a *astCodeIndex) FindChunksByName(string) []*search.CodeChunk                 { return nil }
+func (a *astCodeIndex) GetFileDependencies(string) []string                           { return nil }
+func (a *astCodeIndex) GetDependents(string) []string                                 { return nil }
+func (a *astCodeIndex) GetChunksForFile(string) []*search.CodeChunk                   { return nil }
+func (a *astCodeIndex) GetChunkByID(string) (*search.CodeChunk, bool)                 { return nil, false }
+func (a *astCodeIndex) FindChunksByName(string) []*search.CodeChunk                   { return nil }
 func (a *astCodeIndex) FindChunksByFileAndRange(string, int, int) []*search.CodeChunk { return nil }
 func (a *astCodeIndex) SearchChunks(query string, limit int) []*search.CodeChunk {
 	nodes, err := a.store.SearchNodes(ast.NodeQuery{})

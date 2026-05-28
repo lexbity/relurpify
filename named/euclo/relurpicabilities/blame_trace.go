@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -26,22 +27,22 @@ func NewBlameTraceHandler(env agentenv.WorkspaceEnvironment) *BlameTraceHandler 
 func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.blame_trace",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Blame Trace",
 		Version:       "1.0.0",
 		Description:   "Parses git blame output to determine commit and author information for code lines",
 		Category:      "git",
 		Tags:          []string{"git", "blame", "read-only"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"file": {
 					Type:        "string",
 					Description: "File path to blame",
@@ -49,7 +50,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"lines": {
 					Type:        "array",
 					Description: "Line range [start, end] to blame (optional)",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "integer",
 					},
 				},
@@ -60,9 +61,9 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 			},
 			Required: []string{"file"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if blame executed successfully",
@@ -74,7 +75,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"entries": {
 					Type:        "array",
 					Description: "Blame entries per line",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},

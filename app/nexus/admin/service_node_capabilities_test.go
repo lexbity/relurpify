@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
@@ -26,7 +27,7 @@ func TestUpdateNodeCapabilitiesPersistsApprovedSet(t *testing.T) {
 		TenantID:   "tenant-1",
 		Name:       "Node One",
 		Platform:   relurpnet.NodePlatformLinux,
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: agentspec.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
 		Owner:      identity.SubjectRef{TenantID: "tenant-1", Kind: identity.SubjectKindNode, ID: "node-1"},
 	}))
@@ -44,9 +45,9 @@ func TestUpdateNodeCapabilitiesPersistsApprovedSet(t *testing.T) {
 		},
 		NodeID: "node-1",
 		Capabilities: []core.CapabilityDescriptor{
-			{ID: "camera.capture", Name: "camera.capture", Kind: core.CapabilityKindTool},
-			{ID: "camera.capture", Name: "camera.capture", Kind: core.CapabilityKindTool},
-			{Name: "microphone.listen", Kind: core.CapabilityKindTool},
+			{ID: "camera.capture", Name: "camera.capture", Kind: agentspec.CapabilityKindTool},
+			{ID: "camera.capture", Name: "camera.capture", Kind: agentspec.CapabilityKindTool},
+			{Name: "microphone.listen", Kind: agentspec.CapabilityKindTool},
 		},
 	})
 	require.NoError(t, err)
@@ -73,7 +74,7 @@ func TestUpdateNodeCapabilitiesDeniesCrossTenantAccess(t *testing.T) {
 		TenantID:   "tenant-b",
 		Name:       "Node One",
 		Platform:   relurpnet.NodePlatformLinux,
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: agentspec.TrustClassRemoteApproved,
 		PairedAt:   time.Now().UTC(),
 		Owner:      identity.SubjectRef{TenantID: "tenant-b", Kind: identity.SubjectKindNode, ID: "node-1"},
 	}))
@@ -90,7 +91,7 @@ func TestUpdateNodeCapabilitiesDeniesCrossTenantAccess(t *testing.T) {
 			TenantID: "tenant-b",
 		},
 		NodeID:       "node-1",
-		Capabilities: []core.CapabilityDescriptor{{ID: "camera.capture", Name: "camera.capture", Kind: core.CapabilityKindTool}},
+		Capabilities: []core.CapabilityDescriptor{{ID: "camera.capture", Name: "camera.capture", Kind: agentspec.CapabilityKindTool}},
 	})
 	require.Error(t, err)
 	var adminErr AdminError

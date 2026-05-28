@@ -684,12 +684,12 @@ func loadEucloLibraryItems(rt tui.RuntimeAdapter) ([]eucloLibraryItem, error) {
 
 func entryToEucloItem(entry thoughtrecipe.ThoughtRecipeEntry) eucloLibraryItem {
 	item := eucloLibraryItem{
-		Kind:  eucloLibraryItemRecipe,
-		ID:    strings.TrimSpace(entry.ThoughtRecipe.ID),
-		Title: strings.TrimSpace(entry.ThoughtRecipe.EffectiveName()),
+		Kind:        eucloLibraryItemRecipe,
+		ID:          strings.TrimSpace(entry.ThoughtRecipe.ID),
+		Title:       strings.TrimSpace(entry.ThoughtRecipe.EffectiveName()),
 		Description: strings.TrimSpace(entry.ThoughtRecipe.Description),
-		Source: strings.TrimSpace(entry.Source),
-		Tags:   append([]string(nil), entry.ThoughtRecipe.Metadata.Tags...),
+		Source:      strings.TrimSpace(entry.Source),
+		Tags:        append([]string(nil), entry.ThoughtRecipe.Metadata.Tags...),
 	}
 	if item.Title == "" {
 		item.Title = item.ID

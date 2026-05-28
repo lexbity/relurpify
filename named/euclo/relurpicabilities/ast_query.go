@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -25,22 +26,22 @@ func NewASTQueryHandler(env agentenv.WorkspaceEnvironment) *ASTQueryHandler {
 func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "AST Query",
 		Version:       "1.0.0",
 		Description:   "Queries the AST index to find symbols, functions, classes, and other code structure elements",
 		Category:      "code_analysis",
 		Tags:          []string{"ast", "query", "read-only"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"query": {
 					Type:        "string",
 					Description: "Symbol name or pattern to search for",
@@ -48,14 +49,14 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 				"types": {
 					Type:        "array",
 					Description: "Filter by node types (e.g., function, class, struct)",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "string",
 					},
 				},
 				"languages": {
 					Type:        "array",
 					Description: "Filter by programming languages",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "string",
 					},
 				},
@@ -66,9 +67,9 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 			},
 			Required: []string{"query"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if query executed successfully",
@@ -76,7 +77,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 				"matches": {
 					Type:        "array",
 					Description: "Matching AST nodes",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},

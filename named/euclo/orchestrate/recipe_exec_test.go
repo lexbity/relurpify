@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -112,7 +113,7 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 	})
 	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
 		Model:         stubThoughtRecipeModel{},
-		Registry:      capability.NewCapabilityRegistry(),
+		Registry:      capability.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
 		Config: &core.Config{
 			Name:  "thoughtrecipe-exec-test",
@@ -385,8 +386,8 @@ func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.En
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Name:          "code_review",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Availability:  core.AvailabilitySpec{Available: true},
 	}
 }
@@ -497,7 +498,7 @@ func containsAllStrings(haystack string, want ...string) bool {
 }
 
 func TestThoughtRecipeExecutorNodeUsesScopedToolsFromSource(t *testing.T) {
-	toolReg := capability.NewCapabilityRegistry()
+	toolReg := capability.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -532,7 +533,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeAppliesRunLocalOverlay(t *testing.T) {
-	toolReg := capability.NewCapabilityRegistry()
+	toolReg := capability.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -568,7 +569,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeSupportsFallbackPromptModeWithScopedTools(t *testing.T) {
-	toolReg := capability.NewCapabilityRegistry()
+	toolReg := capability.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -597,7 +598,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeKeepsUnscopedRecipesAtFullToolSurface(t *testing.T) {
-	toolReg := capability.NewCapabilityRegistry()
+	toolReg := capability.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -627,7 +628,7 @@ run reviewer:
 
 func TestThoughtRecipeExecutorNodeStillInvokesDirectCapabilities(t *testing.T) {
 	capHandler := &recordingCapabilityHandler{}
-	capReg := capability.NewCapabilityRegistry()
+	capReg := capability.NewRegistry()
 	if err := capReg.RegisterInvocableCapability(capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}
@@ -659,7 +660,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeCombinesScopedToolsAndNestedCapabilityInvocation(t *testing.T) {
-	toolReg := capability.NewCapabilityRegistry()
+	toolReg := capability.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -688,7 +689,7 @@ run reviewer:
 	}
 
 	capHandler := &recordingCapabilityHandler{}
-	runtimeReg := capability.NewCapabilityRegistry()
+	runtimeReg := capability.NewRegistry()
 	if err := runtimeReg.RegisterInvocableCapability(capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}

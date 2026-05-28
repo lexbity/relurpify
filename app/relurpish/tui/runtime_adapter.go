@@ -1014,7 +1014,7 @@ func capabilityAvailabilityLabel(spec core.AvailabilitySpec) string {
 	return "unavailable"
 }
 
-func riskClassStrings(values []core.RiskClass) []string {
+func riskClassStrings(values []agentspec.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -1022,7 +1022,7 @@ func riskClassStrings(values []core.RiskClass) []string {
 	return out
 }
 
-func effectClassStrings(values []core.EffectClass) []string {
+func effectClassStrings(values []agentspec.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))

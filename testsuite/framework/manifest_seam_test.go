@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 

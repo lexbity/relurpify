@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )

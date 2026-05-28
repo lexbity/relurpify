@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -73,7 +74,7 @@ func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	return false
 }
 
-func registerClarificationCapability(reg *capability.CapabilityRegistry) error {
+func registerClarificationCapability(reg *capability.Registry) error {
 	if reg == nil {
 		return nil
 	}
@@ -89,8 +90,8 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdat
 	return core.CapabilityDescriptor{
 		ID:            clarificationCapabilityID,
 		Name:          "intent clarification",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Category:      "clarification",
 		Availability:  core.AvailabilitySpec{Available: true},
 	}

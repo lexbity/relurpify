@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	mschema "codeburg.org/lexbit/relurpify/relurpnet/mcp/schema"
 )
 
-func ImportedToolDescriptor(providerID, sessionID, negotiatedVersion string, tool protocol.Tool, trust core.TrustClass) (core.CapabilityDescriptor, error) {
+func ImportedToolDescriptor(providerID, sessionID, negotiatedVersion string, tool protocol.Tool, trust agentspec.TrustClass) (core.CapabilityDescriptor, error) {
 	name := strings.TrimSpace(tool.Name)
 	if name == "" {
 		return core.CapabilityDescriptor{}, fmt.Errorf("remote tool name required")
@@ -24,8 +26,8 @@ func ImportedToolDescriptor(providerID, sessionID, negotiatedVersion string, too
 	}
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:            "mcp:" + providerID + ":tool:" + name,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Name:          name,
 		Version:       strings.TrimSpace(negotiatedVersion),
 		Description:   firstNonEmpty(tool.Description, tool.Title),
@@ -33,7 +35,7 @@ func ImportedToolDescriptor(providerID, sessionID, negotiatedVersion string, too
 		Tags:          []string{"mcp", "remote", "tool"},
 		Source: core.CapabilitySource{
 			ProviderID: providerID,
-			Scope:      core.CapabilityScopeRemote,
+			Scope:      agentspec.CapabilityScopeRemote,
 			SessionID:  sessionID,
 		},
 		TrustClass:      trust,
@@ -49,16 +51,16 @@ func ImportedToolDescriptor(providerID, sessionID, negotiatedVersion string, too
 	}), nil
 }
 
-func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, prompt protocol.Prompt, trust core.TrustClass) core.CapabilityDescriptor {
+func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, prompt protocol.Prompt, trust agentspec.TrustClass) core.CapabilityDescriptor {
 	name := strings.TrimSpace(prompt.Name)
-	schema := &core.Schema{Type: "object"}
+	schema := &contracts.Schema{Type: "object"}
 	if len(prompt.Arguments) > 0 {
-		schema.Properties = make(map[string]*core.Schema, len(prompt.Arguments))
+		schema.Properties = make(map[string]*contracts.Schema, len(prompt.Arguments))
 		for _, arg := range prompt.Arguments {
 			if strings.TrimSpace(arg.Name) == "" {
 				continue
 			}
-			schema.Properties[arg.Name] = &core.Schema{
+			schema.Properties[arg.Name] = &contracts.Schema{
 				Type:        "string",
 				Description: arg.Description,
 			}
@@ -69,8 +71,8 @@ func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, p
 	}
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:            "mcp:" + providerID + ":prompt:" + name,
-		Kind:          core.CapabilityKindPrompt,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindPrompt,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Name:          name,
 		Version:       strings.TrimSpace(negotiatedVersion),
 		Description:   prompt.Description,
@@ -78,7 +80,7 @@ func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, p
 		Tags:          []string{"mcp", "remote", "prompt"},
 		Source: core.CapabilitySource{
 			ProviderID: providerID,
-			Scope:      core.CapabilityScopeRemote,
+			Scope:      agentspec.CapabilityScopeRemote,
 			SessionID:  sessionID,
 		},
 		TrustClass:      trust,
@@ -93,12 +95,12 @@ func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, p
 	})
 }
 
-func ImportedResourceDescriptor(providerID, sessionID, negotiatedVersion string, resource protocol.Resource, trust core.TrustClass) core.CapabilityDescriptor {
+func ImportedResourceDescriptor(providerID, sessionID, negotiatedVersion string, resource protocol.Resource, trust agentspec.TrustClass) core.CapabilityDescriptor {
 	uri := strings.TrimSpace(resource.URI)
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:            "mcp:" + providerID + ":resource:" + sanitizeResourceID(uri),
-		Kind:          core.CapabilityKindResource,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindResource,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Name:          firstNonEmpty(resource.Name, uri),
 		Version:       strings.TrimSpace(negotiatedVersion),
 		Description:   resource.Description,
@@ -106,7 +108,7 @@ func ImportedResourceDescriptor(providerID, sessionID, negotiatedVersion string,
 		Tags:          []string{"mcp", "remote", "resource"},
 		Source: core.CapabilitySource{
 			ProviderID: providerID,
-			Scope:      core.CapabilityScopeRemote,
+			Scope:      agentspec.CapabilityScopeRemote,
 			SessionID:  sessionID,
 		},
 		TrustClass:      trust,

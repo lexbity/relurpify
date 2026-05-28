@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func minimalPlan(name string) *ExecutionPlan {
@@ -85,7 +85,7 @@ func TestRecipeCapabilityHandler_Descriptor(t *testing.T) {
 	if desc.Name != "myrecipe" {
 		t.Fatalf("expected descriptor name myrecipe, got %s", desc.Name)
 	}
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
 		t.Fatalf("expected relurpic runtime family, got %s", desc.RuntimeFamily)
 	}
 }

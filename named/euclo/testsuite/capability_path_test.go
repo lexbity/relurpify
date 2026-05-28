@@ -6,8 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
-	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {

@@ -59,13 +59,13 @@ func (r *CapabilityRegistry) UseSandboxScope(scope *sandbox.FileScopePolicy) {
 	r.mu.Unlock()
 }
 
-func (r *CapabilityRegistry) setAllowedCapabilities(allowed []core.CapabilitySelector, configured bool) {
+func (r *CapabilityRegistry) setAllowedCapabilities(allowed []agentspec.CapabilitySelector, configured bool) {
 	if r == nil || !configured {
 		return
 	}
 	if len(allowed) == 0 {
 		r.mu.Lock()
-		r.allowedCapabilities = []core.CapabilitySelector{}
+		r.allowedCapabilities = []agentspec.CapabilitySelector{}
 		r.allowedMatchers = nil
 		r.capabilities = make(map[string]core.CapabilityDescriptor)
 		r.entries = make(map[string]*capabilityEntry)
@@ -162,7 +162,7 @@ func effectiveExposurePolicies(spec *agentspec.AgentRuntimeSpec) []core.Capabili
 		policies = append(policies, core.CapabilityExposurePolicy{
 			Selector: agentspec.CapabilitySelector{
 				Name:            "browser",
-				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
+				RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyProvider},
 			},
 			Access: core.CapabilityExposureCallable,
 		})
@@ -201,15 +201,15 @@ func (r *CapabilityRegistry) effectiveExposureLocked(desc core.CapabilityDescrip
 
 func defaultCapabilityExposure(desc core.CapabilityDescriptor) core.CapabilityExposure {
 	switch desc.RuntimeFamily {
-	case core.CapabilityRuntimeFamilyLocalTool:
+	case agentspec.CapabilityRuntimeFamilyLocalTool:
 		return core.CapabilityExposureCallable
-	case core.CapabilityRuntimeFamilyProvider:
+	case agentspec.CapabilityRuntimeFamilyProvider:
 		return core.CapabilityExposureInspectable
 	default:
 		switch desc.Kind {
-		case core.CapabilityKindTool:
+		case agentspec.CapabilityKindTool:
 			switch desc.Source.Scope {
-			case core.CapabilityScopeProvider, core.CapabilityScopeRemote:
+			case agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
 				return core.CapabilityExposureInspectable
 			default:
 				return core.CapabilityExposureCallable
@@ -225,11 +225,11 @@ func defaultCapabilityExposureForEntry(desc core.CapabilityDescriptor, entry *ca
 		return defaultCapabilityExposure(desc)
 	}
 	switch desc.RuntimeFamily {
-	case core.CapabilityRuntimeFamilyLocalTool:
+	case agentspec.CapabilityRuntimeFamilyLocalTool:
 		return core.CapabilityExposureCallable
-	case core.CapabilityRuntimeFamilyProvider:
+	case agentspec.CapabilityRuntimeFamilyProvider:
 		return core.CapabilityExposureInspectable
-	case core.CapabilityRuntimeFamilyRelurpic:
+	case agentspec.CapabilityRuntimeFamilyRelurpic:
 		if _, ok := entry.handler.(core.InvocableCapabilityHandler); ok {
 			return core.CapabilityExposureCallable
 		}
@@ -542,19 +542,19 @@ func (r *CapabilityRegistry) RestrictTo(allowed []string) {
 	if len(allowed) == 0 {
 		return
 	}
-	selectors := make([]core.CapabilitySelector, 0, len(allowed))
+	selectors := make([]agentspec.CapabilitySelector, 0, len(allowed))
 	for _, name := range allowed {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		selectors = append(selectors, core.CapabilitySelector{Name: name, Kind: core.CapabilityKindTool})
+		selectors = append(selectors, agentspec.CapabilitySelector{Name: name, Kind: agentspec.CapabilityKindTool})
 	}
 	r.RestrictToCapabilities(selectors)
 }
 
 // RestrictToCapabilities removes tools and capabilities not matched by the selector set.
-func (r *CapabilityRegistry) RestrictToCapabilities(allowed []core.CapabilitySelector) {
+func (r *CapabilityRegistry) RestrictToCapabilities(allowed []agentspec.CapabilitySelector) {
 	if len(allowed) == 0 {
 		return
 	}
@@ -570,7 +570,7 @@ func (r *CapabilityRegistry) RestrictToCapabilities(allowed []core.CapabilitySel
 	r.rebuildIndexesLocked()
 }
 
-func matchesAnyCapabilitySelector(selectors []core.CapabilitySelector, desc core.CapabilityDescriptor) bool {
+func matchesAnyCapabilitySelector(selectors []agentspec.CapabilitySelector, desc core.CapabilityDescriptor) bool {
 	return matchesAnyCompiledCapabilitySelector(compileSelectors(selectors), buildDescriptorProfile(desc))
 }
 
@@ -706,7 +706,6 @@ func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[stri
 	return result
 }
 
-
 // SetModelProfile sets the active model profile for the registry to enable custom tool aliasing.
 func (r *CapabilityRegistry) SetModelProfile(p *contracts.ModelProfile) {
 	if r == nil {
@@ -737,4 +736,3 @@ func (r *CapabilityRegistry) normalizeToolNameLocked(name string) string {
 	}
 	return name
 }
-

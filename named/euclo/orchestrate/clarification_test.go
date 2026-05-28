@@ -6,11 +6,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 

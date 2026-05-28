@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestRootGraphExecute(t *testing.T) {
@@ -129,7 +130,7 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 
 func testGraphCapabilityRegistry(t *testing.T) *capability.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterInvocableCapability(testGraphCapability{}); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
@@ -142,8 +143,8 @@ func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) co
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Name:          "ast_query",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Availability:  core.AvailabilitySpec{Available: true},
 	}
 }

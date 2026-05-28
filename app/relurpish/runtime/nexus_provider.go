@@ -47,7 +47,7 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 	if rt == nil || rt.Tools == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	registrar, err := rt.Tools.ProviderCapabilityRegistrar(p.Descriptor(), agentspec.ProviderPolicy{DefaultTrust: core.TrustClassRemoteApproved})
+	registrar, err := rt.Tools.ProviderCapabilityRegistrar(p.Descriptor(), agentspec.ProviderPolicy{DefaultTrust: agentspec.TrustClassRemoteApproved})
 	if err != nil {
 		return err
 	}
@@ -57,11 +57,11 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 	for _, desc := range capabilities {
 		normalized := desc
 		normalized.Source.ProviderID = p.Descriptor().ID
-		normalized.Source.Scope = core.CapabilityScopeProvider
-		normalized.RuntimeFamily = core.CapabilityRuntimeFamilyProvider
+		normalized.Source.Scope = agentspec.CapabilityScopeProvider
+		normalized.RuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
 		current[normalized.ID] = struct{}{}
 		switch normalized.Kind {
-		case core.CapabilityKindTool:
+		case agentspec.CapabilityKindTool:
 			if _, ok := rt.Tools.GetCapability(normalized.ID); ok {
 				continue
 			}
@@ -119,7 +119,7 @@ func (p *nexusGatewayRuntimeProvider) Descriptor() core.ProviderDescriptor {
 		Kind:               core.ProviderKindAgentRuntime,
 		ConfiguredSource:   "nexus/ws",
 		ActivationScope:    "workspace",
-		TrustBaseline:      core.TrustClassRemoteApproved,
+		TrustBaseline:      agentspec.TrustClassRemoteApproved,
 		RecoverabilityMode: core.RecoverabilityInProcess,
 		SupportsHealth:     true,
 		Security: core.ProviderSecurityProfile{

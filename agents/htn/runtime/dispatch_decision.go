@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -15,10 +16,10 @@ type dispatchDecision struct {
 	Mode            string
 	Reason          string
 	Operator        string
-	Selectors       []core.CapabilitySelector
+	Selectors       []agentspec.CapabilitySelector
 }
 
-func dispatchMetadata(task *core.Task) (string, []core.CapabilitySelector, map[string]any) {
+func dispatchMetadata(task *core.Task) (string, []agentspec.CapabilitySelector, map[string]any) {
 	args := map[string]any{}
 	if task != nil {
 		args["instruction"] = task.Instruction
@@ -51,7 +52,7 @@ func dispatchMetadata(task *core.Task) (string, []core.CapabilitySelector, map[s
 			}
 		}
 	}
-	return defaultDelegateTarget, []core.CapabilitySelector{{Kind: core.CapabilityKindTool, Name: defaultDelegateTarget}}, args
+	return defaultDelegateTarget, []agentspec.CapabilitySelector{{Kind: agentspec.CapabilityKindTool, Name: defaultDelegateTarget}}, args
 }
 
 func operatorExecutor(step plan.PlanStep) string {
@@ -107,18 +108,18 @@ func capabilityTargetForOperator(operator string) string {
 	}
 }
 
-func selectorsFromStep(step plan.PlanStep) []core.CapabilitySelector {
+func selectorsFromStep(step plan.PlanStep) []agentspec.CapabilitySelector {
 	if step.Params == nil {
-		return []core.CapabilitySelector{{Kind: core.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
+		return []agentspec.CapabilitySelector{{Kind: agentspec.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
 	}
-	var selectors []core.CapabilitySelector
+	var selectors []agentspec.CapabilitySelector
 	if raw, ok := step.Params["required_capabilities"]; ok && decodeContextValue(raw, &selectors) && len(selectors) > 0 {
 		return dedupeSelectors(selectors)
 	}
-	return []core.CapabilitySelector{{Kind: core.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
+	return []agentspec.CapabilitySelector{{Kind: agentspec.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
 }
 
-func resolveDispatchTarget(registry *capability.Registry, explicitTarget string, selectors []core.CapabilitySelector) (string, string) {
+func resolveDispatchTarget(registry *capability.Registry, explicitTarget string, selectors []agentspec.CapabilitySelector) (string, string) {
 	if registry == nil {
 		return "", "registry_unavailable"
 	}

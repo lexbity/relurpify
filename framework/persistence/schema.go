@@ -22,16 +22,16 @@ type SchemaVersion struct {
 // CurrentSchemaVersions returns the current schema versions for all entity kinds.
 func CurrentSchemaVersions() map[string]SchemaVersion {
 	return map[string]SchemaVersion{
-		"workflow":                  {Name: "workflow", Version: 1},
-		"workflow_run":              {Name: "workflow_run", Version: 1},
-		"delegation":               {Name: "delegation", Version: 1},
-		"delegation_transition":    {Name: "delegation_transition", Version: 1},
-		"workflow_event":            {Name: "workflow_event", Version: 1},
-		"workflow_artifact":        {Name: "workflow_artifact", Version: 1},
-		"lineage_binding":           {Name: "lineage_binding", Version: 1},
-		"compilation_record":       {Name: "compilation_record", Version: 1},
-		"compilation_artifact":     {Name: "compilation_artifact", Version: 1},
-		"compilation_cache_entry":  {Name: "compilation_cache_entry", Version: 1},
+		"workflow":                {Name: "workflow", Version: 1},
+		"workflow_run":            {Name: "workflow_run", Version: 1},
+		"delegation":              {Name: "delegation", Version: 1},
+		"delegation_transition":   {Name: "delegation_transition", Version: 1},
+		"workflow_event":          {Name: "workflow_event", Version: 1},
+		"workflow_artifact":       {Name: "workflow_artifact", Version: 1},
+		"lineage_binding":         {Name: "lineage_binding", Version: 1},
+		"compilation_record":      {Name: "compilation_record", Version: 1},
+		"compilation_artifact":    {Name: "compilation_artifact", Version: 1},
+		"compilation_cache_entry": {Name: "compilation_cache_entry", Version: 1},
 	}
 }
 

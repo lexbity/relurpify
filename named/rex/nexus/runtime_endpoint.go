@@ -95,10 +95,10 @@ func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage fwfmp.Linea
 		}
 	}
 	return &fwfmp.AttemptRecord{
-		AttemptID:        accept.ProvisionalAttemptID,
-		LineageID:        lineage.LineageID,
-		RuntimeID:        e.DescriptorValue.RuntimeID,
-		State:            fwfmp.AttemptStateRunning,
+		AttemptID: accept.ProvisionalAttemptID,
+		LineageID: lineage.LineageID,
+		RuntimeID: e.DescriptorValue.RuntimeID,
+		State:     fwfmp.AttemptStateRunning,
 	}, nil
 }
 

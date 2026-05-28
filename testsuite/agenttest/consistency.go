@@ -105,12 +105,12 @@ func computeStandardDeviation(values []int) float64 {
 
 // VarianceReport provides detailed variance analysis
 type VarianceReport struct {
-	Mean          float64 `json:"mean"`
-	Variance      float64 `json:"variance"`
-	StdDev        float64 `json:"std_dev"`
-	Min           int     `json:"min"`
-	Max           int     `json:"max"`
-	Range         int     `json:"range"`
+	Mean                   float64 `json:"mean"`
+	Variance               float64 `json:"variance"`
+	StdDev                 float64 `json:"std_dev"`
+	Min                    int     `json:"min"`
+	Max                    int     `json:"max"`
+	Range                  int     `json:"range"`
 	CoefficientOfVariation float64 `json:"cv"`
 }
 

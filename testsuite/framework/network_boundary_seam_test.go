@@ -245,7 +245,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		}
 
 		// Create capability registry
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		registry.UsePermissionManager("test-agent", manager)
 
 		// Register a tool that requires network permission
@@ -295,7 +295,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		}
 
 		// Create capability registry
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		registry.UsePermissionManager("test-agent", manager)
 
 		// Register a tool that requires network permission

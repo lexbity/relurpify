@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/relurpnet/channel"
@@ -60,10 +61,10 @@ func (s *SessionSink) Emit(ctx context.Context, ev core.FrameworkEvent) error {
 	if inbound.Channel == "" && inbound.Conversation.ID == "" && inbound.Sender.ChannelID == "" && inbound.Sender.ResolvedID == "" {
 		return nil
 	}
-	trustClass := core.TrustClassRemoteDeclared
+	trustClass := agentspec.TrustClassRemoteDeclared
 	actorID := inbound.Sender.ChannelID
 	if resolution.Resolved() {
-		trustClass = core.TrustClassRemoteApproved
+		trustClass = agentspec.TrustClassRemoteApproved
 		if resolution.Owner.ID != "" {
 			actorID = resolution.Owner.ID
 		}

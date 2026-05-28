@@ -31,11 +31,11 @@ type Projection struct {
 }
 
 type Registration struct {
-	Name            string            `json:"name"`
-	RuntimeType     string            `json:"runtime_type"`
-	Managed         bool              `json:"managed"`
-	Capabilities    []string          `json:"capabilities,omitempty"`
-	ProjectionTiers []string          `json:"projection_tiers,omitempty"`
+	Name            string   `json:"name"`
+	RuntimeType     string   `json:"runtime_type"`
+	Managed         bool     `json:"managed"`
+	Capabilities    []string `json:"capabilities,omitempty"`
+	ProjectionTiers []string `json:"projection_tiers,omitempty"`
 }
 
 type AdminSnapshot struct {

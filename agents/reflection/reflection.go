@@ -192,13 +192,13 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.E
 		NodeID:  n.id,
 		Success: true,
 		Data: core.NewToolResultPayload(map[string]any{
-		"revise":                 revise,
-		"issue_score":            assessment.IssueScore,
-		"approval_threshold":     assessment.ApprovalThreshold,
-		"missing_verification":   assessment.MissingVerification,
-		"blocking_reasons":       append([]string{}, assessment.BlockingReasons...),
-		"blocking_issue_count":   assessment.BlockingIssueCount,
-		"unresolved_issue_count": assessment.UnresolvedIssueCount,
+			"revise":                 revise,
+			"issue_score":            assessment.IssueScore,
+			"approval_threshold":     assessment.ApprovalThreshold,
+			"missing_verification":   assessment.MissingVerification,
+			"blocking_reasons":       append([]string{}, assessment.BlockingReasons...),
+			"blocking_issue_count":   assessment.BlockingIssueCount,
+			"unresolved_issue_count": assessment.UnresolvedIssueCount,
 		}),
 	}, nil
 }

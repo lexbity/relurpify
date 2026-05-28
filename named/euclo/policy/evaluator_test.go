@@ -8,11 +8,11 @@ func TestEvaluatorEvaluate(t *testing.T) {
 	evaluator := NewEvaluator()
 
 	ctx := &PolicyContext{
-		FamilyID:          "implementation",
-		EditPermitted:     true,
+		FamilyID:             "implementation",
+		EditPermitted:        true,
 		RequiresVerification: false,
-		RiskLevel:         "medium",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "medium",
+		WorkspaceScopes:      []string{},
 	}
 
 	decision := evaluator.Evaluate(ctx)
@@ -30,11 +30,11 @@ func TestEvaluatorCheckPermission(t *testing.T) {
 	evaluator := NewEvaluator()
 
 	ctx := &PolicyContext{
-		FamilyID:          "implementation",
-		EditPermitted:     true,
+		FamilyID:             "implementation",
+		EditPermitted:        true,
 		RequiresVerification: false,
-		RiskLevel:         "medium",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "medium",
+		WorkspaceScopes:      []string{},
 	}
 
 	permitted := evaluator.CheckPermission(ctx)
@@ -53,11 +53,11 @@ func TestEvaluatorRequestHITL(t *testing.T) {
 	evaluator := NewEvaluator()
 
 	ctx := &PolicyContext{
-		FamilyID:          "debug",
-		EditPermitted:     false,
+		FamilyID:             "debug",
+		EditPermitted:        false,
 		RequiresVerification: false,
-		RiskLevel:         "low",
-		WorkspaceScopes:   []string{},
+		RiskLevel:            "low",
+		WorkspaceScopes:      []string{},
 	}
 
 	required := evaluator.RequestHITL(ctx)

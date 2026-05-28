@@ -96,18 +96,18 @@ func seedRuntimeMemory(ctx context.Context, store *memory.WorkingMemoryStore, sp
 	}
 	for _, record := range spec.Procedural {
 		store.Scope(firstNonEmpty(record.TaskID, "task")).Set(record.RoutineID, map[string]any{
-			"routine_id":   record.RoutineID,
-			"name":         record.Name,
-			"description":  record.Description,
-			"summary":      record.Summary,
-			"workflow_id":  record.WorkflowID,
-			"task_id":      record.TaskID,
-			"project_id":   record.ProjectID,
-			"body_ref":     record.BodyRef,
-			"inline_body":  record.InlineBody,
-			"verified":     record.Verified,
-			"version":      record.Version,
-			"reuse_count":  record.ReuseCount,
+			"routine_id":  record.RoutineID,
+			"name":        record.Name,
+			"description": record.Description,
+			"summary":     record.Summary,
+			"workflow_id": record.WorkflowID,
+			"task_id":     record.TaskID,
+			"project_id":  record.ProjectID,
+			"body_ref":    record.BodyRef,
+			"inline_body": record.InlineBody,
+			"verified":    record.Verified,
+			"version":     record.Version,
+			"reuse_count": record.ReuseCount,
 		}, core.MemoryClassWorking)
 	}
 	return nil
@@ -156,11 +156,11 @@ func firstWorkflowRunID(runs []WorkflowRunSeedSpec) string {
 	return strings.TrimSpace(runs[0].RunID)
 }
 
-func parseMemoryScope(raw string) string { return strings.TrimSpace(raw) }
+func parseMemoryScope(raw string) string     { return strings.TrimSpace(raw) }
 func parseDeclarativeKind(raw string) string { return strings.TrimSpace(raw) }
-func parseProceduralKind(raw string) string { return strings.TrimSpace(raw) }
-func parseWorkflowStatus(raw string) string { return strings.TrimSpace(raw) }
-func parseKnowledgeKind(raw string) string { return strings.TrimSpace(raw) }
+func parseProceduralKind(raw string) string  { return strings.TrimSpace(raw) }
+func parseWorkflowStatus(raw string) string  { return strings.TrimSpace(raw) }
+func parseKnowledgeKind(raw string) string   { return strings.TrimSpace(raw) }
 
 type agenttestRetrievalEmbedder struct{}
 

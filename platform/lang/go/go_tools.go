@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
-		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var goProjectMarkers = []string{
@@ -105,7 +105,9 @@ func (t *GoModuleMetadataTool) Category() string { return "go" }
 func (t *GoModuleMetadataTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{{Name: "working_directory", Type: "string", Required: false, Default: "."}}
 }
-func (t *GoModuleMetadataTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *GoModuleMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
+	t.inner.SetCommandRunner(r)
+}
 func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
@@ -131,7 +133,7 @@ func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]inte
 	}
 	return &contracts.ToolResult{Success: result.Success, Error: result.Error, Data: data, Metadata: result.Metadata}, nil
 }
-func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *GoModuleMetadataTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *GoModuleMetadataTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "metadata", "recovery"}
@@ -214,7 +216,7 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *GoTestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *GoTestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *GoTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *GoTestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "test", "verification", "diagnostics"}
@@ -291,7 +293,7 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *GoBuildTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *GoBuildTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *GoBuildTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *GoBuildTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "build", "verification", "diagnostics"}

@@ -344,5 +344,3 @@ func (p *ModelProfile) MatchPattern() string {
 func hasGlobMeta(s string) bool {
 	return strings.ContainsAny(s, "*?[")
 }
-
-

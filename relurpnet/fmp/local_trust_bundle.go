@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
 )
 
 func (s *Service) PublishLocalTrustBundle(ctx context.Context, trustDomain, bundleID string, recipientKeys []RecipientKeyAdvertisement) error {

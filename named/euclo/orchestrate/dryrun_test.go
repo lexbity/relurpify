@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -22,8 +23,8 @@ func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata
 	return core.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Availability:  h.availability,
 	}
 }
@@ -42,7 +43,7 @@ func (h *dryRunCountingHandler) count() int {
 }
 
 func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	handler := &dryRunCountingHandler{
 		id:           "euclo:cap.ast_query",
 		availability: core.AvailabilitySpec{Available: true},
@@ -64,7 +65,7 @@ func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
 }
 
 func TestDryRun_IncludesAllCandidates(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	one := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
 	two := &dryRunCountingHandler{id: "euclo:cap.symbol_trace", availability: core.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(one); err != nil {
@@ -84,7 +85,7 @@ func TestDryRun_IncludesAllCandidates(t *testing.T) {
 }
 
 func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	visible := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
 	hidden := &dryRunCountingHandler{id: "euclo:cap.code_review", availability: core.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(visible); err != nil {
@@ -94,7 +95,7 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 		t.Fatalf("register hidden: %v", err)
 	}
 	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{ID: hidden.id},
+		Selector: agentspec.CapabilitySelector{ID: hidden.id},
 		Access:   core.CapabilityExposureHidden,
 	}})
 
@@ -126,7 +127,7 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 }
 
 func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(primary); err != nil {
 		t.Fatalf("register primary: %v", err)
@@ -149,7 +150,7 @@ func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 }
 
 func TestDryRun_EmitsDryRunEvent(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(primary); err != nil {
 		t.Fatalf("register primary: %v", err)

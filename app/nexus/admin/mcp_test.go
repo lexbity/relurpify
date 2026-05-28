@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
@@ -160,12 +161,12 @@ func TestMCPHelpersAndParsing(t *testing.T) {
 
 		capabilities := capabilityDescriptorsArg(map[string]any{
 			"capabilities": []any{
-				map[string]any{"id": "cap-1", "kind": string(core.CapabilityKindTool), "name": "tool-one"},
+				map[string]any{"id": "cap-1", "kind": string(agentspec.CapabilityKindTool), "name": "tool-one"},
 			},
 		}, "capabilities")
 		require.Len(t, capabilities, 1)
 		require.Equal(t, "cap-1", capabilities[0].ID)
-		require.Equal(t, core.CapabilityKindTool, capabilities[0].Kind)
+		require.Equal(t, agentspec.CapabilityKindTool, capabilities[0].Kind)
 
 		bundle, err := trustBundleArg(map[string]any{"bundle": map[string]any{"trust_domain": "mesh.example", "bundle_id": "bundle-1"}}, "bundle")
 		require.NoError(t, err)

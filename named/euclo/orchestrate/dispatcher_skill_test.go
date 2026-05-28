@@ -21,7 +21,7 @@ func TestDispatcherExecuteSkillFilterNarrowsCandidates(t *testing.T) {
 		"euclo:cap.symbol_trace",
 	})
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	for _, entry := range []struct {
 		id       string
 		priority int
@@ -63,7 +63,7 @@ func TestDispatcherExecuteSkillFilterUnknownSkill(t *testing.T) {
 	workspace := t.TempDir()
 	dispatcher := NewDispatcher("dispatcher1").
 		WithWorkspace(workspace).
-		WithCapabilityRegistry(capability.NewCapabilityRegistry())
+		WithCapabilityRegistry(capability.NewRegistry())
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	state.SetSkillFilter(env, "missing-skill")
 
@@ -82,7 +82,7 @@ func TestDispatcherExecuteSkillFilterEmptyAllowedCapabilities(t *testing.T) {
 
 	dispatcher := NewDispatcher("dispatcher1").
 		WithWorkspace(workspace).
-		WithCapabilityRegistry(capability.NewCapabilityRegistry())
+		WithCapabilityRegistry(capability.NewRegistry())
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	state.SetSkillFilter(env, "empty-bundle")
 
@@ -99,7 +99,7 @@ func TestSkillFilterDryRunRespectsAvailability(t *testing.T) {
 	workspace := t.TempDir()
 	writeSkillManifestFixture(t, workspace, "bundle", []string{"euclo:cap.targeted_refactor"})
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterCapability(testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",

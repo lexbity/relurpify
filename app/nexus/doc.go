@@ -18,7 +18,7 @@
 // Nexus works with three distinct trust-related concepts. They operate at
 // different layers and must not be conflated:
 //
-// Node enrollment trust (framework/core.TrustClass on NodeEnrollment) —
+// Node enrollment trust (framework/agentspec.TrustClass on NodeEnrollment) —
 // records the result of the node pairing handshake. Answers: "how was this
 // node authenticated when it joined the fabric?"
 //

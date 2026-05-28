@@ -84,7 +84,7 @@ func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []core.ProviderC
 			Enabled:         provider.Enabled,
 			Target:          provider.Target,
 			ActivationScope: provider.ActivationScope,
-			TrustBaseline:   core.TrustClass(provider.TrustBaseline),
+			TrustBaseline:   agentspec.TrustClass(provider.TrustBaseline),
 			Recoverability:  core.RecoverabilityMode(provider.Recoverability),
 		}
 		if len(provider.Config) > 0 {

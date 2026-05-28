@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
-		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var nodeProjectMarkers = []string{
@@ -199,7 +199,7 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]interface
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *NodeNPMTestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *NodeNPMTestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *NodeNPMTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *NodeNPMTestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:node", "test", "verification", "diagnostics"}
@@ -234,7 +234,9 @@ func (t *NodeSyntaxCheckTool) Parameters() []contracts.ToolParameter {
 		{Name: "path", Type: "string", Required: true},
 	}
 }
-func (t *NodeSyntaxCheckTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *NodeSyntaxCheckTool) SetCommandRunner(r contracts.CommandRunner) {
+	t.inner.SetCommandRunner(r)
+}
 func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
@@ -267,7 +269,7 @@ func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]inter
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *NodeSyntaxCheckTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *NodeSyntaxCheckTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
 func (t *NodeSyntaxCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *NodeSyntaxCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:node", "syntax-check", "verification", "diagnostics"}

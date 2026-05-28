@@ -10,6 +10,7 @@ import (
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -31,22 +32,22 @@ func NewDiffSummaryHandler(env agentenv.WorkspaceEnvironment) *DiffSummaryHandle
 func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.diff_summary",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Diff Summary",
 		Version:       "1.0.0",
 		Description:   "Summarizes git diff output and identifies risk areas",
 		Category:      "review_synthesis",
 		Tags:          []string{"git", "diff", "review", "relurpic"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"base_ref": {
 					Type:        "string",
 					Description: "Base git ref (default: HEAD~1)",
@@ -61,9 +62,9 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				},
 			},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if diff completed",
@@ -75,7 +76,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"changed_files": {
 					Type:        "array",
 					Description: "List of changed files",
-					Items:       &core.Schema{Type: "string"},
+					Items:       &contracts.Schema{Type: "string"},
 				},
 				"additions": {
 					Type:        "integer",
@@ -88,7 +89,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"risk_areas": {
 					Type:        "array",
 					Description: "Identified risk areas",
-					Items:       &core.Schema{Type: "object"},
+					Items:       &contracts.Schema{Type: "object"},
 				},
 			},
 		},

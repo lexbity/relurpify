@@ -464,7 +464,7 @@ func discoverSuites(ws, agentName string) []string {
 		return matches
 	}
 	// Fallback: check relurpify_cfg/testsuites/ for locally-added suites.
-			cfgDir := cfgload.New(ws).TestsuitesDir()
+	cfgDir := cfgload.New(ws).TestsuitesDir()
 	if _, err := os.Stat(cfgDir); err == nil {
 		matches, _ = filepath.Glob(filepath.Join(cfgDir, pattern))
 	}

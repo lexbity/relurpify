@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -25,22 +26,22 @@ func NewSymbolTraceHandler(env agentenv.WorkspaceEnvironment) *SymbolTraceHandle
 func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.symbol_trace",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Symbol Trace",
 		Version:       "1.0.0",
 		Description:   "Traces call relationships for a symbol to find callers and callees",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "trace", "read-only"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"symbol": {
 					Type:        "string",
 					Description: "Symbol name to trace",
@@ -48,9 +49,9 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 			},
 			Required: []string{"symbol"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if trace executed successfully",
@@ -66,14 +67,14 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"callees": {
 					Type:        "array",
 					Description: "Functions called by this symbol",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},
 				"callers": {
 					Type:        "array",
 					Description: "Functions that call this symbol",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "object",
 					},
 				},

@@ -317,11 +317,11 @@ func (c *Controller) sourceByName(name string) (KnowledgeSource, error) {
 	return nil, fmt.Errorf("blackboard: knowledge source %q not found", name)
 }
 
-func aggregateKnowledgeSourceSelectors(sources []KnowledgeSource) []core.CapabilitySelector {
+func aggregateKnowledgeSourceSelectors(sources []KnowledgeSource) []agentspec.CapabilitySelector {
 	if len(sources) == 0 {
 		return nil
 	}
-	out := make([]core.CapabilitySelector, 0, len(sources))
+	out := make([]agentspec.CapabilitySelector, 0, len(sources))
 	seen := make(map[string]struct{})
 	for _, source := range sources {
 		for _, selector := range ResolveKnowledgeSource(source).Contract.RequiredCapabilities {

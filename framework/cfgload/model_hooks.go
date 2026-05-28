@@ -8,4 +8,3 @@ func init() {
 	model.ReadConfigFile = ReadConfigFile
 	model.RejectForbiddenSecretFields = RejectForbiddenSecretFields
 }
-

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // GrepTool implements plain text search.

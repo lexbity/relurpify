@@ -111,7 +111,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 			}
 			emitPreflightEvent(telemetry, "preflight_pull_start", model, nil)
 			pullStart := time.Now()
-			
+
 			// Pull the model
 			if err := pb.Pull(ctx, model); err != nil {
 				duration := time.Since(startTime)
@@ -122,20 +122,20 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 				})
 				return nil, fmt.Errorf("model %q not found, and automatic pull failed: %w", model, err)
 			}
-			
+
 			if logger != nil {
 				logger.Printf("[preflight] successfully pulled model %q in %v, refreshing model list...", model, time.Since(pullStart))
 			}
 			emitPreflightEvent(telemetry, "preflight_pull_success", model, map[string]interface{}{
 				"pull_duration": time.Since(pullStart).Milliseconds(),
 			})
-			
+
 			// Refresh list of models
 			models, err = backend.ListModels(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list models after successful pull: %w", err)
 			}
-			
+
 			// Search again
 			for _, m := range models {
 				if strings.EqualFold(strings.TrimSpace(m.Name), model) {
@@ -153,12 +153,12 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 		if logger != nil {
 			logger.Printf("[preflight] model %q found in backend list, warming/loading model into memory...", model)
 		}
-		
+
 		// Warm the model to force Ollama/LMStudio to cache it in VRAM
 		if err := backend.Warm(ctx); err != nil && logger != nil {
 			logger.Printf("[preflight] warning: model warm-up failed/timed out: %v", err)
 		}
-		
+
 		emitPreflightEvent(telemetry, "preflight_success", model, map[string]interface{}{
 			"found_model":    matchedModel.Name,
 			"family":         matchedModel.Family,

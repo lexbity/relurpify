@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 )
 
@@ -17,7 +17,7 @@ func (reactCapabilityCatalogProvider) Provide(ctx prompt.RuntimeContext) prompt.
 	}
 	var lines []string
 	for _, cap := range ctx.Capabilities {
-		if cap.Kind == core.CapabilityKindTool {
+		if cap.Kind == agentspec.CapabilityKindTool {
 			continue
 		}
 		label := strings.TrimSpace(cap.Name)

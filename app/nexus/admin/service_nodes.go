@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
@@ -193,7 +194,7 @@ func (s *service) ApprovePairing(ctx context.Context, req ApprovePairingRequest)
 				ID:         pairing.Cred.DeviceID,
 				Name:       pairing.Cred.DeviceID,
 				Platform:   relurpnet.NodePlatformHeadless,
-				TrustClass: core.TrustClassRemoteApproved,
+				TrustClass: agentspec.TrustClassRemoteApproved,
 				PairedAt:   pairing.Cred.IssuedAt,
 			}); err != nil {
 				return ApprovePairingResult{}, internalError("persist node descriptor failed", err, map[string]any{"code": req.Code})
@@ -299,7 +300,7 @@ func (s *service) ListNodeEnrollments(ctx context.Context, req ListNodeEnrollmen
 			TenantID:       e.TenantID,
 			NodeID:         e.NodeID,
 			Owner:          e.Owner,
-			TrustClass:     core.TrustClass(e.TrustClass),
+			TrustClass:     agentspec.TrustClass(e.TrustClass),
 			KeyID:          e.KeyID,
 			PairedAt:       e.PairedAt,
 			LastVerifiedAt: e.LastVerifiedAt,

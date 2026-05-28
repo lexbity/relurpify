@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	netsession "codeburg.org/lexbit/relurpify/relurpnet/session"
 	_ "github.com/mattn/go-sqlite3"
@@ -138,7 +139,7 @@ func (s *SQLiteSessionStore) GetBoundary(ctx context.Context, key string) (*nets
 		return nil, err
 	}
 	boundary.Scope = core.SessionScope(scope)
-	boundary.TrustClass = core.TrustClass(trust)
+	boundary.TrustClass = agentspec.TrustClass(trust)
 	if boundary.Owner.ID != "" || ownerKind != "" {
 		boundary.Owner = core.DelegationSubjectRef{
 			TenantID: boundary.TenantID,
@@ -197,7 +198,7 @@ func (s *SQLiteSessionStore) GetBoundaryBySessionID(ctx context.Context, session
 		return nil, err
 	}
 	boundary.Scope = core.SessionScope(scope)
-	boundary.TrustClass = core.TrustClass(trust)
+	boundary.TrustClass = agentspec.TrustClass(trust)
 	if boundary.Owner.ID != "" || ownerKind != "" {
 		boundary.Owner = core.DelegationSubjectRef{
 			TenantID: boundary.TenantID,
@@ -323,7 +324,7 @@ func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition strin
 			return nil, err
 		}
 		boundary.Scope = core.SessionScope(scope)
-		boundary.TrustClass = core.TrustClass(trust)
+		boundary.TrustClass = agentspec.TrustClass(trust)
 		if boundary.Owner.ID != "" || ownerKind != "" {
 			boundary.Owner = core.DelegationSubjectRef{
 				TenantID: boundary.TenantID,

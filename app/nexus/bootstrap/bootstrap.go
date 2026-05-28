@@ -6,8 +6,8 @@ import (
 
 	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet"
 	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
@@ -50,7 +50,7 @@ func DefaultNodeDescriptor(deviceID string) relurpnet.NodeDescriptor {
 		ID:         deviceID,
 		Name:       deviceID,
 		Platform:   relurpnet.NodePlatformHeadless,
-		TrustClass: core.TrustClassWorkspaceTrusted,
+		TrustClass: agentspec.TrustClassWorkspaceTrusted,
 		PairedAt:   time.Now().UTC(),
 	}
 }

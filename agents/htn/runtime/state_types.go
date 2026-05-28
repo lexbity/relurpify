@@ -3,6 +3,7 @@ package runtime
 import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -53,12 +54,12 @@ type TaskState struct {
 // MethodState summarizes the selected decomposition method without retaining
 // executable function fields.
 type MethodState struct {
-	Name                 string                    `json:"name"`
-	TaskType             core.TaskType             `json:"task_type"`
-	Priority             int                       `json:"priority"`
-	SubtaskCount         int                       `json:"subtask_count"`
-	OperatorCount        int                       `json:"operator_count"`
-	RequiredCapabilities []core.CapabilitySelector `json:"required_capabilities,omitempty"`
+	Name                 string                         `json:"name"`
+	TaskType             core.TaskType                  `json:"task_type"`
+	Priority             int                            `json:"priority"`
+	SubtaskCount         int                            `json:"subtask_count"`
+	OperatorCount        int                            `json:"operator_count"`
+	RequiredCapabilities []agentspec.CapabilitySelector `json:"required_capabilities,omitempty"`
 }
 
 // ExecutionState tracks HTN runtime progress separately from the plan.

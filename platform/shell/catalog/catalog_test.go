@@ -50,8 +50,8 @@ func TestSchemaValidationReportsFieldPaths(t *testing.T) {
 				Type: "object",
 				Properties: map[string]ToolSchemaField{
 					"mode": {
-						Type:  "string",
-						Enum:  []string{"fast", "safe"},
+						Type:    "string",
+						Enum:    []string{"fast", "safe"},
 						Default: "slow",
 					},
 				},
@@ -95,17 +95,17 @@ func TestDeprecatedEntriesRemainDiscoverable(t *testing.T) {
 func TestCatalogOrderingIsDeterministic(t *testing.T) {
 	cat := NewToolCatalog()
 	require.NoError(t, cat.Register(ToolCatalogEntry{
-		Name: "cli_zeta",
+		Name:            "cli_zeta",
 		ParameterSchema: ToolSchema{Type: "object"},
 		OutputSchema:    ToolSchema{Type: "object"},
 	}))
 	require.NoError(t, cat.Register(ToolCatalogEntry{
-		Name: "cli_alpha",
+		Name:            "cli_alpha",
 		ParameterSchema: ToolSchema{Type: "object"},
 		OutputSchema:    ToolSchema{Type: "object"},
 	}))
 	require.NoError(t, cat.Register(ToolCatalogEntry{
-		Name: "cli_middle",
+		Name:            "cli_middle",
 		ParameterSchema: ToolSchema{Type: "object"},
 		OutputSchema:    ToolSchema{Type: "object"},
 	}))

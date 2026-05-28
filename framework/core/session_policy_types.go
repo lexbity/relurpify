@@ -21,20 +21,20 @@ const (
 
 // SessionSelector matches session-oriented requests during policy evaluation.
 type SessionSelector struct {
-	Partitions                []string           `json:"partitions,omitempty"`
-	ChannelIDs                []string           `json:"channel_ids,omitempty"`
-	Scopes                    []SessionScope     `json:"scopes,omitempty"`
-	TrustClasses              []TrustClass       `json:"trust_classes,omitempty"`
-	Operations                []SessionOperation `json:"operations,omitempty"`
-	ActorKinds                []string           `json:"actor_kinds,omitempty"`
-	ActorIDs                  []string           `json:"actor_ids,omitempty"`
-	ExternalProviders         []string           `json:"external_providers,omitempty"`
-	RequireOwnership          *bool              `json:"require_ownership,omitempty"`
-	RequireDelegation         *bool              `json:"require_delegation,omitempty"`
-	RequireExternalBinding    *bool              `json:"require_external_binding,omitempty"`
-	RequireResolvedExternal   *bool              `json:"require_resolved_external,omitempty"`
-	RequireRestrictedExternal *bool              `json:"require_restricted_external,omitempty"`
-	AuthenticatedOnly         *bool              `json:"authenticated_only,omitempty"`
+	Partitions                []string               `json:"partitions,omitempty"`
+	ChannelIDs                []string               `json:"channel_ids,omitempty"`
+	Scopes                    []SessionScope         `json:"scopes,omitempty"`
+	TrustClasses              []agentspec.TrustClass `json:"trust_classes,omitempty"`
+	Operations                []SessionOperation     `json:"operations,omitempty"`
+	ActorKinds                []string               `json:"actor_kinds,omitempty"`
+	ActorIDs                  []string               `json:"actor_ids,omitempty"`
+	ExternalProviders         []string               `json:"external_providers,omitempty"`
+	RequireOwnership          *bool                  `json:"require_ownership,omitempty"`
+	RequireDelegation         *bool                  `json:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool                  `json:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool                  `json:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool                  `json:"require_restricted_external,omitempty"`
+	AuthenticatedOnly         *bool                  `json:"authenticated_only,omitempty"`
 }
 
 // SessionPolicy configures access to session-scoped operations.

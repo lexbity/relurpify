@@ -8,32 +8,32 @@ import (
 
 // PatchHunk describes one causal code change attached to an execution event.
 type PatchHunk struct {
-	File        string
-	Summary     string
-	Body        string
-	StepID      string
-	Origin      string
-	LinesAdded  int
+	File         string
+	Summary      string
+	Body         string
+	StepID       string
+	Origin       string
+	LinesAdded   int
 	LinesRemoved int
 }
 
 // ExecutionEvent is the normalized event envelope used by the Euclo router.
 type ExecutionEvent struct {
-	Header     reporting.EventHeader
-	Type       reporting.EventType
-	TaskID     string
-	SessionID  string
-	NodeID     string
-	RecipeID   string
-	StepID     string
-	Surface    string
-	Summary    string
-	Milestone  string
-	Output     string
+	Header      reporting.EventHeader
+	Type        reporting.EventType
+	TaskID      string
+	SessionID   string
+	NodeID      string
+	RecipeID    string
+	StepID      string
+	Surface     string
+	Summary     string
+	Milestone   string
+	Output      string
 	RouteScores map[string]float64
-	PatchHunks []PatchHunk
-	Frame      *interaction.InteractionFrame
-	Payload    map[string]any
+	PatchHunks  []PatchHunk
+	Frame       *interaction.InteractionFrame
+	Payload     map[string]any
 }
 
 // RecipeRunMsg groups execution events under one recipe run identifier.

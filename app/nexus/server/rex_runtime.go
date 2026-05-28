@@ -402,17 +402,17 @@ func (p *RexRuntimeProvider) ReadSLOSignals(ctx context.Context) (rexcontrolplan
 func (p *RexRuntimeProvider) CapabilityDescriptor() core.CapabilityDescriptor {
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:            rexCapabilityID,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "rex.execute",
 		Version:       "v1alpha1",
 		Description:   "Execute a task on the Nexus-managed Rex runtime",
 		Category:      "runtime",
 		Tags:          []string{"rex", "managed-runtime", "execute"},
-		TrustClass:    core.TrustClassWorkspaceTrusted,
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassWorkspaceTrusted,
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"instruction":      {Type: "string", Description: "Task instruction for Rex"},
 				"task_type":        {Type: "string", Description: "Optional core task type"},
 				"task_id":          {Type: "string"},

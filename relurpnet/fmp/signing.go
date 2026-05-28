@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
 )
 
 const SignatureAlgorithmEd25519 = "ed25519"

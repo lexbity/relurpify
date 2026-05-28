@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/services"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
+	"codeburg.org/lexbit/relurpify/framework/services"
 )
 
 func TestThoughtRecipeLoaderRejectsBytes(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 )
 
 // OwnershipStore is part of the Phase 1 frozen FMP surface.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestGetSessionDeniesCrossTenantAccess(t *testing.T) {
 		ChannelID:  "webchat",
 		PeerID:     "conv-1",
 		Owner:      core.DelegationSubjectRef{TenantID: "tenant-b", Kind: string(identity.SubjectKindServiceAccount), ID: "svc-b"},
-		TrustClass: core.TrustClassRemoteApproved,
+		TrustClass: agentspec.TrustClassRemoteApproved,
 		CreatedAt:  time.Now().UTC(),
 	}))
 

@@ -279,8 +279,8 @@ func TestEucloLibraryPaneFooterShowsSessionRuns(t *testing.T) {
 
 func TestEucloLibraryPaneEntryToEucloItem(t *testing.T) {
 	recipe := &thoughtrecipe.ThoughtRecipe{
-		ID:   "test.entry",
-		Name: "Test Entry",
+		ID:          "test.entry",
+		Name:        "Test Entry",
 		Description: "An entry test",
 		Metadata: thoughtrecipe.ThoughtRecipeMetadata{
 			Tags: []string{"test", "conversion"},

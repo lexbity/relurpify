@@ -81,7 +81,7 @@ func newTargetedRefactorTestEnv(t *testing.T) (agentenv.WorkspaceEnvironment, st
 
 	env := agentenv.WorkspaceEnvironment{
 		Config:            &core.Config{},
-		Registry:          capability.NewCapabilityRegistry(),
+		Registry:          capability.NewRegistry(),
 		IndexManager:      manager,
 		CommandRunner:     nil,
 		PermissionManager: nil,

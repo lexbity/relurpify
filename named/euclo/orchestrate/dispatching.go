@@ -15,7 +15,7 @@ import (
 )
 
 // Dispatch resolves a route request and records route telemetry.
-func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
+func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
 	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
@@ -65,7 +65,7 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 	return result, nil
 }
 
-func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
+func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
 	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
@@ -141,7 +141,7 @@ func routeResultFromSelection(report *DryRunReport, selected CandidateRouteInfo,
 	return result
 }
 
-func rankCandidates(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func rankCandidates(req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
 	candidates := make([]CandidateRouteInfo, 0)
 	for _, cand := range rankCapabilityCandidates(req, caps) {
 		candidates = append(candidates, CandidateRouteInfo{
@@ -174,7 +174,7 @@ func rankCandidates(req RouteRequest, caps *capability.CapabilityRegistry, thoug
 	return candidates
 }
 
-func rankCapabilityCandidates(req RouteRequest, caps *capability.CapabilityRegistry) []rankedRoute {
+func rankCapabilityCandidates(req RouteRequest, caps *capability.Registry) []rankedRoute {
 	if caps == nil {
 		return nil
 	}
@@ -343,14 +343,14 @@ func candidateByIDKind(candidates []CandidateRouteInfo, kind, id string) (Candid
 	return CandidateRouteInfo{}, false
 }
 
-func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
+func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
 	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes)
 	selected, ok := selectDeterministicCandidate(req, report.Candidates)
 	return report, selected, false, ok
 }
 
-func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
 	clarificationCandidate := clarificationRouteCandidate(env, req)
 	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
 		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
@@ -368,7 +368,7 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, c
 	return dedupeAndSortRouteCandidates(candidates)
 }
 
-func explicitRouteCandidate(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
+func explicitRouteCandidate(req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
 	switch {
 	case strings.TrimSpace(req.ThoughtRecipeID) != "":
 		id := strings.TrimSpace(req.ThoughtRecipeID)
@@ -478,7 +478,7 @@ func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest
 	return candidates
 }
 
-func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry) []CandidateRouteInfo {
+func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.Registry) []CandidateRouteInfo {
 	if caps == nil {
 		return nil
 	}
@@ -916,7 +916,7 @@ func capabilityRiskTokens(desc core.CapabilityDescriptor) []string {
 	return out
 }
 
-func capabilitySnapshotByID(caps *capability.CapabilityRegistry, id string) (capability.CapabilitySnapshot, bool) {
+func capabilitySnapshotByID(caps *capability.Registry, id string) (capability.CapabilitySnapshot, bool) {
 	if caps == nil {
 		return capability.CapabilitySnapshot{}, false
 	}

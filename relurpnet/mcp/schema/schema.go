@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-func FromMap(input map[string]any) (*core.Schema, error) {
+func FromMap(input map[string]any) (*contracts.Schema, error) {
 	if len(input) == 0 {
 		return nil, nil
 	}
@@ -15,7 +15,7 @@ func FromMap(input map[string]any) (*core.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, ok := value.(*core.Schema)
+	result, ok := value.(*contracts.Schema)
 	if !ok {
 		return nil, fmt.Errorf("schema root must decode to object")
 	}
@@ -27,7 +27,7 @@ func fromAny(input any) (any, error) {
 	case nil:
 		return nil, nil
 	case map[string]any:
-		schema := &core.Schema{}
+		schema := &contracts.Schema{}
 		if value, ok := typed["type"].(string); ok {
 			schema.Type = strings.TrimSpace(value)
 		}
@@ -41,13 +41,13 @@ func fromAny(input any) (any, error) {
 			schema.Format = value
 		}
 		if rawProps, ok := typed["properties"].(map[string]any); ok {
-			schema.Properties = make(map[string]*core.Schema, len(rawProps))
+			schema.Properties = make(map[string]*contracts.Schema, len(rawProps))
 			for key, raw := range rawProps {
 				child, err := fromAny(raw)
 				if err != nil {
 					return nil, err
 				}
-				if childSchema, ok := child.(*core.Schema); ok {
+				if childSchema, ok := child.(*contracts.Schema); ok {
 					schema.Properties[key] = childSchema
 				}
 			}
@@ -57,7 +57,7 @@ func fromAny(input any) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if itemSchema, ok := items.(*core.Schema); ok {
+			if itemSchema, ok := items.(*contracts.Schema); ok {
 				schema.Items = itemSchema
 			}
 		}

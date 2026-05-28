@@ -202,7 +202,9 @@ func (t *ASTTool) Permissions() contracts.ToolPermissions {
 		Permissions: &contracts.PermissionSet{},
 	}
 }
-func (t *ASTTool) Tags() []string { return []string{contracts.TagReadOnly, "ast", "symbol", "recovery"} }
+func (t *ASTTool) Tags() []string {
+	return []string{contracts.TagReadOnly, "ast", "symbol", "recovery"}
+}
 
 func successResult(data map[string]interface{}) *contracts.ToolResult {
 	return &contracts.ToolResult{

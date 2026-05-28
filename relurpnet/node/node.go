@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -289,8 +290,8 @@ func (m *Manager) ListCapabilitiesForTenant(tenantID string) []core.CapabilityDe
 		for _, desc := range conn.Capabilities() {
 			normalized := desc
 			normalized.Source.ProviderID = "node:" + node.ID
-			normalized.Source.Scope = core.CapabilityScopeProvider
-			normalized.RuntimeFamily = core.CapabilityRuntimeFamilyProvider
+			normalized.Source.Scope = agentspec.CapabilityScopeProvider
+			normalized.RuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
 			if normalized.TrustClass == "" {
 				normalized.TrustClass = node.TrustClass
 			}

@@ -8,20 +8,20 @@ import (
 
 // WorkflowRecord represents a workflow lifecycle entity.
 type WorkflowRecord struct {
-	WorkflowID   string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Metadata     map[string]any
+	WorkflowID string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Metadata   map[string]any
 }
 
 // WorkflowRunRecord represents a single execution run of a workflow.
 type WorkflowRunRecord struct {
-	RunID        string
-	WorkflowID   string
-	Status       string
-	StartedAt    time.Time
-	CompletedAt  *time.Time
-	Metadata     map[string]any
+	RunID       string
+	WorkflowID  string
+	Status      string
+	StartedAt   time.Time
+	CompletedAt *time.Time
+	Metadata    map[string]any
 }
 
 // DelegationEntry represents a persisted delegation state.
@@ -55,13 +55,13 @@ type DelegationTransitionEntry struct {
 
 // WorkflowEventRecord represents a runtime workflow event.
 type WorkflowEventRecord struct {
-	EventID      string
-	WorkflowID   string
-	RunID        string
-	EventType    string
-	Payload      map[string]any
-	Sequence     uint64
-	CreatedAt    time.Time
+	EventID    string
+	WorkflowID string
+	RunID      string
+	EventType  string
+	Payload    map[string]any
+	Sequence   uint64
+	CreatedAt  time.Time
 }
 
 // WorkflowArtifactRecord represents a persisted workflow artifact.
@@ -92,15 +92,15 @@ const (
 
 // LineageBindingRecord represents a lineage binding for runtime bridges.
 type LineageBindingRecord struct {
-	BindingID    string
-	WorkflowID   string
-	RunID        string
-	LineageID    string
-	AttemptID    string
-	BindingType  string
-	Metadata     map[string]any
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	BindingID   string
+	WorkflowID  string
+	RunID       string
+	LineageID   string
+	AttemptID   string
+	BindingType string
+	Metadata    map[string]any
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // WorkflowProjectionRole represents the role of a workflow projection.

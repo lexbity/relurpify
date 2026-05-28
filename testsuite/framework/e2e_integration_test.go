@@ -44,7 +44,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 3: Create capability registry with permission manager (capability seam)
-	registry := capability.NewCapabilityRegistry()
+	registry := capability.NewRegistry()
 	registry.UsePermissionManager("test-agent", manager)
 
 	// Register a test tool that requires permission

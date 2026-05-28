@@ -10,16 +10,16 @@ import (
 type descriptorProfile struct {
 	id                          string
 	name                        string
-	kind                        core.CapabilityKind
-	runtimeFamily               core.CapabilityRuntimeFamily
-	sourceScope                 core.CapabilityScope
-	trustClass                  core.TrustClass
+	kind                        agentspec.CapabilityKind
+	runtimeFamily               agentspec.CapabilityRuntimeFamily
+	sourceScope                 agentspec.CapabilityScope
+	trustClass                  agentspec.TrustClass
 	tags                        map[string]struct{}
-	riskClasses                 map[core.RiskClass]struct{}
-	effectClasses               map[core.EffectClass]struct{}
-	coordinationRole            core.CoordinationRole
+	riskClasses                 map[agentspec.RiskClass]struct{}
+	effectClasses               map[agentspec.EffectClass]struct{}
+	coordinationRole            agentspec.CoordinationRole
 	coordinationTaskTypes       map[string]struct{}
-	coordinationExecutionModes  map[core.CoordinationExecutionMode]struct{}
+	coordinationExecutionModes  map[agentspec.CoordinationExecutionMode]struct{}
 	coordinationLongRunning     agentspec.EnabledState
 	coordinationDirectInsertion agentspec.EnabledState
 	hasCoordination             bool
@@ -29,17 +29,17 @@ type descriptorProfile struct {
 type compiledSelector struct {
 	id                          string
 	name                        string
-	kind                        core.CapabilityKind
-	runtimeFamilies             map[core.CapabilityRuntimeFamily]struct{}
+	kind                        agentspec.CapabilityKind
+	runtimeFamilies             map[agentspec.CapabilityRuntimeFamily]struct{}
 	tags                        map[string]struct{}
 	excludeTags                 map[string]struct{}
-	sourceScopes                map[core.CapabilityScope]struct{}
-	trustClasses                map[core.TrustClass]struct{}
-	riskClasses                 map[core.RiskClass]struct{}
-	effectClasses               map[core.EffectClass]struct{}
-	coordinationRoles           map[core.CoordinationRole]struct{}
+	sourceScopes                map[agentspec.CapabilityScope]struct{}
+	trustClasses                map[agentspec.TrustClass]struct{}
+	riskClasses                 map[agentspec.RiskClass]struct{}
+	effectClasses               map[agentspec.EffectClass]struct{}
+	coordinationRoles           map[agentspec.CoordinationRole]struct{}
 	coordinationTaskTypes       map[string]struct{}
-	coordinationExecutionModes  map[core.CoordinationExecutionMode]struct{}
+	coordinationExecutionModes  map[agentspec.CoordinationExecutionMode]struct{}
 	coordinationLongRunning     agentspec.EnabledState
 	coordinationDirectInsertion agentspec.EnabledState
 }
@@ -63,8 +63,8 @@ func buildDescriptorProfile(desc core.CapabilityDescriptor) descriptorProfile {
 		sourceScope:   desc.Source.Scope,
 		trustClass:    desc.TrustClass,
 		tags:          make(map[string]struct{}, len(desc.Tags)),
-		riskClasses:   make(map[core.RiskClass]struct{}, len(desc.RiskClasses)),
-		effectClasses: make(map[core.EffectClass]struct{}, len(desc.EffectClasses)),
+		riskClasses:   make(map[agentspec.RiskClass]struct{}, len(desc.RiskClasses)),
+		effectClasses: make(map[agentspec.EffectClass]struct{}, len(desc.EffectClasses)),
 	}
 	for _, tag := range desc.Tags {
 		normalized := normalizeComparable(tag)
@@ -93,7 +93,7 @@ func buildDescriptorProfile(desc core.CapabilityDescriptor) descriptorProfile {
 			}
 		}
 		if len(desc.Coordination.ExecutionModes) > 0 {
-			profile.coordinationExecutionModes = make(map[core.CoordinationExecutionMode]struct{}, len(desc.Coordination.ExecutionModes))
+			profile.coordinationExecutionModes = make(map[agentspec.CoordinationExecutionMode]struct{}, len(desc.Coordination.ExecutionModes))
 			for _, mode := range desc.Coordination.ExecutionModes {
 				profile.coordinationExecutionModes[mode] = struct{}{}
 			}
@@ -103,7 +103,7 @@ func buildDescriptorProfile(desc core.CapabilityDescriptor) descriptorProfile {
 	return profile
 }
 
-func compileSelector(selector core.CapabilitySelector) compiledSelector {
+func compileSelector(selector agentspec.CapabilitySelector) compiledSelector {
 	return compiledSelector{
 		id:                          normalizeComparable(selector.ID),
 		name:                        normalizeComparable(selector.Name),
@@ -151,7 +151,7 @@ func compileExposurePolicies(policies []core.CapabilityExposurePolicy) []compile
 	return out
 }
 
-func compileSelectors(selectors []core.CapabilitySelector) []compiledSelector {
+func compileSelectors(selectors []agentspec.CapabilitySelector) []compiledSelector {
 	if len(selectors) == 0 {
 		return nil
 	}
@@ -248,77 +248,77 @@ func normalizedStringSet(values []string) map[string]struct{} {
 	return out
 }
 
-func runtimeFamilySet(values []core.CapabilityRuntimeFamily) map[core.CapabilityRuntimeFamily]struct{} {
+func runtimeFamilySet(values []agentspec.CapabilityRuntimeFamily) map[agentspec.CapabilityRuntimeFamily]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.CapabilityRuntimeFamily]struct{}, len(values))
+	out := make(map[agentspec.CapabilityRuntimeFamily]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func scopeSet(values []core.CapabilityScope) map[core.CapabilityScope]struct{} {
+func scopeSet(values []agentspec.CapabilityScope) map[agentspec.CapabilityScope]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.CapabilityScope]struct{}, len(values))
+	out := make(map[agentspec.CapabilityScope]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func trustClassSet(values []core.TrustClass) map[core.TrustClass]struct{} {
+func trustClassSet(values []agentspec.TrustClass) map[agentspec.TrustClass]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.TrustClass]struct{}, len(values))
+	out := make(map[agentspec.TrustClass]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func riskClassSet(values []core.RiskClass) map[core.RiskClass]struct{} {
+func riskClassSet(values []agentspec.RiskClass) map[agentspec.RiskClass]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.RiskClass]struct{}, len(values))
+	out := make(map[agentspec.RiskClass]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func effectClassSet(values []core.EffectClass) map[core.EffectClass]struct{} {
+func effectClassSet(values []agentspec.EffectClass) map[agentspec.EffectClass]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.EffectClass]struct{}, len(values))
+	out := make(map[agentspec.EffectClass]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func coordinationRoleSet(values []core.CoordinationRole) map[core.CoordinationRole]struct{} {
+func coordinationRoleSet(values []agentspec.CoordinationRole) map[agentspec.CoordinationRole]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.CoordinationRole]struct{}, len(values))
+	out := make(map[agentspec.CoordinationRole]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func coordinationExecutionModeSet(values []core.CoordinationExecutionMode) map[core.CoordinationExecutionMode]struct{} {
+func coordinationExecutionModeSet(values []agentspec.CoordinationExecutionMode) map[agentspec.CoordinationExecutionMode]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[core.CoordinationExecutionMode]struct{}, len(values))
+	out := make(map[agentspec.CoordinationExecutionMode]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
@@ -343,7 +343,7 @@ func containsAnyNormalized(want, have map[string]struct{}) bool {
 	return false
 }
 
-func containsAnyRiskClass(want, have map[core.RiskClass]struct{}) bool {
+func containsAnyRiskClass(want, have map[agentspec.RiskClass]struct{}) bool {
 	for value := range want {
 		if _, ok := have[value]; ok {
 			return true
@@ -352,7 +352,7 @@ func containsAnyRiskClass(want, have map[core.RiskClass]struct{}) bool {
 	return false
 }
 
-func containsAnyEffectClass(want, have map[core.EffectClass]struct{}) bool {
+func containsAnyEffectClass(want, have map[agentspec.EffectClass]struct{}) bool {
 	for value := range want {
 		if _, ok := have[value]; ok {
 			return true
@@ -361,7 +361,7 @@ func containsAnyEffectClass(want, have map[core.EffectClass]struct{}) bool {
 	return false
 }
 
-func containsAnyCoordinationMode(want, have map[core.CoordinationExecutionMode]struct{}) bool {
+func containsAnyCoordinationMode(want, have map[agentspec.CoordinationExecutionMode]struct{}) bool {
 	for value := range want {
 		if _, ok := have[value]; ok {
 			return true

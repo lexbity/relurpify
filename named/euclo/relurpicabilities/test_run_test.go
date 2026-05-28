@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
@@ -35,12 +35,12 @@ func TestTestRunHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.test_run")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -462,7 +463,7 @@ func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, ident
 		TenantID:   enrollment.TenantID,
 		Name:       enrollment.NodeID,
 		Platform:   relurpnet.NodePlatformHeadless,
-		TrustClass: core.TrustClass(enrollment.TrustClass),
+		TrustClass: agentspec.TrustClass(enrollment.TrustClass),
 		PairedAt:   enrollment.PairedAt,
 		Owner:      enrollment.Owner,
 	}

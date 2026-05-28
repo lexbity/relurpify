@@ -4,7 +4,7 @@ package reporting
 func ClassifyOutcome(completed bool, errorCount int, blocked bool) *Outcome {
 	outcome := &Outcome{
 		Details:    map[string]string{},
-		Completed: completed,
+		Completed:  completed,
 		ErrorCount: errorCount,
 	}
 

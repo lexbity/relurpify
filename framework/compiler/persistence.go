@@ -31,13 +31,13 @@ type Repository interface {
 
 // CompilerArtifact represents a compiler-produced artifact (e.g., candidate records, replay metadata).
 type CompilerArtifact struct {
-	ArtifactID          string
-	RequestID           string
-	ArtifactKind        string
-	ContentType         string
-	Payload             []byte
-	Metadata            map[string]any
-	CreatedAt           int64
+	ArtifactID   string
+	RequestID    string
+	ArtifactKind string
+	ContentType  string
+	Payload      []byte
+	Metadata     map[string]any
+	CreatedAt    int64
 }
 
 // Adapter is the generic persistence adapter that the compiler repository depends on.

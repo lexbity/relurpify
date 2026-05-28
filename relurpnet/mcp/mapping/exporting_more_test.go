@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -14,13 +15,13 @@ func TestExportedTool(t *testing.T) {
 			ID:          "tool:test",
 			Name:        "test.tool",
 			Description: "A test tool",
-			InputSchema: &core.Schema{
+			InputSchema: &contracts.Schema{
 				Type: "object",
-				Properties: map[string]*core.Schema{
+				Properties: map[string]*contracts.Schema{
 					"input": {Type: "string"},
 				},
 			},
-			OutputSchema: &core.Schema{
+			OutputSchema: &contracts.Schema{
 				Type: "string",
 			},
 		}
@@ -51,9 +52,9 @@ func TestExportedPrompt(t *testing.T) {
 			ID:          "prompt:test",
 			Name:        "test.prompt",
 			Description: "A test prompt",
-			InputSchema: &core.Schema{
+			InputSchema: &contracts.Schema{
 				Type: "object",
-				Properties: map[string]*core.Schema{
+				Properties: map[string]*contracts.Schema{
 					"name": {Type: "string", Description: "The name"},
 					"age":  {Type: "number", Description: "The age"},
 				},
@@ -90,7 +91,7 @@ func TestExportedPrompt(t *testing.T) {
 	t.Run("non-object input schema", func(t *testing.T) {
 		desc := core.CapabilityDescriptor{
 			Name:        "test.prompt",
-			InputSchema: &core.Schema{Type: "string"},
+			InputSchema: &contracts.Schema{Type: "string"},
 		}
 		prompt := ExportedPrompt(desc)
 		require.Empty(t, prompt.Arguments)
@@ -99,9 +100,9 @@ func TestExportedPrompt(t *testing.T) {
 	t.Run("empty property name skipped", func(t *testing.T) {
 		desc := core.CapabilityDescriptor{
 			Name: "test.prompt",
-			InputSchema: &core.Schema{
+			InputSchema: &contracts.Schema{
 				Type: "object",
-				Properties: map[string]*core.Schema{
+				Properties: map[string]*contracts.Schema{
 					"":     {Type: "string"},
 					"name": {Type: "string"},
 				},
@@ -115,9 +116,9 @@ func TestExportedPrompt(t *testing.T) {
 	t.Run("case insensitive required check", func(t *testing.T) {
 		desc := core.CapabilityDescriptor{
 			Name: "test.prompt",
-			InputSchema: &core.Schema{
+			InputSchema: &contracts.Schema{
 				Type: "object",
-				Properties: map[string]*core.Schema{
+				Properties: map[string]*contracts.Schema{
 					"Name": {Type: "string"},
 				},
 				Required: []string{"NAME"},
@@ -193,12 +194,12 @@ func TestSchemaToMap(t *testing.T) {
 	})
 
 	t.Run("empty schema", func(t *testing.T) {
-		m := schemaToMap(&core.Schema{})
+		m := schemaToMap(&contracts.Schema{})
 		require.Empty(t, m)
 	})
 
 	t.Run("basic fields", func(t *testing.T) {
-		schema := &core.Schema{
+		schema := &contracts.Schema{
 			Type:        "string",
 			Title:       "Test Field",
 			Description: "A test field",
@@ -212,16 +213,16 @@ func TestSchemaToMap(t *testing.T) {
 	})
 
 	t.Run("nested properties", func(t *testing.T) {
-		schema := &core.Schema{
+		schema := &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"name": {
 					Type:        "string",
 					Description: "The name",
 				},
 				"address": {
 					Type: "object",
-					Properties: map[string]*core.Schema{
+					Properties: map[string]*contracts.Schema{
 						"street": {Type: "string"},
 						"city":   {Type: "string"},
 					},
@@ -238,9 +239,9 @@ func TestSchemaToMap(t *testing.T) {
 	})
 
 	t.Run("array items", func(t *testing.T) {
-		schema := &core.Schema{
+		schema := &contracts.Schema{
 			Type: "array",
-			Items: &core.Schema{
+			Items: &contracts.Schema{
 				Type: "string",
 			},
 		}
@@ -251,7 +252,7 @@ func TestSchemaToMap(t *testing.T) {
 	})
 
 	t.Run("required and enum", func(t *testing.T) {
-		schema := &core.Schema{
+		schema := &contracts.Schema{
 			Type:     "string",
 			Required: []string{"field1", "field2"},
 			Enum:     []any{"a", "b", "c"},
@@ -267,7 +268,7 @@ func TestSchemaToMap(t *testing.T) {
 	})
 
 	t.Run("default value", func(t *testing.T) {
-		schema := &core.Schema{
+		schema := &contracts.Schema{
 			Type:    "string",
 			Default: "default_value",
 		}

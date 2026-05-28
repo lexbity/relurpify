@@ -79,7 +79,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		return &core.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{
+			Data: core.NewToolResultPayload(map[string]any{
 				"contextstream_job_id": job.ID,
 				"mode":                 string(req.Mode),
 				"requested_query":      n.Query.Text,

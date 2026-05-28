@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // Position follows the LSP specification.
@@ -151,7 +151,7 @@ func (p *Proxy) cached(key string, fetch func() (interface{}, error)) (interface
 
 // DefinitionTool implements the GetDefinition tool.
 type DefinitionTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 // Name implements Tool.
@@ -220,7 +220,7 @@ func (t *DefinitionTool) Tags() []string { return []string{contracts.TagReadOnly
 
 // ReferencesTool implements GetReferences tool.
 type ReferencesTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *ReferencesTool) Name() string { return "lsp_get_references" }
@@ -275,7 +275,7 @@ func (t *ReferencesTool) Tags() []string { return []string{contracts.TagReadOnly
 
 // HoverTool implements GetHover.
 type HoverTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *HoverTool) Name() string { return "lsp_get_hover" }
@@ -329,7 +329,7 @@ func (t *HoverTool) Tags() []string { return []string{contracts.TagReadOnly} }
 
 // DiagnosticsTool implements diagnostics retrieval.
 type DiagnosticsTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *DiagnosticsTool) Name() string { return "lsp_get_diagnostics" }
@@ -371,7 +371,7 @@ func (t *DiagnosticsTool) Tags() []string { return []string{contracts.TagReadOnl
 
 // SearchSymbolsTool implements symbol lookup.
 type SearchSymbolsTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *SearchSymbolsTool) Name() string { return "lsp_search_symbols" }
@@ -414,7 +414,7 @@ func (t *SearchSymbolsTool) Tags() []string { return []string{contracts.TagReadO
 
 // DocumentSymbolsTool returns structure of a file.
 type DocumentSymbolsTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *DocumentSymbolsTool) Name() string { return "lsp_document_symbols" }
@@ -456,7 +456,7 @@ func (t *DocumentSymbolsTool) Tags() []string { return []string{contracts.TagRea
 
 // FormatTool formats code through the LSP.
 type FormatTool struct {
-	Proxy   *Proxy
+	Proxy *Proxy
 }
 
 func (t *FormatTool) Name() string        { return "lsp_format" }

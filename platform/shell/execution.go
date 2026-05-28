@@ -175,7 +175,9 @@ func (t *RunLinterTool) Permissions() contracts.ToolPermissions {
 		},
 	}}
 }
-func (t *RunLinterTool) Tags() []string { return []string{contracts.TagExecute, "lint", "verification"} }
+func (t *RunLinterTool) Tags() []string {
+	return []string{contracts.TagExecute, "lint", "verification"}
+}
 
 func (t *RunLinterTool) run(ctx context.Context, args []string) (string, string, error) {
 	if t.Runner == nil {
@@ -226,7 +228,9 @@ func (t *RunBuildTool) Permissions() contracts.ToolPermissions {
 		},
 	}}
 }
-func (t *RunBuildTool) Tags() []string { return []string{contracts.TagExecute, "build", "verification"} }
+func (t *RunBuildTool) Tags() []string {
+	return []string{contracts.TagExecute, "build", "verification"}
+}
 
 func (t *RunBuildTool) run(ctx context.Context) (string, string, error) {
 	if t.Runner == nil {

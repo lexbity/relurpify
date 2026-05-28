@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
@@ -79,7 +80,7 @@ run reviewer:
   goal "Inspect the code."
 `)
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
@@ -116,7 +117,7 @@ input workspace: "**/*"
 agent reviewer uses react
 `)
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
@@ -139,12 +140,12 @@ input workspace: "**/*"
 agent reviewer uses react
 `)
 
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
 		t.Fatalf("register hidden_tool: %v", err)
 	}
 	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{Name: "hidden_tool"},
+		Selector: agentspec.CapabilitySelector{Name: "hidden_tool"},
 		Access:   core.CapabilityExposureHidden,
 	}})
 

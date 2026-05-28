@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-		"codeburg.org/lexbit/relurpify/platform/browser"
-		"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultStartupTimeout = 10 * time.Second

@@ -39,16 +39,16 @@ type doctorStatusMsg struct {
 }
 
 type DoctorPane struct {
-	runtime RuntimeAdapter
-	report  DoctorReport
-	section doctorSection
-	filter  string
-	working bool
-	action  doctorAction
+	runtime  RuntimeAdapter
+	report   DoctorReport
+	section  doctorSection
+	filter   string
+	working  bool
+	action   doctorAction
 	progress float64
-	status  string
-	width   int
-	height  int
+	status   string
+	width    int
+	height   int
 }
 
 // Report returns the current doctor report.

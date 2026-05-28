@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -26,31 +27,31 @@ func NewAPICompatHandler(env agentenv.WorkspaceEnvironment) *APICompatHandler {
 func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.api_compat",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "API Compatibility",
 		Version:       "1.0.0",
 		Description:   "Compares exported signatures between git refs and flags breaking changes",
 		Category:      "migration_compat",
 		Tags:          []string{"migration", "compatibility", "git", "api"},
-		Source:        core.CapabilitySource{Scope: core.CapabilityScopeBuiltin},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"base_ref": {Type: "string"},
 				"head_ref": {Type: "string"},
 			},
 			Required: []string{"base_ref"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success":    {Type: "boolean"},
-				"breaking":   {Type: "array", Items: &core.Schema{Type: "object"}},
-				"compatible": {Type: "array", Items: &core.Schema{Type: "object"}},
+				"breaking":   {Type: "array", Items: &contracts.Schema{Type: "object"}},
+				"compatible": {Type: "array", Items: &contracts.Schema{Type: "object"}},
 				"summary":    {Type: "string"},
 				"base_ref":   {Type: "string"},
 				"head_ref":   {Type: "string"},

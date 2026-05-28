@@ -93,7 +93,7 @@ func (h instrumentCapabilityHandler) runtimeState() executionRuntimeState {
 	return h.registry.executionRuntimeState()
 }
 
-func toolParametersFromSchema(schema *core.Schema) []contracts.ToolParameter {
+func toolParametersFromSchema(schema *contracts.Schema) []contracts.ToolParameter {
 	if schema == nil || schema.Type != "object" || len(schema.Properties) == 0 {
 		return nil
 	}
@@ -271,7 +271,7 @@ func enforceDescriptorExecutionPolicies(ctx context.Context, desc core.Capabilit
 }
 
 func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc core.CapabilityDescriptor, profile descriptorProfile, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
-	if desc.Kind == core.CapabilityKindTool && desc.RuntimeFamily == core.CapabilityRuntimeFamilyLocalTool && stateSnapshot.policy.agentSpec != nil {
+	if desc.Kind == agentspec.CapabilityKindTool && desc.RuntimeFamily == agentspec.CapabilityRuntimeFamilyLocalTool && stateSnapshot.policy.agentSpec != nil {
 		switch stateSnapshot.policy.toolPolicies[desc.Name].Execute {
 		case agentspec.AgentPermissionDeny:
 			return fmt.Errorf("capability %s blocked: execution denied by tool policy", desc.ID)

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
@@ -135,7 +136,7 @@ func exportedResourceURI(desc core.CapabilityDescriptor) string {
 	return "relurpify://capability/" + strings.ReplaceAll(desc.ID, ":", "/")
 }
 
-func schemaToMap(schema *core.Schema) map[string]any {
+func schemaToMap(schema *contracts.Schema) map[string]any {
 	if schema == nil {
 		return nil
 	}

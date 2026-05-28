@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
@@ -28,8 +29,8 @@ func (n *reactActNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeTo
 // Contract marks the ReAct act step as a capability-consuming execution node.
 func (n *reactActNode) Contract() agentgraph.NodeContract {
 	return agentgraph.NodeContract{
-		RequiredCapabilities: []core.CapabilitySelector{{
-			Kind: core.CapabilityKindTool,
+		RequiredCapabilities: []agentspec.CapabilitySelector{{
+			Kind: agentspec.CapabilityKindTool,
 		}},
 		SideEffectClass: agentgraph.SideEffectExternal,
 		Idempotency:     agentgraph.IdempotencyUnknown,
@@ -250,12 +251,12 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 		} else {
 			desc = core.CapabilityDescriptor{
 				ID:          "tool:" + call.Name,
-				Kind:        core.CapabilityKindTool,
+				Kind:        agentspec.CapabilityKindTool,
 				Name:        call.Name,
 				Description: call.Name,
-				TrustClass:  core.TrustClassWorkspaceTrusted,
+				TrustClass:  agentspec.TrustClassWorkspaceTrusted,
 				Source: core.CapabilitySource{
-					Scope: core.CapabilityScopeWorkspace,
+					Scope: agentspec.CapabilityScopeWorkspace,
 				},
 			}
 		}

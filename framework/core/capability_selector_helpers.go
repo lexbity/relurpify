@@ -10,11 +10,11 @@ import (
 
 // CloneCapabilitySelectors returns a deep copy of selector slices so callers
 // can safely retain or mutate them without aliasing the source.
-func CloneCapabilitySelectors(selectors []CapabilitySelector) []CapabilitySelector {
+func CloneCapabilitySelectors(selectors []agentspec.CapabilitySelector) []agentspec.CapabilitySelector {
 	if selectors == nil {
 		return nil
 	}
-	out := make([]CapabilitySelector, len(selectors))
+	out := make([]agentspec.CapabilitySelector, len(selectors))
 	for i, selector := range selectors {
 		out[i] = CloneCapabilitySelector(selector)
 	}
@@ -22,9 +22,9 @@ func CloneCapabilitySelectors(selectors []CapabilitySelector) []CapabilitySelect
 }
 
 // CloneCapabilitySelector returns a deep copy of one selector.
-func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
+func CloneCapabilitySelector(selector agentspec.CapabilitySelector) agentspec.CapabilitySelector {
 	if selector.RuntimeFamilies != nil {
-		selector.RuntimeFamilies = append([]CapabilityRuntimeFamily{}, selector.RuntimeFamilies...)
+		selector.RuntimeFamilies = append([]agentspec.CapabilityRuntimeFamily{}, selector.RuntimeFamilies...)
 	}
 	if selector.Tags != nil {
 		selector.Tags = append([]string{}, selector.Tags...)
@@ -33,38 +33,38 @@ func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
 		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
 	}
 	if selector.SourceScopes != nil {
-		selector.SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
+		selector.SourceScopes = append([]agentspec.CapabilityScope{}, selector.SourceScopes...)
 	}
 	if selector.TrustClasses != nil {
-		selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
+		selector.TrustClasses = append([]agentspec.TrustClass{}, selector.TrustClasses...)
 	}
 	if selector.RiskClasses != nil {
-		selector.RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
+		selector.RiskClasses = append([]agentspec.RiskClass{}, selector.RiskClasses...)
 	}
 	if selector.EffectClasses != nil {
-		selector.EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
+		selector.EffectClasses = append([]agentspec.EffectClass{}, selector.EffectClasses...)
 	}
 	if selector.CoordinationRoles != nil {
-		selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
+		selector.CoordinationRoles = append([]agentspec.CoordinationRole{}, selector.CoordinationRoles...)
 	}
 	if selector.CoordinationTaskTypes != nil {
 		selector.CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
 	}
 	if selector.CoordinationExecutionModes != nil {
-		selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
+		selector.CoordinationExecutionModes = append([]agentspec.CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
 	}
 	return selector
 }
 
 // MergeCapabilitySelectors appends selectors and deduplicates by semantic
 // selector key while preserving first-seen order.
-func MergeCapabilitySelectors(base, extra []CapabilitySelector) []CapabilitySelector {
+func MergeCapabilitySelectors(base, extra []agentspec.CapabilitySelector) []agentspec.CapabilitySelector {
 	if len(extra) == 0 {
 		return CloneCapabilitySelectors(base)
 	}
 	seen := make(map[string]struct{}, len(base)+len(extra))
-	out := make([]CapabilitySelector, 0, len(base)+len(extra))
-	for _, selector := range append(append([]CapabilitySelector{}, base...), extra...) {
+	out := make([]agentspec.CapabilitySelector, 0, len(base)+len(extra))
+	for _, selector := range append(append([]agentspec.CapabilitySelector{}, base...), extra...) {
 		key := capabilitySelectorKey(selector)
 		if _, ok := seen[key]; ok {
 			continue
@@ -75,7 +75,7 @@ func MergeCapabilitySelectors(base, extra []CapabilitySelector) []CapabilitySele
 	return out
 }
 
-func capabilitySelectorKey(selector CapabilitySelector) string {
+func capabilitySelectorKey(selector agentspec.CapabilitySelector) string {
 	return selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
 		strings.Join(runtimeFamiliesToStrings(selector.RuntimeFamilies), ",") + "|" +
 		strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",") + "|" +
@@ -90,7 +90,7 @@ func capabilitySelectorKey(selector CapabilitySelector) string {
 		enabledStateKey(selector.CoordinationDirectInsertion)
 }
 
-func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
+func runtimeFamiliesToStrings(values []agentspec.CapabilityRuntimeFamily) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -98,7 +98,7 @@ func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
 	return out
 }
 
-func capabilityScopesToStrings(values []CapabilityScope) []string {
+func capabilityScopesToStrings(values []agentspec.CapabilityScope) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -106,7 +106,7 @@ func capabilityScopesToStrings(values []CapabilityScope) []string {
 	return out
 }
 
-func trustClassesToStrings(values []TrustClass) []string {
+func trustClassesToStrings(values []agentspec.TrustClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -114,7 +114,7 @@ func trustClassesToStrings(values []TrustClass) []string {
 	return out
 }
 
-func riskClassesToStrings(values []RiskClass) []string {
+func riskClassesToStrings(values []agentspec.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -122,7 +122,7 @@ func riskClassesToStrings(values []RiskClass) []string {
 	return out
 }
 
-func effectClassesToStrings(values []EffectClass) []string {
+func effectClassesToStrings(values []agentspec.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -130,7 +130,7 @@ func effectClassesToStrings(values []EffectClass) []string {
 	return out
 }
 
-func coordinationRolesToStrings(values []CoordinationRole) []string {
+func coordinationRolesToStrings(values []agentspec.CoordinationRole) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -138,7 +138,7 @@ func coordinationRolesToStrings(values []CoordinationRole) []string {
 	return out
 }
 
-func coordinationExecutionModesToStrings(values []CoordinationExecutionMode) []string {
+func coordinationExecutionModesToStrings(values []agentspec.CoordinationExecutionMode) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -152,7 +152,7 @@ func enabledStateKey(value agentspec.EnabledState) string {
 
 // ValidateCapabilitySelector checks the legacy selector for obvious structural
 // issues. The broader matching rules are handled elsewhere in the framework.
-func ValidateCapabilitySelector(selector CapabilitySelector) error {
+func ValidateCapabilitySelector(selector agentspec.CapabilitySelector) error {
 	if strings.TrimSpace(selector.ID) == "" &&
 		strings.TrimSpace(selector.Name) == "" &&
 		selector.Kind == "" &&
@@ -187,49 +187,49 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 	}
 	for _, scope := range selector.SourceScopes {
 		switch scope {
-		case CapabilityScopeBuiltin, CapabilityScopeWorkspace, CapabilityScopeProvider, CapabilityScopeRemote:
+		case agentspec.CapabilityScopeBuiltin, agentspec.CapabilityScopeWorkspace, agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
 		default:
 			return fmt.Errorf("source scope %s invalid", scope)
 		}
 	}
 	for _, family := range selector.RuntimeFamilies {
 		switch family {
-		case CapabilityRuntimeFamilyLocalTool, CapabilityRuntimeFamilyProvider, CapabilityRuntimeFamilyRelurpic:
+		case agentspec.CapabilityRuntimeFamilyLocalTool, agentspec.CapabilityRuntimeFamilyProvider, agentspec.CapabilityRuntimeFamilyRelurpic:
 		default:
 			return fmt.Errorf("runtime family %s invalid", family)
 		}
 	}
 	for _, trust := range selector.TrustClasses {
 		switch trust {
-		case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+		case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted, agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult, agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassRemoteDeclared, agentspec.TrustClassRemoteApproved:
 		default:
 			return fmt.Errorf("trust class %s invalid", trust)
 		}
 	}
 	for _, risk := range selector.RiskClasses {
 		switch risk {
-		case RiskClassReadOnly, RiskClassDestructive, RiskClassExecute, RiskClassNetwork, RiskClassCredentialed, RiskClassExfiltration, RiskClassSessioned:
+		case agentspec.RiskClassReadOnly, agentspec.RiskClassDestructive, agentspec.RiskClassExecute, agentspec.RiskClassNetwork, agentspec.RiskClassCredentialed, agentspec.RiskClassExfiltration, agentspec.RiskClassSessioned:
 		default:
 			return fmt.Errorf("risk class %s invalid", risk)
 		}
 	}
 	for _, effect := range selector.EffectClasses {
 		switch effect {
-		case EffectClassFilesystemMutation, EffectClassProcessSpawn, EffectClassNetworkEgress, EffectClassCredentialUse, EffectClassExternalState, EffectClassSessionCreation, EffectClassContextInsertion:
+		case agentspec.EffectClassFilesystemMutation, agentspec.EffectClassProcessSpawn, agentspec.EffectClassNetworkEgress, agentspec.EffectClassCredentialUse, agentspec.EffectClassExternalState, agentspec.EffectClassSessionCreation, agentspec.EffectClassContextInsertion:
 		default:
 			return fmt.Errorf("effect class %s invalid", effect)
 		}
 	}
 	for _, role := range selector.CoordinationRoles {
 		switch role {
-		case CoordinationRolePlanner, CoordinationRoleArchitect, CoordinationRoleReviewer, CoordinationRoleVerifier, CoordinationRoleExecutor, CoordinationRoleDomainPack, CoordinationRoleBackgroundAgent:
+		case agentspec.CoordinationRolePlanner, agentspec.CoordinationRoleArchitect, agentspec.CoordinationRoleReviewer, agentspec.CoordinationRoleVerifier, agentspec.CoordinationRoleExecutor, agentspec.CoordinationRoleDomainPack, agentspec.CoordinationRoleBackgroundAgent:
 		default:
 			return fmt.Errorf("coordination role %s invalid", role)
 		}
 	}
 	for _, mode := range selector.CoordinationExecutionModes {
 		switch mode {
-		case CoordinationExecutionModeSync, CoordinationExecutionModeSessionBacked, CoordinationExecutionModeBackgroundAgent:
+		case agentspec.CoordinationExecutionModeSync, agentspec.CoordinationExecutionModeSessionBacked, agentspec.CoordinationExecutionModeBackgroundAgent:
 		default:
 			return fmt.Errorf("coordination execution mode %s invalid", mode)
 		}

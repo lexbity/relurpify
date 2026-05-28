@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -61,13 +62,13 @@ const (
 // boundaries for a node. Placement, recoverability, and checkpoint policy are
 // contract metadata, not runtime persistence ownership.
 type NodeContract struct {
-	RequiredCapabilities []core.CapabilitySelector `json:"required_capabilities,omitempty" yaml:"required_capabilities,omitempty"`
-	SideEffectClass      SideEffectClass           `json:"side_effect_class,omitempty" yaml:"side_effect_class,omitempty"`
-	Idempotency          IdempotencyClass          `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
+	RequiredCapabilities []agentspec.CapabilitySelector `json:"required_capabilities,omitempty" yaml:"required_capabilities,omitempty"`
+	SideEffectClass      SideEffectClass                `json:"side_effect_class,omitempty" yaml:"side_effect_class,omitempty"`
+	Idempotency          IdempotencyClass               `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
 	PreferredPlacement PlacementPreference      `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass       core.RiskClass           `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
-	RequiredTrustClass core.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
+	MaxRiskClass       agentspec.RiskClass      `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	RequiredTrustClass agentspec.TrustClass     `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
 	Recoverability     NodeRecoverability       `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
 	CheckpointPolicy   CheckpointPolicyClass    `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
 	ContextPolicy      core.StateBoundaryPolicy `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
@@ -216,10 +217,10 @@ func toolNodeContract(tool contracts.Tool) NodeContract {
 	}
 	desc := core.ToolDescriptor(context.Background(), tool)
 	if desc.ID != "" || desc.Name != "" {
-		contract.RequiredCapabilities = []core.CapabilitySelector{{
+		contract.RequiredCapabilities = []agentspec.CapabilitySelector{{
 			ID:   desc.ID,
 			Name: desc.Name,
-			Kind: core.CapabilityKindTool,
+			Kind: agentspec.CapabilityKindTool,
 		}}
 	}
 	contract.SideEffectClass = classifyToolSideEffects(desc)
@@ -243,11 +244,11 @@ func classifyToolSideEffects(desc core.CapabilityDescriptor) SideEffectClass {
 	hasExternal := false
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case core.EffectClassContextInsertion:
+		case agentspec.EffectClassContextInsertion:
 			continue
-		case core.EffectClassFilesystemMutation, core.EffectClassProcessSpawn:
+		case agentspec.EffectClassFilesystemMutation, agentspec.EffectClassProcessSpawn:
 			hasContextOnly = false
-		case core.EffectClassNetworkEgress, core.EffectClassCredentialUse, core.EffectClassExternalState, core.EffectClassSessionCreation:
+		case agentspec.EffectClassNetworkEgress, agentspec.EffectClassCredentialUse, agentspec.EffectClassExternalState, agentspec.EffectClassSessionCreation:
 			hasContextOnly = false
 			hasExternal = true
 		default:
@@ -270,13 +271,13 @@ func classifyToolIdempotency(desc core.CapabilityDescriptor) IdempotencyClass {
 	}
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case core.EffectClassFilesystemMutation, core.EffectClassNetworkEgress, core.EffectClassCredentialUse, core.EffectClassExternalState, core.EffectClassSessionCreation:
+		case agentspec.EffectClassFilesystemMutation, agentspec.EffectClassNetworkEgress, agentspec.EffectClassCredentialUse, agentspec.EffectClassExternalState, agentspec.EffectClassSessionCreation:
 			return IdempotencySingleShot
 		}
 	}
 	for _, risk := range desc.RiskClasses {
 		switch risk {
-		case core.RiskClassDestructive, core.RiskClassNetwork, core.RiskClassCredentialed, core.RiskClassExfiltration, core.RiskClassSessioned:
+		case agentspec.RiskClassDestructive, agentspec.RiskClassNetwork, agentspec.RiskClassCredentialed, agentspec.RiskClassExfiltration, agentspec.RiskClassSessioned:
 			return IdempotencySingleShot
 		}
 	}

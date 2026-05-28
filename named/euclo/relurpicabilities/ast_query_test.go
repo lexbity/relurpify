@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
@@ -163,12 +163,12 @@ func TestASTQueryHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.ast_query")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -362,12 +362,12 @@ func TestSymbolTraceHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.symbol_trace")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -466,12 +466,12 @@ func TestCallGraphHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.call_graph")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -625,12 +625,12 @@ func TestBlameTraceHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.blame_trace")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -803,12 +803,12 @@ func TestBisectHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.bisect")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -949,12 +949,12 @@ func TestCodeReviewHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.code_review")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 
 	if desc.Category != "review_synthesis" {
@@ -1011,12 +1011,12 @@ func TestDiffSummaryHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.diff_summary")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 
@@ -1075,12 +1075,12 @@ func TestLayerCheckHandlerDescriptor(t *testing.T) {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.layer_check")
 	}
 
-	if desc.Kind != core.CapabilityKindTool {
-		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, core.CapabilityKindTool)
+	if desc.Kind != agentspec.CapabilityKindTool {
+		t.Errorf("descriptor Kind = %v, want %v", desc.Kind, agentspec.CapabilityKindTool)
 	}
 
-	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyRelurpic {
-		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, core.CapabilityRuntimeFamilyRelurpic)
+	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyRelurpic {
+		t.Errorf("descriptor RuntimeFamily = %v, want %v", desc.RuntimeFamily, agentspec.CapabilityRuntimeFamilyRelurpic)
 	}
 }
 

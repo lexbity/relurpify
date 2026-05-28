@@ -34,7 +34,7 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewCapabilityRegistry(),
+		Registry: capability.NewRegistry(),
 	}
 
 	// Create agent with the environment

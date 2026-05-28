@@ -14,14 +14,14 @@ import (
 // discovered and enumerated correctly.
 func TestCapabilityDiscovery(t *testing.T) {
 	t.Run("registry can be created", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		if registry == nil {
 			t.Fatal("registry should not be nil")
 		}
 	})
 
 	t.Run("registry starts empty", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 
 		// Try to get a non-existent capability
 		_, ok := registry.Get("non-existent")
@@ -32,7 +32,7 @@ func TestCapabilityDiscovery(t *testing.T) {
 
 	t.Run("capability descriptors are stable", func(t *testing.T) {
 		// Register a test capability
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		tool := &testTool{
 			name:        "test-tool",
 			description: "test tool for discovery",
@@ -67,7 +67,7 @@ func TestCapabilityDiscovery(t *testing.T) {
 // and their permission sets are enforced.
 func TestCapabilityRegistration(t *testing.T) {
 	t.Run("tool can be registered", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		tool := &testTool{
 			name:        "registered-tool",
 			description: "tool for registration test",
@@ -87,7 +87,7 @@ func TestCapabilityRegistration(t *testing.T) {
 	})
 
 	t.Run("duplicate registration fails", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		tool := &testTool{
 			name:        "duplicate-tool",
 			description: "tool for duplicate test",
@@ -107,7 +107,7 @@ func TestCapabilityRegistration(t *testing.T) {
 	})
 
 	t.Run("permission set is preserved", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		perms := core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead, contracts.FileSystemWrite)
 		tool := &testTool{
 			name:        "permission-tool",
@@ -147,7 +147,7 @@ func TestCapabilityRegistration(t *testing.T) {
 // permission manager.
 func TestInvocationGating(t *testing.T) {
 	t.Run("tool execution without permission manager", func(t *testing.T) {
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 		tool := &testTool{
 			name:        "ungated-tool",
 			description: "tool without permission manager",
@@ -170,7 +170,7 @@ func TestInvocationGating(t *testing.T) {
 	t.Run("tool execution with permission manager", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 
 		// Create a permission manager
 		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
@@ -212,7 +212,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 	t.Run("tool execution denied without permission", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 
 		// Create a permission manager with no permissions
 		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
@@ -258,7 +258,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 	t.Run("tool execution allowed with permission", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 
-		registry := capability.NewCapabilityRegistry()
+		registry := capability.NewRegistry()
 
 		// Create a permission manager with read permission
 		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)

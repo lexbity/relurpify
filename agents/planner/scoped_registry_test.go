@@ -43,7 +43,7 @@ func plannerToolCapabilityID(name string) string {
 }
 
 func TestPlannerExecuteNodeUsesScopedRegistryDirectly(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(scopedPlannerTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}

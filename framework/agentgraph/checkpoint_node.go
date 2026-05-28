@@ -215,7 +215,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{
+		Data: core.NewToolResultPayload(map[string]any{
 			"checkpoint_created": true,
 			"checkpoint_id":      ref.ArtifactID,
 			"workflow_id":        snapshot.WorkflowID,

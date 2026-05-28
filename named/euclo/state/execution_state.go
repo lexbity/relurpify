@@ -6,7 +6,7 @@ import (
 
 // Execution kind values written to KeyExecutionKind.
 const (
-	ExecutionKindCapability   = "capability"
+	ExecutionKindCapability    = "capability"
 	ExecutionKindThoughtRecipe = "thoughtrecipe"
 )
 

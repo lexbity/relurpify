@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
@@ -34,7 +34,7 @@ type RouteSelectionRequest struct {
 	IsOwner                    bool
 	IsDelegated                bool
 	SessionID                  string
-	TrustClass                 core.TrustClass
+	TrustClass                 agentspec.TrustClass
 	TaskClass                  string
 	ContextClass               string
 	ContextSizeBytes           int64
@@ -45,15 +45,15 @@ type RouteSelectionRequest struct {
 }
 
 type RouteCandidate struct {
-	QualifiedExport string                  `json:"qualified_export" yaml:"qualified_export"`
-	TrustDomain     string                  `json:"trust_domain" yaml:"trust_domain"`
-	NodeID          string                  `json:"node_id,omitempty" yaml:"node_id,omitempty"`
-	RuntimeID       string                  `json:"runtime_id,omitempty" yaml:"runtime_id,omitempty"`
-	Imported        bool                    `json:"imported,omitempty" yaml:"imported,omitempty"`
+	QualifiedExport string             `json:"qualified_export" yaml:"qualified_export"`
+	TrustDomain     string             `json:"trust_domain" yaml:"trust_domain"`
+	NodeID          string             `json:"node_id,omitempty" yaml:"node_id,omitempty"`
+	RuntimeID       string             `json:"runtime_id,omitempty" yaml:"runtime_id,omitempty"`
+	Imported        bool               `json:"imported,omitempty" yaml:"imported,omitempty"`
 	RouteMode       RouteMode          `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
 	Export          ExportDescriptor   `json:"export" yaml:"export"`
 	Runtime         *RuntimeDescriptor `json:"runtime,omitempty" yaml:"runtime,omitempty"`
-	Reason          string                  `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Reason          string             `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 type InMemoryDiscoveryStore struct {

@@ -94,7 +94,7 @@ func toolCapabilityID(name string) string {
 }
 
 func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	if err := reg.RegisterLegacyTool(scopeAwareReactTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}

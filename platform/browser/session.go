@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-		"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultBudgetCategory = "immediate"

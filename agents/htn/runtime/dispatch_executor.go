@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -115,7 +116,7 @@ func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, env 
 	return d.fallback.Execute(ctx, task, env)
 }
 
-func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *contextdata.Envelope, target, operator string, selectors []core.CapabilitySelector, args map[string]any) (*core.Result, dispatchDecision, bool, error) {
+func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *contextdata.Envelope, target, operator string, selectors []agentspec.CapabilitySelector, args map[string]any) (*core.Result, dispatchDecision, bool, error) {
 	decision := dispatchDecision{
 		RequestedTarget: target,
 		Operator:        operator,

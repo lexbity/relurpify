@@ -1,7 +1,6 @@
 package euclotui
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +8,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -1270,7 +1272,7 @@ func insertionBadge(insertion tui.StructuredInsertion) string {
 	}
 }
 
-func effectClassLabels(classes []core.EffectClass) []string {
+func effectClassLabels(classes []agentspec.EffectClass) []string {
 	if len(classes) == 0 {
 		return nil
 	}

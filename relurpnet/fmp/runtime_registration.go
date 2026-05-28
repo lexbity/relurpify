@@ -10,11 +10,11 @@ import (
 )
 
 type RuntimeRegistrationRequest struct {
-	TrustDomain string                 `json:"trust_domain" yaml:"trust_domain"`
+	TrustDomain string                   `json:"trust_domain" yaml:"trust_domain"`
 	Node        relurpnet.NodeDescriptor `json:"node" yaml:"node"`
-	Runtime     RuntimeDescriptor `json:"runtime" yaml:"runtime"`
-	ExpiresAt   time.Time              `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
-	Signature   string                 `json:"signature,omitempty" yaml:"signature,omitempty"`
+	Runtime     RuntimeDescriptor        `json:"runtime" yaml:"runtime"`
+	ExpiresAt   time.Time                `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	Signature   string                   `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 func (r RuntimeRegistrationRequest) Validate() error {

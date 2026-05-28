@@ -10,82 +10,10 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-type CapabilityKind = agentspec.CapabilityKind
-
-const (
-	CapabilityKindTool         CapabilityKind = agentspec.CapabilityKindTool
-	CapabilityKindPrompt       CapabilityKind = agentspec.CapabilityKindPrompt
-	CapabilityKindResource     CapabilityKind = agentspec.CapabilityKindResource
-	CapabilityKindSession      CapabilityKind = agentspec.CapabilityKindSession
-	CapabilityKindSubscription CapabilityKind = agentspec.CapabilityKindSubscription
-)
-
-type CapabilityScope = agentspec.CapabilityScope
-
-const (
-	CapabilityScopeBuiltin   CapabilityScope = agentspec.CapabilityScopeBuiltin
-	CapabilityScopeWorkspace CapabilityScope = agentspec.CapabilityScopeWorkspace
-	CapabilityScopeProvider  CapabilityScope = agentspec.CapabilityScopeProvider
-	CapabilityScopeRemote    CapabilityScope = agentspec.CapabilityScopeRemote
-)
-
-type CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamily
-
-const (
-	// CapabilityRuntimeFamilyLocalTool identifies local callable tool execution.
-	CapabilityRuntimeFamilyLocalTool CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyLocalTool
-	// CapabilityRuntimeFamilyProvider identifies provider-backed capability execution.
-	CapabilityRuntimeFamilyProvider CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
-	// CapabilityRuntimeFamilyRelurpic identifies higher-order execution behavior
-	// composed from capabilities, skills, sub-agents, or multiple execution
-	// paradigms. Relurpic is a runtime-family classification inside the canonical
-	// capability model, not a separate capability system.
-	CapabilityRuntimeFamilyRelurpic CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyRelurpic
-)
-
-type TrustClass = agentspec.TrustClass
-
-const (
-	TrustClassBuiltinTrusted         TrustClass = agentspec.TrustClassBuiltinTrusted
-	TrustClassWorkspaceTrusted       TrustClass = agentspec.TrustClassWorkspaceTrusted
-	TrustClassLLMGenerated           TrustClass = agentspec.TrustClassLLMGenerated
-	TrustClassToolResult             TrustClass = agentspec.TrustClassToolResult
-	TrustClassProviderLocalUntrusted TrustClass = agentspec.TrustClassProviderLocalUntrusted
-	TrustClassRemoteDeclared         TrustClass = agentspec.TrustClassRemoteDeclared
-	TrustClassRemoteApproved         TrustClass = agentspec.TrustClassRemoteApproved
-)
-
-type RiskClass = agentspec.RiskClass
-
-const (
-	RiskClassReadOnly     RiskClass = agentspec.RiskClassReadOnly
-	RiskClassDestructive  RiskClass = agentspec.RiskClassDestructive
-	RiskClassExecute      RiskClass = agentspec.RiskClassExecute
-	RiskClassNetwork      RiskClass = agentspec.RiskClassNetwork
-	RiskClassCredentialed RiskClass = agentspec.RiskClassCredentialed
-	RiskClassExfiltration RiskClass = agentspec.RiskClassExfiltration
-	RiskClassSessioned    RiskClass = agentspec.RiskClassSessioned
-)
-
-type EffectClass = agentspec.EffectClass
-
-const (
-	EffectClassFilesystemMutation EffectClass = agentspec.EffectClassFilesystemMutation
-	EffectClassProcessSpawn       EffectClass = agentspec.EffectClassProcessSpawn
-	EffectClassNetworkEgress      EffectClass = agentspec.EffectClassNetworkEgress
-	EffectClassCredentialUse      EffectClass = agentspec.EffectClassCredentialUse
-	EffectClassExternalState      EffectClass = agentspec.EffectClassExternalState
-	EffectClassSessionCreation    EffectClass = agentspec.EffectClassSessionCreation
-	EffectClassContextInsertion   EffectClass = agentspec.EffectClassContextInsertion
-)
-
-type CapabilitySelector = agentspec.CapabilitySelector
-type SkillCapabilitySelector = agentspec.SkillCapabilitySelector
-
 type CapabilitySource struct {
-	ProviderID string          `json:"provider_id,omitempty"`
-	Scope      CapabilityScope `json:"scope,omitempty"`
-	SessionID  string          `json:"session_id,omitempty"`
+	ProviderID string                    `json:"provider_id,omitempty"`
+	Scope      agentspec.CapabilityScope `json:"scope,omitempty"`
+	SessionID  string                    `json:"session_id,omitempty"`
 }
 
 type AvailabilitySpec struct {
@@ -93,30 +21,6 @@ type AvailabilitySpec struct {
 	Reason    string            `json:"reason,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
-
-// Schema is re-exported from platform/contracts for backward compatibility.
-// The canonical definition now lives in platform/contracts.
-type Schema = contracts.Schema
-
-type CoordinationRole = agentspec.CoordinationRole
-
-const (
-	CoordinationRolePlanner         = agentspec.CoordinationRolePlanner
-	CoordinationRoleArchitect       = agentspec.CoordinationRoleArchitect
-	CoordinationRoleReviewer        = agentspec.CoordinationRoleReviewer
-	CoordinationRoleVerifier        = agentspec.CoordinationRoleVerifier
-	CoordinationRoleExecutor        = agentspec.CoordinationRoleExecutor
-	CoordinationRoleDomainPack      = agentspec.CoordinationRoleDomainPack
-	CoordinationRoleBackgroundAgent = agentspec.CoordinationRoleBackgroundAgent
-)
-
-type CoordinationExecutionMode = agentspec.CoordinationExecutionMode
-
-const (
-	CoordinationExecutionModeSync            = agentspec.CoordinationExecutionModeSync
-	CoordinationExecutionModeSessionBacked   = agentspec.CoordinationExecutionModeSessionBacked
-	CoordinationExecutionModeBackgroundAgent = agentspec.CoordinationExecutionModeBackgroundAgent
-)
 
 type EnabledState int
 
@@ -137,37 +41,37 @@ func (s EnabledState) IsEnabled() bool {
 // CoordinationTargetMetadata is the framework-owned metadata block for
 // capability-based delegation targets.
 type CoordinationTargetMetadata struct {
-	Target                 bool                        `json:"target,omitempty"`
-	Role                   CoordinationRole            `json:"role,omitempty"`
-	TaskTypes              []string                    `json:"task_types,omitempty"`
-	ExecutionModes         []CoordinationExecutionMode `json:"execution_modes,omitempty"`
-	LongRunning            EnabledState                `json:"long_running,omitempty"`
-	MaxDepth               int                         `json:"max_depth,omitempty"`
-	MaxRuntimeSeconds      int                         `json:"max_runtime_seconds,omitempty"`
-	DirectInsertionAllowed EnabledState                `json:"direct_insertion_allowed,omitempty"`
-	ExpectedInput          *Schema                     `json:"expected_input,omitempty"`
-	ExpectedOutput         *Schema                     `json:"expected_output,omitempty"`
+	Target                 bool                                  `json:"target,omitempty"`
+	Role                   agentspec.CoordinationRole            `json:"role,omitempty"`
+	TaskTypes              []string                              `json:"task_types,omitempty"`
+	ExecutionModes         []agentspec.CoordinationExecutionMode `json:"execution_modes,omitempty"`
+	LongRunning            EnabledState                          `json:"long_running,omitempty"`
+	MaxDepth               int                                   `json:"max_depth,omitempty"`
+	MaxRuntimeSeconds      int                                   `json:"max_runtime_seconds,omitempty"`
+	DirectInsertionAllowed EnabledState                          `json:"direct_insertion_allowed,omitempty"`
+	ExpectedInput          *contracts.Schema                     `json:"expected_input,omitempty"`
+	ExpectedOutput         *contracts.Schema                     `json:"expected_output,omitempty"`
 }
 
 type CapabilityDescriptor struct {
-	ID              string                      `json:"id"`
-	Kind            CapabilityKind              `json:"kind"`
-	RuntimeFamily   CapabilityRuntimeFamily     `json:"runtime_family,omitempty"`
-	Name            string                      `json:"name"`
-	Version         string                      `json:"version,omitempty"`
-	Description     string                      `json:"description,omitempty"`
-	Category        string                      `json:"category,omitempty"`
-	Tags            []string                    `json:"tags,omitempty"`
-	Source          CapabilitySource            `json:"source,omitempty"`
-	TrustClass      TrustClass                  `json:"trust_class,omitempty"`
-	RiskClasses     []RiskClass                 `json:"risk_classes,omitempty"`
-	EffectClasses   []EffectClass               `json:"effect_classes,omitempty"`
-	SessionAffinity string                      `json:"session_affinity,omitempty"`
-	InputSchema     *Schema                     `json:"input_schema,omitempty"`
-	OutputSchema    *Schema                     `json:"output_schema,omitempty"`
-	Availability    AvailabilitySpec            `json:"availability,omitempty"`
-	Coordination    *CoordinationTargetMetadata `json:"coordination,omitempty"`
-	Annotations     map[string]any              `json:"annotations,omitempty"`
+	ID              string                            `json:"id"`
+	Kind            agentspec.CapabilityKind          `json:"kind"`
+	RuntimeFamily   agentspec.CapabilityRuntimeFamily `json:"runtime_family,omitempty"`
+	Name            string                            `json:"name"`
+	Version         string                            `json:"version,omitempty"`
+	Description     string                            `json:"description,omitempty"`
+	Category        string                            `json:"category,omitempty"`
+	Tags            []string                          `json:"tags,omitempty"`
+	Source          CapabilitySource                  `json:"source,omitempty"`
+	TrustClass      agentspec.TrustClass              `json:"trust_class,omitempty"`
+	RiskClasses     []agentspec.RiskClass             `json:"risk_classes,omitempty"`
+	EffectClasses   []agentspec.EffectClass           `json:"effect_classes,omitempty"`
+	SessionAffinity string                            `json:"session_affinity,omitempty"`
+	InputSchema     *contracts.Schema                 `json:"input_schema,omitempty"`
+	OutputSchema    *contracts.Schema                 `json:"output_schema,omitempty"`
+	Availability    AvailabilitySpec                  `json:"availability,omitempty"`
+	Coordination    *CoordinationTargetMetadata       `json:"coordination,omitempty"`
+	Annotations     map[string]any                    `json:"annotations,omitempty"`
 }
 
 type ContentBlock interface {
@@ -221,11 +125,11 @@ type ErrorContentBlock struct {
 func (ErrorContentBlock) ContentType() string { return "error" }
 
 type ContentProvenance struct {
-	CapabilityID string             `json:"capability_id,omitempty"`
-	ProviderID   string             `json:"provider_id,omitempty"`
-	TrustClass   TrustClass         `json:"trust_class,omitempty"`
-	Disposition  ContentDisposition `json:"disposition,omitempty"`
-	Derivation   *DerivationChain   `json:"derivation,omitempty"` // NEW: transformation history
+	CapabilityID string               `json:"capability_id,omitempty"`
+	ProviderID   string               `json:"provider_id,omitempty"`
+	TrustClass   agentspec.TrustClass `json:"trust_class,omitempty"`
+	Disposition  ContentDisposition   `json:"disposition,omitempty"`
+	Derivation   *DerivationChain     `json:"derivation,omitempty"` // NEW: transformation history
 }
 
 type CapabilityDescriptorProvider interface {
@@ -245,15 +149,15 @@ type CapabilityVersionProvider interface {
 }
 
 type CapabilityTrustProvider interface {
-	TrustClass() TrustClass
+	TrustClass() agentspec.TrustClass
 }
 
 type CapabilityRiskProvider interface {
-	RiskClasses() []RiskClass
+	RiskClasses() []agentspec.RiskClass
 }
 
 type CapabilityEffectProvider interface {
-	EffectClasses() []EffectClass
+	EffectClasses() []agentspec.EffectClass
 }
 
 type SessionAffinityProvider interface {
@@ -261,7 +165,7 @@ type SessionAffinityProvider interface {
 }
 
 type CapabilityRuntimeFamilyAware interface {
-	CapabilityRuntimeFamily() CapabilityRuntimeFamily
+	CapabilityRuntimeFamily() agentspec.CapabilityRuntimeFamily
 }
 
 type CoordinationMetadataProvider interface {
@@ -279,7 +183,7 @@ func ToolDescriptor(ctx context.Context, tool contracts.Tool) CapabilityDescript
 			desc.ID = ToolCapabilityID(tool)
 		}
 		if desc.Kind == "" {
-			desc.Kind = CapabilityKindTool
+			desc.Kind = agentspec.CapabilityKindTool
 		}
 		if desc.Name == "" {
 			desc.Name = tool.Name()
@@ -323,7 +227,7 @@ func ToolDescriptor(ctx context.Context, tool contracts.Tool) CapabilityDescript
 	}
 	desc := CapabilityDescriptor{
 		ID:            ToolCapabilityID(tool),
-		Kind:          CapabilityKindTool,
+		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: ToolCapabilityRuntimeFamily(tool),
 		Name:          tool.Name(),
 		Description:   tool.Description(),
@@ -378,21 +282,21 @@ func ToolVersion(tool contracts.Tool) string {
 
 func ToolCapabilitySource(tool contracts.Tool) CapabilitySource {
 	if tool == nil {
-		return CapabilitySource{Scope: CapabilityScopeBuiltin}
+		return CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin}
 	}
 	if provider, ok := tool.(CapabilitySourceProvider); ok {
 		source := provider.CapabilitySource()
 		if source.Scope == "" {
-			source.Scope = CapabilityScopeBuiltin
+			source.Scope = agentspec.CapabilityScopeBuiltin
 		}
 		return source
 	}
-	return CapabilitySource{Scope: CapabilityScopeBuiltin}
+	return CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin}
 }
 
-func ToolCapabilityRuntimeFamily(tool contracts.Tool) CapabilityRuntimeFamily {
+func ToolCapabilityRuntimeFamily(tool contracts.Tool) agentspec.CapabilityRuntimeFamily {
 	if tool == nil {
-		return CapabilityRuntimeFamilyLocalTool
+		return agentspec.CapabilityRuntimeFamilyLocalTool
 	}
 	if provider, ok := tool.(CapabilityRuntimeFamilyAware); ok {
 		if family := provider.CapabilityRuntimeFamily(); family != "" {
@@ -401,16 +305,16 @@ func ToolCapabilityRuntimeFamily(tool contracts.Tool) CapabilityRuntimeFamily {
 	}
 	source := ToolCapabilitySource(tool)
 	switch source.Scope {
-	case CapabilityScopeProvider, CapabilityScopeRemote:
-		return CapabilityRuntimeFamilyProvider
+	case agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
+		return agentspec.CapabilityRuntimeFamilyProvider
 	default:
-		return CapabilityRuntimeFamilyLocalTool
+		return agentspec.CapabilityRuntimeFamilyLocalTool
 	}
 }
 
-func ToolTrustClass(tool contracts.Tool) TrustClass {
+func ToolTrustClass(tool contracts.Tool) agentspec.TrustClass {
 	if tool == nil {
-		return TrustClassBuiltinTrusted
+		return agentspec.TrustClassBuiltinTrusted
 	}
 	if provider, ok := tool.(CapabilityTrustProvider); ok {
 		if trust := provider.TrustClass(); trust != "" {
@@ -418,14 +322,14 @@ func ToolTrustClass(tool contracts.Tool) TrustClass {
 		}
 	}
 	switch ToolCapabilitySource(tool).Scope {
-	case CapabilityScopeWorkspace:
-		return TrustClassWorkspaceTrusted
-	case CapabilityScopeProvider:
-		return TrustClassProviderLocalUntrusted
-	case CapabilityScopeRemote:
-		return TrustClassRemoteDeclared
+	case agentspec.CapabilityScopeWorkspace:
+		return agentspec.TrustClassWorkspaceTrusted
+	case agentspec.CapabilityScopeProvider:
+		return agentspec.TrustClassProviderLocalUntrusted
+	case agentspec.CapabilityScopeRemote:
+		return agentspec.TrustClassRemoteDeclared
 	default:
-		return TrustClassBuiltinTrusted
+		return agentspec.TrustClassBuiltinTrusted
 	}
 }
 
@@ -436,90 +340,90 @@ func ToolCapabilityTags(tool contracts.Tool) []string {
 	return normalizeCapabilityTags(tool.Tags())
 }
 
-func ToolRiskClasses(tool contracts.Tool) []RiskClass {
+func ToolRiskClasses(tool contracts.Tool) []agentspec.RiskClass {
 	if tool == nil {
 		return nil
 	}
 	if provider, ok := tool.(CapabilityRiskProvider); ok {
 		return normalizeRiskClasses(provider.RiskClasses())
 	}
-	set := make(map[RiskClass]struct{})
+	set := make(map[agentspec.RiskClass]struct{})
 	for _, tag := range tool.Tags() {
 		switch strings.ToLower(strings.TrimSpace(tag)) {
-		case string(RiskClassReadOnly):
-			set[RiskClassReadOnly] = struct{}{}
-		case string(RiskClassDestructive):
-			set[RiskClassDestructive] = struct{}{}
-		case string(RiskClassExecute):
-			set[RiskClassExecute] = struct{}{}
-		case string(RiskClassNetwork):
-			set[RiskClassNetwork] = struct{}{}
-		case string(RiskClassCredentialed):
-			set[RiskClassCredentialed] = struct{}{}
-		case string(RiskClassExfiltration):
-			set[RiskClassExfiltration] = struct{}{}
-		case string(RiskClassSessioned):
-			set[RiskClassSessioned] = struct{}{}
+		case string(agentspec.RiskClassReadOnly):
+			set[agentspec.RiskClassReadOnly] = struct{}{}
+		case string(agentspec.RiskClassDestructive):
+			set[agentspec.RiskClassDestructive] = struct{}{}
+		case string(agentspec.RiskClassExecute):
+			set[agentspec.RiskClassExecute] = struct{}{}
+		case string(agentspec.RiskClassNetwork):
+			set[agentspec.RiskClassNetwork] = struct{}{}
+		case string(agentspec.RiskClassCredentialed):
+			set[agentspec.RiskClassCredentialed] = struct{}{}
+		case string(agentspec.RiskClassExfiltration):
+			set[agentspec.RiskClassExfiltration] = struct{}{}
+		case string(agentspec.RiskClassSessioned):
+			set[agentspec.RiskClassSessioned] = struct{}{}
 		}
 	}
 	perms := tool.Permissions().Permissions
 	if perms != nil {
 		if len(perms.Executables) > 0 || len(perms.Capabilities) > 0 || len(perms.IPC) > 0 {
-			set[RiskClassExecute] = struct{}{}
+			set[agentspec.RiskClassExecute] = struct{}{}
 		}
 		if len(perms.Network) > 0 {
-			set[RiskClassNetwork] = struct{}{}
-			set[RiskClassExfiltration] = struct{}{}
+			set[agentspec.RiskClassNetwork] = struct{}{}
+			set[agentspec.RiskClassExfiltration] = struct{}{}
 		}
 		if hasFilesystemMutation(perms) {
-			set[RiskClassDestructive] = struct{}{}
+			set[agentspec.RiskClassDestructive] = struct{}{}
 		}
 		if len(set) == 0 && hasFilesystemReadOnly(perms) {
-			set[RiskClassReadOnly] = struct{}{}
+			set[agentspec.RiskClassReadOnly] = struct{}{}
 		}
 	}
 	return riskClassSetToSlice(set)
 }
 
-func ToolEffectClasses(tool contracts.Tool) []EffectClass {
+func ToolEffectClasses(tool contracts.Tool) []agentspec.EffectClass {
 	if tool == nil {
 		return nil
 	}
 	if provider, ok := tool.(CapabilityEffectProvider); ok {
 		return normalizeEffectClasses(provider.EffectClasses())
 	}
-	set := make(map[EffectClass]struct{})
+	set := make(map[agentspec.EffectClass]struct{})
 	perms := tool.Permissions().Permissions
 	if perms != nil {
 		for _, fs := range perms.FileSystem {
 			if fs.Action == contracts.FileSystemWrite || fs.Action == contracts.FileSystemExecute {
-				set[EffectClassFilesystemMutation] = struct{}{}
+				set[agentspec.EffectClassFilesystemMutation] = struct{}{}
 				break
 			}
 		}
 		if len(perms.Executables) > 0 || len(perms.Capabilities) > 0 || len(perms.IPC) > 0 {
-			set[EffectClassProcessSpawn] = struct{}{}
+			set[agentspec.EffectClassProcessSpawn] = struct{}{}
 		}
 		if len(perms.Network) > 0 {
-			set[EffectClassNetworkEgress] = struct{}{}
-			set[EffectClassExternalState] = struct{}{}
+			set[agentspec.EffectClassNetworkEgress] = struct{}{}
+			set[agentspec.EffectClassExternalState] = struct{}{}
 		}
 	}
 	if _, ok := tool.(SessionAffinityProvider); ok {
-		set[EffectClassSessionCreation] = struct{}{}
+		set[agentspec.EffectClassSessionCreation] = struct{}{}
 	}
 	return effectClassSetToSlice(set)
 }
 
-func ToolInputSchema(tool contracts.Tool) *Schema {
+func ToolInputSchema(tool contracts.Tool) *contracts.Schema {
 	if tool == nil {
 		return nil
 	}
 	params := tool.Parameters()
-	properties := make(map[string]*Schema, len(params))
+	properties := make(map[string]*contracts.Schema, len(params))
 	required := make([]string, 0, len(params))
 	for _, param := range params {
-		schema := &Schema{
+		schema := &contracts.Schema{
 			Type:        strings.TrimSpace(param.Type),
 			Description: strings.TrimSpace(param.Description),
 			Default:     param.Default,
@@ -533,7 +437,7 @@ func ToolInputSchema(tool contracts.Tool) *Schema {
 		}
 	}
 	sort.Strings(required)
-	return &Schema{
+	return &contracts.Schema{
 		Type:       "object",
 		Properties: properties,
 		Required:   required,
@@ -542,13 +446,13 @@ func ToolInputSchema(tool contracts.Tool) *Schema {
 
 func normalizeCapabilityDescriptor(desc CapabilityDescriptor) CapabilityDescriptor {
 	if desc.Kind == "" {
-		desc.Kind = CapabilityKindTool
+		desc.Kind = agentspec.CapabilityKindTool
 	}
 	if desc.RuntimeFamily == "" {
 		desc.RuntimeFamily = defaultCapabilityRuntimeFamily(desc)
 	}
 	if desc.Source.Scope == "" {
-		desc.Source.Scope = CapabilityScopeBuiltin
+		desc.Source.Scope = agentspec.CapabilityScopeBuiltin
 	}
 	desc.Tags = normalizeCapabilityTags(desc.Tags)
 	desc.RiskClasses = normalizeRiskClasses(desc.RiskClasses)
@@ -565,13 +469,13 @@ func ValidateCoordinationTargetMetadata(metadata *CoordinationTargetMetadata) er
 		return fmt.Errorf("coordination target must be enabled")
 	}
 	switch metadata.Role {
-	case CoordinationRolePlanner,
-		CoordinationRoleArchitect,
-		CoordinationRoleReviewer,
-		CoordinationRoleVerifier,
-		CoordinationRoleExecutor,
-		CoordinationRoleDomainPack,
-		CoordinationRoleBackgroundAgent:
+	case agentspec.CoordinationRolePlanner,
+		agentspec.CoordinationRoleArchitect,
+		agentspec.CoordinationRoleReviewer,
+		agentspec.CoordinationRoleVerifier,
+		agentspec.CoordinationRoleExecutor,
+		agentspec.CoordinationRoleDomainPack,
+		agentspec.CoordinationRoleBackgroundAgent:
 	default:
 		return fmt.Errorf("coordination role %s invalid", metadata.Role)
 	}
@@ -588,7 +492,7 @@ func ValidateCoordinationTargetMetadata(metadata *CoordinationTargetMetadata) er
 	}
 	for _, mode := range metadata.ExecutionModes {
 		switch mode {
-		case CoordinationExecutionModeSync, CoordinationExecutionModeSessionBacked, CoordinationExecutionModeBackgroundAgent:
+		case agentspec.CoordinationExecutionModeSync, agentspec.CoordinationExecutionModeSessionBacked, agentspec.CoordinationExecutionModeBackgroundAgent:
 		default:
 			return fmt.Errorf("coordination execution mode %s invalid", mode)
 		}
@@ -609,32 +513,32 @@ func ValidateCoordinationTargetMetadata(metadata *CoordinationTargetMetadata) er
 	if metadata.MaxRuntimeSeconds < 0 {
 		return fmt.Errorf("coordination max_runtime_seconds cannot be negative")
 	}
-	if metadata.LongRunning == EnabledStateEnabled && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeBackgroundAgent) && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeSessionBacked) {
+	if metadata.LongRunning == EnabledStateEnabled && !containsCoordinationExecutionMode(metadata.ExecutionModes, agentspec.CoordinationExecutionModeBackgroundAgent) && !containsCoordinationExecutionMode(metadata.ExecutionModes, agentspec.CoordinationExecutionModeSessionBacked) {
 		return fmt.Errorf("long-running coordination targets must be session-backed or background-service")
 	}
-	if metadata.Role == CoordinationRoleBackgroundAgent && !containsCoordinationExecutionMode(metadata.ExecutionModes, CoordinationExecutionModeBackgroundAgent) {
+	if metadata.Role == agentspec.CoordinationRoleBackgroundAgent && !containsCoordinationExecutionMode(metadata.ExecutionModes, agentspec.CoordinationExecutionModeBackgroundAgent) {
 		return fmt.Errorf("background-agent role requires background-service execution mode")
 	}
 	return nil
 }
 
-func defaultCapabilityRuntimeFamily(desc CapabilityDescriptor) CapabilityRuntimeFamily {
+func defaultCapabilityRuntimeFamily(desc CapabilityDescriptor) agentspec.CapabilityRuntimeFamily {
 	switch desc.Kind {
-	case CapabilityKindPrompt, CapabilityKindResource, CapabilityKindSession, CapabilityKindSubscription:
-		if desc.Source.ProviderID != "" || desc.Source.Scope == CapabilityScopeProvider || desc.Source.Scope == CapabilityScopeRemote {
-			return CapabilityRuntimeFamilyProvider
+	case agentspec.CapabilityKindPrompt, agentspec.CapabilityKindResource, agentspec.CapabilityKindSession, agentspec.CapabilityKindSubscription:
+		if desc.Source.ProviderID != "" || desc.Source.Scope == agentspec.CapabilityScopeProvider || desc.Source.Scope == agentspec.CapabilityScopeRemote {
+			return agentspec.CapabilityRuntimeFamilyProvider
 		}
-		return CapabilityRuntimeFamilyRelurpic
-	case CapabilityKindTool:
-		if desc.Source.Scope == CapabilityScopeProvider || desc.Source.Scope == CapabilityScopeRemote || desc.Source.ProviderID != "" {
-			return CapabilityRuntimeFamilyProvider
+		return agentspec.CapabilityRuntimeFamilyRelurpic
+	case agentspec.CapabilityKindTool:
+		if desc.Source.Scope == agentspec.CapabilityScopeProvider || desc.Source.Scope == agentspec.CapabilityScopeRemote || desc.Source.ProviderID != "" {
+			return agentspec.CapabilityRuntimeFamilyProvider
 		}
-		return CapabilityRuntimeFamilyLocalTool
+		return agentspec.CapabilityRuntimeFamilyLocalTool
 	default:
-		if desc.Source.Scope == CapabilityScopeProvider || desc.Source.Scope == CapabilityScopeRemote || desc.Source.ProviderID != "" {
-			return CapabilityRuntimeFamilyProvider
+		if desc.Source.Scope == agentspec.CapabilityScopeProvider || desc.Source.Scope == agentspec.CapabilityScopeRemote || desc.Source.ProviderID != "" {
+			return agentspec.CapabilityRuntimeFamilyProvider
 		}
-		return CapabilityRuntimeFamilyRelurpic
+		return agentspec.CapabilityRuntimeFamilyRelurpic
 	}
 }
 
@@ -661,7 +565,7 @@ func normalizeCapabilityTags(tags []string) []string {
 	return out
 }
 
-func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, defaultInput, defaultOutput *Schema) *CoordinationTargetMetadata {
+func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, defaultInput, defaultOutput *contracts.Schema) *CoordinationTargetMetadata {
 	if metadata == nil {
 		return nil
 	}
@@ -678,10 +582,10 @@ func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, d
 	} else {
 		clone.ExpectedOutput = cloneSchema(clone.ExpectedOutput)
 	}
-	if clone.Role == CoordinationRoleBackgroundAgent {
+	if clone.Role == agentspec.CoordinationRoleBackgroundAgent {
 		clone.LongRunning = EnabledStateEnabled
-		if !containsCoordinationExecutionMode(clone.ExecutionModes, CoordinationExecutionModeBackgroundAgent) {
-			clone.ExecutionModes = append(clone.ExecutionModes, CoordinationExecutionModeBackgroundAgent)
+		if !containsCoordinationExecutionMode(clone.ExecutionModes, agentspec.CoordinationExecutionModeBackgroundAgent) {
+			clone.ExecutionModes = append(clone.ExecutionModes, agentspec.CoordinationExecutionModeBackgroundAgent)
 			clone.ExecutionModes = normalizeCoordinationExecutionModes(clone.ExecutionModes)
 		}
 	}
@@ -711,13 +615,13 @@ func normalizeStringList(values []string) []string {
 	return out
 }
 
-func normalizeCoordinationExecutionModes(values []CoordinationExecutionMode) []CoordinationExecutionMode {
+func normalizeCoordinationExecutionModes(values []agentspec.CoordinationExecutionMode) []agentspec.CoordinationExecutionMode {
 	if len(values) == 0 {
 		return nil
 	}
-	set := make(map[CoordinationExecutionMode]struct{}, len(values))
+	set := make(map[agentspec.CoordinationExecutionMode]struct{}, len(values))
 	for _, value := range values {
-		value = CoordinationExecutionMode(strings.TrimSpace(string(value)))
+		value = agentspec.CoordinationExecutionMode(strings.TrimSpace(string(value)))
 		if value == "" {
 			continue
 		}
@@ -726,7 +630,7 @@ func normalizeCoordinationExecutionModes(values []CoordinationExecutionMode) []C
 	if len(set) == 0 {
 		return nil
 	}
-	out := make([]CoordinationExecutionMode, 0, len(set))
+	out := make([]agentspec.CoordinationExecutionMode, 0, len(set))
 	for value := range set {
 		out = append(out, value)
 	}
@@ -734,7 +638,7 @@ func normalizeCoordinationExecutionModes(values []CoordinationExecutionMode) []C
 	return out
 }
 
-func containsCoordinationExecutionMode(values []CoordinationExecutionMode, want CoordinationExecutionMode) bool {
+func containsCoordinationExecutionMode(values []agentspec.CoordinationExecutionMode, want agentspec.CoordinationExecutionMode) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -743,7 +647,7 @@ func containsCoordinationExecutionMode(values []CoordinationExecutionMode, want 
 	return false
 }
 
-func cloneSchema(schema *Schema) *Schema {
+func cloneSchema(schema *contracts.Schema) *contracts.Schema {
 	if schema == nil {
 		return nil
 	}
@@ -752,7 +656,7 @@ func cloneSchema(schema *Schema) *Schema {
 		clone.Items = cloneSchema(schema.Items)
 	}
 	if schema.Properties != nil {
-		clone.Properties = make(map[string]*Schema, len(schema.Properties))
+		clone.Properties = make(map[string]*contracts.Schema, len(schema.Properties))
 		for key, value := range schema.Properties {
 			clone.Properties[key] = cloneSchema(value)
 		}
@@ -768,38 +672,38 @@ func isReservedSecurityTag(tag string) bool {
 		strings.ToLower(contracts.TagExecute),
 		strings.ToLower(contracts.TagDestructive),
 		strings.ToLower(contracts.TagNetwork),
-		string(TrustClassBuiltinTrusted),
-		string(TrustClassWorkspaceTrusted),
-		string(TrustClassProviderLocalUntrusted),
-		string(TrustClassRemoteDeclared),
-		string(TrustClassRemoteApproved),
-		string(RiskClassReadOnly),
-		string(RiskClassDestructive),
-		string(RiskClassExecute),
-		string(RiskClassNetwork),
-		string(RiskClassCredentialed),
-		string(RiskClassExfiltration),
-		string(RiskClassSessioned),
-		string(EffectClassFilesystemMutation),
-		string(EffectClassProcessSpawn),
-		string(EffectClassNetworkEgress),
-		string(EffectClassCredentialUse),
-		string(EffectClassExternalState),
-		string(EffectClassSessionCreation),
-		string(EffectClassContextInsertion):
+		string(agentspec.TrustClassBuiltinTrusted),
+		string(agentspec.TrustClassWorkspaceTrusted),
+		string(agentspec.TrustClassProviderLocalUntrusted),
+		string(agentspec.TrustClassRemoteDeclared),
+		string(agentspec.TrustClassRemoteApproved),
+		string(agentspec.RiskClassReadOnly),
+		string(agentspec.RiskClassDestructive),
+		string(agentspec.RiskClassExecute),
+		string(agentspec.RiskClassNetwork),
+		string(agentspec.RiskClassCredentialed),
+		string(agentspec.RiskClassExfiltration),
+		string(agentspec.RiskClassSessioned),
+		string(agentspec.EffectClassFilesystemMutation),
+		string(agentspec.EffectClassProcessSpawn),
+		string(agentspec.EffectClassNetworkEgress),
+		string(agentspec.EffectClassCredentialUse),
+		string(agentspec.EffectClassExternalState),
+		string(agentspec.EffectClassSessionCreation),
+		string(agentspec.EffectClassContextInsertion):
 		return true
 	default:
 		return false
 	}
 }
 
-func normalizeRiskClasses(classes []RiskClass) []RiskClass {
+func normalizeRiskClasses(classes []agentspec.RiskClass) []agentspec.RiskClass {
 	if len(classes) == 0 {
 		return nil
 	}
-	set := make(map[RiskClass]struct{}, len(classes))
+	set := make(map[agentspec.RiskClass]struct{}, len(classes))
 	for _, class := range classes {
-		class = RiskClass(strings.TrimSpace(string(class)))
+		class = agentspec.RiskClass(strings.TrimSpace(string(class)))
 		if class == "" {
 			continue
 		}
@@ -808,13 +712,13 @@ func normalizeRiskClasses(classes []RiskClass) []RiskClass {
 	return riskClassSetToSlice(set)
 }
 
-func normalizeEffectClasses(classes []EffectClass) []EffectClass {
+func normalizeEffectClasses(classes []agentspec.EffectClass) []agentspec.EffectClass {
 	if len(classes) == 0 {
 		return nil
 	}
-	set := make(map[EffectClass]struct{}, len(classes))
+	set := make(map[agentspec.EffectClass]struct{}, len(classes))
 	for _, class := range classes {
-		class = EffectClass(strings.TrimSpace(string(class)))
+		class = agentspec.EffectClass(strings.TrimSpace(string(class)))
 		if class == "" {
 			continue
 		}
@@ -823,11 +727,11 @@ func normalizeEffectClasses(classes []EffectClass) []EffectClass {
 	return effectClassSetToSlice(set)
 }
 
-func riskClassSetToSlice(set map[RiskClass]struct{}) []RiskClass {
+func riskClassSetToSlice(set map[agentspec.RiskClass]struct{}) []agentspec.RiskClass {
 	if len(set) == 0 {
 		return nil
 	}
-	out := make([]RiskClass, 0, len(set))
+	out := make([]agentspec.RiskClass, 0, len(set))
 	for class := range set {
 		out = append(out, class)
 	}
@@ -835,11 +739,11 @@ func riskClassSetToSlice(set map[RiskClass]struct{}) []RiskClass {
 	return out
 }
 
-func effectClassSetToSlice(set map[EffectClass]struct{}) []EffectClass {
+func effectClassSetToSlice(set map[agentspec.EffectClass]struct{}) []agentspec.EffectClass {
 	if len(set) == 0 {
 		return nil
 	}
-	out := make([]EffectClass, 0, len(set))
+	out := make([]agentspec.EffectClass, 0, len(set))
 	for class := range set {
 		out = append(out, class)
 	}

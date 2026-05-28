@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -223,23 +224,23 @@ func CapabilityRequirementsSatisfied(trigger TriggerPolicyRequirements, capabili
 func capabilityRequiresWrite(desc core.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case core.EffectClassFilesystemMutation,
-			core.EffectClassProcessSpawn,
-			core.EffectClassNetworkEgress,
-			core.EffectClassCredentialUse,
-			core.EffectClassExternalState,
-			core.EffectClassSessionCreation:
+		case agentspec.EffectClassFilesystemMutation,
+			agentspec.EffectClassProcessSpawn,
+			agentspec.EffectClassNetworkEgress,
+			agentspec.EffectClassCredentialUse,
+			agentspec.EffectClassExternalState,
+			agentspec.EffectClassSessionCreation:
 			return true
 		}
 	}
 	for _, risk := range desc.RiskClasses {
 		switch risk {
-		case core.RiskClassDestructive,
-			core.RiskClassExecute,
-			core.RiskClassNetwork,
-			core.RiskClassCredentialed,
-			core.RiskClassExfiltration,
-			core.RiskClassSessioned:
+		case agentspec.RiskClassDestructive,
+			agentspec.RiskClassExecute,
+			agentspec.RiskClassNetwork,
+			agentspec.RiskClassCredentialed,
+			agentspec.RiskClassExfiltration,
+			agentspec.RiskClassSessioned:
 			return true
 		}
 	}

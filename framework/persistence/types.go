@@ -13,14 +13,14 @@ import (
 
 // PersistenceRequest is the caller-facing write contract.
 type PersistenceRequest struct {
-	Content            []byte
-	ContentType        string              // mime type or structural type
-	SourcePrincipal    identity.SubjectRef
-	SourceOrigin       knowledge.SourceOrigin
-	Reason             string
-	Tags               []string
-	DerivedFrom        []knowledge.ChunkID // for compiler-produced artifacts
-	DerivationMethod   string
+	Content              []byte
+	ContentType          string // mime type or structural type
+	SourcePrincipal      identity.SubjectRef
+	SourceOrigin         knowledge.SourceOrigin
+	Reason               string
+	Tags                 []string
+	DerivedFrom          []knowledge.ChunkID // for compiler-produced artifacts
+	DerivationMethod     string
 	DerivationGeneration int
 }
 
@@ -28,11 +28,11 @@ type PersistenceRequest struct {
 type PersistenceAction string
 
 const (
-	ActionCreated       PersistenceAction = "created"
-	ActionUpdated       PersistenceAction = "updated"
-	ActionDeduplicated  PersistenceAction = "deduplicated"
-	ActionQuarantined   PersistenceAction = "quarantined"
-	ActionRejected      PersistenceAction = "rejected"
+	ActionCreated      PersistenceAction = "created"
+	ActionUpdated      PersistenceAction = "updated"
+	ActionDeduplicated PersistenceAction = "deduplicated"
+	ActionQuarantined  PersistenceAction = "quarantined"
+	ActionRejected     PersistenceAction = "rejected"
 )
 
 // PersistenceResult is the outcome of a persistence operation.
@@ -58,11 +58,11 @@ type PersistenceAuditRecord struct {
 
 // Writer is the main entry point for runtime persistence.
 type Writer struct {
-	Store         *knowledge.ChunkStore
-	Events        EventLog
-	Policy        *contextpolicy.ContextPolicyBundle
-	Evaluator     *contextpolicy.Evaluator
-	AuditLog      []PersistenceAuditRecord
+	Store     *knowledge.ChunkStore
+	Events    EventLog
+	Policy    *contextpolicy.ContextPolicyBundle
+	Evaluator *contextpolicy.Evaluator
+	AuditLog  []PersistenceAuditRecord
 }
 
 // EventLog is a minimal event logging interface.
@@ -78,13 +78,13 @@ type WorkingMemoryStore interface {
 
 // PromotionRequest represents a request to promote content from working memory.
 type PromotionRequest struct {
-	Key                string
-	ContentType        string
-	SourcePrincipal    identity.SubjectRef
-	SourceOrigin       knowledge.SourceOrigin
-	Reason             string
-	Tags               []string
-	DerivedFrom        []knowledge.ChunkID
-	DerivationMethod   string
+	Key                  string
+	ContentType          string
+	SourcePrincipal      identity.SubjectRef
+	SourceOrigin         knowledge.SourceOrigin
+	Reason               string
+	Tags                 []string
+	DerivedFrom          []knowledge.ChunkID
+	DerivationMethod     string
 	DerivationGeneration int
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -25,20 +26,20 @@ func NewRenameSymbolHandler(env agentenv.WorkspaceEnvironment) *RenameSymbolHand
 func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.rename_symbol",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Rename Symbol",
 		Version:       "1.0.0",
 		Description:   "Renames a symbol across the workspace using AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "rename", "ast", "write"},
-		Source:        core.CapabilitySource{Scope: core.CapabilityScopeBuiltin},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassDestructive},
-		EffectClasses: []core.EffectClass{core.EffectClassFilesystemMutation},
-		InputSchema: &core.Schema{
+		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassDestructive},
+		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassFilesystemMutation},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"from":    {Type: "string"},
 				"to":      {Type: "string"},
 				"file":    {Type: "string"},
@@ -46,13 +47,13 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 			},
 			Required: []string{"from", "to"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success":        {Type: "boolean"},
 				"preview":        {Type: "boolean"},
 				"applied":        {Type: "boolean"},
-				"files_modified": {Type: "array", Items: &core.Schema{Type: "object"}},
+				"files_modified": {Type: "array", Items: &contracts.Schema{Type: "object"}},
 				"replacements":   {Type: "integer"},
 			},
 		},

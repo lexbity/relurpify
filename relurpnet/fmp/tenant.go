@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
@@ -24,7 +25,7 @@ type AuthorizedActor struct {
 	Delegated  bool
 	SessionID  string
 	TenantID   string
-	TrustClass core.TrustClass
+	TrustClass agentspec.TrustClass
 }
 
 func (s *Service) CreateLineageFromSession(ctx context.Context, req SessionLineageRequest) (*LineageRecord, error) {

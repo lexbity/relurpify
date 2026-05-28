@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -38,8 +39,8 @@ func testCapabilityDescriptor(id string, priority int, availability core.Availab
 	return core.CapabilityDescriptor{
 		ID:            id,
 		Name:          id,
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Availability:  availability,
 		Annotations: map[string]any{
 			"euclo.priority": priority,
@@ -55,7 +56,7 @@ func testThoughtRecipe(id string) *thoughtrecipepkg.ThoughtRecipe {
 }
 
 func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, core.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
@@ -162,7 +163,7 @@ func mustStringRouteValue(t *testing.T, env *contextdata.Envelope, key string) s
 }
 
 func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, core.AvailabilitySpec{Available: true})
 	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, core.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(low); err != nil {
@@ -216,7 +217,7 @@ func TestRouteMatchesFamily_EmptyFamilyRejectsUnrelatedInstruction(t *testing.T)
 }
 
 func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, core.AvailabilitySpec{Available: true})
 	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, core.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(low); err != nil {
@@ -253,7 +254,7 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 }
 
 func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, core.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
@@ -284,7 +285,7 @@ func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 }
 
 func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
@@ -300,7 +301,7 @@ func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 }
 
 func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	primary := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
@@ -330,7 +331,7 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 }
 
 func TestDispatch_AllUnavailable_HardFailure(t *testing.T) {
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",

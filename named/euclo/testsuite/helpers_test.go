@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -93,14 +94,14 @@ func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Env
 
 func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewCapabilityRegistry()
+	reg := capability.NewRegistry()
 	for _, id := range ids {
 		if err := reg.RegisterInvocableCapability(&testCapabilityHandler{
 			descriptor: core.CapabilityDescriptor{
 				ID:            id,
 				Name:          id,
-				Kind:          core.CapabilityKindTool,
-				RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+				Kind:          agentspec.CapabilityKindTool,
+				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 				Availability:  core.AvailabilitySpec{Available: true},
 			},
 			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {

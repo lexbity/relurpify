@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -24,30 +25,30 @@ func NewBoundaryReportHandler(env agentenv.WorkspaceEnvironment) *BoundaryReport
 func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.boundary_report",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Boundary Report",
 		Version:       "1.0.0",
 		Description:   "Generates a workspace layering report with dependency counts and violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "report"},
-		Source:        core.CapabilitySource{Scope: core.CapabilityScopeBuiltin},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassReadOnly},
-		EffectClasses: []core.EffectClass{},
-		InputSchema: &core.Schema{
+		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
+		EffectClasses: []agentspec.EffectClass{},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"layer": {Type: "string"},
 			},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success":           {Type: "boolean"},
 				"report":            {Type: "string"},
 				"summary":           {Type: "string"},
-				"violations":        {Type: "array", Items: &core.Schema{Type: "object"}},
+				"violations":        {Type: "array", Items: &contracts.Schema{Type: "object"}},
 				"dependency_counts": {Type: "object"},
 			},
 		},

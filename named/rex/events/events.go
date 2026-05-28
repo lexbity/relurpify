@@ -12,7 +12,7 @@ import (
 )
 
 // IngressOrigin classifies the source of an inbound canonical event.
-// This is distinct from framework/core.TrustClass, which governs capability
+// This is distinct from framework/agentspec.TrustClass, which governs capability
 // execution authorization. IngressOrigin answers "where did this event come
 // from and how was its source authenticated?", not "is this capability allowed
 // to run?".

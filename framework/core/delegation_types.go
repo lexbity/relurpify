@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type DelegationState string
@@ -19,23 +22,23 @@ const (
 // DelegationRequest is the framework-owned contract for handing work from one
 // coordinated capability/agent target to another.
 type DelegationRequest struct {
-	ID                 string         `json:"id"`
-	WorkflowID         string         `json:"workflow_id,omitempty"`
-	TaskID             string         `json:"task_id,omitempty"`
-	CallerAgentID      string         `json:"caller_agent_id,omitempty"`
-	CallerCapabilityID string         `json:"caller_capability_id,omitempty"`
-	TargetCapabilityID string         `json:"target_capability_id"`
-	TargetProviderID   string         `json:"target_provider_id,omitempty"`
-	TargetSessionID    string         `json:"target_session_id,omitempty"`
-	TaskType           string         `json:"task_type"`
-	Instruction        string         `json:"instruction"`
-	ResourceRefs       []string       `json:"resource_refs,omitempty"`
-	ExpectedResult     *Schema        `json:"expected_result,omitempty"`
-	Depth              int            `json:"depth,omitempty"`
-	PolicySnapshotID   string         `json:"policy_snapshot_id,omitempty"`
-	ApprovalRequired   bool           `json:"approval_required,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
-	CreatedAt          time.Time      `json:"created_at,omitempty"`
+	ID                 string            `json:"id"`
+	WorkflowID         string            `json:"workflow_id,omitempty"`
+	TaskID             string            `json:"task_id,omitempty"`
+	CallerAgentID      string            `json:"caller_agent_id,omitempty"`
+	CallerCapabilityID string            `json:"caller_capability_id,omitempty"`
+	TargetCapabilityID string            `json:"target_capability_id"`
+	TargetProviderID   string            `json:"target_provider_id,omitempty"`
+	TargetSessionID    string            `json:"target_session_id,omitempty"`
+	TaskType           string            `json:"task_type"`
+	Instruction        string            `json:"instruction"`
+	ResourceRefs       []string          `json:"resource_refs,omitempty"`
+	ExpectedResult     *contracts.Schema `json:"expected_result,omitempty"`
+	Depth              int               `json:"depth,omitempty"`
+	PolicySnapshotID   string            `json:"policy_snapshot_id,omitempty"`
+	ApprovalRequired   bool              `json:"approval_required,omitempty"`
+	Metadata           map[string]any    `json:"metadata,omitempty"`
+	CreatedAt          time.Time         `json:"created_at,omitempty"`
 }
 
 // DelegationResult is the framework-owned result record for delegated work.
@@ -60,15 +63,15 @@ type DelegationResult struct {
 // DelegationSnapshot is the runtime-owned lifecycle record for an admitted
 // delegation.
 type DelegationSnapshot struct {
-	Request        DelegationRequest  `json:"request"`
-	Result         *DelegationResult  `json:"result,omitempty"`
-	State          DelegationState    `json:"state"`
-	TrustClass     TrustClass         `json:"trust_class,omitempty"`
-	Recoverability RecoverabilityMode `json:"recoverability,omitempty"`
-	Background     bool               `json:"background,omitempty"`
-	Metadata       map[string]any     `json:"metadata,omitempty"`
-	StartedAt      time.Time          `json:"started_at,omitempty"`
-	UpdatedAt      time.Time          `json:"updated_at,omitempty"`
+	Request        DelegationRequest    `json:"request"`
+	Result         *DelegationResult    `json:"result,omitempty"`
+	State          DelegationState      `json:"state"`
+	TrustClass     agentspec.TrustClass `json:"trust_class,omitempty"`
+	Recoverability RecoverabilityMode   `json:"recoverability,omitempty"`
+	Background     bool                 `json:"background,omitempty"`
+	Metadata       map[string]any       `json:"metadata,omitempty"`
+	StartedAt      time.Time            `json:"started_at,omitempty"`
+	UpdatedAt      time.Time            `json:"updated_at,omitempty"`
 }
 
 type DelegationFilter struct {
@@ -162,7 +165,7 @@ func (s DelegationSnapshot) Validate() error {
 
 // NewDelegationResult constructs a result record with default provenance and
 // insertion semantics derived from the delegated target's trust class.
-func NewDelegationResult(request DelegationRequest, targetCapabilityID, providerID, sessionID string, trust TrustClass, state DelegationState, success bool, data map[string]any, snapshot *PolicySnapshot) *DelegationResult {
+func NewDelegationResult(request DelegationRequest, targetCapabilityID, providerID, sessionID string, trust agentspec.TrustClass, state DelegationState, success bool, data map[string]any, snapshot *PolicySnapshot) *DelegationResult {
 	now := time.Now().UTC()
 	disposition := ContentDispositionRaw
 	result := &DelegationResult{

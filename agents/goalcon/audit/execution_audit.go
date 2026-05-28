@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -21,9 +22,9 @@ type AuditEntry struct {
 	CapabilityName string    `json:"capability_name" yaml:"capability_name"`
 
 	// Classification
-	TrustClass    core.TrustClass    `json:"trust_class" yaml:"trust_class"`
-	EffectClasses []core.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	RiskClasses   []core.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	TrustClass    agentspec.TrustClass    `json:"trust_class" yaml:"trust_class"`
+	EffectClasses []agentspec.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	RiskClasses   []agentspec.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
 
 	// Execution
 	InputSummary  string `json:"input_summary,omitempty" yaml:"input_summary,omitempty"`
@@ -156,7 +157,7 @@ func (t *CapabilityAuditTrail) GetEntriesByCapability(capabilityID string) []*Au
 }
 
 // GetEntriesByTrustClass returns all invocations with a specific trust class.
-func (t *CapabilityAuditTrail) GetEntriesByTrustClass(trustClass core.TrustClass) []*AuditEntry {
+func (t *CapabilityAuditTrail) GetEntriesByTrustClass(trustClass agentspec.TrustClass) []*AuditEntry {
 	if t == nil || trustClass == "" {
 		return nil
 	}

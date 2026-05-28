@@ -188,9 +188,9 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 
 func TestRecipeCommandsUseGenericGuestSurface(t *testing.T) {
 	lib := &recipeLibrarySurfaceFake{
-		selected:   "demo.recipe",
-		promptByID:  map[string]string{"demo.recipe": "/recipe run demo.recipe "},
-		lastFilter:  "",
+		selected:     "demo.recipe",
+		promptByID:   map[string]string{"demo.recipe": "/recipe run demo.recipe "},
+		lastFilter:   "",
 		lastSelected: "",
 	}
 	guest := &recipeGuestSurface{

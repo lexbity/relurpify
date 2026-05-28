@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -29,22 +30,22 @@ func NewTestRunHandler(env agentenv.WorkspaceEnvironment) *TestRunHandler {
 func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "euclo:cap.test_run",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          "Test Runner",
 		Version:       "1.0.0",
 		Description:   "Runs test suites and parses results to determine pass/fail status",
 		Category:      "testing",
 		Tags:          []string{"testing", "shell", "tool"},
 		Source: core.CapabilitySource{
-			Scope: core.CapabilityScopeBuiltin,
+			Scope: agentspec.CapabilityScopeBuiltin,
 		},
-		TrustClass:    core.TrustClassBuiltinTrusted,
-		RiskClasses:   []core.RiskClass{core.RiskClassExecute},
-		EffectClasses: []core.EffectClass{core.EffectClassProcessSpawn},
-		InputSchema: &core.Schema{
+		TrustClass:    agentspec.TrustClassBuiltinTrusted,
+		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
+		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
+		InputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"command": {
 					Type:        "string",
 					Description: "Test command to execute (e.g., 'go test ./...')",
@@ -60,9 +61,9 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 			},
 			Required: []string{"command"},
 		},
-		OutputSchema: &core.Schema{
+		OutputSchema: &contracts.Schema{
 			Type: "object",
-			Properties: map[string]*core.Schema{
+			Properties: map[string]*contracts.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if command executed successfully",
@@ -86,7 +87,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 				"failed_tests": {
 					Type:        "array",
 					Description: "List of failed test names",
-					Items: &core.Schema{
+					Items: &contracts.Schema{
 						Type: "string",
 					},
 				},

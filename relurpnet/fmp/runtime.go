@@ -7,11 +7,11 @@ import (
 
 type PortableContextPackage struct {
 	Manifest             ContextManifest `json:"manifest" yaml:"manifest"`
-	ExecutionPayload     []byte               `json:"execution_payload,omitempty" yaml:"execution_payload,omitempty"`
-	DeclarativeMemory    []byte               `json:"declarative_memory,omitempty" yaml:"declarative_memory,omitempty"`
-	ProceduralMemory     []byte               `json:"procedural_memory,omitempty" yaml:"procedural_memory,omitempty"`
-	RetrievalReferences  []string             `json:"retrieval_references,omitempty" yaml:"retrieval_references,omitempty"`
-	AdditionalObjectRefs []string             `json:"additional_object_refs,omitempty" yaml:"additional_object_refs,omitempty"`
+	ExecutionPayload     []byte          `json:"execution_payload,omitempty" yaml:"execution_payload,omitempty"`
+	DeclarativeMemory    []byte          `json:"declarative_memory,omitempty" yaml:"declarative_memory,omitempty"`
+	ProceduralMemory     []byte          `json:"procedural_memory,omitempty" yaml:"procedural_memory,omitempty"`
+	RetrievalReferences  []string        `json:"retrieval_references,omitempty" yaml:"retrieval_references,omitempty"`
+	AdditionalObjectRefs []string        `json:"additional_object_refs,omitempty" yaml:"additional_object_refs,omitempty"`
 }
 
 type ImportResult struct {

@@ -8,11 +8,11 @@ import (
 
 func TestEntryFromCommandSpecNormalizesDefaults(t *testing.T) {
 	entry := EntryFromCommandSpec(CommandToolSpec{
-		Name:        "  CLI-Example  ",
-		Aliases:     []string{"One", "Two Words", "", "One"},
-		Family:      "  Text Tools  ",
-		Intent:      []string{" Transform ", "", "Inspect"},
-		Description: "example",
+		Name:            "  CLI-Example  ",
+		Aliases:         []string{"One", "Two Words", "", "One"},
+		Family:          "  Text Tools  ",
+		Intent:          []string{" Transform ", "", "Inspect"},
+		Description:     "example",
 		LongDescription: "long form",
 		CommandTemplate: []string{"", "awk", " ", "$1"},
 		DefaultArgs:     []string{"-n", ""},
@@ -21,7 +21,7 @@ func TestEntryFromCommandSpecNormalizesDefaults(t *testing.T) {
 		Replacement:     "  replacement-tool  ",
 		ParameterSchema: ToolSchema{},
 		OutputSchema: ToolSchema{
-			Type: "array",
+			Type:  "array",
 			Items: &ToolSchemaField{Type: "string"},
 		},
 		Examples: []ToolExample{{Query: "demo", Output: "ok"}},
@@ -47,10 +47,10 @@ func TestEntryFromCommandSpecNormalizesDefaults(t *testing.T) {
 
 func TestEntryFromCommandSpecUsesCommandFallbackWhenTemplateMissing(t *testing.T) {
 	entry := EntryFromCommandSpec(CommandToolSpec{
-		Name:        "CLI-Fallback",
-		Family:      "Archive",
-		Description: "fallback",
-		Command:     " tar ",
+		Name:            "CLI-Fallback",
+		Family:          "Archive",
+		Description:     "fallback",
+		Command:         " tar ",
 		ParameterSchema: ToolSchema{Type: "object"},
 		OutputSchema:    ToolSchema{Type: "object"},
 	})
@@ -112,7 +112,7 @@ func TestValidateRejectsInvalidReplacementAndSchema(t *testing.T) {
 					Default: "slow",
 				},
 				"options": {
-					Type: "object",
+					Type:     "object",
 					Required: []string{"missing"},
 					Properties: map[string]ToolSchemaField{
 						"inner": {Type: "array"},

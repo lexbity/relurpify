@@ -3,7 +3,7 @@ package mapping
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -18,11 +18,11 @@ func TestImportedToolDescriptorBuildsStableProviderCapability(t *testing.T) {
 				"message": map[string]any{"type": "string"},
 			},
 		},
-	}, core.TrustClassRemoteDeclared)
+	}, agentspec.TrustClassRemoteDeclared)
 	require.NoError(t, err)
 	require.Equal(t, "mcp:remote-mcp:tool:remote.echo", desc.ID)
-	require.Equal(t, core.CapabilityRuntimeFamilyProvider, desc.RuntimeFamily)
-	require.Equal(t, core.CapabilityScopeRemote, desc.Source.Scope)
+	require.Equal(t, agentspec.CapabilityRuntimeFamilyProvider, desc.RuntimeFamily)
+	require.Equal(t, agentspec.CapabilityScopeRemote, desc.Source.Scope)
 	require.Equal(t, "session-1", desc.Source.SessionID)
 	require.Equal(t, "string", desc.InputSchema.Properties["message"].Type)
 }
@@ -30,6 +30,6 @@ func TestImportedToolDescriptorBuildsStableProviderCapability(t *testing.T) {
 func TestImportedResourceDescriptorSanitizesURIIntoStableID(t *testing.T) {
 	desc := ImportedResourceDescriptor("remote-mcp", "session-1", protocol.Revision20250618, protocol.Resource{
 		URI: "file:///tmp/report.json",
-	}, core.TrustClassRemoteDeclared)
+	}, agentspec.TrustClassRemoteDeclared)
 	require.Equal(t, "mcp:remote-mcp:resource:file____tmp_report_json", desc.ID)
 }

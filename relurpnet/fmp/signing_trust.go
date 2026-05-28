@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
-
 )
 
 func verifierForTrustBundle(bundle TrustBundle, algorithm string) (PayloadVerifier, bool) {

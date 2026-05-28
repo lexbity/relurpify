@@ -172,11 +172,11 @@ type CapabilityDetail struct {
 
 // PromptInfo exposes prompt capabilities through a dedicated browser.
 type PromptInfo struct {
-	Meta       InspectableMeta
-	PromptID   string
-	ProviderID string
-	Tags       []string
-	Variables  []string
+	Meta        InspectableMeta
+	PromptID    string
+	ProviderID  string
+	Tags        []string
+	Variables   []string
 	Description string
 }
 

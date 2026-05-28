@@ -3,7 +3,7 @@ package ayenitd
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
@@ -34,7 +34,7 @@ type WorkspaceConfig struct {
 	Sandbox             fsandbox.SandboxConfig
 	DebugLLM            bool
 	DebugAgent          bool
-	AllowedCapabilities []core.CapabilitySelector
+	AllowedCapabilities []agentspec.CapabilitySelector
 	// ReindexInterval, if non-zero, schedules periodic AST re-indexing.
 	// Zero (default) disables the background re-index job.
 	ReindexInterval time.Duration

@@ -19,7 +19,7 @@ func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *Capa
 	}
 	override := decision.Action
 	for _, policy := range spec.InsertionPolicies {
-		if !SelectorMatchesDescriptor(CapabilitySelector(policy.Selector), envelope.Descriptor) {
+		if !SelectorMatchesDescriptor(agentspec.CapabilitySelector(policy.Selector), envelope.Descriptor) {
 			continue
 		}
 		action := InsertionAction(policy.Action)
@@ -95,7 +95,7 @@ func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc Capab
 	return true
 }
 
-func containsScope(values []CapabilityScope, want CapabilityScope) bool {
+func containsScope(values []agentspec.CapabilityScope, want agentspec.CapabilityScope) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -104,7 +104,7 @@ func containsScope(values []CapabilityScope, want CapabilityScope) bool {
 	return false
 }
 
-func containsRuntimeFamily(values []CapabilityRuntimeFamily, want CapabilityRuntimeFamily) bool {
+func containsRuntimeFamily(values []agentspec.CapabilityRuntimeFamily, want agentspec.CapabilityRuntimeFamily) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -144,7 +144,7 @@ func containsTag(want string, haystack []string) bool {
 	return false
 }
 
-func containsTrust(values []TrustClass, want TrustClass) bool {
+func containsTrust(values []agentspec.TrustClass, want agentspec.TrustClass) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -153,7 +153,7 @@ func containsTrust(values []TrustClass, want TrustClass) bool {
 	return false
 }
 
-func containsAnyRisk(values []RiskClass, haystack []RiskClass) bool {
+func containsAnyRisk(values []agentspec.RiskClass, haystack []agentspec.RiskClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {
@@ -164,7 +164,7 @@ func containsAnyRisk(values []RiskClass, haystack []RiskClass) bool {
 	return false
 }
 
-func containsAnyEffect(values []EffectClass, haystack []EffectClass) bool {
+func containsAnyEffect(values []agentspec.EffectClass, haystack []agentspec.EffectClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {
@@ -175,7 +175,7 @@ func containsAnyEffect(values []EffectClass, haystack []EffectClass) bool {
 	return false
 }
 
-func containsCoordinationRole(values []CoordinationRole, want CoordinationRole) bool {
+func containsCoordinationRole(values []agentspec.CoordinationRole, want agentspec.CoordinationRole) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -193,7 +193,7 @@ func containsAllCoordinationTaskTypes(values []string, haystack []string) bool {
 	return true
 }
 
-func containsAnyCoordinationExecutionMode(values []CoordinationExecutionMode, haystack []CoordinationExecutionMode) bool {
+func containsAnyCoordinationExecutionMode(values []agentspec.CoordinationExecutionMode, haystack []agentspec.CoordinationExecutionMode) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {

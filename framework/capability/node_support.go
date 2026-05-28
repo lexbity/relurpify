@@ -16,7 +16,7 @@ type NodeSelectionCriteria struct {
 	PreferNodeID   string
 	PreferPlatform core.NodePlatform
 	RequireOnline  bool
-	MaxRiskClass   core.RiskClass
+	MaxRiskClass   agentspec.RiskClass
 }
 
 // SetPolicyEngine wires a policy engine for capability evaluation.
@@ -127,7 +127,7 @@ func (r *CapabilityRegistry) nodeCapabilityCandidates(capabilityName string, cri
 	return candidates
 }
 
-func riskExceeds(max core.RiskClass, actual []core.RiskClass) bool {
+func riskExceeds(max agentspec.RiskClass, actual []agentspec.RiskClass) bool {
 	if max == "" {
 		return false
 	}
@@ -140,21 +140,21 @@ func riskExceeds(max core.RiskClass, actual []core.RiskClass) bool {
 	return false
 }
 
-func riskRank(risk core.RiskClass) int {
+func riskRank(risk agentspec.RiskClass) int {
 	switch risk {
-	case core.RiskClassReadOnly:
+	case agentspec.RiskClassReadOnly:
 		return 1
-	case core.RiskClassSessioned:
+	case agentspec.RiskClassSessioned:
 		return 2
-	case core.RiskClassNetwork:
+	case agentspec.RiskClassNetwork:
 		return 3
-	case core.RiskClassExecute:
+	case agentspec.RiskClassExecute:
 		return 4
-	case core.RiskClassCredentialed:
+	case agentspec.RiskClassCredentialed:
 		return 5
-	case core.RiskClassExfiltration:
+	case agentspec.RiskClassExfiltration:
 		return 6
-	case core.RiskClassDestructive:
+	case agentspec.RiskClassDestructive:
 		return 7
 	default:
 		return 0

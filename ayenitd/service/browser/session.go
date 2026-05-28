@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
@@ -409,7 +410,7 @@ func (h *browserSessionHandle) providerSession() core.ProviderSession {
 		CapabilityIDs:  []string{"tool:browser"},
 		WorkflowID:     h.workflowID,
 		TaskID:         h.taskID,
-		TrustClass:     core.TrustClassProviderLocalUntrusted,
+		TrustClass:     agentspec.TrustClassProviderLocalUntrusted,
 		Recoverability: core.RecoverabilityInProcess,
 		CreatedAt:      h.createdAt.UTC().Format(time.RFC3339Nano),
 		LastActivityAt: h.lastSeenAt.UTC().Format(time.RFC3339Nano),

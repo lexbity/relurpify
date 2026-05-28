@@ -53,7 +53,6 @@ func (p *recordingChatPane) ApplyPendingChanges(ChangeStatus) int    { return 0 
 func (p *recordingChatPane) MutateMessages(func([]Message))          {}
 func (p *recordingChatPane) AddFile(string) tea.Cmd                  { return nil }
 
-
 func newFocusTestModel() (RootModel, *recordingChatPane) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}

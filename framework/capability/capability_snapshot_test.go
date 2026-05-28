@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -33,12 +34,12 @@ func (t *availabilityToggleTool) Permissions() contracts.ToolPermissions {
 func (t *availabilityToggleTool) Tags() []string { return nil }
 
 func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	desc := core.CapabilityDescriptor{
 		ID:            "cap:callable",
 		Name:          "callable",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
@@ -57,18 +58,18 @@ func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	desc := core.CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "hidden",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{Name: desc.Name},
+		Selector: agentspec.CapabilitySelector{Name: desc.Name},
 		Access:   core.CapabilityExposureHidden,
 	}})
 
@@ -89,7 +90,7 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_Empty(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	snapshots := reg.AllCapabilitySnapshots()
 	if len(snapshots) != 0 {
 		t.Fatalf("expected empty snapshots, got %d", len(snapshots))
@@ -97,18 +98,18 @@ func TestAllCapabilitySnapshots_Empty(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	visible := core.CapabilityDescriptor{
 		ID:            "cap:visible",
 		Name:          "visible",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
 	hidden := core.CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "delegate-hidden",
-		Kind:          core.CapabilityKindTool,
-		RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
 	if err := reg.RegisterCapability(visible); err != nil {
 		t.Fatalf("register visible capability: %v", err)
@@ -117,7 +118,7 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 		t.Fatalf("register hidden capability: %v", err)
 	}
 	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{ID: hidden.ID},
+		Selector: agentspec.CapabilitySelector{ID: hidden.ID},
 		Access:   core.CapabilityExposureHidden,
 	}})
 
@@ -135,7 +136,7 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	const total = 32
 	errCh := make(chan error, total*2)
 	done := make(chan struct{})
@@ -145,8 +146,8 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 			desc := core.CapabilityDescriptor{
 				ID:            "cap:concurrent:" + string(rune('a'+i)),
 				Name:          "concurrent",
-				Kind:          core.CapabilityKindTool,
-				RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+				Kind:          agentspec.CapabilityKindTool,
+				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 			}
 			if err := reg.RegisterCapability(desc); err != nil {
 				errCh <- err
@@ -173,7 +174,7 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 }
 
 func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
 	if err := reg.RegisterLegacyTool(tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
@@ -194,7 +195,7 @@ func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
 }
 
 func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
 	if err := reg.RegisterLegacyTool(tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
@@ -211,7 +212,7 @@ func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
 }
 
 func TestWithAllowlist_PreservesFilteringAndReflectsAvailabilityChanges(t *testing.T) {
-	reg := NewCapabilityRegistry()
+	reg := NewRegistry()
 	visible := &availabilityToggleTool{name: "scope_read", available: true}
 	hidden := &availabilityToggleTool{name: "scope_write", available: true}
 	if err := reg.RegisterLegacyTool(visible); err != nil {

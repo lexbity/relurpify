@@ -3,8 +3,8 @@ package orchestrate
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 func TestClarificationFrameToInteractionFrame(t *testing.T) {

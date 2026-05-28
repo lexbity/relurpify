@@ -3,7 +3,7 @@ package mapping
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -18,16 +18,16 @@ func TestImportedPromptDescriptor(t *testing.T) {
 				{Name: "age", Description: "The age", Required: false},
 			},
 		}
-		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, core.TrustClassRemoteDeclared)
+		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, agentspec.TrustClassRemoteDeclared)
 
 		require.Equal(t, "mcp:provider-1:prompt:test.prompt", desc.ID)
-		require.Equal(t, core.CapabilityKindPrompt, desc.Kind)
+		require.Equal(t, agentspec.CapabilityKindPrompt, desc.Kind)
 		require.Equal(t, "test.prompt", desc.Name)
 		require.Equal(t, "A test prompt", desc.Description)
-		require.Equal(t, core.CapabilityRuntimeFamilyProvider, desc.RuntimeFamily)
-		require.Equal(t, core.CapabilityScopeRemote, desc.Source.Scope)
+		require.Equal(t, agentspec.CapabilityRuntimeFamilyProvider, desc.RuntimeFamily)
+		require.Equal(t, agentspec.CapabilityScopeRemote, desc.Source.Scope)
 		require.Equal(t, "session-1", desc.Source.SessionID)
-		require.Equal(t, core.TrustClassRemoteDeclared, desc.TrustClass)
+		require.Equal(t, agentspec.TrustClassRemoteDeclared, desc.TrustClass)
 		require.Equal(t, "session-1", desc.SessionAffinity)
 
 		// Check schema
@@ -52,7 +52,7 @@ func TestImportedPromptDescriptor(t *testing.T) {
 			Name:        "simple.prompt",
 			Description: "Simple prompt",
 		}
-		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, core.TrustClassRemoteApproved)
+		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, agentspec.TrustClassRemoteApproved)
 
 		require.Equal(t, "mcp:provider-1:prompt:simple.prompt", desc.ID)
 		require.NotNil(t, desc.InputSchema)
@@ -69,7 +69,7 @@ func TestImportedPromptDescriptor(t *testing.T) {
 				{Name: "valid", Description: "Valid name"},
 			},
 		}
-		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, core.TrustClassRemoteDeclared)
+		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, agentspec.TrustClassRemoteDeclared)
 
 		require.Len(t, desc.InputSchema.Properties, 1)
 		require.Contains(t, desc.InputSchema.Properties, "valid")
@@ -79,7 +79,7 @@ func TestImportedPromptDescriptor(t *testing.T) {
 		prompt := protocol.Prompt{
 			Name: "  test.prompt  ",
 		}
-		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, core.TrustClassRemoteDeclared)
+		desc := ImportedPromptDescriptor("provider-1", "session-1", protocol.Revision20250618, prompt, agentspec.TrustClassRemoteDeclared)
 
 		require.Equal(t, "mcp:provider-1:prompt:test.prompt", desc.ID)
 		require.Equal(t, "test.prompt", desc.Name)
@@ -89,7 +89,7 @@ func TestImportedPromptDescriptor(t *testing.T) {
 		prompt := protocol.Prompt{
 			Name: "test.prompt",
 		}
-		desc := ImportedPromptDescriptor("provider-1", "session-1", "  2025-06-18  ", prompt, core.TrustClassRemoteDeclared)
+		desc := ImportedPromptDescriptor("provider-1", "session-1", "  2025-06-18  ", prompt, agentspec.TrustClassRemoteDeclared)
 
 		// Note: strings.TrimSpace is applied to version
 		require.Equal(t, "2025-06-18", desc.Version)
@@ -102,7 +102,7 @@ func TestImportedToolDescriptor(t *testing.T) {
 		tool := protocol.Tool{
 			Name: "",
 		}
-		_, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, core.TrustClassRemoteDeclared)
+		_, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, agentspec.TrustClassRemoteDeclared)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "remote tool name required")
 	})
@@ -111,7 +111,7 @@ func TestImportedToolDescriptor(t *testing.T) {
 		tool := protocol.Tool{
 			Name: "   ",
 		}
-		_, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, core.TrustClassRemoteDeclared)
+		_, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, agentspec.TrustClassRemoteDeclared)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "remote tool name required")
 	})
@@ -121,7 +121,7 @@ func TestImportedToolDescriptor(t *testing.T) {
 			Name:        "test.tool",
 			InputSchema: map[string]any{"type": 123}, // non-string type is ignored
 		}
-		desc, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, core.TrustClassRemoteDeclared)
+		desc, err := ImportedToolDescriptor("provider-1", "session-1", protocol.Revision20250618, tool, agentspec.TrustClassRemoteDeclared)
 		require.NoError(t, err)
 		require.NotNil(t, desc.InputSchema)
 		require.Empty(t, desc.InputSchema.Type) // Type is empty since 123 is not a string

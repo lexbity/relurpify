@@ -33,21 +33,21 @@ type ProviderDescriptor struct {
 	Kind               ProviderKind            `json:"kind"`
 	ConfiguredSource   string                  `json:"configured_source,omitempty"`
 	ActivationScope    string                  `json:"activation_scope,omitempty"`
-	TrustBaseline      TrustClass              `json:"trust_baseline,omitempty"`
+	TrustBaseline      agentspec.TrustClass    `json:"trust_baseline,omitempty"`
 	RecoverabilityMode RecoverabilityMode      `json:"recoverability_mode,omitempty"`
 	SupportsHealth     bool                    `json:"supports_health,omitempty"`
 	Security           ProviderSecurityProfile `json:"security,omitempty"`
 }
 
 type ProviderConfig struct {
-	ID              string             `json:"id"`
-	Kind            ProviderKind       `json:"kind"`
-	Enabled         bool               `json:"enabled"`
-	Target          string             `json:"target,omitempty"`
-	ActivationScope string             `json:"activation_scope,omitempty"`
-	TrustBaseline   TrustClass         `json:"trust_baseline,omitempty"`
-	Recoverability  RecoverabilityMode `json:"recoverability,omitempty"`
-	Config          map[string]any     `json:"config,omitempty"`
+	ID              string               `json:"id"`
+	Kind            ProviderKind         `json:"kind"`
+	Enabled         bool                 `json:"enabled"`
+	Target          string               `json:"target,omitempty"`
+	ActivationScope string               `json:"activation_scope,omitempty"`
+	TrustBaseline   agentspec.TrustClass `json:"trust_baseline,omitempty"`
+	Recoverability  RecoverabilityMode   `json:"recoverability,omitempty"`
+	Config          map[string]any       `json:"config,omitempty"`
 }
 
 type ProviderOriginKind string
@@ -71,7 +71,7 @@ type ProviderSession struct {
 	CapabilityIDs  []string               `json:"capability_ids,omitempty"`
 	WorkflowID     string                 `json:"workflow_id,omitempty"`
 	TaskID         string                 `json:"task_id,omitempty"`
-	TrustClass     TrustClass             `json:"trust_class,omitempty"`
+	TrustClass     agentspec.TrustClass   `json:"trust_class,omitempty"`
 	Recoverability RecoverabilityMode     `json:"recoverability,omitempty"`
 	CreatedAt      string                 `json:"created_at,omitempty"`
 	LastActivityAt string                 `json:"last_activity_at,omitempty"`
@@ -150,7 +150,7 @@ func (d ProviderDescriptor) Validate() error {
 		return fmt.Errorf("provider kind %s invalid", d.Kind)
 	}
 	switch d.TrustBaseline {
-	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+	case "", agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted, agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult, agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassRemoteDeclared, agentspec.TrustClassRemoteApproved:
 	default:
 		return fmt.Errorf("trust baseline %s invalid", d.TrustBaseline)
 	}
@@ -175,7 +175,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider kind %s invalid", c.Kind)
 	}
 	switch c.TrustBaseline {
-	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassLLMGenerated, TrustClassToolResult, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+	case "", agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted, agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult, agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassRemoteDeclared, agentspec.TrustClassRemoteApproved:
 	default:
 		return fmt.Errorf("trust baseline %s invalid", c.TrustBaseline)
 	}
@@ -255,7 +255,7 @@ func NormalizeProviderCapability(desc CapabilityDescriptor, provider ProviderDes
 	}
 	desc.Source.ProviderID = provider.ID
 	desc.Source.Scope = normalizeProviderCapabilityScope(desc.Source.Scope, provider)
-	desc.RuntimeFamily = CapabilityRuntimeFamilyProvider
+	desc.RuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
 	baseline := providerCapabilityTrustBaseline(provider, policy, desc.Source.Scope)
 	if desc.TrustClass == "" {
 		desc.TrustClass = baseline
@@ -270,7 +270,7 @@ func NormalizeProviderCapability(desc CapabilityDescriptor, provider ProviderDes
 
 func normalizeRemoteCapabilityDescriptor(desc CapabilityDescriptor, provider ProviderDescriptor) CapabilityDescriptor {
 	desc.RiskClasses = nil
-	if desc.Kind != CapabilityKindTool {
+	if desc.Kind != agentspec.CapabilityKindTool {
 		desc.EffectClasses = nil
 	}
 	if desc.Annotations == nil {
@@ -285,24 +285,24 @@ func normalizeRemoteCapabilityDescriptor(desc CapabilityDescriptor, provider Pro
 	return desc
 }
 
-func normalizeProviderCapabilityScope(scope CapabilityScope, provider ProviderDescriptor) CapabilityScope {
+func normalizeProviderCapabilityScope(scope agentspec.CapabilityScope, provider ProviderDescriptor) agentspec.CapabilityScope {
 	switch provider.Security.Origin {
 	case ProviderOriginRemote:
-		return CapabilityScopeRemote
+		return agentspec.CapabilityScopeRemote
 	case ProviderOriginLocal:
-		if scope == CapabilityScopeRemote {
-			return CapabilityScopeRemote
+		if scope == agentspec.CapabilityScopeRemote {
+			return agentspec.CapabilityScopeRemote
 		}
-		return CapabilityScopeProvider
+		return agentspec.CapabilityScopeProvider
 	default:
 		if scope != "" {
 			return scope
 		}
-		return CapabilityScopeProvider
+		return agentspec.CapabilityScopeProvider
 	}
 }
 
-func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope CapabilityScope) TrustClass {
+func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope agentspec.CapabilityScope) agentspec.TrustClass {
 	if policy.DefaultTrust != "" {
 		return policy.DefaultTrust
 	}
@@ -310,33 +310,33 @@ func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentsp
 		return provider.TrustBaseline
 	}
 	switch scope {
-	case CapabilityScopeRemote:
-		return TrustClassRemoteDeclared
-	case CapabilityScopeWorkspace:
-		return TrustClassWorkspaceTrusted
-	case CapabilityScopeBuiltin:
-		return TrustClassBuiltinTrusted
+	case agentspec.CapabilityScopeRemote:
+		return agentspec.TrustClassRemoteDeclared
+	case agentspec.CapabilityScopeWorkspace:
+		return agentspec.TrustClassWorkspaceTrusted
+	case agentspec.CapabilityScopeBuiltin:
+		return agentspec.TrustClassBuiltinTrusted
 	default:
-		return TrustClassProviderLocalUntrusted
+		return agentspec.TrustClassProviderLocalUntrusted
 	}
 }
 
-func moreRestrictiveTrustClass(left, right TrustClass) TrustClass {
+func moreRestrictiveTrustClass(left, right agentspec.TrustClass) agentspec.TrustClass {
 	if trustClassRank(left) >= trustClassRank(right) {
 		return left
 	}
 	return right
 }
 
-func trustClassRank(class TrustClass) int {
+func trustClassRank(class agentspec.TrustClass) int {
 	switch class {
-	case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted:
+	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
 		return 0
-	case TrustClassLLMGenerated, TrustClassToolResult, TrustClassRemoteApproved:
+	case agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult, agentspec.TrustClassRemoteApproved:
 		return 1
-	case TrustClassProviderLocalUntrusted:
+	case agentspec.TrustClassProviderLocalUntrusted:
 		return 2
-	case TrustClassRemoteDeclared:
+	case agentspec.TrustClassRemoteDeclared:
 		return 3
 	default:
 		return 3

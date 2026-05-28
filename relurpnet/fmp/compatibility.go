@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
 )
 
 func ValidateOfferCompatibility(runtime RuntimeDescriptor, offer HandoffOffer, destination ExportDescriptor, now time.Time) *TransferRefusal {

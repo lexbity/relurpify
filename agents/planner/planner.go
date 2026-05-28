@@ -511,8 +511,8 @@ func (n *plannerExecuteNode) Type() graph.NodeType { return graph.NodeTypeTool }
 // Contract marks the planner executor as a capability-consuming tool stage.
 func (n *plannerExecuteNode) Contract() graph.NodeContract {
 	return graph.NodeContract{
-		RequiredCapabilities: []core.CapabilitySelector{{
-			Kind: core.CapabilityKindTool,
+		RequiredCapabilities: []agentspec.CapabilitySelector{{
+			Kind: agentspec.CapabilityKindTool,
 		}},
 		SideEffectClass: graph.SideEffectExternal,
 		Idempotency:     graph.IdempotencyUnknown,

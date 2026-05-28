@@ -50,12 +50,12 @@ type SourceSummary struct {
 	ManifestName     string
 	ManifestVersion  string
 	Workspace        string
-	RequestedSkills   []string
-	AppliedSkills     []string
-	FailedSkills      []string
-	GlobalDefaults    bool
-	OverlayCount      int
-	RuntimeOverrides  int
+	RequestedSkills  []string
+	AppliedSkills    []string
+	FailedSkills     []string
+	GlobalDefaults   bool
+	OverlayCount     int
+	RuntimeOverrides int
 }
 
 // ResolveOptions provides optional inputs layered on top of the raw manifest.
@@ -258,10 +258,10 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		ManifestName:     m.Metadata.Name,
 		ManifestVersion:  m.Metadata.Version,
 		Workspace:        workspace,
-		RequestedSkills:   append([]string{}, m.Spec.Skills...),
-		GlobalDefaults:    false,
-		OverlayCount:      len(opts.AgentOverlays),
-		RuntimeOverrides:  len(opts.AgentOverlays),
+		RequestedSkills:  append([]string{}, m.Spec.Skills...),
+		GlobalDefaults:   false,
+		OverlayCount:     len(opts.AgentOverlays),
+		RuntimeOverrides: len(opts.AgentOverlays),
 	}
 	for _, result := range skillResults {
 		if result.Applied {

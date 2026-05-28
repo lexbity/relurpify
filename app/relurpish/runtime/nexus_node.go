@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -44,7 +45,7 @@ func NewLocalNexusNodeProvider(registry *capability.Registry, cfg cfgload.Runtim
 		ID:         nodeID,
 		Name:       name,
 		Platform:   nodePlatform,
-		TrustClass: core.TrustClassWorkspaceTrusted,
+		TrustClass: agentspec.TrustClassWorkspaceTrusted,
 		PairedAt:   time.Now().UTC().Unix(),
 		Tags:       cloneTags(cfg.Tags),
 	}
@@ -58,7 +59,7 @@ func NewLocalNexusNodeProvider(registry *capability.Registry, cfg cfgload.Runtim
 		Kind:               core.ProviderKindNodeDevice,
 		ConfiguredSource:   "relurpish/local",
 		ActivationScope:    "workspace",
-		TrustBaseline:      core.TrustClassWorkspaceTrusted,
+		TrustBaseline:      agentspec.TrustClassWorkspaceTrusted,
 		RecoverabilityMode: core.RecoverabilityInProcess,
 		SupportsHealth:     true,
 		Security: core.ProviderSecurityProfile{
@@ -95,10 +96,10 @@ func (p *LocalNexusNodeProvider) RegisterCapabilities(_ context.Context, registr
 	for _, desc := range p.registry.CallableCapabilities() {
 		normalized := desc
 		normalized.Source.ProviderID = p.provider.ID
-		normalized.Source.Scope = core.CapabilityScopeProvider
-		normalized.RuntimeFamily = core.CapabilityRuntimeFamilyProvider
+		normalized.Source.Scope = agentspec.CapabilityScopeProvider
+		normalized.RuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
 		if normalized.TrustClass == "" {
-			normalized.TrustClass = core.TrustClassWorkspaceTrusted
+			normalized.TrustClass = agentspec.TrustClassWorkspaceTrusted
 		}
 		if err := registrar.RegisterCapability(normalized); err != nil {
 			return err

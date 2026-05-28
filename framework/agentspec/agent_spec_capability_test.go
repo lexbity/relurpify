@@ -1,8 +1,10 @@
 package agentspec
 
-import "testing"
+import (
+	"testing"
 
-import "github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/require"
+)
 
 func TestAgentRuntimeSpecValidateCapabilityPolicies(t *testing.T) {
 	spec := &AgentRuntimeSpec{

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
@@ -36,7 +37,7 @@ type InboundMessage struct {
 	ActorID    string
 	Owner      identity.SubjectRef
 	Binding    *identity.ExternalSessionBinding
-	TrustClass core.TrustClass
+	TrustClass agentspec.TrustClass
 }
 
 // Store persists session boundaries and state.

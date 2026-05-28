@@ -53,9 +53,9 @@ func (m *MockRegistry) WithIssue(id string, iss prompt.ValidationIssue) *MockReg
 
 // — Registry interface implementation —
 
-func (m *MockRegistry) LoadDir(_ string) error                          { return nil }
-func (m *MockRegistry) LoadFS(_ fs.FS, _ string) error                 { return nil }
-func (m *MockRegistry) ValidateProviders() []prompt.ValidationIssue    { return nil }
+func (m *MockRegistry) LoadDir(_ string) error                      { return nil }
+func (m *MockRegistry) LoadFS(_ fs.FS, _ string) error              { return nil }
+func (m *MockRegistry) ValidateProviders() []prompt.ValidationIssue { return nil }
 
 func (m *MockRegistry) RegisterProvider(name string, _ prompt.ContextProvider) error {
 	m.mu.Lock()
@@ -136,4 +136,3 @@ func (m *MockRegistry) ValidateAll() map[string][]prompt.ValidationIssue {
 	}
 	return out
 }
-

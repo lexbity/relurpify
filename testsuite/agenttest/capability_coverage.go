@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/named/rex"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex"
 )
 
 // CapabilityCoverage tracks which registered capabilities were exercised

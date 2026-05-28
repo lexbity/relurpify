@@ -1,6 +1,10 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+)
 
 // NodePlatform identifies the platform/operating system of a node.
 type NodePlatform string
@@ -37,7 +41,7 @@ type NodeDescriptor struct {
 	TenantID             string                 `json:"tenant_id,omitempty"`
 	Name                 string                 `json:"name"`
 	Platform             NodePlatform           `json:"platform"`
-	TrustClass           TrustClass             `json:"trust_class"`
+	TrustClass           agentspec.TrustClass   `json:"trust_class"`
 	PairedAt             int64                  `json:"paired_at,omitempty"`
 	Owner                string                 `json:"owner,omitempty"`
 	Tags                 map[string]string      `json:"tags,omitempty"`
