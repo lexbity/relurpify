@@ -13,5 +13,6 @@ func NewIPTool(basePath string) contracts.Tool {
 		Command:     "ip",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

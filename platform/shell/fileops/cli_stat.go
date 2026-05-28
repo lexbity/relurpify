@@ -12,6 +12,7 @@ func NewStatTool(basePath string) contracts.Tool {
 		Description: "Shows file metadata with stat.",
 		Command:     "stat",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

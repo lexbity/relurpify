@@ -13,5 +13,6 @@ func NewPerlTool(basePath string) contracts.Tool {
 		Command:     "perl",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

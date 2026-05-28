@@ -13,5 +13,6 @@ func NewRevTool(basePath string) contracts.Tool {
 		Command:     "rev",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

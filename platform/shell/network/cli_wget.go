@@ -13,5 +13,6 @@ func NewWgetTool(basePath string) contracts.Tool {
 		Command:     "wget",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

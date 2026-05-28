@@ -12,6 +12,7 @@ func NewAGTool(basePath string) contracts.Tool {
 		Description: "Searches codebases with the silver searcher (ag).",
 		Command:     "ag",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

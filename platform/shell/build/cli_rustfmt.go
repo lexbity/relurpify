@@ -13,5 +13,6 @@ func NewRustfmtTool(basePath string) contracts.Tool {
 		Command:     "rustfmt",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

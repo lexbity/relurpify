@@ -13,5 +13,6 @@ func NewWCTool(basePath string) contracts.Tool {
 		Command:     "wc",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

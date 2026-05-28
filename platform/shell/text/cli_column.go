@@ -13,5 +13,6 @@ func NewColumnTool(basePath string) contracts.Tool {
 		Command:     "column",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

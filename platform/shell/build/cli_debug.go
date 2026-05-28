@@ -14,6 +14,7 @@ func NewGDBTool(basePath string) contracts.Tool {
 		Category:     "cli_debug",
 		HITLRequired: true,
 		Tags:         []string{"execute"},
+		AllowFlags:   true,
 	})
 }
 
@@ -25,6 +26,7 @@ func NewValgrindTool(basePath string) contracts.Tool {
 		Command:     "valgrind",
 		Category:    "cli_debug",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }
 
@@ -36,6 +38,7 @@ func NewLddTool(basePath string) contracts.Tool {
 		Command:     "ldd",
 		Category:    "cli_debug",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }
 
@@ -47,6 +50,7 @@ func NewObjdumpTool(basePath string) contracts.Tool {
 		Command:     "objdump",
 		Category:    "cli_debug",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }
 
@@ -59,6 +63,7 @@ func NewPerfTool(basePath string) contracts.Tool {
 		Category:     "cli_debug",
 		HITLRequired: true,
 		Tags:         []string{"execute"},
+		AllowFlags:   true,
 	})
 }
 
@@ -71,5 +76,6 @@ func NewStraceTool(basePath string) contracts.Tool {
 		Category:     "cli_debug",
 		HITLRequired: true,
 		Tags:         []string{"execute"},
+		AllowFlags:   true,
 	})
 }

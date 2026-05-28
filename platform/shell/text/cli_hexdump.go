@@ -13,5 +13,6 @@ func NewHexdumpTool(basePath string) contracts.Tool {
 		Command:     "hexdump",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

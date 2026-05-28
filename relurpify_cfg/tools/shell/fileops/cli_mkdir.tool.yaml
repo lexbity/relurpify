@@ -15,6 +15,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   default_args:
     - -p
   allow_stdin: true

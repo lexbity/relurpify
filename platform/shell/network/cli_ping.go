@@ -13,5 +13,6 @@ func NewPingTool(basePath string) contracts.Tool {
 		Command:     "ping",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

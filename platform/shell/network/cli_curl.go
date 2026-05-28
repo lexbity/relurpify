@@ -13,5 +13,6 @@ func NewCurlTool(basePath string) contracts.Tool {
 		Command:     "curl",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

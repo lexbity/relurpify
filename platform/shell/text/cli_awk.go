@@ -13,5 +13,6 @@ func NewAwkTool(basePath string) contracts.Tool {
 		Command:     "awk",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

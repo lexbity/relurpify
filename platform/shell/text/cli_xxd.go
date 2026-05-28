@@ -13,5 +13,6 @@ func NewXxdTool(basePath string) contracts.Tool {
 		Command:     "xxd",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

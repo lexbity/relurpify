@@ -13,5 +13,6 @@ func NewCutTool(basePath string) contracts.Tool {
 		Command:     "cut",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

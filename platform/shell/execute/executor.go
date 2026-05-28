@@ -92,6 +92,9 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 	if err != nil {
 		return nil, err
 	}
+	if err := validateUserArgs(e.Preset, userArgs); err != nil {
+		return nil, err
+	}
 	finalArgs := append([]string{}, e.Preset.DefaultArgs...)
 	finalArgs = append(finalArgs, userArgs...)
 	selectedWorkdir := e.BasePath
@@ -152,6 +155,24 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 
 func toStringSlice(value interface{}) ([]string, error) {
 	return contracts.NormalizeStringSlice(value)
+}
+
+// validateUserArgs checks that user-provided arguments do not start with '-'
+// unless the preset explicitly allows flags. This prevents flag injection
+// (e.g. --config=, -o) into CLI tools that do not declare opt-in to flag
+// passing via ToolManifestSandbox.AllowFlags.
+func validateUserArgs(preset CommandPreset, args []string) error {
+	if preset.AllowFlags || len(args) == 0 {
+		return nil
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			return fmt.Errorf(
+				"flag injection: arg %q must not begin with '-'; "+
+					"set allow_flags: true in the tool manifest to permit flags", arg)
+		}
+	}
+	return nil
 }
 
 func resolvePath(base, path string) string {

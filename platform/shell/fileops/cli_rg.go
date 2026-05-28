@@ -12,6 +12,7 @@ func NewRGTool(basePath string) contracts.Tool {
 		Description: "Uses ripgrep (rg) for recursive code search.",
 		Command:     "rg",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

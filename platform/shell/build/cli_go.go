@@ -13,5 +13,6 @@ func NewGoTool(basePath string) contracts.Tool {
 		Command:     "go",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

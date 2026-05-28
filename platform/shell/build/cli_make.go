@@ -13,5 +13,6 @@ func NewMakeTool(basePath string) contracts.Tool {
 		Command:     "make",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

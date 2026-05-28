@@ -12,6 +12,7 @@ func NewFDTool(basePath string) contracts.Tool {
 		Description: "Performs fast file searches with fd.",
 		Command:     "fd",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

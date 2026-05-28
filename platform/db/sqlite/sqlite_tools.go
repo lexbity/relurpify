@@ -75,6 +75,7 @@ func NewSQLiteSchemaInspectTool(basePath string) *SQLiteSchemaInspectTool {
 			Command:     "sqlite3",
 			Category:    "sqlite",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -142,6 +143,7 @@ func NewSQLiteQueryTool(basePath string) *SQLiteQueryTool {
 			Command:     "sqlite3",
 			Category:    "sqlite",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -208,6 +210,7 @@ func NewSQLiteIntegrityCheckTool(basePath string) *SQLiteIntegrityCheckTool {
 			Command:     "sqlite3",
 			Category:    "sqlite",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }

@@ -179,6 +179,99 @@ func TestToolResultMixedTruncation(t *testing.T) {
 	require.LessOrEqual(t, len(envelope.Stderr), 256*1024, "truncated stderr must not exceed limit")
 }
 
+func TestFlagInjectionBlockedByDefault(t *testing.T) {
+	runner := &recordingRunner{}
+	exec := NewExecutor(t.TempDir(), CommandPreset{
+		Name:    "cli_tool",
+		Command: "somebinary",
+	}, runner)
+
+	_, err := exec.Execute(context.Background(), "", []interface{}{"--config=/etc/passwd"}, "")
+	if err == nil {
+		t.Fatal("expected flag injection error, got nil")
+	}
+	if !strings.Contains(err.Error(), "flag injection") {
+		t.Fatalf("expected error to contain 'flag injection', got: %v", err)
+	}
+	if len(runner.requests) > 0 {
+		t.Fatal("runner should not be called when flag injection is detected")
+	}
+}
+
+func TestSingleDashArgBlockedByDefault(t *testing.T) {
+	runner := &recordingRunner{}
+	exec := NewExecutor(t.TempDir(), CommandPreset{
+		Name:    "cli_tool",
+		Command: "somebinary",
+	}, runner)
+
+	_, err := exec.Execute(context.Background(), "", []interface{}{"-n", "10"}, "")
+	if err == nil {
+		t.Fatal("expected flag injection error, got nil")
+	}
+}
+
+func TestFlagInjectionAllowedWhenOptedIn(t *testing.T) {
+	runner := &recordingRunner{stdout: "ok"}
+	exec := NewExecutor(t.TempDir(), CommandPreset{
+		Name:       "cli_tool",
+		Command:    "somebinary",
+		AllowFlags: true,
+	}, runner)
+
+	envelope, err := exec.Execute(context.Background(), "", []interface{}{"--verbose"}, "")
+	if err != nil {
+		t.Fatalf("expected no error when AllowFlags=true, got: %v", err)
+	}
+	if !envelope.Success {
+		t.Fatal("expected success")
+	}
+	require.Len(t, runner.requests, 1)
+	require.Equal(t, "somebinary", runner.requests[0].Args[0])
+	require.Equal(t, "--verbose", runner.requests[0].Args[1])
+}
+
+func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
+	runner := &recordingRunner{stdout: "ok"}
+	exec := NewExecutor(t.TempDir(), CommandPreset{
+		Name:    "cli_tool",
+		Command: "cp",
+	}, runner)
+
+	envelope, err := exec.Execute(context.Background(), "", []interface{}{"src/main.go", "/tmp/dest"}, "")
+	if err != nil {
+		t.Fatalf("expected no error for non-flag args, got: %v", err)
+	}
+	if !envelope.Success {
+		t.Fatal("expected success")
+	}
+	require.Len(t, runner.requests, 1)
+	require.Equal(t, "cp", runner.requests[0].Args[0])
+	require.Equal(t, "src/main.go", runner.requests[0].Args[1])
+	require.Equal(t, "/tmp/dest", runner.requests[0].Args[2])
+}
+
+func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
+	runner := &recordingRunner{stdout: "ok"}
+	exec := NewExecutor(t.TempDir(), CommandPreset{
+		Name:       "cli_tool",
+		Command:    "grep",
+		AllowFlags: true,
+	}, runner)
+
+	envelope, err := exec.Execute(context.Background(), "", []interface{}{"--", "-pattern"}, "")
+	if err != nil {
+		t.Fatalf("expected no error when AllowFlags=true with double-dash, got: %v", err)
+	}
+	if !envelope.Success {
+		t.Fatal("expected success")
+	}
+	require.Len(t, runner.requests, 1)
+	require.Equal(t, "grep", runner.requests[0].Args[0])
+	require.Equal(t, "--", runner.requests[0].Args[1])
+	require.Equal(t, "-pattern", runner.requests[0].Args[2])
+}
+
 func TestExecutorIsolatesNestedCargoRuns(t *testing.T) {
 	base := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[package]\nname = \"root\"\nversion = \"0.1.0\"\n"), 0o644))

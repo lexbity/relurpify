@@ -13,5 +13,6 @@ func NewUptimeTool(basePath string) contracts.Tool {
 		Command:     "uptime",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

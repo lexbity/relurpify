@@ -13,5 +13,6 @@ func NewAtTool(basePath string) contracts.Tool {
 		Command:     "at",
 		Category:    "cli_scheduler",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

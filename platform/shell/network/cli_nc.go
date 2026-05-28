@@ -13,5 +13,6 @@ func NewNCTool(basePath string) contracts.Tool {
 		Command:     "nc",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

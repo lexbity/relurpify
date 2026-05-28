@@ -13,5 +13,6 @@ func NewSQLite3Tool(basePath string) contracts.Tool {
 		Command:     "sqlite3",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

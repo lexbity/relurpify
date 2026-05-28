@@ -13,5 +13,6 @@ func NewGzipTool(basePath string) contracts.Tool {
 		Command:     "gzip",
 		Category:    "cli_archive",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

@@ -13,5 +13,6 @@ func NewCommTool(basePath string) contracts.Tool {
 		Command:     "comm",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

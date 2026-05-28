@@ -13,5 +13,6 @@ func NewBzip2Tool(basePath string) contracts.Tool {
 		Command:     "bzip2",
 		Category:    "cli_archive",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

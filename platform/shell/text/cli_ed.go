@@ -13,5 +13,6 @@ func NewEdTool(basePath string) contracts.Tool {
 		Command:     "ed",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

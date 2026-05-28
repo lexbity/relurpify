@@ -13,5 +13,6 @@ func NewUniqTool(basePath string) contracts.Tool {
 		Command:     "uniq",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

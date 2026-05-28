@@ -13,5 +13,6 @@ func NewColordiffTool(basePath string) contracts.Tool {
 		Command:     "colordiff",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

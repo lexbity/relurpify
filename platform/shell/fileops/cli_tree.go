@@ -12,6 +12,7 @@ func NewTreeTool(basePath string) contracts.Tool {
 		Description: "Displays directory trees using tree.",
 		Command:     "tree",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

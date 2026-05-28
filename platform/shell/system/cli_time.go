@@ -13,5 +13,6 @@ func NewTimeTool(basePath string) contracts.Tool {
 		Command:     "time",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

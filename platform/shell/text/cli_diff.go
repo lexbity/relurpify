@@ -13,5 +13,6 @@ func NewDiffTool(basePath string) contracts.Tool {
 		Command:     "diff",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

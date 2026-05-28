@@ -12,6 +12,7 @@ func NewFileTool(basePath string) contracts.Tool {
 		Description: "Detects file types using the file command.",
 		Command:     "file",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

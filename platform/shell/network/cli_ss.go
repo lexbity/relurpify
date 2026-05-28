@@ -13,5 +13,6 @@ func NewSSTool(basePath string) contracts.Tool {
 		Command:     "ss",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

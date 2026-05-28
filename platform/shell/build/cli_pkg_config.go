@@ -13,5 +13,6 @@ func NewPkgConfigTool(basePath string) contracts.Tool {
 		Command:     "pkg-config",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

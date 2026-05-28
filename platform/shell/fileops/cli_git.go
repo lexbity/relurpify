@@ -13,6 +13,7 @@ func NewGitTool(basePath string) contracts.Tool {
 		Description: "Runs git with the provided arguments.",
 		Command:     "git",
 		Category:    "git",
+		AllowFlags:  true,
 		Tags:        []string{contracts.TagExecute},
 	})
 }

@@ -13,5 +13,6 @@ func NewPatchTool(basePath string) contracts.Tool {
 		Command:     "patch",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

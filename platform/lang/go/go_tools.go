@@ -93,6 +93,7 @@ func NewGoModuleMetadataTool(basePath string) *GoModuleMetadataTool {
 			Command:     "go",
 			Category:    "go",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -153,6 +154,7 @@ func NewGoTestTool(basePath string) *GoTestTool {
 			Command:     "go",
 			Category:    "go",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -236,6 +238,7 @@ func NewGoBuildTool(basePath string) *GoBuildTool {
 			Command:     "go",
 			Category:    "go",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }

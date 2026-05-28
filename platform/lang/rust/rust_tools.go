@@ -84,6 +84,7 @@ func NewRustCargoTestTool(basePath string) *RustCargoTestTool {
 			Command:     "cargo",
 			Category:    "rust",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -165,6 +166,7 @@ func NewRustCargoCheckTool(basePath string) *RustCargoCheckTool {
 			Command:     "cargo",
 			Category:    "rust",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -240,6 +242,7 @@ func NewRustCargoMetadataTool(basePath string) *RustCargoMetadataTool {
 			Command:     "cargo",
 			Category:    "rust",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }

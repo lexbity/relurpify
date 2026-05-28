@@ -13,5 +13,6 @@ func NewExTool(basePath string) contracts.Tool {
 		Command:     "ex",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

@@ -13,5 +13,6 @@ func NewJQTool(basePath string) contracts.Tool {
 		Command:     "jq",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

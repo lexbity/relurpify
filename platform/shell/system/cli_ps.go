@@ -13,5 +13,6 @@ func NewPSTool(basePath string) contracts.Tool {
 		Command:     "ps",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

@@ -22,6 +22,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   supports_workdir: true
 capability:
   trust_class: builtin_trusted

@@ -13,5 +13,6 @@ func NewSortTool(basePath string) contracts.Tool {
 		Command:     "sort",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

@@ -13,5 +13,6 @@ func NewTRTool(basePath string) contracts.Tool {
 		Command:     "tr",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

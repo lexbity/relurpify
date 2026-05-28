@@ -13,5 +13,6 @@ func NewCrontabTool(basePath string) contracts.Tool {
 		Command:     "crontab",
 		Category:    "cli_scheduler",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

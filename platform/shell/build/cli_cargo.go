@@ -13,5 +13,6 @@ func NewCargoTool(basePath string) contracts.Tool {
 		Command:     "cargo",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

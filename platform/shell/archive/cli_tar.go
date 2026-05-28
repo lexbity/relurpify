@@ -13,5 +13,6 @@ func NewTarTool(basePath string) contracts.Tool {
 		Command:     "tar",
 		Category:    "cli_archive",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

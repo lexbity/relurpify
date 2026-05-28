@@ -172,6 +172,7 @@ func NewPythonPytestTool(basePath string) *PythonPytestTool {
 			Command:     "python3",
 			Category:    "python",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -250,6 +251,7 @@ func NewPythonUnittestTool(basePath string) *PythonUnittestTool {
 			Command:     "python3",
 			Category:    "python",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -332,6 +334,7 @@ func NewPythonCompileCheckTool(basePath string) *PythonCompileCheckTool {
 			Command:     "python3",
 			Category:    "python",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }

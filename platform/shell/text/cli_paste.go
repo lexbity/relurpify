@@ -13,5 +13,6 @@ func NewPasteTool(basePath string) contracts.Tool {
 		Command:     "paste",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

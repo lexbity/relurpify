@@ -13,5 +13,6 @@ func NewLsofTool(basePath string) contracts.Tool {
 		Command:     "lsof",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

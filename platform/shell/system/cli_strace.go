@@ -13,5 +13,6 @@ func NewStraceTool(basePath string) contracts.Tool {
 		Command:     "strace",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

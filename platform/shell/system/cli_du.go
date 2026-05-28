@@ -13,5 +13,6 @@ func NewDUTool(basePath string) contracts.Tool {
 		Command:     "du",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

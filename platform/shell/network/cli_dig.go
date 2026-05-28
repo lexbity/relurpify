@@ -13,5 +13,6 @@ func NewDigTool(basePath string) contracts.Tool {
 		Command:     "dig",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

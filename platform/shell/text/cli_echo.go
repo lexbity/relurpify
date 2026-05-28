@@ -13,5 +13,6 @@ func NewEchoTool(basePath string) contracts.Tool {
 		Command:     "echo",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

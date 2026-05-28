@@ -13,6 +13,7 @@ func NewMkdirTool(basePath string) contracts.Tool {
 		Command:     "mkdir",
 		Category:    "cli_files",
 		DefaultArgs: []string{"-p"},
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

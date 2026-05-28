@@ -23,6 +23,7 @@ type CommandToolConfig struct {
 	DefaultArgs  []string
 	Timeout      time.Duration
 	HITLRequired bool
+	AllowFlags   bool
 	Tags         []string
 }
 
@@ -78,6 +79,7 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 		Tags:        append([]string{}, t.cfg.Tags...),
 		Timeout:     t.cfg.Timeout,
 		AllowStdin:  true,
+		AllowFlags:  t.cfg.AllowFlags,
 		WorkdirMode: "workspace",
 	}, t.runner)
 	envelope, err := executor.Execute(ctx, workdir, args["args"], stdin)

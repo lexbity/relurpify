@@ -1,11 +1,15 @@
 package command
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 )
 
 func TestCommandToolHelperBranches(t *testing.T) {
@@ -70,6 +74,54 @@ func TestCommandToolHelperBranches(t *testing.T) {
 
 	require.Error(t, copyFile(filepath.Join(base, "missing.txt"), filepath.Join(t.TempDir(), "out.txt"), 0o644))
 	require.Error(t, copyDir(filepath.Join(base, "missing"), filepath.Join(t.TempDir(), "mirror")))
+}
+
+func TestCommandToolBlockFlagsByDefault(t *testing.T) {
+	runner := &responseRunner{stdout: "ok"}
+	tool := NewCommandTool(t.TempDir(), CommandToolConfig{
+		Name:        "cli_echo",
+		Description: "echo",
+		Command:     "echo",
+	})
+	tool.SetCommandRunner(runner)
+
+	_, err := tool.Execute(context.Background(), map[string]interface{}{
+		"args": []interface{}{"--version"},
+	})
+	if err == nil {
+		t.Fatal("expected flag injection error when AllowFlags is not set")
+	}
+	if !strings.Contains(err.Error(), "flag injection") {
+		t.Fatalf("expected 'flag injection' in error, got: %v", err)
+	}
+}
+
+func TestCommandToolAllowFlagsOptIn(t *testing.T) {
+	runner := &responseRunner{stdout: "ok"}
+	tool := NewCommandTool(t.TempDir(), CommandToolConfig{
+		Name:        "cli_echo",
+		Description: "echo",
+		Command:     "echo",
+	})
+	tool.SetCommandRunner(runner)
+
+	// When the caller explicitly constructs an executor with AllowFlags=true,
+	// flags are allowed. The CommandTool itself doesn't expose AllowFlags in
+	// its config, but the Executor checks AllowFlags via the CommandPreset.
+	executor := execute.NewExecutor(t.TempDir(), execute.CommandPreset{
+		Name:       "cli_echo",
+		Command:    "echo",
+		AllowFlags: true,
+	}, runner)
+	envelope, err := executor.Execute(context.Background(), "", []interface{}{"--version"}, "")
+	if err != nil {
+		t.Fatalf("expected no error when AllowFlags=true, got: %v", err)
+	}
+	if !envelope.Success {
+		t.Fatal("expected success")
+	}
+	require.Len(t, runner.requests, 1)
+	require.Equal(t, "--version", runner.requests[len(runner.requests)-1].Args[1])
 }
 
 func TestCommandToolExecuteWithNoRunnerStillReportsAvailability(t *testing.T) {

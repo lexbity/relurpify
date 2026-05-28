@@ -13,5 +13,6 @@ func NewYQTool(basePath string) contracts.Tool {
 		Command:     "yq",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

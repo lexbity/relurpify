@@ -12,6 +12,7 @@ func NewLocateTool(basePath string) contracts.Tool {
 		Description: "Queries the file database via locate.",
 		Command:     "locate",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

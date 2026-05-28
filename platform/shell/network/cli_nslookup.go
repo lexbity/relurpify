@@ -13,5 +13,6 @@ func NewNslookupTool(basePath string) contracts.Tool {
 		Command:     "nslookup",
 		Category:    "cli_network",
 		Tags:        []string{"execute", "network"},
+		AllowFlags:  true,
 	})
 }

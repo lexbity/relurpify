@@ -13,5 +13,6 @@ func NewSedTool(basePath string) contracts.Tool {
 		Command:     "sed",
 		Category:    "cli_text",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

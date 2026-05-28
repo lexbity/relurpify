@@ -13,5 +13,6 @@ func NewDFTool(basePath string) contracts.Tool {
 		Command:     "df",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

@@ -145,6 +145,7 @@ func NewNodeNPMTestTool(basePath string) *NodeNPMTestTool {
 			Command:     "npm",
 			Category:    "node",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }
@@ -219,6 +220,7 @@ func NewNodeSyntaxCheckTool(basePath string) *NodeSyntaxCheckTool {
 			Command:     "node",
 			Category:    "node",
 			Tags:        []string{contracts.TagExecute},
+			AllowFlags:  true,
 		}),
 	}
 }

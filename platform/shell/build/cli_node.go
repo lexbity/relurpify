@@ -13,5 +13,6 @@ func NewNodeTool(basePath string) contracts.Tool {
 		Command:     "node",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

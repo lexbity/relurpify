@@ -13,5 +13,6 @@ func NewLsblkTool(basePath string) contracts.Tool {
 		Command:     "lsblk",
 		Category:    "cli_system",
 		Tags:        []string{"execute", "read-only"},
+		AllowFlags:  true,
 	})
 }

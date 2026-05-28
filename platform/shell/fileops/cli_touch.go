@@ -12,6 +12,7 @@ func NewTouchTool(basePath string) contracts.Tool {
 		Description: "Creates empty files or updates timestamps via touch.",
 		Command:     "touch",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }

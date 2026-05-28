@@ -13,5 +13,6 @@ func NewXzTool(basePath string) contracts.Tool {
 		Command:     "xz",
 		Category:    "cli_archive",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

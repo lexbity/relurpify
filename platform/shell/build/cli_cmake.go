@@ -13,5 +13,6 @@ func NewCMakeTool(basePath string) contracts.Tool {
 		Command:     "cmake",
 		Category:    "cli_build",
 		Tags:        []string{"execute"},
+		AllowFlags:  true,
 	})
 }

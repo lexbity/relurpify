@@ -12,6 +12,7 @@ func NewFindTool(basePath string) contracts.Tool {
 		Description: "Searches the filesystem using find.",
 		Command:     "find",
 		Category:    "cli_files",
+		AllowFlags:  true,
 		Tags:        []string{"execute", "read-only"},
 	})
 }
