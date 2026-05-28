@@ -645,53 +645,67 @@ func (m *PermissionManager) collectUndeclared(requirements *contracts.Permission
 }
 
 // normalizePath sanitizes user input by resolving relative segments and
-// preventing traversal outside the workspace base.
+// symlinks, and preventing traversal outside the workspace base.
+//
+// The resolved path is guaranteed to be within m.basePath after all
+// symlink resolution. Paths that escape the workspace (including via
+// symlinks pointing outside) return an error.
 func (m *PermissionManager) normalizePath(path string) (string, error) {
-	clean := filepath.Clean(path)
-	clean = filepath.ToSlash(clean)
-	if strings.HasPrefix(clean, "../") || strings.Contains(clean, "/../") {
-		return "", fmt.Errorf("path traversal detected: %s", path)
+	if path == "" {
+		return "", errors.New("path required")
 	}
-	if strings.HasPrefix(clean, "..") && clean != ".." {
-		return "", fmt.Errorf("path traversal detected: %s", path)
+	// Join with basePath for relative paths so we can always check the
+	// result against the workspace boundary.
+	resolved := path
+	if !filepath.IsAbs(resolved) {
+		if m.basePath == "" {
+			return filepath.ToSlash(filepath.Clean(resolved)), nil
+		}
+		resolved = filepath.Join(m.basePath, resolved)
 	}
-	if filepath.IsAbs(clean) {
-		return clean, nil
+	resolved = filepath.Clean(resolved)
+	// Resolve symlinks for the longest existing prefix, then append any
+	// non-existent suffix. This handles symlink-to-directory where the
+	// final file component does not yet exist (e.g. new file creation
+	// through a symlinked directory).
+	if canonical, err := resolveCanonicalPath(resolved); err == nil {
+		resolved = canonical
 	}
-	if m.basePath == "" {
-		return clean, nil
+	// Verify the resolved path is within the workspace.
+	base := filepath.Clean(m.basePath)
+	if resolved != base && !strings.HasPrefix(resolved, base+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes workspace %q", resolved, base)
 	}
-	return filepath.ToSlash(filepath.Join(m.basePath, clean)), nil
+	return filepath.ToSlash(resolved), nil
 }
 
 func resolveCanonicalPath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("path required")
 	}
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+	clean := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
 		return filepath.Clean(resolved), nil
 	}
-	current := path
-	suffix := make([]string, 0, 4)
-	for {
-		parent := filepath.Dir(current)
-		if parent == current {
-			current = path
-			suffix = suffix[:0]
-			break
+	// Walk up from the path until we find an existing ancestor whose
+	// symlinks can be resolved, then re-append the non-existent suffix.
+	// This supports paths like /workspace/symlink_to_dir/newfile.go
+	// where the symlink exists but the leaf file does not.
+	suffix := []string{filepath.Base(clean)}
+	parent := filepath.Dir(clean)
+	for parent != "." && parent != "/" && parent != clean {
+		if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+			// Re-append suffix from leaf to resolved ancestor
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, suffix[i])
+			}
+			return filepath.Clean(resolved), nil
 		}
-		suffix = append([]string{filepath.Base(current)}, suffix...)
-		current = parent
+		suffix = append(suffix, filepath.Base(parent))
+		parent = filepath.Dir(parent)
 	}
-	resolvedAncestor, err := filepath.EvalSymlinks(current)
-	if err != nil {
-		resolvedAncestor = current
-	}
-	resolved := resolvedAncestor
-	for _, part := range suffix {
-		resolved = filepath.Join(resolved, part)
-	}
-	return filepath.Clean(resolved), nil
+	// Nothing exists on this path — return the cleaned original
+	return clean, nil
 }
 
 // findFilesystemPermission returns the first filesystem permission matching the
