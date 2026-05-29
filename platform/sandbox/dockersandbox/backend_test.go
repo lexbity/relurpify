@@ -8,20 +8,20 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestBackendCapabilitiesReportSupportedFeatures(t *testing.T) {
 	backend := NewBackend(Config{})
 	caps := backend.Capabilities()
 
-	if !caps.Supports(sandbox.CapabilityNetworkIsolation) {
+	if !caps.Supports(contracts.CapabilityNetworkIsolation) {
 		t.Fatal("expected network isolation to be supported")
 	}
-	if !caps.Supports(sandbox.CapabilityProtectedPaths) {
+	if !caps.Supports(contracts.CapabilityProtectedPaths) {
 		t.Fatal("expected protected paths to be supported")
 	}
-	if caps.Supports(sandbox.CapabilityEnvFiltering) {
+	if caps.Supports(contracts.CapabilityEnvFiltering) {
 		t.Fatal("expected env filtering to be unsupported")
 	}
 }
@@ -29,10 +29,10 @@ func TestBackendCapabilitiesReportSupportedFeatures(t *testing.T) {
 func TestBackendValidatePolicyRejectsUnsupportedPolicy(t *testing.T) {
 	backend := NewBackend(Config{Workspace: t.TempDir()})
 
-	if err := backend.ValidatePolicy(sandbox.SandboxPolicy{AllowedEnvKeys: []string{"HOME"}}); err == nil {
+	if err := backend.ValidatePolicy(contracts.SandboxPolicy{AllowedEnvKeys: []string{"HOME"}}); err == nil {
 		t.Fatal("expected env filtering to be rejected")
 	}
-	if err := backend.ValidatePolicy(sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}}); err == nil {
+	if err := backend.ValidatePolicy(contracts.SandboxPolicy{NetworkRules: []contracts.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}}); err == nil {
 		t.Fatal("expected granular network rules to be rejected")
 	}
 }
@@ -48,7 +48,7 @@ func TestBackendValidatePolicyAcceptsProtectedPathsInsideWorkspace(t *testing.T)
 	}
 
 	backend := NewBackend(Config{Workspace: workspace})
-	policy := sandbox.SandboxPolicy{ProtectedPaths: []string{protected}}
+	policy := contracts.SandboxPolicy{ProtectedPaths: []string{protected}}
 	if err := backend.ValidatePolicy(policy); err != nil {
 		t.Fatalf("ValidatePolicy: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestBackendPolicyRoundTrip(t *testing.T) {
 	}
 
 	backend := NewBackend(Config{Workspace: workspace})
-	policy := sandbox.SandboxPolicy{
+	policy := contracts.SandboxPolicy{
 		ReadOnlyRoot:    true,
 		ProtectedPaths:  []string{protected},
 		NoNewPrivileges: true,
@@ -107,7 +107,7 @@ func writeDockerScript(t *testing.T, dir, name, body string) string {
 	return path
 }
 
-func policyEqual(a, b sandbox.SandboxPolicy) bool {
+func policyEqual(a, b contracts.SandboxPolicy) bool {
 	if a.ReadOnlyRoot != b.ReadOnlyRoot || a.NoNewPrivileges != b.NoNewPrivileges || a.SeccompProfile != b.SeccompProfile {
 		return false
 	}

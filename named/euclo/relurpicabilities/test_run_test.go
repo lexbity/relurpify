@@ -8,19 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
-
-// mockCommandRunner is a test double for sandbox.CommandRunner
-type mockCommandRunner struct {
-	stdout string
-	stderr string
-	err    error
-}
-
-func (m *mockCommandRunner) Run(ctx context.Context, req sandbox.CommandRequest) (string, string, error) {
-	return m.stdout, m.stderr, m.err
-}
 
 func TestTestRunHandlerDescriptor(t *testing.T) {
 	wsEnv := agentenv.WorkspaceEnvironment{}
@@ -45,11 +34,9 @@ func TestTestRunHandlerDescriptor(t *testing.T) {
 }
 
 func TestTestRunHandlerPassingTest(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "PASS: TestFoo\nPASS: TestBar\nok\tcodeburg.org/lexbit/relurpify\t0.002s",
-		stderr: "",
-		err:    nil,
-	}
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "PASS: TestFoo\nPASS: TestBar\nok\tcodeburg.org/lexbit/relurpify\t0.002s",
+	})
 
 	wsEnv := agentenv.WorkspaceEnvironment{
 		CommandRunner: mockRunner,
@@ -82,11 +69,10 @@ func TestTestRunHandlerPassingTest(t *testing.T) {
 }
 
 func TestTestRunHandlerFailingTest(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "FAIL: TestFoo\n--- FAIL: TestBar (0.00s)\nFAIL",
-		stderr: "FAIL\tcodeburg.org/lexbit/relurpify\t0.002s",
-		err:    nil,
-	}
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "FAIL: TestFoo\n--- FAIL: TestBar (0.00s)\nFAIL",
+		Stderr: "FAIL\tcodeburg.org/lexbit/relurpify\t0.002s",
+	})
 
 	wsEnv := agentenv.WorkspaceEnvironment{
 		CommandRunner: mockRunner,
@@ -158,11 +144,9 @@ func TestTestRunHandlerNilRunner(t *testing.T) {
 }
 
 func TestTestRunHandlerCommandDenied(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    errors.New("command denied by policy"),
-	}
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Err: errors.New("command denied by policy"),
+	})
 
 	wsEnv := agentenv.WorkspaceEnvironment{
 		CommandRunner: mockRunner,

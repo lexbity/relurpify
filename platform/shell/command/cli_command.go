@@ -70,6 +70,19 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 	}()
 	workdir := mapStringArg(args, "working_directory")
 	stdin := mapStringArg(args, "stdin")
+	// SF-1 SSRF guard: for network-family tools, screen target hosts against the
+	// sandbox denylist before the command runs. Private, loopback, and
+	// link-local addresses (incl. cloud-metadata endpoints) are never reachable.
+	if hasNetworkTag(t.cfg.Tags) {
+		userArgs, _ := contracts.NormalizeStringSlice(args["args"])
+		scan := append(append([]string{}, t.cfg.DefaultArgs...), userArgs...)
+		if host := firstBlockedEgressHost(scan); host != "" {
+			return &contracts.ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("network egress to %q denied: private, loopback, and link-local addresses are blocked (SSRF protection)", host),
+			}, nil
+		}
+	}
 	executor := execute.NewExecutor(t.basePath, execute.CommandPreset{
 		Name:        t.cfg.Name,
 		Command:     t.cfg.Command,

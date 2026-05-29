@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
@@ -115,7 +116,7 @@ func openPreparedRunWorkspace(ctx context.Context, desc *agenttest.PreparedRunDe
 	if err != nil {
 		return nil, nil, err
 	}
-	profileRegistry, err := llm.NewProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
+	profileRegistry, err := llmconfig.ProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
 	if err != nil {
 		return nil, nil, err
 	}

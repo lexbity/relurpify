@@ -1,34 +1,20 @@
-//go:build guard
-
-// Guard test — enabled with `go test -tags guard ./framework/sandbox/`.
-// Asserts that NewLocalCommandRunner is absent from the entire module.
-// Remove the build tag in Phase 5 to run in normal CI.
+// Guard test — runs in normal CI to prevent reintroduction of the host-exec
+// path. Asserts that NewLocalCommandRunner is absent from the entire module.
 //
-// Inventory of NewLocalCommandRunner references (Phase 0 baseline, 2026-05-28):
-//
-// Production call sites (3):
-//   framework/agentenv/composition.go:116   BuildWorkspaceEnvironment (nexus server)
-//   app/dev-agent-cli/tool_exec.go:55       dev CLI tool-exec command
-//   testsuite/agenttest/verification_driver.go:37  test harness
-//
-// Test files (2):
+// NewLocalCommandRunner was removed in Phase 5 of the sandbox-centrality
+// rework (2026-05-28). The following were deleted:
+//   framework/sandbox/local_command_runner.go
 //   framework/sandbox/local_command_runner_env_test.go
 //   framework/sandbox/local_command_runner_processgroup_test.go
+//   framework/sandbox/enforcement_env.go
+//   framework/sandbox/enforcement_env_test.go
+//   framework/cfgload/security/subprocess_env.go
 //
-// Definition (1):
-//   framework/sandbox/local_command_runner.go
+// The test-harness fallback in testsuite/agenttest/verification_driver.go
+// was switched to error-on-nil-runner in Phase 5.
 //
-// Helpers used ONLY by the local-runner path:
-//   cappedBuffer                   local_command_runner.go (also copied in dockersandbox/runner.go)
-//   assembleSubprocessEnv          enforcement_env.go — only called from local_command_runner.go
-//   splitEnvEntry                  enforcement_env.go — only called from assembleSubprocessEnv
-//   SubprocessEnvAllowlist         cfgload/security/subprocess_env.go — only called from composition.go:118
-//   defaultSubprocessEnvAllowlist  local_command_runner.go — only referenced in local_command_runner.go
-//   DefaultTimeout                 local_command_runner.go — only referenced in local_command_runner.go
-//
-// Phase 5 deletes: local_command_runner.go, enforcement_env.go, enforcement_env_test.go,
-// local_command_runner_env_test.go, local_command_runner_processgroup_test.go,
-// and cfgload/security/subprocess_env.go (when its only caller composition.go migrates in Phase 3).
+// All eight phases of the sandbox-centrality rework are complete.
+// See devdocs/plans/sandbox-central-rework.md for the full plan.
 
 package sandbox
 

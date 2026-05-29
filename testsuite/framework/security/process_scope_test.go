@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 // TestCommandRequestValidation validates that command request structure
@@ -138,9 +139,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			Args:    []string{"echo", "test"},
 		}
 
-		inner := &mockCommandRunner{
-			runCalled: false,
-		}
+		inner := testsupport.FakeRunner()
 
 		policy := sandbox.CommandPolicyFunc(func(ctx context.Context, r sandbox.CommandRequest) error {
 			if len(r.Args) == 0 {
@@ -156,7 +155,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			t.Errorf("command execution should succeed: %v", err)
 		}
 
-		if !inner.runCalled {
+		if inner.CallCount() == 0 {
 			t.Error("inner runner should be called when policy allows")
 		}
 	})
@@ -167,9 +166,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			Args:    []string{},
 		}
 
-		inner := &mockCommandRunner{
-			runCalled: false,
-		}
+		inner := testsupport.FakeRunner()
 
 		policy := sandbox.CommandPolicyFunc(func(ctx context.Context, r sandbox.CommandRequest) error {
 			if len(r.Args) == 0 {
@@ -185,7 +182,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			t.Error("execution should be denied when policy rejects")
 		}
 
-		if inner.runCalled {
+		if inner.CallCount() > 0 {
 			t.Error("inner runner should not be called when policy denies")
 		}
 
@@ -201,9 +198,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			Args:    []string{"echo", "test"},
 		}
 
-		inner := &mockCommandRunner{
-			runCalled: false,
-		}
+		inner := testsupport.FakeRunner()
 
 		runner := sandbox.NewEnforcingCommandRunner(inner, nil)
 
@@ -212,7 +207,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 			t.Errorf("command execution should succeed without policy: %v", err)
 		}
 
-		if !inner.runCalled {
+		if inner.CallCount() == 0 {
 			t.Error("inner runner should be called when no policy is set")
 		}
 	})
@@ -389,12 +384,4 @@ func TestSeccompProfile(t *testing.T) {
 	})
 }
 
-// mockCommandRunner is a mock implementation of CommandRunner for testing.
-type mockCommandRunner struct {
-	runCalled bool
-}
 
-func (m *mockCommandRunner) Run(ctx context.Context, req sandbox.CommandRequest) (string, string, error) {
-	m.runCalled = true
-	return "stdout", "stderr", nil
-}

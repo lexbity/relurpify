@@ -25,6 +25,9 @@ type PreparedRunVerificationReport struct {
 }
 
 // VerifyPreparedRun validates the run-scoped artifacts produced for a prepared run.
+// A nil runner is acceptable only when there are no verification steps; when
+// verification steps or scripts are present, the runner must be non-nil or
+// the function returns an error. Use RequireSandbox to obtain a verified runner.
 func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport CaseReport, suite *Suite, c CaseSpec, runner sandbox.CommandRunner) (*PreparedRunVerificationReport, error) {
 	if prepared == nil || prepared.Descriptor == nil {
 		return nil, fmt.Errorf("prepared run required")
@@ -33,10 +36,6 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 	if err := preparedRunEnsure(desc); err != nil {
 		return nil, err
 	}
-	if runner == nil {
-		runner = sandbox.NewLocalCommandRunner(desc.DerivedWorkspaceRoot, nil, nil)
-	}
-
 	report := &PreparedRunVerificationReport{
 		DescriptorPath:         prepared.Artifacts.DescriptorPath(),
 		ExecutionReportPath:    preparedRunReportPath(desc),
@@ -75,6 +74,9 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 	}
 
 	if desc.Verification.Script != "" || len(desc.Verification.Steps) > 0 {
+		if runner == nil {
+			return nil, fmt.Errorf("runner required when verification steps are present; use RequireSandbox to obtain one")
+		}
 		verificationResults := runVerificationSteps(ctx, VerifySpec{
 			Steps:  convertPreparedVerificationSteps(desc.Verification.Steps),
 			Script: desc.Verification.Script,

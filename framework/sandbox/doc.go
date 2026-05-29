@@ -2,9 +2,8 @@
 // owns the backend-neutral policy contract used to validate and apply runtime
 // security intent.
 //
-// LocalCommandRunner executes commands directly on the host; sandbox backends
-// report capabilities, validate policy, and store the effective policy before
-// command execution proceeds.
+// Sandbox backends report capabilities, validate policy, and store the
+// effective policy before command execution proceeds.
 //
 // EnforcingCommandRunner composes a CommandPolicy around any runner so the
 // sandbox layer can refuse execution before the backend process is launched.
@@ -14,4 +13,9 @@
 //
 // command_runner.go selects the appropriate implementation based on the
 // workspace configuration.
+//
+// Historical note: LocalCommandRunner (bare host exec) was removed in Phase 5
+// of the sandbox-centrality rework. All command execution now goes through a
+// verified sandbox backend (gVisor or Docker). See devdocs/toolcall-audit.md
+// for the full audit.
 package sandbox

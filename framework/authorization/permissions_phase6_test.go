@@ -117,35 +117,6 @@ func TestCheckNetworkAllowsPublicIP(t *testing.T) {
 	}
 }
 
-func TestIsPrivateOrLoopbackHost(t *testing.T) {
-	cases := []struct {
-		host string
-		want bool
-	}{
-		{"127.0.0.1", true},
-		{"127.0.0.255", true},
-		{"::1", true},
-		{"10.0.0.1", true},
-		{"10.255.255.255", true},
-		{"172.16.0.1", true},
-		{"172.31.255.255", true},
-		{"192.168.0.1", true},
-		{"192.168.255.255", true},
-		{"169.254.169.254", true},
-		{"fc00::1", true},
-		{"fe80::1", true},
-		{"8.8.8.8", false},
-		{"93.184.216.34", false}, // example.com
-		{"1.1.1.1", false},
-	}
-	for _, c := range cases {
-		got := IsPrivateOrLoopbackHost(c.host)
-		if got != c.want {
-			t.Errorf("IsPrivateOrLoopbackHost(%q) = %v, want %v", c.host, got, c.want)
-		}
-	}
-}
-
 func TestDefaultPolicyAllowRejectedAtRegistration(t *testing.T) {
 	perm := &contracts.PermissionSet{
 		Executables: []contracts.ExecutablePermission{

@@ -138,9 +138,19 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 // Supported backends: "" (defaults to gvisor), "gvisor", "docker".
 // Unsupported backends ("local", "none", or any unknown value) return an error.
 // This is the central, policy-resolved chokepoint for obtaining a sandbox runtime.
+// The supported-backend vocabulary is defined by sandbox.SupportedSandboxBackends;
+// cfgload validation derives from the same source.
 func SelectSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string) (sandbox.SandboxRuntime, error) {
-	switch strings.ToLower(strings.TrimSpace(backend)) {
-	case "", "gvisor":
+	b := strings.ToLower(strings.TrimSpace(backend))
+	if b == "" {
+		b = "gvisor"
+	}
+	if !sandbox.IsSupportedSandboxBackend(b) {
+		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
+		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: %s)", backend, supported)
+	}
+	switch b {
+	case "gvisor":
 		return sandbox.NewSandboxRuntime(sandboxCfg), nil
 	case "docker":
 		return dockersandbox.NewBackend(dockersandbox.Config{
@@ -149,7 +159,7 @@ func SelectSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, imag
 			Workspace:  workspace,
 		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: gvisor, docker)", backend)
+		return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
 	}
 }
 

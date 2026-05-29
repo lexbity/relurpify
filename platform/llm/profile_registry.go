@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -32,64 +30,23 @@ type ProfileResolution struct {
 	Model      string
 }
 
-// NewProfileRegistry loads model profile configs from the canonical directory.
-// Missing directory returns an empty registry using built-in defaults.
-func NewProfileRegistry(configDir string) (*ProfileRegistry, error) {
+// NewProfileRegistryFromProfiles builds a registry from already-converted domain
+// profiles. The framework/llmconfig adapter is responsible for converting YAML
+// config DTOs into these domain profiles, keeping platform/llm free of any
+// dependency on framework configuration loaders.
+func NewProfileRegistryFromProfiles(profiles []*ModelProfile) *ProfileRegistry {
 	reg := &ProfileRegistry{}
-	if strings.TrimSpace(configDir) == "" {
-		return reg, nil
-	}
-	loaded, err := cfgmodel.LoadProfileDir(configDir, cfgload.StrictDecode)
-	if err != nil {
-		lower := strings.ToLower(err.Error())
-		if strings.Contains(lower, "no such file") || strings.Contains(lower, "does not exist") {
-			return reg, nil
-		}
-		return nil, fmt.Errorf("read model profiles dir: %w", err)
-	}
-	return NewProfileRegistryFromConfigs(loaded)
-}
-
-// NewProfileRegistryFromConfigs builds a registry from already-loaded profile configs.
-func NewProfileRegistryFromConfigs(configs []*cfgmodel.ModelProfileConfig) (*ProfileRegistry, error) {
-	reg := &ProfileRegistry{}
-	for _, loadedProfile := range configs {
-		if loadedProfile == nil {
+	for _, profile := range profiles {
+		if profile == nil {
 			continue
 		}
-		profile := convertModelProfileConfig(loadedProfile)
 		reg.profiles = append(reg.profiles, &profileEntry{
 			profile:    profile,
-			sourcePath: loadedProfile.SourcePath,
-			isDefault:  isDefaultProfileFile(loadedProfile.SourcePath),
+			sourcePath: profile.SourcePath,
+			isDefault:  isDefaultProfileFile(profile.SourcePath),
 		})
 	}
-	return reg, nil
-}
-
-func convertModelProfileConfig(cfg *cfgmodel.ModelProfileConfig) *ModelProfile {
-	if cfg == nil {
-		return nil
-	}
-	profile := &ModelProfile{
-		Pattern:    cfg.Pattern,
-		SourcePath: cfg.SourcePath,
-	}
-	switch strings.ToLower(strings.TrimSpace(cfg.ToolCalling.Intent)) {
-	case "native":
-		profile.ToolCalling.NativeAPI = true
-	case "prompt_based":
-		profile.ToolCalling.NativeAPI = false
-	case "auto":
-		profile.ToolCalling.NativeAPI = false
-	}
-	profile.ToolCalling.DoubleEncodedArgs = cfg.ToolCalling.DoubleEncodeArgs
-	profile.ToolCalling.MaxToolsPerCall = cfg.ToolCalling.MaxConcurrentTools
-	if cfg.Context.MaxTokens > 0 {
-		profile.ContextSize = cfg.Context.MaxTokens
-	}
-	profile.Normalize()
-	return profile
+	return reg
 }
 
 // Resolve returns the best-matching profile for provider/model.

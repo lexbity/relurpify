@@ -8,29 +8,26 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	sandbox2 "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/services"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 )
 
-// sandboxRunnerAdapter adapts a sandbox.CommandRunner to contracts.CommandRunner.
-type sandboxRunnerAdapter struct {
-	inner sandbox2.CommandRunner
-}
+// buildToolExecRunner is overridable in tests. It constructs a verified,
+// sandbox-backed command runner for the tool-exec CLI.
+var buildToolExecRunner = buildToolExecRunnerImpl
 
-func (a sandboxRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
-	if a.inner == nil {
-		return "", "", nil
+func buildToolExecRunnerImpl(ctx context.Context, ws, backend string) (sandbox2.CommandRunner, error) {
+	sandboxCfg := sandbox2.SandboxConfig{}
+	sboxRuntime, err := fauthorization.SelectSandboxRuntime(backend, sandboxCfg, "", ws)
+	if err != nil {
+		return nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
-	return a.inner.Run(ctx, sandbox2.CommandRequest{
-		Workdir:        req.Workdir,
-		Args:           req.Args,
-		Env:            req.Env,
-		Input:          req.Input,
-		Timeout:        req.Timeout,
-		MaxOutputBytes: req.MaxOutputBytes,
+	policy := fauthorization.BuildSandboxPolicy(nil, nil)
+	return sandbox2.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &contracts.CommandRunnerConfig{
+		Workspace: ws,
 	})
 }
 
@@ -52,15 +49,14 @@ func newToolExecCmd() *cobra.Command {
 			}
 
 			ws := ensureWorkspace()
-			sboxRunner := sandbox2.NewLocalCommandRunner(ws, nil, nil)
-			runner := sandboxRunnerAdapter{inner: sboxRunner}
-			tools := platformshell.CommandLineTools(ws, runner, nil)
-			capReg := capability.NewRegistry()
+			sboxRunner, err := buildToolExecRunner(cmd.Context(), ws, sandboxBackend)
+			if err != nil {
+				return fmt.Errorf("tool-exec requires a verified sandbox (gvisor/docker); none available: %w", err)
+			}
 
-			for _, t := range tools {
-				if err := capReg.Register(t); err != nil {
-					return fmt.Errorf("register tool %s: %w", t.Name(), err)
-				}
+			capReg, err := services.BuildMinimalToolRegistry(ws, sboxRunner)
+			if err != nil {
+				return fmt.Errorf("build tool registry: %w", err)
 			}
 
 			result, err := capReg.InvokeCapability(

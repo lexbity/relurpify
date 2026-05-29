@@ -14,6 +14,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
@@ -189,7 +190,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets cfgload.Sec
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
-	if reg, err := llm.NewProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := llmconfig.LoadProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, selected)
 		report.SelectedProfile = filepath.Base(resolution.SourcePath)
 		if report.SelectedProfile == "." || report.SelectedProfile == "" {

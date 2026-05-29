@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/templates"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -153,7 +154,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
-	if reg, err := llm.NewProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := llmconfig.LoadProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
 		if resolution.SourcePath != "" {
 			report.ModelProfilesExists = true
@@ -355,11 +356,11 @@ func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) Dep
 
 func formatSandboxDetail(detail string) string {
 	if detail == "" {
-		return "sandbox unavailable — tool sandboxing disabled"
+		return "sandbox unavailable — agent runtime will FAIL TO START (no host-exec fallback)"
 	}
 	// If it's an error message, append the note
 	if strings.Contains(detail, "error") || strings.Contains(detail, "not found") {
-		return detail + " — sandbox unavailable — tool sandboxing disabled"
+		return detail + " — agent runtime will FAIL TO START (no host-exec fallback)"
 	}
 	// If it's a version string, we're good
 	return detail

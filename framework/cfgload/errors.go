@@ -10,11 +10,6 @@ import (
 type ErrorKind string
 
 const (
-	// ErrKindScan is returned when a file cannot be parsed or read.
-	ErrKindScan ErrorKind = "scan"
-	// ErrKindAudit is returned when the inventory finds an ambient-config
-	// behavior that violates the freeze policy.
-	ErrKindAudit ErrorKind = "audit"
 	// ErrKindSchema is returned when schema parsing, lookup, or body decoding
 	// fails.
 	ErrKindSchema ErrorKind = "schema"
@@ -37,62 +32,6 @@ var (
 	// ErrForbiddenSecretField reports a forbidden secret-bearing field name in a config file.
 	ErrForbiddenSecretField = errors.New("secret field detected in config file")
 )
-
-// ScanError wraps a file-level parse or read failure.
-type ScanError struct {
-	Path string
-	Err  error
-}
-
-func (e *ScanError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-	if e.Path == "" {
-		return fmt.Sprintf("scan error: %v", e.Err)
-	}
-	return fmt.Sprintf("scan %s: %v", e.Path, e.Err)
-}
-
-func (e *ScanError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-// AuditError reports a set of findings that violate the current freeze rules.
-type AuditError struct {
-	Findings []Finding
-}
-
-func (e *AuditError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-	if len(e.Findings) == 0 {
-		return "audit failed"
-	}
-	return fmt.Sprintf("audit failed: %d ambient config findings", len(e.Findings))
-}
-
-// Is allows errors.Is to match any AuditError sentinel if needed.
-func (e *AuditError) Is(target error) bool {
-	_, ok := target.(*AuditError)
-	return ok
-}
-
-// JoinScanErrors collapses a set of scan errors into one error.
-func JoinScanErrors(errs ...error) error {
-	var filtered []error
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		filtered = append(filtered, err)
-	}
-	return errors.Join(filtered...)
-}
 
 // SchemaError wraps schema parsing and body-decoding failures with location
 // context.

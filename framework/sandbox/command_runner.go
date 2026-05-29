@@ -12,26 +12,16 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-// CommandRequest captures process execution metadata routed through a sandbox.
-type CommandRequest struct {
-	Workdir        string
-	Args           []string
-	Env            []string
-	Input          string
-	Timeout        time.Duration
-	MaxOutputBytes int64 // 0 = use runner default; -1 = unlimited (unsafe)
-	UsePTY         bool  // allocate a pseudo-terminal for the subprocess
-}
-
-// CommandRunner describes a primitive capable of executing commands in a sandbox.
-type CommandRunner interface {
-	Run(ctx context.Context, req CommandRequest) (stdout string, stderr string, err error)
-}
+// CommandRequest and CommandRunner are defined canonically in platform/contracts
+// so that platform-level backends can satisfy them without importing framework.
+type (
+	CommandRequest = contracts.CommandRequest
+	CommandRunner  = contracts.CommandRunner
+)
 
 // commandCappedBuffer wraps bytes.Buffer with a write limit. Writes and reads
 // beyond the limit are silently discarded. Both Write and ReadFrom are
@@ -67,11 +57,6 @@ func (c *commandCappedBuffer) ReadFrom(r io.Reader) (int64, error) {
 	return c.Buffer.ReadFrom(io.LimitReader(r, remaining))
 }
 
-// CommandRunnerProvider lets a sandbox backend supply a specialized runner.
-type CommandRunnerProvider interface {
-	NewCommandRunner(config *contracts.CommandRunnerConfig) (CommandRunner, error)
-}
-
 // NewCommandRunner returns a backend-specific runner when the runtime supports
 // one, otherwise it falls back to the standard sandbox command runner.
 func NewCommandRunner(config *contracts.CommandRunnerConfig, runtime SandboxRuntime) (CommandRunner, error) {
@@ -80,6 +65,9 @@ func NewCommandRunner(config *contracts.CommandRunnerConfig, runtime SandboxRunt
 	}
 	return NewSandboxCommandRunner(config, runtime)
 }
+
+// Compile-time guarantee that the sandbox runner satisfies the CommandRunner API.
+var _ CommandRunner = (*SandboxCommandRunner)(nil)
 
 // SandboxCommandRunner launches commands via the configured sandbox runtime.
 type SandboxCommandRunner struct {
@@ -158,10 +146,13 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	if r.config.SeccompProfile != "" {
 		args = append(args, "--security-opt", "seccomp="+r.config.SeccompProfile)
 	}
-	// Network isolation: use --network none when requested and no specific
-	// egress rules are declared (rules are enforced by PermissionManager instead).
-	policy := r.rt.Policy()
-	if r.config.NetworkIsolation && len(policy.NetworkRules) == 0 {
+	// Network isolation: always pass --network none when isolation is requested.
+	// Declared NetworkRules do NOT relax isolation — granular per-rule egress is
+	// not enforceable at the packet level here, so opening the container network
+	// because rules exist would be an unsafe fallback (SF-3). Network access
+	// requires explicitly disabling NetworkIsolation in the sandbox config;
+	// brokered egress filtering is a separate, future capability.
+	if r.config.NetworkIsolation {
 		args = append(args, "--network", "none")
 	}
 	for _, env := range req.Env {

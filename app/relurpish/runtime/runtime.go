@@ -27,6 +27,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
@@ -170,7 +171,7 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
 	}
 	securityBundle := loadedConfig.Security
-	profileRegistry, err := llm.NewProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
+	profileRegistry, err := llmconfig.ProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
 	if err != nil {
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}

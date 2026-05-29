@@ -203,6 +203,24 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	}, nil
 }
 
+// BuildMinimalToolRegistry constructs a capability registry with all shell CLI
+// tools registered. Unlike BuildBuiltinCapabilityBundle, it does not set up
+// AST indexing, search, or git tools — only the CLI tool wrappers. This is
+// suitable for the tool-exec CLI command which needs a throwaway registry.
+//
+// This function exists to keep the app layer from importing platform/shell
+// directly (layer violation).
+func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*capability.Registry, error) {
+	capReg := newCapabilityRegistryFn()
+	tools := platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}, nil)
+	for _, tool := range tools {
+		if err := capReg.Register(tool); err != nil {
+			return nil, fmt.Errorf("register tool %s: %w", tool.Name(), err)
+		}
+	}
+	return capReg, nil
+}
+
 type commandRunnerAdapter struct {
 	runner fsandbox.CommandRunner
 }

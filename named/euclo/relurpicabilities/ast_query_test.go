@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 // mockIndexStore is a test double for ast.IndexStore
@@ -635,12 +636,12 @@ func TestBlameTraceHandlerDescriptor(t *testing.T) {
 }
 
 func TestBlameTraceHandlerParsesOutput(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "abc123def456abc123def456abc123def456abc123 1 2 3\nauthor John Doe\nsummary Added feature\n",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "abc123def456abc123def456abc123def456abc123 1 2 3\nauthor John Doe\nsummary Added feature\n",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -676,12 +677,12 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 }
 
 func TestBlameTraceHandlerLineRange(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -706,12 +707,12 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 }
 
 func TestBlameTraceHandlerCommandDenied(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    errors.New("command denied by policy"),
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "",
+		Stderr: "",
+		Err:    errors.New("command denied by policy"),
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -747,12 +748,12 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 }
 
 func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -813,12 +814,12 @@ func TestBisectHandlerDescriptor(t *testing.T) {
 }
 
 func TestBisectHandlerMissingArgs(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -856,12 +857,12 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 }
 
 func TestBisectHandlerStepLimit(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "bisecting...",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "bisecting...",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -897,12 +898,12 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 }
 
 func TestBisectHandlerCulpritExtracted(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "first bad commit: abc123def456",
-		stderr: "",
-		err:    nil,
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "first bad commit: abc123def456",
+		Stderr: "",
+		Err:    nil,
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -1021,12 +1022,12 @@ func TestDiffSummaryHandlerDescriptor(t *testing.T) {
 }
 
 func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		stdout: "",
-		stderr: "",
-		err:    errors.New("command denied by policy"),
-	}
-
+	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
+		Stdout: "",
+		Stderr: "",
+		Err:    errors.New("command denied by policy"),
+	})
+	
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // validateAgents validates the agent entries parsed from workspace.yaml.
@@ -102,10 +103,9 @@ func (c *WorkspaceConfig) Validate() error {
 	}
 
 	backend := strings.ToLower(strings.TrimSpace(stringValue(c.Sandbox.Backend)))
-	switch backend {
-	case "gvisor", "docker", "local":
-	default:
-		errs = append(errs, fmt.Errorf("sandbox.backend must be one of gvisor, docker, local"))
+	if backend != "" && !sandbox.IsSupportedSandboxBackend(backend) {
+		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
+		errs = append(errs, fmt.Errorf("sandbox.backend must be one of %s (got %q)", supported, backend))
 	}
 
 	level := strings.ToLower(strings.TrimSpace(stringValue(c.Logging.Level)))

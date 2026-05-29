@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // stdoutLimit and stderrLimit are the default caps applied to docker command
@@ -36,7 +36,7 @@ func NewRunner(backend *Backend) (*Runner, error) {
 }
 
 // Run executes the command via `docker run`.
-func (r *Runner) Run(ctx context.Context, req sandbox.CommandRequest) (string, string, error) {
+func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
 	if r == nil || r.backend == nil {
 		return "", "", errors.New("docker runner missing backend")
 	}
@@ -58,9 +58,10 @@ func (r *Runner) Run(ctx context.Context, req sandbox.CommandRequest) (string, s
 	if strings.TrimSpace(policy.SeccompProfile) != "" {
 		args = append(args, "--security-opt", "seccomp="+policy.SeccompProfile)
 	}
-	if len(policy.NetworkRules) == 0 {
-		args = append(args, "--network", "none")
-	}
+	// Always isolate: the docker backend has no packet-level egress filtering and
+	// rejects granular NetworkRules at policy validation, so isolation must never
+	// be dropped on the presence of rules (SF-3).
+	args = append(args, "--network", "none")
 	for _, mount := range r.protectedMounts(policy.ProtectedPaths) {
 		args = append(args, "-v", mount)
 	}

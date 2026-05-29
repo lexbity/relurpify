@@ -3,9 +3,6 @@ package llm
 import (
 	"fmt"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
 )
 
 // ProviderDefinition describes a loaded model provider file.
@@ -25,34 +22,21 @@ type ProviderRegistry struct {
 	byName map[string]ProviderDefinition
 }
 
-// NewProviderRegistry loads model provider files from a directory.
-func NewProviderRegistry(dir string) (*ProviderRegistry, error) {
-	loaded, err := cfgmodel.LoadProviderDir(dir, cfgload.StrictDecode)
-	if err != nil {
-		return nil, err
-	}
+// NewProviderRegistryFromDefinitions builds a registry from already-loaded
+// provider definitions. The framework/llmconfig adapter converts YAML provider
+// configs into these definitions, keeping platform/llm free of any dependency
+// on framework configuration loaders.
+func NewProviderRegistryFromDefinitions(defs []ProviderDefinition) (*ProviderRegistry, error) {
 	reg := &ProviderRegistry{byName: map[string]ProviderDefinition{}}
-	for _, provider := range loaded {
-		if provider == nil {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(provider.Name))
+	for _, def := range defs {
+		key := strings.ToLower(strings.TrimSpace(def.Name))
 		if key == "" {
 			continue
 		}
 		if _, exists := reg.byName[key]; exists {
-			return nil, fmt.Errorf("duplicate provider definition %q", provider.Name)
+			return nil, fmt.Errorf("duplicate provider definition %q", def.Name)
 		}
-		reg.byName[key] = ProviderDefinition{
-			Name:                  provider.Name,
-			Kind:                  provider.Kind,
-			Endpoint:              provider.Endpoint,
-			RequestTimeoutSeconds: provider.RequestTimeoutSeconds,
-			AvailableModels:       append([]string(nil), provider.AvailableModels...),
-			NativeToolCalling:     provider.NativeToolCalling,
-			MaxConcurrent:         provider.MaxConcurrent,
-			SourcePath:            provider.SourcePath,
-		}
+		reg.byName[key] = def
 	}
 	return reg, nil
 }

@@ -16,6 +16,8 @@ jobs:
         run: make lint-config-boundary
       - name: Boundary tests
         run: make test-boundary
+      - name: Check single boot root (warn-only Phase 0)
+        run: make check-boot-root
       - name: Check template drift
         run: make check-template-drift
       - name: Validate config

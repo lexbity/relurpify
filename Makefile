@@ -1,5 +1,5 @@
 .PHONY: test-unit test-integ test-scenario test-all
-.PHONY: validate-config lint-config-boundary test-boundary generate-templates check-template-drift
+.PHONY: validate-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root
 
 validate-config:
 	go run ./app/relurpish validate-config
@@ -14,6 +14,10 @@ lint-config-boundary:
 
 test-boundary:
 	go test ./framework/configcheck ./framework/cfgload -count=1 -timeout 60s
+
+check-boot-root:
+	@echo "Checking single boot root (warn-only Phase 0)..."
+	@bash scripts/check-single-boot-root.sh
 
 generate-templates:
 	go run ./cmd/gen-templates --output /tmp/relurpify-templates
