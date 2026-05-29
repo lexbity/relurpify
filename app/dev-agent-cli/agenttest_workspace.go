@@ -124,7 +124,7 @@ func openPreparedRunWorkspace(ctx context.Context, desc *agenttest.PreparedRunDe
 	target.Config.ManifestSnapshot = manifestSnapshot
 	target.Config.SecurityBundle = &loadedConfig.Security
 	target.Config.ProfileResolution = profileRegistry.Resolve(target.Config.InferenceProvider, target.Config.InferenceModel)
-	ws, err := agentenv.Open(ctx, target.Config, llm.ProviderSecrets{}, preparedRunRegistrationFuncsFn())
+	ws, err := agentenv.OpenWorkspace(ctx, target.Config, llm.ProviderSecrets{}, preparedRunRegistrationFuncsFn())
 	if err != nil {
 		return nil, nil, err
 	}

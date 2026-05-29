@@ -29,7 +29,7 @@
 //
 // Usage:
 //
-//	env := agentenv.Open(...)
+//	env := agentenv.OpenWorkspace(...)
 //	agent := euclo.New(env, euclo.WithConfig(config))
 //	if err := agent.Initialize(cfg); err != nil {
 //	    return err

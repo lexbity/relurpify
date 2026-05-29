@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	workspaceOpenFn              = agentenv.Open
+	workspaceOpenFn              = agentenv.OpenWorkspace
 	workspaceRegistrationFuncsFn = euclo.GetRegistrationFuncs
 )
 

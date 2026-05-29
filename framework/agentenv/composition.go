@@ -69,6 +69,9 @@ type WorkspaceConfig struct {
 	// If nil, no event log is created. This allows apps to inject app-specific
 	// event log implementations (e.g., app/nexus/db) without framework dependencies.
 	EventLogFactory func(path string) (event.Log, error)
+	// Scope declares which optional feature layers are assembled.
+	// A zero value defaults to ScopeFull for backward compatibility.
+	Scope WorkspaceScope
 }
 
 // InferenceProviderValue returns the inference provider

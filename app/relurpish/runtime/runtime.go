@@ -165,7 +165,8 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
 
-	// Delegate all workspace initialization to framework/agentenv.Open().
+	// Delegate all workspace initialization to framework/agentenv.OpenWorkspace().
+	// app/relurpish does not build its own workspace environment.
 	manifestSnapshot, err := cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
@@ -180,7 +181,7 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	if err != nil {
 		return nil, fmt.Errorf("load agent definitions: %w", err)
 	}
-	ws, err := agentenv.Open(ctx, agentenv.WorkspaceConfig{
+	ws, err := agentenv.OpenWorkspace(ctx, agentenv.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
 		InferenceProvider:          cfg.InferenceProvider,

@@ -361,13 +361,20 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}, nil
 }
 
-// Open initializes a complete workspace session: platform checks, store
-// opening, service graph construction, agent registration, and background
-// indexing. The returned *Workspace is ready for agent construction.
+// OpenWorkspace initializes a complete workspace session: platform checks,
+// store opening, service graph construction, agent registration, and
+// background indexing. The returned *Workspace is ready for agent
+// construction.
 //
-// Open is the single composition root for all Relurpify entry points.
-// app/relurpish, app/dev-agent-cli, and integration tests all call Open().
-func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
+// OpenWorkspace is the single composition root for all Relurpify entry
+// points. app/relurpish, app/dev-agent-cli, and integration tests all call
+// OpenWorkspace.
+//
+// Feature assembly is governed by cfg.Scope. Security and capability
+// assembly are unconditional; LLM backend, knowledge, services, and
+// telemetry-sink construction are gated behind their respective scope flags.
+// A zero-value scope defaults to ScopeFull for backward compatibility.
+func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -420,25 +427,40 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		cfg.MemoryPath = filepath.Join(cfg.StateDir, "memory")
 	}
 
+	// Default zero-valued Scope to ScopeFull for backward compatibility.
+	if cfg.Scope == (WorkspaceScope{}) {
+		cfg.Scope = ScopeFull
+	}
+
+	if !cfg.Scope.TelemetrySinks {
+		cfg.TelemetryPath = ""
+	}
+
 	// Phase A: Configuration Validation
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
 
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
-	if err != nil {
-		return nil, fmt.Errorf("build inference backend: %w", err)
+	// Phase B: LLM Backend (gated by Scope.LLMBackend)
+	var backend llm.ManagedBackend
+	if cfg.Scope.LLMBackend {
+		var beErr error
+		backend, beErr = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
+		if beErr != nil {
+			return nil, fmt.Errorf("build inference backend: %w", beErr)
+		}
 	}
 
-	// Phase C: Log and Telemetry Setup
+	// Phase C: Log and Telemetry Setup (logger always on; JSON sink gated by
+	// cfg.Scope.TelemetrySinks, enforced via empty cfg.TelemetryPath above)
 	logFile, logger, tel, err := setupTelemetry(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Phase C.5: Event Log Setup (if factory provided)
+	// Phase C.5: Event Log Setup (gated by Scope.Services)
 	var eventLog event.Log
-	if cfg.EventLogFactory != nil && cfg.EventsPath != "" {
+	if cfg.Scope.Services && cfg.EventLogFactory != nil && cfg.EventsPath != "" {
 		eventLog, err = cfg.EventLogFactory(cfg.EventsPath)
 		if err != nil {
 			logFile.Close()
@@ -492,18 +514,22 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		}
 	}
 
+	var model contracts.LanguageModel
+	var logLLM bool
 	profileResolution := cfg.ProfileResolution
-	_ = llm.ApplyProfile(backend, profileResolution.Profile)
+	if cfg.Scope.LLMBackend && backend != nil {
+		_ = llm.ApplyProfile(backend, profileResolution.Profile)
 
-	logLLM := cfg.DebugLLM
-	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
-		if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
-			logLLM = *registration.Manifest.Spec.Agent.Logging.LLM
+		logLLM = cfg.DebugLLM
+		if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
+			if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
+				logLLM = *registration.Manifest.Spec.Agent.Logging.LLM
+			}
 		}
+		backend.SetDebugLogging(logLLM)
+		model = llm.NewInstrumentedModel(backend.Model(), llmTelemetryAdapter{inner: tel}, logLLM)
+		_ = llm.ApplyProfile(model, profileResolution.Profile)
 	}
-	backend.SetDebugLogging(logLLM)
-	model := llm.NewInstrumentedModel(backend.Model(), llmTelemetryAdapter{inner: tel}, logLLM)
-	_ = llm.ApplyProfile(model, profileResolution.Profile)
 
 	// Wire permission event logger if event telemetry is available.
 	if et, ok := tel.(interface {
@@ -516,9 +542,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 		}
 	}
 
-	// Phase G: Create ServiceManager and Bootstrap
-	scheduler := NewServiceScheduler()
-
+	// Phase G: Bootstrap Agent Runtime
 	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             registration.ID,
@@ -562,45 +586,49 @@ func Open(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets,
 	boot.Environment.PromptRegistry = promptRegistry
 	logger.Printf("agentenv: prompt registry loaded: %d prompts", promptRegistry.Count())
 
-	// Phase H: ServiceManager Setup & Scheduler Registration
+	// Phase H: ServiceManager, Scheduler, Knowledge, and Retrieval
+	// (gated by Scope.Services and Scope.Knowledge)
 	env := boot.Environment
-	sm := NewServiceManager()
-	bkcEvents := &knowledge.EventBus{}
-	sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
-		Source: "framework/agentenv/workspace.go",
-		Owner:  "framework",
-		Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
-	})
-
-	// Initialize KnowledgeStore now that GraphDB is available
-	knowledgeStore, err := openKnowledgeStore(env.IndexManager.GraphDB)
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("open knowledge store: %w", err)
-	}
-
-	env.Scheduler = scheduler
 	env.PermissionManager = registration.Permissions
-	env.KnowledgeStore = knowledgeStore
-	env.KnowledgeEvents = bkcEvents
 
-	policyBundle, err := contextpolicy.Compile(registration.Manifest, nil, contextpolicy.DefaultContextPolicy())
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("compile context policy: %w", err)
+	var sm *ServiceManager
+	if cfg.Scope.Services {
+		scheduler := NewServiceScheduler()
+		env.Scheduler = scheduler
+		sm = NewServiceManager()
+		sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
+			Source: "framework/agentenv/workspace.go",
+			Owner:  "framework",
+			Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
+		})
+		env.ServiceManager = sm
 	}
-	rankerRegistry := retrieval.NewRankerRegistry()
-	rankerRegistry.Register(&retrieval.KeywordRanker{K1: 1.2, B: 0.75})
-	rankerRegistry.Register(&retrieval.RecencyRanker{HalfLifeHours: 24.0})
-	rankerRegistry.Register(&retrieval.ASTProximityRanker{Index: env.IndexManager})
-	rankerRegistry.Register(&retrieval.TrustRanker{})
-	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(policyBundle)
-	env.Retriever = retriever
-	env.Compiler = compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
-	env.StreamTrigger = contextstream.NewTrigger(env.Compiler)
 
-	// Attach ServiceManager to environment (for direct access)
-	env.ServiceManager = sm
+	if cfg.Scope.Knowledge && env.IndexManager != nil && env.IndexManager.GraphDB != nil {
+		bkcEvents := &knowledge.EventBus{}
+		knowledgeStore, err := openKnowledgeStore(env.IndexManager.GraphDB)
+		if err != nil {
+			logFile.Close()
+			return nil, fmt.Errorf("open knowledge store: %w", err)
+		}
+		env.KnowledgeStore = knowledgeStore
+		env.KnowledgeEvents = bkcEvents
+
+		policyBundle, err := contextpolicy.Compile(registration.Manifest, nil, contextpolicy.DefaultContextPolicy())
+		if err != nil {
+			logFile.Close()
+			return nil, fmt.Errorf("compile context policy: %w", err)
+		}
+		rankerRegistry := retrieval.NewRankerRegistry()
+		rankerRegistry.Register(&retrieval.KeywordRanker{K1: 1.2, B: 0.75})
+		rankerRegistry.Register(&retrieval.RecencyRanker{HalfLifeHours: 24.0})
+		rankerRegistry.Register(&retrieval.ASTProximityRanker{Index: env.IndexManager})
+		rankerRegistry.Register(&retrieval.TrustRanker{})
+		retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(policyBundle)
+		env.Retriever = retriever
+		env.Compiler = compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
+		env.StreamTrigger = contextstream.NewTrigger(env.Compiler)
+	}
 
 	ws := &Workspace{
 		Environment:          env,

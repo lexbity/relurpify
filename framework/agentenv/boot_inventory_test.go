@@ -52,24 +52,39 @@ func TestBootRootInventory(t *testing.T) {
 		}
 	}
 
-	// --- agentenv.Open callers ------------------------------------------------
-	openCmd := exec.Command("grep", "-rn", `agentenv\.Open(`, "--include=*.go", ".")
-	openCmd.Dir = root
-	openOut, openErr := openCmd.Output()
-	if openErr != nil {
-		t.Fatalf("grep agentenv.Open failed: %v", openErr)
+	// --- agentenv.OpenWorkspace callers ----------------------------------------
+	// After Phase 5 the legacy agentenv.Open symbol no longer exists. All callers
+	// use OpenWorkspace.
+	owCmd := exec.Command("grep", "-rn", `agentenv\.OpenWorkspace(`, "--include=*.go", ".")
+	owCmd.Dir = root
+	owOut, owErr := owCmd.Output()
+	if owErr != nil {
+		t.Fatalf("grep agentenv.OpenWorkspace failed: %v", owErr)
 	}
 
-	knownOpenCallers := []string{
-		"app/relurpish/runtime/runtime.go",                     // primary entry point
-		"app/dev-agent-cli/agenttest_workspace.go",             // inspection+prepared-run entry
-		"named/euclo/doc.go",                                   // doc-comment reference
+	knownOWCallers := []string{
+		"app/relurpish/runtime/runtime.go",         // primary entry point
+		"app/dev-agent-cli/agenttest_workspace.go", // inspection+prepared-run entry
+		"app/dev-agent-cli/workspace.go",           // workspaceOpenFn var assignment
+		"named/euclo/doc.go",                       // doc-comment reference
 	}
 
-	for _, line := range grepLines(openOut) {
-		if !matchedByAny(line, knownOpenCallers) {
-			t.Errorf("unexpected agentenv.Open caller (must be migrated in Phase 5):\n  %s", line)
+	for _, line := range grepLines(owOut) {
+		if !matchedByAny(line, knownOWCallers) {
+			t.Errorf("unexpected agentenv.OpenWorkspace caller:\n  %s", line)
 		}
+	}
+
+	// Verify the legacy symbol no longer exists.
+	legacyCmd := exec.Command("grep", "-rn", `agentenv\.Open\b`, "--include=*.go", ".")
+	legacyCmd.Dir = root
+	legacyOut, _ := legacyCmd.Output()
+	for _, line := range grepLines(legacyOut) {
+		// Skip lines that mention the legacy symbol in a historical context.
+		if strings.Contains(line, "boot_inventory_test.go") {
+			continue
+		}
+		t.Errorf("legacy agentenv.Open symbol still present (must be removed in Phase 5):\n  %s", line)
 	}
 
 	// --- BuildWorkspaceEnvironment callers ------------------------------------

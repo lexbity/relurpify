@@ -9,5 +9,5 @@
 // - Type alias shims have been removed
 // - ayenitd is now a pure service runner with no composition logic
 //
-// Entry points should now use framework/agentenv.Open for workspace initialization.
+// Entry points should now use framework/agentenv.OpenWorkspace for workspace initialization.
 package ayenitd
