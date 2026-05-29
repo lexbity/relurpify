@@ -191,43 +191,37 @@ func auditCodebaseBoundary(workspaceAbs string, report *cfgload.ValidationReport
 
 // hasConfigPathIndicator checks whether any string literal in the given AST
 // expressions contains a config-path indicator (relurpify_cfg, .yaml, .policy,
-// manifest, security/). It walks filepath.Join sub-expressions recursively so
-// const-built paths like filepath.Join(ws, "relurpify_cfg", "file") are caught.
+// manifest, security/). It walks filepath.Join sub-expressions via an explicit
+// stack so const-built paths like filepath.Join(ws, "relurpify_cfg", "file")
+// are caught without recursion.
 func hasConfigPathIndicator(args []ast.Expr) bool {
-	for _, arg := range args {
-		if hasConfigLiteral(arg) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasConfigLiteral(n ast.Expr) bool {
-	switch expr := n.(type) {
-	case *ast.BasicLit:
-		if expr.Kind == token.STRING {
-			// Check for config-path indicators including YAML extensions.
-			v := strings.ToLower(expr.Value)
-			if strings.Contains(v, "relurpify_cfg") ||
-				strings.Contains(v, ".yaml") ||
-				strings.Contains(v, ".policy") ||
-				strings.Contains(v, "manifest") ||
-				strings.Contains(v, "/security/") {
-				return true
+	stack := make([]ast.Expr, 0, len(args))
+	stack = append(stack, args...)
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		switch expr := n.(type) {
+		case *ast.BasicLit:
+			if expr.Kind == token.STRING {
+				v := strings.ToLower(expr.Value)
+				if strings.Contains(v, "relurpify_cfg") ||
+					strings.Contains(v, ".yaml") ||
+					strings.Contains(v, ".policy") ||
+					strings.Contains(v, "manifest") ||
+					strings.Contains(v, "/security/") {
+					return true
+				}
 			}
-		}
-	case *ast.CallExpr:
-		// Recursively check filepath.Join arguments.
-		if sel, ok := expr.Fun.(*ast.SelectorExpr); ok {
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == "filepath" && sel.Sel.Name == "Join" {
-				return hasConfigPathIndicator(expr.Args)
+		case *ast.CallExpr:
+			// Walk all arguments of any call expression (catches
+			// filepath.Join and any other function with config strings).
+			for i := len(expr.Args) - 1; i >= 0; i-- {
+				stack = append(stack, expr.Args[i])
 			}
+		case *ast.BinaryExpr:
+			// Check both sides of concatenation like "dir" + "/file.yaml".
+			stack = append(stack, expr.X, expr.Y)
 		}
-		// Recursively check any nested function call's arguments.
-		return hasConfigPathIndicator(expr.Args)
-	case *ast.BinaryExpr:
-		// Check both sides of string concatenation like "dir" + "/file.yaml"
-		return hasConfigLiteral(expr.X) || hasConfigLiteral(expr.Y)
 	}
 	return false
 }
