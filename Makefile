@@ -6,7 +6,7 @@ validate-config:
 
 lint-config-boundary:
 	@echo "Checking config boundary..."
-	@! rg -n 'os\.(Getenv|Environ)\(' --glob '*.go' . | grep -v '_test.go' | grep -v 'framework/cfgload/' | grep -v 'framework/runtimeenv/' >/dev/null \
+	@! rg -n 'os\.(Getenv|Environ|LookupEnv|Setenv)\(' --glob '*.go' . | grep -v '_test.go' | grep -v 'framework/cfgload/' | grep -v 'framework/runtimeenv/' >/dev/null \
 		|| (echo "Config boundary: FAIL — env access outside framework/cfgload and framework/runtimeenv"; exit 1)
 	@! rg -n 'relurpify_cfg' --glob '*.go' . | grep -v '_test.go' | rg 'os\.ReadFile|os\.ReadDir|os\.WriteFile|os\.OpenFile' >/dev/null \
 		|| (echo "Config boundary: FAIL — config path access outside framework/cfgload"; exit 1)

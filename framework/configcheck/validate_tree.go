@@ -119,10 +119,10 @@ func auditCodebaseBoundary(workspaceAbs string, report *cfgload.ValidationReport
 		}
 
 		// Exclude allowed packages/directories for env lookup
-		isEnvExempt := strings.HasPrefix(rel, "framework/cfgload/") || strings.HasPrefix(rel, "framework/runtimeenv/") || strings.Contains(rel, "/testsuite/")
+		isEnvExempt := strings.HasPrefix(rel, "framework/cfgload/") || strings.HasPrefix(rel, "framework/runtimeenv/") || hasTestsuitePathComponent(rel)
 
 		// Exclude allowed packages/directories for config file read/write
-		isConfigExempt := strings.HasPrefix(rel, "framework/cfgload/") || strings.Contains(rel, "/testsuite/")
+		isConfigExempt := strings.HasPrefix(rel, "framework/cfgload/") || hasTestsuitePathComponent(rel)
 
 		src, err := os.ReadFile(path)
 		if err != nil {
@@ -158,27 +158,22 @@ func auditCodebaseBoundary(workspaceAbs string, report *cfgload.ValidationReport
 				snippet = strings.TrimSpace(lines[pos.Line-1])
 			}
 
-			// Rule 1: os.Getenv or os.Environ is forbidden outside allowed env packages
-			if sel.Sel.Name == "Getenv" || sel.Sel.Name == "Environ" {
+			// Rule 1: os.Getenv, os.Environ, os.LookupEnv, or os.Setenv is
+			// forbidden outside allowed env packages
+			if sel.Sel.Name == "Getenv" || sel.Sel.Name == "Environ" || sel.Sel.Name == "LookupEnv" || sel.Sel.Name == "Setenv" {
 				if !isEnvExempt {
 					report.Add(rel, fmt.Sprintf("line:%d", pos.Line), "os."+sel.Sel.Name, fmt.Sprintf("direct environment boundary violation: %s", snippet))
 				}
 				return true
 			}
 
-			// Rule 2: os.ReadFile, os.ReadDir, os.WriteFile, os.OpenFile, os.Create with "relurpify_cfg" is forbidden outside allowed config packages
+			// Rule 2: os.ReadFile, os.ReadDir, os.WriteFile, os.OpenFile, os.Create
+			// with config-path indicators is forbidden outside allowed config packages.
+			// Checks ALL arguments recursively (including filepath.Join sub-expressions)
+			// so const-built paths like filepath.Join(ws, "relurpify_cfg", "file") are caught.
 			if sel.Sel.Name == "ReadFile" || sel.Sel.Name == "ReadDir" || sel.Sel.Name == "WriteFile" || sel.Sel.Name == "OpenFile" || sel.Sel.Name == "Create" {
 				if !isConfigExempt {
-					hasRelurpifyCfg := false
-					for _, arg := range call.Args {
-						if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-							if strings.Contains(lit.Value, "relurpify_cfg") {
-								hasRelurpifyCfg = true
-								break
-							}
-						}
-					}
-					if hasRelurpifyCfg || strings.Contains(snippet, "relurpify_cfg") {
+					if hasConfigPathIndicator(call.Args) {
 						report.Add(rel, fmt.Sprintf("line:%d", pos.Line), "os."+sel.Sel.Name, fmt.Sprintf("direct config path boundary violation: %s", snippet))
 					}
 				}
@@ -192,4 +187,61 @@ func auditCodebaseBoundary(workspaceAbs string, report *cfgload.ValidationReport
 	if err != nil {
 		report.Add("", "codebase_audit", "", fmt.Sprintf("failed to walk workspace directory: %v", err))
 	}
+}
+
+// hasConfigPathIndicator checks whether any string literal in the given AST
+// expressions contains a config-path indicator (relurpify_cfg, .yaml, .policy,
+// manifest, security/). It walks filepath.Join sub-expressions recursively so
+// const-built paths like filepath.Join(ws, "relurpify_cfg", "file") are caught.
+func hasConfigPathIndicator(args []ast.Expr) bool {
+	for _, arg := range args {
+		if hasConfigLiteral(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConfigLiteral(n ast.Expr) bool {
+	switch expr := n.(type) {
+	case *ast.BasicLit:
+		if expr.Kind == token.STRING {
+			// Check for config-path indicators including YAML extensions.
+			v := strings.ToLower(expr.Value)
+			if strings.Contains(v, "relurpify_cfg") ||
+				strings.Contains(v, ".yaml") ||
+				strings.Contains(v, ".policy") ||
+				strings.Contains(v, "manifest") ||
+				strings.Contains(v, "/security/") {
+				return true
+			}
+		}
+	case *ast.CallExpr:
+		// Recursively check filepath.Join arguments.
+		if sel, ok := expr.Fun.(*ast.SelectorExpr); ok {
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name == "filepath" && sel.Sel.Name == "Join" {
+				return hasConfigPathIndicator(expr.Args)
+			}
+		}
+		// Recursively check any nested function call's arguments.
+		return hasConfigPathIndicator(expr.Args)
+	case *ast.BinaryExpr:
+		// Check both sides of string concatenation like "dir" + "/file.yaml"
+		return hasConfigLiteral(expr.X) || hasConfigLiteral(expr.Y)
+	}
+	return false
+}
+
+// hasTestsuitePathComponent returns true if the relative path contains a
+// directory component named "testsuite". Uses path-component matching
+// instead of substring matching to avoid false positives from paths like
+// "tools/mytestsuitehelper/".
+func hasTestsuitePathComponent(rel string) bool {
+	parts := strings.Split(rel, string(filepath.Separator))
+	for _, part := range parts {
+		if part == "testsuite" {
+			return true
+		}
+	}
+	return false
 }
