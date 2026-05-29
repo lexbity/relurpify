@@ -208,7 +208,10 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		return nil, fmt.Errorf("workspace required")
 	}
 	if opts.ManifestSnapshot == nil {
-		return nil, fmt.Errorf("agent manifest snapshot required")
+		if opts.AgentSpec == nil {
+			return nil, fmt.Errorf("either manifest snapshot or agent spec required")
+		}
+		opts.ManifestSnapshot = synthesizeManifestSnapshot(opts.AgentName, opts.AgentSpec)
 	}
 	if opts.ManifestSnapshot.Manifest == nil {
 		return nil, fmt.Errorf("agent manifest missing")
