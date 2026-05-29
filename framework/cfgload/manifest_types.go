@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
@@ -45,7 +46,7 @@ func (p Paths) SkillsDir() string {
 }
 
 func (p Paths) StateRoot() string {
-	return filepath.Join(p.Workspace, ".relurpify_state")
+	return filepath.Join(p.Workspace, secretscan.RuntimeStateDirName)
 }
 
 func (p Paths) RuntimeWorkspaceFile() string {

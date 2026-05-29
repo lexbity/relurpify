@@ -16,8 +16,9 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
-// openEnvForTest is a test helper that replaces the deleted BuildWorkspaceEnvironment shim.
-// It calls OpenWorkspace with ScopeEmbeddedAgent and extracts the environment.
+// openEnvForTest calls OpenWorkspace with ScopeEmbeddedAgent and extracts the
+// environment. It replaces the deleted BuildWorkspaceEnvironment for tests
+// that exercise the embedded-agent bootstrap path.
 func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
 	cfg.SecurityBundle = securityBundle
 	cfg.Scope = ScopeEmbeddedAgent
@@ -60,7 +61,6 @@ func TestWorkspaceConfig(t *testing.T) {
 		AgentName:         "test-agent",
 		AgentsDir:         "/test/agents",
 		SandboxBackend:    "docker",
-		Sandbox:           "default",
 		AuditLimit:        100,
 		HITLTimeout:       5 * time.Minute,
 		LogPath:           "/test/log.txt",
@@ -89,7 +89,7 @@ func TestWorkspaceConfig(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironment(t *testing.T) {
+func TestOpenEnvForTestBasic(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -115,10 +115,10 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	regFuncs := AgentRegistrationFuncs{}
 	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
-		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
+		t.Fatalf("openEnvForTest returned error: %v", err)
 	}
 	if env == nil {
-		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+		t.Fatal("openEnvForTest returned nil environment")
 	}
 
 	// Verify basic fields are populated
@@ -164,7 +164,7 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
+func TestOpenEnvForTestRunnerPopulated(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -189,10 +189,10 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 	regFuncs := AgentRegistrationFuncs{}
 	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
-		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
+		t.Fatalf("openEnvForTest returned error: %v", err)
 	}
 	if env == nil {
-		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+		t.Fatal("openEnvForTest returned nil environment")
 	}
 
 	// The CommandRunner should be populated via buildCommandRunner (the fake in TestMain)
@@ -209,7 +209,7 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironment_ShimSetsEmbeddedScope(t *testing.T) {
+func TestOpenEnvForTestEmbeddedScope(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -233,10 +233,10 @@ func TestBuildWorkspaceEnvironment_ShimSetsEmbeddedScope(t *testing.T) {
 
 	env, err := openEnvForTest(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
 	if err != nil {
-		t.Fatalf("BuildWorkspaceEnvironment shim should succeed, got: %v", err)
+		t.Fatalf("openEnvForTest should succeed, got: %v", err)
 	}
 	if env == nil {
-		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+		t.Fatal("openEnvForTest returned nil environment")
 	}
 
 	// The environment should have a CommandRunner (AuthorizedRunner from the
@@ -249,7 +249,7 @@ func TestBuildWorkspaceEnvironment_ShimSetsEmbeddedScope(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
+func TestOpenEnvForTestEmptyWorkspace(t *testing.T) {
 	ctx := context.Background()
 	cfg := WorkspaceConfig{
 		Workspace: "",
@@ -257,11 +257,11 @@ func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
 	regFuncs := AgentRegistrationFuncs{}
 	_, err := openEnvForTest(ctx, cfg, nil, regFuncs)
 	if err == nil {
-		t.Error("BuildWorkspaceEnvironment should return error for empty workspace")
+		t.Error("openEnvForTest should return error for empty workspace")
 	}
 }
 
-func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
+func TestOpenEnvForTestWithRegistrationFuncs(t *testing.T) {
 	ctx := context.Background()
 	called := false
 	workspace := t.TempDir()
@@ -295,10 +295,10 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 
 	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
-		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
+		t.Fatalf("openEnvForTest returned error: %v", err)
 	}
 	if env == nil {
-		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+		t.Fatal("openEnvForTest returned nil environment")
 	}
 
 	if !called {
@@ -311,7 +311,7 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
+func TestOpenEnvForTestRegistrationError(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -343,11 +343,11 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 
 	_, err = openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err == nil {
-		t.Error("BuildWorkspaceEnvironment should return error when registration fails")
+		t.Error("openEnvForTest should return error when registration fails")
 	}
 }
 
-func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
+func TestOpenEnvForTestWithAgentSpec(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -372,10 +372,10 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	regFuncs := AgentRegistrationFuncs{}
 	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
-		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
+		t.Fatalf("openEnvForTest returned error: %v", err)
 	}
 	if env == nil {
-		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
+		t.Fatal("openEnvForTest returned nil environment")
 	}
 
 	// Verify AgentID is in config
@@ -389,7 +389,7 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironmentRequiresSecurityPolicies(t *testing.T) {
+func TestOpenEnvForTestRequiresSecurityPolicies(t *testing.T) {
 	ctx := context.Background()
 	cfg := WorkspaceConfig{
 		Workspace:    t.TempDir(),

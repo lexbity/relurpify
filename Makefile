@@ -4,6 +4,7 @@
 validate-config:
 	go run ./app/relurpish validate-config
 	@$(MAKE) check-config-tree-drift
+	@$(MAKE) check-boot-root
 
 lint-config-boundary:
 	@echo "Checking config boundary..."
@@ -17,7 +18,7 @@ test-boundary:
 	go test ./framework/configcheck ./framework/cfgload -count=1 -timeout 60s
 
 check-boot-root:
-	@echo "Checking single boot root (warn-only Phase 0)..."
+	@echo "Checking single boot root..."
 	@bash scripts/check-single-boot-root.sh
 
 check-config-tree-drift:

@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 )
 
-const runtimeStateDirName = ".relurpify_state"
+const runtimeStateDirName = secretscan.RuntimeStateDirName
 
 // ReadConfigFile reads a workspace config file after enforcing workspace-local
 // access and rejecting runtime-state paths.

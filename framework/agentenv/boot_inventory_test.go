@@ -18,13 +18,12 @@ import (
 
 const selfFile = "framework/agentenv/boot_inventory_test.go"
 
-// TestBootRootInventory enumerates the known callers of composition-root
-// functions (Open, BuildWorkspaceEnvironment) and fails if any new caller
-// appears. This locks the baseline for Phases 5, 6, and 12.
+// TestBootRootInventory enumerates the known callers of
+// BuildBuiltinCapabilityBundle and fails if any new caller appears.
+// There is exactly one composition root: BootstrapAgentRuntime.
 //
-// Current composition roots (both call BuildBuiltinCapabilityBundle):
-//   - framework/agentenv/workspace.go   (Open -> BootstrapAgentRuntime)
-//   - framework/agentenv/composition.go (BuildWorkspaceEnvironment, TO BE DELETED Phase 12)
+// The single composition root (calls BuildBuiltinCapabilityBundle):
+//   - framework/agentenv/workspace.go (BootstrapAgentRuntime)
 func TestBootRootInventory(t *testing.T) {
 	root := findModuleRoot(t)
 
@@ -180,6 +179,111 @@ func matchedByAny(line string, known []string) bool {
 		}
 	}
 	return false
+}
+
+// TestNoSecondBootRoot asserts that BuildBuiltinCapabilityBundle is only
+// called by BootstrapAgentRuntime (framework/agentenv/workspace.go) in
+// production code. This prevents reintroduction of a second composition root.
+func TestNoSecondBootRoot(t *testing.T) {
+	root := findModuleRoot(t)
+
+	cmd := exec.Command("grep", "-rn", `BuildBuiltinCapabilityBundle(`, "--include=*.go", ".")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("grep BuildBuiltinCapabilityBundle failed: %v", err)
+	}
+
+	allowed := "framework/agentenv/workspace.go"
+	for _, line := range grepLines(out) {
+		if strings.Contains(line, "framework/services/capability_bundle.go") {
+			continue
+		}
+		if strings.Contains(line, allowed) {
+			continue
+		}
+		// Allow doc.go and test files (comments, grep commands).
+		if strings.Contains(line, "doc.go") || strings.Contains(line, "_test.go") || strings.Contains(line, "fakerunner.go") {
+			continue
+		}
+		t.Errorf("second composition root detected (BuildBuiltinCapabilityBundle caller outside %s):\n  %s", allowed, line)
+	}
+}
+
+// TestNoLegacyBootSymbols asserts that the legacy symbols agentenv.Open and
+// BuildWorkspaceEnvironment no longer exist in production code. The rename
+// (Phase 5) and fork deletion (Phase 6) are locked.
+func TestNoLegacyBootSymbols(t *testing.T) {
+	root := findModuleRoot(t)
+
+	for _, symbol := range []string{`agentenv\.Open(`, `BuildWorkspaceEnvironment(`} {
+		cmd := exec.Command("grep", "-rn", symbol, "--include=*.go", ".")
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			continue // grep exits 1 when no match — that's success
+		}
+		violations := false
+		for _, line := range grepLines(out) {
+			if strings.Contains(line, "_test.go") || strings.Contains(line, "doc.go") {
+				continue
+			}
+			t.Errorf("legacy symbol %q must not appear in production code:\n  %s", symbol, line)
+			violations = true
+		}
+		if violations {
+			t.Logf("legacy symbol %q found — the rename/fork-deletion may have regressed", symbol)
+		}
+	}
+}
+
+// TestSingleBootRootScriptFails is a self-test of the CI guard script.
+// It verifies that a file injecting a second BuildBuiltinCapabilityBundle
+// caller is rejected by the script. The fixture is a temporary Go file
+// that references the bundle function.
+func TestSingleBootRootScriptFails(t *testing.T) {
+	root := findModuleRoot(t)
+
+	// Create a temp file that introduces a second bundle caller.
+	tmpDir := t.TempDir()
+	violation := tmpDir + "/violation.go"
+	if err := os.WriteFile(violation, []byte(`package violation
+import "codeburg.org/lexbit/relurpify/framework/services"
+func f() { services.BuildBuiltinCapabilityBundle("", nil) }
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run the check script from the temp root (without our temp file it's fine).
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "check-single-boot-root.sh"))
+	cmd.Dir = root
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("script should pass on clean tree, got: %v\n%s", err, out)
+	}
+
+	// Now create a violation within the module tree.
+	// Use a non-_test.go name so the script does not filter it out.
+	violation2 := filepath.Join(root, "zz_violation_check.go")
+	if err := os.WriteFile(violation2, []byte(`package main
+import "codeburg.org/lexbit/relurpify/framework/services"
+func f() { services.BuildBuiltinCapabilityBundle("/tmp", nil) }
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(violation2)
+
+	cmd2 := exec.Command("bash", filepath.Join(root, "scripts", "check-single-boot-root.sh"))
+	cmd2.Dir = root
+	cmd2.Env = os.Environ()
+	out2, err2 := cmd2.CombinedOutput()
+	if err2 == nil {
+		t.Error("script should fail when a second bundle caller is present")
+	}
+	if !strings.Contains(string(out2), "FAIL") {
+		t.Errorf("script output should contain FAIL, got:\n%s", out2)
+	}
 }
 
 func findModuleRoot(t *testing.T) string {

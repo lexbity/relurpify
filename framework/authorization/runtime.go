@@ -10,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -104,7 +105,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if permissions != nil {
 		stateDir := cfg.StateDir
 		if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
-			stateDir = filepath.Join(cfg.BaseFS, ".relurpify_state")
+			stateDir = filepath.Join(cfg.BaseFS, secretscan.RuntimeStateDirName)
 		}
 		permissions.SetFilesystemGuardRoots(
 			[]string{

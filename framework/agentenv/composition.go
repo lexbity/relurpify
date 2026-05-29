@@ -27,7 +27,6 @@ type WorkspaceConfig struct {
 	AgentName                  string
 	AgentsDir                  string
 	SandboxBackend             string
-	Sandbox                    string
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 	LogPath                    string

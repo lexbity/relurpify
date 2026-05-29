@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -365,19 +366,34 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}, nil
 }
 
-// OpenWorkspace initializes a complete workspace session: platform checks,
-// store opening, service graph construction, agent registration, and
-// background indexing. The returned *Workspace is ready for agent
-// construction.
-//
 // OpenWorkspace is the single composition root for all Relurpify entry
-// points. app/relurpish, app/dev-agent-cli, and integration tests all call
-// OpenWorkspace.
+// points. It initializes a complete workspace session: platform checks,
+// store opening, capability registration, agent registration, background
+// indexing, and (depending on scope) LLM backend, knowledge, services,
+// and telemetry. app/relurpish, app/dev-agent-cli, and integration tests
+// all call OpenWorkspace.
+//
+// There is exactly one composition root. There is no second function that
+// builds a WorkspaceEnvironment. BuildWorkspaceEnvironment was deleted in
+// Phase 6; its callers were migrated to OpenWorkspace.
 //
 // Feature assembly is governed by cfg.Scope. Security and capability
 // assembly are unconditional; LLM backend, knowledge, services, and
-// telemetry-sink construction are gated behind their respective scope flags.
-// A zero-value scope defaults to ScopeFull for backward compatibility.
+// telemetry-sink construction are gated behind their respective scope
+// flags. A zero-value scope defaults to ScopeFull for backward
+// compatibility.
+//
+// Builder taxonomy (design decision 8):
+//
+//	OpenWorkspace         — session lifecycle (this function)
+//	BootstrapAgentRuntime  — secured runtime assembly
+//	buildSecuredRuntime    — security foundation (unexported)
+//	Build*                 — single leaf components (capabilities, prompts)
+//
+// Scope mechanism (design decision 9):
+//	cfg.Scope is a WorkspaceScope field, not a positional parameter.
+//	ScopeFull = every optional layer.
+//	ScopeEmbeddedAgent = security + capabilities only.
 func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
@@ -742,7 +758,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 		if cfg.StateDir != "" {
 			logPath = filepath.Join(cfg.StateDir, "logs", "agentenv.log")
 		} else {
-			logPath = filepath.Join(cfg.Workspace, ".relurpify_state", "logs", "agentenv.log")
+			logPath = filepath.Join(cfg.Workspace, secretscan.RuntimeStateDirName, "logs", "agentenv.log")
 		}
 	}
 	telemetryPath := cfg.TelemetryPath
@@ -750,7 +766,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 		if cfg.StateDir != "" {
 			telemetryPath = filepath.Join(cfg.StateDir, "telemetry", "agentenv.jsonl")
 		} else {
-			telemetryPath = filepath.Join(cfg.Workspace, ".relurpify_state", "telemetry", "agentenv.jsonl")
+			telemetryPath = filepath.Join(cfg.Workspace, secretscan.RuntimeStateDirName, "telemetry", "agentenv.jsonl")
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
