@@ -1,0 +1,26 @@
+schema: relurpify/tool/v1
+name: go_test
+version: "1"
+family: build
+intent:
+  - test
+  - go
+description: Runs Go tests inside the workspace using the structured GoTestTool runner.
+parameters:
+  - name: working_directory
+    type: string
+    required: false
+    description: Directory to run tests in, relative to workspace root.
+execution:
+  backend: go_native
+  implementation: go_test
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 120
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn
