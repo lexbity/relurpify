@@ -137,7 +137,10 @@ func resolveNodeVariables(node *yaml.Node, workspace string, env []string, defau
 
 // Load executes the consolidated configuration loading boundary.
 func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
-	overrides := LoadEnvOverrides(opts.EnvOverrides)
+	overrides, err := LoadEnvOverrides(opts.EnvOverrides)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load env overrides: %w", err)
+	}
 	secrets := LoadSecrets(opts.EnvOverrides)
 	if strings.TrimSpace(secrets.LLMAPIKey) == "" {
 		log.Printf("WARN config: RELURPIFY_LLM_API_KEY is not set; provider auth may fail")

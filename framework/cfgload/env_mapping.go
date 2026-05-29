@@ -1,6 +1,7 @@
 package cfgload
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,11 +68,19 @@ func lookupEnv(env []string, key string) string {
 	return ""
 }
 
-func parseBoolEnv(value string) bool {
+// parseBoolEnv parses a boolean environment variable and returns an error
+// for unrecognized input. Accepts: 1, true, yes, on (true) and 0, false,
+// no, off (false). Any other value is an error — a typo like "flase" or
+// "enabled" is caught immediately rather than silently treated as false.
+func parseBoolEnv(value string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "1", "true", "yes", "on":
-		return true
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	case "":
+		return false, nil
 	default:
-		return false
+		return false, fmt.Errorf("unrecognized boolean value %q (expected 1/true/yes/on or 0/false/no/off)", value)
 	}
 }

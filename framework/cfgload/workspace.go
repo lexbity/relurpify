@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload/model"
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 )
 
-const defaultWorkspaceStateDir = ".relurpify_state"
+const defaultWorkspaceStateDir = secretscan.RuntimeStateDirName
 
 // WorkspaceLoadOptions controls workspace loader behavior.
 type WorkspaceLoadOptions struct {

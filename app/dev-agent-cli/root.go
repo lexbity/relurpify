@@ -55,7 +55,11 @@ func NewRootCmd() *cobra.Command {
 			}
 			workspaceCfg = cfg
 			envSnapshot = runtimeenv.Capture()
-			envOverrides = cfgload.LoadEnvOverrides(envSnapshot)
+			var ovErr error
+			envOverrides, ovErr = cfgload.LoadEnvOverrides(envSnapshot)
+			if ovErr != nil {
+				return ovErr
+			}
 			secrets = cfgload.LoadSecrets(envSnapshot)
 			sharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
 			return nil

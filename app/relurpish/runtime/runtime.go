@@ -100,7 +100,10 @@ type MCPElicitationHandler interface {
 
 // New builds a fruntime for the TUI and status surfaces.
 func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, error) {
-	envOverrides := cfgload.LoadEnvOverrides(cfg.EnvOverrides)
+	envOverrides, err := cfgload.LoadEnvOverrides(cfg.EnvOverrides)
+	if err != nil {
+		return nil, fmt.Errorf("load env overrides: %w", err)
+	}
 	if envOverrides.WorkspaceRoot != "" {
 		cfg.Workspace = envOverrides.WorkspaceRoot
 	}

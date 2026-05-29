@@ -5,19 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 	"gopkg.in/yaml.v3"
 )
-
-var forbiddenSecretFieldNames = map[string]struct{}{
-	"apikey":     {},
-	"apisecret":  {},
-	"credential": {},
-	"passwd":     {},
-	"password":   {},
-	"privatekey": {},
-	"secret":     {},
-	"token":      {},
-}
 
 // RejectForbiddenSecretFields scans a YAML document for secret-bearing field names.
 func RejectForbiddenSecretFields(path string, data []byte) error {
@@ -64,7 +54,7 @@ func collectForbiddenSecretFields(node *yaml.Node, path string, fieldPath []stri
 
 func isForbiddenSecretFieldName(name string) bool {
 	normalized := normalizeSecretFieldName(name)
-	_, ok := forbiddenSecretFieldNames[normalized]
+	_, ok := secretscan.ForbiddenSecretFieldNames[normalized]
 	return ok
 }
 

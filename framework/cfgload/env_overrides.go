@@ -1,7 +1,13 @@
 package cfgload
 
 // LoadEnvOverrides resolves RELURPIFY_* config overrides from the supplied env list.
-func LoadEnvOverrides(env []string) EnvOverrides {
+// An unrecognized RELURPIFY_STRICT value is returned as an error — a typo like
+// "flase" or "enabled" fails the boot loudly rather than being silently ignored.
+func LoadEnvOverrides(env []string) (EnvOverrides, error) {
+	strict, err := parseBoolEnv(lookupEnv(env, "RELURPIFY_STRICT"))
+	if err != nil {
+		return EnvOverrides{}, err
+	}
 	return EnvOverrides{
 		WorkspaceRoot:  lookupEnv(env, "RELURPIFY_WORKSPACE"),
 		ModelProvider:  lookupEnv(env, "RELURPIFY_MODEL_PROVIDER"),
@@ -11,8 +17,8 @@ func LoadEnvOverrides(env []string) EnvOverrides {
 		LogLevel:       lookupEnv(env, "RELURPIFY_LOG_LEVEL"),
 		Editor:         lookupEnv(env, "EDITOR"),
 		XDGDataHome:    lookupEnv(env, "XDG_DATA_HOME"),
-		Strict:         parseBoolEnv(lookupEnv(env, "RELURPIFY_STRICT")),
-	}
+		Strict:         strict,
+	}, nil
 }
 
 // LoadSecrets resolves env-only secrets from the supplied env list.

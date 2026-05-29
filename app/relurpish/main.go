@@ -31,7 +31,11 @@ var (
 // main bootstraps the relurpish CLI/TUI entrypoint.
 func main() {
 	envSnapshot = runtimeenv.Capture()
-	envOverrides = cfgload.LoadEnvOverrides(envSnapshot)
+	var ovErr error
+	envOverrides, ovErr = cfgload.LoadEnvOverrides(envSnapshot)
+	if ovErr != nil {
+		log.Fatalf("invalid environment: %v", ovErr)
+	}
 	secrets = cfgload.LoadSecrets(envSnapshot)
 	cfg.EnvOverrides = append([]string(nil), envSnapshot...)
 	cfg.Editor = envOverrides.Editor

@@ -7,21 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
 	"gopkg.in/yaml.v3"
 )
 
-const fallbackRuntimeStateDirName = ".relurpify_state"
-
-var fallbackForbiddenSecretFieldNames = map[string]struct{}{
-	"apikey":     {},
-	"apisecret":  {},
-	"credential": {},
-	"passwd":     {},
-	"password":   {},
-	"privatekey": {},
-	"secret":     {},
-	"token":      {},
-}
+var fallbackForbiddenSecretFieldNames = secretscan.ForbiddenSecretFieldNames
 
 func readConfigFile(workspaceRoot, path string) ([]byte, error) {
 	if ReadConfigFile != nil {
@@ -52,8 +42,8 @@ func readConfigFile(workspaceRoot, path string) ([]byte, error) {
 	if rel == "." {
 		return nil, fmt.Errorf("config path %q must reference a file", absPath)
 	}
-	if rel == fallbackRuntimeStateDirName || strings.HasPrefix(rel, fallbackRuntimeStateDirName+string(filepath.Separator)) {
-		return nil, fmt.Errorf("config path %q is inside runtime state dir %q", absPath, fallbackRuntimeStateDirName)
+	if rel == secretscan.RuntimeStateDirName || strings.HasPrefix(rel, secretscan.RuntimeStateDirName+string(filepath.Separator)) {
+		return nil, fmt.Errorf("config path %q is inside runtime state dir %q", absPath, secretscan.RuntimeStateDirName)
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return nil, fmt.Errorf("config path %q is outside workspace root %q", absPath, absWorkspace)

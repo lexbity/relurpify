@@ -22,7 +22,8 @@ func TestLoadEnvOverridesAndSecrets(t *testing.T) {
 		"RELURPIFY_NEXUS_ADMIN_TOKEN=admin-secret",
 	}
 
-	overrides := LoadEnvOverrides(env)
+	overrides, err := LoadEnvOverrides(env)
+	require.NoError(t, err)
 	require.Equal(t, "/tmp/ws", overrides.WorkspaceRoot)
 	require.Equal(t, "ollama", overrides.ModelProvider)
 	require.Equal(t, "gemma4:e4b", overrides.ModelName)
