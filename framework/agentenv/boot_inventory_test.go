@@ -67,7 +67,7 @@ func TestBootRootInventory(t *testing.T) {
 		"app/dev-agent-cli/agenttest_workspace.go",             // inspection+prepared-run entry
 		"app/dev-agent-cli/workspace.go",                       // workspaceOpenFn var assignment
 		"app/nexus/server/rex_runtime.go",                      // nexus entry point
-		"framework/agentenv/composition.go",                    // BuildWorkspaceEnvironment shim
+		"named/euclo/testsuite/live_workspace_handshake_test.go", // integration test
 		"named/euclo/doc.go",                                   // doc-comment reference
 	}
 

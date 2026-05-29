@@ -13,7 +13,20 @@ import (
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
+
+// openEnvForTest is a test helper that replaces the deleted BuildWorkspaceEnvironment shim.
+// It calls OpenWorkspace with ScopeEmbeddedAgent and extracts the environment.
+func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
+	cfg.SecurityBundle = securityBundle
+	cfg.Scope = ScopeEmbeddedAgent
+	ws, err := OpenWorkspace(ctx, cfg, llm.ProviderSecrets{}, regFuncs)
+	if err != nil {
+		return nil, err
+	}
+	return &ws.Environment, nil
+}
 
 // fakeRunner implements sandbox.CommandRunner for tests.
 type fakeRunner struct{}
@@ -100,7 +113,7 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 
 	// Test with no registration functions
 	regFuncs := AgentRegistrationFuncs{}
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -174,7 +187,7 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 	}
 
 	regFuncs := AgentRegistrationFuncs{}
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -218,7 +231,7 @@ func TestBuildWorkspaceEnvironment_ShimSetsEmbeddedScope(t *testing.T) {
 		},
 	}
 
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
+	env, err := openEnvForTest(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment shim should succeed, got: %v", err)
 	}
@@ -242,7 +255,7 @@ func TestBuildWorkspaceEnvironmentWithEmptyWorkspace(t *testing.T) {
 		Workspace: "",
 	}
 	regFuncs := AgentRegistrationFuncs{}
-	_, err := BuildWorkspaceEnvironment(ctx, cfg, nil, regFuncs)
+	_, err := openEnvForTest(ctx, cfg, nil, regFuncs)
 	if err == nil {
 		t.Error("BuildWorkspaceEnvironment should return error for empty workspace")
 	}
@@ -280,7 +293,7 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 		LoadThoughtRecipes:      nil,
 	}
 
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -328,7 +341,7 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 		LoadThoughtRecipes:      nil,
 	}
 
-	_, err = BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	_, err = openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err == nil {
 		t.Error("BuildWorkspaceEnvironment should return error when registration fails")
 	}
@@ -357,7 +370,7 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 	}
 
 	regFuncs := AgentRegistrationFuncs{}
-	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, regFuncs)
+	env, err := openEnvForTest(ctx, cfg, securityBundle, regFuncs)
 	if err != nil {
 		t.Fatalf("BuildWorkspaceEnvironment returned error: %v", err)
 	}
@@ -384,7 +397,7 @@ func TestBuildWorkspaceEnvironmentRequiresSecurityPolicies(t *testing.T) {
 		AgentID:      "test-agent-id",
 	}
 
-	_, err := BuildWorkspaceEnvironment(ctx, cfg, nil, AgentRegistrationFuncs{})
+	_, err := openEnvForTest(ctx, cfg, nil, AgentRegistrationFuncs{})
 	if err == nil {
 		t.Fatal("expected missing security policies to fail")
 	}

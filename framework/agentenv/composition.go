@@ -1,7 +1,6 @@
 package agentenv
 
 import (
-	"context"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -88,23 +87,6 @@ func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }
 
-// BuildWorkspaceEnvironment is a deprecated shim that delegates to
-// OpenWorkspace with ScopeEmbeddedAgent. It exists for in-tree callers
-// that have not yet been migrated to OpenWorkspace (Phase 6). The shim
-// will be deleted in Phase 12.
-//
-// Deprecated: use OpenWorkspace with an explicit scope instead.
-func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
-	if securityBundle != nil {
-		cfg.SecurityBundle = securityBundle
-	}
-	cfg.Scope = ScopeEmbeddedAgent
 
-	ws, err := OpenWorkspace(ctx, cfg, llm.ProviderSecrets{}, regFuncs)
-	if err != nil {
-		return nil, err
-	}
-	return &ws.Environment, nil
-}
 
 

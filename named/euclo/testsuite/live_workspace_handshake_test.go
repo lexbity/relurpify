@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 func TestLiveWorkspaceHandshakeBuildsWorkspaceEnvironment(t *testing.T) {
@@ -134,7 +135,7 @@ capability:
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := agentenv.WorkspaceConfig{
+	ws, err := agentenv.OpenWorkspace(context.Background(), agentenv.WorkspaceConfig{
 		Workspace:         workspace,
 		ManifestPath:      manifestPath,
 		ConfigPath:        filepath.Join(relurpifyCfg, "config.yaml"),
@@ -143,6 +144,7 @@ capability:
 		AgentName:         "euclo",
 		AgentsDir:         filepath.Join(relurpifyCfg, "agents"),
 		SandboxBackend:    "gvisor",
+		SecurityBundle:    securityBundle,
 		AgentSpec: &agentspec.AgentRuntimeSpec{
 			Mode: agentspec.AgentModePrimary,
 			Model: agentspec.AgentModelConfig{
@@ -168,14 +170,11 @@ capability:
 				},
 			},
 		},
-	}
-	env, err := agentenv.BuildWorkspaceEnvironment(context.Background(), cfg, securityBundle, euclo.GetRegistrationFuncs())
+	}, llm.ProviderSecrets{}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env == nil {
-		t.Fatal("expected workspace environment")
-	}
+	env := ws.Environment
 	if env.Registry == nil {
 		t.Fatal("expected capability registry")
 	}

@@ -60,7 +60,9 @@ func assertAllowedImports(t *testing.T, path string, file *ast.File) {
 			t.Fatalf("forbidden legacy import in %s: %s", path, importPath)
 		case strings.Contains(importPath, "archaeo/"):
 			t.Fatalf("forbidden archaeo import in %s: %s", path, importPath)
-		case strings.Contains(importPath, "/platform/") && !strings.HasSuffix(importPath, "/platform/contracts"):
+		case strings.Contains(importPath, "/platform/") &&
+			!strings.HasSuffix(importPath, "/platform/contracts") &&
+			!(strings.HasSuffix(importPath, "/platform/llm") && strings.Contains(path, "/testsuite/")):
 			t.Fatalf("forbidden platform import in %s: %s", path, importPath)
 		}
 	}
