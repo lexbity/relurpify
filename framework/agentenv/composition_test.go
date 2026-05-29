@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // fakeRunner implements sandbox.CommandRunner for tests.
@@ -26,12 +27,12 @@ var _ sandbox.CommandRunner = (*fakeRunner)(nil)
 // TestMain installs a fake command runner for all tests so they don't require
 // a real sandbox backend (runsc/docker) on the host.
 func TestMain(m *testing.M) {
-	old := buildCommandRunner
-	buildCommandRunner = func(_ context.Context, _ WorkspaceConfig, _ *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
-		return &fakeRunner{}, nil
+	old := buildRunnerForInput
+	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *contracts.CommandRunnerConfig, error) {
+		return &fakeRunner{}, &contracts.CommandRunnerConfig{Workspace: "/tmp/test"}, nil
 	}
 	code := m.Run()
-	buildCommandRunner = old
+	buildRunnerForInput = old
 	os.Exit(code)
 }
 
@@ -196,15 +197,15 @@ func TestBuildWorkspaceEnvironment_VerifyFailure(t *testing.T) {
 	expectedErr := errors.New("sandbox verify failed")
 
 	// Override the hook locally for this test.
-	old := buildCommandRunner
-	buildCommandRunner = func(_ context.Context, _ WorkspaceConfig, _ *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
-		return nil, expectedErr
+	old := buildRunnerForInput
+	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *contracts.CommandRunnerConfig, error) {
+		return nil, nil, expectedErr
 	}
-	t.Cleanup(func() { buildCommandRunner = old })
+	t.Cleanup(func() { buildRunnerForInput = old })
 
 	_, err = BuildWorkspaceEnvironment(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
 	if err == nil {
-		t.Fatal("BuildWorkspaceEnvironment should return error when buildCommandRunner fails")
+		t.Fatal("BuildWorkspaceEnvironment should return error when buildRunnerForInput fails")
 	}
 	if !errors.Is(err, expectedErr) {
 		t.Errorf("error %v does not wrap %v", err, expectedErr)

@@ -3,7 +3,6 @@ package agentenv
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -17,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/services"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -93,23 +91,6 @@ func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }
 
-// buildCommandRunner constructs a verified, sandbox-backed CommandRunner for
-// the given workspace configuration and security bundle. It is a variable so
-// tests can inject a fake runner without requiring a real sandbox backend.
-var buildCommandRunner = buildCommandRunnerImpl
-
-func buildCommandRunnerImpl(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle) (sandbox.CommandRunner, error) {
-	sandboxCfg := sandbox.SandboxConfig{}
-	sboxRuntime, err := fauthorization.SelectSandboxRuntime(cfg.SandboxBackend, sandboxCfg, "", cfg.Workspace)
-	if err != nil {
-		return nil, fmt.Errorf("select sandbox runtime: %w", err)
-	}
-	policy := fauthorization.BuildSandboxPolicy(nil, append([]string(nil), securityBundle.Sandbox.ProtectedPaths...))
-	return sandbox.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &contracts.CommandRunnerConfig{
-		Workspace: cfg.Workspace,
-	})
-}
-
 // BuildWorkspaceEnvironment constructs a complete WorkspaceEnvironment with all framework services.
 // This is the composition root for environment construction, owned by framework/agentenv
 // rather than ayenitd. Entry points call this function and then wire in ayenitd-specific services.
@@ -131,20 +112,23 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	// Phase 1: Build verified sandbox runner and wrap with authorization
-	verifiedRunner, err := buildCommandRunner(ctx, cfg, securityBundle)
+	// Phase 1: Build authorized runner and policy engine via the single
+	// security foundation (buildSecuredRuntime). No PermissionManager yet
+	// — a default-deny policy is wired until Phase 6.
+	sr, err := buildSecuredRuntime(ctx, SecuredRuntimeInput{
+		Context:          ctx,
+		Workspace:        cfg.Workspace,
+		SandboxBackend:   cfg.SandboxBackend,
+		AgentID:          cfg.AgentID,
+		AgentSpec:        cfg.AgentSpec,
+		PermissionManager: cfg.PermissionManager,
+		SecurityBundle:   securityBundle,
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build secured runtime: %w", err)
 	}
 
-	// TODO(Phase 6): nexus supplies a real PermissionManager; until then a
-	// default-deny policy prevents unauthorized tool execution on the gateway.
-	authRunner, err := sandbox.NewAuthorizedRunner(verifiedRunner, defaultDenyPolicy())
-	if err != nil {
-		return nil, fmt.Errorf("authorize runner: %w", err)
-	}
-
-	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, authRunner, services.CapabilityRegistryOptions{
+	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, sr.Runner, services.CapabilityRegistryOptions{
 		Context:           ctx,
 		AgentID:           cfg.AgentID,
 		PermissionManager: cfg.PermissionManager,
@@ -200,7 +184,7 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 
 	env := &WorkspaceEnvironment{
 		Config:            agentCfg,
-		CommandRunner:     authRunner,
+		CommandRunner:     sr.Runner,
 		JobSubmitter:      jobs.NoopSubmitter{},
 		FileScope:         fileScope,
 		Registry:          capabilities.Registry,
@@ -244,14 +228,4 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 	return env, nil
 }
 
-// defaultDenyPolicy returns a CommandPolicy that denies all tool execution.
-// Used in the nexus path until Phase 6 supplies a real PermissionManager.
-func defaultDenyPolicy() sandbox.CommandPolicy {
-	return sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {
-		return &sandbox.ExecutionDeniedError{
-			Command: strings.Join(req.Args, " "),
-			Reason:  "no authorization policy configured — default-deny",
-			Policy:  "default-deny",
-		}
-	})
-}
+

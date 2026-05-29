@@ -247,17 +247,19 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		resolvedModel = agentSpec.Model.Name
 	}
 
-	var authRunner *fsandbox.AuthorizedRunner
-	if opts.Runner != nil {
-		policy := fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "sandbox")
-		var authErr error
-		authRunner, authErr = fsandbox.NewAuthorizedRunner(opts.Runner, policy)
-		if authErr != nil {
-			return nil, fmt.Errorf("build authorized runner: %w", authErr)
-		}
+	sr, err := buildSecuredRuntime(opts.Context, SecuredRuntimeInput{
+		Context:            opts.Context,
+		Workspace:          workspace,
+		AgentID:            opts.AgentID,
+		AgentSpec:          agentSpec,
+		PermissionManager:  opts.PermissionManager,
+		ExistingRunner:     opts.Runner,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build secured runtime: %w", err)
 	}
 
-	capabilities, err := services.BuildBuiltinCapabilityBundle(workspace, authRunner, services.CapabilityRegistryOptions{
+	capabilities, err := services.BuildBuiltinCapabilityBundle(workspace, sr.Runner, services.CapabilityRegistryOptions{
 		Context:           opts.Context,
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
@@ -280,15 +282,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.ProfileResolution.Profile != nil {
 		registry.SetModelProfile(opts.ProfileResolution.Profile)
 	}
-	policyEngine, err := fauthorization.FromAgentSpecWithConfig(effectiveContract.AgentSpec, effectiveContract.AgentID, opts.PermissionManager)
-	if err != nil {
-		return nil, fmt.Errorf("compile effective policy: %w", err)
-	}
-	compiledPolicy, err := fauthorization.BuildFromContract(effectiveContract, policyEngine, nil)
+	compiledPolicy, err := fauthorization.BuildFromContract(effectiveContract, sr.PolicyEngine, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build compiled policy: %w", err)
 	}
-	registry.SetPolicyEngine(policyEngine)
+	registry.SetPolicyEngine(sr.PolicyEngine)
 
 	maxIterations := opts.MaxIterations
 	if maxIterations <= 0 {
@@ -324,9 +322,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	env := WorkspaceEnvironment{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
-		CommandRunner:                 authRunner,
+		CommandRunner:                 sr.Runner,
 		JobSubmitter:                  jobs.NoopSubmitter{},
-		CommandPolicy:                 fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "workspace"),
+		CommandPolicy:                 sr.CommandPolicy,
 		FileScope:                     fileScope,
 		Registry:                      registry,
 		PermissionManager:             opts.PermissionManager,
@@ -356,7 +354,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		CapabilityAdmissions: admissionResults,
 		Contract:             effectiveContract,
 		CompiledPolicy:       compiledPolicy,
-		PolicyEngine:         policyEngine,
+		PolicyEngine:         sr.PolicyEngine,
 	}, nil
 }
 
