@@ -63,10 +63,12 @@ func TestBootRootInventory(t *testing.T) {
 	}
 
 	knownOWCallers := []string{
-		"app/relurpish/runtime/runtime.go",         // primary entry point
-		"app/dev-agent-cli/agenttest_workspace.go", // inspection+prepared-run entry
-		"app/dev-agent-cli/workspace.go",           // workspaceOpenFn var assignment
-		"named/euclo/doc.go",                       // doc-comment reference
+		"app/relurpish/runtime/runtime.go",                     // primary entry point
+		"app/dev-agent-cli/agenttest_workspace.go",             // inspection+prepared-run entry
+		"app/dev-agent-cli/workspace.go",                       // workspaceOpenFn var assignment
+		"app/nexus/server/rex_runtime.go",                      // nexus entry point
+		"framework/agentenv/composition.go",                    // BuildWorkspaceEnvironment shim
+		"named/euclo/doc.go",                                   // doc-comment reference
 	}
 
 	for _, line := range grepLines(owOut) {

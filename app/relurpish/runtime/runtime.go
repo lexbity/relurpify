@@ -206,6 +206,7 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		ProfileResolution:          profileResolution,
 		AgentDefinitions:           agentDefs,
 		SecurityBundle:             &securityBundle,
+		Scope:                      agentenv.ScopeFull,
 		EventLogFactory: func(path string) (event.Log, error) {
 			return nexusdb.NewSQLiteEventLog(path)
 		},

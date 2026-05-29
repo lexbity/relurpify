@@ -204,6 +204,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		SkipASTIndex:      true,
 		HITLTimeout:       runtimeCfg.HITLTimeout,
 		AuditLimit:        runtimeCfg.AuditLimit,
+		Scope:             agentenv.ScopeFull,
 	}
 	return &inspectionTarget{
 		workspace:    ws,

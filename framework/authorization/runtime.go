@@ -90,32 +90,41 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := core.NewInMemoryAuditLogger(cfg.AuditLimit)
-	permissions, err := NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
-	if err != nil {
-		return nil, fmt.Errorf("permission manager init: %w", err)
-	}
-	stateDir := cfg.StateDir
-	if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
-		stateDir = filepath.Join(cfg.BaseFS, ".relurpify_state")
-	}
-	permissions.SetFilesystemGuardRoots(
-		[]string{
-			filepath.Join(cfg.BaseFS, "relurpify_cfg"),
-			filepath.Join(cfg.BaseFS, ".git"),
-		},
-		[]string{stateDir},
-	)
-	if agentManifest.Spec.Policies != nil {
-		if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
-			if string(policy) == "allow" {
-				return nil, errors.New(
-					"agent spec sets default_policy=allow which is not permitted; " +
-						"use default_policy=ask for HITL or declare explicit permissions")
-			}
-			permissions.SetDefaultPolicy(policy)
+	var permissions *PermissionManager
+	if len(agentManifest.Spec.Permissions.FileSystem) > 0 ||
+		len(agentManifest.Spec.Permissions.Executables) > 0 ||
+		len(agentManifest.Spec.Permissions.Network) > 0 ||
+		len(agentManifest.Spec.Permissions.Capabilities) > 0 ||
+		len(agentManifest.Spec.Permissions.IPC) > 0 {
+		permissions, err = NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
+		if err != nil {
+			return nil, fmt.Errorf("permission manager init: %w", err)
 		}
 	}
-	permissions.AttachRuntime(runtime)
+	if permissions != nil {
+		stateDir := cfg.StateDir
+		if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
+			stateDir = filepath.Join(cfg.BaseFS, ".relurpify_state")
+		}
+		permissions.SetFilesystemGuardRoots(
+			[]string{
+				filepath.Join(cfg.BaseFS, "relurpify_cfg"),
+				filepath.Join(cfg.BaseFS, ".git"),
+			},
+			[]string{stateDir},
+		)
+		if agentManifest.Spec.Policies != nil {
+			if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
+				if string(policy) == "allow" {
+					return nil, errors.New(
+						"agent spec sets default_policy=allow which is not permitted; " +
+							"use default_policy=ask for HITL or declare explicit permissions")
+				}
+				permissions.SetDefaultPolicy(policy)
+			}
+		}
+		permissions.AttachRuntime(runtime)
+	}
 	policy := BuildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(policy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)

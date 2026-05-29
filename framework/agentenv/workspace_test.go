@@ -16,9 +16,9 @@ import (
 
 func TestValidateConfigMissingFields(t *testing.T) {
 	require.Error(t, validateConfig(WorkspaceConfig{}))
-	require.Error(t, validateConfig(WorkspaceConfig{Workspace: "w"}))
-	require.Error(t, validateConfig(WorkspaceConfig{Workspace: "w", ManifestPath: "m"}))
-	require.NoError(t, validateConfig(WorkspaceConfig{Workspace: "w", ManifestPath: "m", InferenceEndpoint: "endpoint"}))
+	require.Error(t, validateConfig(WorkspaceConfig{Workspace: "w", Scope: ScopeFull}))
+	require.Error(t, validateConfig(WorkspaceConfig{Workspace: "w", ManifestPath: "m", Scope: ScopeFull}))
+	require.NoError(t, validateConfig(WorkspaceConfig{Workspace: "w", ManifestPath: "m", InferenceEndpoint: "endpoint", Scope: ScopeFull}))
 }
 
 func TestSetupTelemetryDefaultsToStateDir(t *testing.T) {

@@ -172,6 +172,7 @@ type AgentBootstrapOptions struct {
 	AgentDefinitions    map[string]*agentspec.AgentDefinition
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
+	SandboxBackend      string
 	Model               contracts.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
@@ -219,9 +220,8 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.ManifestSnapshot.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
-	if opts.Runner == nil {
-		return nil, fmt.Errorf("command runner required")
-	}
+	// opts.Runner may be nil — buildSecuredRuntime will build one from scratch
+	// using SecurityBundle and SandboxBackend when no ExistingRunner is set.
 	if opts.SecurityBundle == nil {
 		return nil, fmt.Errorf("security bundle required")
 	}
@@ -253,9 +253,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	sr, err := buildSecuredRuntime(opts.Context, SecuredRuntimeInput{
 		Context:            opts.Context,
 		Workspace:          workspace,
+		SandboxBackend:     opts.SandboxBackend,
 		AgentID:            opts.AgentID,
 		AgentSpec:          agentSpec,
 		PermissionManager:  opts.PermissionManager,
+		SecurityBundle:     opts.SecurityBundle,
 		ExistingRunner:     opts.Runner,
 	})
 	if err != nil {
@@ -378,37 +380,54 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	if cfg.LoadedConfig == nil {
-		return nil, fmt.Errorf("loaded config required")
-	}
-	if cfg.ManifestSnapshot == nil {
-		return nil, fmt.Errorf("manifest snapshot required")
+
+	// Embedded scope (nexus) has relaxed requirements: no LoadedConfig,
+	// ManifestSnapshot, or ProfileResolution needed. Full scope requires
+	// the complete config tree.
+	isEmbedded := cfg.Scope == ScopeEmbeddedAgent
+
+	if !isEmbedded {
+		if cfg.LoadedConfig == nil {
+			return nil, fmt.Errorf("loaded config required")
+		}
+		if cfg.ManifestSnapshot == nil {
+			return nil, fmt.Errorf("manifest snapshot required")
+		}
+		if cfg.ProfileResolution.Profile == nil {
+			return nil, fmt.Errorf("profile resolution required")
+		}
 	}
 	if cfg.SecurityBundle == nil {
 		return nil, fmt.Errorf("security bundle required")
 	}
-	if cfg.ProfileResolution.Profile == nil {
-		return nil, fmt.Errorf("profile resolution required")
-	}
-	workspaceCfg := cfg.LoadedConfig.Workspace
-	if workspaceCfg.SourcePath == "" {
-		return nil, fmt.Errorf("loaded workspace config missing source path")
-	}
-	if len(workspaceCfg.DefaultsUsed) > 0 {
-		for _, usage := range workspaceCfg.DefaultsUsed {
-			log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceCfg.SourcePath, usage.Key, usage.Value)
+
+	if !isEmbedded {
+		workspaceCfg := cfg.LoadedConfig.Workspace
+		if workspaceCfg.SourcePath == "" {
+			return nil, fmt.Errorf("loaded workspace config missing source path")
+		}
+		if len(workspaceCfg.DefaultsUsed) > 0 {
+			for _, usage := range workspaceCfg.DefaultsUsed {
+				log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceCfg.SourcePath, usage.Key, usage.Value)
+			}
+		}
+		if cfg.ManifestPath == "" {
+			cfg.ManifestPath = cfg.ManifestSnapshot.SourcePath
+		}
+		cfg.StateDir = workspaceCfg.StateDir()
+		if cfg.SandboxBackend == "" {
+			cfg.SandboxBackend = stringValue(workspaceCfg.Sandbox.Backend)
+		}
+		if cfg.InferenceModel == "" {
+			cfg.InferenceModel = workspaceCfg.Model.Name
+		}
+	} else {
+		// Embedded scope defaults.
+		if cfg.StateDir == "" {
+			cfg.StateDir = cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
 		}
 	}
-	if cfg.ManifestPath == "" {
-		cfg.ManifestPath = cfg.ManifestSnapshot.SourcePath
-	}
-	cfg.StateDir = workspaceCfg.StateDir()
-	if cfg.SandboxBackend == "" {
-		cfg.SandboxBackend = stringValue(workspaceCfg.Sandbox.Backend)
-	}
-	if cfg.InferenceModel == "" {
-		cfg.InferenceModel = workspaceCfg.Model.Name
-	}
+
 	defaultStateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
 	defaultLogPath := filepath.Join(defaultStateDir, "logs", "agentenv.log")
 	defaultTelemetryPath := filepath.Join(defaultStateDir, "telemetry", "agentenv.jsonl")
@@ -425,11 +444,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	}
 	if cfg.MemoryPath == "" || filepath.Clean(cfg.MemoryPath) == filepath.Clean(defaultMemoryPath) {
 		cfg.MemoryPath = filepath.Join(cfg.StateDir, "memory")
-	}
-
-	// Default zero-valued Scope to ScopeFull for backward compatibility.
-	if cfg.Scope == (WorkspaceScope{}) {
-		cfg.Scope = ScopeFull
 	}
 
 	if !cfg.Scope.TelemetrySinks {
@@ -472,6 +486,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	// where the graphdb.Engine is available from IndexManager.
 
 	// Phase E: Agent Registration + Authorization
+	// For embedded scope, synthesize a minimal manifest snapshot if none provided.
+	if cfg.ManifestSnapshot == nil && cfg.AgentSpec != nil {
+		cfg.ManifestSnapshot = synthesizeManifestSnapshot(cfg.AgentName, cfg.AgentSpec)
+	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath:     cfg.ManifestPath,
 		ManifestSnapshot: cfg.ManifestSnapshot,
@@ -695,11 +713,13 @@ func validateConfig(cfg WorkspaceConfig) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("Workspace is required")
 	}
-	if cfg.ManifestPath == "" {
-		return fmt.Errorf("ManifestPath is required")
-	}
-	if cfg.InferenceEndpoint == "" {
-		return fmt.Errorf("InferenceEndpoint is required")
+	if cfg.Scope != ScopeEmbeddedAgent {
+		if cfg.ManifestPath == "" {
+			return fmt.Errorf("ManifestPath is required")
+		}
+		if cfg.InferenceEndpoint == "" {
+			return fmt.Errorf("InferenceEndpoint is required")
+		}
 	}
 	return nil
 }

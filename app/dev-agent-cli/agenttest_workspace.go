@@ -91,6 +91,7 @@ func buildPreparedRunWorkspaceTarget(desc *agenttest.PreparedRunDescriptor, outp
 		SkipASTIndex:      working.SkipASTIndex,
 		MaxIterations:     working.MaxIterations,
 		AgentSpec:         &resolvedSpec,
+		Scope:             agentenv.ScopeFull,
 	}
 	return &preparedRunWorkspaceTarget{Descriptor: &working, Config: cfg}, nil
 }

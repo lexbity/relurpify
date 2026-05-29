@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/rex"
 	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
@@ -139,17 +140,19 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		return nil, err
 	}
 
-	// Build workspace environment using framework composition root.
-	// SandboxBackend defaults to "" → gVisor. If the host has no sandbox
-	// backend (runsc/docker), BuildWorkspaceEnvironment will fail closed
-	// from NewVerifiedCommandRunner → runtime.Verify and this function
-	// returns the error. This is intentional — nexus refuses to start
+	// Build workspace environment via the single composition root with
+	// ScopeEmbeddedAgent — security + capabilities only, no LLM backend,
+	// no knowledge, no services. SandboxBackend defaults to "" → gVisor.
+	// If the host has no sandbox backend, OpenWorkspace fails closed from
+	// sandbox verification. This is intentional — nexus refuses to start
 	// without a verified sandbox.
-	env, err := agentenv.BuildWorkspaceEnvironment(ctx, agentenv.WorkspaceConfig{
+	ws, err := agentenv.OpenWorkspace(ctx, agentenv.WorkspaceConfig{
 		Workspace:      workspace,
 		AgentName:      "euclo",
+		AgentID:        "euclo",
 		SkipASTIndex:   false,
 		SecurityBundle: securityBundle,
+		Scope:          agentenv.ScopeEmbeddedAgent,
 		AgentSpec: &agentspec.AgentRuntimeSpec{
 			Mode: agentspec.AgentModePrimary,
 			Model: agentspec.AgentModelConfig{
@@ -175,11 +178,13 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 				},
 			},
 		},
-	}, securityBundle, euclo.GetRegistrationFuncs())
+	}, llm.ProviderSecrets{}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		_ = workflowStore.Close()
 		return nil, err
 	}
+
+	env := &ws.Environment
 
 	agent := rex.NewWithWorkspace(env, workspace)
 	agent.Runtime.Start(ctx)

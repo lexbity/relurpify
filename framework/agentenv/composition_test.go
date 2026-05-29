@@ -2,13 +2,13 @@ package agentenv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -88,6 +88,14 @@ func TestBuildWorkspaceEnvironment(t *testing.T) {
 		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
+		AgentName:    "test-agent",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
 	// Test with no registration functions
@@ -155,6 +163,14 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
+		AgentName:    "test-agent",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
 	regFuncs := AgentRegistrationFuncs{}
@@ -180,7 +196,7 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceEnvironment_VerifyFailure(t *testing.T) {
+func TestBuildWorkspaceEnvironment_ShimSetsEmbeddedScope(t *testing.T) {
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -192,23 +208,31 @@ func TestBuildWorkspaceEnvironment_VerifyFailure(t *testing.T) {
 		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
+		AgentName:    "test-agent",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
-	expectedErr := errors.New("sandbox verify failed")
-
-	// Override the hook locally for this test.
-	old := buildRunnerForInput
-	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *contracts.CommandRunnerConfig, error) {
-		return nil, nil, expectedErr
+	env, err := BuildWorkspaceEnvironment(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
+	if err != nil {
+		t.Fatalf("BuildWorkspaceEnvironment shim should succeed, got: %v", err)
 	}
-	t.Cleanup(func() { buildRunnerForInput = old })
-
-	_, err = BuildWorkspaceEnvironment(ctx, cfg, securityBundle, AgentRegistrationFuncs{})
-	if err == nil {
-		t.Fatal("BuildWorkspaceEnvironment should return error when buildRunnerForInput fails")
+	if env == nil {
+		t.Fatal("BuildWorkspaceEnvironment returned nil environment")
 	}
-	if !errors.Is(err, expectedErr) {
-		t.Errorf("error %v does not wrap %v", err, expectedErr)
+
+	// The environment should have a CommandRunner (AuthorizedRunner from the
+	// shared security foundation via OpenWorkspace with ScopeEmbeddedAgent).
+	if env.CommandRunner == nil {
+		t.Error("CommandRunner should not be nil")
+	}
+	if _, ok := env.CommandRunner.(*sandbox.AuthorizedRunner); !ok {
+		t.Errorf("expected *sandbox.AuthorizedRunner, got %T", env.CommandRunner)
 	}
 }
 
@@ -237,6 +261,14 @@ func TestBuildWorkspaceEnvironmentWithRegistrationFuncs(t *testing.T) {
 		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
+		AgentName:    "test-agent",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
 	regFuncs := AgentRegistrationFuncs{
@@ -278,6 +310,14 @@ func TestBuildWorkspaceEnvironmentRegistrationError(t *testing.T) {
 		Workspace:    workspace,
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
+		AgentName:    "test-agent",
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
 	regFuncs := AgentRegistrationFuncs{
@@ -307,7 +347,13 @@ func TestBuildWorkspaceEnvironmentWithAgentSpec(t *testing.T) {
 		SkipASTIndex: true,
 		AgentID:      "test-agent-id",
 		AgentName:    "test-agent",
-		// AgentSpec would be set in real usage, but we test without it for now
+		AgentSpec: &agentspec.AgentRuntimeSpec{
+			Mode: agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "test-model",
+			},
+		},
 	}
 
 	regFuncs := AgentRegistrationFuncs{}
