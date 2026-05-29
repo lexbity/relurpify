@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -10,10 +12,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config is the nexus gateway configuration, loaded via DecodeWithSchema
+// with a nexus-local schema registry (relurpify/nexus/v1).
 type Config struct {
-	Gateway  GatewayConfig             `yaml:"gateway"`
-	Channels map[string]map[string]any `yaml:"channels,omitempty"`
-	Nodes    NodesConfig               `yaml:"nodes,omitempty"`
+	Gateway  GatewayConfig `yaml:"gateway"`
+	Channels map[string]any `yaml:"channels,omitempty"`
+	Nodes    NodesConfig   `yaml:"nodes,omitempty"`
+
+	// DefaultsUsed records every default that was applied at load time.
+	// Exposed so that RELURPIFY_STRICT can reject defaulted fields.
+	DefaultsUsed []cfgload.WorkspaceDefaultUsage `yaml:"-"`
 }
 
 type GatewayConfig struct {
@@ -53,7 +61,81 @@ type NodesConfig struct {
 	PairingCodeTTL   time.Duration `yaml:"pairing_code_ttl,omitempty"`
 }
 
-// SecurityWarnings returns operator-visible warnings about the current manifest.
+// nexusSchemaRegistry returns a registry that knows relurpify/nexus/v1.
+func nexusSchemaRegistry() *cfgload.SchemaRegistry {
+	reg := cfgload.NewSchemaRegistry()
+	_ = reg.Register("nexus", 1)
+	return reg
+}
+
+// Load reads, validates, and decodes a nexus config file.
+//
+// The file must begin with schema: relurpify/nexus/v1. During a one-release
+// deprecation window, files without a schema declaration are accepted with
+// a warning; after the window they will be rejected.
+func Load(path string) (Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+
+	reg := nexusSchemaRegistry()
+
+	var cfg Config
+	_, err = cfgload.DecodeWithSchema(path, data, reg, &cfg)
+	if err != nil {
+		if isMissingSchema(err) {
+			// Deprecation window: accept missing schema line with warning.
+			log.Printf("WARNING: nexus config %q is missing schema declaration; add 'schema: relurpify/nexus/v1' as the first line", path)
+			if decodeErr := decodeLegacy(path, data, &cfg); decodeErr != nil {
+				return Config{}, decodeErr
+			}
+		} else {
+			return Config{}, err
+		}
+	}
+
+	applyDefaults(&cfg)
+	return cfg, nil
+}
+
+func isMissingSchema(err error) bool {
+	return errors.Is(err, cfgload.ErrMissingSchemaDeclaration)
+}
+
+func decodeLegacy(path string, data []byte, cfg *Config) error {
+	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
+		return err
+	}
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	return dec.Decode(cfg)
+}
+
+func applyDefaults(cfg *Config) {
+	if cfg.Gateway.Bind == "" {
+		cfg.Gateway.Bind = ":8090"
+		cfg.DefaultsUsed = append(cfg.DefaultsUsed, cfgload.WorkspaceDefaultUsage{Key: "gateway.bind", Value: ":8090"})
+	}
+	if cfg.Gateway.Path == "" {
+		cfg.Gateway.Path = "/gateway"
+		cfg.DefaultsUsed = append(cfg.DefaultsUsed, cfgload.WorkspaceDefaultUsage{Key: "gateway.path", Value: "/gateway"})
+	}
+	if cfg.Gateway.Log.RetentionDays <= 0 {
+		cfg.Gateway.Log.RetentionDays = 30
+		cfg.DefaultsUsed = append(cfg.DefaultsUsed, cfgload.WorkspaceDefaultUsage{Key: "gateway.log.retention_days", Value: 30})
+	}
+	if cfg.Gateway.Log.SnapshotInterval <= 0 {
+		cfg.Gateway.Log.SnapshotInterval = 10000
+		cfg.DefaultsUsed = append(cfg.DefaultsUsed, cfgload.WorkspaceDefaultUsage{Key: "gateway.log.snapshot_interval_events", Value: 10000})
+	}
+	if cfg.Nodes.PairingCodeTTL <= 0 {
+		cfg.Nodes.PairingCodeTTL = time.Hour
+		cfg.DefaultsUsed = append(cfg.DefaultsUsed, cfgload.WorkspaceDefaultUsage{Key: "nodes.pairing_code_ttl", Value: "1h0m0s"})
+	}
+}
+
+// SecurityWarnings returns operator-visible warnings about the current config.
 func (cfg Config) SecurityWarnings(pendingPairings int) []string {
 	var warnings []string
 	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !IsLoopbackBind(bind) {
@@ -87,36 +169,4 @@ func IsLoopbackBind(bind string) bool {
 	default:
 		return false
 	}
-}
-
-func Load(path string) (Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-	if err := cfgload.RejectForbiddenSecretFields(path, data); err != nil {
-		return Config{}, err
-	}
-	var cfg Config
-	dec := yaml.NewDecoder(strings.NewReader(string(data)))
-	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
-		return Config{}, err
-	}
-	if cfg.Gateway.Bind == "" {
-		cfg.Gateway.Bind = ":8090"
-	}
-	if cfg.Gateway.Path == "" {
-		cfg.Gateway.Path = "/gateway"
-	}
-	if cfg.Gateway.Log.RetentionDays <= 0 {
-		cfg.Gateway.Log.RetentionDays = 30
-	}
-	if cfg.Gateway.Log.SnapshotInterval <= 0 {
-		cfg.Gateway.Log.SnapshotInterval = 10000
-	}
-	if cfg.Nodes.PairingCodeTTL <= 0 {
-		cfg.Nodes.PairingCodeTTL = time.Hour
-	}
-	return cfg, nil
 }

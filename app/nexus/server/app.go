@@ -560,8 +560,12 @@ func registerConfiguredAdapters(manager *channel.Manager, cfg nexuscfg.Config, w
 	return nil
 }
 
-func enabled(channels map[string]map[string]any, name string, defaultValue bool) bool {
-	config, ok := channels[name]
+func enabled(channels map[string]any, name string, defaultValue bool) bool {
+	raw, ok := channels[name]
+	if !ok {
+		return defaultValue
+	}
+	config, ok := raw.(map[string]any)
 	if !ok {
 		return defaultValue
 	}

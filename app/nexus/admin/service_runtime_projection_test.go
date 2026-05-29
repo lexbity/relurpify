@@ -39,8 +39,8 @@ func TestListChannelsFiltersActivityToAuthorizedTenant(t *testing.T) {
 		Events:    eventLog,
 		Partition: "local",
 		Config: nexuscfg.Config{
-			Channels: map[string]map[string]any{
-				"webchat": {},
+			Channels: map[string]any{
+				"webchat": map[string]any{},
 			},
 		},
 	}).(*service)
@@ -102,8 +102,8 @@ func TestHealthFiltersEventCountsToAuthorizedTenant(t *testing.T) {
 		Partition: "local",
 		Config: nexuscfg.Config{
 			Gateway: nexuscfg.GatewayConfig{Bind: ":8090"},
-			Channels: map[string]map[string]any{
-				"webchat": {},
+			Channels: map[string]any{
+				"webchat": map[string]any{},
 			},
 		},
 	}).(*service)
