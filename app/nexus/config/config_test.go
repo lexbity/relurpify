@@ -161,15 +161,18 @@ channels:
 }
 
 // TestNexusConfigNonLoopbackBindHardErrorUnderStrict asserts that a
-// non-loopback bind is caught by SecurityWarnings.
+// non-loopback bind is caught by SecurityWarnings (non-strict) and by
+// ValidateStrict (strict mode).
 func TestNexusConfigNonLoopbackBindHardErrorUnderStrict(t *testing.T) {
-	cfg := Config{
-		Gateway: GatewayConfig{
-			Bind: "0.0.0.0:9090",
-			Path: "/gateway",
-		},
+	loopback := Config{
+		Gateway: GatewayConfig{Bind: ":9090", Path: "/gateway"},
 	}
-	warnings := cfg.SecurityWarnings(0)
+	nonLoopback := Config{
+		Gateway: GatewayConfig{Bind: "0.0.0.0:9090", Path: "/gateway"},
+	}
+
+	// SecurityWarnings: non-loopback produces a warning.
+	warnings := nonLoopback.SecurityWarnings(0)
 	found := false
 	for _, w := range warnings {
 		if strings.Contains(w, "not loopback-only") {
@@ -179,5 +182,16 @@ func TestNexusConfigNonLoopbackBindHardErrorUnderStrict(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected security warning for non-loopback bind")
+	}
+
+	// ValidateStrict: non-loopback under strict mode is an error.
+	if err := nonLoopback.ValidateStrict(true); err == nil {
+		t.Error("ValidateStrict(true) should reject non-loopback bind")
+	}
+	if err := loopback.ValidateStrict(true); err != nil {
+		t.Errorf("ValidateStrict(true) should allow loopback bind, got: %v", err)
+	}
+	if err := nonLoopback.ValidateStrict(false); err != nil {
+		t.Errorf("ValidateStrict(false) should allow non-loopback bind, got: %v", err)
 	}
 }

@@ -139,6 +139,7 @@ func TestBackendVocabularyInventory(t *testing.T) {
 		"framework/authorization/runtime_test.go", // tests for SelectSandboxRuntime
 		"app/relurpish/tui/runtime_adapter.go",   // TUI backend display — legitimate leaf use
 		"framework/sandbox/sandbox.go",           // checkContainerRuntime — container-runtime check
+		"framework/agentenv/boot_validate.go",    // backendsCompatible — Phase 10 boot invariant check
 	}
 
 	violations := 0

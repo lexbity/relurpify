@@ -135,6 +135,19 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
+// ValidateStrict returns an error if the config violates strict-mode policies.
+// Non-loopback gateway binds are rejected under strict mode (promoted from
+// SecurityWarnings to a hard gate).
+func (cfg Config) ValidateStrict(strict bool) error {
+	if !strict {
+		return nil
+	}
+	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !IsLoopbackBind(bind) {
+		return fmt.Errorf("strict mode: gateway bind %q is not loopback-only", bind)
+	}
+	return nil
+}
+
 // SecurityWarnings returns operator-visible warnings about the current config.
 func (cfg Config) SecurityWarnings(pendingPairings int) []string {
 	var warnings []string

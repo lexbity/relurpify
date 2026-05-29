@@ -26,6 +26,7 @@ type SecuredRuntimeInput struct {
 	SecurityBundle   *cfgsecurity.Bundle
 	ExistingRunner   sandbox.CommandRunner
 	Manifest         *cfgload.AgentManifest
+	Strict           bool
 }
 
 // SecuredRuntime bundles the result of the non-bypassable security foundation.
@@ -58,6 +59,12 @@ var buildRunnerForInput = buildRunnerForInputImpl
 func buildSecuredRuntime(ctx context.Context, in SecuredRuntimeInput) (*SecuredRuntime, error) {
 	if in.Context == nil {
 		in.Context = context.Background()
+	}
+
+	// Step 0: Boot invariants — reject inconsistent configurations before
+	// any sandbox resources are allocated.
+	if err := validateBootInvariants(in); err != nil {
+		return nil, fmt.Errorf("boot invariant violation: %w", err)
 	}
 
 	// Steps 1–3: Select sandbox, verify, build runner.

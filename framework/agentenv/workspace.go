@@ -250,6 +250,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		resolvedModel = agentSpec.Model.Name
 	}
 
+	manifest := opts.ManifestSnapshot.Manifest
 	sr, err := buildSecuredRuntime(opts.Context, SecuredRuntimeInput{
 		Context:            opts.Context,
 		Workspace:          workspace,
@@ -259,6 +260,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		PermissionManager:  opts.PermissionManager,
 		SecurityBundle:     opts.SecurityBundle,
 		ExistingRunner:     opts.Runner,
+		Manifest:           manifest,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build secured runtime: %w", err)
