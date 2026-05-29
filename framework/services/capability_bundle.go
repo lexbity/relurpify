@@ -69,12 +69,14 @@ type CapabilityRegistryOptions struct {
 }
 
 // BuildBuiltinCapabilityBundle constructs a complete capability bundle with platform tools and AST indexing.
-func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (bundle *CapabilityBundle, err error) {
+// The runner must be an *fsandbox.AuthorizedRunner — a verified, policy-wrapped runner.
+// Passing a bare CommandRunner is a compile error.
+func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedRunner, opts ...CapabilityRegistryOptions) (bundle *CapabilityBundle, err error) {
 	if workspace == "" {
 		workspace = "."
 	}
 	if runner == nil {
-		return nil, fmt.Errorf("command runner required")
+		return nil, fmt.Errorf("authorized command runner required")
 	}
 	var cfg CapabilityRegistryOptions
 	if len(opts) > 0 {

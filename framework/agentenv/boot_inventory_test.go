@@ -31,7 +31,7 @@ func TestBootRootInventory(t *testing.T) {
 	// --- BuildBuiltinCapabilityBundle callers ---------------------------------
 	// This is the authoritative indicator of a composition root, because
 	// every root must call it to wire the capability bundle.
-	cmd := exec.Command("grep", "-rn", `BuildBuiltinCapabilityBundle`, "--include=*.go", ".")
+	cmd := exec.Command("grep", "-rn", `BuildBuiltinCapabilityBundle(`, "--include=*.go", ".")
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {

@@ -247,12 +247,17 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		resolvedModel = agentSpec.Model.Name
 	}
 
-	runner := opts.Runner
-	if runner != nil {
-		runner = fsandbox.NewEnforcingCommandRunner(runner, fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "sandbox"))
+	var authRunner *fsandbox.AuthorizedRunner
+	if opts.Runner != nil {
+		policy := fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "sandbox")
+		var authErr error
+		authRunner, authErr = fsandbox.NewAuthorizedRunner(opts.Runner, policy)
+		if authErr != nil {
+			return nil, fmt.Errorf("build authorized runner: %w", authErr)
+		}
 	}
 
-	capabilities, err := services.BuildBuiltinCapabilityBundle(workspace, runner, services.CapabilityRegistryOptions{
+	capabilities, err := services.BuildBuiltinCapabilityBundle(workspace, authRunner, services.CapabilityRegistryOptions{
 		Context:           opts.Context,
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
@@ -319,7 +324,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	env := WorkspaceEnvironment{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
-		CommandRunner:                 runner,
+		CommandRunner:                 authRunner,
 		JobSubmitter:                  jobs.NoopSubmitter{},
 		CommandPolicy:                 fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "workspace"),
 		FileScope:                     fileScope,

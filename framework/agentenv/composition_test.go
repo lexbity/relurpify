@@ -166,11 +166,12 @@ func TestBuildWorkspaceEnvironment_RunnerPopulated(t *testing.T) {
 	}
 
 	// The CommandRunner should be populated via buildCommandRunner (the fake in TestMain)
+	// wrapped in an AuthorizedRunner (Phase 2).
 	if env.CommandRunner == nil {
 		t.Error("CommandRunner should not be nil")
 	}
-	if _, ok := env.CommandRunner.(*fakeRunner); !ok {
-		t.Errorf("expected *fakeRunner, got %T", env.CommandRunner)
+	if _, ok := env.CommandRunner.(*sandbox.AuthorizedRunner); !ok {
+		t.Errorf("expected *sandbox.AuthorizedRunner, got %T", env.CommandRunner)
 	}
 
 	if env.IndexManager != nil {

@@ -3,6 +3,7 @@ package agentenv
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -130,13 +131,20 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	// Phase 1: Build verified sandbox runner and capability bundle
-	runner, err := buildCommandRunner(ctx, cfg, securityBundle)
+	// Phase 1: Build verified sandbox runner and wrap with authorization
+	verifiedRunner, err := buildCommandRunner(ctx, cfg, securityBundle)
 	if err != nil {
 		return nil, err
 	}
 
-	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, runner, services.CapabilityRegistryOptions{
+	// TODO(Phase 6): nexus supplies a real PermissionManager; until then a
+	// default-deny policy prevents unauthorized tool execution on the gateway.
+	authRunner, err := sandbox.NewAuthorizedRunner(verifiedRunner, defaultDenyPolicy())
+	if err != nil {
+		return nil, fmt.Errorf("authorize runner: %w", err)
+	}
+
+	capabilities, err := services.BuildBuiltinCapabilityBundle(cfg.Workspace, authRunner, services.CapabilityRegistryOptions{
 		Context:           ctx,
 		AgentID:           cfg.AgentID,
 		PermissionManager: cfg.PermissionManager,
@@ -192,7 +200,7 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 
 	env := &WorkspaceEnvironment{
 		Config:            agentCfg,
-		CommandRunner:     runner,
+		CommandRunner:     authRunner,
 		JobSubmitter:      jobs.NoopSubmitter{},
 		FileScope:         fileScope,
 		Registry:          capabilities.Registry,
@@ -234,4 +242,16 @@ func BuildWorkspaceEnvironment(ctx context.Context, cfg WorkspaceConfig, securit
 	}
 
 	return env, nil
+}
+
+// defaultDenyPolicy returns a CommandPolicy that denies all tool execution.
+// Used in the nexus path until Phase 6 supplies a real PermissionManager.
+func defaultDenyPolicy() sandbox.CommandPolicy {
+	return sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {
+		return &sandbox.ExecutionDeniedError{
+			Command: strings.Join(req.Args, " "),
+			Reason:  "no authorization policy configured — default-deny",
+			Policy:  "default-deny",
+		}
+	})
 }

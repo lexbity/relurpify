@@ -91,3 +91,19 @@ func argsPrefixMatch(got, want []string) bool {
 }
 
 var _ sandbox.CommandRunner = (*FakeCommandRunner)(nil)
+
+// NewAuthorizedFakeRunner returns an *sandbox.AuthorizedRunner backed by a
+// FakeCommandRunner with the given responses and policy. Tests that need a
+// real AuthorizedRunner (e.g. when calling BuildBuiltinCapabilityBundle after
+// Phase 2) can use this instead of a real sandbox backend.
+func NewAuthorizedFakeRunner(policy sandbox.CommandPolicy, responses ...FakeResponse) (*sandbox.AuthorizedRunner, error) {
+	fake := FakeRunner(responses...)
+	return sandbox.NewAuthorizedRunner(fake, policy)
+}
+
+// PermitAllPolicy returns a CommandPolicy that allows all commands.
+func PermitAllPolicy() sandbox.CommandPolicy {
+	return sandbox.CommandPolicyFunc(func(_ context.Context, _ sandbox.CommandRequest) error {
+		return nil
+	})
+}
