@@ -1,0 +1,17 @@
+# Template for a tool test case.
+# Copy this file, rename it to match your tool name, and fill in the fields.
+tool: cli_<name>                   # must match the manifest name
+# args:                           # invocation args (map[string]interface{})
+#   args: ["--flag", "value"]
+# stdin: "input text"             # optional stdin
+stdout: "expected output"         # canned stdout the stub runner returns
+# stderr: ""                      # canned stderr
+# exit_code: 0                    # exit code (default 0)
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "expected substring"        # stdout must contain this text
+  # stdout_json:                  # uncomment to assert JSON output
+  #   type: object
+  # has_stdout_ref: false
+  # has_stderr_ref: false

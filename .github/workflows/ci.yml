@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+      - name: Lint layering
+        run: make lint-layering
       - name: Lint config boundary
         run: make lint-config-boundary
       - name: Boundary tests

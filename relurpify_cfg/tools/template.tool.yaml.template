@@ -1,0 +1,37 @@
+# Template for a subprocess tool.
+# Copy this file, rename it, and fill in the fields.
+schema: relurpify/tool/v1
+name: cli_<name>                  # unique tool name (lowercase, underscore-separated)
+version: "1"
+family: <family>                  # text | fileops | network | build | archive | scheduler | system | search
+intent:
+  - <intent>                      # e.g. transform, inspect, search, create
+description: <brief description of what the tool does.>
+execution:
+  backend: subprocess
+  command:
+    base:
+      - <binary>                  # the CLI binary name
+    # flags:                      # uncomment for typed flags (v2 schema)
+    #   <flag_name>:
+    #     param: <param_name>
+    #     style: equals|separate
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+    allow_flags: true             # set false to block --flag injection
+    # network_access: true        # uncomment for network tools (curl, wget, etc.)
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+    # - read_only               # add for read-only tools
+    # - destructive             # add for write/delete tools
+    # - network                 # add for network tools
+  effect_class:
+    - filesystem_read
+    - process_spawn
+    # - filesystem_mutation     # add for write tools
+    # - network_egress          # add for network tools
