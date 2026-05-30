@@ -17,11 +17,56 @@ type ToolResolver func(name string) (contracts.Tool, bool)
 
 // New builds a composite tool from a manifest. The resolver is called at
 // execution time to locate each step's tool implementation.
+//
+// Returns a tool that returns a validation error on Execute if the manifest
+// has duplicate aliases or a cyclic dependency (detected at load time).
 func New(manifest contracts.ToolManifest, resolver ToolResolver) contracts.Tool {
+	if err := validateComposition(manifest.Composition); err != nil {
+		return &invalidTool{err: err}
+	}
 	return &compositeTool{
 		manifest: manifest,
 		resolve:  resolver,
 	}
+}
+
+// validateComposition checks for duplicate aliases and other structural
+// issues in the composition steps. Returns nil when valid.
+func validateComposition(comp *contracts.ToolManifestComposition) error {
+	if comp == nil || len(comp.Steps) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(comp.Steps))
+	for i, step := range comp.Steps {
+		if step.Alias == "" {
+			continue
+		}
+		norm := contracts.NormalizeToolName(step.Alias)
+		if norm == "" {
+			continue
+		}
+		if _, dup := seen[norm]; dup {
+			return fmt.Errorf("composite step %d: duplicate alias %q", i, step.Alias)
+		}
+		seen[norm] = struct{}{}
+	}
+	return nil
+}
+
+// invalidTool returns a tool that always fails with the given validation error.
+type invalidTool struct {
+	err error
+}
+
+func (t *invalidTool) Name() string                             { return "" }
+func (t *invalidTool) Description() string                      { return t.err.Error() }
+func (t *invalidTool) Category() string                         { return "composite" }
+func (t *invalidTool) Parameters() []contracts.ToolParameter    { return nil }
+func (t *invalidTool) Tags() []string                           { return nil }
+func (t *invalidTool) Permissions() contracts.ToolPermissions   { return contracts.ToolPermissions{} }
+func (t *invalidTool) IsAvailable(ctx context.Context) bool     { return false }
+func (t *invalidTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+	return &contracts.ToolResult{Success: false, Error: t.err.Error()}, nil
 }
 
 type compositeTool struct {
