@@ -103,10 +103,50 @@ func canonicalScopePath(path string) string {
 			clean = abs
 		}
 	}
+	// Resolve symlinks for the longest existing prefix, then re-append
+	// any non-existent tail. This closes the symlinked-parent write escape
+	// (SEC-5): a path like /workspace/link/newfile where link -> /etc would
+	// previously fall back to the lexical path because newfile doesn't exist.
 	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
 		clean = resolved
+	} else {
+		clean = resolveExistingPrefix(clean)
 	}
 	return filepath.ToSlash(filepath.Clean(clean))
+}
+
+// resolveExistingPrefix walks up the path to find the longest existing ancestor
+// that can be resolved through symlinks, then re-appends the non-existent tail.
+// Iterative (stack-based) to avoid deep recursion on long paths.
+func resolveExistingPrefix(p string) string {
+	if p == "" || p == "/" {
+		return p
+	}
+	// Walk up collecting path segments until we find a prefix that EvalSymlinks
+	// can resolve. The resolved prefix replaces the equivalent lexical portion;
+	// the remaining segments are re-appended as-is.
+	var tail []string
+	current := filepath.Clean(p)
+	for {
+		if current == "" || current == "/" {
+			break
+		}
+		if resolved, err := filepath.EvalSymlinks(current); err == nil {
+			// Re-append tail segments in reverse order.
+			for i := len(tail) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, tail[i])
+			}
+			return filepath.Clean(resolved)
+		}
+		tail = append(tail, filepath.Base(current))
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	// No prefix could be resolved — return the original path unchanged.
+	return p
 }
 
 func pathWithinOrEqual(target, root string) bool {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -177,8 +178,18 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}
 			}
 		}
 	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		return nil, err
+	// Open with O_NOFOLLOW to prevent writing through a symlink (defence-in-depth
+	// for the sandbox scope check — SEC-5).
+	f, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o644)
+	if openErr != nil {
+		return nil, fmt.Errorf("open %s for write: %w", path, openErr)
+	}
+	if _, writeErr := f.Write(content); writeErr != nil {
+		f.Close()
+		return nil, writeErr
+	}
+	if closeErr := f.Close(); closeErr != nil {
+		return nil, closeErr
 	}
 	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
 }
