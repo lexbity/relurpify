@@ -69,8 +69,16 @@ func (t *ReadFileTool) Category() string    { return "file" }
 func (t *ReadFileTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: true}}
 }
+func (t *ReadFileTool) ParamKeys() []string {
+	return FileReadParamKeys()
+}
+
 func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	path := t.preparePath(fmt.Sprint(args["path"]))
+	params, err := ParseFileReadParams(args)
+	if err != nil {
+		return nil, err
+	}
+	path := t.preparePath(params.Path)
 
 	if err := t.enforceSandboxScope(contracts.FileSystemRead, path); err != nil {
 		return nil, err
@@ -147,8 +155,16 @@ func (t *WriteFileTool) Parameters() []contracts.ToolParameter {
 		{Name: "content", Type: "string", Required: true},
 	}
 }
+func (t *WriteFileTool) ParamKeys() []string {
+	return FileWriteParamKeys()
+}
+
 func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	path := t.preparePath(fmt.Sprint(args["path"]))
+	params, err := ParseFileWriteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	path := t.preparePath(params.Path)
 
 	if err := t.enforceSandboxScope(contracts.FileSystemWrite, path); err != nil {
 		return nil, err
@@ -161,7 +177,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}
 		return nil, err
 	}
 
-	content := []byte(fmt.Sprint(args["content"]))
+	content := []byte(params.Content)
 	if t.Backup {
 		if _, err := os.Stat(path); err == nil {
 			backup := path + ".bak"
@@ -228,13 +244,17 @@ func (t *ListFilesTool) Parameters() []contracts.ToolParameter {
 		{Name: "pattern", Type: "string", Required: false, Default: "*"},
 	}
 }
+func (t *ListFilesTool) ParamKeys() []string {
+	return FileListParamKeys()
+}
+
 func (t *ListFilesTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	dirVal, ok := args["directory"]
-	if !ok || dirVal == nil {
-		dirVal = "."
+	params, err := ParseFileListParams(args)
+	if err != nil {
+		return nil, err
 	}
-	dirText := strings.TrimSpace(fmt.Sprint(dirVal))
-	if dirText == "" || dirText == "<nil>" {
+	dirText := strings.TrimSpace(params.Directory)
+	if dirText == "" {
 		dirText = "."
 	}
 	dir := t.preparePath(dirText)
@@ -242,9 +262,9 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]interface{}
 		return nil, err
 	}
 
-	pattern := fmt.Sprint(args["pattern"])
+	pattern := params.Pattern
 	var files []string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -323,13 +343,17 @@ func (t *SearchInFilesTool) Parameters() []contracts.ToolParameter {
 		{Name: "case_sensitive", Type: "bool", Required: false, Default: false},
 	}
 }
+func (t *SearchInFilesTool) ParamKeys() []string {
+	return FileSearchParamKeys()
+}
+
 func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	dirVal, ok := args["directory"]
-	if !ok || dirVal == nil {
-		dirVal = "."
+	params, err := ParseFileSearchParams(args)
+	if err != nil {
+		return nil, err
 	}
-	dirText := strings.TrimSpace(fmt.Sprint(dirVal))
-	if dirText == "" || dirText == "<nil>" {
+	dirText := strings.TrimSpace(params.Directory)
+	if dirText == "" {
 		dirText = "."
 	}
 	dir := t.preparePath(dirText)
@@ -337,8 +361,8 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]interfa
 		return nil, err
 	}
 
-	pattern := fmt.Sprint(args["pattern"])
-	caseSensitive := toBool(args["case_sensitive"])
+	pattern := params.Pattern
+	caseSensitive := params.CaseSensitive
 	if !caseSensitive {
 		pattern = strings.ToLower(pattern)
 	}
@@ -348,7 +372,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]interfa
 		Content string `json:"content"`
 	}
 	var matches []match
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -447,8 +471,16 @@ func (t *CreateFileTool) Parameters() []contracts.ToolParameter {
 		{Name: "content", Type: "string", Required: false},
 	}
 }
+func (t *CreateFileTool) ParamKeys() []string {
+	return FileCreateParamKeys()
+}
+
 func (t *CreateFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	path := t.preparePath(fmt.Sprint(args["path"]))
+	params, err := ParseFileCreateParams(args)
+	if err != nil {
+		return nil, err
+	}
+	path := t.preparePath(params.Path)
 
 	if err := t.enforceSandboxScope(contracts.FileSystemWrite, path); err != nil {
 		return nil, err
@@ -463,7 +495,7 @@ func (t *CreateFileTool) Execute(ctx context.Context, args map[string]interface{
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(path, []byte(fmt.Sprint(args["content"])), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(params.Content), 0o644); err != nil {
 		return nil, err
 	}
 	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
@@ -507,8 +539,16 @@ func (t *DeleteFileTool) Category() string    { return "file" }
 func (t *DeleteFileTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: true}}
 }
+func (t *DeleteFileTool) ParamKeys() []string {
+	return FileDeleteParamKeys()
+}
+
 func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	path := t.preparePath(fmt.Sprint(args["path"]))
+	params, err := ParseFileDeleteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	path := t.preparePath(params.Path)
 
 	if err := t.enforceSandboxScope(contracts.FileSystemDelete, path); err != nil {
 		return nil, err

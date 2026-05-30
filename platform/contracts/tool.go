@@ -111,6 +111,17 @@ type ToolPermissions struct {
 	Permissions *PermissionSet
 }
 
+// ParamKeysProvider is an optional interface for go_native tools that
+// declares which manifest parameter keys they consume. The toolcapabilities
+// build process uses this to assert that consumed keys exist in the manifest,
+// providing compile-time drift detection.
+type ParamKeysProvider interface {
+	// ParamKeys returns the parameter names this tool reads from the
+	// invocation args map. Used for registration-time assertion against
+	// the manifest's declared parameters.
+	ParamKeys() []string
+}
+
 // Validate ensures tool permission manifests are well-formed.
 func (t ToolPermissions) Validate() error {
 	if t.Permissions == nil {

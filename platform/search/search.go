@@ -3,7 +3,6 @@ package search
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,20 +25,28 @@ func (t *GrepTool) Parameters() []contracts.ToolParameter {
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
+func (t *GrepTool) ParamKeys() []string {
+	return SearchGrepParamKeys()
+}
+
 func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	root := fmt.Sprint(args["directory"])
+	params, err := ParseSearchGrepParams(args)
+	if err != nil {
+		return nil, err
+	}
+	root := params.Directory
 	if root == "" {
 		root = "."
 	}
 	root = preparePath(t.BasePath, root)
-	pattern := strings.ToLower(fmt.Sprint(args["pattern"]))
+	pattern := strings.ToLower(params.Pattern)
 	type match struct {
 		File    string `json:"file"`
 		Line    int    `json:"line"`
 		Content string `json:"content"`
 	}
 	var matches []match
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -94,18 +101,25 @@ func (t *SimilarityTool) Parameters() []contracts.ToolParameter {
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
+func (t *SimilarityTool) ParamKeys() []string {
+	return SearchFindSimilarParamKeys()
+}
+
 func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	dirArg, _ := args["directory"].(string)
-	root := preparePath(t.BasePath, dirArg)
-	target := sanitizeSnippet(fmt.Sprint(args["snippet"]))
-	terms := semanticTerms(fmt.Sprint(args["snippet"]))
+	params, err := ParseSearchFindSimilarParams(args)
+	if err != nil {
+		return nil, err
+	}
+	root := preparePath(t.BasePath, params.Directory)
+	target := sanitizeSnippet(params.Snippet)
+	terms := semanticTerms(params.Snippet)
 	type match struct {
 		File     string  `json:"file"`
 		Score    float64 `json:"score"`
 		Fragment string  `json:"fragment"`
 	}
 	var matches []match
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			if err == nil && info.IsDir() && shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
@@ -155,11 +169,19 @@ func (t *SemanticSearchTool) Category() string { return "search" }
 func (t *SemanticSearchTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
+func (t *SemanticSearchTool) ParamKeys() []string {
+	return SearchSemanticParamKeys()
+}
+
 func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	query := strings.ToLower(fmt.Sprint(args["query"]))
+	params, err := ParseSearchSemanticParams(args)
+	if err != nil {
+		return nil, err
+	}
+	query := strings.ToLower(params.Query)
 	terms := semanticTerms(query)
 	var hits []map[string]interface{}
-	err := filepath.Walk(t.BasePath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(t.BasePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

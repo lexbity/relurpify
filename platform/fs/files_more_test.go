@@ -457,8 +457,7 @@ func TestCreateFileTool_NoContent(t *testing.T) {
 
 	content, err := os.ReadFile(filepath.Join(dir, "empty.txt"))
 	require.NoError(t, err)
-	// fmt.Sprint(nil) returns "<nil>", so the file should contain that
-	assert.Equal(t, "<nil>", string(content))
+	assert.Empty(t, string(content), "file should be empty when content not provided")
 }
 
 func TestCreateFileTool_EmptyContent(t *testing.T) {
