@@ -52,7 +52,15 @@ func LoadToolManifest(path string) (*contracts.ToolManifest, error) {
 			Path:   path,
 			Line:   decl.Line,
 			Schema: decl.String(),
-			Err:    fmt.Errorf("tool manifest must use relurpify/tool/v1"),
+			Err:    fmt.Errorf("tool manifest must use relurpify/tool/v1 or relurpify/tool/v2, got %s", decl.String()),
+		}
+	}
+	if decl.Version != 1 && decl.Version != 2 {
+		return nil, &SchemaError{
+			Path:   path,
+			Line:   decl.Line,
+			Schema: decl.String(),
+			Err:    fmt.Errorf("tool manifest version must be 1 or 2, got %d", decl.Version),
 		}
 	}
 	manifest.SourcePath = path

@@ -11,6 +11,7 @@ type ToolBackend string
 const (
 	ToolBackendSubprocess ToolBackend = "subprocess"
 	ToolBackendGoNative   ToolBackend = "go_native"
+	ToolBackendComposite  ToolBackend = "composite"
 	ToolBackendMCP        ToolBackend = "mcp"
 )
 
@@ -48,8 +49,19 @@ type ToolManifest struct {
 	Capability    ToolManifestCapability    `yaml:"capability" json:"capability"`
 	RateLimit     *ToolRateLimit            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	Composition   *ToolManifestComposition  `yaml:"composition,omitempty" json:"composition,omitempty"`
+	Telemetry     *ToolManifestTelemetry    `yaml:"telemetry,omitempty" json:"telemetry,omitempty"`
 	SourcePath    string                    `yaml:"-" json:"-"`
 	CanonicalName string                    `yaml:"-" json:"-"`
+}
+
+// ToolManifestTelemetry provides observability hints for tool invocations.
+// All fields are optional; defaults are derived from the manifest name.
+type ToolManifestTelemetry struct {
+	// SpanName overrides the default OTel span name (tool.<name>).
+	SpanName string `yaml:"span_name,omitempty" json:"span_name,omitempty"`
+	// ExtraAttributes lists parameter names whose values are safe to emit
+	// as span attributes (allowlist — secrets never leak).
+	ExtraAttributes []string `yaml:"extra_attributes,omitempty" json:"extra_attributes,omitempty"`
 }
 
 // ToolManifestGuidance captures agent-facing usage hints.
@@ -79,11 +91,34 @@ type ToolManifestCommand struct {
 	Flags map[string]ToolManifestFlag `yaml:"flags,omitempty" json:"flags,omitempty"`
 }
 
-// ToolManifestFlag describes a boolean or conditional flag expansion.
+// ToolManifestFlag describes a boolean or typed flag expansion.
+//
+// A flag must use exactly one form:
+//   - Boolean form: sets WhenTrue/WhenFalse based on a boolean parameter value.
+//   - Typed form: binds a parameter value via the Param field, formatting it
+//     into one or two argv tokens according to Style.
+//
+// In the typed form:
+//   - Param names the manifest parameter whose value drives the flag.
+//   - Style is "equals" (--output=VALUE, one token) or "separate" (--output VALUE,
+//     two tokens). Empty defaults to "equals".
+//   - Type hints at the parameter's schema type ("string", "integer", etc.).
+//   - Repeat, when true, emits one flag instance per element for array values.
 type ToolManifestFlag struct {
 	WhenTrue  []string `yaml:"when_true,omitempty" json:"when_true,omitempty"`
 	WhenFalse []string `yaml:"when_false,omitempty" json:"when_false,omitempty"`
+
+	Param  string `yaml:"param,omitempty" json:"param,omitempty"`
+	Style  string `yaml:"style,omitempty" json:"style,omitempty"`
+	Type   string `yaml:"type,omitempty" json:"type,omitempty"`
+	Repeat bool   `yaml:"repeat,omitempty" json:"repeat,omitempty"`
 }
+
+// ToolManifestFlagStyle enumerates the supported expansion styles for typed flags.
+const (
+	FlagStyleEquals   = "equals"   // --key=value   (single argv token)
+	FlagStyleSeparate = "separate" // --key  value  (two argv tokens)
+)
 
 // ToolManifestSandbox captures execution sandbox constraints for a tool.
 type ToolManifestSandbox struct {
@@ -103,11 +138,27 @@ type ToolManifestMCP struct {
 	Method string `yaml:"method,omitempty" json:"method,omitempty"`
 }
 
-// ToolManifestReturns captures the structured output shape.
+// ToolManifestReturns captures the structured output shape and chunking hints.
 type ToolManifestReturns struct {
-	Type  string `yaml:"type,omitempty" json:"type,omitempty"`
-	Shape Schema `yaml:"shape,omitempty" json:"shape,omitempty"`
+	Type     string                      `yaml:"type,omitempty" json:"type,omitempty"`
+	Shape    Schema                      `yaml:"shape,omitempty" json:"shape,omitempty"`
+	Chunking *ToolManifestReturnsChunking `yaml:"chunking,omitempty" json:"chunking,omitempty"`
 }
+
+// ToolManifestReturnsChunking declares how structured stdout is decomposed into
+// context chunks. When absent the entire output is treated as a single opaque blob.
+type ToolManifestReturnsChunking struct {
+	Mode      string   `yaml:"mode,omitempty" json:"mode,omitempty"`           // whole | per_item | per_field
+	ItemPath  string   `yaml:"item_path,omitempty" json:"item_path,omitempty"` // JSONPath-ish selector for per_item
+	RefFields []string `yaml:"ref_fields,omitempty" json:"ref_fields,omitempty"` // fields promoted to retrieval refs
+}
+
+// ToolManifestChunkingMode enumerates the supported chunking strategies.
+const (
+	ChunkingModeWhole    = "whole"     // single opaque blob (default)
+	ChunkingModePerItem  = "per_item"  // one chunk per array element at item_path
+	ChunkingModePerField = "per_field" // one chunk per top-level field
+)
 
 // ToolManifestCapability maps the tool to capability classification.
 type ToolManifestCapability struct {

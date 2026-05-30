@@ -50,7 +50,7 @@ name: test
 func TestDecodeWithSchemaRejectsUnsupportedVersion(t *testing.T) {
 	reg := NewSchemaRegistry()
 
-	data := []byte(`schema: relurpify/tool/v2
+	data := []byte(`schema: relurpify/tool/v3
 name: test
 `)
 
@@ -58,4 +58,16 @@ name: test
 	_, err := DecodeWithSchema("tool.yaml", data, reg, &out)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupportedSchemaVersion)
+}
+
+func TestDecodeWithSchemaAcceptsV2(t *testing.T) {
+	reg := NewSchemaRegistry()
+
+	data := []byte(`schema: relurpify/tool/v2
+name: test
+`)
+
+	var out map[string]any
+	_, err := DecodeWithSchema("tool.yaml", data, reg, &out)
+	require.NoError(t, err, "v2 schema must be accepted")
 }

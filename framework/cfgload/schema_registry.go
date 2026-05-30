@@ -24,7 +24,7 @@ type SchemaRegistry struct {
 	entries map[string]map[int]struct{}
 }
 
-// NewSchemaRegistry returns the phase-2 registry with the current v1 schema set.
+// NewSchemaRegistry returns the schema registry with currently supported versions.
 func NewSchemaRegistry() *SchemaRegistry {
 	reg := &SchemaRegistry{
 		entries: make(map[string]map[int]struct{}, len(defaultSchemaKinds)),
@@ -32,6 +32,8 @@ func NewSchemaRegistry() *SchemaRegistry {
 	for _, kind := range defaultSchemaKinds {
 		_ = reg.Register(kind, 1)
 	}
+	// Tool schema v2: typed flags, chunking, telemetry hints.
+	_ = reg.Register("tool", 2)
 	return reg
 }
 
