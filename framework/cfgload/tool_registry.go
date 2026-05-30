@@ -2,7 +2,6 @@ package cfgload
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"sort"
@@ -204,22 +203,23 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	if execSpec.Sandbox != nil && execSpec.Sandbox.TimeoutSeconds > 0 {
 		request.Timeout = time.Duration(execSpec.Sandbox.TimeoutSeconds) * time.Second
 	}
-	stdout, stderr, runErr := t.runner.Run(ctx, request)
+	res, runErr := t.runner.Run(ctx, request)
 	if runErr != nil {
-		msg := stderr
+		return nil, fmt.Errorf("subprocess execution failed: %w", runErr)
+	}
+	if res.ExitCode != 0 {
+		msg := res.Stderr
 		if msg == "" {
-			msg = runErr.Error()
+			msg = fmt.Sprintf("exit code %d", res.ExitCode)
 		}
-		if exitCode := exitStatusCode(runErr); exitCode != 0 {
-			if mapped, ok := t.manifest.Errors[strconv.Itoa(exitCode)]; ok && strings.TrimSpace(mapped) != "" {
-				msg = mapped
-			}
+		if mapped, ok := t.manifest.Errors[strconv.Itoa(res.ExitCode)]; ok && strings.TrimSpace(mapped) != "" {
+			msg = mapped
 		}
 		return &contracts.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
-				"stdout": stdout,
-				"stderr": stderr,
+				"stdout": res.Stdout,
+				"stderr": res.Stderr,
 			},
 			Error: msg,
 		}, nil
@@ -227,8 +227,8 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
+			"stdout": res.Stdout,
+			"stderr": res.Stderr,
 		},
 	}, nil
 }
@@ -332,13 +332,4 @@ func stringArg(args map[string]interface{}, name string) string {
 	return strings.TrimSpace(fmt.Sprint(value))
 }
 
-func exitStatusCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	var exitErr interface{ ExitCode() int }
-	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode()
-	}
-	return 0
-}
+

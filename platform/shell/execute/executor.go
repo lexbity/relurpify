@@ -119,18 +119,21 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 	}
 
 	start := time.Now()
-	stdout, stderr, runErr := e.Runner.Run(ctx, request)
+	res, runErr := e.Runner.Run(ctx, request)
+	if runErr != nil {
+		return nil, fmt.Errorf("execute: %w", runErr)
+	}
 	limit := e.Preset.MaxOutputBytes
-	stdoutBytes := int64(len(stdout))
-	stderrBytes := int64(len(stderr))
+	stdoutBytes := int64(len(res.Stdout))
+	stderrBytes := int64(len(res.Stderr))
 	stdoutTruncated := limit > 0 && stdoutBytes >= limit
 	stderrTruncated := limit > 0 && stderrBytes >= limit
 	truncated := stdoutTruncated || stderrTruncated
 
 	envelope := &ResultEnvelope{
-		Success:     runErr == nil,
-		Stdout:      stdout,
-		Stderr:      stderr,
+		Success:     res.ExitCode == 0,
+		Stdout:      res.Stdout,
+		Stderr:      res.Stderr,
 		Error:       "",
 		Command:     append([]string(nil), request.Args...),
 		Workdir:     selectedWorkdir,
@@ -147,8 +150,8 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 			"preset":   e.Preset.Name,
 		},
 	}
-	if runErr != nil {
-		envelope.Error = runErr.Error()
+	if res.ExitCode != 0 {
+		envelope.Error = fmt.Sprintf("exit code %d", res.ExitCode)
 	}
 	return envelope, nil
 }

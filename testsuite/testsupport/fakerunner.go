@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // FakeResponse defines a canned response for a command invocation.
@@ -22,7 +23,8 @@ type FakeResponse struct {
 	MatchArgs []string
 	Stdout    string
 	Stderr    string
-	Err       error
+	ExitCode  int
+	Err       error // when non-nil, returned as Run's second return value
 }
 
 // FakeCommandRunner is a test double for sandbox.CommandRunner. It records
@@ -39,18 +41,27 @@ func FakeRunner(responses ...FakeResponse) *FakeCommandRunner {
 
 // Run implements sandbox.CommandRunner. It records the request and returns
 // the first matching response.
-func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
+func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
 	if f == nil {
-		return "", "", fmt.Errorf("FakeCommandRunner is nil")
+		return nil, fmt.Errorf("FakeCommandRunner is nil")
 	}
 	f.Calls = append(f.Calls, req)
 	for _, resp := range f.responses {
 		if resp.MatchArgs != nil && !argsPrefixMatch(req.Args, resp.MatchArgs) {
 			continue
 		}
-		return resp.Stdout, resp.Stderr, resp.Err
+		if resp.Err != nil {
+			return nil, resp.Err
+		}
+		return &contracts.CommandResult{
+			Stdout:      resp.Stdout,
+			Stderr:      resp.Stderr,
+			ExitCode:    resp.ExitCode,
+			StdoutBytes: int64(len(resp.Stdout)),
+			StderrBytes: int64(len(resp.Stderr)),
+		}, nil
 	}
-	return "", "", nil
+	return &contracts.CommandResult{}, nil
 }
 
 // LastCall returns the most recent recorded invocation, or nil if none.

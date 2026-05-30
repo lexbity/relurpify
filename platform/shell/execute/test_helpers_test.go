@@ -13,7 +13,7 @@ type recordingRunner struct {
 	err      error
 }
 
-func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (string, string, error) {
+func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	r.requests = append(r.requests, req)
 	stdout, stderr := r.stdout, r.stderr
 	if req.MaxOutputBytes > 0 {
@@ -24,5 +24,13 @@ func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (
 			stderr = stderr[:req.MaxOutputBytes]
 		}
 	}
-	return stdout, stderr, r.err
+	if r.err != nil {
+		return nil, r.err
+	}
+	return &contracts.CommandResult{
+		Stdout:      stdout,
+		Stderr:      stderr,
+		StdoutBytes: int64(len(stdout)),
+		StderrBytes: int64(len(stderr)),
+	}, nil
 }

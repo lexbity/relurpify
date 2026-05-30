@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type stubCommandRunner struct {
@@ -13,7 +14,15 @@ type stubCommandRunner struct {
 	err     error
 }
 
-func (s *stubCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
+func (s *stubCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
 	s.lastReq = req
-	return s.stdout, s.stderr, s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &contracts.CommandResult{
+		Stdout:      s.stdout,
+		Stderr:      s.stderr,
+		StdoutBytes: int64(len(s.stdout)),
+		StderrBytes: int64(len(s.stderr)),
+	}, nil
 }

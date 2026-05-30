@@ -11,9 +11,9 @@ type commandRunnerAdapter struct {
 	runner sandbox.CommandRunner
 }
 
-func (a commandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
+func (a commandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	if a.runner == nil {
-		return "", "", nil
+		return nil, nil
 	}
 	return a.runner.Run(ctx, sandbox.CommandRequest{
 		Workdir: req.Workdir,

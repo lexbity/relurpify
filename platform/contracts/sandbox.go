@@ -15,13 +15,34 @@ type CommandRequest struct {
 	Env            []string
 	Input          string
 	Timeout        time.Duration
-	MaxOutputBytes int64 // 0 = use runner default; -1 = unlimited (unsafe)
-	UsePTY         bool  // allocate a pseudo-terminal for the subprocess
+	MaxOutputBytes int64         // DEPRECATED prompt cap — removed in Phase 6
+	UsePTY         bool          // allocate a pseudo-terminal for the subprocess
+	MemoryBytes    int64         // 0 => default (512 MiB)
+	PidsLimit      int64         // 0 => default (256)
+	CPUs           float64       // 0 => default (1.0)
+	OutputCeiling  int64         // 0 => default (32 MiB/stream); teardown trigger
+	GracePeriod    time.Duration // SIGTERM→SIGKILL grace (default 3s)
+}
+
+// CommandResult is the canonical output of a sandboxed command execution.
+type CommandResult struct {
+	Stdout      string        // bounded by the artifact-store spill, not a prompt cap
+	Stderr      string
+	ExitCode    int           // -1 when the process was killed by signal/teardown
+	Signaled    bool          // true if terminated by signal (timeout/teardown/OOM)
+	TimedOut    bool          // true if the deadline fired
+	TornDown    bool          // true if the container was force-removed
+	OOMKilled   bool          // true if killed by the output ceiling or cgroup OOM
+	Duration    time.Duration
+	StdoutBytes int64         // total bytes produced (may exceed len(Stdout) if spilled)
+	StderrBytes int64
+	StdoutRef   string        // artifact-store handle for full stdout (Phase 5+)
+	StderrRef   string        // artifact-store handle for full stderr
 }
 
 // CommandRunner describes a primitive capable of executing commands in a sandbox.
 type CommandRunner interface {
-	Run(ctx context.Context, req CommandRequest) (stdout string, stderr string, err error)
+	Run(ctx context.Context, req CommandRequest) (*CommandResult, error)
 }
 
 // CommandPolicy decides whether a command request may proceed.
@@ -189,6 +210,28 @@ func (p SandboxPolicy) Validate() error {
 		}
 	}
 	return nil
+}
+
+// NewCommandResult constructs a CommandResult from raw command output and an
+// optional error. This is a shared helper used by both sandbox runners until
+// Phase 2+ replace the internals.
+func NewCommandResult(stdout, stderr string, runErr error, elapsed time.Duration) *CommandResult {
+	res := &CommandResult{
+		Stdout:      stdout,
+		Stderr:      stderr,
+		StdoutBytes: int64(len(stdout)),
+		StderrBytes: int64(len(stderr)),
+		Duration:    elapsed,
+	}
+	if runErr != nil {
+		var exitErr interface{ ExitCode() int }
+		if errors.As(runErr, &exitErr) {
+			res.ExitCode = exitErr.ExitCode()
+		} else {
+			res.ExitCode = -1
+		}
+	}
+	return res
 }
 
 // Validate checks that a network rule is structurally sound.

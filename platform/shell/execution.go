@@ -30,24 +30,11 @@ func (t *RunTestsTool) Execute(ctx context.Context, args map[string]interface{})
 	if pattern != "" {
 		cmdline = append(cmdline, pattern)
 	}
-	stdout, stderr, err := t.run(ctx, cmdline, "")
+	res, err := t.run(ctx, cmdline, "")
 	if err != nil {
-		return &contracts.ToolResult{
-			Success: false,
-			Data: map[string]interface{}{
-				"stdout": stdout,
-				"stderr": stderr,
-			},
-			Error: err.Error(),
-		}, nil
+		return nil, err
 	}
-	return &contracts.ToolResult{
-		Success: true,
-		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
-		},
-	}, nil
+	return toolResultFromCommandResult(res), nil
 }
 func (t *RunTestsTool) IsAvailable(ctx context.Context) bool { return len(t.Command) > 0 }
 func (t *RunTestsTool) Permissions() contracts.ToolPermissions {
@@ -60,9 +47,9 @@ func (t *RunTestsTool) Permissions() contracts.ToolPermissions {
 }
 func (t *RunTestsTool) Tags() []string { return []string{contracts.TagExecute, "test", "verification"} }
 
-func (t *RunTestsTool) run(ctx context.Context, args []string, input string) (string, string, error) {
+func (t *RunTestsTool) run(ctx context.Context, args []string, input string) (*contracts.CommandResult, error) {
 	if t.Runner == nil {
-		return "", "", fmt.Errorf("command runner missing")
+		return nil, fmt.Errorf("command runner missing")
 	}
 	return t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.Workdir,
@@ -94,20 +81,11 @@ func (t *ExecuteCodeTool) Execute(ctx context.Context, args map[string]interface
 	code := fmt.Sprint(args["code"])
 	cmdline := append([]string{}, t.Command...)
 	cmdline = append(cmdline, code)
-	stdout, stderr, err := t.run(ctx, cmdline, "")
-	success := err == nil
-	resultErr := ""
+	res, err := t.run(ctx, cmdline, "")
 	if err != nil {
-		resultErr = err.Error()
+		return nil, err
 	}
-	return &contracts.ToolResult{
-		Success: success,
-		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
-		},
-		Error: resultErr,
-	}, nil
+	return toolResultFromCommandResult(res), nil
 }
 func (t *ExecuteCodeTool) IsAvailable(ctx context.Context) bool { return len(t.Command) > 0 }
 func (t *ExecuteCodeTool) Permissions() contracts.ToolPermissions {
@@ -119,9 +97,9 @@ func (t *ExecuteCodeTool) Permissions() contracts.ToolPermissions {
 }
 func (t *ExecuteCodeTool) Tags() []string { return []string{contracts.TagExecute, "code"} }
 
-func (t *ExecuteCodeTool) run(ctx context.Context, args []string, input string) (string, string, error) {
+func (t *ExecuteCodeTool) run(ctx context.Context, args []string, input string) (*contracts.CommandResult, error) {
 	if t.Runner == nil {
-		return "", "", fmt.Errorf("command runner missing")
+		return nil, fmt.Errorf("command runner missing")
 	}
 	return t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.Workdir,
@@ -152,20 +130,11 @@ func (t *RunLinterTool) Execute(ctx context.Context, args map[string]interface{}
 	if path := fmt.Sprint(args["path"]); path != "" {
 		cmdline = append(cmdline, path)
 	}
-	stdout, stderr, err := t.run(ctx, cmdline)
-	success := err == nil
-	errStr := ""
+	res, err := t.run(ctx, cmdline)
 	if err != nil {
-		errStr = err.Error()
+		return nil, err
 	}
-	return &contracts.ToolResult{
-		Success: success,
-		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
-		},
-		Error: errStr,
-	}, nil
+	return toolResultFromCommandResult(res), nil
 }
 func (t *RunLinterTool) IsAvailable(ctx context.Context) bool { return len(t.Command) > 0 }
 func (t *RunLinterTool) Permissions() contracts.ToolPermissions {
@@ -179,9 +148,9 @@ func (t *RunLinterTool) Tags() []string {
 	return []string{contracts.TagExecute, "lint", "verification"}
 }
 
-func (t *RunLinterTool) run(ctx context.Context, args []string) (string, string, error) {
+func (t *RunLinterTool) run(ctx context.Context, args []string) (*contracts.CommandResult, error) {
 	if t.Runner == nil {
-		return "", "", fmt.Errorf("command runner missing")
+		return nil, fmt.Errorf("command runner missing")
 	}
 	return t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.Workdir,
@@ -205,20 +174,11 @@ func (t *RunBuildTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{}
 }
 func (t *RunBuildTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	stdout, stderr, err := t.run(ctx)
-	success := err == nil
-	errStr := ""
+	res, err := t.run(ctx)
 	if err != nil {
-		errStr = err.Error()
+		return nil, err
 	}
-	return &contracts.ToolResult{
-		Success: success,
-		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
-		},
-		Error: errStr,
-	}, nil
+	return toolResultFromCommandResult(res), nil
 }
 func (t *RunBuildTool) IsAvailable(ctx context.Context) bool { return len(t.Command) > 0 }
 func (t *RunBuildTool) Permissions() contracts.ToolPermissions {
@@ -232,13 +192,36 @@ func (t *RunBuildTool) Tags() []string {
 	return []string{contracts.TagExecute, "build", "verification"}
 }
 
-func (t *RunBuildTool) run(ctx context.Context) (string, string, error) {
+func (t *RunBuildTool) run(ctx context.Context) (*contracts.CommandResult, error) {
 	if t.Runner == nil {
-		return "", "", fmt.Errorf("command runner missing")
+		return nil, fmt.Errorf("command runner missing")
 	}
 	return t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.Workdir,
 		Args:    t.Command,
 		Timeout: t.Timeout,
 	})
+}
+
+// toolResultFromCommandResult converts a CommandResult to a ToolResult.
+func toolResultFromCommandResult(res *contracts.CommandResult) *contracts.ToolResult {
+	if res == nil {
+		return &contracts.ToolResult{Success: false, Error: "no result"}
+	}
+	success := res.ExitCode == 0
+	errStr := ""
+	if !success {
+		errStr = fmt.Sprintf("exit code %d", res.ExitCode)
+		if res.Stderr != "" {
+			errStr = res.Stderr
+		}
+	}
+	return &contracts.ToolResult{
+		Success: success,
+		Data: map[string]interface{}{
+			"stdout": res.Stdout,
+			"stderr": res.Stderr,
+		},
+		Error: errStr,
+	}
 }

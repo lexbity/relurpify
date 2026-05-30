@@ -10,9 +10,9 @@ import (
 
 type recordingRunner struct{ called bool }
 
-func (r *recordingRunner) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
+func (r *recordingRunner) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	r.called = true
-	return "ok", "", nil
+	return &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}, nil
 }
 
 func newNetTool(r contracts.CommandRunner, tags ...string) *CommandTool {

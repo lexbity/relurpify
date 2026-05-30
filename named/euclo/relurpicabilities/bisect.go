@@ -366,17 +366,14 @@ func (h *BisectHandler) runBisectCommandOutput(ctx context.Context, workdir stri
 	if err := h.authorizeCommand(ctx, h.env, req, "euclo bisect"); err != nil {
 		return "", err
 	}
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
+	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		if stderr != "" {
-			return stdout + stderr, err
-		}
-		return stdout, err
+		return "", err
 	}
-	if stderr != "" {
-		return stdout + stderr, nil
+	if res.Stderr != "" {
+		return res.Stdout + res.Stderr, nil
 	}
-	return stdout, nil
+	return res.Stdout, nil
 }
 
 func (h *BisectHandler) runBisectStatus(ctx context.Context, workdir string) (string, error) {
@@ -398,7 +395,11 @@ func (h *BisectHandler) runTestCommand(ctx context.Context, workdir, testCommand
 	if err := h.authorizeCommand(ctx, h.env, req, "euclo bisect"); err != nil {
 		return "", "", err
 	}
-	return h.env.CommandRunner.Run(ctx, req)
+	res, err := h.env.CommandRunner.Run(ctx, req)
+	if err != nil {
+		return "", "", err
+	}
+	return res.Stdout, res.Stderr, nil
 }
 
 func parseBisectCulprit(output string) (string, bool) {

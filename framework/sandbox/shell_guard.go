@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CommandApprover is the interface ShellGuard needs for HITL escalation of
@@ -65,12 +67,12 @@ func (g *ShellGuard) AllowCommand(ctx context.Context, req CommandRequest) error
 
 // Run implements CommandRunner. It first applies the shell policy, then
 // forwards to the underlying runner.
-func (g *ShellGuard) Run(ctx context.Context, req CommandRequest) (string, string, error) {
+func (g *ShellGuard) Run(ctx context.Context, req CommandRequest) (*contracts.CommandResult, error) {
 	if g == nil || g.inner == nil {
-		return "", "", fmt.Errorf("shell guard missing")
+		return nil, fmt.Errorf("shell guard missing")
 	}
 	if err := g.AllowCommand(ctx, req); err != nil {
-		return "", "", err
+		return nil, err
 	}
 	return g.inner.Run(ctx, req)
 }

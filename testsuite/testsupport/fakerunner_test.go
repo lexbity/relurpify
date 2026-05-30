@@ -18,14 +18,14 @@ func TestFakeRunner_ReturnsCannedResponse(t *testing.T) {
 		Stderr: "",
 	})
 
-	stdout, stderr, err := fr.Run(context.Background(), sandbox.CommandRequest{
+	res, err := fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"echo", "hello"},
 	})
-	if stdout != "hello world" {
-		t.Errorf("stdout = %q, want %q", stdout, "hello world")
+	if res.Stdout != "hello world" {
+		t.Errorf("stdout = %q, want %q", res.Stdout, "hello world")
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want empty", stderr)
+	if res.Stderr != "" {
+		t.Errorf("stderr = %q, want empty", res.Stderr)
 	}
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -41,7 +41,7 @@ func TestFakeRunner_ReturnsError(t *testing.T) {
 		Err:    expectedErr,
 	})
 
-	_, _, err := fr.Run(context.Background(), sandbox.CommandRequest{
+	_, err := fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"false"},
 	})
 	if !errors.Is(err, expectedErr) {
@@ -85,27 +85,27 @@ func TestFakeRunner_ResponseMatchingByArgs(t *testing.T) {
 	)
 
 	// Exact prefix match
-	stdout, _, _ := fr.Run(context.Background(), sandbox.CommandRequest{
+	res, _ := fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"echo", "hello", "world"},
 	})
-	if stdout != "hi there" {
-		t.Errorf("stdout = %q, want %q", stdout, "hi there")
+	if res.Stdout != "hi there" {
+		t.Errorf("stdout = %q, want %q", res.Stdout, "hi there")
 	}
 
 	// Broader prefix match (second response)
-	stdout, _, _ = fr.Run(context.Background(), sandbox.CommandRequest{
+	res, _ = fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"echo", "foo"},
 	})
-	if stdout != "generic echo" {
-		t.Errorf("stdout = %q, want %q", stdout, "generic echo")
+	if res.Stdout != "generic echo" {
+		t.Errorf("stdout = %q, want %q", res.Stdout, "generic echo")
 	}
 
 	// No match — default fallback
-	stdout, _, _ = fr.Run(context.Background(), sandbox.CommandRequest{
+	res, _ = fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"ls"},
 	})
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
+	if res.Stdout != "" {
+		t.Errorf("stdout = %q, want empty", res.Stdout)
 	}
 }
 
@@ -117,14 +117,14 @@ func TestFakeRunner_NoMatchReturnsEmpty(t *testing.T) {
 		Stdout:    "git output",
 	})
 
-	stdout, stderr, err := fr.Run(context.Background(), sandbox.CommandRequest{
+	res, err := fr.Run(context.Background(), sandbox.CommandRequest{
 		Args: []string{"echo", "hello"},
 	})
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
+	if res.Stdout != "" {
+		t.Errorf("stdout = %q, want empty", res.Stdout)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want empty", stderr)
+	if res.Stderr != "" {
+		t.Errorf("stderr = %q, want empty", res.Stderr)
 	}
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -160,7 +160,7 @@ func TestFakeRunner_NilSafe(t *testing.T) {
 		t.Error("LastCall on nil should be nil")
 	}
 	fr.Reset() // should not panic
-	_, _, err := fr.Run(context.Background(), sandbox.CommandRequest{})
+	_, err := fr.Run(context.Background(), sandbox.CommandRequest{})
 	if err == nil {
 		t.Error("Run on nil should return error")
 	}

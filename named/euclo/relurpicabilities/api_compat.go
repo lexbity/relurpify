@@ -81,12 +81,15 @@ func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	if err := h.authorizeCommand(ctx, h.env, listReq, "euclo api compat"); err != nil {
 		return failResult(fmt.Sprintf("api compatibility command denied: %v", err)), err
 	}
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, listReq)
-	combined := stdout + stderr
-	if err != nil && strings.TrimSpace(combined) == "" {
-		return failResult(fmt.Sprintf("failed to list changed files: %v", err)), err
+	res, err := h.env.CommandRunner.Run(ctx, listReq)
+	if err != nil {
+		return nil, err
+	}
+	if res.ExitCode != 0 {
+		return failResult(fmt.Sprintf("failed to list changed files: exit code %d: %s", res.ExitCode, res.Stderr)), err
 	}
 
+	combined := res.Stdout + res.Stderr
 	paths := splitNonEmptyLines(combined)
 	sort.Strings(paths)
 
@@ -138,14 +141,17 @@ func (h *APICompatHandler) readGitFile(ctx context.Context, ref, path string) ([
 	if err := h.authorizeCommand(ctx, h.env, req, "euclo api compat"); err != nil {
 		return nil, err
 	}
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
-	if err != nil && strings.TrimSpace(stdout+stderr) == "" {
+	res, err := h.env.CommandRunner.Run(ctx, req)
+	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(stdout) == "" {
+	if res.ExitCode != 0 {
+		return nil, fmt.Errorf("git show %s:%s: exit code %d: %s", ref, path, res.ExitCode, res.Stderr)
+	}
+	if strings.TrimSpace(res.Stdout) == "" {
 		return nil, nil
 	}
-	return []byte(stdout), nil
+	return []byte(res.Stdout), nil
 }
 
 func mergeSignatureRecords(dst map[string]apiSignatureRecord, src map[string]apiSignatureRecord) {

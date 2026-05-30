@@ -3,6 +3,8 @@ package sandbox
 import (
 	"context"
 	"errors"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // AuthorizedRunner is a CommandRunner that has been verified (sandbox boundary
@@ -27,9 +29,9 @@ func NewAuthorizedRunner(verified CommandRunner, policy CommandPolicy) (*Authori
 
 // Run applies the command policy before delegating to the underlying verified
 // and enforced runner.
-func (a *AuthorizedRunner) Run(ctx context.Context, req CommandRequest) (string, string, error) {
+func (a *AuthorizedRunner) Run(ctx context.Context, req CommandRequest) (*contracts.CommandResult, error) {
 	if a == nil || a.inner == nil {
-		return "", "", errors.New("authorized runner missing")
+		return nil, errors.New("authorized runner missing")
 	}
 	return a.inner.Run(ctx, req)
 }

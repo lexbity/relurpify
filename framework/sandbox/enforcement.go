@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CommandPolicy decides whether a command request may proceed.
@@ -75,13 +77,13 @@ func NewEnforcingCommandRunner(inner CommandRunner, policy CommandPolicy) *Enfor
 }
 
 // Run applies the command policy before delegating to the underlying runner.
-func (r *EnforcingCommandRunner) Run(ctx context.Context, req CommandRequest) (string, string, error) {
+func (r *EnforcingCommandRunner) Run(ctx context.Context, req CommandRequest) (*contracts.CommandResult, error) {
 	if r == nil || r.inner == nil {
-		return "", "", errors.New("enforcing command runner missing")
+		return nil, errors.New("enforcing command runner missing")
 	}
 	if r.policy != nil {
 		if err := r.policy.AllowCommand(ctx, req); err != nil {
-			return "", "", &ExecutionDeniedError{
+			return nil, &ExecutionDeniedError{
 				Command: strings.Join(req.Args, " "),
 				Reason:  err.Error(),
 				Policy:  "sandbox policy",

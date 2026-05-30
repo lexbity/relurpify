@@ -32,8 +32,8 @@ func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cf
 // fakeRunner implements sandbox.CommandRunner for tests.
 type fakeRunner struct{}
 
-func (f *fakeRunner) Run(_ context.Context, _ sandbox.CommandRequest) (string, string, error) {
-	return "", "", nil
+func (f *fakeRunner) Run(_ context.Context, _ sandbox.CommandRequest) (*contracts.CommandResult, error) {
+	return &contracts.CommandResult{}, nil
 }
 
 var _ sandbox.CommandRunner = (*fakeRunner)(nil)

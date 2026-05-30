@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -36,16 +37,16 @@ func NewRunner(backend *Backend) (*Runner, error) {
 }
 
 // Run executes the command via `docker run`.
-func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
+func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	if r == nil || r.backend == nil {
-		return "", "", errors.New("docker runner missing backend")
+		return nil, errors.New("docker runner missing backend")
 	}
 	if len(req.Args) == 0 {
-		return "", "", errors.New("command arguments required")
+		return nil, errors.New("command arguments required")
 	}
 	containerWorkdir, err := r.containerWorkdir(req.Workdir)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	policy := r.backend.Policy()
 	args := []string{"run", "--rm", "-v", fmt.Sprintf("%s:/workspace", r.backend.config.Workspace), "-w", containerWorkdir}
@@ -92,6 +93,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (string,
 		execCtx, cancel = context.WithTimeout(ctx, req.Timeout)
 	}
 	defer cancel()
+	start := time.Now()
 	cmd := exec.Command(r.backend.config.DockerPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	limit := req.MaxOutputBytes
@@ -106,7 +108,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (string,
 		cmd.Stdin = strings.NewReader(req.Input)
 	}
 	if err := cmd.Start(); err != nil {
-		return "", "", fmt.Errorf("start: %w", err)
+		return nil, fmt.Errorf("start: %w", err)
 	}
 	pid := cmd.Process.Pid
 	go func() {
@@ -116,7 +118,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (string,
 		}
 	}()
 	err = cmd.Wait()
-	return stdoutBuf.String(), stderrBuf.String(), err
+	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start)), nil
 }
 
 func (r *Runner) protectedMounts(paths []string) []string {

@@ -48,17 +48,18 @@ func TestSandboxCommandRunner_ProcessGroupCleanupAfterTimeout(t *testing.T) {
 		t.Fatalf("NewSandboxCommandRunner failed: %v", err)
 	}
 
-	_, stderr, err := runner.Run(
+	res, err := runner.Run(
 		ctx,
 		CommandRequest{
 			Args:    []string{"sh", "-c", "sleep 60 & SPID=$!; sleep 60 & echo $SPID; wait"},
 			Timeout: 100 * time.Millisecond,
 		},
 	)
-	t.Logf("run returned: err=%v stderr=%q", err, stderr)
+	t.Logf("run returned: err=%v", err)
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
+	_ = res
 }
 
 func TestSandboxCommandRunner_ProcessGroupCleanupDoesNotPanicOnAlreadyExited(t *testing.T) {
@@ -77,7 +78,7 @@ func TestSandboxCommandRunner_ProcessGroupCleanupDoesNotPanicOnAlreadyExited(t *
 		t.Fatalf("NewSandboxCommandRunner failed: %v", err)
 	}
 
-	stdout, stderr, err := runner.Run(
+	res, err := runner.Run(
 		ctx,
 		CommandRequest{
 			Args:    []string{"echo", "hello"},
@@ -85,9 +86,9 @@ func TestSandboxCommandRunner_ProcessGroupCleanupDoesNotPanicOnAlreadyExited(t *
 		},
 	)
 	if err != nil {
-		t.Fatalf("run failed: %v (stderr: %s)", err, stderr)
+		t.Fatalf("run failed: %v", err)
 	}
-	if stdout != "hello\n" && stdout != "hello" {
-		t.Fatalf("unexpected stdout: %q", stdout)
+	if res.Stdout != "hello\n" && res.Stdout != "hello" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
 	}
 }

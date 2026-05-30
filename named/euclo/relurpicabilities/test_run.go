@@ -135,17 +135,16 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 	}
 
 	// Execute command
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
+	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		// Command execution failed (e.g., timeout, permission denied)
 		return &contracts.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success":      false,
 				"passed":       false,
 				"exit_code":    -1,
-				"stdout":       truncate(stdout, 10000),
-				"stderr":       truncate(stderr, 10000),
+				"stdout":       "",
+				"stderr":       "",
 				"error":        err.Error(),
 				"failed_tests": []string{},
 			},
@@ -154,24 +153,24 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 
 	// Parse test output to determine pass/fail
 	passed := true
-	failedTests := parseFailedTests(stdout, stderr)
+	failedTests := parseFailedTests(res.Stdout, res.Stderr)
 
 	// If there are failed tests or stderr contains failure indicators, mark as failed
 	if len(failedTests) > 0 {
 		passed = false
 	}
-	if strings.Contains(stderr, "FAIL") || strings.Contains(stdout, "FAIL") {
+	if strings.Contains(res.Stderr, "FAIL") || strings.Contains(res.Stdout, "FAIL") {
 		passed = false
 	}
 
 	return &contracts.CapabilityExecutionResult{
-		Success: true,
+		Success: res.ExitCode == 0,
 		Data: map[string]interface{}{
-			"success":      true,
+			"success":      res.ExitCode == 0,
 			"passed":       passed,
-			"exit_code":    0, // We got here, so command didn't error
-			"stdout":       truncate(stdout, 10000),
-			"stderr":       truncate(stderr, 10000),
+			"exit_code":    res.ExitCode,
+			"stdout":       truncate(res.Stdout, 10000),
+			"stderr":       truncate(res.Stderr, 10000),
 			"failed_tests": failedTests,
 		},
 	}, nil

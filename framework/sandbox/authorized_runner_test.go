@@ -12,6 +12,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestNewAuthorizedRunnerRejectsNilPolicy(t *testing.T) {
@@ -43,20 +45,20 @@ func TestAuthorizedRunnerDelegatesAndEnforces(t *testing.T) {
 
 	// Allowed command should delegate to inner runner.
 	req := CommandRequest{Args: []string{"echo", "hello"}}
-	stdout, stderr, err := auth.Run(context.Background(), req)
+	res, err := auth.Run(context.Background(), req)
 	if err != nil {
 		t.Errorf("allowed command should not error, got: %v", err)
 	}
-	if stdout != "ok" {
-		t.Errorf("stdout = %q, want %q", stdout, "ok")
+	if res.Stdout != "ok" {
+		t.Errorf("stdout = %q, want %q", res.Stdout, "ok")
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want empty", stderr)
+	if res.Stderr != "" {
+		t.Errorf("stderr = %q, want empty", res.Stderr)
 	}
 
 	// Denied command should be blocked before reaching inner runner.
 	denyReq := CommandRequest{Args: []string{"deny", "something"}}
-	_, _, err = auth.Run(context.Background(), denyReq)
+	_, err = auth.Run(context.Background(), denyReq)
 	if err == nil {
 		t.Fatal("denied command should error")
 	}
@@ -69,13 +71,13 @@ func TestAuthorizedRunnerDelegatesAndEnforces(t *testing.T) {
 // fakeRunner is a simple CommandRunner that returns canned output.
 type fakeRunner struct{}
 
-func (f *fakeRunner) Run(_ context.Context, req CommandRequest) (string, string, error) {
+func (f *fakeRunner) Run(_ context.Context, req CommandRequest) (*contracts.CommandResult, error) {
 	for _, arg := range req.Args {
 		if arg == "error" {
-			return "", "", errors.New("runner error")
+			return nil, errors.New("runner error")
 		}
 	}
-	return "ok", "", nil
+	return &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}, nil
 }
 
 var _ CommandRunner = (*fakeRunner)(nil)

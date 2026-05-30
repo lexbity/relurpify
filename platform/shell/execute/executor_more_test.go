@@ -56,10 +56,17 @@ func TestExecutorRejectsMissingRunnerAndPropagatesErrors(t *testing.T) {
 
 	runner := &recordingRunner{err: errors.New("boom")}
 	envelope, err := NewExecutor(base, CommandPreset{Name: "cli_echo", Command: "echo"}, runner).Execute(context.Background(), "", []interface{}{"hello"}, "")
-	require.NoError(t, err)
-	require.False(t, envelope.Success)
-	require.Equal(t, "boom", envelope.Error)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "execute:")
+	require.Nil(t, envelope)
 	require.Len(t, runner.requests, 1)
+
+	// Command failure (non-zero exit) still produces a ResultEnvelope
+	runner2 := &recordingRunner{}
+	runner2.requests = nil
+	envelope2, err2 := NewExecutor(base, CommandPreset{Name: "cli_echo", Command: "echo"}, runner2).Execute(context.Background(), "", []interface{}{"hello"}, "")
+	require.NoError(t, err2)
+	require.NotNil(t, envelope2)
 }
 
 func TestExecutorResolvesCargoHelpersAndCopiesTrees(t *testing.T) {

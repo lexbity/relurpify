@@ -227,9 +227,9 @@ type commandRunnerAdapter struct {
 	runner fsandbox.CommandRunner
 }
 
-func (a commandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (string, string, error) {
+func (a commandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	if a.runner == nil {
-		return "", "", fmt.Errorf("command runner missing")
+		return nil, fmt.Errorf("command runner missing")
 	}
 	return a.runner.Run(ctx, fsandbox.CommandRequest{
 		Workdir: req.Workdir,

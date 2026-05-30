@@ -39,8 +39,8 @@ func (s *stubProviderRuntime) NewCommandRunner(_ *contracts.CommandRunnerConfig)
 // stubRunner implements CommandRunner for testing.
 type stubRunner struct{}
 
-func (s *stubRunner) Run(_ context.Context, _ CommandRequest) (string, string, error) {
-	return "", "", nil
+func (s *stubRunner) Run(_ context.Context, _ CommandRequest) (*contracts.CommandResult, error) {
+	return &contracts.CommandResult{}, nil
 }
 
 var (

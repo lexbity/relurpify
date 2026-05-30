@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -111,12 +112,12 @@ func NewSandboxCommandRunner(config *contracts.CommandRunnerConfig, runtime Sand
 }
 
 // Run executes the requested command inside the sandboxed container runtime.
-func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (string, string, error) {
+func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*contracts.CommandResult, error) {
 	if r == nil {
-		return "", "", errors.New("sandbox command runner missing")
+		return nil, errors.New("sandbox command runner missing")
 	}
 	if len(req.Args) == 0 {
-		return "", "", errors.New("command arguments required")
+		return nil, errors.New("command arguments required")
 	}
 	runtimeBinary := r.config.ContainerRuntime
 	if runtimeBinary == "" {
@@ -128,7 +129,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	}
 	containerWorkdir, err := r.containerWorkdir(req.Workdir)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	args := []string{"run", "--rm", "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
 	for _, mount := range r.protectedMounts() {
@@ -172,6 +173,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 		execCtx, cancel = context.WithTimeout(ctx, req.Timeout)
 	}
 	defer cancel()
+	start := time.Now()
 	cmd := exec.Command(runtimeBinary, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	limit := req.MaxOutputBytes
@@ -186,7 +188,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 		cmd.Stdin = strings.NewReader(req.Input)
 	}
 	if err := cmd.Start(); err != nil {
-		return "", "", fmt.Errorf("start: %w", err)
+		return nil, fmt.Errorf("start: %w", err)
 	}
 	pid := cmd.Process.Pid
 	go func() {
@@ -196,8 +198,10 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 		}
 	}()
 	err = cmd.Wait()
-	return stdoutBuf.String(), stderrBuf.String(), err
+	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start)), nil
 }
+
+// Note: newCommandResult was promoted to contracts.NewCommandResult in Phase 1.
 
 func (r *SandboxCommandRunner) protectedMounts() []string {
 	if r == nil || r.rt == nil {

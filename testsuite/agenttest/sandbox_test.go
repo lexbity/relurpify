@@ -58,14 +58,14 @@ func TestNewWorkspaceSandboxRunner_AvailableBackend(t *testing.T) {
 	}
 
 	// Execute a trivial command to prove the sandbox works.
-	stdout, stderr, err := runner.Run(ctx, sandbox.CommandRequest{
+	res, err := runner.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"echo", "sandbox-ok"},
 	})
 	if err != nil {
-		t.Fatalf("run failed: %v (stderr: %s)", err, stderr)
+		t.Fatalf("run failed: %v", err)
 	}
-	if strings.TrimSpace(stdout) != "sandbox-ok" {
-		t.Errorf("stdout = %q, want %q", stdout, "sandbox-ok")
+	if strings.TrimSpace(res.Stdout) != "sandbox-ok" {
+		t.Errorf("stdout = %q, want %q", res.Stdout, "sandbox-ok")
 	}
 }
 
@@ -104,26 +104,26 @@ func TestNewWorkspaceSandboxRunner_WorkspaceIsolation(t *testing.T) {
 
 	// Write a file in workspace A.
 	markerFile := "marker.txt"
-	_, stderr, err := runnerA.Run(ctx, sandbox.CommandRequest{
+	res, err := runnerA.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"sh", "-c", "echo 'workspace-a-data' > " + markerFile},
 	})
 	if err != nil {
-		t.Fatalf("write in ws A failed: %v (stderr: %s)", err, stderr)
+		t.Fatalf("write in ws A failed: %v", err)
 	}
 
 	// Verify the file exists in workspace A.
-	stdout, stderr, err := runnerA.Run(ctx, sandbox.CommandRequest{
+	res, err = runnerA.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"cat", markerFile},
 	})
 	if err != nil {
-		t.Fatalf("read in ws A failed: %v (stderr: %s)", err, stderr)
+		t.Fatalf("read in ws A failed: %v", err)
 	}
-	if strings.TrimSpace(stdout) != "workspace-a-data" {
-		t.Errorf("ws A content = %q, want %q", stdout, "workspace-a-data")
+	if strings.TrimSpace(res.Stdout) != "workspace-a-data" {
+		t.Errorf("ws A content = %q, want %q", res.Stdout, "workspace-a-data")
 	}
 
 	// Verify workspace B does NOT see the file.
-	_, _, err = runnerB.Run(ctx, sandbox.CommandRequest{
+	_, err = runnerB.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"cat", markerFile},
 	})
 	if err == nil {

@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,23 +150,26 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*contracts.
 	if t.Runner == nil {
 		return nil, fmt.Errorf("command runner missing for git tool")
 	}
-	stdout, stderr, err := t.Runner.Run(ctx, contracts.CommandRequest{
+	res, err := t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    append([]string{"git"}, args...),
 		Timeout: 30 * time.Second,
 	})
 	if err != nil {
-		msg := stderr
+		return nil, fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+	}
+	if res.ExitCode != 0 {
+		msg := res.Stderr
 		if msg == "" {
-			msg = err.Error()
+			msg = "exit code " + strconv.Itoa(res.ExitCode)
 		}
 		return &contracts.ToolResult{Success: false, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
 	}
 	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"output": stdout,
-			"stderr": stderr,
+			"output": res.Stdout,
+			"stderr": res.Stderr,
 			"time":   time.Now().UTC(),
 		},
 	}, nil
@@ -178,12 +182,12 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
 	if t.Runner == nil {
 		return false
 	}
-	_, _, err := t.Runner.Run(ctx, contracts.CommandRequest{
+	res, err := t.Runner.Run(ctx, contracts.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    []string{"git", "rev-parse", "--is-inside-work-tree"},
 		Timeout: 5 * time.Second,
 	})
-	return err == nil
+	return err == nil && res != nil && res.ExitCode == 0
 }
 
 func (t *GitCommandTool) Permissions() contracts.ToolPermissions {

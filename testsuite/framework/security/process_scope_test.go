@@ -150,7 +150,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 
 		runner := sandbox.NewEnforcingCommandRunner(inner, policy)
 
-		_, _, err := runner.Run(context.Background(), req)
+		_, err := runner.Run(context.Background(), req)
 		if err != nil {
 			t.Errorf("command execution should succeed: %v", err)
 		}
@@ -177,7 +177,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 
 		runner := sandbox.NewEnforcingCommandRunner(inner, policy)
 
-		_, _, err := runner.Run(context.Background(), req)
+		_, err := runner.Run(context.Background(), req)
 		if err == nil {
 			t.Error("execution should be denied when policy rejects")
 		}
@@ -202,7 +202,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 
 		runner := sandbox.NewEnforcingCommandRunner(inner, nil)
 
-		_, _, err := runner.Run(context.Background(), req)
+		_, err := runner.Run(context.Background(), req)
 		if err != nil {
 			t.Errorf("command execution should succeed without policy: %v", err)
 		}
@@ -224,7 +224,7 @@ func TestEnforcingCommandRunner(t *testing.T) {
 
 		runner := sandbox.NewEnforcingCommandRunner(nil, policy)
 
-		_, _, err := runner.Run(context.Background(), req)
+		_, err := runner.Run(context.Background(), req)
 		if err == nil {
 			t.Error("enforcing runner with missing inner should return error")
 		}

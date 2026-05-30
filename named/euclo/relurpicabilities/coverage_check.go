@@ -3,7 +3,6 @@ package relurpicabilities
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
@@ -125,11 +124,11 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Enve
 		return failResult(fmt.Sprintf("coverage command denied: %v", err)), err
 	}
 
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
-	combined := stdout + stderr
-	if err != nil && strings.TrimSpace(combined) == "" {
-		return failResult(fmt.Sprintf("coverage command failed: %v", err)), err
+	res, err := h.env.CommandRunner.Run(ctx, req)
+	if err != nil {
+		return nil, err
 	}
+	combined := res.Stdout + res.Stderr
 
 	coverage, packages := parseCoverageOutput(combined)
 
@@ -142,25 +141,20 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Enve
 		totalCoverage = sum / float64(len(packages))
 	}
 
-	passed := err == nil && (threshold == 0 || totalCoverage >= threshold)
+	passed := res.ExitCode == 0 && (threshold == 0 || totalCoverage >= threshold)
 
 	return &contracts.CapabilityExecutionResult{
-		Success: err == nil,
+		Success: true,
 		Data: map[string]interface{}{
-			"success":        err == nil,
+			"success":        true,
 			"passed":         passed,
 			"packages":       coveragePackagesToInterfaces(packages),
 			"coverage":       coverage,
 			"total_coverage": totalCoverage,
 			"threshold":      threshold,
 			"output":         truncate(combined, 8192),
-			"exit_code": func() int {
-				if err == nil {
-					return 0
-				}
-				return -1
-			}(),
-			"package": pkg,
+			"exit_code":      res.ExitCode,
+			"package":        pkg,
 		},
 	}, nil
 }

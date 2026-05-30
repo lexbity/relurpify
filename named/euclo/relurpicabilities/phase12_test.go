@@ -13,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,8 +23,16 @@ type phase12RecordingRunner struct {
 	err    error
 }
 
-func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (string, string, error) {
-	return r.stdout, r.stderr, r.err
+func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return &contracts.CommandResult{
+		Stdout:      r.stdout,
+		Stderr:      r.stderr,
+		StdoutBytes: int64(len(r.stdout)),
+		StderrBytes: int64(len(r.stderr)),
+	}, nil
 }
 
 func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.WorkspaceEnvironment, map[string]string) {

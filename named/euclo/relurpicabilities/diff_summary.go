@@ -135,7 +135,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	if err := h.authorizeCommand(ctx, h.env, statReq, "euclo diff summary"); err != nil {
 		return failResult(fmt.Sprintf("diff command denied: %v", err)), err
 	}
-	statOut, _, err := h.env.CommandRunner.Run(ctx, statReq)
+	statRes, err := h.env.CommandRunner.Run(ctx, statReq)
 	if err != nil {
 		return &contracts.CapabilityExecutionResult{
 			Success: false,
@@ -144,6 +144,10 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 				"error":   fmt.Sprintf("git diff --stat failed: %v", err),
 			},
 		}, nil
+	}
+	statOut := statRes.Stdout
+	if statRes.ExitCode != 0 {
+		statOut = statRes.Stderr
 	}
 
 	// Run git diff --name-only to get changed files
@@ -159,7 +163,17 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	if err := h.authorizeCommand(ctx, h.env, nameReq, "euclo diff summary"); err != nil {
 		return failResult(fmt.Sprintf("diff command denied: %v", err)), err
 	}
-	nameOut, _, _ := h.env.CommandRunner.Run(ctx, nameReq)
+	nameRes, err := h.env.CommandRunner.Run(ctx, nameReq)
+	if err != nil {
+		return &contracts.CapabilityExecutionResult{
+			Success: false,
+			Data: map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("git diff --name-only failed: %v", err),
+			},
+		}, nil
+	}
+	nameOut := nameRes.Stdout
 
 	changedFiles := []string{}
 	for _, line := range strings.Split(strings.TrimSpace(nameOut), "\n") {

@@ -13,7 +13,15 @@ type responseRunner struct {
 	err      error
 }
 
-func (r *responseRunner) Run(_ context.Context, req contracts.CommandRequest) (string, string, error) {
+func (r *responseRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
 	r.requests = append(r.requests, req)
-	return r.stdout, r.stderr, r.err
+	if r.err != nil {
+		return nil, r.err
+	}
+	return &contracts.CommandResult{
+		Stdout:      r.stdout,
+		Stderr:      r.stderr,
+		StdoutBytes: int64(len(r.stdout)),
+		StderrBytes: int64(len(r.stderr)),
+	}, nil
 }

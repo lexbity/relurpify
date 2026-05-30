@@ -149,20 +149,30 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	req.Args[len(req.Args)-1] = resolvedFile
 
 	// Execute command
-	stdout, stderr, err := h.env.CommandRunner.Run(ctx, req)
+	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
 		return &contracts.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
 				"error":   err.Error(),
-				"stderr":  truncate(stderr, 10000),
+				"stderr":  "",
+			},
+		}, nil
+	}
+	if res.ExitCode != 0 {
+		return &contracts.CapabilityExecutionResult{
+			Success: false,
+			Data: map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("exit code %d: %s", res.ExitCode, res.Stderr),
+				"stderr":  truncate(res.Stderr, 10000),
 			},
 		}, nil
 	}
 
 	// Parse porcelain blame output
-	entries := parsePorcelainBlame(stdout)
+	entries := parsePorcelainBlame(res.Stdout)
 
 	return &contracts.CapabilityExecutionResult{
 		Success: true,

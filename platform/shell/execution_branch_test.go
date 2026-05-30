@@ -16,28 +16,28 @@ func TestExecutionToolPermissionEdgeBranches(t *testing.T) {
 	testsPerms := testsTool.Permissions()
 	require.Len(t, testsPerms.Permissions.FileSystem, 2)
 	require.Len(t, testsPerms.Permissions.Executables, 0)
-	_, _, err := testsTool.run(context.Background(), []string{"go", "test"}, "")
+	_, err := testsTool.run(context.Background(), []string{"go", "test"}, "")
 	require.Error(t, err)
 
 	codeTool := &ExecuteCodeTool{Workdir: base}
 	codePerms := codeTool.Permissions()
 	require.Len(t, codePerms.Permissions.FileSystem, 1)
 	require.Len(t, codePerms.Permissions.Executables, 0)
-	_, _, err = codeTool.run(context.Background(), []string{"python", "-c", "print(1)"}, "")
+	_, err = codeTool.run(context.Background(), []string{"python", "-c", "print(1)"}, "")
 	require.Error(t, err)
 
 	lintTool := &RunLinterTool{Workdir: base}
 	lintPerms := lintTool.Permissions()
 	require.Len(t, lintPerms.Permissions.FileSystem, 1)
 	require.Len(t, lintPerms.Permissions.Executables, 0)
-	_, _, err = lintTool.run(context.Background(), []string{"golangci-lint", "run"})
+	_, err = lintTool.run(context.Background(), []string{"golangci-lint", "run"})
 	require.Error(t, err)
 
 	buildTool := &RunBuildTool{Workdir: base}
 	buildPerms := buildTool.Permissions()
 	require.Len(t, buildPerms.Permissions.FileSystem, 1)
 	require.Len(t, buildPerms.Permissions.Executables, 0)
-	_, _, err = buildTool.run(context.Background())
+	_, err = buildTool.run(context.Background())
 	require.Error(t, err)
 }
 

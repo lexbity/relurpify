@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	sandbox2 "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type fakeToolRunner struct{}
 
-func (f *fakeToolRunner) Run(_ context.Context, _ sandbox2.CommandRequest) (string, string, error) {
-	return "", "", nil
+func (f *fakeToolRunner) Run(_ context.Context, _ sandbox2.CommandRequest) (*contracts.CommandResult, error) {
+	return &contracts.CommandResult{}, nil
 }
 
 var _ sandbox2.CommandRunner = (*fakeToolRunner)(nil)
