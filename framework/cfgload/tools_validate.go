@@ -36,6 +36,9 @@ func validateToolManifest(path string, manifest *contracts.ToolManifest) error {
 	if err := validateToolManifestCapability(manifest.Capability); err != nil {
 		problems = append(problems, err.Error())
 	}
+	if err := validateToolManifestFlags(manifest.Execution.Command, manifest.Parameters); err != nil {
+		problems = append(problems, err.Error())
+	}
 	if len(problems) > 0 {
 		return &SchemaError{
 			Path: path,
@@ -79,6 +82,8 @@ func validateToolManifestExecution(exec contracts.ToolManifestExecution) error {
 		if strings.TrimSpace(exec.Implementation) == "" {
 			return fmt.Errorf("execution.implementation required for go_native backend")
 		}
+	case contracts.ToolBackendComposite:
+		// composition.steps validated during build, not here
 	case contracts.ToolBackendMCP:
 		if exec.MCP == nil {
 			return fmt.Errorf("execution.mcp required for mcp backend")
@@ -104,6 +109,53 @@ func validateToolManifestCapability(cap contracts.ToolManifestCapability) error 
 	}
 	if len(cap.EffectClass) == 0 {
 		return fmt.Errorf("capability.effect_class required")
+	}
+	return nil
+}
+
+// validateToolManifestFlags checks each declared flag for internal consistency.
+// A flag must use exactly one form (boolean WhenTrue/WhenFalse or typed Param),
+// typed flags must reference a declared parameter, and Style must be valid.
+func validateToolManifestFlags(cmd *contracts.ToolManifestCommand, params []contracts.ToolParameter) error {
+	if cmd == nil || len(cmd.Flags) == 0 {
+		return nil
+	}
+
+	paramNames := make(map[string]struct{}, len(params))
+	for _, p := range params {
+		paramNames[contracts.NormalizeToolName(p.Name)] = struct{}{}
+	}
+
+	validStyles := map[string]bool{
+		contracts.FlagStyleEquals:   true,
+		contracts.FlagStyleSeparate: true,
+	}
+
+	var problems []string
+	for name, flag := range cmd.Flags {
+		hasBool := len(flag.WhenTrue) > 0 || len(flag.WhenFalse) > 0
+		hasTyped := flag.Param != ""
+
+		if hasBool && hasTyped {
+			problems = append(problems, fmt.Sprintf("flag %q: must use exactly one of boolean (when_true/when_false) or typed (param) form", name))
+			continue
+		}
+		if !hasBool && !hasTyped {
+			problems = append(problems, fmt.Sprintf("flag %q: must specify either boolean (when_true/when_false) or typed (param) form", name))
+			continue
+		}
+
+		if hasTyped {
+			if _, ok := paramNames[contracts.NormalizeToolName(flag.Param)]; !ok {
+				problems = append(problems, fmt.Sprintf("flag %q: param %q does not match any declared parameter", name, flag.Param))
+			}
+			if flag.Style != "" && !validStyles[flag.Style] {
+				problems = append(problems, fmt.Sprintf("flag %q: style %q must be %q or %q", name, flag.Style, contracts.FlagStyleEquals, contracts.FlagStyleSeparate))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
 }
