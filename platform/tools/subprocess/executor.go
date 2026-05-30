@@ -79,9 +79,23 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	}
 
 	execSpec := t.manifest.Execution
+
+	// Cargo isolation: for nested workspace members, copy the crate to a
+	// temp directory and inject --manifest-path to prevent concurrent runs
+	// from interfering with each other.
+	workdir := stringArg(args, "working_directory")
+	if workdir == "" {
+		workdir = "."
+	}
+	cmd, workdir, cargoCleanup, cargoErr := applyCargoIsolation(t.manifest, cmd, workdir)
+	if cargoErr != nil {
+		return &contracts.ToolResult{Success: false, Error: cargoErr.Error()}, nil
+	}
+	defer cargoCleanup()
+
 	request := contracts.CommandRequest{
 		Args:    cmd,
-		Workdir: stringArg(args, "working_directory"),
+		Workdir: workdir,
 		Input:   stringArg(args, "stdin"),
 	}
 	if execSpec.Sandbox != nil {
