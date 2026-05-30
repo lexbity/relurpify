@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/artifactstore"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
@@ -123,6 +124,10 @@ type WorkspaceEnvironment struct {
 	// Nil when the workspace is not backed by a persistent job store (e.g., in
 	// unit tests). Capabilities must check for nil before calling Submit.
 	JobSubmitter jobs.Submitter
+
+	// ArtifactStore provides durable per-session storage for large tool output.
+	// Created by OpenWorkspace; GC'd at session end or when size cap is exceeded.
+	ArtifactStore artifactstore.Store
 
 	// Optional agents (interfaces)
 	VerificationPlanner           VerificationPlanner

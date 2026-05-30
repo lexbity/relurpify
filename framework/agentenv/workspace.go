@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/artifactstore"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
@@ -626,6 +627,14 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	// (gated by Scope.Services and Scope.Knowledge)
 	env := boot.Environment
 	env.PermissionManager = registration.Permissions
+
+	// Phase H.5: Artifact Store — per-session durable storage for tool output.
+	artifactStore, err := artifactstore.NewDiskStore(cfg.Workspace, 0)
+	if err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("create artifact store: %w", err)
+	}
+	env.ArtifactStore = artifactStore
 
 	var sm *ServiceManager
 	if cfg.Scope.Services {
