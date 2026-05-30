@@ -63,6 +63,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				toolErrors := make([]string, 0)
 				overallSuccess := true
 				for _, call := range calls {
+					callID := call.ID
+					if callID == "" {
+						callID = NewUUID()
+					}
 					if !n.capabilityAllowed(call.Name, activeTools) || !n.agent.Tools.HasCapability(call.Name) {
 						errResult := &contracts.ToolResult{
 							Success: false,
@@ -70,7 +74,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						}
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, errResult)
 						n.recordObservation(env, call, errResult, envelope)
-						envelopes[call.Name] = envelope
+						envelopes[callID] = envelope
 						overallSuccess = false
 						toolErrors = append(toolErrors, fmt.Sprintf("unknown tool %s", call.Name))
 						continue
@@ -82,12 +86,12 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						}
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, errResult)
 						n.recordObservation(env, call, errResult, envelope)
-						envelopes[call.Name] = envelope
+						envelopes[callID] = envelope
 						overallSuccess = false
 						toolErrors = append(toolErrors, fmt.Sprintf("unavailable tool %s", call.Name))
 						continue
 					}
-					n.agent.debugf("%s executing tool=%s args=%v", n.id, call.Name, call.Args)
+					n.agent.debugf("%s executing tool=%s id=%s args=%v", n.id, call.Name, callID, call.Args)
 					res, err := n.agent.Tools.InvokeCapability(ctx, env, call.Name, call.Args)
 					if err != nil {
 						// Convert hard tool errors (e.g. schema validation, permission denial)
@@ -97,16 +101,16 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 					}
 					if res != nil {
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, res)
-						envelopes[call.Name] = envelope
+						envelopes[callID] = envelope
 						n.recordObservation(env, call, res, envelope)
 						n.latchVerificationSuccess(env, call.Name, res)
 						n.refreshIndexesAfterMutation(call, res)
-						results[call.Name] = map[string]interface{}{
+						results[callID] = map[string]interface{}{
 							"success": res.Success,
 							"data":    res.Data,
 							"error":   res.Error,
 						}
-						n.agent.debugf("%s tool=%s result=%v", n.id, call.Name, res.Data)
+						n.agent.debugf("%s tool=%s id=%s result=%v", n.id, call.Name, callID, res.Data)
 						if !res.Success {
 							overallSuccess = false
 							if res.Error != "" {
@@ -314,11 +318,12 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 
 func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) {
 	appendToolMessage(n.agent, n.task, env, call, res, envelope)
-	observation := summarizeToolResult(env, call, res)
+	decision := resolveInsertionDecision(n.agent, n.task, envelope)
+	observation := summarizeToolResult(env, call, res, decision)
 	displaySummary, visible := renderInsertionFilteredSummary(n.agent, n.task, call.Name, res, envelope)
 	if visible {
 		observation.Summary = displaySummary
-		switch resolveInsertionDecision(n.agent, n.task, envelope).Action {
+		switch decision.Action {
 		case core.InsertionActionMetadataOnly, core.InsertionActionHITLRequired:
 			observation.Data = nil
 		}

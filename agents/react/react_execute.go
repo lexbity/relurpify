@@ -88,7 +88,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 		Name: "file_read",
 		Args: map[string]any{"path": path},
 	}
-	observation := summarizeToolResult(env, call, res)
+	observation := summarizeToolResult(env, call, res, core.InsertionDecision{Action: core.InsertionActionSummarized})
 	history := append(getToolObservations(env), observation)
 	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)

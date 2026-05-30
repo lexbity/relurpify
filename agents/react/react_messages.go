@@ -225,7 +225,7 @@ func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	}
 }
 
-func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult) ToolObservation {
+func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, decision core.InsertionDecision) ToolObservation {
 	phase := ""
 	if state != nil {
 		phase = getWorkingValueAsString(state, "react.phase")
@@ -241,28 +241,45 @@ func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, r
 		observation.Summary = fmt.Sprintf("%s returned no result", call.Name)
 		return observation
 	}
-	summary, data := compactToolData(call, res)
+	summary, data := compactToolData(call, res, decision)
 	observation.Summary = summary
 	observation.Data = data
 	return observation
 }
 
-func compactToolData(call contracts.ToolCall, res *contracts.ToolResult) (string, map[string]interface{}) {
+// clipSizeForDecision returns the max characters for tool output in
+// observations, based on the insertion decision. Direct → generous budget,
+// Summarized → moderate, MetadataOnly → minimal.
+func clipSizeForDecision(decision core.InsertionDecision) int {
+	switch decision.Action {
+	case core.InsertionActionDirect:
+		return 4000
+	case core.InsertionActionSummarized:
+		return 900
+	case core.InsertionActionMetadataOnly:
+		return 120
+	default:
+		return 320
+	}
+}
+
+func compactToolData(call contracts.ToolCall, res *contracts.ToolResult, decision core.InsertionDecision) (string, map[string]interface{}) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}
+	maxClip := clipSizeForDecision(decision)
 	if res.Error != "" {
-		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), 320)
-		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), 320)
+		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), maxClip)
+		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), maxClip)
 		reason := strings.TrimSpace(firstMeaningfulLine(stderr))
 		if reason == "" {
 			reason = strings.TrimSpace(firstMeaningfulLine(stdout))
 		}
 		if reason == "" {
-			reason = trimToBudget(res.Error, 220)
+			reason = trimToBudget(res.Error, maxClip)
 		}
 		return fmt.Sprintf("%s failed: %s", call.Name, reason), map[string]interface{}{
-			"error":  trimToBudget(res.Error, 220),
+			"error":  trimToBudget(res.Error, maxClip),
 			"stdout": stdout,
 			"stderr": stderr,
 		}
@@ -271,23 +288,23 @@ func compactToolData(call contracts.ToolCall, res *contracts.ToolResult) (string
 	case "file_read":
 		path := fmt.Sprint(call.Args["path"])
 		content := fmt.Sprint(res.Data["content"])
-		snippet := trimToBudget(content, 900)
+		snippet := trimToBudget(content, maxClip*3)
 		return fmt.Sprintf("Read %s", path), map[string]interface{}{"path": path, "snippet": snippet}
 	case "file_list":
-		files := trimToBudget(fmt.Sprint(res.Data["files"]), 220)
+		files := trimToBudget(fmt.Sprint(res.Data["files"]), maxClip)
 		return fmt.Sprintf("Listed files: %s", files), map[string]interface{}{"files": files}
 	default:
-		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), 320)
-		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), 320)
+		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), maxClip)
+		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), maxClip)
 		if stdout != "" || stderr != "" {
 			summary := strings.TrimSpace(strings.Join([]string{firstMeaningfulLine(stderr), firstMeaningfulLine(stdout)}, " | "))
 			if summary == "" {
-				summary = trimToBudget(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), 220)
+				summary = trimToBudget(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), maxClip)
 			}
 			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"stdout": stdout, "stderr": stderr}
 		}
 		if len(res.Data) > 0 {
-			summary := trimToBudget(fmt.Sprint(res.Data), 220)
+			summary := trimToBudget(fmt.Sprint(res.Data), maxClip)
 			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"summary": summary}
 		}
 		return fmt.Sprintf("%s completed", call.Name), map[string]interface{}{"summary": fmt.Sprintf("%s completed", call.Name)}

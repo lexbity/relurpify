@@ -219,9 +219,11 @@ func toolResultFromCommandResult(res *contracts.CommandResult) *contracts.ToolRe
 	return &contracts.ToolResult{
 		Success: success,
 		Data: map[string]interface{}{
-			"stdout":    res.Stdout,
-			"stderr":    res.Stderr,
-			"exit_code": res.ExitCode,
+			"stdout":     res.Stdout,
+			"stderr":     res.Stderr,
+			"exit_code":  res.ExitCode,
+			"stdout_ref": res.StdoutRef,
+			"stderr_ref": res.StderrRef,
 		},
 		Error: errStr,
 	}

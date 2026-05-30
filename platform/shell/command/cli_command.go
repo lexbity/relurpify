@@ -102,9 +102,11 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 	return &contracts.ToolResult{
 		Success: envelope.Success,
 		Data: map[string]interface{}{
-			"stdout":    envelope.Stdout,
-			"stderr":    envelope.Stderr,
-			"exit_code": envelope.ExitCode,
+			"stdout":     envelope.Stdout,
+			"stderr":     envelope.Stderr,
+			"exit_code":  envelope.ExitCode,
+			"stdout_ref": envelope.StdoutRef,
+			"stderr_ref": envelope.StderrRef,
 		},
 		Error: envelope.Error,
 		Metadata: map[string]interface{}{

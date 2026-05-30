@@ -38,8 +38,10 @@ type ResultEnvelope struct {
 	Preset      string
 	Elapsed     time.Duration
 	Metadata    map[string]any
-	StdoutBytes int64 `json:"stdout_bytes,omitempty"`
-	StderrBytes int64 `json:"stderr_bytes,omitempty"`
+	StdoutBytes int64  `json:"stdout_bytes,omitempty"`
+	StderrBytes int64  `json:"stderr_bytes,omitempty"`
+	StdoutRef   string `json:"stdout_ref,omitempty"`
+	StderrRef   string `json:"stderr_ref,omitempty"`
 }
 
 // Executor runs a command preset through a contracts.CommandRunner.
@@ -125,6 +127,8 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 		Elapsed:     time.Since(start),
 		StdoutBytes: res.StdoutBytes,
 		StderrBytes: res.StderrBytes,
+		StdoutRef:   res.StdoutRef,
+		StderrRef:   res.StderrRef,
 		Metadata: map[string]any{
 			"command":  request.Args[0],
 			"args":     append([]string(nil), finalArgs...),
