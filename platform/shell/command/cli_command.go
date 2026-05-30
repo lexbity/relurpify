@@ -104,8 +104,9 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 		Truncated:   envelope.Truncated,
 		TruncatedAt: envelope.TruncatedAt,
 		Data: map[string]interface{}{
-			"stdout": envelope.Stdout,
-			"stderr": envelope.Stderr,
+			"stdout":    envelope.Stdout,
+			"stderr":    envelope.Stderr,
+			"exit_code": envelope.ExitCode,
 		},
 		Error: envelope.Error,
 		Metadata: map[string]interface{}{

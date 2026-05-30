@@ -14,10 +14,11 @@ import (
 )
 
 type recordingRunner struct {
-	request contracts.CommandRequest
-	stdout  string
-	stderr  string
-	err     error
+	request  contracts.CommandRequest
+	stdout   string
+	stderr   string
+	exitCode int
+	err      error
 }
 
 func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
@@ -28,6 +29,7 @@ func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (
 	return &contracts.CommandResult{
 		Stdout:      r.stdout,
 		Stderr:      r.stderr,
+		ExitCode:    r.exitCode,
 		StdoutBytes: int64(len(r.stdout)),
 		StderrBytes: int64(len(r.stderr)),
 	}, nil
@@ -140,6 +142,57 @@ func TestGenerateSubprocessTool_ParameterSubstitution(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, []string{"echo", "hello"}, runner.request.Args)
+}
+
+func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
+	def := &contracts.ToolManifest{
+		Name:   "demo",
+		Family: "demo",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{
+				Base: []string{"false"},
+			},
+		},
+		Capability: contracts.ToolManifestCapability{
+			TrustClass:  "builtin_trusted",
+			RiskClass:   []string{"execute"},
+			EffectClass: []string{"external_state"},
+		},
+	}
+
+	t.Run("non-zero exit code surfaces in Data", func(t *testing.T) {
+		runner := &recordingRunner{exitCode: 1, stderr: "error occurred"}
+		tool := GenerateSubprocessTool(def, runner)
+		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		require.NoError(t, err)
+		require.False(t, result.Success)
+		code, ok := result.Data["exit_code"]
+		require.True(t, ok, "exit_code must be present in Data")
+		require.Equal(t, 1, code)
+	})
+
+	t.Run("zero exit code surfaces exit_code=0", func(t *testing.T) {
+		runner := &recordingRunner{exitCode: 0, stdout: "ok"}
+		tool := GenerateSubprocessTool(def, runner)
+		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		require.NoError(t, err)
+		require.True(t, result.Success)
+		code, ok := result.Data["exit_code"]
+		require.True(t, ok)
+		require.Equal(t, 0, code)
+	})
+
+	t.Run("torn-down process has exit_code=-1", func(t *testing.T) {
+		runner := &recordingRunner{exitCode: -1}
+		tool := GenerateSubprocessTool(def, runner)
+		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		require.NoError(t, err)
+		require.False(t, result.Success)
+		code, ok := result.Data["exit_code"]
+		require.True(t, ok)
+		require.Equal(t, -1, code)
+	})
 }
 
 func TestGenerateSubprocessTool_NoShellInjection(t *testing.T) {

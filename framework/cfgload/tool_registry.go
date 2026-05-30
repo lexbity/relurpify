@@ -229,8 +229,9 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		return &contracts.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
-				"stdout": res.Stdout,
-				"stderr": res.Stderr,
+				"stdout":    res.Stdout,
+				"stderr":    res.Stderr,
+				"exit_code": res.ExitCode,
 			},
 			Error: msg,
 		}, nil
@@ -238,8 +239,9 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"stdout": res.Stdout,
-			"stderr": res.Stderr,
+			"stdout":    res.Stdout,
+			"stderr":    res.Stderr,
+			"exit_code": res.ExitCode,
 		},
 	}, nil
 }

@@ -38,6 +38,7 @@ type ResultEnvelope struct {
 	Stdout      string
 	Stderr      string
 	Error       string
+	ExitCode    int
 	Command     []string
 	Workdir     string
 	Preset      string
@@ -134,6 +135,7 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 		Success:     res.ExitCode == 0,
 		Stdout:      res.Stdout,
 		Stderr:      res.Stderr,
+		ExitCode:    res.ExitCode,
 		Error:       "",
 		Command:     append([]string(nil), request.Args...),
 		Workdir:     selectedWorkdir,

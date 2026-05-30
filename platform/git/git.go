@@ -163,14 +163,15 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*contracts.
 		if msg == "" {
 			msg = "exit code " + strconv.Itoa(res.ExitCode)
 		}
-		return &contracts.ToolResult{Success: false, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
+		return &contracts.ToolResult{Success: false, Data: map[string]interface{}{"exit_code": res.ExitCode}, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
 	}
 	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"output": res.Stdout,
-			"stderr": res.Stderr,
-			"time":   time.Now().UTC(),
+			"output":    res.Stdout,
+			"stderr":    res.Stderr,
+			"exit_code": res.ExitCode,
+			"time":      time.Now().UTC(),
 		},
 	}, nil
 }
