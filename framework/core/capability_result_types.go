@@ -135,26 +135,42 @@ type CapabilityResultEnvelope struct {
 }
 
 func NewCapabilityResultEnvelope(descriptor CapabilityDescriptor, result *contracts.ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding) *CapabilityResultEnvelope {
+	return newCapabilityResultEnvelopeWithBlocks(descriptor, result, disposition, snapshot, approval, nil)
+}
+
+// NewCapabilityResultEnvelopeWithBlocks creates an envelope using pre-computed
+// content blocks. This allows callers to apply structured chunking (from
+// framework/toolcapabilities) before envelope construction.
+func NewCapabilityResultEnvelopeWithBlocks(descriptor CapabilityDescriptor, result *contracts.ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding, blocks []ContentBlock) *CapabilityResultEnvelope {
+	return newCapabilityResultEnvelopeWithBlocks(descriptor, result, disposition, snapshot, approval, blocks)
+}
+
+func newCapabilityResultEnvelopeWithBlocks(descriptor CapabilityDescriptor, result *contracts.ToolResult, disposition ContentDisposition, snapshot *PolicySnapshot, approval *ApprovalBinding, blocks []ContentBlock) *CapabilityResultEnvelope {
 	provenance := ContentProvenance{
 		CapabilityID: descriptor.ID,
 		ProviderID:   descriptor.Source.ProviderID,
 		TrustClass:   descriptor.TrustClass,
 		Disposition:  disposition,
 	}
+
+	if blocks == nil {
+		blocks = capabilityResultBlocks(result, provenance)
+	}
+
 	envelope := &CapabilityResultEnvelope{
-		Descriptor:  descriptor,
-		Result:      result,
-		Provenance:  provenance,
-		Disposition: disposition,
-		Insertion:   DefaultInsertionDecision(descriptor, disposition),
-		Approval:    approval,
-		Policy:      snapshot,
-		RecordedAt:  time.Now().UTC(),
+		Descriptor:    descriptor,
+		Result:        result,
+		Provenance:    provenance,
+		Disposition:   disposition,
+		Insertion:     DefaultInsertionDecision(descriptor, disposition),
+		Approval:      approval,
+		Policy:        snapshot,
+		RecordedAt:    time.Now().UTC(),
+		ContentBlocks: blocks,
 	}
 	if snapshot != nil {
 		envelope.Insertion.PolicySnapshotID = snapshot.ID
 	}
-	envelope.ContentBlocks = capabilityResultBlocks(result, provenance)
 	envelope.BlockInsertions = buildContentBlockInsertions(envelope.ContentBlocks, envelope.Insertion)
 	return envelope
 }
@@ -254,6 +270,10 @@ func ToolResultEnvelope(result *contracts.ToolResult) (*CapabilityResultEnvelope
 // execution result.
 func CapabilityExecutionEnvelope(result *contracts.CapabilityExecutionResult) (*CapabilityResultEnvelope, bool) {
 	return ToolResultEnvelope(result)
+}
+
+func CapabilityResultBlocks(result *contracts.ToolResult, provenance ContentProvenance) []ContentBlock {
+	return capabilityResultBlocks(result, provenance)
 }
 
 func capabilityResultBlocks(result *contracts.ToolResult, provenance ContentProvenance) []ContentBlock {
