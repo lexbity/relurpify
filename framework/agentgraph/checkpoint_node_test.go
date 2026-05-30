@@ -108,7 +108,6 @@ func TestCheckpointNodeMaterializesCheckpointFromStreamHook(t *testing.T) {
 		},
 		Trim: contextstream.TrimMetadata{
 			ShortfallTokens: 3,
-			Truncated:       true,
 		},
 	}, contextdata.MemoryClassTask)
 
@@ -206,7 +205,6 @@ func TestCheckpointNodeMirrorsStreamResultToEnvelope(t *testing.T) {
 		CompletedAt: time.Now(),
 		Trim: contextstream.TrimMetadata{
 			ShortfallTokens: 0,
-			Truncated:       false,
 		},
 	}, contextdata.MemoryClassTask)
 

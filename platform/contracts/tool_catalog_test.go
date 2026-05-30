@@ -56,7 +56,6 @@ func TestToolParameterTypeConstants(t *testing.T) {
 func TestToolManifestSandboxDefaults(t *testing.T) {
 	sandbox := ToolManifestSandbox{}
 	require.False(t, sandbox.AllowFlags, "AllowFlags must default to false")
-	require.Equal(t, int64(0), sandbox.MaxOutputBytes, "MaxOutputBytes must default to 0")
 	require.Equal(t, int64(0), sandbox.MemoryMB, "MemoryMB must default to 0")
 	require.Equal(t, int64(0), sandbox.PidsLimit, "PidsLimit must default to 0")
 	require.Equal(t, float64(0), sandbox.CPUs, "CPUs must default to 0")
@@ -68,7 +67,6 @@ func TestToolManifestSandboxJSONRoundTrip(t *testing.T) {
 		TimeoutSeconds: 30,
 		NetworkAccess:  true,
 		AllowFlags:     true,
-		MaxOutputBytes: 512 * 1024,
 		MemoryMB:       1024,
 		PidsLimit:      512,
 		CPUs:           2.0,
@@ -83,7 +81,6 @@ func TestToolManifestSandboxJSONRoundTrip(t *testing.T) {
 	require.Equal(t, sandbox.TimeoutSeconds, decoded.TimeoutSeconds)
 	require.Equal(t, sandbox.NetworkAccess, decoded.NetworkAccess)
 	require.Equal(t, sandbox.AllowFlags, decoded.AllowFlags)
-	require.Equal(t, sandbox.MaxOutputBytes, decoded.MaxOutputBytes)
 	require.Equal(t, sandbox.MemoryMB, decoded.MemoryMB)
 	require.Equal(t, sandbox.PidsLimit, decoded.PidsLimit)
 	require.Equal(t, sandbox.CPUs, decoded.CPUs)

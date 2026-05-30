@@ -162,7 +162,7 @@ func latestReadOnlyFileSummary(observations []ToolObservation) (string, bool) {
 		if snippet == "" {
 			continue
 		}
-		snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
+		snippet = trimToBudget(strings.ReplaceAll(snippet, "\n", " "), 220)
 		if path != "" {
 			return fmt.Sprintf("Summary of %s: %s", path, snippet), true
 		}
@@ -323,7 +323,7 @@ func verificationNoEditSummary(toolName, stdout, stderr string) string {
 		output = strings.TrimSpace(stderr)
 	}
 	if output != "" {
-		return truncateForPrompt(output, 220)
+		return trimToBudget(output, 220)
 	}
 	return fmt.Sprintf("%s verification passed", toolName)
 }

@@ -128,7 +128,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 		if len(toolCalls) > 0 {
 			call := toolCalls[0]
 			return decisionPayload{
-				Thought:   truncateForPrompt(resp.Text, 220),
+				Thought:   trimToBudget(resp.Text, 220),
 				Tool:      call.Name,
 				Arguments: call.Args,
 				Complete:  false,
@@ -142,7 +142,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 			detectedCalls = detectedCalls[:maxTools]
 		}
 		return decisionPayload{
-			Thought:   truncateForPrompt(resp.Text, 220),
+			Thought:   trimToBudget(resp.Text, 220),
 			Complete:  false,
 			Timestamp: time.Now().UTC(),
 		}, detectedCalls, nil
@@ -163,16 +163,16 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	}
 	if repairErr != nil || repairStrategy != "llm" {
 		if textSuggestsPendingToolCall(resp.Text) {
-			return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
+			return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
 		}
-		return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
+		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	parsed, err = parseDecision(repaired)
 	if err != nil {
 		if textSuggestsPendingToolCall(resp.Text) {
-			return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
+			return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
 		}
-		return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
+		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	if parsed.Tool != "" {
 		return parsed, []contracts.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil

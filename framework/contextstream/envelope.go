@@ -21,7 +21,7 @@ func ApplyResult(env *contextdata.Envelope, result *Result) error {
 	if result.Record != nil {
 		env.SetAssemblyMetadata(result.Record.AssemblyMetadata)
 	}
-	if result.Trim.Truncated {
+	if result.Trim.ShortfallTokens > 0 || len(result.Trim.Substitutions) > 0 {
 		env.SetWorkingValue("contextstream.trimmed", true, contextdata.MemoryClassTask)
 		env.SetWorkingValue("contextstream.shortfall_tokens", result.Trim.ShortfallTokens, contextdata.MemoryClassTask)
 	}

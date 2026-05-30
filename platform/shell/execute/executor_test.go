@@ -110,7 +110,7 @@ func TestToolResultNoTruncationUnderLimit(t *testing.T) {
 	require.Equal(t, int64(len("short err")), envelope.StderrBytes)
 }
 
-func TestToolResultMaxOutputBytesZeroUsesDefault(t *testing.T) {
+func TestToolResultStdoutBytesWithLargeOutput(t *testing.T) {
 	runner := &recordingRunner{stdout: strings.Repeat("x", 300*1024)} // 300KB — exceeds 256KB default
 	exec := NewExecutor(t.TempDir(), CommandPreset{
 		Name:    "cli_cat",
@@ -122,7 +122,7 @@ func TestToolResultMaxOutputBytesZeroUsesDefault(t *testing.T) {
 	require.Equal(t, int64(300*1024), envelope.StdoutBytes)
 }
 
-func TestToolResultMaxOutputBytesNegativeIsUnlimited(t *testing.T) {
+func TestToolResultStdoutBytesLargeCapture(t *testing.T) {
 	runner := &recordingRunner{stdout: strings.Repeat("x", 1024*1024)} // 1MB
 	exec := NewExecutor(t.TempDir(), CommandPreset{
 		Name:    "cli_cat",
@@ -135,7 +135,7 @@ func TestToolResultMaxOutputBytesNegativeIsUnlimited(t *testing.T) {
 	require.Equal(t, 1024*1024, len(envelope.Stdout))
 }
 
-func TestToolResultTruncationPropagatedToToolResult(t *testing.T) {
+func TestToolResultStdoutContentPassedThrough(t *testing.T) {
 	runner := &recordingRunner{stdout: "ab"}
 	exec := NewExecutor(t.TempDir(), CommandPreset{
 		Name:    "cli_echo",
@@ -148,7 +148,7 @@ func TestToolResultTruncationPropagatedToToolResult(t *testing.T) {
 	require.Equal(t, int64(len("ab")), envelope.StdoutBytes)
 }
 
-func TestToolResultMixedTruncation(t *testing.T) {
+func TestToolResultLargeStderrPreservesSmallStdout(t *testing.T) {
 	runner := &recordingRunner{stdout: "small out", stderr: strings.Repeat("e", 1024*1024)} // 1MB stderr
 	exec := NewExecutor(t.TempDir(), CommandPreset{
 		Name:    "cli_mixed",

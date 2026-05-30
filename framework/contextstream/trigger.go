@@ -105,7 +105,6 @@ func trimMetadataFromCompilation(req Request, compilation *compiler.CompilationR
 	return TrimMetadata{
 		BudgetTokens:    req.MaxTokens,
 		ShortfallTokens: compilation.ShortfallTokens,
-		Substitutions:   append([]compiler.SummarySubstitution(nil), compilation.Substitutions...),
-		Truncated:       compilation.ShortfallTokens > 0 || len(compilation.Substitutions) > 0,
+		Substitutions:   compilation.Substitutions,
 	}
 }

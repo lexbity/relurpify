@@ -153,7 +153,6 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 		},
 		Trim: contextstream.TrimMetadata{
 			ShortfallTokens: 2,
-			Truncated:       true,
 		},
 		StartedAt:   time.Now().Add(-1 * time.Minute),
 		CompletedAt: time.Now(),

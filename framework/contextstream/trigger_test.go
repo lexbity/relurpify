@@ -56,8 +56,8 @@ func TestRequestBlockingAppliesCompilationResult(t *testing.T) {
 	if result == nil || result.Record == nil {
 		t.Fatalf("expected result and record, got %+v", result)
 	}
-	if !result.Trim.Truncated {
-		t.Fatal("expected trimmed result")
+	if result.Trim.ShortfallTokens <= 0 {
+		t.Fatal("expected trimmed result (shortfall)")
 	}
 	if result.Trim.ShortfallTokens != 5 {
 		t.Fatalf("expected shortfall 5, got %d", result.Trim.ShortfallTokens)

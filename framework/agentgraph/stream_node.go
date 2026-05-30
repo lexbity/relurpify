@@ -102,7 +102,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 		if result != nil {
 			data["shortfall_tokens"] = result.Trim.ShortfallTokens
-			data["trimmed"] = result.Trim.Truncated
+			data["trimmed"] = result.Trim.ShortfallTokens > 0 || len(result.Trim.Substitutions) > 0
 			data["streamed_ref_count"] = len(result.Compilation.StreamedRefs)
 		}
 		return &core.Result{

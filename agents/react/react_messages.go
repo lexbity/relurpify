@@ -252,17 +252,17 @@ func compactToolData(call contracts.ToolCall, res *contracts.ToolResult) (string
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}
 	if res.Error != "" {
-		stdout := truncateForPrompt(fmt.Sprint(res.Data["stdout"]), 320)
-		stderr := truncateForPrompt(fmt.Sprint(res.Data["stderr"]), 320)
+		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), 320)
+		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), 320)
 		reason := strings.TrimSpace(firstMeaningfulLine(stderr))
 		if reason == "" {
 			reason = strings.TrimSpace(firstMeaningfulLine(stdout))
 		}
 		if reason == "" {
-			reason = truncateForPrompt(res.Error, 220)
+			reason = trimToBudget(res.Error, 220)
 		}
 		return fmt.Sprintf("%s failed: %s", call.Name, reason), map[string]interface{}{
-			"error":  truncateForPrompt(res.Error, 220),
+			"error":  trimToBudget(res.Error, 220),
 			"stdout": stdout,
 			"stderr": stderr,
 		}
@@ -271,23 +271,23 @@ func compactToolData(call contracts.ToolCall, res *contracts.ToolResult) (string
 	case "file_read":
 		path := fmt.Sprint(call.Args["path"])
 		content := fmt.Sprint(res.Data["content"])
-		snippet := truncateForPrompt(content, 900)
+		snippet := trimToBudget(content, 900)
 		return fmt.Sprintf("Read %s", path), map[string]interface{}{"path": path, "snippet": snippet}
 	case "file_list":
-		files := truncateForPrompt(fmt.Sprint(res.Data["files"]), 220)
+		files := trimToBudget(fmt.Sprint(res.Data["files"]), 220)
 		return fmt.Sprintf("Listed files: %s", files), map[string]interface{}{"files": files}
 	default:
-		stdout := truncateForPrompt(fmt.Sprint(res.Data["stdout"]), 320)
-		stderr := truncateForPrompt(fmt.Sprint(res.Data["stderr"]), 320)
+		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), 320)
+		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), 320)
 		if stdout != "" || stderr != "" {
 			summary := strings.TrimSpace(strings.Join([]string{firstMeaningfulLine(stderr), firstMeaningfulLine(stdout)}, " | "))
 			if summary == "" {
-				summary = truncateForPrompt(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), 220)
+				summary = trimToBudget(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), 220)
 			}
 			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"stdout": stdout, "stderr": stderr}
 		}
 		if len(res.Data) > 0 {
-			summary := truncateForPrompt(fmt.Sprint(res.Data), 220)
+			summary := trimToBudget(fmt.Sprint(res.Data), 220)
 			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"summary": summary}
 		}
 		return fmt.Sprintf("%s completed", call.Name), map[string]interface{}{"summary": fmt.Sprintf("%s completed", call.Name)}
@@ -300,7 +300,7 @@ func firstMeaningfulLine(text string) string {
 		if line == "" {
 			continue
 		}
-		return truncateForPrompt(line, 180)
+		return trimToBudget(line, 180)
 	}
 	return ""
 }
@@ -321,13 +321,16 @@ func reactTaskScope(state *contextdata.Envelope) string {
 	return getWorkingValueAsString(state, "task.id")
 }
 
-func truncateForPrompt(value string, max int) string {
+func trimToBudget(value string, max int) string {
 	value = strings.TrimSpace(value)
 	if max <= 0 || len(value) <= max {
 		return value
 	}
 	return strings.TrimSpace(value[:max]) + "..."
 }
+
+// truncateForPrompt is removed in Phase 7. Use trimToBudget for caller-side budget
+// limits, or let the InsertionDecision gate what the model sees.
 
 func toolNames(tools []contracts.Tool) []string {
 	out := make([]string, 0, len(tools))
@@ -348,7 +351,7 @@ func summarizeToolPayload(result *contracts.ToolResult) string {
 	if result.Error != "" {
 		return result.Error
 	}
-	return truncateForPrompt(fmt.Sprint(result.Data), 220)
+	return trimToBudget(fmt.Sprint(result.Data), 220)
 }
 
 func toolSummaryBudgetForPhase(phase string) int {

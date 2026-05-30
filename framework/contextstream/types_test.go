@@ -28,9 +28,6 @@ func TestRequestAndModeTypes(t *testing.T) {
 
 func TestTrimMetadataDefaults(t *testing.T) {
 	meta := TrimMetadata{}
-	if meta.Truncated {
-		t.Fatal("expected zero-value trim metadata to be untrimmed")
-	}
 	if meta.BudgetTokens != 0 || meta.ShortfallTokens != 0 {
 		t.Fatalf("unexpected trim metadata: %+v", meta)
 	}

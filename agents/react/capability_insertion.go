@@ -53,17 +53,17 @@ func visibleBlockSummary(envelope *core.CapabilityResultEnvelope) (string, bool)
 		}
 		switch typed := block.(type) {
 		case core.TextContentBlock:
-			text := truncateForPrompt(strings.TrimSpace(typed.Text), 220)
+			text := trimToBudget(strings.TrimSpace(typed.Text), 220)
 			if text != "" {
 				parts = append(parts, text)
 			}
 		case core.StructuredContentBlock:
-			text := truncateForPrompt(fmt.Sprint(typed.Data), 220)
+			text := trimToBudget(fmt.Sprint(typed.Data), 220)
 			if text != "" && text != "<nil>" {
 				parts = append(parts, text)
 			}
 		case core.ErrorContentBlock:
-			text := truncateForPrompt(strings.TrimSpace(typed.Message), 220)
+			text := trimToBudget(strings.TrimSpace(typed.Message), 220)
 			if text != "" {
 				parts = append(parts, text)
 			}

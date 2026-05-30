@@ -269,7 +269,7 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 		snapshot.Metadata["stream_request_id"] = sr.Request.ID
 		snapshot.Metadata["stream_mode"] = string(sr.Request.Mode)
 		snapshot.Metadata["shortfall_tokens"] = sr.Trim.ShortfallTokens
-		snapshot.Metadata["trimmed"] = sr.Trim.Truncated
+		snapshot.Metadata["trimmed"] = sr.Trim.ShortfallTokens > 0 || len(sr.Trim.Substitutions) > 0
 	}
 	inline, err := json.Marshal(map[string]any{
 		"checkpoint_request": req,

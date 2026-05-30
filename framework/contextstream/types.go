@@ -33,7 +33,6 @@ type TrimMetadata struct {
 	BudgetTokens    int
 	ShortfallTokens int
 	Substitutions   []compiler.SummarySubstitution
-	Truncated       bool
 }
 
 // Result is the orchestrator-facing outcome of a context streaming request.
