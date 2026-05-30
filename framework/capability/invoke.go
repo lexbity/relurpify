@@ -223,7 +223,11 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 			}
 			proceed, guideErr := r.handleDoomLoopGuidance(ctx, *doomErr)
 			if guideErr != nil {
-				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, guideErr)
+				// Return the original precheck error which carries the actionable
+				// message for the model (DoomLoopPrecheck wraps DoomLoopError with
+				// guidance text). The bare DoomLoopError from guidance is less
+				// informative.
+				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, err)
 			}
 			if proceed {
 				return entry, nil

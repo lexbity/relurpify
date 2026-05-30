@@ -28,6 +28,10 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 	if len(scope.WritePathGlobs) > 0 {
 		cloned.AddPrecheck(capability.WritePathPrecheck{Globs: append([]string{}, scope.WritePathGlobs...)})
 	}
+	// Phase 9: default doom-loop detector — blocks after 3 identical failing calls.
+	loopCheck := capability.NewDoomLoopPrecheck()
+	cloned.AddPrecheck(loopCheck)
+	cloned.AddPostcheck(loopCheck)
 	return cloned
 }
 
