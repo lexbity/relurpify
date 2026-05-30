@@ -1,5 +1,9 @@
 .PHONY: test-unit test-integ test-scenario test-all
 .PHONY: validate-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
+.PHONY: lint-layering
+
+lint-layering:
+	@bash scripts/lint-layering.sh
 
 validate-config:
 	go run ./app/relurpish validate-config
