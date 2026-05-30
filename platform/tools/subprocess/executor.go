@@ -53,6 +53,13 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 
+	// SF-1 SSRF guard: for network-access tools, screen target hosts against
+	// the sandbox denylist before the command runs. Private, loopback, and
+	// link-local addresses (incl. cloud-metadata endpoints) are never reachable.
+	if err := checkEgress(t.manifest, cmd); err != nil {
+		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
 	execSpec := t.manifest.Execution
 	request := contracts.CommandRequest{
 		Args:    cmd,
