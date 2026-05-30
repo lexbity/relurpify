@@ -3,6 +3,7 @@ package subprocess
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +34,16 @@ func (t *subprocessTool) Parameters() []contracts.ToolParameter {
 }
 func (t *subprocessTool) IsAvailable(context.Context) bool { return t.runner != nil }
 func (t *subprocessTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+	perms := &contracts.PermissionSet{}
+	if cmd := t.manifest.Execution.Command; cmd != nil && len(cmd.Base) > 0 {
+		hitl := hasDestructiveRisk(t.manifest.Capability.RiskClass)
+		perms.Executables = []contracts.ExecutablePermission{{
+			Binary:       cmd.Base[0],
+			Args:         append([]string(nil), t.manifest.Execution.DefaultArgs...),
+			HITLRequired: hitl,
+		}}
+	}
+	return contracts.ToolPermissions{Permissions: perms}
 }
 func (t *subprocessTool) Tags() []string {
 	return append([]string(nil), t.manifest.Capability.RiskClass...)
@@ -43,21 +53,29 @@ func (t *subprocessTool) Tags() []string {
 // template via ExpandCommand (which enforces flag-injection, typed flags,
 // platform variants, and placeholder substitution), then delegates to the
 // configured CommandRunner.
-func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (res *contracts.ToolResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("subprocess tool %q panic recovered: %v", t.manifest.Name, r)
+			res = &contracts.ToolResult{Success: false, Error: "tool panicked — see server logs"}
+			err = nil
+		}
+	}()
+
 	if t.runner == nil {
 		return nil, fmt.Errorf("command runner missing")
 	}
 
-	cmd, err := ExpandCommand(t.manifest, args)
-	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+	cmd, e := ExpandCommand(t.manifest, args)
+	if e != nil {
+		return &contracts.ToolResult{Success: false, Error: e.Error()}, nil
 	}
 
 	// SF-1 SSRF guard: for network-access tools, screen target hosts against
 	// the sandbox denylist before the command runs. Private, loopback, and
 	// link-local addresses (incl. cloud-metadata endpoints) are never reachable.
-	if err := checkEgress(t.manifest, cmd); err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+	if e := checkEgress(t.manifest, cmd); e != nil {
+		return &contracts.ToolResult{Success: false, Error: e.Error()}, nil
 	}
 
 	execSpec := t.manifest.Execution
@@ -81,25 +99,25 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		}
 	}
 
-	res, runErr := t.runner.Run(ctx, request)
+	r, runErr := t.runner.Run(ctx, request)
 	if runErr != nil {
 		return nil, fmt.Errorf("subprocess execution failed: %w", runErr)
 	}
 
 	data := map[string]interface{}{
-		"stdout":     res.Stdout,
-		"stderr":     res.Stderr,
-		"exit_code":  res.ExitCode,
-		"stdout_ref": res.StdoutRef,
-		"stderr_ref": res.StderrRef,
+		"stdout":     r.Stdout,
+		"stderr":     r.Stderr,
+		"exit_code":  r.ExitCode,
+		"stdout_ref": r.StdoutRef,
+		"stderr_ref": r.StderrRef,
 	}
 
-	if res.ExitCode != 0 {
-		msg := res.Stderr
+	if r.ExitCode != 0 {
+		msg := r.Stderr
 		if msg == "" {
-			msg = fmt.Sprintf("exit code %d", res.ExitCode)
+			msg = fmt.Sprintf("exit code %d", r.ExitCode)
 		}
-		if mapped, ok := t.manifest.Errors[strconv.Itoa(res.ExitCode)]; ok && strings.TrimSpace(mapped) != "" {
+		if mapped, ok := t.manifest.Errors[strconv.Itoa(r.ExitCode)]; ok && strings.TrimSpace(mapped) != "" {
 			msg = mapped
 		}
 		return &contracts.ToolResult{
@@ -113,6 +131,15 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		Success: true,
 		Data:    data,
 	}, nil
+}
+
+func hasDestructiveRisk(classes []string) bool {
+	for _, c := range classes {
+		if strings.TrimSpace(strings.ToLower(c)) == contracts.TagDestructive {
+			return true
+		}
+	}
+	return false
 }
 
 func stringArg(args map[string]interface{}, name string) string {

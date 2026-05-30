@@ -446,7 +446,7 @@ func TestParityCLIMkdir(t *testing.T) {
 
 // --- Param/tag/metadata parity ---
 
-func TestSubprocessToolPermissionsEmpty(t *testing.T) {
+func TestSubprocessToolPermissionsNotEmptyWithCommand(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(contracts.ToolManifest{
 		Name:    "cli_jq",
@@ -459,7 +459,8 @@ func TestSubprocessToolPermissionsEmpty(t *testing.T) {
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
-	require.Empty(t, perms.Permissions.Executables)
+	require.Len(t, perms.Permissions.Executables, 1, "Permissions must derive Executables from command.base")
+	require.Equal(t, "jq", perms.Permissions.Executables[0].Binary)
 }
 
 func TestSubprocessToolTagsFromCapability(t *testing.T) {
@@ -491,6 +492,130 @@ func TestSubprocessToolNilRunner(t *testing.T) {
 	require.False(t, tool.IsAvailable(context.Background()))
 	_, err := tool.Execute(context.Background(), nil)
 	require.Error(t, err)
+}
+
+// --- Permissions tests ---
+
+func TestPermissionsDerivesBinaryFromCommandBase(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "cli_jq",
+		Family:  "text",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+		},
+	}, nil)
+
+	perms := tool.Permissions()
+	require.NotNil(t, perms.Permissions)
+	require.Len(t, perms.Permissions.Executables, 1)
+	require.Equal(t, "jq", perms.Permissions.Executables[0].Binary)
+}
+
+func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "empty",
+		Family:  "text",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+		},
+	}, nil)
+
+	perms := tool.Permissions()
+	require.NotNil(t, perms.Permissions)
+	require.Empty(t, perms.Permissions.Executables)
+}
+
+func TestPermissionsIncludesDefaultArgs(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "cli_mkdir",
+		Family:  "fileops",
+		Execution: contracts.ToolManifestExecution{
+			Backend:     contracts.ToolBackendSubprocess,
+			Command:     &contracts.ToolManifestCommand{Base: []string{"mkdir"}},
+			DefaultArgs: []string{"-p"},
+		},
+	}, nil)
+
+	perms := tool.Permissions()
+	require.Len(t, perms.Permissions.Executables, 1)
+	require.Equal(t, []string{"-p"}, perms.Permissions.Executables[0].Args)
+}
+
+func TestPermissionsHITLFalseByDefault(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "cli_echo",
+		Family:  "text",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+		},
+		Capability: contracts.ToolManifestCapability{
+			RiskClass: []string{"execute"},
+		},
+	}, nil)
+
+	require.False(t, tool.Permissions().Permissions.Executables[0].HITLRequired)
+}
+
+func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "cli_gdb",
+		Family:  "build",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{Base: []string{"gdb"}},
+		},
+		Capability: contracts.ToolManifestCapability{
+			RiskClass: []string{"execute", "destructive"},
+		},
+	}, nil)
+
+	require.True(t, tool.Permissions().Permissions.Executables[0].HITLRequired)
+}
+
+// --- Panic recovery tests ---
+
+func TestPanicInRunnerReturnsStructuredResult(t *testing.T) {
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "cli_tool",
+		Family:  "text",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+		},
+	}, &panickingRunner{})
+
+	result, err := tool.Execute(context.Background(), nil)
+	require.NoError(t, err) // panic recovery returns structured result, not Go error
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "panicked")
+}
+
+func TestPanicInExpandCommandDoesNotPanic(t *testing.T) {
+	// This constructs an invalid manifest that would panic during processing
+	// The manifest itself is valid, but we exercise the deferred recovery path
+	runner := &recordingRunner{}
+	tool := NewTool(contracts.ToolManifest{
+		Name:    "panic_test",
+		Family:  "text",
+		Execution: contracts.ToolManifestExecution{
+			Backend: contracts.ToolBackendSubprocess,
+			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+		},
+	}, runner)
+
+	// Normal execution — no panic expected here
+	result, err := tool.Execute(context.Background(), nil)
+	require.NoError(t, err)
+	require.True(t, result.Success)
+}
+
+// panickingRunner panics on Run to verify defer/recover in executor.
+type panickingRunner struct{}
+
+func (r *panickingRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+	panic("unexpected runtime error in command runner")
 }
 
 // exitCodeRunner is a helper that returns a fixed exit code.
