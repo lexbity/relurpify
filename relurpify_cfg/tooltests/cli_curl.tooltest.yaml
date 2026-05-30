@@ -1,0 +1,11 @@
+tool: cli_curl
+# Verifies SSRF egress blocking — private host must be denied
+stdout: "should not be reached"
+args:
+  args: ["http://127.0.0.1:8080/"]
+expect:
+  success: false
+  exit_code: 0
+  error_contains:
+    - "denied"
+    - "SSRF"

@@ -24,4 +24,6 @@ capability:
     - execute
     - network
   effect_class:
+    - external_state
+    - network_egress
     - process_spawn

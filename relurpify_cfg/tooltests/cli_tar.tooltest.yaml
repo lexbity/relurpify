@@ -1,0 +1,5 @@
+tool: cli_tar
+stdout: "ok"
+expect:
+  exit_code: 0
+  stdout_contains: ["ok"]

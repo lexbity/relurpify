@@ -23,4 +23,5 @@ capability:
     - execute
     - destructive
   effect_class:
+    - filesystem_read
     - process_spawn

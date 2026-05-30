@@ -22,3 +22,4 @@ capability:
     - execute
   effect_class:
     - filesystem_read
+    - process_spawn

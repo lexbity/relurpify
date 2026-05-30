@@ -1,0 +1,11 @@
+tool: cli_sort
+# Verifies sort tool with stdin and allow_flags
+stdout: "apple\nbanana\ncherry"
+args:
+  args: ["-r"]
+  stdin: "cherry\nbanana\napple"
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "apple"
+    - "banana"

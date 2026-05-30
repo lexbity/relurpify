@@ -1,0 +1,5 @@
+tool: cli_awk
+stdout: "ok"
+expect:
+  exit_code: 0
+  stdout_contains: ["ok"]

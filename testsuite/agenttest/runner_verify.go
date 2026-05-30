@@ -9,8 +9,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/platform/shell"
 	"codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
@@ -25,11 +25,12 @@ type VerifyStepResult struct {
 }
 
 func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]contracts.Tool {
-	platformCfg, err := cfgload.LoadPlatformConfig(workspace)
+	manifestDir := cfgload.DefaultToolManifestDir(workspace)
+	manifests, err := cfgload.LoadToolManifests(manifestDir)
 	if err != nil {
-		platformCfg = &cfgload.PlatformConfig{}
+		return nil
 	}
-	tools := shell.CommandLineTools(workspace, commandRunnerAdapter{runner: runner}, platformCfg.ToolRegistry)
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests)
 	index := make(map[string]contracts.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool

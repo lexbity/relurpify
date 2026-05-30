@@ -30,3 +30,5 @@ capability:
     - execute
   effect_class:
     - external_state
+    - filesystem_read
+    - process_spawn

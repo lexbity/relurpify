@@ -16,24 +16,15 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/framework/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
-	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
-	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 )
 
 var (
-	newCapabilityRegistryFn  = capability.NewRegistry
-	platformFileOperationsFn = platformfs.FileOperations
-	newSimilarityToolFn      = func(workspace string) contracts.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
-	newSemanticSearchToolFn  = func(workspace string) contracts.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
-	newGitCommandToolFn      = func(workspace, command string, runner contracts.CommandRunner) contracts.Tool {
-		return &platformgit.GitCommandTool{RepoPath: workspace, Command: command, Runner: runner}
-	}
-	platformShellCommandLineToolsFn = platformshell.CommandLineTools
-	newASTSQLiteStoreFn             = ast.NewSQLiteStore
-	newGraphDBFn                    = graphdb.Open
+	newCapabilityRegistryFn = capability.NewRegistry
+	newASTSQLiteStoreFn      = ast.NewSQLiteStore
+	newGraphDBFn             = graphdb.Open
 	startIndexingFn                 = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
 	newSearchEngineFn               = search.NewSearchEngine
 	attachASTSymbolProviderFn       = ast.AttachASTSymbolProvider
@@ -94,10 +85,6 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 		return nil, err
 	}
 	toolManifests := platformCfg.ToolManifests
-	toolRegistry := platformCfg.ToolRegistry
-	if toolRegistry == nil {
-		return nil, fmt.Errorf("platform tool registry missing")
-	}
 	registry.UseToolAdmission(capability.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
@@ -113,6 +100,19 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 	if len(cfg.ProtectedPaths) > 0 {
 		registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
 	}
+	// Build all manifest-declared tools (subprocess + go_native) through the
+	// governance package. This replaces the legacy platformShellCommandLineToolsFn
+	// and the separate git/lang/search constructor blocks.
+	manifestTools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests, toolcapabilities.StrictMode())
+
+	// Inject CommandRunner into tools that need it (git, lang, sqlite tools
+	// that wrap CommandTool internally).
+	for _, tool := range manifestTools {
+		if setter, ok := tool.(interface{ SetCommandRunner(contracts.CommandRunner) }); ok {
+			setter.SetCommandRunner(commandRunnerAdapter{runner: runner})
+		}
+	}
+
 	register := func(tool contracts.Tool) error {
 		if err := registry.Register(tool); err != nil {
 			return err
@@ -128,16 +128,15 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 			available[contracts.NormalizeToolName(tool.Name())] = tool
 		}
 	}
-	addTools(platformFileOperationsFn(workspace)...)
-	addTools(newSimilarityToolFn(workspace), newSemanticSearchToolFn(workspace))
+	addTools(manifestTools...)
+
+	// Non-manifest go_native tools: language detectors, project metadata tools.
+	// These are registered in the native registry but have no .tool.yaml manifest.
 	addTools(
-		newGitCommandToolFn(workspace, "diff", commandRunnerAdapter{runner: runner}),
-		newGitCommandToolFn(workspace, "history", commandRunnerAdapter{runner: runner}),
-		newGitCommandToolFn(workspace, "branch", commandRunnerAdapter{runner: runner}),
-		newGitCommandToolFn(workspace, "commit", commandRunnerAdapter{runner: runner}),
-		newGitCommandToolFn(workspace, "blame", commandRunnerAdapter{runner: runner}),
+		&platformsearch.SimilarityTool{BasePath: workspace},
+		&platformsearch.SemanticSearchTool{BasePath: workspace},
 	)
-	addTools(platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}, toolRegistry)...)
+
 	paths := cfgload.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
@@ -173,15 +172,6 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 	})
 	attachASTSymbolProviderFn(manager, registry)
 	addTools(ast.NewASTTool(manager))
-	declared := make(map[string]struct{}, len(toolManifests))
-	for _, manifest := range toolManifests {
-		declared[contracts.NormalizeToolName(manifest.Name)] = struct{}{}
-	}
-	for name := range declared {
-		if _, ok := available[name]; !ok {
-			log.Printf("tool admission warning: manifest %q has no registered Go implementation", name)
-		}
-	}
 	for _, tool := range available {
 		if err := register(tool); err != nil {
 			return nil, err
@@ -214,7 +204,22 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 // directly (layer violation).
 func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*capability.Registry, error) {
 	capReg := newCapabilityRegistryFn()
-	tools := platformShellCommandLineToolsFn(workspace, commandRunnerAdapter{runner: runner}, nil)
+
+	// Load manifests and build tools through the governance package.
+	manifestDir := cfgload.DefaultToolManifestDir(workspace)
+	manifests, err := cfgload.LoadToolManifests(manifestDir)
+	if err != nil {
+		return nil, fmt.Errorf("load tool manifests: %w", err)
+	}
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests, toolcapabilities.StrictMode())
+
+	// Inject CommandRunner into tools that need it.
+	for _, tool := range tools {
+		if setter, ok := tool.(interface{ SetCommandRunner(contracts.CommandRunner) }); ok {
+			setter.SetCommandRunner(commandRunnerAdapter{runner: runner})
+		}
+	}
+
 	for _, tool := range tools {
 		if err := capReg.Register(tool); err != nil {
 			return nil, fmt.Errorf("register tool %s: %w", tool.Name(), err)

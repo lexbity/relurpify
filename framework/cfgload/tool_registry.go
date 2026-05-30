@@ -120,7 +120,7 @@ func BuildRegistry(
 			// happens in the packages that own the implementations.
 		case contracts.ToolBackendSubprocess:
 			if !ok {
-				tool = GenerateSubprocessTool(&manifest, nil)
+				tool = subprocess.NewTool(manifest, nil)
 			}
 		case contracts.ToolBackendComposite:
 			// Composite tools are resolved at runtime via the composition
@@ -145,18 +145,6 @@ func BuildRegistry(
 	}, nil
 }
 
-// GenerateSubprocessTool creates a subprocess-backed tool implementation from
-// a tool manifest. The returned tool never shells out through string
-// interpolation; every argument is constructed as a discrete token.
-//
-// This is a thin forwarder to platform/tools/subprocess.NewTool. It exists
-// to keep the cfgload import surface stable during the Phase 5–18 migration
-// and will be removed when the legacy cli_*.go path is deleted (Phase 19).
-func GenerateSubprocessTool(def *contracts.ToolManifest, runner contracts.CommandRunner) contracts.Tool {
-	if def == nil {
-		return nil
-	}
-	return subprocess.NewTool(*def, runner)
-}
+
 
 

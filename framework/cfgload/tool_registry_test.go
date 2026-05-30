@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"github.com/stretchr/testify/require"
 )
 
@@ -137,7 +138,7 @@ func TestGenerateSubprocessTool_ParameterSubstitution(t *testing.T) {
 		},
 	}
 	runner := &recordingRunner{}
-	tool := GenerateSubprocessTool(def, runner)
+	tool := subprocess.NewTool(*def, runner)
 	result, err := tool.Execute(context.Background(), map[string]interface{}{"value": "hello"})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -163,7 +164,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 
 	t.Run("non-zero exit code surfaces in Data", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: 1, stderr: "error occurred"}
-		tool := GenerateSubprocessTool(def, runner)
+		tool := subprocess.NewTool(*def, runner)
 		result, err := tool.Execute(context.Background(), map[string]interface{}{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
@@ -174,7 +175,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 
 	t.Run("zero exit code surfaces exit_code=0", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: 0, stdout: "ok"}
-		tool := GenerateSubprocessTool(def, runner)
+		tool := subprocess.NewTool(*def, runner)
 		result, err := tool.Execute(context.Background(), map[string]interface{}{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
@@ -185,7 +186,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 
 	t.Run("torn-down process has exit_code=-1", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: -1}
-		tool := GenerateSubprocessTool(def, runner)
+		tool := subprocess.NewTool(*def, runner)
 		result, err := tool.Execute(context.Background(), map[string]interface{}{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
@@ -217,7 +218,7 @@ func TestGenerateSubprocessTool_NoShellInjection(t *testing.T) {
 	}
 	malicious := "hello; rm -rf /"
 	runner := &recordingRunner{}
-	tool := GenerateSubprocessTool(def, runner)
+	tool := subprocess.NewTool(*def, runner)
 	_, err := tool.Execute(context.Background(), map[string]interface{}{"value": malicious})
 	require.NoError(t, err)
 	require.Len(t, runner.request.Args, 2)
@@ -244,7 +245,7 @@ func TestGenerateSubprocessTool_PlatformVariant(t *testing.T) {
 		},
 	}
 	runner := &recordingRunner{}
-	tool := GenerateSubprocessTool(def, runner)
+	tool := subprocess.NewTool(*def, runner)
 	_, err := tool.Execute(context.Background(), map[string]interface{}{})
 	require.NoError(t, err)
 	require.Equal(t, []string{"variant"}, runner.request.Args)

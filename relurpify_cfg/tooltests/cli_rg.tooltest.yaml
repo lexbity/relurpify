@@ -1,0 +1,10 @@
+tool: cli_rg
+# Verifies ripgrep basic search
+stdout: "src/main.go:1:func main()"
+args:
+  args: ["func", "src/"]
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "func"
+    - "main"

@@ -1,0 +1,10 @@
+tool: cli_echo
+# Verifies basic arg passthrough — the command "echo hello world" is constructed
+stdout: "hello world"
+args:
+  args: ["hello", "world"]
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "hello"
+    - "world"

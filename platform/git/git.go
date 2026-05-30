@@ -32,6 +32,10 @@ func (t *GitCommandTool) SetPermissionManager(manager interface{}, agentID strin
 
 func (t *GitCommandTool) SetAgentSpec(spec interface{}, agentID string) {}
 
+func (t *GitCommandTool) SetCommandRunner(runner contracts.CommandRunner) {
+	t.Runner = runner
+}
+
 func (t *GitCommandTool) Name() string { return "git_" + t.Command }
 
 func (t *GitCommandTool) Description() string {

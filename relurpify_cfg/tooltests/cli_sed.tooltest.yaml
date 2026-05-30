@@ -1,0 +1,10 @@
+tool: cli_sed
+# Verifies stdin passthrough + args with allow_flags
+stdout: "hello world"
+args:
+  args: ["s/foo/hello/"]
+  stdin: "foo world"
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "hello"

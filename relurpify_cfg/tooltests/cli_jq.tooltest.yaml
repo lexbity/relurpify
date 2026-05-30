@@ -1,0 +1,11 @@
+tool: cli_jq
+# Verifies JSON output and typed flag support
+stdout: '{"key":"value","number":42}'
+expect:
+  exit_code: 0
+  stdout_contains:
+    - "key"
+    - "value"
+    - "42"
+  stdout_json:
+    type: object

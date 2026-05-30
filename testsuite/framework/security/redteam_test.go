@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 // ---------- SEC-3: workspace confinement ----------
@@ -225,10 +226,10 @@ func TestShellInjectionArgsAreInert(t *testing.T) {
 			TrustClass: "builtin_trusted",
 		},
 	}
-	// GenerateSubprocessTool returns a Tool that executes via tokenized args.
-	tool := cfgload.GenerateSubprocessTool(def, nil)
+	// subprocess.NewTool returns a Tool that executes via tokenized args.
+	tool := subprocess.NewTool(*def, nil)
 	if tool == nil {
-		t.Fatal("GenerateSubprocessTool returned nil")
+		t.Fatal("subprocess.NewTool returned nil")
 	}
 	// The tool must be available (runner can be nil for test).
 	// The key assertion: tool construction succeeds with injection in args.

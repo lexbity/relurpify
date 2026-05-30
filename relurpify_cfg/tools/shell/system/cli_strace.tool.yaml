@@ -21,5 +21,7 @@ capability:
   trust_class: builtin_trusted
   risk_class:
     - execute
+    - read_only
   effect_class:
+    - filesystem_read
     - process_spawn

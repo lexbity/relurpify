@@ -24,5 +24,7 @@ capability:
   trust_class: builtin_trusted
   risk_class:
     - execute
+    - destructive
   effect_class:
-    - filesystem_read
+    - filesystem_mutation
+    - process_spawn

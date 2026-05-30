@@ -22,4 +22,5 @@ capability:
   risk_class:
     - execute
   effect_class:
+    - filesystem_read
     - process_spawn
