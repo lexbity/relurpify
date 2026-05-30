@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -554,10 +555,31 @@ func (g *Graph) Validate() error {
 // Pause builds a snapshot at the given node.
 // ToolNode executes a tool by name.
 type ToolNode struct {
-	id       string
-	Tool     contracts.Tool
-	Args     map[string]interface{}
-	Registry CapabilityInvoker
+	id        string
+	Tool      contracts.Tool
+	Args      map[string]interface{}
+	Registry  CapabilityInvoker
+	traceID   string // set by SetTraceID
+	spanCount int    // per-execution child span counter
+}
+
+// SetTraceID assigns a trace ID for child span generation.
+func (n *ToolNode) SetTraceID(traceID string) {
+	n.traceID = traceID
+}
+
+// nextSpanID generates a unique child span ID for each tool call.
+func (n *ToolNode) nextSpanID() string {
+	n.spanCount++
+	return telemetry.NewSpanID()
+}
+
+// nextTraceContext derives a child trace context for a tool invocation.
+func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
+	return telemetry.TraceContext{
+		TraceID: n.traceID,
+		SpanID:  n.nextSpanID(),
+	}
 }
 
 // CapabilityInvoker is the narrow registry contract ToolNode needs for
@@ -601,6 +623,12 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*cor
 	if n.Registry == nil {
 		return nil, fmt.Errorf("tool node %q missing capability registry", n.id)
 	}
+	// Attach trace context for child span generation in instrumentedTool.
+	if n.traceID == "" {
+		n.traceID = telemetry.NewTraceID()
+	}
+	tc := n.nextTraceContext()
+	ctx = telemetry.WithTraceContext(ctx, tc)
 	res, err := n.Registry.InvokeCapability(ctx, env, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err

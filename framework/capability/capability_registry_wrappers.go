@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -329,16 +330,24 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			return nil, err
 		}
 	}
+	traceCtx, _ := telemetry.TraceContextFromContext(ctx)
 	if stateSnapshot.telemetry != nil {
+		spanAttrs := buildSpanAttrs(desc, t.Tool)
+		meta := map[string]interface{}{
+			"tool":       t.Tool.Name(),
+			"agent_id":   stateSnapshot.agentID,
+			"args":       summarizeArgs(args),
+			"span_attrs": spanAttrs,
+		}
+		if traceCtx.TraceID != "" {
+			meta["trace_id"] = traceCtx.TraceID
+			meta["span_id"] = traceCtx.SpanID
+		}
 		stateSnapshot.telemetry.Emit(core.Event{
 			Type:      core.EventToolCall,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s invoked", t.Tool.Name()),
-			Metadata: redactTelemetryMetadata(stateSnapshot.safety, map[string]interface{}{
-				"tool":     t.Tool.Name(),
-				"agent_id": stateSnapshot.agentID,
-				"args":     summarizeArgs(args),
-			}),
+			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
 		})
 	}
 	startedAt := time.Now().UTC()
@@ -378,12 +387,21 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		}
 	}
 	if stateSnapshot.telemetry != nil {
+		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		metadata := map[string]interface{}{
-			"tool":     t.Tool.Name(),
-			"agent_id": stateSnapshot.agentID,
+			"tool":       t.Tool.Name(),
+			"agent_id":   stateSnapshot.agentID,
+			"span_attrs": spanAttrs,
+		}
+		if traceCtx.TraceID != "" {
+			metadata["trace_id"] = traceCtx.TraceID
+			metadata["span_id"] = traceCtx.SpanID
 		}
 		if result != nil {
 			metadata["success"] = result.Success
+			metadata["exit_code"] = extractExitCode(result)
+			metadata["stdout_bytes"] = extractStdoutBytes(result)
+			metadata["artifact_ref"] = extractArtifactRef(result)
 			if result.Error != "" {
 				metadata["tool_error"] = result.Error
 			}
@@ -596,4 +614,72 @@ func summarizeArgs(args map[string]interface{}) interface{} {
 		return nil
 	}
 	return core.RedactMetadataMap(args)
+}
+
+// buildSpanAttrs extracts span-compatible attributes from the capability
+// descriptor and the tool implementation.
+func buildSpanAttrs(desc core.CapabilityDescriptor, tool contracts.Tool) map[string]interface{} {
+	attrs := map[string]interface{}{
+		"tool.name":   tool.Name(),
+		"tool.family": tool.Category(),
+	}
+	if desc.TrustClass != "" {
+		attrs["capability.trust_class"] = string(desc.TrustClass)
+	}
+	for i, ec := range desc.EffectClasses {
+		var key string
+		if i == 0 {
+			key = "capability.effect_class"
+		} else {
+			key = fmt.Sprintf("capability.effect_class_%d", i)
+		}
+		attrs[key] = string(ec)
+	}
+	return attrs
+}
+
+func extractExitCode(result *contracts.ToolResult) int {
+	if result == nil || result.Data == nil {
+		return 0
+	}
+	if ec, ok := result.Data["exit_code"]; ok {
+		switch v := ec.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		}
+	}
+	return 0
+}
+
+func extractStdoutBytes(result *contracts.ToolResult) int64 {
+	if result == nil || result.Data == nil {
+		return 0
+	}
+	if sb, ok := result.Data["stdout_bytes"]; ok {
+		switch v := sb.(type) {
+		case int64:
+			return v
+		case float64:
+			return int64(v)
+		case int:
+			return int64(v)
+		}
+	}
+	return 0
+}
+
+func extractArtifactRef(result *contracts.ToolResult) string {
+	if result == nil || result.Data == nil {
+		return ""
+	}
+	if ref, ok := result.Data["stdout_ref"]; ok {
+		if s, ok := ref.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
