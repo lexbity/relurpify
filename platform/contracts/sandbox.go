@@ -212,18 +212,22 @@ func (p SandboxPolicy) Validate() error {
 	return nil
 }
 
-// NewCommandResult constructs a CommandResult from raw command output and an
-// optional error. This is a shared helper used by both sandbox runners until
-// Phase 2+ replace the internals.
-func NewCommandResult(stdout, stderr string, runErr error, elapsed time.Duration) *CommandResult {
+// NewCommandResult constructs a CommandResult from raw command output,
+// error, and lifecycle state. Used by both sandbox runners.
+func NewCommandResult(stdout, stderr string, runErr error, elapsed time.Duration, tornDown bool) *CommandResult {
 	res := &CommandResult{
 		Stdout:      stdout,
 		Stderr:      stderr,
 		StdoutBytes: int64(len(stdout)),
 		StderrBytes: int64(len(stderr)),
 		Duration:    elapsed,
+		TornDown:    tornDown,
 	}
-	if runErr != nil {
+	if tornDown {
+		res.ExitCode = -1
+		res.TimedOut = true
+		res.Signaled = true
+	} else if runErr != nil {
 		var exitErr interface{ ExitCode() int }
 		if errors.As(runErr, &exitErr) {
 			res.ExitCode = exitErr.ExitCode()
@@ -232,6 +236,14 @@ func NewCommandResult(stdout, stderr string, runErr error, elapsed time.Duration
 		}
 	}
 	return res
+}
+
+// GracePeriodOrDefault returns the effective grace period, defaulting to 3s.
+func GracePeriodOrDefault(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 3 * time.Second
+	}
+	return d
 }
 
 // Validate checks that a network rule is structurally sound.

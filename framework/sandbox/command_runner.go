@@ -3,6 +3,8 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,11 +13,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+// randSuffix returns a short hex string for container naming.
+func randSuffix() string {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 // CommandRequest and CommandRunner are defined canonically in platform/contracts
 // so that platform-level backends can satisfy them without importing framework.
@@ -131,7 +141,12 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"run", "--rm", "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
+
+	// Container identity for lifecycle management.
+	containerName := "relurpify-sandbox-" + randSuffix()
+	handle := NewContainerHandle(containerName, runtimeName, runtimeBinary)
+
+	args := []string{"run", "--rm", "--name", containerName, "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
 	for _, mount := range r.protectedMounts() {
 		args = append(args, "-v", mount)
 	}
@@ -190,15 +205,22 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start: %w", err)
 	}
-	pid := cmd.Process.Pid
+
+	// Teardown goroutine: on context cancellation (timeout / cancel), tear down
+	// the container by name instead of killing the client's process group.
+	var tornDown atomic.Bool
+	grace := contracts.GracePeriodOrDefault(req.GracePeriod)
+	// Detached context for teardown so it runs even when ctx is already done.
+	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), grace+10*time.Second)
+	defer teardownCancel()
 	go func() {
 		<-execCtx.Done()
-		if pgid, err := syscall.Getpgid(pid); err == nil {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		}
+		tornDown.Store(true)
+		handle.Teardown(teardownCtx, grace)
 	}()
+
 	err = cmd.Wait()
-	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start)), nil
+	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load()), nil
 }
 
 // Note: newCommandResult was promoted to contracts.NewCommandResult in Phase 1.

@@ -134,11 +134,12 @@ func TestBackendVocabularyInventory(t *testing.T) {
 	}
 
 	knownBackendSites := []string{
-		"framework/authorization/runtime.go",     // SelectSandboxRuntime — single source of truth
-		"framework/authorization/runtime_test.go", // tests for SelectSandboxRuntime
-		"app/relurpish/tui/runtime_adapter.go",   // TUI backend display — legitimate leaf use
-		"framework/sandbox/sandbox.go",           // checkContainerRuntime — container-runtime check
-		"framework/agentenv/boot_validate.go",    // backendsCompatible — Phase 10 boot invariant check
+		"framework/authorization/runtime.go",       // SelectSandboxRuntime — single source of truth
+		"framework/authorization/runtime_test.go",   // tests for SelectSandboxRuntime
+		"app/relurpish/tui/runtime_adapter.go",     // TUI backend display — legitimate leaf use
+		"framework/sandbox/sandbox.go",             // checkContainerRuntime — container-runtime check
+		"framework/sandbox/container_handle.go",    // ContainerHandle.Teardown — Phase 2 lifecycle
+		"framework/agentenv/boot_validate.go",      // backendsCompatible — Phase 10 boot invariant check
 	}
 
 	violations := 0

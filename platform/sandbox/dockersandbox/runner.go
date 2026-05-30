@@ -3,17 +3,27 @@ package dockersandbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+// randSuffix returns a short hex string for container naming.
+func randSuffix() string {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 // stdoutLimit and stderrLimit are the default caps applied to docker command
 // output when CommandRequest.MaxOutputBytes is 0. These match the defaults in
@@ -48,8 +58,16 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	if err != nil {
 		return nil, err
 	}
+
+	// Container identity for lifecycle management.
+	containerName := "relurpify-docker-" + randSuffix()
+	dockerPath := r.backend.config.DockerPath
+	if dockerPath == "" {
+		dockerPath = "docker"
+	}
+
 	policy := r.backend.Policy()
-	args := []string{"run", "--rm", "-v", fmt.Sprintf("%s:/workspace", r.backend.config.Workspace), "-w", containerWorkdir}
+	args := []string{"run", "--rm", "--name", containerName, "-v", fmt.Sprintf("%s:/workspace", r.backend.config.Workspace), "-w", containerWorkdir}
 	if policy.ReadOnlyRoot {
 		args = append(args, "--read-only")
 	}
@@ -94,7 +112,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	}
 	defer cancel()
 	start := time.Now()
-	cmd := exec.Command(r.backend.config.DockerPath, args...)
+	cmd := exec.Command(dockerPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	limit := req.MaxOutputBytes
 	if limit <= 0 {
@@ -110,15 +128,28 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start: %w", err)
 	}
-	pid := cmd.Process.Pid
+
+	// Teardown goroutine: on context cancellation (timeout / cancel), stop and
+	// remove the container by name instead of killing the client's process group.
+	var tornDown atomic.Bool
+	grace := contracts.GracePeriodOrDefault(req.GracePeriod)
+	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), grace+10*time.Second)
+	defer teardownCancel()
 	go func() {
 		<-execCtx.Done()
-		if pgid, err := syscall.Getpgid(pid); err == nil {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		}
+		tornDown.Store(true)
+		// docker stop -t <grace> sends SIGTERM, waits up to grace, then SIGKILLs.
+		stopCtx, stopCancel := context.WithTimeout(teardownCtx, grace+5*time.Second)
+		defer stopCancel()
+		_ = exec.CommandContext(stopCtx, dockerPath, "stop", "-t", fmt.Sprintf("%.0f", grace.Seconds()), containerName).Run()
+		// Force-remove in case --rm didn't clean up.
+		rmCtx, rmCancel := context.WithTimeout(teardownCtx, 5*time.Second)
+		defer rmCancel()
+		_ = exec.CommandContext(rmCtx, dockerPath, "rm", "-f", containerName).Run()
 	}()
+
 	err = cmd.Wait()
-	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start)), nil
+	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load()), nil
 }
 
 func (r *Runner) protectedMounts(paths []string) []string {
