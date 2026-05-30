@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package messy_calc
 
 // Divide returns a / b and guards against divide-by-zero.

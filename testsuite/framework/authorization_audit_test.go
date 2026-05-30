@@ -102,8 +102,8 @@ func TestDenyDecisionAudit(t *testing.T) {
 	if !errors.As(err, &deniedErr) {
 		t.Fatalf("expected PermissionDeniedError, got %T: %v", err, err)
 	}
-	if !strings.Contains(deniedErr.Message, "not declared") {
-		t.Fatalf("expected deny reason to mention not declared, got %q", deniedErr.Message)
+	if !strings.Contains(deniedErr.Message, "path escapes workspace") {
+		t.Fatalf("expected deny reason to mention path escapes workspace, got %q", deniedErr.Message)
 	}
 
 	// Verify an audit record was created
@@ -473,8 +473,11 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 	if denyRecord.Result != "denied" {
 		t.Errorf("deny record result should be 'denied', got %s", denyRecord.Result)
 	}
-	if denyRecord.Metadata == nil || denyRecord.Metadata["reason"] != "not declared" {
-		t.Fatalf("deny record should carry exact reason 'not declared', got %#v", denyRecord.Metadata)
+	if denyRecord.Metadata == nil {
+		t.Fatalf("deny record should carry reason metadata, got nil")
+	}
+	if reason, ok := denyRecord.Metadata["reason"].(string); !ok || !strings.Contains(reason, "path escapes workspace") {
+		t.Fatalf("deny record should carry reason mentioning path escapes workspace, got %#v", denyRecord.Metadata)
 	}
 
 	// HITL should have result "granted" (after approval)

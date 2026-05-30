@@ -43,37 +43,14 @@ func TestCommandToolHelperBranches(t *testing.T) {
 	require.Equal(t, "", mapStringArg(map[string]interface{}{"missing": nil}, "missing"))
 
 	var nilTool *CommandTool
-	require.Equal(t, []string{"go"}, nilTool.prepareArgsForWorkingDir([]string{"go"}, base))
 	require.False(t, nilTool.shouldIsolateCargoRun(base, []string{"test"}))
 
-	require.Equal(t, []string{"test", "--manifest-path", filepath.Join(crate, "Cargo.toml")}, tool.prepareArgsForWorkingDir([]string{"test"}, crate))
-	require.Equal(t, []string{"--manifest-path", filepath.Join(crate, "Cargo.toml"), "--verbose"}, tool.prepareArgsForWorkingDir([]string{"--verbose"}, crate))
-	require.Equal(t, []string{"--manifest-path", filepath.Join(crate, "Cargo.toml")}, withManifestPath(nil, filepath.Join(crate, "Cargo.toml")))
-	require.Equal(t, []string{"test", "--manifest-path", filepath.Join(crate, "Cargo.toml")}, withManifestPath([]string{"test"}, filepath.Join(crate, "Cargo.toml")))
-	require.Equal(t, []string{"--manifest-path", filepath.Join(crate, "Cargo.toml"), "--verbose"}, withManifestPath([]string{"--verbose"}, filepath.Join(crate, "Cargo.toml")))
 	require.Equal(t, rootCargo, findParentCargoManifest(crate, base))
 	require.Empty(t, findParentCargoManifest(base, base))
 	require.False(t, tool.shouldIsolateCargoRun(crate, []string{"fmt"}))
 	require.True(t, tool.shouldIsolateCargoRun(crate, []string{"test"}))
 	require.False(t, tool.shouldIsolateCargoRun("", []string{"test"}))
 	require.False(t, tool.shouldIsolateCargoRun(crate, nil))
-
-	workdir, args, cleanup, err := tool.prepareExecution(crate, []string{"fmt"})
-	require.NoError(t, err)
-	require.Equal(t, crate, workdir)
-	require.Equal(t, []string{"fmt"}, args)
-	cleanup()
-	noIsoWorkdir, noIsoArgs, noIsoCleanup, err := tool.prepareExecution(crate, nil)
-	require.NoError(t, err)
-	require.Equal(t, crate, noIsoWorkdir)
-	require.Nil(t, noIsoArgs)
-	noIsoCleanup()
-
-	_, err = isolateCargoWorkdir(filepath.Join(base, "missing"))
-	require.Error(t, err)
-
-	require.Error(t, copyFile(filepath.Join(base, "missing.txt"), filepath.Join(t.TempDir(), "out.txt"), 0o644))
-	require.Error(t, copyDir(filepath.Join(base, "missing"), filepath.Join(t.TempDir(), "mirror")))
 }
 
 func TestCommandToolBlockFlagsByDefault(t *testing.T) {

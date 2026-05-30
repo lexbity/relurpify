@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package debug_divide
 
 // Divide returns a / b, guarding against divide-by-zero.

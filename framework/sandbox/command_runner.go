@@ -258,6 +258,8 @@ func (r *SandboxCommandRunner) protectedMounts() []string {
 }
 
 // containerWorkdir maps the host workdir into the container mount.
+// Uses filepath.Rel + ".." prefix check to avoid the HasPrefix confinement
+// bypass (SEC-3). Both backends share this single confinement routine.
 func (r *SandboxCommandRunner) containerWorkdir(workdir string) (string, error) {
 	if r == nil {
 		return "", errors.New("sandbox command runner missing")
@@ -270,13 +272,12 @@ func (r *SandboxCommandRunner) containerWorkdir(workdir string) (string, error) 
 		abs = filepath.Join(r.workspace, workdir)
 	}
 	abs = filepath.Clean(abs)
-	absSlash := filepath.ToSlash(abs)
-	if !strings.HasPrefix(absSlash, r.workspaceSlash) {
-		return "", fmt.Errorf("workdir %s outside workspace %s", abs, r.workspace)
-	}
 	rel, err := filepath.Rel(r.workspace, abs)
 	if err != nil {
 		return "", err
+	}
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("workdir %s outside workspace %s", abs, r.workspace)
 	}
 	containerPath := "/workspace"
 	if rel != "." {

@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package debug_server
 
 // GetUser returns the user entry if present.

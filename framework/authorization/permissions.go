@@ -323,7 +323,11 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 	}
 	clean, err := m.normalizePath(path)
 	if err != nil {
-		return err
+		return m.deny(ctx, agentID, contracts.PermissionDescriptor{
+			Type:     contracts.PermissionTypeFilesystem,
+			Action:   string(action),
+			Resource: path,
+		}, fmt.Sprintf("path escapes workspace: %v", err))
 	}
 	perm := m.findFilesystemPermission(action, clean)
 	if perm == nil {

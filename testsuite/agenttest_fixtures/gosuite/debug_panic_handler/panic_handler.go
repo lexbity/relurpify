@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package debug_panic_handler
 
 // ProcessItems returns the first item when present.

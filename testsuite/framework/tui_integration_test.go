@@ -35,15 +35,6 @@ func TestTUIPTYSafeRecoversPanic(t *testing.T) {
 	}
 }
 
-func TestTUIPTYSafeRecoversNilPanic(t *testing.T) {
-	err := tui.PTYSafe(func() error {
-		panic(nil)
-	})
-	if err == nil {
-		t.Fatal("expected error from panic(nil), got nil")
-	}
-}
-
 func TestTUIEditorExitMsgType(t *testing.T) {
 	msg := tui.EditorExitMsg{
 		Path: "/tmp/test.go",

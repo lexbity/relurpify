@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package calculator
 
 // Add returns the sum of a and b.

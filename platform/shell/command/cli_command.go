@@ -161,45 +161,6 @@ func mapStringArg(args map[string]interface{}, key string) string {
 	return fmt.Sprint(raw)
 }
 
-func (t *CommandTool) prepareArgsForWorkingDir(args []string, workdir string) []string {
-	if t == nil || t.cfg.Command != "cargo" || workdir == "" {
-		return args
-	}
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--manifest-path" {
-			return args
-		}
-	}
-	manifestPath := filepath.Join(workdir, "Cargo.toml")
-	if _, err := os.Stat(manifestPath); err != nil {
-		return args
-	}
-	if len(args) == 0 {
-		return []string{"--manifest-path", manifestPath}
-	}
-	prepared := make([]string, 0, len(args)+2)
-	if !strings.HasPrefix(args[0], "-") {
-		prepared = append(prepared, args[0], "--manifest-path", manifestPath)
-		prepared = append(prepared, args[1:]...)
-		return prepared
-	}
-	prepared = append(prepared, "--manifest-path", manifestPath)
-	prepared = append(prepared, args...)
-	return prepared
-}
-
-func (t *CommandTool) prepareExecution(workdir string, args []string) (string, []string, func(), error) {
-	if !t.shouldIsolateCargoRun(workdir, args) {
-		return workdir, args, func() {}, nil
-	}
-	isolated, err := isolateCargoWorkdir(workdir)
-	if err != nil {
-		return workdir, args, func() {}, err
-	}
-	manifestPath := filepath.Join(isolated, "Cargo.toml")
-	return t.basePath, withManifestPath(args, manifestPath), func() { _ = os.RemoveAll(filepath.Dir(isolated)) }, nil
-}
-
 func (t *CommandTool) shouldIsolateCargoRun(workdir string, args []string) bool {
 	if t == nil || t.cfg.Command != "cargo" || workdir == "" {
 		return false

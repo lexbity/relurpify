@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package hello
 
 // Hello returns the expected greeting for the euclo code suite.
