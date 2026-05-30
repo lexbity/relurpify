@@ -95,12 +95,10 @@ type ToolParameter struct {
 
 // ToolResult is returned by every tool execution.
 type ToolResult struct {
-	Success     bool
-	Data        map[string]interface{}
-	Error       string
-	Metadata    map[string]interface{}
-	Truncated   bool  `json:"truncated,omitempty"`
-	TruncatedAt int64 `json:"truncated_at,omitempty"`
+	Success  bool
+	Data     map[string]interface{}
+	Error    string
+	Metadata map[string]interface{}
 }
 
 // CapabilityExecutionResult is the capability-native name for execution

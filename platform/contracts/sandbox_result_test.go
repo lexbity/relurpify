@@ -136,11 +136,6 @@ func TestCommandRequestNewFields(t *testing.T) {
 		require.Equal(t, 10*time.Second, req.GracePeriod)
 	})
 
-	t.Run("backward compat with MaxOutputBytes", func(t *testing.T) {
-		req := CommandRequest{MaxOutputBytes: 256 * 1024}
-		require.Equal(t, int64(256*1024), req.MaxOutputBytes)
-	})
-
 	t.Run("JSON round-trip", func(t *testing.T) {
 		orig := CommandRequest{
 			Args:          []string{"echo", "hi"},

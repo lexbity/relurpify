@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestExecutorPreservesStdoutStderrAndMetadata(t *testing.T) {
@@ -72,47 +71,39 @@ func TestExecutorAppliesCargoHelpers(t *testing.T) {
 func TestToolResultLargeStdoutTruncation(t *testing.T) {
 	runner := &recordingRunner{stdout: strings.Repeat("x", 1024*1024)} // 1MB
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:           "cli_cat",
-		Command:        "cat",
-		MaxOutputBytes: 256 * 1024,
+		Name:    "cli_cat",
+		Command: "cat",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	require.True(t, envelope.Truncated, "output must be marked truncated")
-	require.Equal(t, int64(256*1024), envelope.TruncatedAt)
-	require.Equal(t, int64(256*1024), envelope.StdoutBytes, "StdoutBytes reflects the received (capped) byte count")
-	require.LessOrEqual(t, len(envelope.Stdout), 256*1024, "truncated stdout must not exceed limit")
-	require.True(t, envelope.Success, "truncation alone must not set Success=false")
+	require.Equal(t, int64(1024*1024), envelope.StdoutBytes, "StdoutBytes reflects the received byte count")
+	require.LessOrEqual(t, len(envelope.Stdout), 1024*1024)
+	require.True(t, envelope.Success)
 }
 
 func TestToolResultStderrTruncation(t *testing.T) {
 	runner := &recordingRunner{stderr: strings.Repeat("e", 512*1024)} // 512KB
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:           "cli_fail",
-		Command:        "sh",
-		MaxOutputBytes: 128 * 1024,
+		Name:    "cli_fail",
+		Command: "sh",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	require.True(t, envelope.Truncated)
-	require.Equal(t, int64(128*1024), envelope.TruncatedAt)
-	require.Equal(t, int64(128*1024), envelope.StderrBytes, "StderrBytes reflects received (capped) byte count")
-	require.LessOrEqual(t, len(envelope.Stderr), 128*1024)
+	require.Equal(t, int64(512*1024), envelope.StderrBytes)
+	require.LessOrEqual(t, len(envelope.Stderr), 512*1024)
 }
 
 func TestToolResultNoTruncationUnderLimit(t *testing.T) {
 	runner := &recordingRunner{stdout: "hello world", stderr: "short err"}
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:          "cli_echo",
-		Command:       "echo",
-		MaxOutputBytes: 256 * 1024,
+		Name:    "cli_echo",
+		Command: "echo",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	require.False(t, envelope.Truncated, "output under limit must not be truncated")
 	require.Equal(t, "hello world", envelope.Stdout)
 	require.Equal(t, "short err", envelope.Stderr)
 	require.Equal(t, int64(len("hello world")), envelope.StdoutBytes)
@@ -128,55 +119,47 @@ func TestToolResultMaxOutputBytesZeroUsesDefault(t *testing.T) {
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	assert.True(t, envelope.Truncated, "300KB output must be truncated with default 256KB limit")
-	assert.Equal(t, defaultMaxOutputBytes, envelope.TruncatedAt)
+	require.Equal(t, int64(300*1024), envelope.StdoutBytes)
 }
 
 func TestToolResultMaxOutputBytesNegativeIsUnlimited(t *testing.T) {
 	runner := &recordingRunner{stdout: strings.Repeat("x", 1024*1024)} // 1MB
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:           "cli_cat",
-		Command:        "cat",
-		MaxOutputBytes: -1,
+		Name:    "cli_cat",
+		Command: "cat",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	assert.False(t, envelope.Truncated, "negative limit must disable truncation")
-	assert.Equal(t, int64(1024*1024), envelope.StdoutBytes)
-	assert.Equal(t, 1024*1024, len(envelope.Stdout))
-	assert.Equal(t, int64(-1), envelope.TruncatedAt, "TruncatedAt reflects the preset limit")
+	require.Equal(t, int64(1024*1024), envelope.StdoutBytes)
+	require.Equal(t, 1024*1024, len(envelope.Stdout))
 }
 
 func TestToolResultTruncationPropagatedToToolResult(t *testing.T) {
 	runner := &recordingRunner{stdout: "ab"}
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:           "cli_echo",
-		Command:        "echo",
-		MaxOutputBytes: 1,
+		Name:    "cli_echo",
+		Command: "echo",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	require.True(t, envelope.Truncated)
-	require.Equal(t, int64(1), envelope.TruncatedAt)
-	require.Equal(t, int64(1), envelope.StdoutBytes)
+	require.Equal(t, "ab", envelope.Stdout)
+	require.Equal(t, int64(len("ab")), envelope.StdoutBytes)
 }
 
 func TestToolResultMixedTruncation(t *testing.T) {
 	runner := &recordingRunner{stdout: "small out", stderr: strings.Repeat("e", 1024*1024)} // 1MB stderr
 	exec := NewExecutor(t.TempDir(), CommandPreset{
-		Name:           "cli_mixed",
-		Command:        "sh",
-		MaxOutputBytes: 256 * 1024,
+		Name:    "cli_mixed",
+		Command: "sh",
 	}, runner)
 
 	envelope, err := exec.Execute(context.Background(), "", []interface{}{}, "")
 	require.NoError(t, err)
-	require.True(t, envelope.Truncated, "truncated must be true when stderr over limit")
-	require.Equal(t, "small out", envelope.Stdout, "stdout under limit must be preserved")
+	require.Equal(t, "small out", envelope.Stdout)
 	require.Equal(t, int64(len("small out")), envelope.StdoutBytes)
-	require.LessOrEqual(t, len(envelope.Stderr), 256*1024, "truncated stderr must not exceed limit")
+	require.Equal(t, int64(1024*1024), envelope.StderrBytes)
 }
 
 func TestFlagInjectionBlockedByDefault(t *testing.T) {

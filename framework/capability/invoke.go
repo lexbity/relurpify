@@ -72,7 +72,6 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 		r.metrics.RecordCall(
 			err == nil && result != nil && result.Success,
 			callDuration,
-			result != nil && result.Truncated,
 		)
 	}
 	// Store rollback token for revertible tools

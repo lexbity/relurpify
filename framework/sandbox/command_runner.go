@@ -1,13 +1,11 @@
 package sandbox
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,40 +31,6 @@ type (
 	CommandRequest = contracts.CommandRequest
 	CommandRunner  = contracts.CommandRunner
 )
-
-// commandCappedBuffer wraps bytes.Buffer with a write limit. Writes and reads
-// beyond the limit are silently discarded. Both Write and ReadFrom are
-// overridden to enforce the cap.
-type commandCappedBuffer struct {
-	bytes.Buffer
-	limit int64
-}
-
-func (c *commandCappedBuffer) Write(p []byte) (int, error) {
-	if c.limit <= 0 {
-		return c.Buffer.Write(p)
-	}
-	remaining := c.limit - int64(c.Buffer.Len())
-	if remaining <= 0 {
-		return len(p), nil
-	}
-	if int64(len(p)) > remaining {
-		p = p[:remaining]
-	}
-	return c.Buffer.Write(p)
-}
-
-func (c *commandCappedBuffer) ReadFrom(r io.Reader) (int64, error) {
-	if c.limit <= 0 {
-		return c.Buffer.ReadFrom(r)
-	}
-	remaining := c.limit - int64(c.Buffer.Len())
-	if remaining <= 0 {
-		_, err := io.Copy(io.Discard, r)
-		return 0, err
-	}
-	return c.Buffer.ReadFrom(io.LimitReader(r, remaining))
-}
 
 // NewCommandRunner returns a backend-specific runner when the runtime supports
 // one, otherwise it falls back to the standard sandbox command runner.
@@ -195,12 +159,9 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 	start := time.Now()
 	cmd := exec.Command(runtimeBinary, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	limit := req.MaxOutputBytes
-	if limit <= 0 {
-		limit = 256 * 1024
-	}
-	stdoutBuf := &commandCappedBuffer{limit: limit}
-	stderrBuf := &commandCappedBuffer{limit: limit}
+	ceiling := contracts.OutputCeilingOrDefault(req.OutputCeiling)
+	stdoutBuf := newSpillWriter(ceiling)
+	stderrBuf := newSpillWriter(ceiling)
 	cmd.Stdout = stdoutBuf
 	cmd.Stderr = stderrBuf
 	if req.Input != "" {
@@ -213,6 +174,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 	// Teardown goroutine: on context cancellation (timeout / cancel), tear down
 	// the container by name instead of killing the client's process group.
 	var tornDown atomic.Bool
+	var oomKilled atomic.Bool
 	grace := contracts.GracePeriodOrDefault(req.GracePeriod)
 	// Detached context for teardown so it runs even when ctx is already done.
 	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), grace+10*time.Second)
@@ -223,8 +185,39 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 		handle.Teardown(teardownCtx, grace)
 	}()
 
+	// Monitor output ceiling concurrently.
+	ceilingDone := make(chan struct{}, 1)
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-execCtx.Done():
+				return
+			case <-ceilingDone:
+				return
+			case <-ticker.C:
+				if stdoutBuf.exceededCeiling() || stderrBuf.exceededCeiling() {
+					oomKilled.Store(true)
+					handle.Teardown(teardownCtx, grace)
+					return
+				}
+			}
+		}
+	}()
+
 	err = cmd.Wait()
-	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load()), nil
+	close(ceilingDone)
+	res := contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
+	if oomKilled.Load() {
+		res.OOMKilled = true
+		res.TornDown = true
+		res.TimedOut = false
+		res.ExitCode = -1
+	}
+	res.StdoutBytes = int64(stdoutBuf.Len())
+	res.StderrBytes = int64(stderrBuf.Len())
+	return res, nil
 }
 
 // Note: newCommandResult was promoted to contracts.NewCommandResult in Phase 1.

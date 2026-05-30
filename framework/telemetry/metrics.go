@@ -24,16 +24,13 @@ func NewToolCallMetrics() *ToolCallMetrics {
 }
 
 // RecordCall records a single tool invocation outcome.
-func (m *ToolCallMetrics) RecordCall(success bool, duration time.Duration, truncated bool) {
+func (m *ToolCallMetrics) RecordCall(success bool, duration time.Duration) {
 	if m == nil {
 		return
 	}
 	m.callsTotal.Add(1)
 	if !success {
 		m.callsFailed.Add(1)
-	}
-	if truncated {
-		m.truncationsTotal.Add(1)
 	}
 	m.durationTotalNs.Add(duration.Nanoseconds())
 }

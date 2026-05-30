@@ -10,18 +10,17 @@ import (
 
 // CommandRequest captures process execution metadata routed through a sandbox.
 type CommandRequest struct {
-	Workdir        string
-	Args           []string
-	Env            []string
-	Input          string
-	Timeout        time.Duration
-	MaxOutputBytes int64         // DEPRECATED prompt cap — removed in Phase 6
-	UsePTY         bool          // allocate a pseudo-terminal for the subprocess
-	MemoryBytes    int64         // 0 => default (512 MiB)
-	PidsLimit      int64         // 0 => default (256)
-	CPUs           float64       // 0 => default (1.0)
-	OutputCeiling  int64         // 0 => default (32 MiB/stream); teardown trigger
-	GracePeriod    time.Duration // SIGTERM→SIGKILL grace (default 3s)
+	Workdir       string
+	Args          []string
+	Env           []string
+	Input         string
+	Timeout       time.Duration
+	UsePTY        bool          // allocate a pseudo-terminal for the subprocess
+	MemoryBytes   int64         // 0 => default (512 MiB)
+	PidsLimit     int64         // 0 => default (256)
+	CPUs          float64       // 0 => default (1.0)
+	OutputCeiling int64         // 0 => default (32 MiB/stream); teardown trigger
+	GracePeriod   time.Duration // SIGTERM→SIGKILL grace (default 3s)
 }
 
 // CommandResult is the canonical output of a sandboxed command execution.
@@ -258,6 +257,14 @@ func MemoryBytesOrDefault(d int64) int64 {
 func PidsLimitOrDefault(d int64) int64 {
 	if d <= 0 {
 		return 256
+	}
+	return d
+}
+
+// OutputCeilingOrDefault returns the effective output ceiling, defaulting to 32 MiB.
+func OutputCeilingOrDefault(d int64) int64 {
+	if d <= 0 {
+		return 32 * 1024 * 1024
 	}
 	return d
 }

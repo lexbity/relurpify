@@ -89,26 +89,6 @@ func TestToolManifestSandboxJSONRoundTrip(t *testing.T) {
 	require.Equal(t, sandbox.CPUs, decoded.CPUs)
 }
 
-func TestToolResultTruncationFields(t *testing.T) {
-	result := ToolResult{
-		Success:     true,
-		Data:        map[string]interface{}{"stdout": "hello"},
-		Truncated:   true,
-		TruncatedAt: 16000,
-	}
-	require.True(t, result.Truncated)
-	require.Equal(t, int64(16000), result.TruncatedAt)
-
-	data, err := json.Marshal(result)
-	require.NoError(t, err)
-
-	var decoded ToolResult
-	err = json.Unmarshal(data, &decoded)
-	require.NoError(t, err)
-	require.True(t, decoded.Truncated)
-	require.Equal(t, int64(16000), decoded.TruncatedAt)
-}
-
 func TestToolManifestRateLimit(t *testing.T) {
 	// Verify that a ToolManifest can carry a RateLimit and it round-trips
 	manifest := ToolManifest{
@@ -161,21 +141,20 @@ func FuzzNormalizeToolName(f *testing.F) {
 	})
 }
 
-func TestCommandRequestMaxOutputBytes(t *testing.T) {
+func TestCommandRequestOutputCeiling(t *testing.T) {
 	req := CommandRequest{
-		Args:           []string{"echo", "hello"},
-		Timeout:        0,
-		MaxOutputBytes: 0,
+		Args:    []string{"echo", "hello"},
+		Timeout: 0,
 	}
-	require.Equal(t, int64(0), req.MaxOutputBytes)
+	require.Equal(t, int64(0), req.OutputCeiling)
 
-	req.MaxOutputBytes = 65536
+	req.OutputCeiling = 65536
 	data, err := json.Marshal(req)
 	require.NoError(t, err)
 
 	var decoded CommandRequest
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
-	require.Equal(t, int64(65536), decoded.MaxOutputBytes)
+	require.Equal(t, int64(65536), decoded.OutputCeiling)
 }
 

@@ -7,7 +7,7 @@ import (
 
 func TestMetricsCallsTotalIncrementOnSuccess(t *testing.T) {
 	m := NewToolCallMetrics()
-	m.RecordCall(true, 10*time.Millisecond, false)
+	m.RecordCall(true, 10*time.Millisecond)
 	snap := m.Snapshot()
 	if snap["calls_total"].(int64) != 1 {
 		t.Fatalf("expected calls_total=1, got %v", snap["calls_total"])
@@ -19,7 +19,7 @@ func TestMetricsCallsTotalIncrementOnSuccess(t *testing.T) {
 
 func TestMetricsCallsTotalIncrementOnFailure(t *testing.T) {
 	m := NewToolCallMetrics()
-	m.RecordCall(false, 5*time.Millisecond, false)
+	m.RecordCall(false, 5*time.Millisecond)
 	snap := m.Snapshot()
 	if snap["calls_total"].(int64) != 1 {
 		t.Fatalf("expected calls_total=1, got %v", snap["calls_total"])
@@ -31,7 +31,7 @@ func TestMetricsCallsTotalIncrementOnFailure(t *testing.T) {
 
 func TestMetricsDurationObserved(t *testing.T) {
 	m := NewToolCallMetrics()
-	m.RecordCall(true, 100*time.Millisecond, false)
+	m.RecordCall(true, 100*time.Millisecond)
 	snap := m.Snapshot()
 	avg := snap["avg_duration_ns"].(int64)
 	if avg < 90_000_000 || avg > 110_000_000 {
@@ -39,18 +39,9 @@ func TestMetricsDurationObserved(t *testing.T) {
 	}
 }
 
-func TestMetricsTruncationCounterIncrements(t *testing.T) {
-	m := NewToolCallMetrics()
-	m.RecordCall(true, 0, true)
-	snap := m.Snapshot()
-	if snap["truncations_total"].(int64) != 1 {
-		t.Fatalf("expected truncations_total=1, got %v", snap["truncations_total"])
-	}
-}
-
 func TestMetricsNilMetricsIsNoop(t *testing.T) {
 	var m *ToolCallMetrics
-	m.RecordCall(true, 0, false)
+	m.RecordCall(true, 0)
 	m.RecordDenial()
 	m.RecordDoomLoop()
 	snap := m.Snapshot()
@@ -80,9 +71,9 @@ func TestMetricsDoomLoopCounter(t *testing.T) {
 
 func TestMetricsSuccessRate(t *testing.T) {
 	m := NewToolCallMetrics()
-	m.RecordCall(true, 0, false)
-	m.RecordCall(false, 0, false)
-	m.RecordCall(true, 0, false)
+	m.RecordCall(true, 0)
+	m.RecordCall(false, 0)
+	m.RecordCall(true, 0)
 	snap := m.Snapshot()
 	rate := snap["success_rate"].(float64)
 	if rate < 0.66 || rate > 0.67 {

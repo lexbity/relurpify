@@ -100,9 +100,7 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 		return nil, err
 	}
 	return &contracts.ToolResult{
-		Success:     envelope.Success,
-		Truncated:   envelope.Truncated,
-		TruncatedAt: envelope.TruncatedAt,
+		Success: envelope.Success,
 		Data: map[string]interface{}{
 			"stdout":    envelope.Stdout,
 			"stderr":    envelope.Stderr,

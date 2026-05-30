@@ -19,17 +19,65 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
+// spillWriter replaces the old capped-buffer pattern. It records all bytes
+// written and signals when the stream exceeds the configured ceiling so the
+// runner can tear down the container.
+type spillWriter struct {
+	preview  bytes.Buffer
+	total    int64
+	ceiling  int64
+	exceeded atomic.Bool
+}
+
+func newSpillWriter(ceiling int64) *spillWriter {
+	if ceiling <= 0 {
+		ceiling = 32 * 1024 * 1024
+	}
+	return &spillWriter{ceiling: ceiling}
+}
+
+func (w *spillWriter) Write(p []byte) (int, error) {
+	if w == nil {
+		return len(p), nil
+	}
+	n := len(p)
+	newTotal := w.total + int64(n)
+	if newTotal > w.ceiling {
+		w.exceeded.Store(true)
+		w.total = newTotal
+		return n, nil
+	}
+	w.total = newTotal
+	_, _ = w.preview.Write(p)
+	return n, nil
+}
+
+func (w *spillWriter) exceededCeiling() bool {
+	return w != nil && w.exceeded.Load()
+}
+
+func (w *spillWriter) String() string {
+	if w == nil {
+		return ""
+	}
+	return w.preview.String()
+}
+
+func (w *spillWriter) Len() int {
+	if w == nil {
+		return 0
+	}
+	return int(w.total)
+}
+
+var _ io.Writer = (*spillWriter)(nil)
+
 // randSuffix returns a short hex string for container naming.
 func randSuffix() string {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
-
-// stdoutLimit and stderrLimit are the default caps applied to docker command
-// output when CommandRequest.MaxOutputBytes is 0. These match the defaults in
-// the local command runner.
-const dockerDefaultOutputLimit int64 = 256 * 1024
 
 // Runner executes commands through Docker using the backend's active policy.
 type Runner struct {
@@ -119,12 +167,9 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	start := time.Now()
 	cmd := exec.Command(dockerPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	limit := req.MaxOutputBytes
-	if limit <= 0 {
-		limit = dockerDefaultOutputLimit
-	}
-	stdoutBuf := &cappedBuffer{limit: limit}
-	stderrBuf := &cappedBuffer{limit: limit}
+	ceiling := contracts.OutputCeilingOrDefault(req.OutputCeiling)
+	stdoutBuf := newSpillWriter(ceiling)
+	stderrBuf := newSpillWriter(ceiling)
 	cmd.Stdout = stdoutBuf
 	cmd.Stderr = stderrBuf
 	if req.Input != "" {
@@ -137,6 +182,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	// Teardown goroutine: on context cancellation (timeout / cancel), stop and
 	// remove the container by name instead of killing the client's process group.
 	var tornDown atomic.Bool
+	var oomKilled atomic.Bool
 	grace := contracts.GracePeriodOrDefault(req.GracePeriod)
 	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), grace+10*time.Second)
 	defer teardownCancel()
@@ -153,8 +199,45 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 		_ = exec.CommandContext(rmCtx, dockerPath, "rm", "-f", containerName).Run()
 	}()
 
+	// Monitor output ceiling concurrently.
+	ceilingDone := make(chan struct{}, 1)
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-execCtx.Done():
+				return
+			case <-ceilingDone:
+				return
+			case <-ticker.C:
+				if stdoutBuf.exceededCeiling() || stderrBuf.exceededCeiling() {
+					oomKilled.Store(true)
+					// docker stop -t 0 force-kills immediately, then rm -f
+					stopCtx2, stopCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+					defer stopCancel2()
+					_ = exec.CommandContext(stopCtx2, dockerPath, "stop", "-t", "0", containerName).Run()
+					rmCtx2, rmCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+					defer rmCancel2()
+					_ = exec.CommandContext(rmCtx2, dockerPath, "rm", "-f", containerName).Run()
+					return
+				}
+			}
+		}
+	}()
+
 	err = cmd.Wait()
-	return contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load()), nil
+	close(ceilingDone)
+	res := contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
+	if oomKilled.Load() {
+		res.OOMKilled = true
+		res.TornDown = true
+		res.TimedOut = false
+		res.ExitCode = -1
+	}
+	res.StdoutBytes = int64(stdoutBuf.Len())
+	res.StderrBytes = int64(stderrBuf.Len())
+	return res, nil
 }
 
 func (r *Runner) protectedMounts(paths []string) []string {
@@ -181,40 +264,6 @@ func (r *Runner) protectedMounts(paths []string) []string {
 		seen[path] = struct{}{}
 	}
 	return mounts
-}
-
-// cappedBuffer wraps bytes.Buffer with a write limit. Writes and reads beyond
-// the limit are silently discarded. Both Write and ReadFrom are overridden
-// to enforce the cap.
-type cappedBuffer struct {
-	bytes.Buffer
-	limit int64
-}
-
-func (c *cappedBuffer) Write(p []byte) (int, error) {
-	if c.limit <= 0 {
-		return c.Buffer.Write(p)
-	}
-	remaining := c.limit - int64(c.Buffer.Len())
-	if remaining <= 0 {
-		return len(p), nil
-	}
-	if int64(len(p)) > remaining {
-		p = p[:remaining]
-	}
-	return c.Buffer.Write(p)
-}
-
-func (c *cappedBuffer) ReadFrom(r io.Reader) (int64, error) {
-	if c.limit <= 0 {
-		return c.Buffer.ReadFrom(r)
-	}
-	remaining := c.limit - int64(c.Buffer.Len())
-	if remaining <= 0 {
-		_, err := io.Copy(io.Discard, r)
-		return 0, err
-	}
-	return c.Buffer.ReadFrom(io.LimitReader(r, remaining))
 }
 
 func (r *Runner) containerWorkdir(workdir string) (string, error) {
