@@ -181,9 +181,6 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	if t.runner == nil {
 		return nil, fmt.Errorf("command runner missing")
 	}
-	if err := contracts.ValidateToolArguments(t.manifest, args); err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
-	}
 
 	execSpec := t.manifest.Execution
 	commandSpec := execSpec.Command

@@ -137,11 +137,11 @@ func StringArg(args map[string]any, key string) string {
 	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
-// coerceParameterValue attempts to coerce a runtime value to the type declared
+// CoerceParameterValue attempts to coerce a runtime value to the type declared
 // by a ToolParameter. Safe coercions (e.g. numeric string to int64) succeed;
 // unsafe ones (e.g. non-numeric string to int64) return an error. The original
 // value is returned unchanged when the type is not recognised or already matches.
-func coerceParameterValue(param ToolParameter, v any) (any, error) {
+func CoerceParameterValue(param ToolParameter, v any) (any, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -242,7 +242,7 @@ func ValidateToolArguments(entry ToolManifest, args map[string]any) error {
 			}
 		}
 		if hasKey && raw != nil {
-			coerced, err := coerceParameterValue(param, raw)
+			coerced, err := CoerceParameterValue(param, raw)
 			if err != nil {
 				return fmt.Errorf("parameter %q: %w", NormalizeToolName(param.Name), err)
 			}

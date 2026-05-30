@@ -5,7 +5,7 @@ import (
 )
 
 func TestCoerceStringToString(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamString}, "hello")
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamString}, "hello")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -15,7 +15,7 @@ func TestCoerceStringToString(t *testing.T) {
 }
 
 func TestCoerceNumericStringToInteger(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamInteger}, "42")
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamInteger}, "42")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -25,14 +25,14 @@ func TestCoerceNumericStringToInteger(t *testing.T) {
 }
 
 func TestCoerceNonNumericStringToIntegerFails(t *testing.T) {
-	_, err := coerceParameterValue(ToolParameter{Type: ToolParamInteger}, "abc")
+	_, err := CoerceParameterValue(ToolParameter{Type: ToolParamInteger}, "abc")
 	if err == nil {
 		t.Fatal("expected error for non-numeric string")
 	}
 }
 
 func TestCoerceFloat64ToInteger(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamInteger}, float64(7))
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamInteger}, float64(7))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -42,14 +42,14 @@ func TestCoerceFloat64ToInteger(t *testing.T) {
 }
 
 func TestCoerceFloat64ToIntegerLossyFails(t *testing.T) {
-	_, err := coerceParameterValue(ToolParameter{Type: ToolParamInteger}, float64(7.5))
+	_, err := CoerceParameterValue(ToolParameter{Type: ToolParamInteger}, float64(7.5))
 	if err == nil {
 		t.Fatal("expected error for lossy float64->int64 conversion")
 	}
 }
 
 func TestCoerceTrueStringToBoolean(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "true")
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "true")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestCoerceTrueStringToBoolean(t *testing.T) {
 }
 
 func TestCoerceTrueStringToBooleanUpper(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "TRUE")
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "TRUE")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestCoerceTrueStringToBooleanUpper(t *testing.T) {
 }
 
 func TestCoerceFalseStringToBoolean(t *testing.T) {
-	result, err := coerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "false")
+	result, err := CoerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "false")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCoerceFalseStringToBoolean(t *testing.T) {
 }
 
 func TestCoerceInvalidStringToBooleanFails(t *testing.T) {
-	_, err := coerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "yep")
+	_, err := CoerceParameterValue(ToolParameter{Type: ToolParamBoolean}, "yep")
 	if err == nil {
 		t.Fatal("expected error for 'yep' (not in supported boolean strings)")
 	}

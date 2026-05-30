@@ -154,7 +154,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
 	stateSnapshot := h.runtimeState()
-	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
+	if err := core.ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
 	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, approvalMetadata); err != nil {
@@ -210,7 +210,7 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *cont
 		desc = h.Descriptor(ctx, env)
 	}
 	stateSnapshot := h.runtimeState()
-	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
+	if err := core.ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
 	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, nil); err != nil {
@@ -309,7 +309,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
 	stateSnapshot := t.runtimeState()
-	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
+	if err := core.ValidateAndCoerce(args, desc.InputSchema, t.Tool.Parameters()); err != nil {
 		return nil, fmt.Errorf("tool %s blocked: input schema invalid: %w", t.Tool.Name(), err)
 	}
 	if err := enforceDescriptorExecutionPolicies(ctx, desc, stateSnapshot, approvalMetadata); err != nil {
