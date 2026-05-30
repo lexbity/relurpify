@@ -229,7 +229,7 @@ func ImportedPromptDescriptor(providerID, sessionID, negotiatedVersion string, p
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Name:          name,
 		Version:       strings.TrimSpace(negotiatedVersion),
-		Description:   prompt.Description,
+		Description:   sanitizeMCPDescription(prompt.Description),
 		Category:      "mcp",
 		Tags:          []string{"mcp", "remote", "prompt"},
 		Source: core.CapabilitySource{
@@ -257,7 +257,7 @@ func ImportedResourceDescriptor(providerID, sessionID, negotiatedVersion string,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Name:          firstNonEmpty(resource.Name, uri),
 		Version:       strings.TrimSpace(negotiatedVersion),
-		Description:   resource.Description,
+		Description:   sanitizeMCPDescription(resource.Description),
 		Category:      "mcp",
 		Tags:          []string{"mcp", "remote", "resource"},
 		Source: core.CapabilitySource{
