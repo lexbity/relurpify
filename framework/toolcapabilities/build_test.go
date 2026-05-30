@@ -1,6 +1,7 @@
 package toolcapabilities
 
 import (
+	"context"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -93,3 +94,226 @@ func TestAssertParamKeysOnConstructorNilCtor(t *testing.T) {
 	err := AssertParamKeysOnConstructor("nil", nil, contracts.ToolManifest{Name: "nil"})
 	require.NoError(t, err)
 }
+
+// --- Build tests ---
+
+type nopRunner struct{}
+
+func (n *nopRunner) Run(_ context.Context, _ contracts.CommandRequest) (*contracts.CommandResult, error) {
+	return &contracts.CommandResult{}, nil
+}
+
+func TestBuildSubprocessTool(t *testing.T) {
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
+		{
+			Name:        "cli_echo",
+			Family:      "text",
+			Description: "echo",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendSubprocess,
+				Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Len(t, tools, 1)
+	require.Equal(t, "cli_echo", tools[0].Name())
+}
+
+func TestBuildSubprocessToolMissingDescription(t *testing.T) {
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
+		{
+			Name:   "no_desc",
+			Family: "text",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendSubprocess,
+				Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Empty(t, tools, "tool with empty description must be excluded")
+}
+
+func TestBuildCompositeTool(t *testing.T) {
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "pipe_tool",
+			Family:      "shell",
+			Description: "pipeline",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendComposite,
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+			Composition: &contracts.ToolManifestComposition{
+				Steps: []contracts.ToolManifestCompositionStep{
+					{Tool: "cli_fd", Alias: "files"},
+				},
+			},
+		},
+	})
+	require.Len(t, tools, 1)
+	require.Equal(t, "pipe_tool", tools[0].Name())
+	require.Equal(t, "shell", tools[0].Category(), "composite tool category comes from manifest family")
+}
+
+func TestBuildMCPToolSkipped(t *testing.T) {
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "mcp_tool",
+			Family:      "mcp",
+			Description: "MCP tool",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendMCP,
+				MCP:     &contracts.ToolManifestMCP{Server: "server", Method: "method"},
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Empty(t, tools, "MCP tools must be skipped in local tool build")
+}
+
+func TestBuildNonStrictModeGoNativeMissingImplSkipped(t *testing.T) {
+	// Without StrictMode, a missing implementation is logged and skipped (not hard-fail)
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "missing_impl",
+			Family:      "search",
+			Description: "missing",
+			Execution: contracts.ToolManifestExecution{
+				Backend:        contracts.ToolBackendGoNative,
+				Implementation: "does_not_exist",
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"read_only"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Empty(t, tools, "non-strict mode must skip tools with unregistered implementations")
+}
+
+func TestBuildStrictModeGoNativeMissingImpl(t *testing.T) {
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "missing_impl",
+			Family:      "search",
+			Description: "missing",
+			Execution: contracts.ToolManifestExecution{
+				Backend:        contracts.ToolBackendGoNative,
+				Implementation: "does_not_exist",
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"read_only"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	}, StrictMode())
+	require.Empty(t, tools, "strict mode must exclude tools with unregistered implementations")
+}
+
+func TestBuildGoNativeToolFromRegistry(t *testing.T) {
+	// Register a test native tool for the duration of this test
+	contracts.ResetNativeRegistry()
+	t.Cleanup(contracts.ResetNativeRegistry)
+
+	contracts.RegisterNative("test_greeter", func(basePath string) contracts.Tool {
+		return &testTool{name: "test_greeter"}
+	})
+
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "test_greeter",
+			Family:      "test",
+			Description: "greeter",
+			Execution: contracts.ToolManifestExecution{
+				Backend:        contracts.ToolBackendGoNative,
+				Implementation: "test_greeter",
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"read_only"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Len(t, tools, 1)
+	require.Equal(t, "test_greeter", tools[0].Name())
+}
+
+func TestBuildExcludesNilManifests(t *testing.T) {
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{nil})
+	require.Empty(t, tools)
+}
+
+func TestBuildExcludesEmptyName(t *testing.T) {
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
+		{
+			Name:   "",
+			Family: "text",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendSubprocess,
+				Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Empty(t, tools)
+}
+
+func TestBuildUnlistedManifestExcluded(t *testing.T) {
+	// Tools built from manifests not provided to Build must not appear
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
+		{
+			Name:        "allowed",
+			Family:      "text",
+			Description: "allowed tool",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendSubprocess,
+				Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "builtin_trusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"filesystem_read"},
+			},
+		},
+	})
+	require.Len(t, tools, 1)
+	require.Equal(t, "allowed", tools[0].Name())
+	// A tool not in the manifest list won't be built
+}
+
+// testTool is a minimal Tool implementation for Build tests.
+type testTool struct {
+	contracts.Tool
+	name string
+}
+
+func (t *testTool) Name() string        { return t.name }
+func (t *testTool) Description() string { return "test: " + t.name }
+func (t *testTool) Category() string    { return "test" }
+
+
