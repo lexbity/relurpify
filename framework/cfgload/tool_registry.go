@@ -200,8 +200,19 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		Workdir: stringArg(args, "working_directory"),
 		Input:   stringArg(args, "stdin"),
 	}
-	if execSpec.Sandbox != nil && execSpec.Sandbox.TimeoutSeconds > 0 {
-		request.Timeout = time.Duration(execSpec.Sandbox.TimeoutSeconds) * time.Second
+	if execSpec.Sandbox != nil {
+		if execSpec.Sandbox.TimeoutSeconds > 0 {
+			request.Timeout = time.Duration(execSpec.Sandbox.TimeoutSeconds) * time.Second
+		}
+		if execSpec.Sandbox.MemoryMB > 0 {
+			request.MemoryBytes = execSpec.Sandbox.MemoryMB * 1024 * 1024
+		}
+		if execSpec.Sandbox.PidsLimit > 0 {
+			request.PidsLimit = execSpec.Sandbox.PidsLimit
+		}
+		if execSpec.Sandbox.CPUs > 0 {
+			request.CPUs = execSpec.Sandbox.CPUs
+		}
 	}
 	res, runErr := t.runner.Run(ctx, request)
 	if runErr != nil {

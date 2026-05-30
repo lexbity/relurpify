@@ -87,11 +87,14 @@ type ToolManifestFlag struct {
 
 // ToolManifestSandbox captures execution sandbox constraints for a tool.
 type ToolManifestSandbox struct {
-	AllowedRoot    string `yaml:"allowed_root,omitempty" json:"allowed_root,omitempty"`
-	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
-	NetworkAccess  bool   `yaml:"network_access,omitempty" json:"network_access,omitempty"`
-	AllowFlags     bool   `yaml:"allow_flags,omitempty" json:"allow_flags,omitempty"`
-	MaxOutputBytes int64  `yaml:"max_output_bytes,omitempty" json:"max_output_bytes,omitempty"`
+	AllowedRoot    string  `yaml:"allowed_root,omitempty" json:"allowed_root,omitempty"`
+	TimeoutSeconds int     `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
+	NetworkAccess  bool    `yaml:"network_access,omitempty" json:"network_access,omitempty"`
+	AllowFlags     bool    `yaml:"allow_flags,omitempty" json:"allow_flags,omitempty"`
+	MaxOutputBytes int64   `yaml:"max_output_bytes,omitempty" json:"max_output_bytes,omitempty"`
+	MemoryMB       int64   `yaml:"memory_mb,omitempty" json:"memory_mb,omitempty"`
+	PidsLimit      int64   `yaml:"pids_limit,omitempty" json:"pids_limit,omitempty"`
+	CPUs           float64 `yaml:"cpus,omitempty" json:"cpus,omitempty"`
 }
 
 // ToolManifestMCP describes MCP execution routing.

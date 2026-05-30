@@ -171,6 +171,10 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*co
 	if r.config.NetworkIsolation {
 		args = append(args, "--network", "none")
 	}
+	// Resource limits from CommandRequest (defaults applied from contracts).
+	args = append(args, "--memory", strconv.FormatInt(contracts.MemoryBytesOrDefault(req.MemoryBytes), 10))
+	args = append(args, "--pids-limit", strconv.FormatInt(contracts.PidsLimitOrDefault(req.PidsLimit), 10))
+	args = append(args, "--cpus", strconv.FormatFloat(contracts.CPUsOrDefault(req.CPUs), 'f', -1, 64))
 	for _, env := range req.Env {
 		if env == "" {
 			continue

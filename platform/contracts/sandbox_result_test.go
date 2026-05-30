@@ -89,6 +89,28 @@ func TestCommandResultLargeOutputRefs(t *testing.T) {
 	require.Less(t, len(r.Stdout), int(r.StdoutBytes))
 }
 
+func TestResourceLimitDefaults(t *testing.T) {
+	t.Run("memory default 512 MiB", func(t *testing.T) {
+		require.Equal(t, int64(512*1024*1024), MemoryBytesOrDefault(0))
+		require.Equal(t, int64(256), MemoryBytesOrDefault(256))
+	})
+
+	t.Run("pids default 256", func(t *testing.T) {
+		require.Equal(t, int64(256), PidsLimitOrDefault(0))
+		require.Equal(t, int64(128), PidsLimitOrDefault(128))
+	})
+
+	t.Run("cpus default 1.0", func(t *testing.T) {
+		require.Equal(t, 1.0, CPUsOrDefault(0))
+		require.Equal(t, 2.5, CPUsOrDefault(2.5))
+	})
+
+	t.Run("grace period default 3s", func(t *testing.T) {
+		require.Equal(t, 3*time.Second, GracePeriodOrDefault(0))
+		require.Equal(t, 10*time.Second, GracePeriodOrDefault(10*time.Second))
+	})
+}
+
 func TestCommandRequestNewFields(t *testing.T) {
 	t.Run("zero values are valid", func(t *testing.T) {
 		req := CommandRequest{}

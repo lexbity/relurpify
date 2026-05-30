@@ -246,6 +246,30 @@ func GracePeriodOrDefault(d time.Duration) time.Duration {
 	return d
 }
 
+// MemoryBytesOrDefault returns the effective memory limit, defaulting to 512 MiB.
+func MemoryBytesOrDefault(d int64) int64 {
+	if d <= 0 {
+		return 512 * 1024 * 1024 // 512 MiB
+	}
+	return d
+}
+
+// PidsLimitOrDefault returns the effective pids limit, defaulting to 256.
+func PidsLimitOrDefault(d int64) int64 {
+	if d <= 0 {
+		return 256
+	}
+	return d
+}
+
+// CPUsOrDefault returns the effective CPU count, defaulting to 1.0.
+func CPUsOrDefault(f float64) float64 {
+	if f <= 0 {
+		return 1.0
+	}
+	return f
+}
+
 // Validate checks that a network rule is structurally sound.
 func (r NetworkRule) Validate() error {
 	if strings.TrimSpace(r.Direction) == "" {
