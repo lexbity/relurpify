@@ -61,6 +61,10 @@ func Build(workspace string, runner contracts.CommandRunner, manifests []*contra
 			continue
 		}
 
+		// Attach manifest capability classes so core.ToolDescriptor reads
+		// trust/risk/effect from the manifest, not Go-derived defaults.
+		tool = wrapWithCapability(tool, *m)
+
 		if ok, admitErr := admission.Admit(tool); !ok {
 			if admitErr != nil {
 				log.Printf("tool admission: skipping %q: %v", name, admitErr)

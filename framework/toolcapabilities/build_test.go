@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
@@ -283,7 +284,129 @@ func TestBuildExcludesEmptyName(t *testing.T) {
 	require.Empty(t, tools)
 }
 
-func TestBuildUnlistedManifestExcluded(t *testing.T) {
+// --- Capability class provider tests ---
+
+func TestWrapWithCapabilityProvidesManifestTrustClass(t *testing.T) {
+	tool := wrapWithCapability(
+		&testTool{name: "trusted_tool"},
+		contracts.ToolManifest{
+			Capability: contracts.ToolManifestCapability{
+				TrustClass: "untrusted",
+			},
+		},
+	)
+	provider, ok := tool.(interface{ TrustClass() agentspec.TrustClass })
+	require.True(t, ok, "wrapped tool must implement TrustClass provider")
+	require.Equal(t, agentspec.TrustClass("untrusted"), provider.TrustClass())
+}
+
+func TestWrapWithCapabilityProvidesManifestRiskClasses(t *testing.T) {
+	tool := wrapWithCapability(
+		&testTool{name: "risk_tool"},
+		contracts.ToolManifest{
+			Capability: contracts.ToolManifestCapability{
+				RiskClass: []string{"execute", "network"},
+			},
+		},
+	)
+	provider, ok := tool.(interface{ RiskClasses() []agentspec.RiskClass })
+	require.True(t, ok)
+	require.Equal(t, []agentspec.RiskClass{"execute", "network"}, provider.RiskClasses())
+}
+
+func TestWrapWithCapabilityProvidesManifestEffectClasses(t *testing.T) {
+	tool := wrapWithCapability(
+		&testTool{name: "effect_tool"},
+		contracts.ToolManifest{
+			Capability: contracts.ToolManifestCapability{
+				EffectClass: []string{"filesystem_read", "process_spawn"},
+			},
+		},
+	)
+	provider, ok := tool.(interface{ EffectClasses() []agentspec.EffectClass })
+	require.True(t, ok)
+	require.Equal(t, []agentspec.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
+}
+
+func TestWrapWithCapabilityReturnsOriginalWhenNoCapability(t *testing.T) {
+	original := &testTool{name: "plain"}
+	wrapped := wrapWithCapability(original, contracts.ToolManifest{})
+	require.Same(t, original, wrapped, "must return original tool when no capability data")
+}
+
+func TestWrapWithCapabilityDelegatesToUnderlyingTool(t *testing.T) {
+	tool := wrapWithCapability(
+		&testTool{name: "delegate"},
+		contracts.ToolManifest{
+			Capability: contracts.ToolManifestCapability{
+				TrustClass: "untrusted",
+			},
+		},
+	)
+	require.Equal(t, "delegate", tool.Name())
+	require.Equal(t, "test: delegate", tool.Description())
+	require.Equal(t, "test", tool.Category())
+}
+
+func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
+	contracts.ResetNativeRegistry()
+	t.Cleanup(contracts.ResetNativeRegistry)
+
+	contracts.RegisterNative("cap_test", func(basePath string) contracts.Tool {
+		return &testTool{name: "cap_test"}
+	})
+
+	tools := Build("/ws", nil, []*contracts.ToolManifest{
+		{
+			Name:        "cap_test",
+			Family:      "test",
+			Description: "capability test",
+			Execution: contracts.ToolManifestExecution{
+				Backend:        contracts.ToolBackendGoNative,
+				Implementation: "cap_test",
+			},
+			Capability: contracts.ToolManifestCapability{
+				TrustClass:  "untrusted",
+				RiskClass:   []string{"execute"},
+				EffectClass: []string{"process_spawn"},
+			},
+		},
+	})
+	require.Len(t, tools, 1)
+
+	trustProv, ok := tools[0].(interface{ TrustClass() agentspec.TrustClass })
+	require.True(t, ok, "Build must wrap tools with TrustClass provider")
+	require.Equal(t, agentspec.TrustClass("untrusted"), trustProv.TrustClass())
+
+	riskProv, ok := tools[0].(interface{ RiskClasses() []agentspec.RiskClass })
+	require.True(t, ok)
+	require.Equal(t, []agentspec.RiskClass{"execute"}, riskProv.RiskClasses())
+
+	effectProv, ok := tools[0].(interface{ EffectClasses() []agentspec.EffectClass })
+	require.True(t, ok)
+	require.Equal(t, []agentspec.EffectClass{"process_spawn"}, effectProv.EffectClasses())
+}
+
+func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {
+	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
+		{
+			Name:        "no_cap",
+			Family:      "text",
+			Description: "no capability",
+			Execution: contracts.ToolManifestExecution{
+				Backend: contracts.ToolBackendSubprocess,
+				Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+			},
+			Capability: contracts.ToolManifestCapability{},
+		},
+	})
+	require.Len(t, tools, 1)
+	// Empty capability means no wrapper — original tool returned
+	_, ok := tools[0].(interface{ TrustClass() agentspec.TrustClass })
+	require.False(t, ok, "subprocess tool without capability should not have TrustClass provider")
+}
+
+func TestUnlistedManifestExcluded(t *testing.T) {
 	// Tools built from manifests not provided to Build must not appear
 	tools := Build("/ws", &nopRunner{}, []*contracts.ToolManifest{
 		{
