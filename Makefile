@@ -11,15 +11,10 @@ validate-config:
 	@$(MAKE) check-boot-root
 
 lint-config-boundary:
-	@echo "Checking config boundary..."
-	@! rg -n 'os\.(Getenv|Environ|LookupEnv|Setenv)\(' --glob '*.go' . | grep -v '_test.go' | grep -v 'framework/cfgload/' | grep -v 'framework/runtimeenv/' >/dev/null \
-		|| (echo "Config boundary: FAIL — env access outside framework/cfgload and framework/runtimeenv"; exit 1)
-	@! rg -n 'relurpify_cfg' --glob '*.go' . | grep -v '_test.go' | rg 'os\.ReadFile|os\.ReadDir|os\.WriteFile|os\.OpenFile' >/dev/null \
-		|| (echo "Config boundary: FAIL — config path access outside framework/cfgload"; exit 1)
-	@echo "Config boundary: PASS"
+	go run ./scripts/boundaryaudit
 
 test-boundary:
-	go test ./framework/configcheck ./framework/cfgload -count=1 -timeout 60s
+	go test ./framework/cfgload ./scripts/boundaryaudit -count=1 -timeout 60s
 
 check-boot-root:
 	@echo "Checking single boot root..."

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"github.com/spf13/cobra"
 )
 
@@ -26,5 +25,5 @@ func newConfigValidateCmd() *cobra.Command {
 }
 
 func validateConfigTree(workspace string) *cfgload.ValidationReport {
-	return configcheck.ValidateWorkspaceTree(workspace)
+	return cfgload.ValidateWorkspaceTree(workspace)
 }

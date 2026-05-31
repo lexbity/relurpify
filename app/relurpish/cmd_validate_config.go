@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +14,7 @@ func newValidateCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "Validating config for workspace: %s\n", cfg.Workspace)
-			report := configcheck.ValidateWorkspaceTree(cfg.Workspace)
+			report := cfgload.ValidateWorkspaceTree(cfg.Workspace)
 			if report.HasErrors() {
 				fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
 				return report

@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
@@ -56,7 +55,7 @@ func newStartCmd() *cobra.Command {
 				runCtx = context.Background()
 			}
 			ws := ensureWorkspace()
-			if report := configcheck.ValidateWorkspaceTree(ws); report.HasErrors() {
+			if report := cfgload.ValidateWorkspaceTree(ws); report.HasErrors() {
 				fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
 				return report
 			}

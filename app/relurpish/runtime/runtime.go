@@ -22,7 +22,6 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
@@ -131,7 +130,7 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	if cfg.SharedRoot == "" {
 		cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
 	}
-	if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+	if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
 		return nil, report
 	}
 

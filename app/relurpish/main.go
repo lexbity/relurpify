@@ -17,7 +17,6 @@ import (
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/configcheck"
 	"codeburg.org/lexbit/relurpify/framework/runtimeenv"
 )
 
@@ -124,7 +123,7 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+	if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
 		fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
 		return report
 	}
@@ -159,7 +158,7 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		if report := configcheck.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
+		if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
 			renderDoctorReport(cmd.OutOrStdout(), runtimesvc.DoctorReport{
 				Workspace:   cfg.Workspace,
 				ConfigRoot:  cfgload.New(cfg.Workspace).ConfigRoot(),
