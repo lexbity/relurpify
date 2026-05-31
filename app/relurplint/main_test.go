@@ -40,8 +40,8 @@ func TestSelectedAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(checks) != 0 {
-		t.Fatalf("expected 0 checks, got %d", len(checks))
+	if len(checks) != 2 {
+		t.Fatalf("expected 2 checks (config, tools), got %d", len(checks))
 	}
 }
 
@@ -63,7 +63,9 @@ func TestSelectedCSVWithUnknown(t *testing.T) {
 }
 
 func TestCLIUnknownCheck(t *testing.T) {
-	out, err := exec.Command(relurplintBin, "--check", "nonexistent").CombinedOutput()
+	cmd := exec.Command(relurplintBin, "--check", "nonexistent")
+	cmd.Dir = repoRoot()
+	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("expected error for unknown check")
 	}
@@ -76,7 +78,9 @@ func TestCLIUnknownCheck(t *testing.T) {
 }
 
 func TestCLIAllJSON(t *testing.T) {
-	out, err := exec.Command(relurplintBin, "--check", "all", "--format", "json").CombinedOutput()
+	cmd := exec.Command(relurplintBin, "--check", "all", "--format", "json")
+	cmd.Dir = repoRoot()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v\noutput: %s", err, string(out))
 	}
@@ -98,7 +102,9 @@ func TestCLIAllJSON(t *testing.T) {
 }
 
 func TestCLIHelp(t *testing.T) {
-	out, err := exec.Command(relurplintBin, "--help").CombinedOutput()
+	cmd := exec.Command(relurplintBin, "--help")
+	cmd.Dir = repoRoot()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -108,7 +114,9 @@ func TestCLIHelp(t *testing.T) {
 }
 
 func TestCLIAllText(t *testing.T) {
-	out, err := exec.Command(relurplintBin, "--check", "all", "--format", "text").CombinedOutput()
+	cmd := exec.Command(relurplintBin, "--check", "all", "--format", "text")
+	cmd.Dir = repoRoot()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v\noutput: %s", err, string(out))
 	}
