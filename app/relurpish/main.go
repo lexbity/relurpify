@@ -70,7 +70,6 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
 
 	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd())
-	root.AddCommand(newValidateCmd())
 	return root
 }
 
@@ -123,10 +122,6 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
-		fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
-		return report
-	}
 	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
 		return err
 	}
@@ -158,14 +153,9 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
-			renderDoctorReport(cmd.OutOrStdout(), runtimesvc.DoctorReport{
-				Workspace:   cfg.Workspace,
-				ConfigRoot:  cfgload.New(cfg.Workspace).ConfigRoot(),
-				ConfigError: report.Error(),
-			})
-			return report
-		}
+		// Config validation is done by cfgload.Load during runtime
+		// initialization. Pre-flight errors (file not found, etc.) are
+		// captured by BootstrapStartupState → BuildDoctorReport.
 		state, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets)
 		if err != nil {
 			return err

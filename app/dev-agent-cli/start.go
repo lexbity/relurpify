@@ -55,10 +55,6 @@ func newStartCmd() *cobra.Command {
 				runCtx = context.Background()
 			}
 			ws := ensureWorkspace()
-			if report := cfgload.ValidateWorkspaceTree(ws); report.HasErrors() {
-				fmt.Fprintln(cmd.ErrOrStderr(), report.Error())
-				return report
-			}
 			reg, err := buildRegistry(ws)
 			if err != nil {
 				return err

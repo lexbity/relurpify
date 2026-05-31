@@ -21,6 +21,6 @@ jobs:
       - name: Check template drift
         run: make check-template-drift
       - name: Validate config
-        run: RELURPIFY_STRICT=true make validate-config
+        run: make validate-config
       - name: Test unit
         run: make test-unit

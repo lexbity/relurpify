@@ -6,7 +6,7 @@ lint-layering:
 	@bash scripts/lint-layering.sh
 
 validate-config:
-	go run ./app/relurpish validate-config
+	go run ./app/relurplint --check config,tools
 	@$(MAKE) check-config-tree-drift
 	@$(MAKE) check-boot-root
 

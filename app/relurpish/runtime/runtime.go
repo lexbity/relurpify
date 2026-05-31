@@ -130,10 +130,6 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	if cfg.SharedRoot == "" {
 		cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
 	}
-	if report := cfgload.ValidateWorkspaceTree(cfg.Workspace); report.HasErrors() {
-		return nil, report
-	}
-
 	loadedConfig, _, err := cfgload.Load(cfgload.LoadOptions{
 		WorkspaceRoot: cfg.Workspace,
 		EnvOverrides:  cfg.EnvOverrides,

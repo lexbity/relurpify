@@ -15,10 +15,9 @@ func TestNewRootCmdRegistersCoreEntryPoints(t *testing.T) {
 	require.Equal(t, "Bubble Tea shell for the Relurpify agent runtime", root.Short)
 
 	want := map[string]bool{
-		"doctor":          true,
-		"status":          true,
-		"chat":            true,
-		"validate-config": true,
+		"doctor": true,
+		"status": true,
+		"chat":   true,
 	}
 	for _, cmd := range root.Commands() {
 		delete(want, cmd.Name())

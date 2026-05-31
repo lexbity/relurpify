@@ -12,7 +12,7 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Inspect or modify manifest.yaml",
 	}
-	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigValidateCmd())
+	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd())
 	return cmd
 }
 
