@@ -1,10 +1,11 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 func TestPromptsCheckNoDirectory(t *testing.T) {
@@ -19,8 +20,8 @@ func TestPromptsCheckNoDirectory(t *testing.T) {
 func TestPromptsCheckValidPrompt(t *testing.T) {
 	workspace := t.TempDir()
 	promptsDir := filepath.Join(workspace, "templates", "prompts")
-	os.MkdirAll(promptsDir, 0o755)
-	mustWrite(t, filepath.Join(promptsDir, "test.prompt"), `---
+	testhelper.MustMkdirAll(t, promptsDir)
+	testhelper.MustWrite(t, filepath.Join(promptsDir, "test.prompt"), `---
 schema framework.prompt/v2
 id test_prompt
 tag "test"
@@ -38,8 +39,8 @@ Hello, world!
 func TestPromptsCheckInvalidSchema(t *testing.T) {
 	workspace := t.TempDir()
 	promptsDir := filepath.Join(workspace, "templates", "prompts")
-	os.MkdirAll(promptsDir, 0o755)
-	mustWrite(t, filepath.Join(promptsDir, "bad.prompt"), `---
+	testhelper.MustMkdirAll(t, promptsDir)
+	testhelper.MustWrite(t, filepath.Join(promptsDir, "bad.prompt"), `---
 schema unknown/v1
 id bad_prompt
 tag "test"
@@ -67,8 +68,8 @@ Hello
 func TestPromptsCheckMissingID(t *testing.T) {
 	workspace := t.TempDir()
 	promptsDir := filepath.Join(workspace, "templates", "prompts")
-	os.MkdirAll(promptsDir, 0o755)
-	mustWrite(t, filepath.Join(promptsDir, "noid.prompt"), `---
+	testhelper.MustMkdirAll(t, promptsDir)
+	testhelper.MustWrite(t, filepath.Join(promptsDir, "noid.prompt"), `---
 schema framework.prompt/v2
 tag "test"
 ---
@@ -95,8 +96,8 @@ Hello
 func TestPromptsCheckEmptyBody(t *testing.T) {
 	workspace := t.TempDir()
 	promptsDir := filepath.Join(workspace, "templates", "prompts")
-	os.MkdirAll(promptsDir, 0o755)
-	mustWrite(t, filepath.Join(promptsDir, "empty.prompt"), `---
+	testhelper.MustMkdirAll(t, promptsDir)
+	testhelper.MustWrite(t, filepath.Join(promptsDir, "empty.prompt"), `---
 schema framework.prompt/v2
 id empty_prompt
 tag "test"
@@ -122,7 +123,7 @@ tag "test"
 
 func TestPromptsCheckCleanRepo(t *testing.T) {
 	c := promptsCheck{}
-	diags := c.Run(repoRoot())
+	diags := c.Run(testRepoRoot)
 	if len(diags) != 0 {
 		t.Fatalf("expected no diagnostics for clean repo, got %d: %+v", len(diags), diags)
 	}

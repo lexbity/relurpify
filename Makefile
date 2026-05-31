@@ -1,12 +1,26 @@
 .PHONY: test-unit test-integ test-scenario test-all
-.PHONY: validate-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
-.PHONY: lint-layering
+.PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
+.PHONY: lint-layering lint-invariants lint-all
 
 lint-layering:
 	@bash scripts/lint-layering.sh
 
-validate-config:
-	go run ./app/relurplint --check config,tools
+lint-invariants:
+	@bash scripts/check-lint-invariants.sh
+
+lint-framework-boundaries:
+	@bash scripts/check-framework-boundaries.sh
+
+lint-no-host-exec:
+	@bash scripts/check-no-host-exec.sh
+
+verify-agent-boundaries:
+	@bash scripts/verify-agent-boundaries.sh
+
+lint-all: lint-layering lint-invariants lint-framework-boundaries lint-no-host-exec lint-config-boundary
+
+lint-config:
+	go run ./app/relurplint --check all
 	@$(MAKE) check-config-tree-drift
 	@$(MAKE) check-boot-root
 
@@ -34,7 +48,7 @@ check-template-drift:
 	rm -rf "$$tmpdir"; \
 	echo "Templates: no drift"
 
-test-unit: validate-config
+test-unit: lint-config
 	go test ./... -count=1 -timeout 60s
 
 test-integ:

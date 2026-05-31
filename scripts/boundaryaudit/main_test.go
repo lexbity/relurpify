@@ -1,10 +1,11 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 func TestAuditCleanRepoRoot(t *testing.T) {
@@ -23,8 +24,8 @@ func TestAuditCatchesEnvViolation(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	violationDir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, violationDir)
-	writeFile(t, filepath.Join(violationDir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, violationDir)
+	testhelper.MustWrite(t, filepath.Join(violationDir, "violation.go"), `package relurpish
 import "os"
 func get() string {
 	return os.Getenv("SECRET_KEY")
@@ -53,8 +54,8 @@ func TestAuditCatchesConfigPathViolation(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	violationDir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, violationDir)
-	writeFile(t, filepath.Join(violationDir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, violationDir)
+	testhelper.MustWrite(t, filepath.Join(violationDir, "violation.go"), `package relurpish
 import "os"
 func read() {
 	_, _ = os.ReadFile("relurpify_cfg/workspace.yaml")
@@ -82,8 +83,8 @@ func TestAuditFlagsLookupEnv(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	violationDir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, violationDir)
-	writeFile(t, filepath.Join(violationDir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, violationDir)
+	testhelper.MustWrite(t, filepath.Join(violationDir, "violation.go"), `package relurpish
 import "os"
 func lookup() string {
 	v, _ := os.LookupEnv("SECRET")
@@ -112,8 +113,8 @@ func TestAuditFlagsSetenv(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	violationDir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, violationDir)
-	writeFile(t, filepath.Join(violationDir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, violationDir)
+	testhelper.MustWrite(t, filepath.Join(violationDir, "violation.go"), `package relurpish
 import "os"
 func set() {
 	_ = os.Setenv("SECRET", "value")
@@ -141,8 +142,8 @@ func TestAuditFlagsConstBuiltConfigPath(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	violationDir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, violationDir)
-	writeFile(t, filepath.Join(violationDir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, violationDir)
+	testhelper.MustWrite(t, filepath.Join(violationDir, "violation.go"), `package relurpish
 import (
 	"os"
 	"path/filepath"
@@ -173,8 +174,8 @@ func TestAuditTestsuiteExemptionIsPrefixNotSubstring(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	dir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, dir)
-	writeFile(t, filepath.Join(dir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, dir)
+	testhelper.MustWrite(t, filepath.Join(dir, "violation.go"), `package relurpish
 import "os"
 func get() string {
 	return os.Getenv("SECRET_KEY")
@@ -191,7 +192,7 @@ func TestAuditFrameworkCfgloadExempt(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	filePath := filepath.Join(workspace, "framework", "cfgload", "loader.go")
-	writeFile(t, filePath, `package cfgload
+	testhelper.MustWrite(t, filePath, `package cfgload
 import "os"
 func get() string {
 	return os.Getenv("CONFIG_KEY")
@@ -210,8 +211,8 @@ func TestAuditTestsuiteExempt(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	dir := filepath.Join(workspace, "testsuite", "somepkg")
-	mkdirAll(t, dir)
-	writeFile(t, filepath.Join(dir, "helper.go"), `package somepkg
+	testhelper.MustMkdirAll(t, dir)
+	testhelper.MustWrite(t, filepath.Join(dir, "helper.go"), `package somepkg
 import "os"
 func get() string {
 	return os.Getenv("TEST_KEY")
@@ -230,8 +231,8 @@ func TestAuditSkipsTestdata(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	dir := filepath.Join(workspace, "testdata")
-	mkdirAll(t, dir)
-	writeFile(t, filepath.Join(dir, "helper.go"), `package testdata
+	testhelper.MustMkdirAll(t, dir)
+	testhelper.MustWrite(t, filepath.Join(dir, "helper.go"), `package testdata
 import "os"
 func get() string {
 	return os.Getenv("SECRET")
@@ -250,8 +251,8 @@ func TestAuditSkipsVendor(t *testing.T) {
 	workspace := writeMinimalWorkspace(t)
 
 	dir := filepath.Join(workspace, "vendor", "somepkg")
-	mkdirAll(t, dir)
-	writeFile(t, filepath.Join(dir, "helper.go"), `package somepkg
+	testhelper.MustMkdirAll(t, dir)
+	testhelper.MustWrite(t, filepath.Join(dir, "helper.go"), `package somepkg
 import "os"
 func get() string {
 	return os.Getenv("SECRET")
@@ -269,8 +270,8 @@ func get() string {
 func TestAuditNoRepoMarkerReturnsEmpty(t *testing.T) {
 	workspace := t.TempDir()
 	dir := filepath.Join(workspace, "app", "relurpish")
-	mkdirAll(t, dir)
-	writeFile(t, filepath.Join(dir, "violation.go"), `package relurpish
+	testhelper.MustMkdirAll(t, dir)
+	testhelper.MustWrite(t, filepath.Join(dir, "violation.go"), `package relurpish
 import "os"
 func get() string {
 	return os.Getenv("SECRET_KEY")
@@ -286,43 +287,14 @@ func get() string {
 func writeMinimalWorkspace(t *testing.T) string {
 	t.Helper()
 	workspace := t.TempDir()
-	cfgRoot := filepath.Join(workspace, "relurpify_cfg")
-	mkdirAll(t, filepath.Join(cfgRoot, "security"))
-	mkdirAll(t, filepath.Join(cfgRoot, "model", "provider"))
-	mkdirAll(t, filepath.Join(cfgRoot, "model", "profiles"))
-	mkdirAll(t, filepath.Join(cfgRoot, "tools"))
-	writeFile(t, filepath.Join(cfgRoot, "workspace.yaml"), `schema: relurpify/workspace/v1
-model:
-  provider: ollama
-  name: qwen2.5-coder:14b
-`)
-	writeFile(t, filepath.Join(cfgRoot, "security", "sandbox.policy.yaml"), `schema: relurpify/security/sandbox/v1
-protected_paths: []
-`)
-	writeFile(t, filepath.Join(cfgRoot, "security", "shell.policy.yaml"), `schema: relurpify/security/shell/v1`)
-	writeFile(t, filepath.Join(cfgRoot, "security", "localtool.policy.yaml"), `schema: relurpify/security/localtool/v1`)
-	writeFile(t, filepath.Join(cfgRoot, "security", "workspaceingestion.policy.yaml"), `schema: relurpify/security/workspaceingestion/v1`)
-	mkdirAll(t, filepath.Join(workspace, "framework", "cfgload"))
+	testhelper.WriteValidWorkspace(t, workspace)
+	testhelper.MustMkdirAll(t, filepath.Join(workspace, "framework", "cfgload"))
 	return workspace
 }
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	return filepath.Clean(filepath.Join("..", ".."))
-}
-
-func mkdirAll(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	return testhelper.RepoRoot(t)
 }
 
 func itoa(n int) string {

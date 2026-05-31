@@ -7,14 +7,24 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 var relurplintBin string
+var testRepoRoot string
 
 func TestMain(m *testing.M) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		os.Stderr.WriteString("getwd: " + err.Error() + "\n")
+		os.Exit(1)
+	}
+	testRepoRoot = filepath.Clean(filepath.Join(cwd, "..", ".."))
+
 	bin := filepath.Join(os.TempDir(), "relurplint-test-"+strings.ReplaceAll(filepath.Base(os.Args[0]), ".", "_"))
 	cmd := exec.Command("go", "build", "-o", bin, "./app/relurplint")
-	cmd.Dir = repoRoot()
+	cmd.Dir = testRepoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		os.Stderr.WriteString("build failed: " + err.Error() + "\n" + string(out))
 		os.Exit(1)
@@ -26,7 +36,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCollectDiagnosticsAllEmpty(t *testing.T) {
-	diags, err := collectDiagnostics("all", repoRoot())
+	diags, err := collectDiagnostics("all", testhelper.RepoRoot(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -64,7 +74,7 @@ func TestSelectedCSVWithUnknown(t *testing.T) {
 
 func TestCLIUnknownCheck(t *testing.T) {
 	cmd := exec.Command(relurplintBin, "--check", "nonexistent")
-	cmd.Dir = repoRoot()
+	cmd.Dir = testhelper.RepoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("expected error for unknown check")
@@ -79,7 +89,7 @@ func TestCLIUnknownCheck(t *testing.T) {
 
 func TestCLIAllJSON(t *testing.T) {
 	cmd := exec.Command(relurplintBin, "--check", "all", "--format", "json")
-	cmd.Dir = repoRoot()
+	cmd.Dir = testhelper.RepoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v\noutput: %s", err, string(out))
@@ -103,7 +113,7 @@ func TestCLIAllJSON(t *testing.T) {
 
 func TestCLIHelp(t *testing.T) {
 	cmd := exec.Command(relurplintBin, "--help")
-	cmd.Dir = repoRoot()
+	cmd.Dir = testhelper.RepoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -115,7 +125,7 @@ func TestCLIHelp(t *testing.T) {
 
 func TestCLIAllText(t *testing.T) {
 	cmd := exec.Command(relurplintBin, "--check", "all", "--format", "text")
-	cmd.Dir = repoRoot()
+	cmd.Dir = testhelper.RepoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("unexpected error: %v\noutput: %s", err, string(out))
@@ -123,10 +133,6 @@ func TestCLIAllText(t *testing.T) {
 	if len(out) != 0 {
 		t.Fatalf("expected empty output (no diagnostics), got: %s", string(out))
 	}
-}
-
-func repoRoot() string {
-	return filepath.Clean(filepath.Join("..", ".."))
 }
 
 func exitCode(err error) int {

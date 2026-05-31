@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 func TestToolsCheckCleanRepo(t *testing.T) {
 	c := toolsCheck{}
-	diags := c.Run(repoRoot())
+	diags := c.Run(testRepoRoot)
 	if len(diags) != 0 {
 		t.Fatalf("expected no diagnostics for clean repo, got %d: %+v", len(diags), diags)
 	}
@@ -124,5 +126,5 @@ capability:
   effect_class:
     - process_spawn
 `
-	mustWrite(t, filepath.Join(toolsDir, "curl.tool.yaml"), content)
+	testhelper.MustWrite(t, filepath.Join(toolsDir, "curl.tool.yaml"), content)
 }

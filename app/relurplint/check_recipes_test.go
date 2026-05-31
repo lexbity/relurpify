@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 func TestRecipesCheckNoDirectory(t *testing.T) {
@@ -29,7 +31,7 @@ func TestRecipesCheckValidRecipe(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
 	os.MkdirAll(recipesDir, 0o755)
-	mustWrite(t, filepath.Join(recipesDir, "hello.erpe"), `thoughtrecipe hello
+	testhelper.MustWrite(t, filepath.Join(recipesDir, "hello.erpe"), `thoughtrecipe hello
 
 trigger as capability:
   may read workspace
@@ -46,7 +48,7 @@ func TestRecipesCheckParseError(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
 	os.MkdirAll(recipesDir, 0o755)
-	mustWrite(t, filepath.Join(recipesDir, "broken.erpe"), `thoughtrecipe broken
+	testhelper.MustWrite(t, filepath.Join(recipesDir, "broken.erpe"), `thoughtrecipe broken
 
 trigger as capability:
   may read workspace
@@ -74,7 +76,7 @@ func TestRecipesCheckIgnoresNonRecipeFiles(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
 	os.MkdirAll(recipesDir, 0o755)
-	mustWrite(t, filepath.Join(recipesDir, "notes.txt"), "this is not a recipe")
+	testhelper.MustWrite(t, filepath.Join(recipesDir, "notes.txt"), "this is not a recipe")
 
 	c := recipesCheck{}
 	diags := c.Run(workspace)
@@ -85,7 +87,7 @@ func TestRecipesCheckIgnoresNonRecipeFiles(t *testing.T) {
 
 func TestRecipesCheckCleanRepo(t *testing.T) {
 	c := recipesCheck{}
-	diags := c.Run(repoRoot())
+	diags := c.Run(testRepoRoot)
 	if len(diags) != 0 {
 		t.Fatalf("expected no diagnostics for clean repo, got %d: %+v", len(diags), diags)
 	}

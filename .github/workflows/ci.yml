@@ -12,15 +12,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
-      - name: Lint layering
-        run: make lint-layering
+      - name: Lint (layering, invariants, boundaries, host-exec)
+        run: make lint-all
       - name: Lint config boundary
         run: make lint-config-boundary
       - name: Boundary tests
         run: make test-boundary
       - name: Check template drift
         run: make check-template-drift
-      - name: Validate config
-        run: make validate-config
       - name: Test unit
         run: make test-unit
