@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 var pythonProjectMarkers = []string{
@@ -160,21 +160,11 @@ func (t *PythonProjectMetadataTool) Tags() []string {
 
 type PythonPytestTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewPythonPytestTool(basePath string) *PythonPytestTool {
-	return &PythonPytestTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "python_pytest",
-			Description: "Runs python -m pytest and returns structured Python test results.",
-			Command:     "python3",
-			Category:    "python",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &PythonPytestTool{BasePath: basePath}
 }
 
 func (t *PythonPytestTool) Name() string { return "python_pytest" }
@@ -189,36 +179,35 @@ func (t *PythonPytestTool) Parameters() []contracts.ToolParameter {
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonPytestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *PythonPytestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
 func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"-m", "pytest", "-q"}
+	commandArgs := []string{"python3", "-m", "pytest", "-q"}
 	if raw, ok := args["test_path"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		commandArgs = append(commandArgs, fmt.Sprint(raw))
 	}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: commandArgs,
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizePythonPytest(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizePythonPytest(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
@@ -228,32 +217,25 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interfac
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *PythonPytestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *PythonPytestTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+	}}
+}
 func (t *PythonPytestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonUnittestTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewPythonUnittestTool(basePath string) *PythonUnittestTool {
-	return &PythonUnittestTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "python_unittest",
-			Description: "Runs python -m unittest discover and returns structured Python test results.",
-			Command:     "python3",
-			Category:    "python",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &PythonUnittestTool{BasePath: basePath}
 }
 
 func (t *PythonUnittestTool) Name() string { return "python_unittest" }
@@ -269,13 +251,13 @@ func (t *PythonUnittestTool) Parameters() []contracts.ToolParameter {
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonUnittestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *PythonUnittestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
 func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"-m", "unittest", "discover"}
+	commandArgs := []string{"python3", "-m", "unittest", "discover"}
 	if raw, ok := args["start_directory"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		commandArgs = append(commandArgs, "-s", fmt.Sprint(raw))
 	}
@@ -284,24 +266,23 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 	}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: commandArgs,
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizePythonUnittest(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizePythonUnittest(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
@@ -311,32 +292,25 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *PythonUnittestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *PythonUnittestTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+	}}
+}
 func (t *PythonUnittestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonCompileCheckTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewPythonCompileCheckTool(basePath string) *PythonCompileCheckTool {
-	return &PythonCompileCheckTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "python_compile_check",
-			Description: "Runs python -m compileall and returns structured Python syntax-check results.",
-			Command:     "python3",
-			Category:    "python",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &PythonCompileCheckTool{BasePath: basePath}
 }
 
 func (t *PythonCompileCheckTool) Name() string { return "python_compile_check" }
@@ -352,7 +326,7 @@ func (t *PythonCompileCheckTool) Parameters() []contracts.ToolParameter {
 	}
 }
 func (t *PythonCompileCheckTool) SetCommandRunner(r contracts.CommandRunner) {
-	t.inner.SetCommandRunner(r)
+	t.runner = r
 }
 func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
@@ -363,27 +337,26 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 	if raw, ok := args["target"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		target = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"-m", "compileall", "-q", target}
+	commandArgs := []string{"python3", "-m", "compileall", "-q", target}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: commandArgs,
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizePythonCompileCheck(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizePythonCompileCheck(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
@@ -391,14 +364,15 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
 func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context) bool {
-	return t.inner.IsAvailable(ctx)
+	return t.runner != nil
 }
 func (t *PythonCompileCheckTool) Permissions() contracts.ToolPermissions {
-	return t.inner.Permissions()
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+	}}
 }
 func (t *PythonCompileCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}

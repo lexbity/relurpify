@@ -19,12 +19,23 @@ import (
 // When no isolation is needed the returned values are unchanged and cleanup is a
 // no-op.
 func applyCargoIsolation(manifest contracts.ToolManifest, cmd []string, workdir string) ([]string, string, func(), error) {
+	if !isCargoTool(manifest) {
+		return cmd, workdir, func() {}, nil
+	}
+	return applyCargoIsolationCmd(cmd, workdir, manifest.SourcePath)
+}
+
+// applyCargoIsolationCmd takes the command, workdir, and sourcePath directly
+// without requiring a full ToolManifest. This allows it to be called from
+// the shared Run function and from go_native tools.
+func applyCargoIsolationCmd(cmd []string, workdir string, sourcePath string) ([]string, string, func(), error) {
 	noop := func() {}
 
-	if !isCargoTool(manifest) {
+	if workdir == "" || len(cmd) == 0 {
 		return cmd, workdir, noop, nil
 	}
-	if workdir == "" || len(cmd) == 0 {
+
+	if !isCargoCmd(cmd) {
 		return cmd, workdir, noop, nil
 	}
 
@@ -38,7 +49,7 @@ func applyCargoIsolation(manifest contracts.ToolManifest, cmd []string, workdir 
 		return cmd, workdir, noop, nil
 	}
 
-	basePath := filepath.Clean(manifest.SourcePath)
+	basePath := filepath.Clean(sourcePath)
 	if basePath == "" || basePath == "." {
 		basePath = workdir
 	}
@@ -56,6 +67,11 @@ func applyCargoIsolation(manifest contracts.ToolManifest, cmd []string, workdir 
 	modified := injectManifestPath(cmd, subcommand, manifestPath)
 
 	return modified, basePath, cleanup, nil
+}
+
+// isCargoCmd reports whether the first token of the command is "cargo".
+func isCargoCmd(cmd []string) bool {
+	return len(cmd) > 0 && cmd[0] == "cargo"
 }
 
 // isCargoTool returns true when the manifest describes a cargo subprocess tool.

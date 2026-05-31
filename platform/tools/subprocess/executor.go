@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -52,7 +50,8 @@ func (t *subprocessTool) Tags() []string {
 // Execute runs the tool with the given arguments. It expands the command
 // template via ExpandCommand (which enforces flag-injection, typed flags,
 // platform variants, and placeholder substitution), then delegates to the
-// configured CommandRunner.
+// shared Run function which applies all guards (egress, cargo isolation,
+// sandbox constraints) and returns a structured envelope.
 func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (res *contracts.ToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -71,73 +70,40 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		return &contracts.ToolResult{Success: false, Error: e.Error()}, nil
 	}
 
-	// SF-1 SSRF guard: for network-access tools, screen target hosts against
-	// the sandbox denylist before the command runs. Private, loopback, and
-	// link-local addresses (incl. cloud-metadata endpoints) are never reachable.
-	if e := checkEgress(t.manifest, cmd); e != nil {
-		return &contracts.ToolResult{Success: false, Error: e.Error()}, nil
-	}
-
 	execSpec := t.manifest.Execution
 
-	// Cargo isolation: for nested workspace members, copy the crate to a
-	// temp directory and inject --manifest-path to prevent concurrent runs
-	// from interfering with each other.
-	workdir := stringArg(args, "working_directory")
-	if workdir == "" {
-		workdir = "."
-	}
-	cmd, workdir, cargoCleanup, cargoErr := applyCargoIsolation(t.manifest, cmd, workdir)
-	if cargoErr != nil {
-		return &contracts.ToolResult{Success: false, Error: cargoErr.Error()}, nil
-	}
-	defer cargoCleanup()
-
-	request := contracts.CommandRequest{
-		Args:    cmd,
-		Workdir: workdir,
-		Input:   stringArg(args, "stdin"),
+	spec := RunSpec{
+		Command:             cmd,
+		Workdir:             stringArg(args, "working_directory"),
+		Stdin:               stringArg(args, "stdin"),
+		NetworkAccess:       execSpec.Sandbox != nil && execSpec.Sandbox.NetworkAccess,
+		ApplyCargoIsolation: isCargoTool(t.manifest),
+		SourcePath:          t.manifest.SourcePath,
+		ErrorMap:            t.manifest.Errors,
 	}
 	if execSpec.Sandbox != nil {
-		if execSpec.Sandbox.TimeoutSeconds > 0 {
-			request.Timeout = time.Duration(execSpec.Sandbox.TimeoutSeconds) * time.Second
-		}
-		if execSpec.Sandbox.MemoryMB > 0 {
-			request.MemoryBytes = execSpec.Sandbox.MemoryMB * 1024 * 1024
-		}
-		if execSpec.Sandbox.PidsLimit > 0 {
-			request.PidsLimit = execSpec.Sandbox.PidsLimit
-		}
-		if execSpec.Sandbox.CPUs > 0 {
-			request.CPUs = execSpec.Sandbox.CPUs
-		}
+		spec.Sandbox = *execSpec.Sandbox
+		spec.AllowHosts = execSpec.Sandbox.AllowHosts
 	}
 
-	r, runErr := t.runner.Run(ctx, request)
+	result, runErr := Run(ctx, t.runner, spec)
 	if runErr != nil {
 		return nil, fmt.Errorf("subprocess execution failed: %w", runErr)
 	}
 
 	data := map[string]interface{}{
-		"stdout":     r.Stdout,
-		"stderr":     r.Stderr,
-		"exit_code":  r.ExitCode,
-		"stdout_ref": r.StdoutRef,
-		"stderr_ref": r.StderrRef,
+		"stdout":     result.Stdout,
+		"stderr":     result.Stderr,
+		"exit_code":  result.ExitCode,
+		"stdout_ref": result.StdoutRef,
+		"stderr_ref": result.StderrRef,
 	}
 
-	if r.ExitCode != 0 {
-		msg := r.Stderr
-		if msg == "" {
-			msg = fmt.Sprintf("exit code %d", r.ExitCode)
-		}
-		if mapped, ok := t.manifest.Errors[strconv.Itoa(r.ExitCode)]; ok && strings.TrimSpace(mapped) != "" {
-			msg = mapped
-		}
+	if !result.Success {
 		return &contracts.ToolResult{
 			Success: false,
 			Data:    data,
-			Error:   msg,
+			Error:   result.Error,
 		}, nil
 	}
 

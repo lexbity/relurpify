@@ -9,6 +9,20 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
+// checkEgress returns an error if the command args reference a blocked
+// network host. allowHosts is an optional per-tool allowlist; hosts in
+// this list bypass the mandatory denylist. Returns nil when no network
+// target is blocked.
+func checkEgress(allowHosts []string, cmd []string) error {
+	if host := firstBlockedEgressHost(cmd, allowHosts); host != "" {
+		return fmt.Errorf(
+			"network egress to %q denied: private, loopback, and link-local addresses are blocked (SSRF protection)",
+			host,
+		)
+	}
+	return nil
+}
+
 // isNetworkTool reports whether a manifest declares network access and must
 // therefore have its target hosts screened against the SSRF denylist.
 func isNetworkTool(manifest contracts.ToolManifest) bool {
@@ -80,24 +94,4 @@ func extractHost(arg string) string {
 	return candidate
 }
 
-// checkEgress returns an error if the command args reference a blocked
-// network host and the manifest declares network access. Returns nil
-// when the tool has no network access or all targets are allowed.
-func checkEgress(manifest contracts.ToolManifest, cmd []string) error {
-	if !isNetworkTool(manifest) {
-		return nil
-	}
 
-	var allowHosts []string
-	if manifest.Execution.Sandbox != nil {
-		allowHosts = manifest.Execution.Sandbox.AllowHosts
-	}
-
-	if host := firstBlockedEgressHost(cmd, allowHosts); host != "" {
-		return fmt.Errorf(
-			"network egress to %q denied: private, loopback, and link-local addresses are blocked (SSRF protection)",
-			host,
-		)
-	}
-	return nil
-}

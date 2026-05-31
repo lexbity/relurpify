@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - sql
-description: Executes SQLite commands using sqlite3 inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary sqlite3 commands.
+  Prefer sqlite_query, sqlite_schema_inspect, or sqlite_integrity_check for structured output.
+guidance:
+  avoid_when:
+    - "A sqlite_query, sqlite_schema_inspect, or sqlite_integrity_check tool handles your use case"
 execution:
   backend: subprocess
   command:

@@ -6,6 +6,7 @@ package contracts
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // ToolParameterType enumerates the supported JSON Schema-like parameter types
@@ -128,4 +129,34 @@ func (t ToolPermissions) Validate() error {
 		return errors.New("tool permissions missing")
 	}
 	return t.Permissions.Validate()
+}
+
+// CommandPreset describes a reusable command wrapper for shell tools.
+// It is kept here (rather than in platform/shell/execute) so that the
+// query/catalog layer can reference it without importing legacy executor code.
+type CommandPreset struct {
+	Name        string
+	Command     string
+	DefaultArgs []string
+	Description string
+	Category    string
+	Tags        []string
+	Timeout     time.Duration
+	AllowStdin  bool
+	AllowFlags  bool
+	WorkdirMode string
+}
+
+// NewCommandPreset normalizes a CommandPreset with sensible defaults.
+func NewCommandPreset(p CommandPreset) CommandPreset {
+	if p.Category == "" {
+		p.Category = "cli"
+	}
+	if p.Timeout <= 0 {
+		p.Timeout = 60 * time.Second
+	}
+	if p.WorkdirMode == "" {
+		p.WorkdirMode = "workspace"
+	}
+	return p
 }

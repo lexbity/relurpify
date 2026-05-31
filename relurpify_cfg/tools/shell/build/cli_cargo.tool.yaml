@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - rust
-description: Executes Rust cargo commands inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary cargo commands.
+  Prefer rust_cargo_test, rust_cargo_check, or rust_cargo_metadata for structured output.
+guidance:
+  avoid_when:
+    - "A rust_cargo_test, rust_cargo_check, or rust_cargo_metadata tool handles your use case"
 execution:
   backend: subprocess
   command:

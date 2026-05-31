@@ -106,7 +106,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 	manifestTools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests, toolcapabilities.StrictMode())
 
 	// Inject CommandRunner into tools that need it (git, lang, sqlite tools
-	// that wrap CommandTool internally).
+	// that use the shared subprocess.Run internally).
 	for _, tool := range manifestTools {
 		if setter, ok := tool.(interface{ SetCommandRunner(contracts.CommandRunner) }); ok {
 			setter.SetCommandRunner(commandRunnerAdapter{runner: runner})

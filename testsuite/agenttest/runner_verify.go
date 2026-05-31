@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 // VerifyStepResult captures the outcome of one verification step.
@@ -83,19 +82,28 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 		absScript = filepath.Join(workspace, scriptPath)
 	}
 
-	scriptTool := command.NewCommandTool(workspace, command.CommandToolConfig{
-		Name:     "verify_script",
-		Command:  "bash",
-		Category: "verify",
-		Timeout:  120 * time.Second,
-	})
-	scriptTool.SetCommandRunner(commandRunnerAdapter{runner: runner})
-	result, err := scriptTool.Execute(ctx, map[string]interface{}{
-		"args":              []interface{}{absScript},
-		"working_directory": workspace,
-	})
-	passed := err == nil && result != nil && result.Success
-	msg := extractVerifyMessage(result, err)
+	spec := subprocess.RunSpec{
+		Command: []string{"bash", absScript},
+		Workdir: workspace,
+	}
+	runResult, err := subprocess.Run(ctx, commandRunnerAdapter{runner: runner}, spec)
+	passed := err == nil && runResult != nil && runResult.Success
+
+	var msg string
+	if runResult != nil {
+		toolResult := &contracts.ToolResult{
+			Success: runResult.Success,
+			Error:   runResult.Error,
+			Data: map[string]interface{}{
+				"stdout": runResult.Stdout,
+				"stderr": runResult.Stderr,
+			},
+		}
+		msg = extractVerifyMessage(toolResult, err)
+	} else {
+		msg = extractVerifyMessage(nil, err)
+	}
+
 	return AssertionResult{
 		AssertionID: fmt.Sprintf("verify.script[%s]", filepath.Base(scriptPath)),
 		Tier:        "outcome",

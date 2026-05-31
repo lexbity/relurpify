@@ -7,11 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 var goProjectMarkers = []string{
@@ -81,21 +80,11 @@ func (t *GoWorkspaceDetectTool) Tags() []string {
 
 type GoModuleMetadataTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewGoModuleMetadataTool(basePath string) *GoModuleMetadataTool {
-	return &GoModuleMetadataTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "go_module_metadata",
-			Description: "Runs go list -m -json and returns structured Go module metadata.",
-			Command:     "go",
-			Category:    "go",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &GoModuleMetadataTool{BasePath: basePath}
 }
 
 func (t *GoModuleMetadataTool) Name() string { return "go_module_metadata" }
@@ -107,22 +96,23 @@ func (t *GoModuleMetadataTool) Parameters() []contracts.ToolParameter {
 	return []contracts.ToolParameter{{Name: "working_directory", Type: "string", Required: false, Default: "."}}
 }
 func (t *GoModuleMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
-	t.inner.SetCommandRunner(r)
+	t.runner = r
 }
 func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              []interface{}{"list", "-m", "-json"},
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: []string{"go", "list", "-m", "-json"},
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
 	summary, parsed := parseGoModuleMetadata(stdout)
 	data := map[string]interface{}{
 		"summary": summary,
@@ -132,31 +122,25 @@ func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]inte
 	for key, value := range parsed {
 		data[key] = value
 	}
-	return &contracts.ToolResult{Success: result.Success, Error: result.Error, Data: data, Metadata: result.Metadata}, nil
+	return &contracts.ToolResult{Success: runResult.Success, Error: runResult.Error, Data: data}, nil
 }
-func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *GoModuleMetadataTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *GoModuleMetadataTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+	}}
+}
 func (t *GoModuleMetadataTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "metadata", "recovery"}
 }
 
 type GoTestTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewGoTestTool(basePath string) *GoTestTool {
-	return &GoTestTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "go_test",
-			Description: "Runs go test and returns structured Go test results.",
-			Command:     "go",
-			Category:    "go",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &GoTestTool{BasePath: basePath}
 }
 
 func (t *GoTestTool) Name() string { return "go_test" }
@@ -172,7 +156,7 @@ func (t *GoTestTool) Parameters() []contracts.ToolParameter {
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *GoTestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *GoTestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
 func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
@@ -182,30 +166,29 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 	if raw, ok := args["package"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		pkg = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"test", pkg}
+	commandArgs := []string{"go", "test", pkg}
 	if raw, ok := args["run"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		commandArgs = append(commandArgs, "-run", fmt.Sprint(raw))
 	}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: commandArgs,
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizeGoTest(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizeGoTest(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
@@ -215,32 +198,25 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
-func (t *GoTestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *GoTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *GoTestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *GoTestTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+	}}
+}
 func (t *GoTestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "test", "verification", "diagnostics"}
 }
 
 type GoBuildTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewGoBuildTool(basePath string) *GoBuildTool {
-	return &GoBuildTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "go_build",
-			Description: "Runs go build and returns structured Go build results.",
-			Command:     "go",
-			Category:    "go",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &GoBuildTool{BasePath: basePath}
 }
 
 func (t *GoBuildTool) Name() string { return "go_build" }
@@ -255,7 +231,7 @@ func (t *GoBuildTool) Parameters() []contracts.ToolParameter {
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *GoBuildTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *GoBuildTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
 func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
@@ -265,27 +241,26 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 	if raw, ok := args["package"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		pkg = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"build", pkg}
+	commandArgs := []string{"go", "build", pkg}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command: commandArgs,
+		Workdir: workingDir,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizeGoBuild(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizeGoBuild(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
@@ -293,11 +268,14 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
-func (t *GoBuildTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *GoBuildTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *GoBuildTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *GoBuildTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+	}}
+}
 func (t *GoBuildTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:go", "build", "verification", "diagnostics"}
 }
@@ -436,8 +414,4 @@ func parseGoModuleMetadata(stdout string) (string, map[string]interface{}) {
 	}
 }
 
-func sortedStrings(values []string) []string {
-	out := append([]string{}, values...)
-	sort.Strings(out)
-	return out
-}
+

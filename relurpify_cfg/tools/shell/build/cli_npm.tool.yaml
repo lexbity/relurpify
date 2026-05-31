@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - node
-description: Executes npm commands inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary npm commands.
+  Prefer node_npm_test for structured test output.
+guidance:
+  avoid_when:
+    - "The node_npm_test tool handles your use case"
 execution:
   backend: subprocess
   command:

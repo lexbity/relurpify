@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 type RustWorkspaceDetectTool struct {
@@ -72,21 +72,11 @@ func (t *RustWorkspaceDetectTool) Tags() []string {
 
 type RustCargoTestTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewRustCargoTestTool(basePath string) *RustCargoTestTool {
-	return &RustCargoTestTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "rust_cargo_test",
-			Description: "Runs cargo test and returns structured Rust test results.",
-			Command:     "cargo",
-			Category:    "rust",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &RustCargoTestTool{BasePath: basePath}
 }
 
 func (t *RustCargoTestTool) Name() string { return "rust_cargo_test" }
@@ -102,34 +92,35 @@ func (t *RustCargoTestTool) Parameters() []contracts.ToolParameter {
 	}
 }
 func (t *RustCargoTestTool) SetCommandRunner(r contracts.CommandRunner) {
-	t.inner.SetCommandRunner(r)
+	t.runner = r
 }
 func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"test"}
+	commandArgs := []string{"cargo", "test"}
 	if raw, ok := args["test_name"]; ok && raw != nil && strings.TrimSpace(fmt.Sprint(raw)) != "" {
 		commandArgs = append(commandArgs, fmt.Sprint(raw))
 	}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command:             commandArgs,
+		Workdir:             workingDir,
+		ApplyCargoIsolation: true,
+		SourcePath:          t.BasePath,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizeRustCargoTest(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizeRustCargoTest(stdout, stderr, runResult.Success)
 	data := map[string]interface{}{
 		"summary":       summary.Summary,
 		"passed":        summary.Passed,
@@ -140,35 +131,28 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interfa
 		"stderr":        stderr,
 	}
 	return &contracts.ToolResult{
-		Success:  result.Success,
-		Error:    result.Error,
-		Data:     data,
-		Metadata: result.Metadata,
+		Success: runResult.Success,
+		Error:   runResult.Error,
+		Data:    data,
 	}, nil
 }
-func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *RustCargoTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *RustCargoTestTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+	}}
+}
 func (t *RustCargoTestTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
 }
 
 type RustCargoCheckTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewRustCargoCheckTool(basePath string) *RustCargoCheckTool {
-	return &RustCargoCheckTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "rust_cargo_check",
-			Description: "Runs cargo check and returns structured Rust compile results.",
-			Command:     "cargo",
-			Category:    "rust",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &RustCargoCheckTool{BasePath: basePath}
 }
 
 func (t *RustCargoCheckTool) Name() string { return "rust_cargo_check" }
@@ -183,34 +167,35 @@ func (t *RustCargoCheckTool) Parameters() []contracts.ToolParameter {
 	}
 }
 func (t *RustCargoCheckTool) SetCommandRunner(r contracts.CommandRunner) {
-	t.inner.SetCommandRunner(r)
+	t.runner = r
 }
 func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	commandArgs := []interface{}{"check"}
+	commandArgs := []string{"cargo", "check"}
 	if raw, ok := args["extra_args"]; ok && raw != nil {
 		if extra, err := toStringSliceValue(raw); err == nil {
-			for _, entry := range extra {
-				commandArgs = append(commandArgs, entry)
-			}
+			commandArgs = append(commandArgs, extra...)
 		}
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              commandArgs,
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command:             commandArgs,
+		Workdir:             workingDir,
+		ApplyCargoIsolation: true,
+		SourcePath:          t.BasePath,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
-	summary := summarizeRustCargoCheck(stdout, stderr, result.Success)
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
+	summary := summarizeRustCargoCheck(stdout, stderr, runResult.Success)
 	return &contracts.ToolResult{
-		Success: result.Success,
-		Error:   result.Error,
+		Success: runResult.Success,
+		Error:   runResult.Error,
 		Data: map[string]interface{}{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
@@ -219,32 +204,25 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interf
 			"stdout":        stdout,
 			"stderr":        stderr,
 		},
-		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool   { return t.inner.IsAvailable(ctx) }
-func (t *RustCargoCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
+func (t *RustCargoCheckTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+	}}
+}
 func (t *RustCargoCheckTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:rust", "build", "verification", "diagnostics"}
 }
 
 type RustCargoMetadataTool struct {
 	BasePath string
-	inner    *clinix.CommandTool
+	runner   contracts.CommandRunner
 }
 
 func NewRustCargoMetadataTool(basePath string) *RustCargoMetadataTool {
-	return &RustCargoMetadataTool{
-		BasePath: basePath,
-		inner: clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
-			Name:        "rust_cargo_metadata",
-			Description: "Runs cargo metadata and returns structured Rust workspace data.",
-			Command:     "cargo",
-			Category:    "rust",
-			Tags:        []string{contracts.TagExecute},
-			AllowFlags:  true,
-		}),
-	}
+	return &RustCargoMetadataTool{BasePath: basePath}
 }
 
 func (t *RustCargoMetadataTool) Name() string { return "rust_cargo_metadata" }
@@ -258,22 +236,25 @@ func (t *RustCargoMetadataTool) Parameters() []contracts.ToolParameter {
 	}
 }
 func (t *RustCargoMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
-	t.inner.SetCommandRunner(r)
+	t.runner = r
 }
 func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	result, err := t.inner.Execute(ctx, map[string]interface{}{
-		"args":              []interface{}{"metadata", "--format-version", "1", "--no-deps"},
-		"working_directory": workingDir,
-	})
-	if err != nil || result == nil {
-		return result, err
+	spec := subprocess.RunSpec{
+		Command:             []string{"cargo", "metadata", "--format-version", "1", "--no-deps"},
+		Workdir:             workingDir,
+		ApplyCargoIsolation: true,
+		SourcePath:          t.BasePath,
 	}
-	stdout := fmt.Sprint(result.Data["stdout"])
-	stderr := fmt.Sprint(result.Data["stderr"])
+	runResult, runErr := subprocess.Run(ctx, t.runner, spec)
+	if runErr != nil {
+		return nil, runErr
+	}
+	stdout := runResult.Stdout
+	stderr := runResult.Stderr
 	summary, parsed := parseRustCargoMetadata(stdout)
 	data := map[string]interface{}{
 		"summary": summary,
@@ -284,16 +265,19 @@ func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]int
 		data[key] = value
 	}
 	return &contracts.ToolResult{
-		Success:  result.Success,
-		Error:    result.Error,
-		Data:     data,
-		Metadata: result.Metadata,
+		Success: runResult.Success,
+		Error:   runResult.Error,
+		Data:    data,
 	}, nil
 }
 func (t *RustCargoMetadataTool) IsAvailable(ctx context.Context) bool {
-	return t.inner.IsAvailable(ctx)
+	return t.runner != nil
 }
-func (t *RustCargoMetadataTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoMetadataTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
+		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+	}}
+}
 func (t *RustCargoMetadataTool) Tags() []string {
 	return []string{contracts.TagExecute, "lang:rust", "metadata", "recovery"}
 }

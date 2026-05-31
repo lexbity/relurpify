@@ -5,7 +5,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
-	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 )
 
@@ -169,7 +168,7 @@ func discoveryMatchToData(match DiscoveryMatch) map[string]interface{} {
 	}
 }
 
-func presetToData(p execute.CommandPreset) map[string]interface{} {
+func presetToData(p contracts.CommandPreset) map[string]interface{} {
 	return map[string]interface{}{
 		"name":         p.Name,
 		"command":      p.Command,

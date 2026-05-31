@@ -9,7 +9,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
-	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 )
 
@@ -74,7 +73,7 @@ type InstantiationResult struct {
 	OriginalQuery   InstantiationQuery
 	NormalizedQuery string
 	Match           DiscoveryMatch
-	Preset          execute.CommandPreset
+	Preset          contracts.CommandPreset
 	Request         contracts.CommandRequest
 	StructuredArgs  map[string]any
 }
@@ -442,7 +441,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		OriginalQuery:   q,
 		NormalizedQuery: renderInstantiationQuery(q),
 		Match:           result,
-		Preset: execute.CommandPreset{
+		Preset: contracts.CommandPreset{
 			Name:        entry.Name,
 			Command:     contracts.ToolCommand(toManifest(entry)),
 			DefaultArgs: append([]string(nil), entry.Preset.DefaultArgs...),
