@@ -199,22 +199,21 @@ func (p *SandboxPane) Update(msg tea.Msg) (*SandboxPane, tea.Cmd) {
 			}
 			return p, nil
 		}
+		// Universal list grammar first, then pane-specific keys.
+		var gram ListGrammar
+		if cmd, handled := gram.HandleKey(p, msg); handled {
+			_ = cmd
+		}
 		switch msg.String() {
-		case "up", "k":
-			p.moveSelection(-1)
-		case "down", "j":
-			p.moveSelection(1)
 		case "left", "h":
 			p.collapseSelection()
 		case "right", "l":
 			p.expandSelection()
-		case "space", " ":
-			p.toggleSelectionState()
 		case "e":
 			p.beginEdit()
 		case "p":
 			p.promptBackendToggle()
-		case "s", "enter":
+		case "s":
 			return p, p.persistManifestCmd()
 		case "r":
 			p.Refresh()
@@ -1104,6 +1103,54 @@ func nodeKindLabel(kind sandboxNodeKind) string {
 func warningText(th *theme.Theme, value string) string {
 	return th.Warning().Bold(true).Render(value)
 }
+
+// ── ListEditor implementation ──────────────────────────────────────────────
+
+func (p *SandboxPane) Actions() []Action {
+	if p == nil {
+		return nil
+	}
+	return []Action{
+		{Label: "navigate", Key: "↑↓"},
+		{Label: "toggle", Key: "space"},
+		{Label: "edit", Key: "e"},
+		{Label: "save", Key: "s"},
+		{Label: "reload", Key: "r"},
+	}
+}
+func (p *SandboxPane) ItemCount() int {
+	if p == nil || p.root == nil {
+		return 0
+	}
+	return len(p.visibleNodes())
+}
+func (p *SandboxPane) Selected() int { return p.sel }
+func (p *SandboxPane) Move(delta int) int {
+	p.moveSelection(delta)
+	return p.sel
+}
+func (p *SandboxPane) OnActivate() tea.Cmd {
+	if p == nil {
+		return nil
+	}
+	return p.persistManifestCmd()
+}
+func (p *SandboxPane) OnToggle() tea.Cmd {
+	if p == nil {
+		return nil
+	}
+	p.toggleSelectionState()
+	return nil
+}
+func (p *SandboxPane) OnNew() tea.Cmd    { return nil }
+func (p *SandboxPane) OnDelete() tea.Cmd { return nil }
+func (p *SandboxPane) OnFilter(query string) {
+	if p != nil {
+		p.SetFilter(query)
+	}
+}
+
+// ── Theme setter ───────────────────────────────────────────────────────────
 
 // SetTheme sets the active semantic style source.
 func (p *SandboxPane) SetTheme(th *theme.Theme) {

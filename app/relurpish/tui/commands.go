@@ -108,6 +108,7 @@ func (r *CommandRegistry) All() []Command {
 var rootCommandRegistry *CommandRegistry
 
 func registerUniversalCommands(r *CommandRegistry) {
+	registerContextualCommands(r)
 	for _, cmd := range []Command{
 		{Name: "workspace", Description: "Switch workspace root", Usage: "/workspace [path]", Handler: rootHandleWorkspace},
 		{Name: "permissions", Description: "Open sandbox permissions", Usage: "/permissions", Handler: rootHandlePermissions},
@@ -134,6 +135,26 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "service", Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabAIProvider}},
 	} {
 		r.Register(cmd)
+	}
+}
+
+func registerContextualCommands(reg *CommandRegistry) {
+	if reg == nil {
+		return
+	}
+	for _, cmd := range []Command{
+		{Name: "save", Description: "Save and reload sandbox manifest", Usage: "/save", Handler: rootHandleSave, TabFilter: []TabID{TabSandbox}},
+		{Name: "backend", Description: "Switch sandbox backend", Usage: "/backend [type]", Handler: rootHandleBackend, TabFilter: []TabID{TabSandbox}},
+		{Name: "test-latency", Description: "Test provider latency", Usage: "/test-latency", Handler: rootHandleTestLatency, TabFilter: []TabID{TabAIProvider}},
+		{Name: "save-model", Description: "Save model configuration", Usage: "/save-model", Handler: rootHandleSaveModel, TabFilter: []TabID{TabAIProvider}},
+		{Name: "test-rule", Description: "Test a security rule against input", Usage: "/test-rule", Handler: rootHandleTestRule, TabFilter: []TabID{TabSecurityGuard}},
+		{Name: "restart-all", Description: "Restart all services", Usage: "/restart-all", Handler: rootHandleRestartAll, TabFilter: []TabID{TabAIProvider}},
+		{Name: "reset-bindings", Description: "Reset all keybindings to defaults", Usage: "/reset-bindings", Handler: rootHandleResetBindings, TabFilter: []TabID{TabKeybindings}},
+		{Name: "diff-apply-all", Description: "Apply all pending diffs", Usage: "/diff-apply-all", Handler: rootHandleDiffApplyAll, TabFilter: []TabID{TabDiff}},
+		{Name: "diff-revert", Description: "Revert selected diff", Usage: "/diff-revert", Handler: rootHandleDiffRevert, TabFilter: []TabID{TabDiff}},
+		{Name: "diff-view", Description: "Toggle diff view mode", Usage: "/diff-view", Handler: rootHandleDiffView, TabFilter: []TabID{TabDiff}},
+	} {
+		reg.Register(cmd)
 	}
 }
 
@@ -1012,4 +1033,102 @@ func denyHITLRootCmd(svc HITLServiceIface, requestID string) tea.Cmd {
 		err := svc.DenyHITL(requestID, "denied in TUI")
 		return hitlResolvedMsg{requestID: requestID, approved: false, err: err}
 	}
+}
+
+// ── Contextual command handlers ──────────────────────────────────────────
+
+func rootHandleSave(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	if m.baseSurface != nil {
+		if s, ok := m.baseSurface.(interface{ Save() tea.Cmd }); ok {
+			m.addSystemMessage("Saving sandbox manifest...")
+			return m, s.Save()
+		}
+	}
+	m.addSystemMessage("Save not available on this surface")
+	return m, nil
+}
+
+func rootHandleBackend(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) > 0 {
+		m.addSystemMessage(fmt.Sprintf("Backend switch to %s requested", args[0]))
+		return m, nil
+	}
+	m.setActiveTab(TabSandbox)
+	m.addSystemMessage("Use /backend <type> to switch backend")
+	return m, nil
+}
+
+func rootHandleTestLatency(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabAIProvider)
+	m.addSystemMessage("Testing provider latency... (not yet implemented as palette command)")
+	return m, nil
+}
+
+func rootHandleSaveModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabAIProvider)
+	m.addSystemMessage("Use /model <name> to set model")
+	return m, nil
+}
+
+func rootHandleTestRule(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabSecurityGuard)
+	m.addSystemMessage("Testing security rule... (not yet implemented as palette command)")
+	return m, nil
+}
+
+func rootHandleRestartAll(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	return m, func() tea.Msg {
+		err := m.runtime.RestartAllServices(context.Background())
+		if err != nil {
+			return chatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
+		}
+		return chatSystemMsg{Text: "All services restarted"}
+	}
+}
+
+func rootHandleResetBindings(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabKeybindings)
+	m.addSystemMessage("Reset bindings requested (not yet implemented as palette command)")
+	return m, nil
+}
+
+func rootHandleRefresh(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabDoctor)
+	if m.baseSurface != nil {
+		m.baseSurface.OpenDoctor()
+	}
+	m.addSystemMessage("Refreshing doctor report...")
+	return m, nil
+}
+
+func rootHandleDiffApplyAll(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabDiff)
+	m.addSystemMessage("Apply all diffs requested (not yet implemented as palette command)")
+	return m, nil
+}
+
+func rootHandleDiffRevert(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabDiff)
+	m.addSystemMessage("Revert diff requested (not yet implemented as palette command)")
+	return m, nil
+}
+
+func rootHandleDiffView(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	_ = args
+	m.setActiveTab(TabDiff)
+	m.addSystemMessage("Toggle diff view requested (not yet implemented as palette command)")
+	return m, nil
 }

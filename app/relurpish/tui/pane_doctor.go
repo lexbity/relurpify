@@ -57,6 +57,8 @@ type DoctorPane struct {
 	th *theme.Theme
 	// anim is the host animation manager, set by the model via SetAnimManager.
 	anim *AnimationManager
+	// bar is a determinate progress indicator for operations with a known total.
+	bar *ProgressBar
 }
 
 // Report returns the current doctor report.
@@ -69,7 +71,11 @@ func (p *DoctorPane) SetReport(report DoctorReport) { p.report = report }
 func (p *DoctorPane) SetStatus(status string) { p.status = status }
 
 func NewDoctorPane(rt RuntimeAdapter) *DoctorPane {
-	p := &DoctorPane{th: theme.Default(), runtime: rt}
+	p := &DoctorPane{
+		th:      theme.Default(),
+		runtime: rt,
+		bar:     NewProgressBar(),
+	}
 	p.Refresh()
 	return p
 }
@@ -247,7 +253,11 @@ func (p *DoctorPane) viewLogs() string {
 func (p *DoctorPane) footerLine() string {
 	footer := p.th.Dim().Render("tab checks/templates/logs  r refresh  h heal  p models")
 	if p.working {
-		footer = p.th.Dim().Render(fmt.Sprintf("%s  %s", p.action, renderPercentBar(p.progress, 18)))
+		barView := renderPercentBar(p.progress, 18)
+		if p.bar != nil && !p.bar.Done() {
+			barView = p.bar.View()
+		}
+		footer = p.th.Dim().Render(fmt.Sprintf("%s  %s", p.action, barView))
 	}
 	if p.status != "" {
 		footer = p.th.Dim().Render(p.status) + "\n" + footer
@@ -276,6 +286,9 @@ func (p *DoctorPane) runAsync(action doctorAction) tea.Cmd {
 	p.action = action
 	p.progress = 0
 	p.status = ""
+	if p.bar != nil {
+		p.bar.SetTarget(1)
+	}
 	return tea.Batch(p.progressCmd(), func() tea.Msg {
 		ctx := context.Background()
 		switch action {
@@ -326,5 +339,21 @@ func (p *DoctorPane) progressCmd() tea.Cmd {
 func (p *DoctorPane) SetTheme(th *theme.Theme) {
 	if th != nil {
 		p.th = th
+	}
+}
+
+// SetAnimManager links the host animation manager and wires it to the
+// progress bar so determinate animations consume the shared tick budget.
+func (p *DoctorPane) SetAnimManager(m *AnimationManager) {
+	p.anim = m
+	if p.bar != nil {
+		p.bar.SetAnimManager(m)
+	}
+}
+
+// SetReduceMotion passes the reduce-motion detector to internal components.
+func (p *DoctorPane) SetReduceMotion(r *ReduceMotion) {
+	if p.bar != nil {
+		p.bar.SetReduceMotion(r)
 	}
 }

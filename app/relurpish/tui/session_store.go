@@ -21,6 +21,11 @@ type SessionMeta struct {
 	Agent     string    `json:"agent"`
 	Model     string    `json:"model"`
 	Label     string    `json:"label,omitempty"` // set for named checkpoints
+
+	// Resume identity — empty for pre-resume sessions.
+	WorkflowID string `json:"workflow_id,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	HasBKC     bool   `json:"has_bkc,omitempty"`
 }
 
 // SessionRecord is the full persisted session.

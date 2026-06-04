@@ -30,7 +30,7 @@ func newControlCenterPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tu
 		session: sess,
 		store:   store,
 	}
-	p.welcome = tui.NewWelcomePane(sess, store)
+	p.welcome = tui.NewWelcomePane(sess, store, nil)
 	p.sandbox = tui.NewSandboxPane(rt)
 	p.securityguard = tui.NewSecurityGuardPane(rt)
 	p.aiprovider = tui.NewAIProviderPane(rt)
@@ -49,7 +49,7 @@ func (p *controlCenterPane) SetSize(w, h int) {
 func (p *controlCenterPane) SetStore(store *tui.SessionStore) {
 	p.store = store
 	if p.welcome != nil {
-		p.welcome = tui.NewWelcomePane(p.session, store)
+		p.welcome = tui.NewWelcomePane(p.session, store, nil)
 	}
 	if p.sandbox != nil {
 		p.sandbox.Refresh()
@@ -154,6 +154,12 @@ func (p *controlCenterPane) Update(msg tea.Msg) (tui.Region1Surface, tea.Cmd) {
 		}
 		return p, nil
 	case tea.KeyMsg:
+		// ? opens help when Region 1 has focus (control center).
+		if msg.String() == "?" {
+			return p, func() tea.Msg {
+				return tui.GlobalKeyMsg{Key: "f1"}
+			}
+		}
 		switch p.activeTab {
 		case tui.TabWelcome:
 			if p.welcome != nil {

@@ -247,7 +247,7 @@ func TestPanelGoldenViews(t *testing.T) {
 		}
 	}
 
-	baseWelcome := tui.NewWelcomePane(&tui.Session{}, sessionStore)
+	baseWelcome := tui.NewWelcomePane(&tui.Session{}, sessionStore, nil)
 	baseWelcome.SetSize(96, 18)
 	assertGolden(t, "welcome_panel.txt", baseWelcome.View())
 

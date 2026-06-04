@@ -1,70 +1,104 @@
 package tui
 
 import (
+	"strings"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestWelcomePaneSelectsWorkspaceFromRecentHistory(t *testing.T) {
-	store := NewSessionStore(t.TempDir())
-	now := time.Now()
-	records := []SessionRecord{
-		{SessionMeta: SessionMeta{ID: "a", Workspace: "/work/alpha", Agent: "euclo", Model: "m1", UpdatedAt: now.Add(-2 * time.Hour)}},
-		{SessionMeta: SessionMeta{ID: "b", Workspace: "/work/beta", Agent: "euclo", Model: "m2", UpdatedAt: now.Add(-1 * time.Hour)}},
-		{SessionMeta: SessionMeta{ID: "c", Workspace: "/work/beta", Agent: "none", Model: "m3", UpdatedAt: now}},
-	}
-	for _, rec := range records {
-		if err := store.Save(rec); err != nil {
-			t.Fatalf("save session %q: %v", rec.ID, err)
-		}
+func TestWelcomePaneStartEmitsStartSessionMsg(t *testing.T) {
+	pane := NewWelcomePane(&Session{}, nil, &welcomeFactory{agents: []string{"none", "euclo"}})
+	pane.SetSize(80, 24)
+
+	// Focus the Start button by navigating to index 1.
+	// Focus ring: 0=agent drop, 1=Start, 2=resume drop, 3=Resume, 4=Doctor, 5=Help
+	for pane.focusIdx != 1 {
+		pane.handleKey(tea.KeyMsg{Type: tea.KeyTab})
 	}
 
-	pane := NewWelcomePane(&Session{}, store)
-	items := pane.filteredWorkspaces()
-	if got := len(items); got != 2 {
-		t.Fatalf("workspace count = %d, want 2", got)
-	}
-	if got := items[0].Workspace; got != "/work/beta" {
-		t.Fatalf("first workspace = %q, want /work/beta", got)
-	}
-
-	pane.selected = 1
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Enter on Start.
+	_, cmd := pane.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("expected enter to emit workspace selection")
+		t.Fatal("expected Start to emit a command")
 	}
 	msg := cmd()
-	sel, ok := msg.(workspaceSelectedMsg)
+	startMsg, ok := msg.(StartSessionMsg)
 	if !ok {
-		t.Fatalf("message type = %T, want workspaceSelectedMsg", msg)
+		t.Fatalf("command produced %T, want StartSessionMsg", msg)
 	}
-	if sel.Workspace != "/work/alpha" {
-		t.Fatalf("selected workspace = %q, want /work/alpha", sel.Workspace)
+	if startMsg.Agent == "" {
+		t.Error("StartSessionMsg should have non-empty Agent")
 	}
 }
 
-func TestWelcomePaneFilterReducesWorkspaceList(t *testing.T) {
-	store := NewSessionStore(t.TempDir())
-	now := time.Now()
-	records := []SessionRecord{
-		{SessionMeta: SessionMeta{ID: "a", Workspace: "/work/alpha", UpdatedAt: now.Add(-2 * time.Hour)}},
-		{SessionMeta: SessionMeta{ID: "b", Workspace: "/work/beta", UpdatedAt: now.Add(-1 * time.Hour)}},
-	}
-	for _, rec := range records {
-		if err := store.Save(rec); err != nil {
-			t.Fatalf("save session %q: %v", rec.ID, err)
-		}
-	}
+func TestWelcomePaneAgentDropdownListsAgents(t *testing.T) {
+	factory := &welcomeFactory{agents: []string{"none", "euclo"}}
+	pane := NewWelcomePane(&Session{}, nil, factory)
+	pane.SetSize(80, 24)
 
-	pane := NewWelcomePane(&Session{}, store)
-	pane.SetFilter("bet")
-	items := pane.filteredWorkspaces()
-	if got := len(items); got != 1 {
-		t.Fatalf("filtered workspace count = %d, want 1", got)
+	// Open the dropdown to verify items are rendered.
+	pane.agentDrop.Open()
+	view := pane.agentDrop.View()
+	if !strings.Contains(view, "euclo") {
+		t.Errorf("agent dropdown view missing euclo: %s", view)
 	}
-	if got := items[0].Workspace; got != "/work/beta" {
-		t.Fatalf("filtered workspace = %q, want /work/beta", got)
+}
+
+func TestWelcomePaneResumeDropdownPopulated(t *testing.T) {
+	store := NewSessionStore(t.TempDir())
+	rec := SessionRecord{SessionMeta: SessionMeta{ID: "s1", Agent: "euclo"}}
+	if err := store.Save(rec); err != nil {
+		t.Fatal(err)
 	}
+	pane := NewWelcomePane(&Session{}, store, nil)
+	pane.SetSize(80, 24)
+
+	// Verify session shows in resume dropdown.
+	pane.resumeDrop.Open()
+	view := pane.resumeDrop.View()
+	if !strings.Contains(view, "euclo") {
+		t.Errorf("resume dropdown view missing agent label: %s", view)
+	}
+}
+
+func TestWelcomePaneFocusRingOrder(t *testing.T) {
+	pane := NewWelcomePane(&Session{}, nil, nil)
+	pane.SetSize(80, 24)
+
+	// Tab cycles through focus ring.
+	states := []int{0, 1, 2, 3, 4, 5, 0}
+	for i, want := range states {
+		if pane.focusIdx != want {
+			t.Fatalf("step %d: focusIdx = %d, want %d", i, pane.focusIdx, want)
+		}
+		pane.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	}
+}
+
+func TestWelcomePaneRenders(t *testing.T) {
+	pane := NewWelcomePane(&Session{}, nil, nil)
+	pane.SetSize(80, 24)
+	view := pane.View()
+	if !strings.Contains(view, "New Session") {
+		t.Errorf("view missing 'New Session': %s", view)
+	}
+	if !strings.Contains(view, "Start") {
+		t.Errorf("view missing 'Start': %s", view)
+	}
+	if !strings.Contains(view, "Doctor") {
+		t.Errorf("view missing 'Doctor': %s", view)
+	}
+}
+
+type welcomeFactory struct {
+	agents []string
+}
+
+func (f *welcomeFactory) Resolve(string) AgentSurface { return nil }
+func (f *welcomeFactory) AvailableAgents() []string {
+	if f == nil {
+		return nil
+	}
+	return f.agents
 }

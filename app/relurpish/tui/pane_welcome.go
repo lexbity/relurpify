@@ -2,201 +2,265 @@ package tui
 
 import (
 	"fmt"
-	"os/exec"
-	"path/filepath"
-	"sort"
-	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type WelcomePane struct {
 	session       *Session
 	store         *SessionStore
-	recent        []SessionMeta
-	selected      int
-	filter        string
+	factory       SurfaceFactory
 	width, height int
+
+	// Logo
+	logo Logo
+
+	// Agent selection
+	agentDrop Dropdown
+
+	// Session resume
+	resumeDrop Dropdown
+
+	// Focus ring index
+	focusIdx int
+
 	// Theme is the active semantic style source.
 	th *theme.Theme
 }
 
-type workspaceSelectedMsg struct {
-	Workspace string
-}
-
-func NewWelcomePane(sess *Session, store *SessionStore) *WelcomePane {
-	p := &WelcomePane{session: sess, store: store, th: theme.Default()}
-	p.Refresh()
+func NewWelcomePane(sess *Session, store *SessionStore, factory SurfaceFactory) *WelcomePane {
+	p := &WelcomePane{
+		session:   sess,
+		store:     store,
+		factory:   factory,
+		th:        theme.Default(),
+		logo:      *NewLogo(55, 20),
+		agentDrop: *NewDropdown("agent", nil),
+		resumeDrop: *NewDropdown("resume", nil),
+	}
+	p.refreshAgents()
+	p.refreshSessions()
 	return p
 }
 
 func (p *WelcomePane) SetSize(w, h int) {
 	p.width = w
 	p.height = h
+	p.logo.SetSize(55, h)
 }
+
+func (p *WelcomePane) SetFilter(string) {}
 
 func (p *WelcomePane) Refresh() {
-	if p.store == nil {
-		p.recent = nil
-		return
-	}
-	metas, err := p.store.List()
-	if err != nil {
-		p.recent = nil
-		return
-	}
-	p.recent = append([]SessionMeta(nil), metas...)
-	if p.selected >= len(p.recent) {
-		p.selected = max(0, len(p.recent)-1)
-	}
+	p.refreshAgents()
+	p.refreshSessions()
 }
 
-func (p *WelcomePane) SetFilter(filter string) {
-	p.filter = strings.ToLower(strings.TrimSpace(filter))
-	p.selected = 0
+func (p *WelcomePane) refreshAgents() {
+	agents := []DropdownItem{}
+	if p.factory != nil {
+		for _, name := range p.factory.AvailableAgents() {
+			agents = append(agents, DropdownItem{ID: name, Label: name})
+		}
+	}
+	if len(agents) == 0 {
+		agents = []DropdownItem{{ID: "none", Label: "none"}}
+	}
+	p.agentDrop = *NewDropdown("agent", agents)
+	p.agentDrop.SetTheme(p.th)
+}
+
+func (p *WelcomePane) refreshSessions() {
+	items := []DropdownItem{}
+	if p.store != nil {
+		metas, err := p.store.List()
+		if err == nil {
+			for _, meta := range metas {
+				label := fmt.Sprintf("%s — %s", meta.Agent, meta.UpdatedAt.Format("01/02 15:04"))
+				items = append(items, DropdownItem{ID: meta.ID, Label: label})
+			}
+		}
+	}
+	p.resumeDrop = *NewDropdown("resume", items)
+	p.resumeDrop.SetTheme(p.th)
 }
 
 func (p *WelcomePane) Update(msg tea.Msg) (*WelcomePane, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			if p.selected > 0 {
-				p.selected--
-			}
-		case "down", "j":
-			if p.selected < len(p.filteredWorkspaces())-1 {
-				p.selected++
-			}
-		case "r":
-			p.Refresh()
-		case "enter":
-			if ws := p.selectedWorkspace(); ws != "" {
-				return p, func() tea.Msg { return workspaceSelectedMsg{Workspace: ws} }
-			}
+		return p.handleKey(msg)
+	case tea.MouseMsg:
+		return p.handleMouse(msg)
+	}
+	return p, nil
+}
+
+func (p *WelcomePane) handleKey(msg tea.KeyMsg) (*WelcomePane, tea.Cmd) {
+	// Focus ring navigation via tab/shift+tab.
+	if msg.String() == "tab" {
+		p.focusIdx = (p.focusIdx + 1) % 6
+		p.syncFocus()
+		return p, nil
+	}
+	if msg.String() == "shift+tab" {
+		p.focusIdx = (p.focusIdx + 5) % 6
+		p.syncFocus()
+		return p, nil
+	}
+
+	// Route key to focused widget.
+	switch p.focusIdx {
+	case 0: // agent dropdown
+		cmd, handled := p.agentDrop.Update(msg)
+		if handled {
+			return p, cmd
+		}
+	case 1: // Start button
+		if msg.String() == "enter" || msg.String() == " " {
+			return p, p.startCmd()
+		}
+	case 2: // resume dropdown
+		cmd, handled := p.resumeDrop.Update(msg)
+		if handled {
+			return p, cmd
+		}
+	case 3: // Resume button
+		if msg.String() == "enter" || msg.String() == " " {
+			return p, p.resumeCmd()
+		}
+	case 4: // Doctor
+		if msg.String() == "enter" || msg.String() == " " {
+			return p, func() tea.Msg { return OpenDoctorMsg{} }
+		}
+	case 5: // Help
+		if msg.String() == "enter" || msg.String() == " " {
+			// Help is handled by the host via f1/?.
+			return p, nil
 		}
 	}
 	return p, nil
 }
 
-func (p *WelcomePane) filtered() []SessionMeta {
-	if p == nil {
+func (p *WelcomePane) handleMouse(msg tea.MouseMsg) (*WelcomePane, tea.Cmd) {
+	cmds := []tea.Cmd{}
+
+	if cmd, handled := p.agentDrop.HandleClick(msg.X, msg.Y); handled {
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return p, tea.Batch(cmds...)
+	}
+
+	if cmd, handled := p.resumeDrop.HandleClick(msg.X, msg.Y); handled {
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return p, tea.Batch(cmds...)
+	}
+
+	return p, nil
+}
+
+func (p *WelcomePane) startCmd() tea.Cmd {
+	agent := p.agentDrop.SelectedID()
+	if agent == "" {
 		return nil
 	}
-	if p.filter == "" {
-		return append([]SessionMeta(nil), p.recent...)
+	return func() tea.Msg {
+		return StartSessionMsg{Agent: agent}
 	}
-	var out []SessionMeta
-	for _, meta := range p.recent {
-		if strings.Contains(strings.ToLower(meta.ID), p.filter) ||
-			strings.Contains(strings.ToLower(meta.Workspace), p.filter) ||
-			strings.Contains(strings.ToLower(meta.Agent), p.filter) ||
-			strings.Contains(strings.ToLower(meta.Model), p.filter) {
-			out = append(out, meta)
-		}
+}
+
+func (p *WelcomePane) resumeCmd() tea.Cmd {
+	sessionID := p.resumeDrop.SelectedID()
+	if sessionID == "" {
+		return nil
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
-	return out
+	return func() tea.Msg {
+		return ResumeSessionMsg{SessionID: sessionID}
+	}
+}
+
+func (p *WelcomePane) syncFocus() {
+	p.agentDrop.Blur()
+	p.resumeDrop.Blur()
+	switch p.focusIdx {
+	case 0:
+		p.agentDrop.Focus()
+	case 2:
+		p.resumeDrop.Focus()
+	}
 }
 
 func (p *WelcomePane) View() string {
-	widths := splitWidths(p.width, 5, 7)
-	current := []string{
-		p.th.Dim().Render("workspace") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Workspace }), "(unset)"),
-		p.th.Dim().Render("branch") + "  " + fallback(p.gitBranch(), "(detached)"),
-		p.th.Dim().Render("agent") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Agent }), "none"),
-		p.th.Dim().Render("model") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Model }), "(unset)"),
-		p.th.Dim().Render("provider") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Provider }), "(unset)"),
-		p.th.Dim().Render("mode") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Mode }), "(unset)"),
+	if p.width < 60 {
+		return p.th.Dim().Render("Terminal too narrow. Minimum 60 columns required.")
 	}
-	if p.session != nil && p.session.Strategy != "" {
-		current = append(current, p.th.Dim().Render("strategy")+"  "+p.session.Strategy)
-	}
-	items := p.filteredWorkspaces()
-	lines := make([]string, 0, len(items))
-	for _, meta := range items {
-		lines = append(lines, fmt.Sprintf("%s  %s", meta.UpdatedAt.Format("01/02 15:04"), meta.Workspace))
-	}
-	if len(lines) == 0 {
-		lines = []string{p.th.Dim().Render("No recent workspaces")}
-	}
-	left := sectionPanel(p.th, "Workspace", widths[0], current...)
-	right := sectionPanel(p.th, "Recent Workspaces", widths[1], sectionList(p.th, lines, p.selected, p.height-10))
-	footer := p.th.Dim().Render("↑↓ navigate  enter switch  r refresh  type to filter")
-	if p.filter != "" {
-		footer = p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
-	}
-	return strings.Join([]string{
-		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
-		footer,
-	}, "\n\n")
-}
 
-func (p *WelcomePane) sessionField(sel func(*Session) string) string {
-	if p == nil || p.session == nil {
-		return ""
-	}
-	return sel(p.session)
-}
+	// Left column: logo
+	logoView := p.logo.View()
 
-func (p *WelcomePane) filteredWorkspaces() []SessionMeta {
-	if p == nil {
-		return nil
+	// Right column: widgets
+	agentLabel := p.agentDrop.Selected().Label
+	if agentLabel == "" {
+		agentLabel = "none"
 	}
-	seen := make(map[string]SessionMeta)
-	for _, meta := range p.filtered() {
-		key := strings.TrimSpace(meta.Workspace)
-		if key == "" {
-			continue
-		}
-		if existing, ok := seen[key]; !ok || meta.UpdatedAt.After(existing.UpdatedAt) {
-			seen[key] = meta
-		}
-	}
-	out := make([]SessionMeta, 0, len(seen))
-	for _, meta := range seen {
-		out = append(out, meta)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
-	return out
-}
+	agentDropView := p.agentDrop.View()
 
-func (p *WelcomePane) selectedWorkspace() string {
-	items := p.filteredWorkspaces()
-	if len(items) == 0 {
-		return ""
+	startBtn := NewButton("Start")
+	startBtn.SetTheme(p.th)
+	startBtn.SetWidth(10)
+	if p.focusIdx == 1 {
+		startBtn.Focus()
 	}
-	if p.selected < 0 || p.selected >= len(items) {
-		return ""
-	}
-	return items[p.selected].Workspace
-}
+	startView := startBtn.View()
 
-func (p *WelcomePane) gitBranch() string {
-	workspace := ""
-	if p.session != nil {
-		workspace = strings.TrimSpace(p.session.Workspace)
-	}
-	if workspace == "" {
-		return ""
-	}
-	if _, err := exec.LookPath("git"); err != nil {
-		return ""
-	}
-	cmd := exec.Command("git", "-C", filepath.Clean(workspace), "branch", "--show-current")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
+	resumeDropView := p.resumeDrop.View()
 
-// SetTheme sets the active semantic style source.
-func (p *WelcomePane) SetTheme(th *theme.Theme) {
-	if th != nil {
-		p.th = th
+	resumeBtn := NewButton("Resume")
+	resumeBtn.SetTheme(p.th)
+	resumeBtn.SetWidth(10)
+	if p.focusIdx == 3 {
+		resumeBtn.Focus()
 	}
+	resumeView := resumeBtn.View()
+
+	doctorBtn := NewButton("Doctor")
+	doctorBtn.SetTheme(p.th)
+	doctorBtn.SetWidth(10)
+	if p.focusIdx == 4 {
+		doctorBtn.Focus()
+	}
+	doctorView := doctorBtn.View()
+
+	helpBtn := NewButton("Help f1")
+	helpBtn.SetTheme(p.th)
+	helpBtn.SetWidth(10)
+	if p.focusIdx == 5 {
+		helpBtn.Focus()
+	}
+	helpView := helpBtn.View()
+
+	right := lipgloss.JoinVertical(lipgloss.Left,
+		"",
+		p.th.Subhead().Render("New Session"),
+		"",
+		agentDropView,
+		"",
+		startView,
+		"",
+		p.th.Subhead().Render("Resume Session"),
+		"",
+		resumeDropView,
+		"",
+		resumeView,
+		"",
+		doctorView,
+		"",
+		helpView,
+	)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, logoView, right)
 }

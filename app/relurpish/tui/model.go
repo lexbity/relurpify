@@ -675,6 +675,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case WorkspaceSelectedMsg:
 		return m.handleWorkspaceSelected(msg.Workspace)
 
+	case StartSessionMsg:
+		if err := m.switchActiveAgent(msg.Agent); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Failed to start session: %v", err))
+		}
+		return m, nil
+
+	case OpenDoctorMsg:
+		if m.baseSurface != nil {
+			m.baseSurface.OpenDoctor()
+		}
+		return m, nil
+
 	// HITL subscription initialization.
 	case hitlSubscribedMsg:
 		m.hitlCh = msg.ch
@@ -1413,12 +1425,22 @@ func (m RootModel) autoSave() {
 	if m.store == nil || m.chat == nil {
 		return
 	}
+	workflowID := ""
+	if m.runtime != nil {
+		workflowID = m.runtime.ActiveWorkflowID()
+	}
+	mode := ""
+	if m.sharedSess != nil {
+		mode = strings.TrimSpace(m.sharedSess.Mode)
+	}
 	rec := SessionRecord{
 		SessionMeta: SessionMeta{
-			ID:        m.sharedSess.ID,
-			Agent:     m.activeAgentName(),
-			Workspace: m.sharedSess.Workspace,
-			UpdatedAt: time.Now(),
+			ID:         m.sharedSess.ID,
+			Agent:      m.activeAgentName(),
+			Workspace:  m.sharedSess.Workspace,
+			UpdatedAt:  time.Now(),
+			WorkflowID: workflowID,
+			Mode:       mode,
 		},
 		Messages: m.chat.Messages(),
 		Context:  m.sharedCtx,

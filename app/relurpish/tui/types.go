@@ -227,6 +227,21 @@ func (r *TabRegistry) All() []TabDefinition {
 // Len returns the number of registered tabs.
 func (r *TabRegistry) Len() int { return len(r.tabs) }
 
+// StartSessionMsg is emitted when the user clicks Start on the Welcome
+// screen with an agent selected.
+type StartSessionMsg struct {
+	Agent string
+}
+
+// ResumeSessionMsg is emitted when the user clicks Resume on the Welcome
+// screen with a session selected.
+type ResumeSessionMsg struct {
+	SessionID string
+}
+
+// OpenDoctorMsg is emitted when the user clicks Doctor on the Welcome screen.
+type OpenDoctorMsg struct{}
+
 // DiagnosticsUpdatedMsg delivers a fresh runtime diagnostics snapshot to the
 // session pane's live subtab.
 type DiagnosticsUpdatedMsg struct {
