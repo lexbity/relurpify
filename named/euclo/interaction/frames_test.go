@@ -34,8 +34,11 @@ func TestNewClarificationFrameCarriesStructuredState(t *testing.T) {
 	if frame.Resume == nil || !frame.Resume.Unresolved {
 		t.Fatalf("resume metadata = %#v", frame.Resume)
 	}
-	if got := frame.Payload["default_choice"]; got != "review" {
-		t.Fatalf("default choice payload = %#v", got)
+	if frame.Selection == nil {
+		t.Fatal("selection payload was nil")
+	}
+	if frame.Selection.Default != "review" || len(frame.Selection.Options) != 2 {
+		t.Fatalf("selection payload = %#v", frame.Selection)
 	}
 }
 

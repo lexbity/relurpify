@@ -46,6 +46,7 @@ type Session struct {
 	Agent         string
 	Role          string
 	Mode          string
+	ExecutionMode string
 	Strategy      string
 	TotalTokens   int
 	TotalDuration time.Duration
@@ -63,6 +64,7 @@ type SessionInfo struct {
 	Agent         string
 	Role          string
 	Mode          string
+	ExecutionMode string
 	Strategy      string
 	MaxTokens     int
 	Profile       string

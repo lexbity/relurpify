@@ -42,7 +42,11 @@ func (s *Surface) NewChat(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *
 	return nil
 }
 
-func (s *Surface) NewLibrary(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.LibrarySurface {
+func (s *Surface) NewInput(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.InputSurface {
+	return nil
+}
+
+func (s *Surface) NewNav(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.NavSurface {
 	return nil
 }
 

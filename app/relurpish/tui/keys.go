@@ -78,6 +78,14 @@ var GlobalKeys = globalKeyMap{
 	ServiceRestartAll: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "restart all services")),
 }
 
+// ReservedChords are consumed by the host before any surface or region can
+// handle the key event.
+var ReservedChords = []key.Binding{
+	GlobalKeys.Quit,
+	GlobalKeys.Help,
+	GlobalKeys.AgentPicker,
+}
+
 func keyMatchesBinding(binding key.Binding, keyStr string) bool {
 	keyStr = strings.ToLower(strings.TrimSpace(keyStr))
 	if keyStr == "" {
@@ -93,6 +101,15 @@ func keyMatchesBinding(binding key.Binding, keyStr string) bool {
 
 func keyMsgMatchesBinding(msg tea.KeyMsg, binding key.Binding) bool {
 	return keyMatchesBinding(binding, msg.String())
+}
+
+func isReservedChord(msg tea.KeyMsg) bool {
+	for _, binding := range ReservedChords {
+		if keyMsgMatchesBinding(msg, binding) {
+			return true
+		}
+	}
+	return false
 }
 
 // ShortHelp returns compact keybinding descriptions.

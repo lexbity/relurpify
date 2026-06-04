@@ -29,7 +29,10 @@ func (f *baseSurfaceFake) RegisterCommands(*CommandRegistry) {}
 func (f *baseSurfaceFake) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
 	return nil
 }
-func (f *baseSurfaceFake) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+func (f *baseSurfaceFake) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
+	return nil
+}
+func (f *baseSurfaceFake) NewNav(RuntimeAdapter, *AgentContext, *Session) NavSurface {
 	return nil
 }
 func (f *baseSurfaceFake) NewRegion1(RuntimeAdapter, *AgentContext, *Session, *SessionStore, *NotificationQueue) Region1Surface {

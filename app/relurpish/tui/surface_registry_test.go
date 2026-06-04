@@ -34,7 +34,11 @@ func (s *registrySurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *Noti
 	return &fakeChatPane{}
 }
 
-func (s *registrySurface) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+func (s *registrySurface) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
+	return nil
+}
+
+func (s *registrySurface) NewNav(RuntimeAdapter, *AgentContext, *Session) NavSurface {
 	return nil
 }
 
@@ -128,9 +132,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		name: "guest",
 		tabs: []TabDefinition{
 			{ID: TabChat, Label: "chat"},
-			{ID: TabGraph, Label: "graph"},
 			{ID: TabDiff, Label: "diff"},
-			{ID: TabLibrary, Label: "library"},
 		},
 		chat: guestChat,
 	}
@@ -155,8 +157,8 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "guest" {
 		t.Fatalf("agent after switch = %q, want guest", got)
 	}
-	if got := len(m.tabs.All()); got != 4 {
-		t.Fatalf("guest tab count = %d, want 4", got)
+	if got := len(m.tabs.All()); got != 2 {
+		t.Fatalf("guest tab count = %d, want 2", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "chat" {
 		t.Fatalf("guest first tab label = %q, want chat", got)
@@ -191,7 +193,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.chat.(*fakeChatPane).width; got != 77 {
 		t.Fatalf("restored chat width = %d, want 77", got)
 	}
-	if got := m.tabs.All()[3].Label; got != "library" {
+	if got := m.tabs.All()[1].Label; got != "diff" {
 		t.Fatalf("guest tab labels not restored, got %q", got)
 	}
 }

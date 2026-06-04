@@ -34,9 +34,10 @@ type RootModel struct {
 	// Panes (pointer types — mutations survive tea.Model value copies)
 	chat        ChatPaner
 	baseSurface Region1Surface
+	activeInput InputSurface
+	activeNav   NavSurface
 	tasks       *TasksPane
 	session     *SessionPane
-	library     LibrarySurface
 
 	// Shared state
 	activeTab     TabID
@@ -89,7 +90,8 @@ type surfaceState struct {
 	cmdReg  *CommandRegistry
 	chat    ChatPaner
 	region1 Region1Surface
-	library LibrarySurface
+	input   InputSurface
+	nav     NavSurface
 }
 
 func isBaseFrameworkTab(id TabID) bool {
@@ -117,6 +119,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		Agent:         info.Agent,
 		Role:          info.Role,
 		Mode:          info.Mode,
+		ExecutionMode: info.ExecutionMode,
 		Strategy:      info.Strategy,
 		Profile:       info.Profile,
 		ProfileReason: info.ProfileReason,
@@ -192,10 +195,12 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	m.store = store
 
 	m.chat = state.chat
+	if setter, ok := m.chat.(interface{ SetSessionStore(*SessionStore) }); ok && setter != nil {
+		setter.SetSessionStore(m.store)
+	}
 	m.tasks = NewTasksPane(rt, notifQ)
 	m.session = NewSessionPane(ctx, sess, rt)
 	m.session.SyncQueuedTasks(m.tasks.Items())
-	m.library = state.library
 	if rt != nil {
 		m.applyStartupGate()
 	}
@@ -236,14 +241,16 @@ func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapt
 		tabAware.SetActiveTab(initialTab)
 	}
 	region1 := surface.NewRegion1(rt, ctx, sess, store, notifQ)
-	library := surface.NewLibrary(rt, ctx, sess)
+	input := surface.NewInput(rt, ctx, sess)
+	nav := surface.NewNav(rt, ctx, sess)
 	return &surfaceState{
 		surface: surface,
 		tabs:    tabs,
 		cmdReg:  cmdReg,
 		chat:    chat,
 		region1: region1,
-		library: library,
+		input:   input,
+		nav:     nav,
 	}
 }
 
@@ -264,7 +271,11 @@ func (m *RootModel) activateSurface(agentName string) {
 	m.tabs = state.tabs
 	m.cmdReg = state.cmdReg
 	m.chat = state.chat
-	m.library = state.library
+	if setter, ok := m.chat.(interface{ SetSessionStore(*SessionStore) }); ok && setter != nil {
+		setter.SetSessionStore(m.store)
+	}
+	m.activeInput = state.input
+	m.activeNav = state.nav
 	if m.inputBar != nil {
 		m.inputBar.SetCommandRegistry(state.cmdReg)
 		m.inputBar.SetContext(m.tabs.ActiveTab().ID, m.tabs.ActiveSubTab())
@@ -301,68 +312,6 @@ func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {
 		m.surfaceCache[key] = state
 	}
 	return state
-}
-
-func (m *RootModel) preferredLibraryAgent() string {
-	if m == nil {
-		return ""
-	}
-	seen := make(map[string]struct{})
-	var candidates []string
-	add := func(name string) {
-		name = normalizeSurfaceKey(name)
-		if name == "" || name == "none" {
-			return
-		}
-		if _, ok := seen[name]; ok {
-			return
-		}
-		seen[name] = struct{}{}
-		candidates = append(candidates, name)
-	}
-	add(m.activeAgent)
-	if m.sharedSess != nil {
-		add(m.sharedSess.Agent)
-	}
-	if m.surfaceFactory != nil {
-		for _, name := range m.surfaceFactory.AvailableAgents() {
-			add(name)
-		}
-	}
-	if m.runtime != nil {
-		for _, name := range m.runtime.AvailableAgents() {
-			add(name)
-		}
-	}
-	for _, name := range candidates {
-		state := m.surfaceStateFor(name)
-		if state != nil && state.library != nil {
-			return name
-		}
-	}
-	return ""
-}
-
-func (m *RootModel) switchToLibrarySurface() error {
-	if m == nil {
-		return nil
-	}
-	if m.library != nil {
-		return nil
-	}
-	agent := m.preferredLibraryAgent()
-	if agent == "" {
-		return fmt.Errorf("recipe library unavailable")
-	}
-	if agent != m.activeAgentName() {
-		if err := m.switchActiveAgent(agent); err != nil {
-			return err
-		}
-	}
-	if m.library == nil {
-		return fmt.Errorf("recipe library unavailable")
-	}
-	return nil
 }
 
 func (m *RootModel) switchActiveAgent(agentName string) error {
@@ -491,12 +440,30 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Quit shortcuts bypass everything.
-		switch {
-		case keyMatchesBinding(GlobalKeys.Quit, msg.String()):
-			return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
+		if isReservedChord(msg) {
+			switch {
+			case keyMatchesBinding(GlobalKeys.Quit, msg.String()):
+				return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
+			case keyMatchesBinding(GlobalKeys.Help, msg.String()):
+				m.showHelp = !m.showHelp
+				return m, nil
+			case keyMatchesBinding(GlobalKeys.AgentPicker, msg.String()):
+				m.openAgentPicker()
+				return m, nil
+			}
 		}
-		if keyMatchesBinding(GlobalKeys.AgentPicker, msg.String()) {
-			m.openAgentPicker()
+		ownsInput := m.activeInput != nil
+		if m.activeInput != nil {
+			if cmd, handled := m.activeInput.HandleKey(msg); handled {
+				return m, cmd
+			}
+		}
+		if m.activeNav != nil {
+			if cmd, handled := m.activeNav.HandleKey(msg); handled {
+				return m, cmd
+			}
+		}
+		if ownsInput {
 			return m, nil
 		}
 		m.syncOverlayStack()
@@ -793,17 +760,6 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch m.activeTab {
-	case TabLibrary:
-		if m.library != nil {
-			lp, cmd := m.library.Update(msg)
-			m.library = lp
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	}
-
 	return m, tea.Batch(cmds...)
 }
 
@@ -843,10 +799,19 @@ func (m RootModel) View() string {
 	bottom := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		renderAgentCell(m.activeAgentName(), m.layout.Region2Width()),
-		m.inputBar.View(m.activeTab, streaming),
+		func() string {
+			if m.activeInput != nil {
+				return m.activeInput.View()
+			}
+			return m.inputBar.View(m.activeTab, streaming)
+		}(),
 	)
 	parts = append(parts, bottom)
-	parts = append(parts, m.tabBar.View())
+	if m.activeNav != nil {
+		parts = append(parts, m.activeNav.View())
+	} else {
+		parts = append(parts, m.tabBar.View())
+	}
 
 	base := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
@@ -861,15 +826,8 @@ func (m RootModel) activePaneView() string {
 	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
 		return m.baseSurface.View()
 	}
-	switch m.activeTab {
-	case TabLibrary:
-		if m.library != nil {
-			return m.library.View()
-		}
-	default:
-		if m.chat != nil {
-			return m.chat.View()
-		}
+	if m.chat != nil {
+		return m.chat.View()
 	}
 	return ""
 }
@@ -905,19 +863,15 @@ func (m *RootModel) setActiveTab(id TabID) {
 	case isBaseFrameworkTab(id) && m.baseSurface != nil:
 		m.baseSurface.SetActiveTab(id)
 		m.baseSurface.SetFilter(filter)
-	case id == TabLibrary:
-		if m.library != nil {
-			m.library.SetFilter(filter)
-		}
 	default:
 		if m.session != nil {
 			m.session.SetFrameworkMode(false)
 		}
 	}
-	if m.chat != nil && (id == TabChat || id == TabGraph || id == TabDiff) {
+	if m.chat != nil && (id == TabChat || id == TabDiff) {
 		m.chat.SetSubTab(sub)
 	}
-	if tabAware, ok := m.chat.(TabAwarePane); ok && (id == TabChat || id == TabGraph || id == TabDiff) {
+	if tabAware, ok := m.chat.(TabAwarePane); ok && (id == TabChat || id == TabDiff) {
 		tabAware.SetActiveTab(id)
 	}
 }
@@ -929,7 +883,7 @@ func (m *RootModel) setActiveSubTab(sub SubTabID) {
 	m.subTabBar.SetActive(sub)
 	m.inputBar.SetContext(m.activeTab, sub)
 	m.syncCommandPalette()
-	if (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) && m.chat != nil {
+	if (m.activeTab == TabChat || m.activeTab == TabDiff) && m.chat != nil {
 		m.chat.SetSubTab(sub)
 	}
 }
@@ -1038,17 +992,17 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		}
 	case keyMatchesBinding(GlobalKeys.ScrollUp, key):
 		// Scroll up: scroll the chat feed up
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) {
+		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
 			m.chat.ScrollUp()
 		}
 	case keyMatchesBinding(GlobalKeys.ScrollDown, key):
 		// Page down: scroll the chat feed down by page
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) {
+		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
 			m.chat.PageDown()
 		}
 	case keyMatchesBinding(GlobalKeys.PageUp, key):
 		// Page up: scroll the chat feed up by page
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) {
+		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
 			m.chat.PageUp()
 		}
 	case keyMatchesBinding(GlobalKeys.FilePicker, key):
@@ -1056,7 +1010,7 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		m.inputBar.SetFilePickerMode(true)
 	case keyMatchesBinding(GlobalKeys.SidebarToggle, key):
 		// Toggle chat context sidebar
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) {
+		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
 			if sidebar, ok := m.chat.(ChatSidebarController); ok {
 				sidebar.ToggleSidebar()
 			}
@@ -1138,22 +1092,12 @@ func (m *RootModel) routeRegion1Key(msg tea.KeyMsg) tea.Cmd {
 		m.baseSurface = pane
 		return cmd
 	}
-	switch m.activeTab {
-	case TabLibrary:
-		if m.library == nil {
-			return nil
-		}
-		lp, cmd := m.library.Update(msg)
-		m.library = lp
-		return cmd
-	default:
-		if m.chat == nil {
-			return nil
-		}
-		cp, cmd := m.chat.Update(msg)
-		m.chat = cp
-		return cmd
+	if m.chat == nil {
+		return nil
 	}
+	cp, cmd := m.chat.Update(msg)
+	m.chat = cp
+	return cmd
 }
 
 func (m *RootModel) setFocus(region FocusRegion) {
@@ -1175,20 +1119,6 @@ func (m *RootModel) applyStartupGate() {
 		m.startupLocked = false
 		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
 			controller.SetDoctorReport(report)
-		}
-		target := m.preferredLibraryAgent()
-		if target != "" {
-			if err := m.switchActiveAgent(target); err == nil {
-				m.setActiveTab(TabChat)
-				return
-			}
-			m.activateSurface(target)
-			m.activeAgent = target
-			if m.sharedSess != nil {
-				m.sharedSess.Agent = target
-			}
-			m.setActiveTab(TabChat)
-			return
 		}
 		m.setActiveTab(TabChat)
 		return
@@ -1214,25 +1144,6 @@ func (m *RootModel) applyDoctorReport(report DoctorReport) {
 		m.startupLocked = false
 		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
 			controller.SetDoctorReport(report)
-		}
-		target := m.preferredLibraryAgent()
-		if target != "" {
-			if err := m.switchActiveAgent(target); err != nil {
-				m.activateSurface(target)
-				m.activeAgent = target
-				if m.sharedSess != nil {
-					m.sharedSess.Agent = target
-				}
-				m.setActiveTab(TabChat)
-				m.addSystemMessage("Doctor checks passed; auto-promoted to active guest chat")
-				return
-			}
-			if m.sharedSess != nil {
-				m.sharedSess.Agent = target
-			}
-			m.setActiveTab(TabChat)
-			m.addSystemMessage("Doctor checks passed; auto-promoted to active guest chat")
-			return
 		}
 		m.setActiveTab(TabChat)
 		m.addSystemMessage("Doctor checks passed; startup checks are healthy")
@@ -1268,7 +1179,7 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 			return m, nil
 		}
 		switch {
-		case isBaseFrameworkTab(m.activeTab), m.activeTab == TabLibrary:
+		case isBaseFrameworkTab(m.activeTab):
 			return m, nil
 		}
 		if m.chat == nil {
@@ -1279,7 +1190,7 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 	}
 	m.syncActivePaneFilter(value)
 	switch {
-	case isBaseFrameworkTab(m.activeTab), m.activeTab == TabLibrary:
+	case isBaseFrameworkTab(m.activeTab):
 		return m, nil
 	default:
 		if m.chat == nil {
@@ -1318,14 +1229,16 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 		m.baseSurface.SetStore(m.store)
 		m.baseSurface.Refresh()
 	}
+	if m.chat != nil {
+		if setter, ok := m.chat.(interface{ SetSessionStore(*SessionStore) }); ok && setter != nil {
+			setter.SetSessionStore(m.store)
+		}
+	}
 	if m.session != nil {
 		m.session.SyncContext(m.sharedCtx)
 	}
 	if m.chat != nil {
 		m.chat.SetSearchFilter("")
-	}
-	if m.library != nil {
-		m.library.Refresh()
 	}
 	m.applyStartupGate()
 	m.syncActivePaneFilter(m.inputBar.Value())
@@ -1352,12 +1265,8 @@ func (m *RootModel) syncActivePaneFilter(raw string) {
 	switch {
 	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
 		m.baseSurface.SetFilter(filter)
-	case m.activeTab == TabLibrary:
-		if m.library != nil {
-			m.library.SetFilter(filter)
-		}
 	default:
-		if draft.filterMode && m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabGraph || m.activeTab == TabDiff) {
+		if draft.filterMode && m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
 			m.chat.SetSearchFilter(filter)
 		}
 	}
@@ -1370,10 +1279,6 @@ func (m *RootModel) refreshActivePane() {
 	switch {
 	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
 		m.baseSurface.Refresh()
-	case m.activeTab == TabLibrary:
-		if m.library != nil {
-			m.library.Refresh()
-		}
 	}
 }
 

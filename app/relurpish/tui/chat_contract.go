@@ -79,20 +79,6 @@ type Region1Surface interface {
 	OpenDoctor()
 }
 
-// LibrarySurface owns the guest library tab state and rendering.
-type LibrarySurface interface {
-	SetSize(w, h int)
-	SetFilter(filter string)
-	Refresh()
-	Update(msg tea.Msg) (LibrarySurface, tea.Cmd)
-	View() string
-	SelectedID() string
-	RunPromptForID(id string) (string, bool)
-	SelectByID(id string) bool
-	OpenSelectedEditorCmd() tea.Cmd
-	ValidateSelected() tea.Cmd
-}
-
 // StartupGateController exposes Doctor-based startup state to the host.
 type StartupGateController interface {
 	DoctorReport() DoctorReport

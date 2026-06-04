@@ -22,27 +22,19 @@ func TestEucloSurfaceFactoryResolvesGuestAndBaseSurfaces(t *testing.T) {
 		t.Fatalf("guest name = %q, want euclo", got)
 	}
 
+	reg := tui.NewTabRegistry()
+	RegisterEucloTabs(reg)
+	tabs := reg.TabsForAgent("euclo")
+	if len(tabs) != 2 || tabs[0].ID != tui.TabChat || tabs[1].ID != tui.TabDiff {
+		t.Fatalf("euclo tabs = %#v, want [chat diff]", tabs)
+	}
+
 	base := factory.Resolve("none")
 	if base == nil {
 		t.Fatal("expected base surface")
 	}
 	if got := base.Name(); got != "none" {
 		t.Fatalf("base name = %q, want none", got)
-	}
-}
-
-func TestEucloSurfaceCreatesLibrarySurface(t *testing.T) {
-	surface, ok := NewSurface().(*EucloSurface)
-	if !ok {
-		t.Fatalf("surface type = %T, want *EucloSurface", NewSurface())
-	}
-
-	lib := surface.NewLibrary(nil, &tui.AgentContext{}, &tui.Session{})
-	if lib == nil {
-		t.Fatal("expected library surface")
-	}
-	if got := lib.View(); got == "" {
-		t.Fatal("expected non-empty library view")
 	}
 }
 

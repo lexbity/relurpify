@@ -38,18 +38,11 @@ func notificationItemFromFrame(id string, kind tui.NotificationKind, frame inter
 
 func serializeFrameSlots(frame interaction.InteractionFrame) map[string]string {
 	slots := frame.Slots
-	if len(slots) == 0 {
-		slots = frame.Actions
-	}
-	frameType := frame.Type
-	if frameType == "" {
-		frameType = frame.Kind
-	}
 	extra := map[string]string{
 		"frame_id":   frame.ID,
 		"task_id":    frame.TaskID,
 		"session_id": frame.SessionID,
-		"frame_type": string(frameType),
+		"frame_type": string(frame.Type),
 	}
 	for i, slot := range slots {
 		for _, prefix := range []string{fmt.Sprintf("slot_%d", i), fmt.Sprintf("action_%d", i)} {
@@ -57,7 +50,6 @@ func serializeFrameSlots(frame interaction.InteractionFrame) map[string]string {
 			extra[prefix+"_label"] = slot.Label
 			extra[prefix+"_action"] = slot.Action
 			extra[prefix+"_shortcut"] = slot.Shortcut
-			extra[prefix+"_kind"] = slot.Kind
 			extra[prefix+"_risk"] = slot.Risk
 		}
 		if slot.Default {
@@ -73,11 +65,7 @@ func serializeFrameSlots(frame interaction.InteractionFrame) map[string]string {
 }
 
 func frameLabel(frame interaction.InteractionFrame) string {
-	frameType := frame.Type
-	if frameType == "" {
-		frameType = frame.Kind
-	}
-	switch frameType {
+	switch frame.Type {
 	case interaction.FrameScopeConfirmation:
 		return "scope confirmation"
 	case interaction.FrameIntentClarification:
@@ -101,7 +89,7 @@ func frameLabel(frame interaction.InteractionFrame) string {
 	case interaction.FrameOutcomeFeedback:
 		return "outcome feedback"
 	default:
-		return string(frameType)
+		return string(frame.Type)
 	}
 }
 
@@ -171,19 +159,12 @@ func RenderActionSlots(actions []interaction.ActionSlot) string {
 type EucloEventRouter struct {
 	mu      sync.Mutex
 	chat    ChatProjection
-	graph   GraphProjection
 	diff    DiffProjection
-	library LibraryProjection
 }
 
 // NewEucloEventRouter creates an empty projection router.
 func NewEucloEventRouter() *EucloEventRouter {
 	return &EucloEventRouter{
-		graph: GraphProjection{Nodes: make(map[string]*GraphNodeProjection)},
-		library: LibraryProjection{
-			Recipes: make(map[string]int),
-			Tags:    make(map[string]int),
-		},
 	}
 }
 
@@ -196,9 +177,7 @@ func (r *EucloEventRouter) ApplyExecutionEvent(ev ExecutionEvent) EucloProjectio
 	defer r.mu.Unlock()
 
 	r.applyChatEvent(ev)
-	r.applyGraphEvent(ev)
 	r.applyDiffEvent(ev)
-	r.applyLibraryEvent(ev)
 	return r.snapshotLocked()
 }
 
@@ -238,10 +217,8 @@ func (r *EucloEventRouter) Snapshot() EucloProjectionSnapshot {
 
 func (r *EucloEventRouter) snapshotLocked() EucloProjectionSnapshot {
 	return EucloProjectionSnapshot{
-		Chat:    r.chat.clone(),
-		Graph:   r.graph.clone(),
-		Diff:    r.diff.clone(),
-		Library: r.library.clone(),
+		Chat:  r.chat.clone(),
+		Diff:  r.diff.clone(),
 	}
 }
 
@@ -257,55 +234,6 @@ func (r *EucloEventRouter) applyChatEvent(ev ExecutionEvent) {
 	}
 	if ev.Frame != nil {
 		r.chat.Frames = append(r.chat.Frames, *ev.Frame)
-	}
-}
-
-func (r *EucloEventRouter) applyGraphEvent(ev ExecutionEvent) {
-	nodeID := strings.TrimSpace(ev.NodeID)
-	if nodeID == "" {
-		nodeID = strings.TrimSpace(ev.StepID)
-	}
-	if nodeID == "" && ev.Frame != nil {
-		nodeID = strings.TrimSpace(ev.Frame.ID)
-	}
-	if nodeID == "" {
-		return
-	}
-	node := r.graph.Nodes[nodeID]
-	if node == nil {
-		node = &GraphNodeProjection{ID: nodeID}
-		r.graph.Nodes[nodeID] = node
-		r.graph.Order = append(r.graph.Order, nodeID)
-	}
-	if ev.StepID != "" {
-		node.StepID = ev.StepID
-	}
-	if ev.RecipeID != "" {
-		node.RecipeID = ev.RecipeID
-	}
-	if ev.Summary != "" {
-		node.Label = ev.Summary
-	} else if ev.Milestone != "" {
-		node.Label = ev.Milestone
-	}
-	node.LastEvent = ev.Type
-	if len(ev.RouteScores) > 0 {
-		node.RouteScores = cloneScores(ev.RouteScores)
-	}
-	switch {
-	case strings.Contains(strings.ToLower(string(ev.Type)), "failed"):
-		node.Status = "failed"
-	case strings.Contains(strings.ToLower(string(ev.Type)), "complete"):
-		node.Status = "completed"
-	case strings.Contains(strings.ToLower(string(ev.Type)), "select"):
-		node.Status = "running"
-	default:
-		if node.Status == "" {
-			node.Status = "running"
-		}
-	}
-	if ev.Type == reporting.EventTypeRouteSelected && node.RouteScores != nil {
-		r.graph.ActiveNode = nodeID
 	}
 }
 
@@ -373,17 +301,6 @@ func (r *EucloEventRouter) applyDiffEvent(ev ExecutionEvent) {
 	}
 }
 
-func (r *EucloEventRouter) applyLibraryEvent(ev ExecutionEvent) {
-	if ev.RecipeID != "" {
-		r.library.Recipes[ev.RecipeID]++
-	}
-	for _, hunk := range ev.PatchHunks {
-		if tag := strings.TrimSpace(hunk.Origin); tag != "" {
-			r.library.Tags[tag]++
-		}
-	}
-}
-
 // ChatProjection is the human-sized milestone feed for the chat surface.
 type ChatProjection struct {
 	Milestones []string
@@ -397,41 +314,6 @@ func (p ChatProjection) clone() ChatProjection {
 		Outputs:    append([]string(nil), p.Outputs...),
 		Frames:     append([]interaction.InteractionFrame(nil), p.Frames...),
 	}
-}
-
-// GraphNodeProjection captures one DAG node state.
-type GraphNodeProjection struct {
-	ID          string
-	RecipeID    string
-	StepID      string
-	Label       string
-	Status      string
-	RouteScores map[string]float64
-	LastEvent   reporting.EventType
-}
-
-// GraphProjection is the execution DAG view.
-type GraphProjection struct {
-	Nodes      map[string]*GraphNodeProjection
-	Order      []string
-	ActiveNode string
-}
-
-func (p GraphProjection) clone() GraphProjection {
-	out := GraphProjection{
-		Nodes:      make(map[string]*GraphNodeProjection, len(p.Nodes)),
-		Order:      append([]string(nil), p.Order...),
-		ActiveNode: p.ActiveNode,
-	}
-	for id, node := range p.Nodes {
-		if node == nil {
-			continue
-		}
-		cloned := *node
-		cloned.RouteScores = cloneScores(node.RouteScores)
-		out.Nodes[id] = &cloned
-	}
-	return out
 }
 
 // DiffHunkProjection captures causal diff state.
@@ -521,32 +403,10 @@ func (p DiffProjection) clone() DiffProjection {
 	return out
 }
 
-// LibraryProjection records historical recipe activity.
-type LibraryProjection struct {
-	Recipes map[string]int
-	Tags    map[string]int
-}
-
-func (p LibraryProjection) clone() LibraryProjection {
-	out := LibraryProjection{
-		Recipes: make(map[string]int, len(p.Recipes)),
-		Tags:    make(map[string]int, len(p.Tags)),
-	}
-	for k, v := range p.Recipes {
-		out.Recipes[k] = v
-	}
-	for k, v := range p.Tags {
-		out.Tags[k] = v
-	}
-	return out
-}
-
 // EucloProjectionSnapshot is the immutable view of all Euclo surfaces.
 type EucloProjectionSnapshot struct {
-	Chat    ChatProjection
-	Graph   GraphProjection
-	Diff    DiffProjection
-	Library LibraryProjection
+	Chat  ChatProjection
+	Diff  DiffProjection
 }
 
 func cloneScores(in map[string]float64) map[string]float64 {

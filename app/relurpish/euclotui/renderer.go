@@ -20,7 +20,7 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 		},
 	}
 
-	switch frame.Kind {
+	switch frame.Type {
 	case interaction.FrameCandidates:
 		msg.Content.Text = renderCandidates(frame)
 	case interaction.FrameComparison:
@@ -66,7 +66,7 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 	case interaction.FrameOutcomeFeedback:
 		msg.Content.Text = renderSelectionFrame(frame, "Outcome Feedback")
 	default:
-		msg.Content.Text = fmt.Sprintf("[%s] %s/%s", frame.Kind, frame.Mode, frame.Phase)
+		msg.Content.Text = fmt.Sprintf("[%s]", frame.Type)
 	}
 
 	return msg
@@ -96,12 +96,29 @@ func renderCandidates(frame interaction.InteractionFrame) string {
 func renderSelectionFrame(frame interaction.InteractionFrame, title string) string {
 	var b strings.Builder
 	b.WriteString(sectionHeaderStyle.Render(title) + "\n")
-	if q := strings.TrimSpace(frame.Question); q != "" {
+	selection := frame.Selection
+	var typed interaction.SelectionFrame
+	if selection != nil {
+		typed = *selection
+	}
+	question := strings.TrimSpace(typed.Question)
+	if question == "" {
+		question = strings.TrimSpace(frame.Question)
+	}
+	if q := question; q != "" {
 		b.WriteString(q + "\n")
 	}
-	if len(frame.Slots) > 0 {
+	options := typed.Options
+	if len(options) == 0 && len(frame.Slots) > 0 {
+		options = selectionOptionsFromSlots(frame.Slots)
+	}
+	defaultChoice := strings.TrimSpace(typed.Default)
+	if defaultChoice == "" {
+		defaultChoice = strings.TrimSpace(frame.DefaultChoice)
+	}
+	if len(options) > 0 {
 		b.WriteString("\n")
-		for i, slot := range frame.Slots {
+		for i, slot := range options {
 			label := strings.TrimSpace(slot.Label)
 			if label == "" {
 				label = slot.ID
@@ -122,7 +139,7 @@ func renderSelectionFrame(frame interaction.InteractionFrame, title string) stri
 		b.WriteString("\n")
 		for i, choice := range frame.Choices {
 			prefix := fmt.Sprintf("[%d]", i+1)
-			if choice == frame.DefaultChoice {
+			if choice == defaultChoice {
 				prefix = headerStyle.Render(prefix + "*")
 			} else {
 				prefix = headerStyle.Render(prefix)
@@ -130,11 +147,15 @@ func renderSelectionFrame(frame interaction.InteractionFrame, title string) stri
 			b.WriteString(fmt.Sprintf("  %s %s\n", prefix, choice))
 		}
 	}
-	if frame.DefaultChoice != "" {
-		b.WriteString("\n" + dimStyle.Render("default: ") + frame.DefaultChoice + "\n")
+	if defaultChoice != "" {
+		b.WriteString("\n" + dimStyle.Render("default: ") + defaultChoice + "\n")
 	}
-	if frame.Resume != nil {
-		b.WriteString("\n" + dimStyle.Render("resume: ") + renderResumeMetadata(*frame.Resume) + "\n")
+	resume := frame.Resume
+	if selection != nil && selection.Resume != nil {
+		resume = selection.Resume
+	}
+	if resume != nil {
+		b.WriteString("\n" + dimStyle.Render("resume: ") + renderResumeMetadata(*resume) + "\n")
 	}
 	if frame.Response != nil {
 		if choice := strings.TrimSpace(frame.Response.ChosenSlot); choice != "" {
@@ -147,6 +168,24 @@ func renderSelectionFrame(frame interaction.InteractionFrame, title string) stri
 		}
 	}
 	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+}
+
+func selectionOptionsFromSlots(slots []interaction.ActionSlot) []interaction.SelectionOption {
+	if len(slots) == 0 {
+		return nil
+	}
+	out := make([]interaction.SelectionOption, 0, len(slots))
+	for _, slot := range slots {
+		out = append(out, interaction.SelectionOption{
+			ID:       slot.ID,
+			Label:    slot.Label,
+			Shortcut: slot.Shortcut,
+			Action:   slot.Action,
+			Risk:     slot.Risk,
+			Default:  slot.Default,
+		})
+	}
+	return out
 }
 
 func renderComparison(frame interaction.InteractionFrame) string {
@@ -426,81 +465,6 @@ func RenderChatProjection(p ChatProjection) string {
 	}
 	for _, frame := range p.Frames {
 		b.WriteString("  " + dimStyle.Render("frame") + " " + frameLabel(frame) + "\n")
-	}
-	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
-}
-
-// RenderGraphProjection renders the active Euclo execution DAG.
-func RenderGraphProjection(p GraphProjection) string {
-	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Graph Projection") + "\n")
-	if len(p.Order) == 0 {
-		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
-	}
-	for _, id := range p.Order {
-		node := p.Nodes[id]
-		if node == nil {
-			continue
-		}
-		label := node.Label
-		if label == "" {
-			label = node.ID
-		}
-		status := node.Status
-		if status == "" {
-			status = "pending"
-		}
-		icon := "○"
-		switch status {
-		case "completed":
-			icon = "●"
-		case "running":
-			icon = "◐"
-		case "failed":
-			icon = "✗"
-		}
-		line := fmt.Sprintf("  %s %s", icon, label)
-		if node.ID == p.ActiveNode {
-			line += " " + dimStyle.Render("<active>")
-		}
-		b.WriteString(line + "\n")
-		if len(node.RouteScores) > 0 {
-			for _, key := range sortedScoreKeys(node.RouteScores) {
-				b.WriteString(fmt.Sprintf("    %s %0.2f\n", dimStyle.Render(key+":"), node.RouteScores[key]))
-			}
-		}
-	}
-	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
-}
-
-// RenderLibraryProjection renders historical recipe statistics.
-func RenderLibraryProjection(p LibraryProjection) string {
-	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Library Projection") + "\n")
-	if len(p.Recipes) == 0 && len(p.Tags) == 0 {
-		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
-	}
-	if len(p.Recipes) > 0 {
-		b.WriteString(dimStyle.Render("recipes") + "\n")
-		keys := make([]string, 0, len(p.Recipes))
-		for k := range p.Recipes {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			b.WriteString(fmt.Sprintf("  %s %d\n", k, p.Recipes[k]))
-		}
-	}
-	if len(p.Tags) > 0 {
-		b.WriteString(dimStyle.Render("tags") + "\n")
-		keys := make([]string, 0, len(p.Tags))
-		for k := range p.Tags {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			b.WriteString(fmt.Sprintf("  %s %d\n", k, p.Tags[k]))
-		}
 	}
 	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
 }

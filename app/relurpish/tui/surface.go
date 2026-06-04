@@ -6,18 +6,21 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // AgentSurface owns the interaction surface for a given agent.
 // The host keeps shell chrome, lifecycle, and persistence, while the surface
 // owns its tabs, commands, notification rendering, and frame handling.
+// Optional input/nav surfaces let an agent replace Region 3 and Region 4.
 type AgentSurface interface {
 	Name() string
 	RegisterTabs(reg *TabRegistry)
 	RegisterCommands(reg *CommandRegistry)
 	NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner
 	NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface
-	NewLibrary(rt RuntimeAdapter, ctx *AgentContext, sess *Session) LibrarySurface
+	NewInput(rt RuntimeAdapter, ctx *AgentContext, sess *Session) InputSurface
+	NewNav(rt RuntimeAdapter, ctx *AgentContext, sess *Session) NavSurface
 	InitialTab() TabID
 	InitialSubTab(tab TabID) SubTabID
 	RenderNotification(item NotificationItem) string
@@ -38,6 +41,22 @@ type SurfaceFrameMsg struct {
 	Message      Message
 	Frame        any
 	Notification NotificationItem
+}
+
+// InputSurface owns the host's Region 3 input bar when a surface opts out of
+// the default host input chrome.
+type InputSurface interface {
+	SetSize(w, h int)
+	View() string
+	HandleKey(msg tea.KeyMsg) (tea.Cmd, bool)
+}
+
+// NavSurface owns the host's Region 4 navigation bar when a surface opts out
+// of the default host tab switcher chrome.
+type NavSurface interface {
+	SetSize(w, h int)
+	View() string
+	HandleKey(msg tea.KeyMsg) (tea.Cmd, bool)
 }
 
 type surfaceRegistry struct {
@@ -146,7 +165,11 @@ func (genericSurface) NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Ses
 	return nil
 }
 
-func (genericSurface) NewLibrary(rt RuntimeAdapter, ctx *AgentContext, sess *Session) LibrarySurface {
+func (genericSurface) NewInput(rt RuntimeAdapter, ctx *AgentContext, sess *Session) InputSurface {
+	return nil
+}
+
+func (genericSurface) NewNav(rt RuntimeAdapter, ctx *AgentContext, sess *Session) NavSurface {
 	return nil
 }
 

@@ -217,9 +217,6 @@ func (m *RootModel) deferPendingInteraction(notificationID string) bool {
 func frameLabelFromInteraction(frame interaction.InteractionFrame) string {
 	frameType := strings.TrimSpace(string(frame.Type))
 	if frameType == "" {
-		frameType = strings.TrimSpace(string(frame.Kind))
-	}
-	if frameType == "" {
 		frameType = "interaction"
 	}
 	return prettyFrameLabel(frameType)

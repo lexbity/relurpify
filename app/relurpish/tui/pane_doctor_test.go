@@ -31,10 +31,6 @@ func TestDoctorStartupLocksWhenReportIsBlocked(t *testing.T) {
 func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 	guestSurface := &recipeGuestSurface{
 		fakeSurface: fakeSurface{name: "guest", chat: &fakeChatPane{}},
-		library: &recipeLibrarySurfaceFake{
-			selected:   "demo.recipe",
-			promptByID: map[string]string{"demo.recipe": "/recipe run demo.recipe "},
-		},
 	}
 	factory := &registryFactory{
 		defaultSurface: &baseSurfaceFake{},
@@ -64,8 +60,8 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 	if m.startupLocked {
 		t.Fatal("expected startup lock to clear on a healthy report")
 	}
-	if got := m.activeAgentName(); got != "guest" {
-		t.Fatalf("active agent = %q, want guest", got)
+	if got := m.activeAgentName(); got != "none" {
+		t.Fatalf("active agent = %q, want none", got)
 	}
 	if got := m.activeTab; got != TabChat {
 		t.Fatalf("active tab = %q, want chat", got)

@@ -29,9 +29,6 @@ const (
 	FrameExecutionSummary       FrameType = "execution_summary"
 	FrameVerificationEvidence   FrameType = "verification_evidence"
 	FrameOutcomeFeedback        FrameType = "outcome_feedback"
-
-	// Legacy frame kinds kept for the older relurpish TUI renderers.
-	FrameArchaeoFindings FrameType = "archaeo_findings"
 )
 
 // ActionSlot represents an action the user can take on a frame.
@@ -40,9 +37,28 @@ type ActionSlot struct {
 	Label    string // Human-readable label
 	Shortcut string // Legacy shortcut key
 	Action   string // Action identifier
-	Kind     string // Legacy action kind
 	Risk     string // "low" | "medium" | "high"
 	Default  bool   // Whether this is the default slot
+}
+
+// SelectionOption is the typed option payload used by the selection-frame
+// family.
+type SelectionOption struct {
+	ID       string
+	Label    string
+	Shortcut string
+	Action   string
+	Risk     string
+	Default  bool
+}
+
+// SelectionFrame is the typed payload for selection-style interaction frames.
+type SelectionFrame struct {
+	Kind     FrameType
+	Question string
+	Options  []SelectionOption
+	Default  string
+	Resume   *ClarificationResumeMetadata
 }
 
 const (
@@ -207,14 +223,6 @@ type ContextFile struct {
 	InsertionAction string
 }
 
-// ContextProposalContent is the legacy context sidebar payload.
-type ContextProposalContent struct {
-	AnchoredFiles  []ContextFile
-	ExpandedFiles  []ContextFile
-	KnowledgeItems []KnowledgeItem
-	PipelineTrace  PipelineTrace
-}
-
 // KnowledgeItem is a legacy knowledge-summary item.
 type KnowledgeItem struct {
 	Kind    string
@@ -254,19 +262,16 @@ type ArchaeoFindingsContent struct {
 type InteractionFrame struct {
 	ID            string                       // UUID-based frame ID
 	Type          FrameType                    // Frame type
-	Kind          FrameType                    // Legacy alias for Type
-	Mode          string                       // Legacy renderer field
-	Phase         string                       // Legacy renderer field
 	TaskID        string                       // Associated task ID
 	SessionID     string                       // Associated session ID
 	Seq           int                          // Frame sequence number
 	Slots         []ActionSlot                 // Available action slots
-	Actions       []ActionSlot                 // Legacy alias for Slots
 	DefaultSlot   string                       // ID of the default slot
 	Question      string                       // Clarification question text
 	Choices       []string                     // Clarification choices
 	DefaultChoice string                       // Clarification default choice
 	Resume        *ClarificationResumeMetadata // Resume metadata for pending clarification
+	Selection     *SelectionFrame              // Typed payload for selection-style frames
 	Payload       map[string]any               // Frame-specific payload data
 	Content       any                          // Legacy payload field used by older renderers
 	Metadata      FrameMetadata                // Legacy metadata field used by older renderers

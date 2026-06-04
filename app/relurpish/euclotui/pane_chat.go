@@ -50,6 +50,7 @@ type ChatPane struct {
 
 	context *tui.AgentContext
 	session *tui.Session
+	store   *tui.SessionStore
 	notifQ  *tui.NotificationQueue
 	hitlSvc tui.HITLServiceIface
 	runtime tui.RuntimeAdapter
@@ -61,7 +62,6 @@ type ChatPane struct {
 	expandTarget  string
 	activeSubTab  tui.SubTabID
 	activeTab     tui.TabID
-	graph         *GraphPane
 
 	width, height int
 
@@ -90,12 +90,13 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 	if router == nil {
 		router = NewEucloEventRouter()
 	}
-	return &ChatPane{
+	pane := &ChatPane{
 		feed:             tui.NewFeed(),
 		spinner:          sp,
 		runStates:        make(map[string]*tui.RunState),
 		context:          ctx,
 		session:          sess,
+		store:            nil,
 		notifQ:           notifQ,
 		hitlSvc:          tui.HITLServiceIface(rt),
 		runtime:          rt,
@@ -103,15 +104,23 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 		expandTarget:     "thinking",
 		astOption:        "workspace",
 		diff:             NewDiffPane(router, sessionWorkspace(sess)),
-		graph:            NewGraphPane(router),
 		showSidebar:      false,
 		sidebarFocused:   false,
 		sidebarEntries:   nil,
 		sidebarSelection: 0,
 	}
+	if rt != nil {
+		pane.diff.SetRuntime(rt)
+	}
+	return pane
 }
 
-func (p *ChatPane) Init() tea.Cmd { return p.spinner.Tick }
+func (p *ChatPane) Init() tea.Cmd {
+	if p.HasActiveRuns() {
+		return p.spinner.Tick
+	}
+	return nil
+}
 
 func (p *ChatPane) Cleanup() {
 	for _, run := range p.runStates {
@@ -123,14 +132,17 @@ func (p *ChatPane) Cleanup() {
 
 func (p *ChatPane) SetSubTab(id tui.SubTabID)  { p.activeSubTab = id }
 func (p *ChatPane) ActiveSubTab() tui.SubTabID { return p.activeSubTab }
+func (p *ChatPane) SetSessionStore(store *tui.SessionStore) {
+	p.store = store
+	if p.diff != nil {
+		p.diff.SetSessionStore(store)
+	}
+}
 func (p *ChatPane) SetActiveTab(id tui.TabID) {
 	p.activeTab = id
 	if p.diff != nil {
 		p.diff.SetRouter(p.router)
 		p.diff.SetWorkspace(sessionWorkspace(p.session))
-	}
-	if p.graph != nil {
-		p.graph.SetRouter(p.router)
 	}
 }
 
@@ -145,9 +157,6 @@ func (p *ChatPane) SetSize(w, h int) {
 		feedWidth = 0
 	}
 	p.feed.SetSize(feedWidth, h)
-	if p.graph != nil {
-		p.graph.SetSize(w, h)
-	}
 	if p.diff != nil {
 		p.diff.SetSize(w, h)
 	}
@@ -158,7 +167,10 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 	case spinner.TickMsg:
 		p.spinner, _ = p.spinner.Update(msg)
 		p.feed.SetSpinner(p.spinner.View())
-		return p, p.spinner.Tick
+		if p.HasActiveRuns() {
+			return p, p.spinner.Tick
+		}
+		return p, nil
 	case tui.StreamTokenMsg:
 		return p.handleStreamToken(msg)
 	case tui.StreamCompleteMsg:
@@ -171,12 +183,6 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 		p.addSystemMessage(msg.Text)
 		return p, nil
 	case tea.KeyMsg:
-		if p.activeTab == tui.TabGraph && p.graph != nil {
-			if cmd := p.graph.Update(msg); cmd != nil {
-				return p, cmd
-			}
-			return p, nil
-		}
 		if p.activeTab == tui.TabDiff && p.diff != nil {
 			if cmd := p.diff.Update(msg); cmd != nil {
 				return p, cmd
@@ -197,10 +203,6 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 
 func (p *ChatPane) View() string {
 	switch p.activeTab {
-	case tui.TabGraph:
-		if p.graph != nil {
-			return p.graph.View()
-		}
 	case tui.TabDiff:
 		if p.diff != nil {
 			return p.diff.View()
@@ -279,7 +281,7 @@ func (p *ChatPane) StartRunSilent(prompt string) (tea.Cmd, string) {
 	metadata := p.buildMetadata(ctx)
 	metadata["compact"] = true
 	go p.runStream(ctx, run, metadata)
-	return listenToStream(ch), runID
+	return tea.Batch(listenToStream(ch), p.spinner.Tick), runID
 }
 
 func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (tea.Cmd, string) {
@@ -323,7 +325,7 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 		metadata[k] = v
 	}
 	go p.runStream(ctx, run, metadata)
-	return listenToStream(ch), runID
+	return tea.Batch(listenToStream(ch), p.spinner.Tick), runID
 }
 
 func (p *ChatPane) HasActiveRuns() bool { return len(p.runStates) > 0 }
@@ -368,9 +370,6 @@ func (p *ChatPane) RemoveFileFromSidebar(path string) {
 func (p *ChatPane) UpdateSidebarFromFrame(frame any) {
 	switch frame := frame.(type) {
 	case interaction.InteractionFrame:
-		if content, ok := frame.Content.(interaction.ContextProposalContent); ok {
-			p.updateSidebarFromProposalFrame(content)
-		}
 		if payloadFiles, ok := frame.Payload["euclo.user_selected_files"]; ok {
 			if files, ok := payloadFiles.([]string); ok {
 				p.replaceSelectedFiles(files)
@@ -590,9 +589,6 @@ func (p *ChatPane) handleStreamComplete(msg tui.StreamCompleteMsg) (tui.ChatPane
 		p.addSystemMessage(fmt.Sprintf("Stream backpressure: dropped %d update(s)", dropped))
 	}
 	delete(p.runStates, msg.RunID)
-	if p.graph != nil {
-		p.graph.SetRouter(p.router)
-	}
 	return p, func() tea.Msg { return tui.StreamDoneMsg{RunID: msg.RunID} }
 }
 
@@ -837,37 +833,6 @@ func (p *ChatPane) updateSidebarContent() {
 	entries := make([]tui.ContextSidebarEntry, 0, len(p.context.Files))
 	for _, file := range p.context.Files {
 		entries = append(entries, tui.ContextSidebarEntry{Path: file, InsertionAction: "direct"})
-	}
-	p.sidebarEntries = entries
-	if p.sidebarSelection >= len(p.sidebarEntries) {
-		p.sidebarSelection = max(0, len(p.sidebarEntries)-1)
-	}
-}
-
-func (p *ChatPane) updateSidebarFromProposalFrame(content interaction.ContextProposalContent) {
-	seen := make(map[string]bool)
-	entries := make([]tui.ContextSidebarEntry, 0, len(content.AnchoredFiles)+len(content.ExpandedFiles))
-	for _, f := range content.AnchoredFiles {
-		if seen[f.Path] {
-			continue
-		}
-		seen[f.Path] = true
-		action := f.InsertionAction
-		if action == "" {
-			action = "direct"
-		}
-		entries = append(entries, tui.ContextSidebarEntry{Path: f.Path, InsertionAction: action, IsPin: true})
-	}
-	for _, f := range content.ExpandedFiles {
-		if seen[f.Path] {
-			continue
-		}
-		seen[f.Path] = true
-		action := f.InsertionAction
-		if action == "" {
-			action = "direct"
-		}
-		entries = append(entries, tui.ContextSidebarEntry{Path: f.Path, InsertionAction: action, IsPin: false})
 	}
 	p.sidebarEntries = entries
 	if p.sidebarSelection >= len(p.sidebarEntries) {

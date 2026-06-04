@@ -22,6 +22,7 @@ func TestRuntimeWorkspaceConfigLoadAndSave(t *testing.T) {
 		Model:          "qwen2.5-coder:14b",
 		Provider:       "ollama",
 		SandboxBackend: "gvisor",
+		ExecutionMode:  string(ExecutionModeAutopilot),
 		Agents:         []string{"euclo", "coding"},
 		AllowedCapabilities: []RuntimeCapabilitySelector{
 			{
@@ -53,6 +54,9 @@ func TestRuntimeWorkspaceConfigLoadAndSave(t *testing.T) {
 	}
 	if loaded.SandboxBackend != cfg.SandboxBackend {
 		t.Errorf("sandbox backend mismatch: got %q, want %q", loaded.SandboxBackend, cfg.SandboxBackend)
+	}
+	if loaded.ExecutionMode != cfg.ExecutionMode {
+		t.Errorf("execution mode mismatch: got %q, want %q", loaded.ExecutionMode, cfg.ExecutionMode)
 	}
 	if len(loaded.Agents) != 2 || loaded.Agents[0] != "euclo" {
 		t.Errorf("agents mismatch: got %v", loaded.Agents)

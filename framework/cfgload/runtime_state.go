@@ -13,6 +13,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ExecutionMode expresses the persisted workspace execution posture.
+type ExecutionMode string
+
+const (
+	ExecutionModeStaged    ExecutionMode = "staged"
+	ExecutionModeAutopilot ExecutionMode = "autopilot"
+)
+
+func NormalizeExecutionMode(value string) ExecutionMode {
+	switch ExecutionMode(strings.ToLower(strings.TrimSpace(value))) {
+	case ExecutionModeAutopilot:
+		return ExecutionModeAutopilot
+	default:
+		return ExecutionModeStaged
+	}
+}
+
 // RuntimeCapabilitySelector mirrors the persisted capability selector shape
 // without depending on framework/core or agentspec.
 type RuntimeCapabilitySelector struct {
@@ -38,6 +55,7 @@ type RuntimeWorkspaceConfig struct {
 	Model               string                        `yaml:"model"`
 	Provider            string                        `yaml:"provider,omitempty"`
 	SandboxBackend      string                        `yaml:"sandbox_backend,omitempty"`
+	ExecutionMode       string                        `yaml:"execution_mode,omitempty"`
 	Agents              []string                      `yaml:"agents"`
 	AllowedCapabilities []RuntimeCapabilitySelector   `yaml:"allowed_capabilities,omitempty"`
 	Nexus               RuntimeNexusConfig            `yaml:"nexus,omitempty"`

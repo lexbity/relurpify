@@ -137,7 +137,6 @@ func newClarificationFrame(taskID, sessionID string, frameType FrameType, questi
 	frame := &InteractionFrame{
 		ID:            generateID(),
 		Type:          frameType,
-		Kind:          frameType,
 		TaskID:        taskID,
 		SessionID:     sessionID,
 		Seq:           0,
@@ -147,6 +146,11 @@ func newClarificationFrame(taskID, sessionID string, frameType FrameType, questi
 		Resume:        CloneClarificationResumeMetadata(resume),
 		Payload:       map[string]any{},
 	}
+	selection := SelectionFrame{
+		Kind:     frameType,
+		Question: strings.TrimSpace(question),
+		Resume:   CloneClarificationResumeMetadata(resume),
+	}
 	if len(frame.Choices) > 0 {
 		if frame.DefaultChoice == "" {
 			frame.DefaultChoice = frame.Choices[0]
@@ -154,16 +158,20 @@ func newClarificationFrame(taskID, sessionID string, frameType FrameType, questi
 	}
 	if len(slots) > 0 {
 		frame.Slots = append([]ActionSlot(nil), slots...)
-		frame.Actions = append([]ActionSlot(nil), slots...)
+		selection.Options = selectionOptionsFromSlots(slots)
 		if frame.DefaultChoice == "" && len(slots) > 0 {
 			frame.DefaultChoice = strings.TrimSpace(slots[0].ID)
 		}
 	} else {
 		frame.Slots = buildActionSlotsFromChoices(frame.Choices)
-		frame.Actions = append([]ActionSlot(nil), frame.Slots...)
+		selection.Options = selectionOptionsFromSlots(frame.Slots)
 		if frame.DefaultChoice == "" && len(frame.Slots) > 0 {
 			frame.DefaultChoice = strings.TrimSpace(frame.Slots[0].ID)
 		}
+	}
+	selection.Default = strings.TrimSpace(defaultChoice)
+	if selection.Default == "" && len(selection.Options) > 0 {
+		selection.Default = strings.TrimSpace(selection.Options[0].ID)
 	}
 	if payload != nil {
 		for k, v := range payload {
@@ -191,10 +199,29 @@ func newClarificationFrame(taskID, sessionID string, frameType FrameType, questi
 			"missing_fields":          append([]string(nil), frame.Resume.MissingFields...),
 		}
 	}
+	frame.Selection = &selection
 	frame.CreatedAt = now
 	frame.Metadata.Timestamp = now
 	frame.Timeout = timeout
 	return frame
+}
+
+func selectionOptionsFromSlots(slots []ActionSlot) []SelectionOption {
+	if len(slots) == 0 {
+		return nil
+	}
+	out := make([]SelectionOption, 0, len(slots))
+	for _, slot := range slots {
+		out = append(out, SelectionOption{
+			ID:       slot.ID,
+			Label:    slot.Label,
+			Shortcut: slot.Shortcut,
+			Action:   slot.Action,
+			Risk:     slot.Risk,
+			Default:  slot.Default,
+		})
+	}
+	return out
 }
 
 // SetResponse records a user's response on the frame and mirrors it into payload.

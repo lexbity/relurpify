@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestDiffPaneGroupsByStepAndShowsVerificationAlerts(t *testing.T) {
+func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {
 	router := NewEucloEventRouter()
 	router.ApplyExecutionEvent(ExecutionEvent{
 		StepID:  "step-1",
@@ -42,9 +43,19 @@ func TestDiffPaneGroupsByStepAndShowsVerificationAlerts(t *testing.T) {
 	pane.SetSize(140, 40)
 
 	view := pane.View()
-	for _, want := range []string{"Step: step-1", "Step: step-2", "fixtures/one.txt", "fixtures/two.txt", "Verification failed", "go test ./..."} {
+	for _, want := range []string{"view by-file", "fixtures/one.txt", "fixtures/two.txt", "Verification failed", "go test ./..."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q: %s", want, view)
+		}
+	}
+
+	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}); cmd != nil {
+		// mode toggle only
+	}
+	view = pane.View()
+	for _, want := range []string{"view by-cause", "Step: step-1", "Step: step-2"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("by-cause view missing %q: %s", want, view)
 		}
 	}
 }
@@ -76,6 +87,9 @@ func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
 
 	pane := NewDiffPane(router, workspace)
 	pane.SetSize(140, 40)
+	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}); cmd != nil {
+		// switch to by-cause for step-scoped apply assertions
+	}
 
 	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}); cmd == nil {
 		t.Fatal("expected apply-step command")
@@ -107,6 +121,38 @@ func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
 	assertFileContents(t, filepath.Join(workspace, "a.txt"), "beta-a\n")
 	assertFileContents(t, filepath.Join(workspace, "b.txt"), "beta-b\n")
 	assertFileContents(t, filepath.Join(workspace, "c.txt"), "beta-c\n")
+}
+
+func TestDiffPaneShowsCheckpointAnchor(t *testing.T) {
+	workspace := t.TempDir()
+	store := tui.NewSessionStore(workspace)
+	if err := store.SaveCheckpoint(tui.SessionRecord{
+		SessionMeta: tui.SessionMeta{
+			Workspace: workspace,
+			Agent:     "guest",
+			Label:     "anchor",
+		},
+	}); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
+	router := NewEucloEventRouter()
+	router.ApplyExecutionEvent(ExecutionEvent{
+		StepID:  "step-1",
+		Type:    reporting.EventTypeStepCompletedEuclo,
+		Summary: "Apply first group",
+		PatchHunks: []PatchHunk{
+			{File: "a.txt", Summary: "A", Body: "beta-a\n"},
+		},
+	})
+
+	pane := NewDiffPane(router, workspace)
+	pane.SetSessionStore(store)
+	pane.SetSize(140, 40)
+
+	view := pane.View()
+	if !strings.Contains(view, "checkpoint @ ckpt-anchor-") {
+		t.Fatalf("view missing checkpoint anchor: %s", view)
+	}
 }
 
 func writeFile(t *testing.T, path, content string) {

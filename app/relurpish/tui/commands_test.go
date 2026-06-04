@@ -6,57 +6,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type recipeLibrarySurfaceFake struct {
-	selected     string
-	promptByID   map[string]string
-	refreshCount int
-	lastFilter   string
-	lastSelected string
-}
-
-func (s *recipeLibrarySurfaceFake) SetSize(int, int) {}
-func (s *recipeLibrarySurfaceFake) SetFilter(filter string) {
-	s.lastFilter = filter
-}
-func (s *recipeLibrarySurfaceFake) Refresh() { s.refreshCount++ }
-func (s *recipeLibrarySurfaceFake) Update(msg tea.Msg) (LibrarySurface, tea.Cmd) {
-	return s, nil
-}
-func (s *recipeLibrarySurfaceFake) View() string { return "library" }
-func (s *recipeLibrarySurfaceFake) SelectedID() string {
-	if s.selected != "" {
-		return s.selected
-	}
-	return s.lastSelected
-}
-func (s *recipeLibrarySurfaceFake) RunPromptForID(id string) (string, bool) {
-	if s.promptByID == nil {
-		return "", false
-	}
-	prompt, ok := s.promptByID[id]
-	return prompt, ok
-}
-func (s *recipeLibrarySurfaceFake) SelectByID(id string) bool {
-	s.lastSelected = id
-	if s.selected == "" {
-		s.selected = id
-	}
-	return true
-}
-func (s *recipeLibrarySurfaceFake) OpenSelectedEditorCmd() tea.Cmd { return nil }
-func (s *recipeLibrarySurfaceFake) ValidateSelected() tea.Cmd      { return nil }
-
 type recipeGuestSurface struct {
 	fakeSurface
-	library *recipeLibrarySurfaceFake
 }
 
 func (s *recipeGuestSurface) RegisterCommands(reg *CommandRegistry) {
-	RegisterEucloCommands(reg)
-}
-
-func (s *recipeGuestSurface) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
-	return s.library
+	reg.Register(Command{Name: "surface-cmd", Usage: "/surface-cmd", Handler: func(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+		return m, nil
+	}})
 }
 
 func TestParseInputDraftPrefixes(t *testing.T) {
@@ -148,19 +105,12 @@ func TestCommandPaletteFilteringAndTabCompletion(t *testing.T) {
 }
 
 func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
-	if _, ok := rootCommandRegistry.Lookup("recipe"); ok {
-		t.Fatal("expected recipe to be guest-only")
-	}
 	if _, ok := rootCommandRegistry.Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
 	}
 
 	guest := &recipeGuestSurface{
 		fakeSurface: fakeSurface{name: "guest", chat: &fakeChatPane{}},
-		library: &recipeLibrarySurfaceFake{
-			selected:   "demo.recipe",
-			promptByID: map[string]string{"demo.recipe": "/recipe run demo.recipe "},
-		},
 	}
 	factory := &registryFactory{
 		defaultSurface: &baseSurfaceFake{},
@@ -169,60 +119,19 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 		},
 	}
 	m := newRootModel(nil, factory)
-	if _, ok := m.cmdReg.Lookup("recipe"); ok {
-		t.Fatal("expected recipe to stay off the host registry")
-	}
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
+	}
+	if _, ok := m.cmdReg.Lookup("surface-cmd"); ok {
+		t.Fatal("expected surface-cmd to stay off the host registry")
 	}
 	if err := m.switchActiveAgent("guest"); err != nil {
 		t.Fatalf("switch to guest failed: %v", err)
 	}
-	if _, ok := m.cmdReg.Lookup("recipe"); !ok {
-		t.Fatal("expected guest registry to include recipe commands")
+	if _, ok := m.cmdReg.Lookup("surface-cmd"); !ok {
+		t.Fatal("expected guest registry to include surface commands")
 	}
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected guest registry to include host commands")
-	}
-}
-
-func TestRecipeCommandsUseGenericGuestSurface(t *testing.T) {
-	lib := &recipeLibrarySurfaceFake{
-		selected:     "demo.recipe",
-		promptByID:   map[string]string{"demo.recipe": "/recipe run demo.recipe "},
-		lastFilter:   "",
-		lastSelected: "",
-	}
-	guest := &recipeGuestSurface{
-		fakeSurface: fakeSurface{name: "guest", chat: &fakeChatPane{}},
-		library:     lib,
-	}
-	factory := &registryFactory{
-		defaultSurface: &baseSurfaceFake{},
-		surfaces: map[string]AgentSurface{
-			"guest": guest,
-		},
-	}
-	m := newRootModel(nil, factory)
-
-	updated, _ := rootHandleRecipes(&m, nil)
-	m = *updated
-	if got := m.activeAgentName(); got != "guest" {
-		t.Fatalf("active agent = %q, want guest", got)
-	}
-	if got := lib.refreshCount; got == 0 {
-		t.Fatal("expected generic guest library to refresh")
-	}
-
-	updated, cmd := rootHandleRecipe(&m, []string{"run"})
-	m = *updated
-	if cmd != nil {
-		t.Fatalf("expected nil command after staging recipe prompt, got %v", cmd)
-	}
-	if got := m.inputBar.Value(); got != "/recipe run demo.recipe " {
-		t.Fatalf("input value = %q, want /recipe run demo.recipe ", got)
-	}
-	if got := m.activeAgentName(); got != "guest" {
-		t.Fatalf("active agent after recipe run = %q, want guest", got)
 	}
 }

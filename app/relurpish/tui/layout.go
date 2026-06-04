@@ -226,6 +226,9 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.inputBar != nil {
 		m.inputBar.SetWidth(m.layout.Region3Width())
 	}
+	if m.activeInput != nil {
+		m.activeInput.SetSize(m.layout.Region3Width(), 1)
+	}
 	m.help.SetSize(msg.Width, msg.Height)
 
 	paneH := m.layout.Region1PaneRows()
@@ -236,8 +239,8 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.baseSurface != nil {
 		m.baseSurface.SetSize(msg.Width, paneH)
 	}
-	if m.library != nil {
-		m.library.SetSize(msg.Width, paneH)
+	if m.activeNav != nil {
+		m.activeNav.SetSize(msg.Width, 1)
 	}
 	if m.hitlRow != nil {
 		m.hitlRow.SetWidth(msg.Width)

@@ -44,13 +44,15 @@ func (s *EucloSurface) NewChat(rt tui.RuntimeAdapter, ctx *tui.AgentContext, ses
 	return NewChatPane(rt, ctx, sess, notifQ, s.router)
 }
 
-func (s *EucloSurface) NewLibrary(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session) tui.LibrarySurface {
-	_ = ctx
-	_ = sess
-	return NewEucloLibraryPane(rt, s.router)
+func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {
+	return nil
 }
 
-func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {
+func (s *EucloSurface) NewInput(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.InputSurface {
+	return nil
+}
+
+func (s *EucloSurface) NewNav(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.NavSurface {
 	return nil
 }
 

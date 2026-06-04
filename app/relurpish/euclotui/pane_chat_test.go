@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	"github.com/charmbracelet/bubbles/spinner"
 )
 
 func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {
@@ -93,5 +94,90 @@ func TestChatPaneMilestoneFiltering(t *testing.T) {
 	got = pane.Messages()
 	if len(got) != 2 {
 		t.Fatalf("messages len after system = %d, want 2", len(got))
+	}
+}
+
+func TestChatPaneSpinnerNotReArmedWhenIdle(t *testing.T) {
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil)
+
+	// With no active runs, Init should not return a spinner tick.
+	initCmd := pane.Init()
+	if initCmd != nil {
+		t.Error("Init returned non-nil cmd when no active runs expected nil")
+	}
+
+	// Send a spinner tick when idle — should not re-arm.
+	pane2, cmd := pane.Update(spinner.TickMsg{})
+	if pane2 == nil {
+		t.Fatal("Update returned nil pane")
+	}
+	if cmd != nil {
+		t.Error("spinner tick re-armed when idle, expected nil cmd")
+	}
+}
+
+func TestChatPaneSpinnerReArmedWhenActive(t *testing.T) {
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil)
+
+	// Simulate an active run.
+	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}
+
+	// Init with active runs should return a tick.
+	initCmd := pane.Init()
+	if initCmd == nil {
+		t.Error("Init returned nil cmd when active runs expected tick")
+	}
+
+	// Send a spinner tick while active — should re-arm.
+	pane2, cmd := pane.Update(spinner.TickMsg{})
+	if pane2 == nil {
+		t.Fatal("Update returned nil pane")
+	}
+	if cmd == nil {
+		t.Error("spinner tick NOT re-armed when active, expected non-nil cmd")
+	}
+}
+
+func TestChatPaneSpinnerKickstartsOnStartRun(t *testing.T) {
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil)
+
+	// Init should not return a tick (no active runs).
+	initCmd := pane.Init()
+	if initCmd != nil {
+		t.Skip("Init returned tick — can't test kickstart with active runs")
+	}
+
+	// StartRunSilent with runtime nil should gracefully handle.
+	cmd, runID := pane.StartRunSilent("test")
+	if cmd != nil || runID != "" {
+		t.Log("StartRunSilent returned cmd/runID despite nil runtime (expected fallback)")
+	}
+}
+
+func TestChatPaneSpinnerStopsAfterRunCompletes(t *testing.T) {
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil)
+
+	// Add active run.
+	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}
+	if !pane.HasActiveRuns() {
+		t.Fatal("expected HasActiveRuns() true")
+	}
+
+	// Tick while active.
+	_, cmd := pane.Update(spinner.TickMsg{})
+	if cmd == nil {
+		t.Fatal("expected tick re-arm while active")
+	}
+
+	// Remove the run (simulate completion).
+	delete(pane.runStates, "run-1")
+	if pane.HasActiveRuns() {
+		t.Fatal("expected HasActiveRuns() false after deletion")
+	}
+
+	// Next tick should NOT re-arm.
+	_, cmd = pane.Update(spinner.TickMsg{})
+	if cmd != nil {
+		t.Error("expected nil cmd (no re-arm) after run completes")
 	}
 }

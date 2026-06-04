@@ -28,18 +28,38 @@ type diffNode struct {
 	Depth  int
 	Label  string
 	StepID string
+	StepIDs []string
 	File   string
 	Hunk   *DiffHunkProjection
 }
+
+type diffViewMode int
+
+const (
+	diffViewByFile diffViewMode = iota
+	diffViewByCause
+)
 
 type diffBaseline struct {
 	Exists bool
 	Data   []byte
 }
 
+type diffFileGroup struct {
+	File                 string
+	StepIDs              []string
+	Hunks                []DiffHunkProjection
+	VerificationFailed   bool
+	VerificationLog      string
+	DeferredMarkdownPath string
+}
+
 type DiffPane struct {
 	router       *EucloEventRouter
+	runtime      tui.RuntimeAdapter
+	store        *tui.SessionStore
 	workspace    string
+	viewMode     diffViewMode
 	width        int
 	height       int
 	selectedKey  string
@@ -53,12 +73,21 @@ func NewDiffPane(router *EucloEventRouter, workspace string) *DiffPane {
 	p := &DiffPane{
 		router:    router,
 		workspace: strings.TrimSpace(workspace),
+		viewMode:  diffViewByFile,
 		collapsed: make(map[string]bool),
 		rejected:  make(map[string]bool),
 		baselines: make(map[string]diffBaseline),
 	}
 	p.primeBaselines()
 	return p
+}
+
+func (p *DiffPane) SetRuntime(runtime tui.RuntimeAdapter) {
+	p.runtime = runtime
+}
+
+func (p *DiffPane) SetSessionStore(store *tui.SessionStore) {
+	p.store = store
 }
 
 func (p *DiffPane) SetRouter(router *EucloEventRouter) {
@@ -136,17 +165,20 @@ func (p *DiffPane) Update(msg tea.Msg) tea.Cmd {
 		}
 	case "a":
 		return p.applyAllCmd()
+	case "c":
+		p.toggleViewMode()
+		return p.systemMsgCmd(p.viewModeLabel())
 	case "s":
 		if idx >= 0 {
-			return p.applyStepCmd(nodes[idx].StepID)
+			return p.applySelectedCmd(nodes[idx])
 		}
 	case "f":
 		if idx >= 0 {
-			return p.applyFileCmd(nodes[idx].StepID, nodes[idx].File)
+			return p.applySelectedCmd(nodes[idx])
 		}
 	case "h":
 		if idx >= 0 && nodes[idx].Kind == diffNodeHunk && nodes[idx].Hunk != nil {
-			return p.applyHunkCmd(nodes[idx].File, *nodes[idx].Hunk)
+			return p.applySelectedCmd(nodes[idx])
 		}
 	case "u":
 		if idx >= 0 {
@@ -177,9 +209,10 @@ func (p *DiffPane) View() string {
 	snap := p.snapshot()
 	nodes := p.visibleNodesFrom(snap)
 	p.lastRendered = nodes
+	header := strings.Join(p.renderHeaderLines(snap, len(nodes)), "\n")
 	if len(nodes) == 0 {
 		return eucloFrameStyle.Render(strings.Join([]string{
-			sectionHeaderStyle.Render("Diff Surface"),
+			header,
 			dimStyle.Render("No diff hunks available."),
 		}, "\n"))
 	}
@@ -187,7 +220,97 @@ func (p *DiffPane) View() string {
 	selected := p.selectedIndex(nodes)
 	tree := p.renderTree(nodes, selected, leftW)
 	detail := p.renderDetail(nodes[selected], rightW)
-	return lipgloss.JoinHorizontal(lipgloss.Top, tree, detail)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, tree, detail)
+	return lipgloss.JoinVertical(lipgloss.Left, eucloFrameStyle.Render(header), body)
+}
+
+func (p *DiffPane) renderHeaderLines(snap EucloProjectionSnapshot, nodeCount int) []string {
+	execMode := ""
+	if p.runtime != nil {
+		execMode = strings.TrimSpace(string(p.runtime.ExecutionMode()))
+	}
+	if execMode == "" {
+		execMode = "staged"
+	}
+	lines := []string{
+		sectionHeaderStyle.Render("Diff Surface"),
+		dimStyle.Render("view ") + headerStyle.Render(p.viewModeLabel()),
+		dimStyle.Render("execution ") + headerStyle.Render(execMode),
+	}
+	if verdict := p.verdictSummary(snap); verdict != "" {
+		lines = append(lines, verdict)
+	}
+	if checkpoint := p.latestCheckpointID(); checkpoint != "" {
+		lines = append(lines, dimStyle.Render("checkpoint ")+headerStyle.Render("@ "+checkpoint))
+	} else {
+		lines = append(lines, dimStyle.Render("checkpoint unavailable"))
+	}
+	if execMode == string(cfgload.ExecutionModeAutopilot) && nodeCount > 0 {
+		lines = append(lines, dimStyle.Render(fmt.Sprintf("%d review item(s) · [r]review [u]ndo", nodeCount)))
+	}
+	return lines
+}
+
+func (p *DiffPane) viewModeLabel() string {
+	switch p.viewMode {
+	case diffViewByCause:
+		return "by-cause"
+	default:
+		return "by-file"
+	}
+}
+
+func (p *DiffPane) toggleViewMode() {
+	if p.viewMode == diffViewByFile {
+		p.viewMode = diffViewByCause
+		return
+	}
+	p.viewMode = diffViewByFile
+}
+
+func (p *DiffPane) verdictSummary(snap EucloProjectionSnapshot) string {
+	failedFiles := 0
+	firstFailure := ""
+	for _, stepID := range snap.Diff.Order {
+		step := snap.Diff.Steps[stepID]
+		if step == nil {
+			continue
+		}
+		if step.VerificationFailed {
+			failedFiles++
+			if firstFailure == "" {
+				firstFailure = strings.TrimSpace(step.VerificationLog)
+			}
+		}
+		for _, filePath := range step.Order {
+			file := step.Files[filePath]
+			if file == nil || !file.VerificationFailed {
+				continue
+			}
+			failedFiles++
+			if firstFailure == "" {
+				firstFailure = strings.TrimSpace(file.VerificationLog)
+			}
+		}
+	}
+	if failedFiles == 0 {
+		return dimStyle.Render("tests ✓")
+	}
+	if firstFailure == "" {
+		firstFailure = "verification failed"
+	}
+	return diffRemoveStyle.Render(fmt.Sprintf("✗ %d failed — %s", failedFiles, firstFailure))
+}
+
+func (p *DiffPane) latestCheckpointID() string {
+	if p == nil || p.store == nil {
+		return ""
+	}
+	checkpoints, err := p.store.ListCheckpoints()
+	if err != nil || len(checkpoints) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(checkpoints[0].ID)
 }
 
 func (p *DiffPane) snapshot() EucloProjectionSnapshot {
@@ -202,6 +325,13 @@ func (p *DiffPane) visibleNodes() []diffNode {
 }
 
 func (p *DiffPane) visibleNodesFrom(snap EucloProjectionSnapshot) []diffNode {
+	if p.viewMode == diffViewByCause {
+		return p.visibleNodesByCause(snap)
+	}
+	return p.visibleNodesByFile(snap)
+}
+
+func (p *DiffPane) visibleNodesByCause(snap EucloProjectionSnapshot) []diffNode {
 	if len(snap.Diff.Order) == 0 {
 		return nil
 	}
@@ -252,6 +382,77 @@ func (p *DiffPane) visibleNodesFrom(snap EucloProjectionSnapshot) []diffNode {
 				}
 				out = append(out, hunkNode)
 			}
+		}
+	}
+	return out
+}
+
+func (p *DiffPane) visibleNodesByFile(snap EucloProjectionSnapshot) []diffNode {
+	if len(snap.Diff.Order) == 0 {
+		return nil
+	}
+	groups := make(map[string]*diffFileGroup)
+	order := make([]string, 0)
+	for _, stepID := range snap.Diff.Order {
+		step := snap.Diff.Steps[stepID]
+		if step == nil {
+			continue
+		}
+		for _, filePath := range step.Order {
+			file := step.Files[filePath]
+			if file == nil {
+				continue
+			}
+			group := groups[filePath]
+			if group == nil {
+				group = &diffFileGroup{File: filePath}
+				groups[filePath] = group
+				order = append(order, filePath)
+			}
+			group.StepIDs = append(group.StepIDs, stepID)
+			group.Hunks = append(group.Hunks, file.Hunks...)
+			if file.VerificationFailed {
+				group.VerificationFailed = true
+			}
+			if group.VerificationLog == "" && file.VerificationLog != "" {
+				group.VerificationLog = file.VerificationLog
+			}
+			if group.DeferredMarkdownPath == "" && file.DeferredMarkdownPath != "" {
+				group.DeferredMarkdownPath = file.DeferredMarkdownPath
+			}
+		}
+	}
+	if len(order) == 0 {
+		return nil
+	}
+	var out []diffNode
+	for _, filePath := range order {
+		group := groups[filePath]
+		if group == nil {
+			continue
+		}
+		fileNode := diffNode{
+			Key:    "file:" + filePath,
+			Kind:   diffNodeFile,
+			Depth:  0,
+			Label:  p.fileGroupLabel(*group),
+			File:   filePath,
+		}
+		out = append(out, fileNode)
+		if p.collapsed[fileNode.Key] {
+			continue
+		}
+		for i := range group.Hunks {
+			hunk := group.Hunks[i]
+			hunkNode := diffNode{
+				Key:    "hunk:" + filePath + ":" + strconv.Itoa(i),
+				Kind:   diffNodeHunk,
+				Depth:  1,
+				Label:  p.hunkLabel(hunk, i),
+				File:   filePath,
+				Hunk:   &hunk,
+			}
+			out = append(out, hunkNode)
 		}
 	}
 	return out
@@ -329,8 +530,8 @@ func (p *DiffPane) renderTree(nodes []diffNode, selected int, width int) string 
 		}
 	}
 	lines = append(lines, "")
-	lines = append(lines, dimStyle.Render("a=apply all  s=apply step  f=apply file  h=apply hunk  u=revert file  U=revert all"))
-	lines = append(lines, dimStyle.Render("x=reject node  e=open editor  arrows=navigate"))
+	lines = append(lines, dimStyle.Render("a=apply all  c=toggle view  s=apply selected  f=apply file  h=apply hunk"))
+	lines = append(lines, dimStyle.Render("u=revert file  U=revert all  x=reject node  e=open editor  arrows=navigate"))
 	return eucloFrameStyle.Width(width).Render(strings.Join(lines, "\n"))
 }
 
@@ -344,9 +545,17 @@ func (p *DiffPane) renderDetail(node diffNode, width int) string {
 		lines = append(lines, p.renderStepDiff(node.StepID)...)
 	case diffNodeFile:
 		lines = append(lines, filePathStyle.Render(node.File))
-		lines = append(lines, p.fileDetailLines(node.StepID, node.File)...)
+		if p.viewMode == diffViewByFile {
+			lines = append(lines, p.fileGroupDetailLines(node.File)...)
+		} else {
+			lines = append(lines, p.fileDetailLines(node.StepID, node.File)...)
+		}
 		lines = append(lines, "")
-		lines = append(lines, p.renderFileDiff(node.StepID, node.File)...)
+		if p.viewMode == diffViewByFile {
+			lines = append(lines, p.renderFileGroupDiff(node.File)...)
+		} else {
+			lines = append(lines, p.renderFileDiff(node.StepID, node.File)...)
+		}
 	case diffNodeHunk:
 		if node.Hunk != nil {
 			lines = append(lines, filePathStyle.Render(node.File))
@@ -384,6 +593,17 @@ func (p *DiffPane) fileLabel(file DiffFileProjection) string {
 	label := fmt.Sprintf("%s [%d]", file.File, len(file.Hunks))
 	if file.VerificationFailed {
 		label += " " + diffRemoveStyle.Render("✗")
+	}
+	return label
+}
+
+func (p *DiffPane) fileGroupLabel(group diffFileGroup) string {
+	label := fmt.Sprintf("%s [%d]", group.File, len(group.Hunks))
+	if group.VerificationFailed {
+		label += " " + diffRemoveStyle.Render("✗")
+	}
+	if len(group.StepIDs) > 1 {
+		label += " " + dimStyle.Render(fmt.Sprintf("(%d steps)", len(group.StepIDs)))
 	}
 	return label
 }
@@ -464,6 +684,28 @@ func (p *DiffPane) fileDetailLines(stepID, filePath string) []string {
 	return lines
 }
 
+func (p *DiffPane) fileGroupDetailLines(filePath string) []string {
+	snap := p.snapshot()
+	group := p.fileGroupForSnapshot(snap, filePath)
+	if group == nil {
+		return []string{dimStyle.Render("No file details available.")}
+	}
+	lines := []string{
+		dimStyle.Render(fmt.Sprintf("hunks: %d", len(group.Hunks))),
+		dimStyle.Render(fmt.Sprintf("steps: %d", len(group.StepIDs))),
+	}
+	if group.VerificationFailed {
+		lines = append(lines, diffRemoveStyle.Render("verification failed"))
+	}
+	if group.VerificationLog != "" {
+		lines = append(lines, group.VerificationLog)
+	}
+	if group.DeferredMarkdownPath != "" {
+		lines = append(lines, dimStyle.Render("deferred: ")+filePathStyle.Render(group.DeferredMarkdownPath))
+	}
+	return lines
+}
+
 func (p *DiffPane) renderStepDiff(stepID string) []string {
 	snap := p.snapshot()
 	step := snap.Diff.Steps[stepID]
@@ -504,6 +746,54 @@ func (p *DiffPane) renderFileDiff(stepID, filePath string) []string {
 		return []string{dimStyle.Render("No diff body available.")}
 	}
 	return bodies
+}
+
+func (p *DiffPane) renderFileGroupDiff(filePath string) []string {
+	snap := p.snapshot()
+	group := p.fileGroupForSnapshot(snap, filePath)
+	if group == nil {
+		return []string{dimStyle.Render("No diff body available.")}
+	}
+	var bodies []string
+	for _, hunk := range group.Hunks {
+		bodies = append(bodies, renderUnifiedDiffTextLines(hunk.Body)...)
+	}
+	if len(bodies) == 0 {
+		return []string{dimStyle.Render("No diff body available.")}
+	}
+	return bodies
+}
+
+func (p *DiffPane) fileGroupForSnapshot(snap EucloProjectionSnapshot, filePath string) *diffFileGroup {
+	if len(snap.Diff.Order) == 0 {
+		return nil
+	}
+	group := &diffFileGroup{File: filePath}
+	for _, stepID := range snap.Diff.Order {
+		step := snap.Diff.Steps[stepID]
+		if step == nil {
+			continue
+		}
+		file := step.Files[filePath]
+		if file == nil {
+			continue
+		}
+		group.StepIDs = append(group.StepIDs, stepID)
+		group.Hunks = append(group.Hunks, file.Hunks...)
+		if file.VerificationFailed {
+			group.VerificationFailed = true
+		}
+		if group.VerificationLog == "" && file.VerificationLog != "" {
+			group.VerificationLog = file.VerificationLog
+		}
+		if group.DeferredMarkdownPath == "" && file.DeferredMarkdownPath != "" {
+			group.DeferredMarkdownPath = file.DeferredMarkdownPath
+		}
+	}
+	if len(group.Hunks) == 0 {
+		return nil
+	}
+	return group
 }
 
 func (p *DiffPane) nodeEditorPath(node diffNode) string {
@@ -551,36 +841,56 @@ func (p *DiffPane) applyAllCmd() tea.Cmd {
 	if len(nodes) == 0 {
 		return p.systemMsgCmd("No diff changes available")
 	}
-	snap := p.snapshot()
 	var applied int
-	for _, stepID := range snap.Diff.Order {
-		if err := p.applyStep(stepID); err != nil {
-			return p.systemMsgCmd(fmt.Sprintf("Apply all failed: %v", err))
+	for _, node := range nodes {
+		if p.rejected[node.Key] {
+			continue
 		}
-		applied++
+		switch p.viewMode {
+		case diffViewByCause:
+			if node.Kind != diffNodeStep {
+				continue
+			}
+			if err := p.applyStep(node.StepID); err != nil {
+				return p.systemMsgCmd(fmt.Sprintf("Apply all failed: %v", err))
+			}
+			applied++
+		default:
+			if node.Kind != diffNodeFile {
+				continue
+			}
+			if err := p.applyFileNode(node, nodes); err != nil {
+				return p.systemMsgCmd(fmt.Sprintf("Apply all failed: %v", err))
+			}
+			applied++
+		}
 	}
-	return p.systemMsgCmd(fmt.Sprintf("Applied %d step(s)", applied))
+	return p.systemMsgCmd(fmt.Sprintf("Applied %d item(s)", applied))
 }
 
-func (p *DiffPane) applyStepCmd(stepID string) tea.Cmd {
-	if err := p.applyStep(stepID); err != nil {
-		return p.systemMsgCmd(fmt.Sprintf("Apply step failed: %v", err))
+func (p *DiffPane) applySelectedCmd(node diffNode) tea.Cmd {
+	switch node.Kind {
+	case diffNodeStep:
+		if err := p.applyStep(node.StepID); err != nil {
+			return p.systemMsgCmd(fmt.Sprintf("Apply step failed: %v", err))
+		}
+		return p.systemMsgCmd(fmt.Sprintf("Applied step %s", node.StepID))
+	case diffNodeFile:
+		if err := p.applyFileNode(node, p.visibleNodes()); err != nil {
+			return p.systemMsgCmd(fmt.Sprintf("Apply file failed: %v", err))
+		}
+		return p.systemMsgCmd(fmt.Sprintf("Applied file %s", node.File))
+	case diffNodeHunk:
+		if node.Hunk == nil {
+			return p.systemMsgCmd("No hunk selected")
+		}
+		if err := p.applyHunk(node.File, *node.Hunk); err != nil {
+			return p.systemMsgCmd(fmt.Sprintf("Apply hunk failed: %v", err))
+		}
+		return p.systemMsgCmd(fmt.Sprintf("Applied hunk %s", node.File))
+	default:
+		return nil
 	}
-	return p.systemMsgCmd(fmt.Sprintf("Applied step %s", stepID))
-}
-
-func (p *DiffPane) applyFileCmd(stepID, filePath string) tea.Cmd {
-	if err := p.applyFile(stepID, filePath); err != nil {
-		return p.systemMsgCmd(fmt.Sprintf("Apply file failed: %v", err))
-	}
-	return p.systemMsgCmd(fmt.Sprintf("Applied file %s", filePath))
-}
-
-func (p *DiffPane) applyHunkCmd(filePath string, hunk DiffHunkProjection) tea.Cmd {
-	if err := p.applyHunk(filePath, hunk); err != nil {
-		return p.systemMsgCmd(fmt.Sprintf("Apply hunk failed: %v", err))
-	}
-	return p.systemMsgCmd(fmt.Sprintf("Applied hunk %s", filePath))
 }
 
 func (p *DiffPane) revertFileCmd(filePath string) tea.Cmd {
@@ -624,8 +934,38 @@ func (p *DiffPane) applyFile(stepID, filePath string) error {
 	return p.applyHunks(filePath, file.Hunks)
 }
 
+func (p *DiffPane) applyFileNode(node diffNode, nodes []diffNode) error {
+	if p.viewMode == diffViewByCause {
+		return p.applyFile(node.StepID, node.File)
+	}
+	hunks := p.groupHunksForFile(node.File, nodes)
+	if len(hunks) == 0 {
+		return fmt.Errorf("file %q not found", node.File)
+	}
+	return p.applyHunks(node.File, hunks)
+}
+
 func (p *DiffPane) applyHunk(filePath string, hunk DiffHunkProjection) error {
 	return p.applyHunks(filePath, []DiffHunkProjection{hunk})
+}
+
+func (p *DiffPane) groupHunksForFile(filePath string, nodes []diffNode) []DiffHunkProjection {
+	var hunks []DiffHunkProjection
+	collecting := false
+	for _, node := range nodes {
+		if node.Kind == diffNodeFile {
+			if collecting && node.File != filePath {
+				break
+			}
+			collecting = node.File == filePath
+			continue
+		}
+		if !collecting || node.File != filePath || node.Hunk == nil || p.rejected[node.Key] {
+			continue
+		}
+		hunks = append(hunks, *node.Hunk)
+	}
+	return hunks
 }
 
 func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error {

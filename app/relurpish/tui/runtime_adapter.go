@@ -84,6 +84,8 @@ type RuntimeAdapter interface {
 	SandboxBackend() string
 	// SaveSandboxBackend persists the active sandbox backend in workspace config.
 	SaveSandboxBackend(backend string) (string, error)
+	// ExecutionMode returns the current workspace execution posture.
+	ExecutionMode() cfgload.ExecutionMode
 	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
 	// ListCapabilities returns all registered capabilities with runtime-family metadata.
@@ -182,13 +184,14 @@ func (r *runtimeAdapter) SwitchAgent(name string) error {
 
 func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info := SessionInfo{
-		Workspace: "",
-		Model:     "",
-		Agent:     "",
-		Role:      "",
-		Mode:      "",
-		Strategy:  "",
-		MaxTokens: 100000,
+		Workspace:     "",
+		Model:         "",
+		Agent:         "",
+		Role:          "",
+		Mode:          "",
+		ExecutionMode: "",
+		Strategy:      "",
+		MaxTokens:     100000,
 	}
 	if r == nil || r.rt == nil {
 		return info
@@ -228,6 +231,7 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		}
 	}
 	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
+	info.ExecutionMode = string(r.ExecutionMode())
 	return info
 }
 
@@ -902,6 +906,17 @@ func (r *runtimeAdapter) SandboxBackend() string {
 	return strings.TrimSpace(r.rt.Config.SandboxBackend)
 }
 
+func (r *runtimeAdapter) ExecutionMode() cfgload.ExecutionMode {
+	if r == nil || r.rt == nil {
+		return cfgload.ExecutionModeStaged
+	}
+	mode := cfgload.NormalizeExecutionMode(r.rt.WorkspaceConfig.ExecutionMode)
+	if mode == cfgload.ExecutionModeStaged && strings.TrimSpace(r.rt.WorkspaceConfig.ExecutionMode) == "" {
+		return cfgload.ExecutionModeStaged
+	}
+	return mode
+}
+
 func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	if r == nil || r.rt == nil {
 		return "", fmt.Errorf("runtime unavailable")
@@ -922,6 +937,7 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 		Model:               r.rt.Config.InferenceModel,
 		Provider:            r.rt.Config.InferenceProvider,
 		SandboxBackend:      backend,
+		ExecutionMode:       string(r.ExecutionMode()),
 		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
 		AllowedCapabilities: append([]cfgload.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
 		Nexus:               r.rt.WorkspaceConfig.Nexus,

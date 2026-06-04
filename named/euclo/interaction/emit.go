@@ -17,7 +17,6 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 
 	seq := getNextFrameSeq(env)
 	frame.Seq = seq
-	frame.Kind = frame.Type
 	if frame.CreatedAt.IsZero() {
 		frame.CreatedAt = time.Now().UTC()
 	}

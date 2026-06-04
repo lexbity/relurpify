@@ -88,7 +88,11 @@ func (s *fakeSurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *Notifica
 	return &fakeChatPane{}
 }
 
-func (s *fakeSurface) NewLibrary(RuntimeAdapter, *AgentContext, *Session) LibrarySurface {
+func (s *fakeSurface) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
+	return nil
+}
+
+func (s *fakeSurface) NewNav(RuntimeAdapter, *AgentContext, *Session) NavSurface {
 	return nil
 }
 
@@ -117,6 +121,42 @@ func (s *fakeSurface) OpenSecurityGuard()                                       
 func (s *fakeSurface) OpenAIProvider()                                          {}
 func (s *fakeSurface) OpenKeybindings()                                         {}
 func (s *fakeSurface) OpenDoctor()                                              {}
+
+type hostileInputSurface struct {
+	keys []string
+}
+
+func (s *hostileInputSurface) SetSize(int, int) {}
+func (s *hostileInputSurface) View() string      { return "hostile-input" }
+func (s *hostileInputSurface) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	s.keys = append(s.keys, msg.String())
+	return nil, true
+}
+
+type hostileNavSurface struct {
+	keys []string
+}
+
+func (s *hostileNavSurface) SetSize(int, int) {}
+func (s *hostileNavSurface) View() string      { return "hostile-nav" }
+func (s *hostileNavSurface) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	s.keys = append(s.keys, msg.String())
+	return nil, true
+}
+
+type ownedSurface struct {
+	*fakeSurface
+	input *hostileInputSurface
+	nav   *hostileNavSurface
+}
+
+func (s *ownedSurface) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
+	return s.input
+}
+
+func (s *ownedSurface) NewNav(RuntimeAdapter, *AgentContext, *Session) NavSurface {
+	return s.nav
+}
 
 type countingFactory struct {
 	shared        AgentSurface
@@ -173,5 +213,41 @@ func TestRootModelResizeAllocatesChromeRows(t *testing.T) {
 	}
 	if got := rm.inputBar.width; got != 100 {
 		t.Fatalf("input width = %d, want %d", got, 100)
+	}
+}
+
+func TestReservedChordsBypassSurfaceOwnedInput(t *testing.T) {
+	surface := &ownedSurface{
+		fakeSurface: &fakeSurface{name: "guest", chat: &fakeChatPane{}},
+		input:       &hostileInputSurface{},
+		nav:         &hostileNavSurface{},
+	}
+	factory := &countingFactory{shared: surface}
+	m := newRootModel(nil, factory)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA, Alt: false})
+	rm := updated.(RootModel)
+
+	if rm.agentPicker == nil || !rm.agentPicker.IsOpen() {
+		t.Fatal("expected agent picker to open on ctrl+a")
+	}
+	if len(surface.input.keys) != 0 {
+		t.Fatalf("expected owned input surface to be bypassed, got %#v", surface.input.keys)
+	}
+	if len(surface.nav.keys) != 0 {
+		t.Fatalf("expected owned nav surface to be bypassed, got %#v", surface.nav.keys)
+	}
+
+	updated, _ = rm.Update(tea.KeyMsg{Type: tea.KeyF1})
+	rm = updated.(RootModel)
+
+	if !rm.showHelp {
+		t.Fatal("expected help overlay to toggle on f1")
+	}
+	if len(surface.input.keys) != 0 {
+		t.Fatalf("expected help key to bypass owned input surface, got %#v", surface.input.keys)
+	}
+	if len(surface.nav.keys) != 0 {
+		t.Fatalf("expected help key to bypass owned nav surface, got %#v", surface.nav.keys)
 	}
 }
