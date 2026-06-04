@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 )
@@ -10,11 +14,13 @@ type TabBar struct {
 	active   TabID
 	registry *TabRegistry
 	width    int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewTabBar creates a TabBar with the given active tab.
 func NewTabBar(active TabID) TabBar {
-	return TabBar{active: active}
+	return TabBar{active: active, th: theme.Default()}
 }
 
 // SetActive updates the active tab.
@@ -29,11 +35,11 @@ func (tb *TabBar) SetWidth(w int) { tb.width = w }
 // View renders the tab bar.
 func (tb TabBar) View() string {
 	if tb.registry == nil {
-		return tabBarStyle.Width(tb.width).Render("")
+		return tb.th.Bar().Width(tb.width).Render("")
 	}
 	tabs := tb.registry.All()
 	if len(tabs) == 0 {
-		return tabBarStyle.Width(tb.width).Render("")
+		return tb.th.Bar().Width(tb.width).Render("")
 	}
 	available := tb.width - (len(tabs)-1)*2
 	if available < len(tabs) {
@@ -48,11 +54,18 @@ func (tb TabBar) View() string {
 		label := fmt.Sprintf("[%d] %s", i+1, t.Label)
 		label = clipText(label, cellWidth)
 		if t.ID == tb.active {
-			parts = append(parts, tabActiveStyle.Width(cellWidth).Render(label))
+			parts = append(parts, tb.th.Active().Width(cellWidth).Render(label))
 		} else {
-			parts = append(parts, tabInactiveStyle.Width(cellWidth).Render(label))
+			parts = append(parts, tb.th.Dim().Width(cellWidth).Render(label))
 		}
 	}
 	content := strings.Join(parts, "  ")
-	return tabBarStyle.Width(tb.width).Render(content)
+	return tb.th.Bar().Width(tb.width).Render(content)
+}
+
+// SetTheme sets the active semantic style source.
+func (tb *TabBar) SetTheme(th *theme.Theme) {
+	if th != nil {
+		tb.th = th
+	}
 }

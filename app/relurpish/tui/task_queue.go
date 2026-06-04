@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 	"time"
@@ -16,11 +20,13 @@ type TasksPane struct {
 	notifQ *NotificationQueue
 	width  int
 	height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewTasksPane creates an empty task queue controller.
 func NewTasksPane(_ RuntimeAdapter, notifQ *NotificationQueue) *TasksPane {
-	return &TasksPane{notifQ: notifQ}
+	return &TasksPane{th: theme.Default(), notifQ: notifQ}
 }
 
 // SetSize stores the allocated size for optional rendering.
@@ -109,26 +115,26 @@ func (p *TasksPane) Update(msg tea.Msg) (*TasksPane, tea.Cmd) {
 // View renders the queued task list for any remaining internal callers.
 func (p *TasksPane) View() string {
 	if len(p.items) == 0 {
-		return welcomeStyle.Render("No tasks queued.")
+		return p.th.Detail().Render("No tasks queued.")
 	}
 	var b strings.Builder
 	for i, item := range p.items {
 		icon := "☐"
-		style := taskPendingStyle
+		style := p.th.Pending()
 		switch item.Status {
 		case TaskCompleted:
 			icon = "✓"
-			style = taskDoneStyle
+			style = p.th.Success()
 		case TaskInProgress:
 			icon = "●"
-			style = taskRunningStyle
+			style = p.th.Warning()
 		}
 		line := fmt.Sprintf("%s  %s", icon, style.Render(item.Description))
 		if item.Agent != "" {
-			line += dimStyle.Render(fmt.Sprintf("  [%s]", item.Agent))
+			line += p.th.Dim().Render(fmt.Sprintf("  [%s]", item.Agent))
 		}
 		if i == p.sel {
-			line = panelItemActiveStyle.Render(line)
+			line = p.th.Active().Render(line)
 		}
 		b.WriteString(line + "\n")
 	}
@@ -145,4 +151,11 @@ func (p *TasksPane) HandleInputSubmit(value string) tea.Cmd {
 		Status:      TaskPending,
 	})
 	return nil
+}
+
+// SetTheme sets the active semantic style source.
+func (p *TasksPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

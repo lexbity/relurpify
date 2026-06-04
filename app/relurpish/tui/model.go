@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -79,6 +80,13 @@ type RootModel struct {
 	// Input gate blocks > prompts during active execution.
 	inputGate *InputGate
 
+	// Theme is the active semantic style source, threaded to all components.
+	th *theme.Theme
+
+	// Animation manager and reduce-motion detector.
+	anim   *AnimationManager
+	reduce *ReduceMotion
+
 	// Phase G: instance-based command registry and corpus scope.
 	cmdReg *CommandRegistry
 	scope  string
@@ -92,6 +100,65 @@ type surfaceState struct {
 	region1 Region1Surface
 	input   InputSurface
 	nav     NavSurface
+}
+
+// propagateTheme distributes the active theme to all host-owned components.
+func (m *RootModel) propagateTheme() {
+	if m.th == nil {
+		return
+	}
+	if m.chat != nil {
+		if setter, ok := m.chat.(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.tasks != nil {
+		m.tasks.SetTheme(m.th)
+	}
+	if m.session != nil {
+		m.session.SetTheme(m.th)
+	}
+	if m.notifBar != nil {
+		m.notifBar.SetTheme(m.th)
+	}
+	if m.inputBar != nil {
+		m.inputBar.SetTheme(m.th)
+	}
+	m.tabBar.SetTheme(m.th)
+	if m.cmdPalette != nil {
+		m.cmdPalette.SetTheme(m.th)
+	}
+	if m.hitlRow != nil {
+		m.hitlRow.SetTheme(m.th)
+	}
+	if m.agentPicker != nil {
+		m.agentPicker.SetTheme(m.th)
+	}
+	if m.overlays != nil {
+		m.overlays.SetTheme(m.th)
+	}
+	m.help.SetTheme(m.th)
+}
+
+// resolveSurfaceTheme returns the surface's preferred theme or the host default.
+func resolveSurfaceTheme(surface AgentSurface) *theme.Theme {
+	if surface == nil {
+		return theme.Default()
+	}
+	if t := surface.Theme(); t != nil {
+		return t
+	}
+	return theme.Default()
+}
+
+func propagateSurfaceTheme(m *RootModel, surface AgentSurface) {
+	m.th = resolveSurfaceTheme(surface)
+	if m.chat != nil {
+		if setter, ok := m.chat.(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	m.propagateTheme()
 }
 
 func isBaseFrameworkTab(id TabID) bool {
@@ -164,7 +231,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	m := RootModel{
 		tabs:              state.tabs,
 		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
-		hitlRow:           &HITLRow{},
+		hitlRow:           &HITLRow{th: theme.Default()},
 		inputGate:         &InputGate{},
 		tabBar:            tabBar,
 		notifBar:          NewNotificationBar(notifQ),
@@ -186,8 +253,12 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		surfaceFactory:    factory,
 		surfaceCache:      map[string]*surfaceState{initialAgent: state},
 		activeSurface:     state.surface,
+		th:                resolveSurfaceTheme(state.surface),
+		anim:              NewAnimationManager(),
+		reduce:            NewReduceMotion(),
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
+	m.propagateTheme()
 	if state.region1 != nil {
 		state.region1.SetStore(store)
 		m.baseSurface = state.region1
@@ -293,6 +364,7 @@ func (m *RootModel) activateSurface(agentName string) {
 	}
 	m.activeTab = m.tabs.ActiveTab().ID
 	m.setActiveTab(m.activeTab)
+	propagateSurfaceTheme(m, state.surface)
 }
 
 func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {
@@ -382,7 +454,7 @@ type hitlSubscribedMsg struct {
 	unsub func()
 }
 
-// Init starts the HITL listener, spinner, and text-input blink.
+// Init starts the HITL listener, spinner, text-input blink, and animation tick.
 func (m RootModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		textinput.Blink,
@@ -392,6 +464,9 @@ func (m RootModel) Init() tea.Cmd {
 	}
 	if m.chat != nil {
 		cmds = append(cmds, m.chat.Init())
+	}
+	if tick := m.anim.TickCmd(); tick != nil {
+		cmds = append(cmds, tick)
 	}
 	return tea.Batch(cmds...)
 }
@@ -429,6 +504,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
+
+	case AnimationTickMsg:
+		frames := m.anim.Advance()
+		for _, fr := range frames {
+			// Broadcast frame texts to interested components.
+			_ = fr.Text
+		}
+		return m, m.anim.TickCmd()
 
 	case tea.MouseMsg:
 		if handled, cmd := m.handleMouse(msg); handled {
@@ -798,7 +881,7 @@ func (m RootModel) View() string {
 
 	bottom := lipgloss.JoinHorizontal(
 		lipgloss.Top,
-		renderAgentCell(m.activeAgentName(), m.layout.Region2Width()),
+		renderAgentCell(m.th, m.activeAgentName(), m.layout.Region2Width()),
 		func() string {
 			if m.activeInput != nil {
 				return m.activeInput.View()

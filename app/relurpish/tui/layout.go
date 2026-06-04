@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 
@@ -107,7 +111,7 @@ func (c ChromeLayout) Region1Rows() int {
 }
 
 // renderAgentCell renders the active-agent chrome cell for Region 2.
-func renderAgentCell(agent string, width int) string {
+func renderAgentCell(th *theme.Theme, agent string, width int) string {
 	if width < chromeMinCellWidth {
 		width = chromeMinCellWidth
 	}
@@ -116,7 +120,7 @@ func renderAgentCell(agent string, width int) string {
 		label = "none"
 	}
 	label = clipText(label, width)
-	return agentStripActiveStyle.Width(width).Render(label)
+	return th.Active().Width(width).Render(label)
 }
 
 func clipText(value string, width int) string {
@@ -140,6 +144,8 @@ type SubTabBar struct {
 	active  SubTabID
 	subtabs []SubTabDefinition
 	width   int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewSubTabBar creates a SubTabBar from a tab definition.
@@ -148,7 +154,7 @@ func NewSubTabBar(def TabDefinition) SubTabBar {
 	if len(def.SubTabs) > 0 {
 		active = def.SubTabs[0].ID
 	}
-	return SubTabBar{active: active, subtabs: def.SubTabs}
+	return SubTabBar{active: active, subtabs: def.SubTabs, th: theme.Default()}
 }
 
 // SetActive updates the active subtab.
@@ -176,7 +182,7 @@ func (s *SubTabBar) SetSubTabs(def TabDefinition) {
 // View renders the subtab bar. Returns empty string when there are no subtabs.
 func (s SubTabBar) View() string {
 	if len(s.subtabs) == 0 {
-		return subtabBarEmptyStyle.Width(s.width).Render("")
+		return s.th.Bar().Width(s.width).Render("")
 	}
 	parts := make([]string, 0, len(s.subtabs))
 	available := s.width - (len(s.subtabs)-1)*2
@@ -191,13 +197,13 @@ func (s SubTabBar) View() string {
 		label := fmt.Sprintf("[%d] %s", i+1, st.Label)
 		label = clipText(label, cellWidth)
 		if st.ID == s.active {
-			parts = append(parts, subtabActiveStyle.Width(cellWidth).Render(label))
+			parts = append(parts, s.th.Subhead().Width(cellWidth).Render(label))
 		} else {
-			parts = append(parts, subtabInactiveStyle.Width(cellWidth).Render(label))
+			parts = append(parts, s.th.Dim().Width(cellWidth).Render(label))
 		}
 	}
 	content := strings.Join(parts, "  ")
-	return subtabBarStyle.Width(s.width).Render(content)
+	return s.th.Bar().Width(s.width).Render(content)
 }
 
 // notificationRowVisible reports whether the host should reserve a row for
@@ -247,4 +253,11 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// SetTheme sets the active semantic style source.
+func (s *SubTabBar) SetTheme(th *theme.Theme) {
+	if th != nil {
+		s.th = th
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	tea "github.com/charmbracelet/bubbletea"
@@ -67,11 +68,16 @@ type DiffPane struct {
 	rejected     map[string]bool
 	baselines    map[string]diffBaseline
 	lastRendered []diffNode
+	th           *theme.Theme
 }
 
-func NewDiffPane(router *EucloEventRouter, workspace string) *DiffPane {
+func NewDiffPane(router *EucloEventRouter, workspace string, th *theme.Theme) *DiffPane {
+	if th == nil {
+		th = theme.Default()
+	}
 	p := &DiffPane{
 		router:    router,
+		th:        th,
 		workspace: strings.TrimSpace(workspace),
 		viewMode:  diffViewByFile,
 		collapsed: make(map[string]bool),
@@ -204,16 +210,16 @@ func (p *DiffPane) Update(msg tea.Msg) tea.Cmd {
 
 func (p *DiffPane) View() string {
 	if p.width < 72 {
-		return dimStyle.Render("Terminal too narrow. Minimum 72 columns required.")
+		return p.th.Dim().Render("Terminal too narrow. Minimum 72 columns required.")
 	}
 	snap := p.snapshot()
 	nodes := p.visibleNodesFrom(snap)
 	p.lastRendered = nodes
 	header := strings.Join(p.renderHeaderLines(snap, len(nodes)), "\n")
 	if len(nodes) == 0 {
-		return eucloFrameStyle.Render(strings.Join([]string{
+		return p.th.Panel().Render(strings.Join([]string{
 			header,
-			dimStyle.Render("No diff hunks available."),
+			p.th.Dim().Render("No diff hunks available."),
 		}, "\n"))
 	}
 	leftW, rightW := diffSplitWidths(p.width)
@@ -221,7 +227,7 @@ func (p *DiffPane) View() string {
 	tree := p.renderTree(nodes, selected, leftW)
 	detail := p.renderDetail(nodes[selected], rightW)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, tree, detail)
-	return lipgloss.JoinVertical(lipgloss.Left, eucloFrameStyle.Render(header), body)
+	return lipgloss.JoinVertical(lipgloss.Left, p.th.Panel().Render(header), body)
 }
 
 func (p *DiffPane) renderHeaderLines(snap EucloProjectionSnapshot, nodeCount int) []string {
@@ -233,20 +239,20 @@ func (p *DiffPane) renderHeaderLines(snap EucloProjectionSnapshot, nodeCount int
 		execMode = "staged"
 	}
 	lines := []string{
-		sectionHeaderStyle.Render("Diff Surface"),
-		dimStyle.Render("view ") + headerStyle.Render(p.viewModeLabel()),
-		dimStyle.Render("execution ") + headerStyle.Render(execMode),
+		p.th.Subhead().Render("Diff Surface"),
+		p.th.Dim().Render("view ") + p.th.Header().Render(p.viewModeLabel()),
+		p.th.Dim().Render("execution ") + p.th.Header().Render(execMode),
 	}
 	if verdict := p.verdictSummary(snap); verdict != "" {
 		lines = append(lines, verdict)
 	}
 	if checkpoint := p.latestCheckpointID(); checkpoint != "" {
-		lines = append(lines, dimStyle.Render("checkpoint ")+headerStyle.Render("@ "+checkpoint))
+		lines = append(lines, p.th.Dim().Render("checkpoint ")+p.th.Header().Render("@ "+checkpoint))
 	} else {
-		lines = append(lines, dimStyle.Render("checkpoint unavailable"))
+		lines = append(lines, p.th.Dim().Render("checkpoint unavailable"))
 	}
 	if execMode == string(cfgload.ExecutionModeAutopilot) && nodeCount > 0 {
-		lines = append(lines, dimStyle.Render(fmt.Sprintf("%d review item(s) · [r]review [u]ndo", nodeCount)))
+		lines = append(lines, p.th.Dim().Render(fmt.Sprintf("%d review item(s) · [r]review [u]ndo", nodeCount)))
 	}
 	return lines
 }
@@ -294,12 +300,12 @@ func (p *DiffPane) verdictSummary(snap EucloProjectionSnapshot) string {
 		}
 	}
 	if failedFiles == 0 {
-		return dimStyle.Render("tests ✓")
+		return p.th.Dim().Render("tests ✓")
 	}
 	if firstFailure == "" {
 		firstFailure = "verification failed"
 	}
-	return diffRemoveStyle.Render(fmt.Sprintf("✗ %d failed — %s", failedFiles, firstFailure))
+	return p.th.Error().Render(fmt.Sprintf("✗ %d failed — %s", failedFiles, firstFailure))
 }
 
 func (p *DiffPane) latestCheckpointID() string {
@@ -500,7 +506,7 @@ func (p *DiffPane) firstChildKey(nodes []diffNode, idx int) string {
 
 func (p *DiffPane) renderTree(nodes []diffNode, selected int, width int) string {
 	var lines []string
-	lines = append(lines, sectionHeaderStyle.Render("Change Tree"))
+	lines = append(lines, p.th.Subhead().Render("Change Tree"))
 	for i, node := range nodes {
 		if node.Depth > 2 {
 			continue
@@ -508,43 +514,43 @@ func (p *DiffPane) renderTree(nodes []diffNode, selected int, width int) string 
 		indent := strings.Repeat("  ", node.Depth)
 		line := indent + p.treePrefix(node) + " " + node.Label
 		if p.rejected[node.Key] {
-			line = diffRemoveStyle.Render(line + " [rejected]")
+			line = p.th.Error().Render(line + " [rejected]")
 		} else if i == selected {
-			line = panelItemActiveStyle.Render(line)
+			line = p.th.Active().Render(line)
 		} else {
-			line = panelItemStyle.Render(line)
+			line = p.th.Body().Render(line)
 		}
 		lines = append(lines, line)
 		if node.Kind == diffNodeHunk && node.Hunk != nil {
 			if node.Hunk.VerificationFailed {
-				lines = append(lines, indent+"    "+diffRemoveStyle.Render("✗ Verification failed"))
+				lines = append(lines, indent+"    "+p.th.Error().Render("✗ Verification failed"))
 				if node.Hunk.VerificationLog != "" {
 					for _, l := range strings.Split(strings.TrimSuffix(node.Hunk.VerificationLog, "\n"), "\n") {
-						lines = append(lines, indent+"    "+dimStyle.Render(l))
+						lines = append(lines, indent+"    "+p.th.Dim().Render(l))
 					}
 				}
 			}
 			if node.Hunk.DeferredMarkdownPath != "" {
-				lines = append(lines, indent+"    "+dimStyle.Render("⚠ Deferred: ")+filePathStyle.Render(node.Hunk.DeferredMarkdownPath))
+				lines = append(lines, indent+"    "+p.th.Dim().Render("⚠ Deferred: ")+p.th.Subhead().Render(node.Hunk.DeferredMarkdownPath))
 			}
 		}
 	}
 	lines = append(lines, "")
-	lines = append(lines, dimStyle.Render("a=apply all  c=toggle view  s=apply selected  f=apply file  h=apply hunk"))
-	lines = append(lines, dimStyle.Render("u=revert file  U=revert all  x=reject node  e=open editor  arrows=navigate"))
-	return eucloFrameStyle.Width(width).Render(strings.Join(lines, "\n"))
+	lines = append(lines, p.th.Dim().Render("a=apply all  c=toggle view  s=apply selected  f=apply file  h=apply hunk"))
+	lines = append(lines, p.th.Dim().Render("u=revert file  U=revert all  x=reject node  e=open editor  arrows=navigate"))
+	return p.th.Panel().Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func (p *DiffPane) renderDetail(node diffNode, width int) string {
-	lines := []string{sectionHeaderStyle.Render("Diff Viewer")}
+	lines := []string{p.th.Subhead().Render("Diff Viewer")}
 	switch node.Kind {
 	case diffNodeStep:
-		lines = append(lines, headerStyle.Render(node.Label))
+		lines = append(lines, p.th.Header().Render(node.Label))
 		lines = append(lines, p.stepDetailLines(node.StepID)...)
 		lines = append(lines, "")
 		lines = append(lines, p.renderStepDiff(node.StepID)...)
 	case diffNodeFile:
-		lines = append(lines, filePathStyle.Render(node.File))
+		lines = append(lines, p.th.Subhead().Render(node.File))
 		if p.viewMode == diffViewByFile {
 			lines = append(lines, p.fileGroupDetailLines(node.File)...)
 		} else {
@@ -558,21 +564,21 @@ func (p *DiffPane) renderDetail(node diffNode, width int) string {
 		}
 	case diffNodeHunk:
 		if node.Hunk != nil {
-			lines = append(lines, filePathStyle.Render(node.File))
+			lines = append(lines, p.th.Subhead().Render(node.File))
 			if node.Hunk.Summary != "" {
 				lines = append(lines, node.Hunk.Summary)
 			}
 			if node.Hunk.VerificationFailed {
-				lines = append(lines, diffRemoveStyle.Render("Verification failed"))
+				lines = append(lines, p.th.Error().Render("Verification failed"))
 			}
 			lines = append(lines, "")
-			lines = append(lines, renderUnifiedDiffText(node.Hunk.Body)...)
+			lines = append(lines, renderUnifiedDiffText(p.th, node.Hunk.Body)...)
 		}
 	}
 	if len(lines) == 1 {
-		lines = append(lines, dimStyle.Render("No diff selection."))
+		lines = append(lines, p.th.Dim().Render("No diff selection."))
 	}
-	return eucloFrameStyle.Width(width).Render(strings.Join(lines, "\n"))
+	return p.th.Panel().Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func (p *DiffPane) stepLabel(step *DiffStepProjection) string {
@@ -581,10 +587,10 @@ func (p *DiffPane) stepLabel(step *DiffStepProjection) string {
 	}
 	label := fmt.Sprintf("Step: %s", step.StepID)
 	if step.Origin != "" {
-		label += " " + dimStyle.Render("("+step.Origin+")")
+		label += " " + p.th.Dim().Render("("+step.Origin+")")
 	}
 	if step.VerificationFailed {
-		label += " " + diffRemoveStyle.Render("✗")
+		label += " " + p.th.Error().Render("✗")
 	}
 	return label
 }
@@ -592,7 +598,7 @@ func (p *DiffPane) stepLabel(step *DiffStepProjection) string {
 func (p *DiffPane) fileLabel(file DiffFileProjection) string {
 	label := fmt.Sprintf("%s [%d]", file.File, len(file.Hunks))
 	if file.VerificationFailed {
-		label += " " + diffRemoveStyle.Render("✗")
+		label += " " + p.th.Error().Render("✗")
 	}
 	return label
 }
@@ -600,10 +606,10 @@ func (p *DiffPane) fileLabel(file DiffFileProjection) string {
 func (p *DiffPane) fileGroupLabel(group diffFileGroup) string {
 	label := fmt.Sprintf("%s [%d]", group.File, len(group.Hunks))
 	if group.VerificationFailed {
-		label += " " + diffRemoveStyle.Render("✗")
+		label += " " + p.th.Error().Render("✗")
 	}
 	if len(group.StepIDs) > 1 {
-		label += " " + dimStyle.Render(fmt.Sprintf("(%d steps)", len(group.StepIDs)))
+		label += " " + p.th.Dim().Render(fmt.Sprintf("(%d steps)", len(group.StepIDs)))
 	}
 	return label
 }
@@ -642,19 +648,19 @@ func (p *DiffPane) stepDetailLines(stepID string) []string {
 	snap := p.snapshot()
 	step := snap.Diff.Steps[stepID]
 	if step == nil {
-		return []string{dimStyle.Render("No step details available.")}
+		return []string{p.th.Dim().Render("No step details available.")}
 	}
 	lines := []string{
-		dimStyle.Render(fmt.Sprintf("files: %d", len(step.Files))),
+		p.th.Dim().Render(fmt.Sprintf("files: %d", len(step.Files))),
 	}
 	if step.VerificationFailed {
-		lines = append(lines, diffRemoveStyle.Render("verification failed"))
+		lines = append(lines, p.th.Error().Render("verification failed"))
 	}
 	if step.VerificationLog != "" {
 		lines = append(lines, step.VerificationLog)
 	}
 	if step.DeferredMarkdownPath != "" {
-		lines = append(lines, dimStyle.Render("deferred: ")+filePathStyle.Render(step.DeferredMarkdownPath))
+		lines = append(lines, p.th.Dim().Render("deferred: ")+p.th.Subhead().Render(step.DeferredMarkdownPath))
 	}
 	return lines
 }
@@ -663,23 +669,23 @@ func (p *DiffPane) fileDetailLines(stepID, filePath string) []string {
 	snap := p.snapshot()
 	step := snap.Diff.Steps[stepID]
 	if step == nil {
-		return []string{dimStyle.Render("No file details available.")}
+		return []string{p.th.Dim().Render("No file details available.")}
 	}
 	file := step.Files[filePath]
 	if file == nil {
-		return []string{dimStyle.Render("No file details available.")}
+		return []string{p.th.Dim().Render("No file details available.")}
 	}
 	lines := []string{
-		dimStyle.Render(fmt.Sprintf("hunks: %d", len(file.Hunks))),
+		p.th.Dim().Render(fmt.Sprintf("hunks: %d", len(file.Hunks))),
 	}
 	if file.VerificationFailed {
-		lines = append(lines, diffRemoveStyle.Render("verification failed"))
+		lines = append(lines, p.th.Error().Render("verification failed"))
 	}
 	if file.VerificationLog != "" {
 		lines = append(lines, file.VerificationLog)
 	}
 	if file.DeferredMarkdownPath != "" {
-		lines = append(lines, dimStyle.Render("deferred: ")+filePathStyle.Render(file.DeferredMarkdownPath))
+		lines = append(lines, p.th.Dim().Render("deferred: ")+p.th.Subhead().Render(file.DeferredMarkdownPath))
 	}
 	return lines
 }
@@ -688,20 +694,20 @@ func (p *DiffPane) fileGroupDetailLines(filePath string) []string {
 	snap := p.snapshot()
 	group := p.fileGroupForSnapshot(snap, filePath)
 	if group == nil {
-		return []string{dimStyle.Render("No file details available.")}
+		return []string{p.th.Dim().Render("No file details available.")}
 	}
 	lines := []string{
-		dimStyle.Render(fmt.Sprintf("hunks: %d", len(group.Hunks))),
-		dimStyle.Render(fmt.Sprintf("steps: %d", len(group.StepIDs))),
+		p.th.Dim().Render(fmt.Sprintf("hunks: %d", len(group.Hunks))),
+		p.th.Dim().Render(fmt.Sprintf("steps: %d", len(group.StepIDs))),
 	}
 	if group.VerificationFailed {
-		lines = append(lines, diffRemoveStyle.Render("verification failed"))
+		lines = append(lines, p.th.Error().Render("verification failed"))
 	}
 	if group.VerificationLog != "" {
 		lines = append(lines, group.VerificationLog)
 	}
 	if group.DeferredMarkdownPath != "" {
-		lines = append(lines, dimStyle.Render("deferred: ")+filePathStyle.Render(group.DeferredMarkdownPath))
+		lines = append(lines, p.th.Dim().Render("deferred: ")+p.th.Subhead().Render(group.DeferredMarkdownPath))
 	}
 	return lines
 }
@@ -710,7 +716,7 @@ func (p *DiffPane) renderStepDiff(stepID string) []string {
 	snap := p.snapshot()
 	step := snap.Diff.Steps[stepID]
 	if step == nil {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	var bodies []string
 	for _, filePath := range step.Order {
@@ -719,11 +725,11 @@ func (p *DiffPane) renderStepDiff(stepID string) []string {
 			continue
 		}
 		for _, hunk := range file.Hunks {
-			bodies = append(bodies, renderUnifiedDiffTextLines(hunk.Body)...)
+			bodies = append(bodies, renderUnifiedDiffTextLines(p.th, hunk.Body)...)
 		}
 	}
 	if len(bodies) == 0 {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	return bodies
 }
@@ -732,18 +738,18 @@ func (p *DiffPane) renderFileDiff(stepID, filePath string) []string {
 	snap := p.snapshot()
 	step := snap.Diff.Steps[stepID]
 	if step == nil {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	file := step.Files[filePath]
 	if file == nil {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	var bodies []string
 	for _, hunk := range file.Hunks {
-		bodies = append(bodies, renderUnifiedDiffTextLines(hunk.Body)...)
+		bodies = append(bodies, renderUnifiedDiffTextLines(p.th, hunk.Body)...)
 	}
 	if len(bodies) == 0 {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	return bodies
 }
@@ -752,14 +758,14 @@ func (p *DiffPane) renderFileGroupDiff(filePath string) []string {
 	snap := p.snapshot()
 	group := p.fileGroupForSnapshot(snap, filePath)
 	if group == nil {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	var bodies []string
 	for _, hunk := range group.Hunks {
-		bodies = append(bodies, renderUnifiedDiffTextLines(hunk.Body)...)
+		bodies = append(bodies, renderUnifiedDiffTextLines(p.th, hunk.Body)...)
 	}
 	if len(bodies) == 0 {
-		return []string{dimStyle.Render("No diff body available.")}
+		return []string{p.th.Dim().Render("No diff body available.")}
 	}
 	return bodies
 }
@@ -1102,30 +1108,30 @@ func (p *DiffPane) nodeLabel(node diffNode) string {
 	}
 }
 
-func renderUnifiedDiffText(text string) []string {
+func renderUnifiedDiffText(th *theme.Theme, text string) []string {
 	if strings.TrimSpace(text) == "" {
-		return []string{dimStyle.Render("(empty diff)")}
+		return []string{th.Dim().Render("(empty diff)")}
 	}
-	return renderUnifiedDiffTextLines(text)
+	return renderUnifiedDiffTextLines(th, text)
 }
 
-func renderUnifiedDiffTextLines(text string) []string {
+func renderUnifiedDiffTextLines(th *theme.Theme, text string) []string {
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
 		switch {
 		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "@@"):
-			out = append(out, headerStyle.Render(line))
+			out = append(out, th.Header().Render(line))
 		case strings.HasPrefix(line, "+"):
-			out = append(out, diffAddStyle.Render(line))
+			out = append(out, th.Success().Render(line))
 		case strings.HasPrefix(line, "-"):
-			out = append(out, diffRemoveStyle.Render(line))
+			out = append(out, th.Error().Render(line))
 		default:
-			out = append(out, dimStyle.Render(line))
+			out = append(out, th.Dim().Render(line))
 		}
 	}
 	if len(out) == 0 {
-		return []string{dimStyle.Render("(empty diff)")}
+		return []string{th.Dim().Render("(empty diff)")}
 	}
 	return out
 }

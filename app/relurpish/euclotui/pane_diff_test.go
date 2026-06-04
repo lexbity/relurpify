@@ -39,7 +39,7 @@ func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {
 		},
 	})
 
-	pane := NewDiffPane(router, "")
+	pane := NewDiffPane(router, "", nil)
 	pane.SetSize(140, 40)
 
 	view := pane.View()
@@ -85,7 +85,7 @@ func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
 		},
 	})
 
-	pane := NewDiffPane(router, workspace)
+	pane := NewDiffPane(router, workspace, nil)
 	pane.SetSize(140, 40)
 	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}); cmd != nil {
 		// switch to by-cause for step-scoped apply assertions
@@ -145,7 +145,7 @@ func TestDiffPaneShowsCheckpointAnchor(t *testing.T) {
 		},
 	})
 
-	pane := NewDiffPane(router, workspace)
+	pane := NewDiffPane(router, workspace, nil)
 	pane.SetSessionStore(store)
 	pane.SetSize(140, 40)
 

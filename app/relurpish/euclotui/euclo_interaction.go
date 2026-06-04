@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
@@ -112,14 +113,14 @@ func notificationAllowsFreetext(item tui.NotificationItem) bool {
 
 // RenderInteractionNotification renders the notification bar for an
 // interaction notification.
-func RenderInteractionNotification(item tui.NotificationItem) string {
+func RenderInteractionNotification(th *theme.Theme, item tui.NotificationItem) string {
 	label := "● " + item.Msg
-	rendered := eucloFrameStyle.Render(label)
+	rendered := th.Panel().Render(label)
 
 	countStr := item.Extra["slot_count"]
 	count, _ := strconv.Atoi(countStr)
 	if count == 0 {
-		return rendered + dimStyle.Render("  [d] dismiss")
+		return rendered + th.Dim().Render("  [d] dismiss")
 	}
 
 	var actions []interaction.ActionSlot
@@ -133,7 +134,7 @@ func RenderInteractionNotification(item tui.NotificationItem) string {
 			Default: item.Extra[prefix+"_default"] == "true",
 		})
 	}
-	return rendered + RenderActionSlots(actions) + dimStyle.Render("  [enter] default  [d] dismiss")
+	return rendered + RenderActionSlots(actions) + th.Dim().Render("  [enter] default  [d] dismiss")
 }
 
 func RenderActionSlots(actions []interaction.ActionSlot) string {

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 )
 
@@ -59,10 +60,10 @@ func TestEucloEventRouterProjectsWorkflowStream(t *testing.T) {
 	if got := snap.Diff.Hunks[0].File; got != "thoughtrecipes/parser_test.go" {
 		t.Fatalf("diff file = %q, want parser test", got)
 	}
-	if got := RenderChatProjection(snap.Chat); !strings.Contains(got, "Inspect parser package") {
+	if got := RenderChatProjection(theme.Default(), snap.Chat); !strings.Contains(got, "Inspect parser package") {
 		t.Fatalf("chat render missing milestone: %q", got)
 	}
-	diffPane := NewDiffPane(router, "")
+	diffPane := NewDiffPane(router, "", nil)
 	diffPane.SetSize(120, 30)
 	if got := diffPane.View(); !strings.Contains(got, "thoughtrecipes/parser_test.go") {
 		t.Fatalf("diff render missing file name: %q", got)

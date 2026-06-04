@@ -5,6 +5,8 @@ import (
 	"sort"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -61,6 +63,7 @@ func (s *registrySurface) InitialSubTab(tab TabID) SubTabID {
 func (s *registrySurface) RenderNotification(item NotificationItem) string { return item.Msg }
 
 func (s *registrySurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
+func (s *registrySurface) Theme() *theme.Theme { return nil }
 
 type registryFactory struct {
 	defaultSurface AgentSurface

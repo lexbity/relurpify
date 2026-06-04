@@ -3,6 +3,7 @@ package relurpifyenvtui
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 )
 
@@ -57,6 +58,8 @@ func (s *Surface) NewRegion1(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess 
 func (s *Surface) InitialTab() tui.TabID { return tui.TabWelcome }
 
 func (s *Surface) InitialSubTab(tab tui.TabID) tui.SubTabID { return "" }
+
+func (s *Surface) Theme() *theme.Theme { return nil }
 
 func (s *Surface) RenderNotification(item tui.NotificationItem) string {
 	return item.Msg

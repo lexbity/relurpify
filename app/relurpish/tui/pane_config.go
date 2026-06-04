@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -39,11 +40,13 @@ type ConfigPane struct {
 
 	runtime       RuntimeAdapter
 	width, height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewConfigPane creates a ConfigPane and loads initial state from the runtime.
 func NewConfigPane(rt RuntimeAdapter) *ConfigPane {
-	p := &ConfigPane{runtime: rt}
+	p := &ConfigPane{th: theme.Default(), runtime: rt}
 	if rt != nil {
 		p.classPolicies = rt.GetClassPolicies()
 		p.capabilities = rt.ListCapabilities()
@@ -231,9 +234,9 @@ func (p *ConfigPane) sectionTabs() string {
 	var parts []string
 	for _, l := range labels {
 		if l.s == p.section {
-			parts = append(parts, subtabActiveStyle.Render(l.label))
+			parts = append(parts, p.th.Subhead().Render(l.label))
 		} else {
-			parts = append(parts, subtabInactiveStyle.Render(l.label))
+			parts = append(parts, p.th.Dim().Render(l.label))
 		}
 	}
 	return strings.Join(parts, "  ")
@@ -266,7 +269,7 @@ func (p *ConfigPane) refreshDetail() {
 func (p *ConfigPane) viewPolicies() string {
 	var b strings.Builder
 	b.WriteString(p.sectionTabs() + "\n\n")
-	b.WriteString(sectionHeaderStyle.Render("Capability Class Policies") + "\n")
+	b.WriteString(p.th.Subhead().Render("Capability Class Policies") + "\n")
 
 	rows := p.classPolicyRows()
 	if p.filter != "" {
@@ -279,7 +282,7 @@ func (p *ConfigPane) viewPolicies() string {
 		rows = append([]classPolicyRow(nil), filtered...)
 	}
 	if len(rows) == 0 {
-		b.WriteString(dimStyle.Render("  No class policies configured.") + "\n")
+		b.WriteString(p.th.Dim().Render("  No class policies configured.") + "\n")
 	} else {
 		maxVisible := p.height - 7
 		if maxVisible < 1 {
@@ -295,26 +298,26 @@ func (p *ConfigPane) viewPolicies() string {
 		}
 		for i := start; i < end; i++ {
 			row := rows[i]
-			levelStyle := dimStyle
+			levelStyle := p.th.Dim()
 			levelLabel := string(row.policy)
 			switch row.policy {
 			case agentspec.AgentPermissionAllow:
-				levelStyle = completedStyle
+				levelStyle = p.th.Success()
 			case agentspec.AgentPermissionDeny:
-				levelStyle = diffRemoveStyle
+				levelStyle = p.th.Error()
 			default:
 				levelLabel = "inherit"
 			}
 			line := fmt.Sprintf("  %-30s  %s", row.class, levelStyle.Render(levelLabel))
 			if i == p.sel {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			}
 			b.WriteString(line + "\n")
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("[a] allow  [d] deny  [c] clear  ↑↓ navigate  tab section  [r] refresh"))
+	b.WriteString(p.th.Dim().Render("[a] allow  [d] deny  [c] clear  ↑↓ navigate  tab section  [r] refresh"))
 	return b.String()
 }
 
@@ -328,20 +331,20 @@ func (p *ConfigPane) viewCapabilities() string {
 		}
 		lines = append(lines, line)
 	}
-	detail := []string{dimStyle.Render("No capability selected.")}
+	detail := []string{p.th.Dim().Render("No capability selected.")}
 	if p.capability != nil {
 		detail = []string{
 			p.capability.Meta.Title,
 			"",
-			dimStyle.Render("ID") + "  " + p.capability.Meta.ID,
-			dimStyle.Render("Kind") + "  " + p.capability.Meta.Kind,
-			dimStyle.Render("Runtime") + "  " + p.capability.Meta.RuntimeFamily,
-			dimStyle.Render("Trust") + "  " + p.capability.Meta.TrustClass,
-			dimStyle.Render("Scope") + "  " + fallback(p.capability.Meta.Scope, "n/a"),
-			dimStyle.Render("Exposure") + "  " + fallback(p.capability.Exposure, "n/a"),
-			dimStyle.Render("Provider") + "  " + fallback(p.capability.ProviderID, "n/a"),
-			dimStyle.Render("Risk") + "  " + joinOrNA(p.capability.RiskClasses),
-			dimStyle.Render("Effects") + "  " + joinOrNA(p.capability.EffectClasses),
+			p.th.Dim().Render("ID") + "  " + p.capability.Meta.ID,
+			p.th.Dim().Render("Kind") + "  " + p.capability.Meta.Kind,
+			p.th.Dim().Render("Runtime") + "  " + p.capability.Meta.RuntimeFamily,
+			p.th.Dim().Render("Trust") + "  " + p.capability.Meta.TrustClass,
+			p.th.Dim().Render("Scope") + "  " + fallback(p.capability.Meta.Scope, "n/a"),
+			p.th.Dim().Render("Exposure") + "  " + fallback(p.capability.Exposure, "n/a"),
+			p.th.Dim().Render("Provider") + "  " + fallback(p.capability.ProviderID, "n/a"),
+			p.th.Dim().Render("Risk") + "  " + joinOrNA(p.capability.RiskClasses),
+			p.th.Dim().Render("Effects") + "  " + joinOrNA(p.capability.EffectClasses),
 		}
 		if p.capability.Description != "" {
 			detail = append(detail, "", p.capability.Description)
@@ -350,10 +353,10 @@ func (p *ConfigPane) viewCapabilities() string {
 	return strings.Join([]string{
 		p.sectionTabs(),
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			sectionPanel("Capabilities", widths[0], sectionList(lines, p.sel, p.height-10)),
-			sectionPanel("Detail", widths[1], detail...),
+			sectionPanel(p.th, "Capabilities", widths[0], sectionList(p.th, lines, p.sel, p.height-10)),
+			sectionPanel(p.th, "Detail", widths[1], detail...),
 		),
-		dimStyle.Render("↑↓ navigate  tab section  [r] refresh"),
+		p.th.Dim().Render("↑↓ navigate  tab section  [r] refresh"),
 	}, "\n\n")
 }
 
@@ -363,22 +366,22 @@ func (p *ConfigPane) viewPrompts() string {
 	for _, prompt := range p.prompts {
 		lines = append(lines, fmt.Sprintf("%s  %s  %s", prompt.Meta.Title, prompt.Meta.RuntimeFamily, fallback(prompt.ProviderID, "local")))
 	}
-	detail := []string{dimStyle.Render("No prompt selected.")}
+	detail := []string{p.th.Dim().Render("No prompt selected.")}
 	if p.prompt != nil {
 		detail = []string{
 			p.prompt.Meta.Title,
 			"",
-			dimStyle.Render("ID") + "  " + p.prompt.PromptID,
-			dimStyle.Render("Runtime") + "  " + fallback(p.prompt.Meta.RuntimeFamily, "n/a"),
-			dimStyle.Render("Trust") + "  " + fallback(p.prompt.Meta.TrustClass, "n/a"),
-			dimStyle.Render("Provider") + "  " + fallback(p.prompt.ProviderID, "n/a"),
-			dimStyle.Render("Metadata") + "  " + joinOrNA(p.prompt.Metadata),
+			p.th.Dim().Render("ID") + "  " + p.prompt.PromptID,
+			p.th.Dim().Render("Runtime") + "  " + fallback(p.prompt.Meta.RuntimeFamily, "n/a"),
+			p.th.Dim().Render("Trust") + "  " + fallback(p.prompt.Meta.TrustClass, "n/a"),
+			p.th.Dim().Render("Provider") + "  " + fallback(p.prompt.ProviderID, "n/a"),
+			p.th.Dim().Render("Metadata") + "  " + joinOrNA(p.prompt.Metadata),
 		}
 		if p.prompt.Description != "" {
 			detail = append(detail, "", p.prompt.Description)
 		}
 		for i, message := range p.prompt.Messages {
-			detail = append(detail, "", dimStyle.Render(fmt.Sprintf("Message %d (%s)", i+1, message.Role)))
+			detail = append(detail, "", p.th.Dim().Render(fmt.Sprintf("Message %d (%s)", i+1, message.Role)))
 			for _, block := range message.Content {
 				detail = append(detail, renderStructuredContentPreview(block)...)
 			}
@@ -387,20 +390,20 @@ func (p *ConfigPane) viewPrompts() string {
 	return strings.Join([]string{
 		p.sectionTabs(),
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			sectionPanel("Prompts", widths[0], sectionList(lines, p.sel, p.height-10)),
-			sectionPanel("Detail", widths[1], detail...),
+			sectionPanel(p.th, "Prompts", widths[0], sectionList(p.th, lines, p.sel, p.height-10)),
+			sectionPanel(p.th, "Detail", widths[1], detail...),
 		),
-		dimStyle.Render("↑↓ navigate  tab section  [r] refresh"),
+		p.th.Dim().Render("↑↓ navigate  tab section  [r] refresh"),
 	}, "\n\n")
 }
 
 func (p *ConfigPane) viewTools() string {
 	var b strings.Builder
 	b.WriteString(p.sectionTabs() + "\n\n")
-	b.WriteString(sectionHeaderStyle.Render("Tool Policies") + "\n")
+	b.WriteString(p.th.Subhead().Render("Tool Policies") + "\n")
 
 	if len(p.tools) == 0 {
-		b.WriteString(dimStyle.Render("  No tools registered.") + "\n")
+		b.WriteString(p.th.Dim().Render("  No tools registered.") + "\n")
 	} else {
 		maxVisible := p.height - 7
 		if maxVisible < 1 {
@@ -416,44 +419,44 @@ func (p *ConfigPane) viewTools() string {
 		}
 		for i := start; i < end; i++ {
 			tool := p.tools[i]
-			levelStyle := dimStyle
+			levelStyle := p.th.Dim()
 			levelLabel := string(tool.Policy)
 			switch tool.Policy {
 			case agentspec.AgentPermissionAllow:
-				levelStyle = completedStyle
+				levelStyle = p.th.Success()
 			case agentspec.AgentPermissionDeny:
-				levelStyle = diffRemoveStyle
+				levelStyle = p.th.Error()
 			default:
 				levelLabel = "default"
 			}
 			line := fmt.Sprintf("  %-28s  %s", tool.Name, levelStyle.Render(levelLabel))
 			if i == p.sel {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			}
 			b.WriteString(line + "\n")
 		}
 		if len(p.tools) > maxVisible {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  (%d/%d)", p.sel+1, len(p.tools))) + "\n")
+			b.WriteString(p.th.Dim().Render(fmt.Sprintf("  (%d/%d)", p.sel+1, len(p.tools))) + "\n")
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("[a] allow  [d] deny  [c] clear  ↑↓ navigate  tab section  [r] refresh"))
+	b.WriteString(p.th.Dim().Render("[a] allow  [d] deny  [c] clear  ↑↓ navigate  tab section  [r] refresh"))
 	return b.String()
 }
 
 func (p *ConfigPane) viewContract() string {
 	var b strings.Builder
 	b.WriteString(p.sectionTabs() + "\n\n")
-	b.WriteString(sectionHeaderStyle.Render("Agent Contract") + "\n")
+	b.WriteString(p.th.Subhead().Render("Agent Contract") + "\n")
 
 	c := p.contract
 	if c == nil {
-		b.WriteString(dimStyle.Render("  Contract not available.") + "\n")
+		b.WriteString(p.th.Dim().Render("  Contract not available.") + "\n")
 	} else {
 		rows := []struct{ k, v string }{
 			{"agent", c.AgentID},
-			{"manifest", c.ManifestName + " " + dimStyle.Render(c.ManifestVersion)},
+			{"manifest", c.ManifestName + " " + p.th.Dim().Render(c.ManifestVersion)},
 			{"workspace", c.Workspace},
 			{"capabilities", fmt.Sprintf("%d  admitted: %d  rejected: %d", c.CapabilityCount, c.AdmissionCount, c.RejectedCount)},
 			{"policy rules", fmt.Sprintf("%d", c.PolicyRuleCount)},
@@ -462,22 +465,29 @@ func (p *ConfigPane) viewContract() string {
 			if r.v == "" {
 				continue
 			}
-			b.WriteString(dimStyle.Render(fmt.Sprintf("%-14s", r.k)) + "  " + r.v + "\n")
+			b.WriteString(p.th.Dim().Render(fmt.Sprintf("%-14s", r.k)) + "  " + r.v + "\n")
 		}
 		if len(c.AppliedSkills) > 0 {
-			b.WriteString("\n" + dimStyle.Render("skills\n"))
+			b.WriteString("\n" + p.th.Dim().Render("skills\n"))
 			for _, s := range c.AppliedSkills {
-				b.WriteString(completedStyle.Render("  ✓ ") + s + "\n")
+				b.WriteString(p.th.Success().Render("  ✓ ") + s + "\n")
 			}
 		}
 		if len(c.FailedSkills) > 0 {
 			for _, s := range c.FailedSkills {
-				b.WriteString(diffRemoveStyle.Render("  ✗ ") + s + "\n")
+				b.WriteString(p.th.Error().Render("  ✗ ") + s + "\n")
 			}
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("tab section  [r] refresh"))
+	b.WriteString(p.th.Dim().Render("tab section  [r] refresh"))
 	return b.String()
+}
+
+// SetTheme sets the active semantic style source.
+func (p *ConfigPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

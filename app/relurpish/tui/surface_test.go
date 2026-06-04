@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -104,6 +106,7 @@ func (s *fakeSurface) InitialTab() TabID                                        
 func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             { return "" }
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
+func (s *fakeSurface) Theme() *theme.Theme                                      { return nil }
 func (s *fakeSurface) DoctorReport() DoctorReport                               { return s.doctorReport }
 func (s *fakeSurface) SetDoctorReport(report DoctorReport)                      { s.doctorReport = report }
 func (s *fakeSurface) SetDoctorStatus(status string)                            { s.doctorStatus = status }

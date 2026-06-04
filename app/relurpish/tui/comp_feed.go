@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,12 +21,14 @@ type Feed struct {
 	searchQuery string
 	autoFollow  bool
 	ready       bool
+	th          *theme.Theme
 }
 
 // NewFeed creates an empty Feed.
 func NewFeed() *Feed {
 	return &Feed{
 		autoFollow: true,
+		th:         theme.Default(),
 	}
 }
 
@@ -44,6 +47,13 @@ func (f *Feed) SetSize(w, h int) {
 // SetSpinner updates the spinner view string used while streaming.
 func (f *Feed) SetSpinner(s string) {
 	f.spinnerView = s
+}
+
+// SetTheme sets the active semantic style source for the feed.
+func (f *Feed) SetTheme(th *theme.Theme) {
+	if th != nil {
+		f.th = th
+	}
 }
 
 // Messages returns a copy of the current message list.
@@ -181,43 +191,40 @@ func (f *Feed) renderAll() string {
 	if f.searchQuery != "" {
 		msgs = f.FilterMessages(f.searchQuery)
 		if len(msgs) == 0 {
-			return dimStyle.Render(fmt.Sprintf("No messages matching %q", f.searchQuery))
+			return f.th.Dim().Render(fmt.Sprintf("No messages matching %q", f.searchQuery))
 		}
 	} else if len(msgs) == 0 {
-		return welcomeStyle.Render("Welcome! Type a message or /help for commands.")
+		return f.th.Detail().Render("Welcome! Type a message or /help for commands.")
 	}
 	parts := make([]string, 0, len(msgs))
-	spinner := f.spinnerView
 	for _, msg := range msgs {
-		parts = append(parts, RenderMessage(msg, f.vp.Width, spinner))
+		parts = append(parts, RenderMessage(f.th, msg, f.vp.Width, f.spinnerView))
 	}
 	return strings.Join(parts, "\n")
 }
 
 // RenderMessage converts a Message into a styled string for display.
-// This is the canonical render function (moved from render.go).
-func RenderMessage(msg Message, width int, spinnerView string) string {
+func RenderMessage(th *theme.Theme, msg Message, width int, spinnerView string) string {
 	var b strings.Builder
-	b.WriteString(renderMsgHeader(msg))
+	b.WriteString(renderMsgHeader(th, msg))
 	b.WriteString("\n")
 	switch msg.Role {
 	case RoleUser:
-		b.WriteString(textStyle.Render(msg.Content.Text))
+		b.WriteString(th.Body().Render(msg.Content.Text))
 	case RoleAgent:
-		b.WriteString(renderAgentContent(msg, width, spinnerView))
+		b.WriteString(renderAgentContent(th, msg, width, spinnerView))
 	case RoleSystem:
-		b.WriteString(dimStyle.Render(msg.Content.Text))
+		b.WriteString(th.Dim().Render(msg.Content.Text))
 	}
 	if msg.Metadata.Duration > 0 {
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(fmt.Sprintf("⏱  %s | %d tok", formatDur(msg.Metadata.Duration), msg.Metadata.TokensUsed)))
+		b.WriteString(th.Dim().Render(fmt.Sprintf("⏱  %s | %d tok", formatDur(msg.Metadata.Duration), msg.Metadata.TokensUsed)))
 	}
 	boxW := max(0, width-4)
-	return messageBoxStyle.Width(boxW).Render(b.String())
+	return th.Panel().Width(boxW).Render(b.String())
 }
 
-func renderMsgHeader(msg Message) string {
-	// Format timestamp: show just time for today, date+time for older messages
+func renderMsgHeader(th *theme.Theme, msg Message) string {
 	ts := formatMessageTimestamp(msg.Timestamp)
 	icon, role := "💬", "User"
 	switch msg.Role {
@@ -228,50 +235,45 @@ func renderMsgHeader(msg Message) string {
 	case RoleSystem:
 		icon, role = "⚙", "System"
 	}
-	return headerStyle.Render(fmt.Sprintf("%s [%s] %s", icon, ts, role))
+	return th.Header().Render(fmt.Sprintf("%s [%s] %s", icon, ts, role))
 }
 
-// formatMessageTimestamp returns a formatted timestamp string.
-// For messages from today, shows "15:04" (HH:MM).
-// For messages from earlier dates, shows "Jan 02 15:04" (Mon DD HH:MM).
 func formatMessageTimestamp(t time.Time) string {
 	now := time.Now()
-	// Check if same day (year, month, day match)
 	sameDay := t.Year() == now.Year() && t.Month() == now.Month() && t.Day() == now.Day()
-
 	if sameDay {
 		return t.Format("15:04")
 	}
 	return t.Format("Jan 02 15:04")
 }
 
-func renderAgentContent(msg Message, width int, spinnerView string) string {
+func renderAgentContent(th *theme.Theme, msg Message, width int, spinnerView string) string {
 	var b strings.Builder
 	if len(msg.Content.Thinking) > 0 {
-		b.WriteString(renderThinkingBlock(msg.Content.Thinking, msg.Content.Expanded["thinking"], spinnerView))
+		b.WriteString(renderThinkingBlock(th, msg.Content.Thinking, msg.Content.Expanded["thinking"], spinnerView))
 		b.WriteString("\n\n")
 	}
 	if msg.Content.Plan != nil {
-		b.WriteString(renderPlanBlock(msg.Content.Plan, msg.Content.Expanded["plan"], spinnerView))
+		b.WriteString(renderPlanBlock(th, msg.Content.Plan, msg.Content.Expanded["plan"], spinnerView))
 		b.WriteString("\n\n")
 	}
 	if len(msg.Content.Changes) > 0 {
-		b.WriteString(renderChangesBlock(msg.Content.Changes, msg.Content.Expanded["changes"], width))
+		b.WriteString(renderChangesBlock(th, msg.Content.Changes, msg.Content.Expanded["changes"], width))
 		b.WriteString("\n\n")
 	}
 	if msg.Content.Text != "" {
-		b.WriteString(textStyle.Render(msg.Content.Text))
+		b.WriteString(th.Body().Render(msg.Content.Text))
 	}
 	if msg.Content.Result != nil {
 		if msg.Content.Text != "" {
 			b.WriteString("\n\n")
 		}
-		b.WriteString(renderStructuredResultBlock(msg.Content.Result, width))
+		b.WriteString(renderStructuredResultBlock(th, msg.Content.Result, width))
 	}
 	return b.String()
 }
 
-func renderStructuredResultBlock(result *StructuredResult, width int) string {
+func renderStructuredResultBlock(th *theme.Theme, result *StructuredResult, width int) string {
 	if result == nil {
 		return ""
 	}
@@ -288,21 +290,21 @@ func renderStructuredResultBlock(result *StructuredResult, width int) string {
 	if result.Envelope != nil && result.Envelope.CapabilityName != "" {
 		headerBits = append(headerBits, "capability="+result.Envelope.CapabilityName)
 	}
-	b.WriteString(sectionHeaderStyle.Render("🧾 Result"))
+	b.WriteString(th.Subhead().Render("🧾 Result"))
 	b.WriteString("\n")
-	b.WriteString(detailStyle.Render(strings.Join(headerBits, " | ")))
+	b.WriteString(th.Detail().Render(strings.Join(headerBits, " | ")))
 	if result.Envelope != nil {
 		b.WriteString("\n")
-		b.WriteString(renderResultEnvelope(result.Envelope, width))
+		b.WriteString(renderResultEnvelope(th, result.Envelope, width))
 	}
 	if result.ErrorText != "" {
 		b.WriteString("\n")
-		b.WriteString(diffRemoveStyle.Render("error: " + result.ErrorText))
+		b.WriteString(th.Error().Render("error: " + result.ErrorText))
 	}
 	return b.String()
 }
 
-func renderResultEnvelope(envelope *StructuredResultEnvelope, width int) string {
+func renderResultEnvelope(th *theme.Theme, envelope *StructuredResultEnvelope, width int) string {
 	if envelope == nil {
 		return ""
 	}
@@ -321,32 +323,32 @@ func renderResultEnvelope(envelope *StructuredResultEnvelope, width int) string 
 	}
 	var b strings.Builder
 	if len(parts) > 0 {
-		b.WriteString(dimStyle.Render(strings.Join(parts, " | ")))
+		b.WriteString(th.Dim().Render(strings.Join(parts, " | ")))
 	}
 	if envelope.Insertion.Reason != "" {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(detailStyle.Render("reason: " + envelope.Insertion.Reason))
+		b.WriteString(th.Detail().Render("reason: " + envelope.Insertion.Reason))
 	}
 	if envelope.Approval != nil {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(renderApprovalBinding(envelope.Approval))
+		b.WriteString(renderApprovalBinding(th, envelope.Approval))
 	}
 	if len(envelope.Blocks) > 0 {
 		for _, block := range envelope.Blocks {
 			if b.Len() > 0 {
 				b.WriteString("\n")
 			}
-			b.WriteString(renderStructuredContentBlock(block, width))
+			b.WriteString(renderStructuredContentBlock(th, block, width))
 		}
 	}
 	return b.String()
 }
 
-func renderApprovalBinding(approval *StructuredApprovalBinding) string {
+func renderApprovalBinding(th *theme.Theme, approval *StructuredApprovalBinding) string {
 	if approval == nil {
 		return ""
 	}
@@ -369,23 +371,23 @@ func renderApprovalBinding(approval *StructuredApprovalBinding) string {
 	if len(approval.EffectClasses) > 0 {
 		fields = append(fields, "effects="+strings.Join(approval.EffectClasses, ","))
 	}
-	return detailStyle.Render("approval: " + strings.Join(fields, " | "))
+	return th.Detail().Render("approval: " + strings.Join(fields, " | "))
 }
 
-func renderStructuredContentBlock(block StructuredContentBlock, width int) string {
+func renderStructuredContentBlock(th *theme.Theme, block StructuredContentBlock, width int) string {
 	var b strings.Builder
 	title := block.Type
 	if block.Summary != "" {
 		title = block.Summary
 	}
-	b.WriteString(detailStyle.Render("[" + block.Type + "] " + title))
+	b.WriteString(th.Detail().Render("[" + block.Type + "] " + title))
 	if block.Body != "" {
 		body := strings.TrimSpace(block.Body)
 		if block.Type == "structured" || block.Type == "embedded-resource" {
 			body = indentStructuredBody(body, max(20, width-10))
 		}
 		b.WriteString("\n")
-		b.WriteString(textStyle.Render(body))
+		b.WriteString(th.Body().Render(body))
 	}
 	if len(block.Provenance) > 0 {
 		pairs := make([]string, 0, len(block.Provenance))
@@ -396,7 +398,7 @@ func renderStructuredContentBlock(block StructuredContentBlock, width int) strin
 		}
 		if len(pairs) > 0 {
 			b.WriteString("\n")
-			b.WriteString(dimStyle.Render(strings.Join(pairs, " | ")))
+			b.WriteString(th.Dim().Render(strings.Join(pairs, " | ")))
 		}
 	}
 	return b.String()
@@ -415,16 +417,16 @@ func indentStructuredBody(body string, _ int) string {
 	return body
 }
 
-func renderThinkingBlock(steps []ThinkingStep, expanded bool, spinnerView string) string {
+func renderThinkingBlock(th *theme.Theme, steps []ThinkingStep, expanded bool, spinnerView string) string {
 	var b strings.Builder
 	toggle := "[−]"
 	if !expanded {
 		toggle = "[+]"
 	}
-	b.WriteString(sectionHeaderStyle.Render(fmt.Sprintf("🤔 Thinking %s", dimStyle.Render(toggle))))
+	b.WriteString(th.Subhead().Render(fmt.Sprintf("🤔 Thinking %s", th.Dim().Render(toggle))))
 	b.WriteString("\n")
 	if !expanded {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("%d steps", len(steps))))
+		b.WriteString(th.Dim().Render(fmt.Sprintf("%d steps", len(steps))))
 		return b.String()
 	}
 	for i, step := range steps {
@@ -439,15 +441,15 @@ func renderThinkingBlock(steps []ThinkingStep, expanded bool, spinnerView string
 		}
 		dur := ""
 		if !step.EndTime.IsZero() {
-			dur = dimStyle.Render(fmt.Sprintf(" (%s)", formatDur(step.EndTime.Sub(step.StartTime))))
+			dur = th.Dim().Render(fmt.Sprintf(" (%s)", formatDur(step.EndTime.Sub(step.StartTime))))
 		}
-		b.WriteString(fmt.Sprintf("%s %s %s%s\n", dimStyle.Render(prefix), icon, step.Description, dur))
+		b.WriteString(fmt.Sprintf("%s %s %s%s\n", th.Dim().Render(prefix), icon, step.Description, dur))
 		for _, d := range step.Details {
 			sub := "│ "
 			if isLast {
 				sub = "  "
 			}
-			b.WriteString(dimStyle.Render(sub) + "  " + detailStyle.Render(d) + "\n")
+			b.WriteString(th.Dim().Render(sub) + "  " + th.Detail().Render(d) + "\n")
 		}
 	}
 	return b.String()
@@ -468,7 +470,7 @@ func stepIcon(t StepType) string {
 	}
 }
 
-func renderPlanBlock(plan *TaskPlan, expanded bool, spinnerView string) string {
+func renderPlanBlock(th *theme.Theme, plan *TaskPlan, expanded bool, spinnerView string) string {
 	var b strings.Builder
 	done := 0
 	for _, t := range plan.Tasks {
@@ -480,7 +482,7 @@ func renderPlanBlock(plan *TaskPlan, expanded bool, spinnerView string) string {
 	if !expanded {
 		toggle = "[+]"
 	}
-	b.WriteString(sectionHeaderStyle.Render(fmt.Sprintf("💡 Plan (%d/%d) %s", done, len(plan.Tasks), dimStyle.Render(toggle))))
+	b.WriteString(th.Subhead().Render(fmt.Sprintf("💡 Plan (%d/%d) %s", done, len(plan.Tasks), th.Dim().Render(toggle))))
 	b.WriteString("\n")
 	if !expanded {
 		return b.String()
@@ -490,22 +492,22 @@ func renderPlanBlock(plan *TaskPlan, expanded bool, spinnerView string) string {
 		var style lipgloss.Style
 		switch t.Status {
 		case TaskCompleted:
-			icon, style = "✅", completedStyle
+			icon, style = "✅", th.Success()
 		case TaskInProgress:
-			icon, style = spinnerView, inProgressStyle
+			icon, style = spinnerView, th.Warning()
 		default:
-			icon, style = "☐", pendingStyle
+			icon, style = "☐", th.Pending()
 		}
 		dur := ""
 		if t.Status == TaskCompleted && !t.EndTime.IsZero() {
-			dur = dimStyle.Render(fmt.Sprintf(" (%s)", formatDur(t.EndTime.Sub(t.StartTime))))
+			dur = th.Dim().Render(fmt.Sprintf(" (%s)", formatDur(t.EndTime.Sub(t.StartTime))))
 		}
 		b.WriteString(fmt.Sprintf("%s %s%s\n", icon, style.Render(t.Description), dur))
 	}
 	return b.String()
 }
 
-func renderChangesBlock(changes []FileChange, expanded bool, width int) string {
+func renderChangesBlock(th *theme.Theme, changes []FileChange, expanded bool, width int) string {
 	var b strings.Builder
 	added, removed := 0, 0
 	for _, c := range changes {
@@ -516,16 +518,16 @@ func renderChangesBlock(changes []FileChange, expanded bool, width int) string {
 	if !expanded {
 		toggle = "[+]"
 	}
-	b.WriteString(sectionHeaderStyle.Render(fmt.Sprintf("✏  Changes (%d files, +%d -%d) %s", len(changes), added, removed, dimStyle.Render(toggle))))
+	b.WriteString(th.Subhead().Render(fmt.Sprintf("✏  Changes (%d files, +%d -%d) %s", len(changes), added, removed, th.Dim().Render(toggle))))
 	b.WriteString("\n")
 	for i, c := range changes {
 		if i > 0 && expanded {
 			b.WriteString("\n")
 		}
 		if expanded {
-			b.WriteString(renderChangeFull(c, width))
+			b.WriteString(renderChangeFull(th, c, width))
 		} else {
-			b.WriteString(renderChangeCompact(c) + "\n")
+			b.WriteString(renderChangeCompact(th, c) + "\n")
 		}
 	}
 	if expanded {
@@ -538,13 +540,13 @@ func renderChangesBlock(changes []FileChange, expanded bool, width int) string {
 		}
 		if pending {
 			b.WriteString("\n")
-			b.WriteString(buttonStyle.Render("/approve") + "  " + buttonStyle.Render("/reject"))
+			b.WriteString(th.Button(true).Render("/approve") + "  " + th.Button(true).Render("/reject"))
 		}
 	}
 	return b.String()
 }
 
-func renderChangeCompact(c FileChange) string {
+func renderChangeCompact(th *theme.Theme, c FileChange) string {
 	icon := "~"
 	switch c.Type {
 	case ChangeCreate:
@@ -559,20 +561,20 @@ func renderChangeCompact(c FileChange) string {
 	case StatusRejected:
 		statusIcon = "❌"
 	}
-	return fmt.Sprintf("%s %s %s %s", statusIcon, filePathStyle.Render(c.Path), dimStyle.Render(icon), dimStyle.Render(fmt.Sprintf("+%d -%d", c.LinesAdded, c.LinesRemoved)))
+	return fmt.Sprintf("%s %s %s %s", statusIcon, th.Subhead().Render(c.Path), th.Dim().Render(icon), th.Dim().Render(fmt.Sprintf("+%d -%d", c.LinesAdded, c.LinesRemoved)))
 }
 
-func renderChangeFull(c FileChange, width int) string {
+func renderChangeFull(th *theme.Theme, c FileChange, width int) string {
 	var b strings.Builder
-	b.WriteString(renderChangeCompact(c))
+	b.WriteString(renderChangeCompact(th, c))
 	b.WriteString("\n")
 	if c.Expanded {
-		b.WriteString(diffBoxStyle.Width(max(0, width-6)).Render(renderDiffText(c.Diff)))
+		b.WriteString(th.Box().Width(max(0, width-6)).Render(renderDiffText(th, c.Diff)))
 	}
 	return b.String()
 }
 
-func renderDiffText(diff string) string {
+func renderDiffText(th *theme.Theme, diff string) string {
 	lines := strings.Split(diff, "\n")
 	rendered := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -580,14 +582,14 @@ func renderDiffText(diff string) string {
 			rendered = append(rendered, "")
 			continue
 		}
-		style := diffContextStyle
+		style := th.Body()
 		switch line[0] {
 		case '+':
-			style = diffAddStyle
+			style = th.Success()
 		case '-':
-			style = diffRemoveStyle
+			style = th.Error()
 		case '@':
-			style = diffHeaderStyle
+			style = th.Subhead()
 		}
 		rendered = append(rendered, style.Render(line))
 	}

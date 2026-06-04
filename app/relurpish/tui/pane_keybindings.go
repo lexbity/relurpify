@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"os"
 	"strings"
@@ -45,10 +49,12 @@ type KeybindingPane struct {
 
 	width  int
 	height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 func NewKeybindingPane(rt keybindingRuntime) *KeybindingPane {
-	p := &KeybindingPane{runtime: rt}
+	p := &KeybindingPane{th: theme.Default(), runtime: rt}
 	p.loadPersistedBindings()
 	p.Refresh()
 	return p
@@ -148,25 +154,25 @@ func (p *KeybindingPane) View() string {
 		}
 		line := fmt.Sprintf("%-24s %-18s %-10s %s", row.Action, keyStr, row.Scope, row.Source)
 		if p.rowMatchesSelected(row) {
-			line = panelItemActiveStyle.Render(line)
+			line = p.th.Active().Render(line)
 		}
 		lines = append(lines, line)
 	}
-	footer := dimStyle.Render("up/down navigate  e rebind  r reset  R reset all")
+	footer := p.th.Dim().Render("up/down navigate  e rebind  r reset  R reset all")
 	if p.filter != "" {
-		footer = dimStyle.Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
+		footer = p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
 	}
 	if p.waitingForKey {
-		footer = warningText(fmt.Sprintf("Rebind %s: press the new key", p.editLabel)) + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Rebind %s: press the new key", p.editLabel)) + "\n" + footer
 	}
 	if p.confirm != nil {
-		footer = warningText(fmt.Sprintf("Key %s is bound to %q. Reassign and clear old binding? [y/n]", p.confirm.Key, p.confirm.Other.Action)) + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Key %s is bound to %q. Reassign and clear old binding? [y/n]", p.confirm.Key, p.confirm.Other.Action)) + "\n" + footer
 	}
 	if p.status != "" {
-		footer = dimStyle.Render(p.status) + "\n" + footer
+		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
 	return strings.Join([]string{
-		sectionPanel("Keybindings", p.width, sectionList(lines, p.selectedRowIndex(), p.height-8)),
+		sectionPanel(p.th, "Keybindings", p.width, sectionList(p.th, lines, p.selectedRowIndex(), p.height-8)),
 		footer,
 	}, "\n\n")
 }
@@ -383,4 +389,11 @@ func (t keybindingTarget) bindingKeys() []string {
 		return nil
 	}
 	return t.Binding.Keys()
+}
+
+// SetTheme sets the active semantic style source.
+func (p *KeybindingPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

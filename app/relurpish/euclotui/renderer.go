@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-// RenderInteractionFrame converts an InteractionFrame into a tui.Message.
-func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
+func RenderInteractionFrame(th *theme.Theme, frame interaction.InteractionFrame) tui.Message {
 	msg := tui.Message{
 		ID:        tui.GenerateID(),
 		Role:      tui.RoleAgent,
@@ -22,80 +22,79 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 
 	switch frame.Type {
 	case interaction.FrameCandidates:
-		msg.Content.Text = renderCandidates(frame)
+		msg.Content.Text = renderCandidates(th, frame)
 	case interaction.FrameComparison:
-		msg.Content.Text = renderComparison(frame)
+		msg.Content.Text = renderComparison(th, frame)
 	case interaction.FrameDraft:
-		msg.Content.Text = renderDraft(frame)
+		msg.Content.Text = renderDraft(th, frame)
 	case interaction.FrameResultType:
-		msg.Content.Text = renderFrameResult(frame)
+		msg.Content.Text = renderFrameResult(th, frame)
 	case interaction.FrameStatus:
-		msg.Content.Text = renderStatus(frame)
+		msg.Content.Text = renderStatus(th, frame)
 	case interaction.FrameSummary:
-		msg.Content.Text = renderSummary(frame)
+		msg.Content.Text = renderSummary(th, frame)
 	case interaction.FrameTransition:
-		msg.Content.Text = renderTransition(frame)
+		msg.Content.Text = renderTransition(th, frame)
 	case interaction.FrameSessionList:
-		msg.Content.Text = renderSessionList(frame)
+		msg.Content.Text = renderSessionList(th, frame)
 	case interaction.FrameSessionListEmpty:
-		msg.Content.Text = renderSessionListEmpty(frame)
+		msg.Content.Text = renderSessionListEmpty(th, frame)
 	case interaction.FrameSessionResuming:
-		msg.Content.Text = renderSessionResuming(frame)
+		msg.Content.Text = renderSessionResuming(th, frame)
 	case interaction.FrameSessionResumeError:
-		msg.Content.Text = renderSessionResumeError(frame)
+		msg.Content.Text = renderSessionResumeError(th, frame)
 	case interaction.FrameScopeConfirmation:
-		msg.Content.Text = renderSelectionFrame(frame, "Scope Confirmation")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Scope Confirmation")
 	case interaction.FrameIntentClarification:
-		msg.Content.Text = renderSelectionFrame(frame, "Clarification")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Clarification")
 	case interaction.FrameCandidateSelection:
-		msg.Content.Text = renderSelectionFrame(frame, "Candidate Selection")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Candidate Selection")
 	case interaction.FrameThoughtRecipeSelection:
-		msg.Content.Text = renderSelectionFrame(frame, "Thoughtrecipe Selection")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Thoughtrecipe Selection")
 	case interaction.FrameCapabilitySelection:
-		msg.Content.Text = renderSelectionFrame(frame, "Capability Selection")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Capability Selection")
 	case interaction.FrameHITLApproval:
-		msg.Content.Text = renderSelectionFrame(frame, "Approval Required")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Approval Required")
 	case interaction.FrameSessionResume:
-		msg.Content.Text = renderSelectionFrame(frame, "Session Resume")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Session Resume")
 	case interaction.FrameBackgroundJobStatus:
-		msg.Content.Text = renderSelectionFrame(frame, "Background Job Status")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Background Job Status")
 	case interaction.FrameExecutionSummary:
-		msg.Content.Text = renderSelectionFrame(frame, "Execution Summary")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Execution Summary")
 	case interaction.FrameVerificationEvidence:
-		msg.Content.Text = renderSelectionFrame(frame, "Verification Evidence")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Verification Evidence")
 	case interaction.FrameOutcomeFeedback:
-		msg.Content.Text = renderSelectionFrame(frame, "Outcome Feedback")
+		msg.Content.Text = renderSelectionFrame(th, frame, "Outcome Feedback")
 	default:
 		msg.Content.Text = fmt.Sprintf("[%s]", frame.Type)
 	}
-
 	return msg
 }
 
-func renderCandidates(frame interaction.InteractionFrame) string {
+func renderCandidates(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.CandidatesContent)
 	if !ok {
 		return "[candidates]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Candidates") + "\n")
+	b.WriteString(th.Subhead().Render("Candidates") + "\n")
 	for i, c := range content.Candidates {
 		label := fmt.Sprintf("[%d] %s", i+1, c.ID)
-		b.WriteString(headerStyle.Render(label) + "\n")
+		b.WriteString(th.Header().Render(label) + "\n")
 		b.WriteString("  " + c.Summary + "\n")
 		for k, v := range c.Properties {
-			b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(k+":"), v))
+			b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(k+":"), v))
 		}
 	}
 	if content.RecommendedID != "" {
-		b.WriteString(dimStyle.Render("\nRecommended: ") + content.RecommendedID + "\n")
+		b.WriteString(th.Dim().Render("\nRecommended: ") + content.RecommendedID + "\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderSelectionFrame(frame interaction.InteractionFrame, title string) string {
+func renderSelectionFrame(th *theme.Theme, frame interaction.InteractionFrame, title string) string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render(title) + "\n")
+	b.WriteString(th.Subhead().Render(title) + "\n")
 	selection := frame.Selection
 	var typed interaction.SelectionFrame
 	if selection != nil {
@@ -125,13 +124,13 @@ func renderSelectionFrame(frame interaction.InteractionFrame, title string) stri
 			}
 			prefix := fmt.Sprintf("[%d]", i+1)
 			if slot.Default {
-				prefix = headerStyle.Render(prefix + "*")
+				prefix = th.Header().Render(prefix + "*")
 			} else {
-				prefix = headerStyle.Render(prefix)
+				prefix = th.Header().Render(prefix)
 			}
 			line := fmt.Sprintf("  %s %s", prefix, label)
 			if slot.Risk != "" {
-				line += fmt.Sprintf(" %s", dimStyle.Render("risk:"+slot.Risk))
+				line += fmt.Sprintf(" %s", th.Dim().Render("risk:"+slot.Risk))
 			}
 			b.WriteString(line + "\n")
 		}
@@ -140,34 +139,34 @@ func renderSelectionFrame(frame interaction.InteractionFrame, title string) stri
 		for i, choice := range frame.Choices {
 			prefix := fmt.Sprintf("[%d]", i+1)
 			if choice == defaultChoice {
-				prefix = headerStyle.Render(prefix + "*")
+				prefix = th.Header().Render(prefix + "*")
 			} else {
-				prefix = headerStyle.Render(prefix)
+				prefix = th.Header().Render(prefix)
 			}
 			b.WriteString(fmt.Sprintf("  %s %s\n", prefix, choice))
 		}
 	}
 	if defaultChoice != "" {
-		b.WriteString("\n" + dimStyle.Render("default: ") + defaultChoice + "\n")
+		b.WriteString("\n" + th.Dim().Render("default: ") + defaultChoice + "\n")
 	}
 	resume := frame.Resume
 	if selection != nil && selection.Resume != nil {
 		resume = selection.Resume
 	}
 	if resume != nil {
-		b.WriteString("\n" + dimStyle.Render("resume: ") + renderResumeMetadata(*resume) + "\n")
+		b.WriteString("\n" + th.Dim().Render("resume: ") + renderResumeMetadata(*resume) + "\n")
 	}
 	if frame.Response != nil {
 		if choice := strings.TrimSpace(frame.Response.ChosenSlot); choice != "" {
-			b.WriteString(dimStyle.Render("response: ") + choice + "\n")
+			b.WriteString(th.Dim().Render("response: ") + choice + "\n")
 		}
 	}
 	if len(frame.Payload) > 0 {
-		if payload := renderFramePayload(frame.Payload); payload != "" {
+		if payload := renderFramePayload(th, frame.Payload); payload != "" {
 			b.WriteString("\n" + payload)
 		}
 	}
-	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+	return th.Panel().Render(strings.TrimSpace(b.String()))
 }
 
 func selectionOptionsFromSlots(slots []interaction.ActionSlot) []interaction.SelectionOption {
@@ -188,219 +187,216 @@ func selectionOptionsFromSlots(slots []interaction.ActionSlot) []interaction.Sel
 	return out
 }
 
-func renderComparison(frame interaction.InteractionFrame) string {
+func renderComparison(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.ComparisonContent)
 	if !ok {
 		return "[comparison]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Comparison") + "\n")
+	b.WriteString(th.Subhead().Render("Comparison") + "\n")
 	if len(content.Dimensions) > 0 {
-		// Header row: dimensions as column headers.
 		b.WriteString(fmt.Sprintf("  %-12s", ""))
 		for _, dim := range content.Dimensions {
-			b.WriteString(fmt.Sprintf("%-15s", dimStyle.Render(dim)))
+			b.WriteString(fmt.Sprintf("%-15s", th.Dim().Render(dim)))
 		}
 		b.WriteString("\n")
-		// Matrix rows.
 		for i, row := range content.Matrix {
 			label := fmt.Sprintf("Option %d", i+1)
-			b.WriteString(fmt.Sprintf("  %-12s", headerStyle.Render(label)))
+			b.WriteString(fmt.Sprintf("  %-12s", th.Header().Render(label)))
 			for _, cell := range row {
 				b.WriteString(fmt.Sprintf("%-15s", cell))
 			}
 			b.WriteString("\n")
 		}
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderDraft(frame interaction.InteractionFrame) string {
+func renderDraft(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.DraftContent)
 	if !ok {
 		return "[draft]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Draft") + "\n")
+	b.WriteString(th.Subhead().Render("Draft") + "\n")
 	if content.Kind != "" {
-		b.WriteString(dimStyle.Render("("+content.Kind+")") + "\n")
+		b.WriteString(th.Dim().Render("("+content.Kind+")") + "\n")
 	}
 	for i, item := range content.Items {
 		marker := fmt.Sprintf("%d.", i+1)
 		if item.Editable {
 			marker = "~" + marker
 		}
-		b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(marker), item.Content))
+		b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(marker), item.Content))
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderFrameResult(frame interaction.InteractionFrame) string {
-	// Handle both ResultContent and FindingsContent.
+func renderFrameResult(th *theme.Theme, frame interaction.InteractionFrame) string {
 	switch content := frame.Content.(type) {
 	case interaction.ResultContent:
-		return renderResultContent(content)
+		return renderResultContent(th, content)
 	case interaction.FindingsContent:
-		return renderFindingsContent(content)
+		return renderFindingsContent(th, content)
 	default:
-		return eucloFrameStyle.Render("[result]")
+		return th.Panel().Render("[result]")
 	}
 }
 
-func renderResultContent(content interaction.ResultContent) string {
+func renderResultContent(th *theme.Theme, content interaction.ResultContent) string {
 	var b strings.Builder
 	statusLabel := content.Status
 	switch content.Status {
 	case "passed", "completed":
-		statusLabel = completedStyle.Render("✓ " + content.Status)
+		statusLabel = th.Success().Render("✓ " + content.Status)
 	case "failed":
-		statusLabel = diffRemoveStyle.Render("✗ " + content.Status)
+		statusLabel = th.Error().Render("✗ " + content.Status)
 	case "partial":
-		statusLabel = inProgressStyle.Render("◐ " + content.Status)
+		statusLabel = th.Warning().Render("◐ " + content.Status)
 	}
-	b.WriteString(sectionHeaderStyle.Render("Result") + " " + statusLabel + "\n")
+	b.WriteString(th.Subhead().Render("Result") + " " + statusLabel + "\n")
 	for _, ev := range content.Evidence {
 		b.WriteString(fmt.Sprintf("  %s %s\n",
-			dimStyle.Render(ev.Kind+":"),
+			th.Dim().Render(ev.Kind+":"),
 			ev.Detail,
 		))
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderFindingsContent(content interaction.FindingsContent) string {
+func renderFindingsContent(th *theme.Theme, content interaction.FindingsContent) string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Findings") + "\n")
+	b.WriteString(th.Subhead().Render("Findings") + "\n")
 	for _, f := range content.Critical {
-		b.WriteString(eucloFindingCriticalStyle.Render("  CRITICAL "))
+		b.WriteString(th.Error().Bold(true).Render("  CRITICAL "))
 		if f.Location != "" {
-			b.WriteString(filePathStyle.Render(f.Location) + " ")
+			b.WriteString(th.Subhead().Render(f.Location) + " ")
 		}
 		b.WriteString(f.Description + "\n")
 	}
 	for _, f := range content.Warning {
-		b.WriteString(eucloFindingWarningStyle.Render("  WARNING  "))
+		b.WriteString(th.Warning().Render("  WARNING  "))
 		if f.Location != "" {
-			b.WriteString(filePathStyle.Render(f.Location) + " ")
+			b.WriteString(th.Subhead().Render(f.Location) + " ")
 		}
 		b.WriteString(f.Description + "\n")
 	}
 	for _, f := range content.Info {
-		b.WriteString(eucloFindingInfoStyle.Render("  INFO     "))
+		b.WriteString(th.Dim().Render("  INFO     "))
 		if f.Location != "" {
-			b.WriteString(filePathStyle.Render(f.Location) + " ")
+			b.WriteString(th.Subhead().Render(f.Location) + " ")
 		}
 		b.WriteString(f.Description + "\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderStatus(frame interaction.InteractionFrame) string {
+func renderStatus(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.StatusContent)
 	if !ok {
 		return "[status]"
 	}
-	return dimStyle.Render("⟳ " + content.Message)
+	return th.Dim().Render("⟳ " + content.Message)
 }
 
-func renderSummary(frame interaction.InteractionFrame) string {
+func renderSummary(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.SummaryContent)
 	if !ok {
 		return "[summary]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Summary") + "\n")
+	b.WriteString(th.Subhead().Render("Summary") + "\n")
 	if content.Description != "" {
 		b.WriteString(content.Description + "\n")
 	}
 	if len(content.Artifacts) > 0 {
-		b.WriteString(dimStyle.Render("  Artifacts: ") + strings.Join(content.Artifacts, ", ") + "\n")
+		b.WriteString(th.Dim().Render("  Artifacts: ") + strings.Join(content.Artifacts, ", ") + "\n")
 	}
 	if len(content.Changes) > 0 {
-		b.WriteString(dimStyle.Render("  Changes: ") + strings.Join(content.Changes, ", ") + "\n")
+		b.WriteString(th.Dim().Render("  Changes: ") + strings.Join(content.Changes, ", ") + "\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderTransition(frame interaction.InteractionFrame) string {
+func renderTransition(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.TransitionContent)
 	if !ok {
 		return "[transition]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Mode Transition") + "\n")
+	b.WriteString(th.Subhead().Render("Mode Transition") + "\n")
 	b.WriteString(fmt.Sprintf("  %s → %s\n",
-		eucloPhaseStyle.Render(content.FromMode),
-		eucloPhaseActiveStyle.Render(content.ToMode),
+		th.Header().Render(content.FromMode),
+		th.Warning().Render(content.ToMode),
 	))
 	if content.Reason != "" {
-		b.WriteString(dimStyle.Render("  "+content.Reason) + "\n")
+		b.WriteString(th.Dim().Render("  "+content.Reason) + "\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderSessionList(frame interaction.InteractionFrame) string {
+func renderSessionList(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(interaction.SessionListContent)
 	if !ok {
 		return "[session list]"
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Resume Session") + "\n")
+	b.WriteString(th.Subhead().Render("Resume Session") + "\n")
 	if content.Workspace != "" {
-		b.WriteString(dimStyle.Render("Workspace: ") + content.Workspace + "\n")
+		b.WriteString(th.Dim().Render("Workspace: ") + content.Workspace + "\n")
 	}
-	b.WriteString(dimStyle.Render("Select a previous session to resume, or skip to start new:") + "\n\n")
+	b.WriteString(th.Dim().Render("Select a previous session to resume, or skip to start new:") + "\n\n")
 	for _, s := range content.Sessions {
-		index := headerStyle.Render(fmt.Sprintf("[%d]", s.Index))
+		index := th.Header().Render(fmt.Sprintf("[%d]", s.Index))
 		mode := ""
 		if s.Mode != "" {
-			mode = dimStyle.Render("(" + s.Mode + ")")
+			mode = th.Dim().Render("(" + s.Mode + ")")
 		}
 		status := ""
 		if s.HasBKCContext {
-			status = completedStyle.Render(" ✓BKC")
+			status = th.Success().Render(" ✓BKC")
 		}
 		b.WriteString(fmt.Sprintf("%s %s %s\n", index, s.Instruction, mode))
-		b.WriteString(dimStyle.Render(fmt.Sprintf("    ID: %s%s\n", s.WorkflowID, status)))
+		b.WriteString(th.Dim().Render(fmt.Sprintf("    ID: %s%s\n", s.WorkflowID, status)))
 		if s.LastActiveAt != "" {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("    Last active: %s\n", s.LastActiveAt)))
+			b.WriteString(th.Dim().Render(fmt.Sprintf("    Last active: %s\n", s.LastActiveAt)))
 		}
 		b.WriteString("\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderSessionListEmpty(frame interaction.InteractionFrame) string {
+func renderSessionListEmpty(th *theme.Theme, frame interaction.InteractionFrame) string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Resume Session") + "\n")
+	b.WriteString(th.Subhead().Render("Resume Session") + "\n")
 	if content, ok := frame.Content.(string); ok && content != "" {
 		b.WriteString(content + "\n")
 	} else {
 		b.WriteString("No previous sessions found for this workspace.\n")
 	}
-	return eucloFrameStyle.Render(b.String())
+	return th.Panel().Render(b.String())
 }
 
-func renderSessionResuming(frame interaction.InteractionFrame) string {
+func renderSessionResuming(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(string)
 	if !ok {
 		content = "Resuming session..."
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Session Resume") + "\n")
-	b.WriteString(inProgressStyle.Render("⟳ ") + content + "\n")
-	return eucloFrameStyle.Render(b.String())
+	b.WriteString(th.Subhead().Render("Session Resume") + "\n")
+	b.WriteString(th.Warning().Render("⟳ ") + content + "\n")
+	return th.Panel().Render(b.String())
 }
 
-func renderSessionResumeError(frame interaction.InteractionFrame) string {
+func renderSessionResumeError(th *theme.Theme, frame interaction.InteractionFrame) string {
 	content, ok := frame.Content.(string)
 	if !ok {
 		content = "Could not resume session."
 	}
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Session Resume") + "\n")
-	b.WriteString(diffRemoveStyle.Render("✗ ") + content + "\n")
-	return eucloFrameStyle.Render(b.String())
+	b.WriteString(th.Subhead().Render("Session Resume") + "\n")
+	b.WriteString(th.Error().Render("✗ ") + content + "\n")
+	return th.Panel().Render(b.String())
 }
 
 func renderResumeMetadata(resume interaction.ClarificationResumeMetadata) string {
@@ -426,7 +422,7 @@ func renderResumeMetadata(resume interaction.ClarificationResumeMetadata) string
 	return strings.Join(parts, " ")
 }
 
-func renderFramePayload(payload map[string]any) string {
+func renderFramePayload(th *theme.Theme, payload map[string]any) string {
 	if len(payload) == 0 {
 		return ""
 	}
@@ -444,27 +440,25 @@ func renderFramePayload(payload map[string]any) string {
 	sort.Strings(keys)
 	var b strings.Builder
 	for _, key := range keys {
-		b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(key+":"), fmt.Sprint(payload[key])))
+		b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(key+":"), fmt.Sprint(payload[key])))
 	}
 	return b.String()
 }
 
-// RenderChatProjection renders the human-sized milestone feed for the chat
-// surface.
-func RenderChatProjection(p ChatProjection) string {
+func RenderChatProjection(th *theme.Theme, p ChatProjection) string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Chat Projection") + "\n")
+	b.WriteString(th.Subhead().Render("Chat Projection") + "\n")
 	if len(p.Milestones) == 0 && len(p.Outputs) == 0 && len(p.Frames) == 0 {
-		return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+		return th.Panel().Render(strings.TrimSpace(b.String()))
 	}
 	for _, line := range p.Milestones {
-		b.WriteString("  " + headerStyle.Render("●") + " " + line + "\n")
+		b.WriteString("  " + th.Header().Render("●") + " " + line + "\n")
 	}
 	for _, line := range p.Outputs {
-		b.WriteString("  " + dimStyle.Render("LLM") + " " + line + "\n")
+		b.WriteString("  " + th.Dim().Render("LLM") + " " + line + "\n")
 	}
 	for _, frame := range p.Frames {
-		b.WriteString("  " + dimStyle.Render("frame") + " " + frameLabel(frame) + "\n")
+		b.WriteString("  " + th.Dim().Render("frame") + " " + frameLabel(frame) + "\n")
 	}
-	return eucloFrameStyle.Render(strings.TrimSpace(b.String()))
+	return th.Panel().Render(strings.TrimSpace(b.String()))
 }

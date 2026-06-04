@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -46,19 +47,19 @@ func splitWidths(total int, weights ...int) []int {
 }
 
 // sectionPanel renders a simple framed panel used by the config and session panes.
-func sectionPanel(title string, width int, lines ...string) string {
+func sectionPanel(th *theme.Theme, title string, width int, lines ...string) string {
 	if width < 1 {
 		width = 1
 	}
-	content := []string{panelHeaderStyle.Render(title)}
+	content := []string{th.Subhead().Render(title)}
 	content = append(content, lines...)
-	return panelStyle.Width(width).Render(strings.Join(content, "\n"))
+	return th.Panel().Width(width).Render(strings.Join(content, "\n"))
 }
 
 // sectionList renders a selectable list with a clipped visible window.
-func sectionList(lines []string, selected int, maxVisible int) string {
+func sectionList(th *theme.Theme, lines []string, selected int, maxVisible int) string {
 	if len(lines) == 0 {
-		return dimStyle.Render("(empty)")
+		return th.Dim().Render("(empty)")
 	}
 	if maxVisible < 1 || maxVisible > len(lines) {
 		maxVisible = len(lines)
@@ -81,9 +82,9 @@ func sectionList(lines []string, selected int, maxVisible int) string {
 	rendered := make([]string, 0, len(visible))
 	for i, line := range visible {
 		if start+i == selected {
-			rendered = append(rendered, panelItemActiveStyle.Render(line))
+			rendered = append(rendered, th.Active().Render(line))
 		} else {
-			rendered = append(rendered, panelItemStyle.Render(line))
+			rendered = append(rendered, th.Body().Render(line))
 		}
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rendered...)

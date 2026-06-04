@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 
@@ -12,11 +16,13 @@ type AgentPicker struct {
 	open  bool
 	items []string
 	sel   int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewAgentPicker returns a closed picker.
 func NewAgentPicker() *AgentPicker {
-	return &AgentPicker{}
+	return &AgentPicker{th: theme.Default()}
 }
 
 // Open loads a new item list and selects the current agent if present.
@@ -63,9 +69,9 @@ func (p *AgentPicker) Render(width, height int) string {
 		width = 1
 	}
 	title := fmt.Sprintf("Agents (%d)", len(p.items))
-	visible := sectionList(p.items, p.sel, 7)
-	return panelStyle.Width(width).Render(strings.Join([]string{
-		panelHeaderStyle.Render(title),
+	visible := sectionList(p.th, p.items, p.sel, 7)
+	return p.th.Panel().Width(width).Render(strings.Join([]string{
+		p.th.Subhead().Render(title),
 		visible,
 	}, "\n"))
 }
@@ -120,4 +126,11 @@ func (p *AgentPicker) HandleKey(msg tea.KeyMsg) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// SetTheme sets the active semantic style source.
+func (p *AgentPicker) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

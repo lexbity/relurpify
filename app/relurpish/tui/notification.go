@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 	"sync"
@@ -103,11 +107,16 @@ type NotificationBar struct {
 	queue               *NotificationQueue
 	width               int
 	interactionRenderer func(NotificationItem) string
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewNotificationBar creates a NotificationBar backed by the given queue.
 func NewNotificationBar(q *NotificationQueue) *NotificationBar {
-	return &NotificationBar{queue: q, interactionRenderer: renderGenericNotification}
+	defaultTheme := theme.Default()
+	return &NotificationBar{queue: q, interactionRenderer: func(item NotificationItem) string {
+		return renderGenericNotification(defaultTheme, item)
+	}}
 }
 
 // SetInteractionRenderer updates the renderer used for surface-specific
@@ -245,23 +254,23 @@ func (nb *NotificationBar) View() string {
 	hint := ""
 	switch current.Kind {
 	case NotifKindHITL:
-		hint = dimStyle.Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+		hint = nb.th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
 	case NotifKindRestore:
-		hint = dimStyle.Render("  [enter] restore  [d] dismiss")
+		hint = nb.th.Dim().Render("  [enter] restore  [d] dismiss")
 	case NotifKindDeferred:
-		hint = dimStyle.Render("  [enter] review  [d] dismiss")
+		hint = nb.th.Dim().Render("  [enter] review  [d] dismiss")
 	case NotifKindInteraction, NotifKindGuidance:
 		rendered := nb.interactionRenderer(current)
 		if nb.queue.Len() > 1 {
-			rendered += dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
+			rendered += nb.th.Dim().Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
 		}
 		return rendered
 	default:
-		hint = dimStyle.Render("  [d] dismiss")
+		hint = nb.th.Dim().Render("  [d] dismiss")
 	}
 	more := ""
 	if nb.queue.Len() > 1 {
-		more = dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
+		more = nb.th.Dim().Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
 	}
 	label := "● " + current.Msg
 	if current.Kind == NotifKindHITL {
@@ -270,36 +279,36 @@ func (nb *NotificationBar) View() string {
 	var rendered string
 	switch current.Kind {
 	case NotifKindHITL:
-		rendered = notifHITLStyle.Render(label)
+		rendered = nb.th.Notif(theme.NotifHITL).Render(label)
 	case NotifKindError:
-		rendered = notifErrorStyle.Render(label)
+		rendered = nb.th.Notif(theme.NotifError).Render(label)
 	case NotifKindTaskDone:
-		rendered = notifSuccessStyle.Render(label)
+		rendered = nb.th.Notif(theme.NotifSuccess).Render(label)
 	case NotifKindDeferred:
-		rendered = notifInfoStyle.Render(label)
+		rendered = nb.th.Notif(theme.NotifInfo).Render(label)
 	default:
-		rendered = notifInfoStyle.Render(label)
+		rendered = nb.th.Notif(theme.NotifInfo).Render(label)
 	}
 	return rendered + hint + more
 }
 
-func renderGenericNotification(item NotificationItem) string {
+func renderGenericNotification(th *theme.Theme, item NotificationItem) string {
 	label := "● " + item.Msg
 	var rendered string
 	switch item.Kind {
 	case NotifKindHITL:
-		rendered = notifHITLStyle.Render(label)
+		rendered = th.Notif(theme.NotifHITL).Render(label)
 	case NotifKindError:
-		rendered = notifErrorStyle.Render(label)
+		rendered = th.Notif(theme.NotifError).Render(label)
 	case NotifKindTaskDone:
-		rendered = notifSuccessStyle.Render(label)
+		rendered = th.Notif(theme.NotifSuccess).Render(label)
 	case NotifKindDeferred:
-		rendered = notifInfoStyle.Render(label)
+		rendered = th.Notif(theme.NotifInfo).Render(label)
 	default:
-		rendered = notifInfoStyle.Render(label)
+		rendered = th.Notif(theme.NotifInfo).Render(label)
 	}
 	if item.Kind == NotifKindHITL {
-		rendered = rendered + dimStyle.Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+		rendered = rendered + th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
 	}
 	return rendered
 }
@@ -316,7 +325,7 @@ func (nb *NotificationBar) PromptOverlay() (Overlay, bool) {
 	}
 	switch current.Kind {
 	case NotifKindRestore, NotifKindDeferred:
-		return &notificationPromptOverlay{queue: nb.queue, item: current}, true
+		return &notificationPromptOverlay{queue: nb.queue, item: current, th: nb.th}, true
 	default:
 		return nil, false
 	}
@@ -325,6 +334,7 @@ func (nb *NotificationBar) PromptOverlay() (Overlay, bool) {
 type notificationPromptOverlay struct {
 	queue *NotificationQueue
 	item  NotificationItem
+	th    *theme.Theme
 }
 
 func (o *notificationPromptOverlay) Render(width, height int) string {
@@ -339,20 +349,20 @@ func (o *notificationPromptOverlay) Render(width, height int) string {
 		title = "Deferred Review"
 	}
 	lines := []string{
-		panelHeaderStyle.Render(title),
+		o.th.Subhead().Render(title),
 		o.item.Msg,
 	}
 	switch o.item.Kind {
 	case NotifKindRestore:
-		lines = append(lines, dimStyle.Render("[enter] restore  [d] dismiss"))
+		lines = append(lines, o.th.Dim().Render("[enter] restore  [d] dismiss"))
 	case NotifKindDeferred:
-		lines = append(lines, dimStyle.Render("[enter] review  [d] dismiss"))
+		lines = append(lines, o.th.Dim().Render("[enter] review  [d] dismiss"))
 	}
 	w := width
 	if w < 1 {
 		w = 1
 	}
-	return panelStyle.Width(w).Render(strings.Join(lines, "\n"))
+	return o.th.Panel().Width(w).Render(strings.Join(lines, "\n"))
 }
 
 func (o *notificationPromptOverlay) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -458,4 +468,11 @@ func hitlTarget(req *fauthorization.PermissionRequest) string {
 		}
 	}
 	return req.Permission.Resource
+}
+
+// SetTheme sets the active semantic style source.
+func (nb *NotificationBar) SetTheme(th *theme.Theme) {
+	if th != nil {
+		nb.th = th
+	}
 }

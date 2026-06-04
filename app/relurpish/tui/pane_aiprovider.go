@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -44,10 +45,12 @@ type AIProviderPane struct {
 
 	width  int
 	height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 func NewAIProviderPane(rt aiProviderRuntime) *AIProviderPane {
-	p := &AIProviderPane{runtime: rt}
+	p := &AIProviderPane{th: theme.Default(), runtime: rt}
 	p.Refresh()
 	return p
 }
@@ -144,12 +147,12 @@ func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
 func (p *AIProviderPane) View() string {
 	left := p.renderModelList()
 	right := p.renderConfigPanel()
-	footer := dimStyle.Render("tab switch focus  arrows navigate  enter select  e edit  t test  s save")
+	footer := p.th.Dim().Render("tab switch focus  arrows navigate  enter select  e edit  t test  s save")
 	if p.editing {
-		footer = warningText(fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuf)) + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuf)) + "\n" + footer
 	}
 	if p.status != "" {
-		footer = dimStyle.Render(p.status) + "\n" + footer
+		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
@@ -346,26 +349,26 @@ func (p *AIProviderPane) llmConfig() llm.ProviderConfig {
 
 func (p *AIProviderPane) renderModelList() string {
 	lines := []string{
-		sectionHeaderStyle.Render("AI Provider"),
+		p.th.Subhead().Render("AI Provider"),
 		fmt.Sprintf("Infrastructure: %s", p.profile.Provider),
 		fmt.Sprintf("Endpoint: %s", p.profile.Endpoint),
 		"",
-		sectionHeaderStyle.Render("Models"),
+		p.th.Subhead().Render("Models"),
 	}
 	if len(p.models) == 0 {
-		lines = append(lines, dimStyle.Render("(no models found)"))
+		lines = append(lines, p.th.Dim().Render("(no models found)"))
 	} else {
 		for i, model := range p.models {
 			line := model.Name
 			if i == p.sel && p.kindFocus == 0 {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			} else if model.Name == p.profile.Model {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			}
 			lines = append(lines, line)
 		}
 	}
-	return sectionPanel("Models", p.width/2, strings.Join(lines, "\n"))
+	return sectionPanel(p.th, "Models", p.width/2, strings.Join(lines, "\n"))
 }
 
 func (p *AIProviderPane) renderConfigPanel() string {
@@ -379,11 +382,11 @@ func (p *AIProviderPane) renderConfigPanel() string {
 	if p.kindFocus == 1 {
 		for i := range fields {
 			if i == int(p.fieldSel) {
-				fields[i] = panelItemActiveStyle.Render(fields[i])
+				fields[i] = p.th.Active().Render(fields[i])
 			}
 		}
 	}
-	return sectionPanel("Configurator", max(20, p.width/2), strings.Join(fields, "\n"))
+	return sectionPanel(p.th, "Configurator", max(20, p.width/2), strings.Join(fields, "\n"))
 }
 
 func defaultProviderProfile() cfgload.RuntimeProviderConfig {
@@ -393,5 +396,12 @@ func defaultProviderProfile() cfgload.RuntimeProviderConfig {
 		Model:             "",
 		Timeout:           "30s",
 		NativeToolCalling: true,
+	}
+}
+
+// SetTheme sets the active semantic style source.
+func (p *AIProviderPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
 	}
 }

@@ -1,10 +1,15 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Messages emitted by InputBar.
@@ -59,6 +64,8 @@ type InputBar struct {
 	ctxTab TabID
 	ctxSub SubTabID
 	gated  bool
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewInputBar creates a focused InputBar.
@@ -66,7 +73,7 @@ func NewInputBar() *InputBar {
 	ti := textinput.New()
 	ti.Placeholder = "Type a message, /help, :git status, or ?search"
 	ti.Focus()
-	return &InputBar{input: ti, focused: true}
+	return &InputBar{input: ti, focused: true, th: theme.Default()}
 }
 
 // SetWorkspace sets the workspace path for file picker globbing.
@@ -436,20 +443,20 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	prompt := b.promptLabel(activeTab, draft)
 	prefix := ""
 	if prompt != "" {
-		prefix = inputPrefixStyle.Render(prompt + " ")
+		prefix = b.th.Active().Render(prompt + " ")
 	}
 
 	var hint string
 	if b.gated {
-		hint = dimStyle.Render(" running — > blocked | : and / active | ctrl+c quit")
+		hint = b.th.Dim().Render(" running — > blocked | : and / active | ctrl+c quit")
 	} else if streaming {
-		hint = dimStyle.Render(" streaming…  pgup/down scroll | ctrl+c quit")
+		hint = b.th.Dim().Render(" streaming…  pgup/down scroll | ctrl+c quit")
 	} else if b.pickerActive && len(b.pickerResult.Results) > 0 {
-		hint = dimStyle.Render(" enter/tab select | esc cancel | ↑↓ navigate")
+		hint = b.th.Dim().Render(" enter/tab select | esc cancel | ↑↓ navigate")
 	} else if b.palOpen && len(b.palette) > 0 {
-		hint = dimStyle.Render(" enter/tab complete | esc cancel | ↑↓ select")
+		hint = b.th.Dim().Render(" enter/tab complete | esc cancel | ↑↓ select")
 	} else if b.searchMode || draft.prefix == "?" {
-		hint = dimStyle.Render(" esc exit search | enter apply")
+		hint = b.th.Dim().Render(" esc exit search | enter apply")
 	} else {
 		hint = ""
 	}
@@ -458,9 +465,17 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	if hint != "" {
 		content += " " + hint
 	}
-	barStyle := inputBarBlurredStyle
+	barStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(b.th.Palette().Dim).
+		Background(b.th.Palette().Surface).
+		Padding(0, 1)
 	if b.Focused() {
-		barStyle = inputBarFocusedStyle
+		barStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(b.th.Palette().Primary).
+			Background(b.th.Palette().Background).
+			Padding(0, 1)
 	}
 	return barStyle.Width(b.width).Render(content)
 }
@@ -474,17 +489,17 @@ func (b *InputBar) PickerView() string {
 }
 
 func (b *InputBar) renderPicker() string {
-	lines := []string{panelHeaderStyle.Render("Files")}
+	lines := []string{b.th.Subhead().Render("Files")}
 	for i, file := range b.pickerResult.Results {
 		label := file
 		if i == b.pickerSel {
-			label = panelItemActiveStyle.Render(label)
+			label = b.th.Active().Render(label)
 		} else {
-			label = panelItemStyle.Render(label)
+			label = b.th.Body().Render(label)
 		}
 		lines = append(lines, label)
 	}
-	return panelStyle.Width(b.width).Render(strings.Join(lines, "\n"))
+	return b.th.Panel().Width(b.width).Render(strings.Join(lines, "\n"))
 }
 
 func sanitizeSubmittedValue(raw, prefix string) string {
@@ -502,4 +517,11 @@ func sanitizeSubmittedValue(raw, prefix string) string {
 		return strings.TrimSpace(raw[1:])
 	}
 	return raw
+}
+
+// SetTheme sets the active semantic style source.
+func (b *InputBar) SetTheme(th *theme.Theme) {
+	if th != nil {
+		b.th = th
+	}
 }

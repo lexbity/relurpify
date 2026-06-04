@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,6 +26,10 @@ type AgentSurface interface {
 	InitialSubTab(tab TabID) SubTabID
 	RenderNotification(item NotificationItem) string
 	HandleFrame(ctx context.Context, m *RootModel, msg SurfaceFrameMsg)
+
+	// Theme returns the surface's preferred theme. When nil the host default
+	// is used. Surfaces may call WithAccent to tint the shared structure.
+	Theme() *theme.Theme
 }
 
 // SurfaceFactory resolves the active surface for a given agent name.
@@ -177,8 +182,10 @@ func (genericSurface) InitialTab() TabID { return TabWelcome }
 
 func (genericSurface) InitialSubTab(tab TabID) SubTabID { return "" }
 
+func (genericSurface) Theme() *theme.Theme { return nil }
+
 func (genericSurface) RenderNotification(item NotificationItem) string {
-	return renderGenericNotification(item)
+	return renderGenericNotification(theme.Default(), item)
 }
 
 func (genericSurface) HandleFrame(_ context.Context, m *RootModel, msg SurfaceFrameMsg) {

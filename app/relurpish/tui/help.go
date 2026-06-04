@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // HelpOverlay renders a centered help box over the current view.
 type HelpOverlay struct {
 	width, height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // SetSize updates the terminal dimensions used for centering.
@@ -31,11 +34,11 @@ func (h HelpOverlay) View(base string) string {
 	if boxWidth < 1 {
 		boxWidth = 1
 	}
-	box := helpOverlayStyle.Width(boxWidth).Render(h.content())
+	box := h.th.Box().Width(boxWidth).Render(h.content())
 	return lipgloss.Place(h.width, h.height,
 		lipgloss.Center, lipgloss.Center,
 		box,
-		lipgloss.WithWhitespaceForeground(colorDim),
+		lipgloss.WithWhitespaceForeground(h.th.Palette().Dim),
 		lipgloss.WithWhitespaceChars("·"),
 	)
 }
@@ -85,6 +88,13 @@ func (h HelpOverlay) content() string {
 	b.WriteString("\nKeybindings Tab\n")
 	b.WriteString("  e                     capture a new binding\n")
 	b.WriteString("  r / R                 reset selected / all bindings\n")
-	b.WriteString("\n" + dimStyle.Render("Press f1 or esc to close"))
+	b.WriteString("\n" + h.th.Dim().Render("Press f1 or esc to close"))
 	return b.String()
+}
+
+// SetTheme sets the active semantic style source.
+func (h *HelpOverlay) SetTheme(th *theme.Theme) {
+	if th != nil {
+		h.th = th
+	}
 }

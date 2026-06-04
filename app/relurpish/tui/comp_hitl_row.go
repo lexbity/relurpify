@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 
@@ -30,6 +34,8 @@ type HITLRow struct {
 	slotNames []string
 
 	width int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // Open activates the row with the given frame information.
@@ -116,6 +122,9 @@ func (h *HITLRow) View() string {
 	if h == nil || !h.open {
 		return ""
 	}
+	if h.th == nil {
+		h.th = theme.Default()
+	}
 	w := h.width
 	if w < 1 {
 		w = 1
@@ -128,8 +137,15 @@ func (h *HITLRow) View() string {
 		}
 		parts = append(parts, fmt.Sprintf("[%d] %s", i+1, name))
 	}
-	parts = append(parts, dimStyle.Render("[esc] dismiss"))
+	parts = append(parts, h.th.Dim().Render("[esc] dismiss"))
 
 	content := strings.Join(parts, "  ")
-	return notifInfoStyle.Width(w).Render(content)
+	return h.th.Notif(theme.NotifInfo).Width(w).Render(content)
+}
+
+// SetTheme sets the active semantic style source.
+func (h *HITLRow) SetTheme(th *theme.Theme) {
+	if th != nil {
+		h.th = th
+	}
 }

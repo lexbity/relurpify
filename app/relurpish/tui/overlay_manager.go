@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"fmt"
 	"strings"
 
@@ -32,10 +36,12 @@ type overlayEntry struct {
 type OverlayStack struct {
 	items []overlayEntry
 	next  int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 func NewOverlayStack() *OverlayStack {
-	return &OverlayStack{}
+	return &OverlayStack{th: theme.Default()}
 }
 
 func (s *OverlayStack) Clear() {
@@ -275,5 +281,12 @@ func (m *RootModel) syncOverlayStack() {
 		if overlay, ok := m.notifBar.PromptOverlay(); ok {
 			m.overlays.Push(overlay)
 		}
+	}
+}
+
+// SetTheme sets the active semantic style source.
+func (o *OverlayStack) SetTheme(th *theme.Theme) {
+	if th != nil {
+		o.th = th
 	}
 }

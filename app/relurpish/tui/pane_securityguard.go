@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -56,10 +60,12 @@ type SecurityGuardPane struct {
 	width  int
 	height int
 	status string
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 func NewSecurityGuardPane(rt securityGuardRuntime) *SecurityGuardPane {
-	p := &SecurityGuardPane{runtime: rt}
+	p := &SecurityGuardPane{th: theme.Default(), runtime: rt}
 	p.Refresh()
 	return p
 }
@@ -162,18 +168,16 @@ func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 func (p *SecurityGuardPane) View() string {
 	shell := p.renderShellPanel()
 	ingest := p.renderIngestionPanel()
-	footer := dimStyle.Render("tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle")
+	footer := p.th.Dim().Render("tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle")
 	if p.testMode {
-		footer = warningText(fmt.Sprintf("Test %s: %s", p.testLabel, p.testBuffer)) + "\n" + footer
-	}
-	if p.editing {
-		footer = warningText(fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
-	}
-	if p.confirmDrop {
-		footer = warningText("Delete selected rule? press y to confirm or n to cancel") + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Test %s: %s", p.testLabel, p.testBuffer)) + "\n" + footer
+	} else if p.editing {
+		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
+	} else if p.confirmDrop {
+		footer = warningText(p.th, "Delete selected rule? press y to confirm or n to cancel") + "\n" + footer
 	}
 	if p.status != "" {
-		footer = dimStyle.Render(p.status) + "\n" + footer
+		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
 	return strings.Join([]string{shell, ingest, footer}, "\n\n")
 }
@@ -477,31 +481,31 @@ func (p *SecurityGuardPane) selectedGuardRule() *core.PolicyRule {
 }
 
 func (p *SecurityGuardPane) renderShellPanel() string {
-	lines := []string{sectionHeaderStyle.Render("Shell Command Blacklist")}
+	lines := []string{p.th.Subhead().Render("Shell Command Blacklist")}
 	if len(p.shellRules) == 0 {
-		lines = append(lines, dimStyle.Render("(no blacklist rules)"))
+		lines = append(lines, p.th.Dim().Render("(no blacklist rules)"))
 	} else {
 		for i, rule := range p.shellRules {
 			line := fmt.Sprintf("%s  %s", strings.ToUpper(string(rule.Action)), rule.Raw)
 			if i == p.shellSel && p.activePanel == securityPanelShell {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			}
 			lines = append(lines, line)
 			if rule.Reason != "" {
-				lines = append(lines, dimStyle.Render("  "+rule.Reason))
+				lines = append(lines, p.th.Dim().Render("  "+rule.Reason))
 			}
 		}
 	}
 	if p.activePanel == securityPanelShell && p.testResult != "" {
-		lines = append(lines, "", dimStyle.Render("test: "+p.testResult))
+		lines = append(lines, "", p.th.Dim().Render("test: "+p.testResult))
 	}
-	return sectionPanel("SecurityGuard", p.width, strings.Join(lines, "\n"))
+	return sectionPanel(p.th, "SecurityGuard", p.width, strings.Join(lines, "\n"))
 }
 
 func (p *SecurityGuardPane) renderIngestionPanel() string {
-	lines := []string{sectionHeaderStyle.Render("Ingestion Guardrails")}
+	lines := []string{p.th.Subhead().Render("Ingestion Guardrails")}
 	if len(p.guardRules) == 0 {
-		lines = append(lines, dimStyle.Render("(no guardrails configured)"))
+		lines = append(lines, p.th.Dim().Render("(no guardrails configured)"))
 	} else {
 		for i, rule := range p.guardRules {
 			prefix := "off"
@@ -510,16 +514,23 @@ func (p *SecurityGuardPane) renderIngestionPanel() string {
 			}
 			line := fmt.Sprintf("%s  %s", prefix, rule.Name)
 			if i == p.guardSel && p.activePanel == securityPanelIngestion {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			}
 			lines = append(lines, line)
 			if rule.Effect.Reason != "" {
-				lines = append(lines, dimStyle.Render("  "+rule.Effect.Reason))
+				lines = append(lines, p.th.Dim().Render("  "+rule.Effect.Reason))
 			}
 		}
 	}
 	if p.activePanel == securityPanelIngestion && p.testResult != "" {
-		lines = append(lines, "", dimStyle.Render("test: "+p.testResult))
+		lines = append(lines, "", p.th.Dim().Render("test: "+p.testResult))
 	}
-	return sectionPanel("Ingestion Guardrails", p.width, strings.Join(lines, "\n"))
+	return sectionPanel(p.th, "Ingestion Guardrails", p.width, strings.Join(lines, "\n"))
+}
+
+// SetTheme sets the active semantic style source.
+func (p *SecurityGuardPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

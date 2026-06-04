@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -96,11 +97,14 @@ type SandboxPane struct {
 	pendingBackend string
 
 	expanded map[string]bool
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewSandboxPane loads the current manifest and builds the tree editor.
 func NewSandboxPane(rt sandboxRuntime) *SandboxPane {
 	p := &SandboxPane{
+		th:       theme.Default(),
 		runtime:  rt,
 		expanded: make(map[string]bool),
 	}
@@ -222,25 +226,25 @@ func (p *SandboxPane) Update(msg tea.Msg) (*SandboxPane, tea.Cmd) {
 func (p *SandboxPane) View() string {
 	if p.root == nil {
 		if p.status == "" {
-			return sectionPanel("Sandbox Permissions", p.width, dimStyle.Render("No manifest loaded"))
+			return sectionPanel(p.th, "Sandbox Permissions", p.width, p.th.Dim().Render("No manifest loaded"))
 		}
-		return sectionPanel("Sandbox Permissions", p.width, dimStyle.Render(p.status))
+		return sectionPanel(p.th, "Sandbox Permissions", p.width, p.th.Dim().Render(p.status))
 	}
 	widths := splitWidths(p.width, 11, 9)
-	left := sectionPanel("Sandbox Permissions", widths[0], p.renderTreeLines())
-	right := sectionPanel("Permission Editor", widths[1], p.renderDetailLines()...)
-	footer := dimStyle.Render("↑↓ navigate  h/l collapse-expand  space cycle  e edit  s save  p backend  r reload")
+	left := sectionPanel(p.th, "Sandbox Permissions", widths[0], p.renderTreeLines())
+	right := sectionPanel(p.th, "Permission Editor", widths[1], p.renderDetailLines()...)
+	footer := p.th.Dim().Render("↑↓ navigate  h/l collapse-expand  space cycle  e edit  s save  p backend  r reload")
 	if p.filter != "" {
-		footer = dimStyle.Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
+		footer = p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
 	}
 	if p.confirmBackend {
-		footer = warningText(fmt.Sprintf("Switch sandbox backend to %s? press enter to confirm or esc to cancel", p.pendingBackend)) + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Switch sandbox backend to %s? press enter to confirm or esc to cancel", p.pendingBackend)) + "\n" + footer
 	}
 	if p.editing {
-		footer = warningText(fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
+		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
 	}
 	if p.status != "" {
-		footer = dimStyle.Render(p.status) + "\n" + footer
+		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
@@ -866,14 +870,14 @@ func (p *SandboxPane) applyToolCategory(clone *cfgload.AgentManifest, cat *sandb
 func (p *SandboxPane) renderTreeLines() string {
 	nodes := p.visibleNodes()
 	if len(nodes) == 0 {
-		return dimStyle.Render("(no permissions)")
+		return p.th.Dim().Render("(no permissions)")
 	}
 	lines := make([]string, 0, len(nodes))
 	for _, item := range nodes {
 		line := p.renderNodeLine(item.node, item.depth)
 		lines = append(lines, line)
 	}
-	return sectionList(lines, p.sel, p.height-8)
+	return sectionList(p.th, lines, p.sel, p.height-8)
 }
 
 func (p *SandboxPane) renderNodeLine(node *sandboxNode, depth int) string {
@@ -893,7 +897,7 @@ func (p *SandboxPane) renderNodeLine(node *sandboxNode, depth int) string {
 		label = fmt.Sprintf("%s %s", prefix, node.Label)
 	}
 	if node.Summary != "" && node.Selectable {
-		label += "  " + dimStyle.Render(node.Summary)
+		label += "  " + p.th.Dim().Render(node.Summary)
 	}
 	return indent + label
 }
@@ -901,12 +905,12 @@ func (p *SandboxPane) renderNodeLine(node *sandboxNode, depth int) string {
 func (p *SandboxPane) renderDetailLines() []string {
 	node := p.selectedNode()
 	if node == nil {
-		return []string{dimStyle.Render("No selection")}
+		return []string{p.th.Dim().Render("No selection")}
 	}
 	lines := []string{
-		headerStyle.Render(node.Label),
-		dimStyle.Render("kind: " + nodeKindLabel(node.Kind)),
-		dimStyle.Render("state: " + stateLabel(node.State)),
+		p.th.Header().Render(node.Label),
+		p.th.Dim().Render("kind: " + nodeKindLabel(node.Kind)),
+		p.th.Dim().Render("state: " + stateLabel(node.State)),
 	}
 	switch node.Kind {
 	case sandboxNodeFileScope:
@@ -936,10 +940,10 @@ func (p *SandboxPane) renderDetailLines() []string {
 		lines = append(lines, "tool: "+node.Label)
 	}
 	lines = append(lines, "")
-	lines = append(lines, dimStyle.Render("space cycles allow -> ask -> deny"))
-	lines = append(lines, dimStyle.Render("e edits the primary label field"))
-	lines = append(lines, dimStyle.Render("s saves and reloads the runtime"))
-	lines = append(lines, dimStyle.Render("p switches sandbox backend"))
+	lines = append(lines, p.th.Dim().Render("space cycles allow -> ask -> deny"))
+	lines = append(lines, p.th.Dim().Render("e edits the primary label field"))
+	lines = append(lines, p.th.Dim().Render("s saves and reloads the runtime"))
+	lines = append(lines, p.th.Dim().Render("p switches sandbox backend"))
 	return lines
 }
 
@@ -1097,6 +1101,13 @@ func nodeKindLabel(kind sandboxNodeKind) string {
 	}
 }
 
-func warningText(value string) string {
-	return lipgloss.NewStyle().Foreground(colorWarning).Bold(true).Render(value)
+func warningText(th *theme.Theme, value string) string {
+	return th.Warning().Bold(true).Render(value)
+}
+
+// SetTheme sets the active semantic style source.
+func (p *SandboxPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

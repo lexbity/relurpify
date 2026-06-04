@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 
@@ -47,6 +48,7 @@ type ChatPane struct {
 	feed      *tui.Feed
 	spinner   spinner.Model
 	runStates map[string]*tui.RunState
+	th        *theme.Theme
 
 	context *tui.AgentContext
 	session *tui.Session
@@ -84,15 +86,19 @@ var _ tui.ChatPaner = (*ChatPane)(nil)
 var _ tui.ChatSidebarController = (*ChatPane)(nil)
 
 // NewChatPane constructs the Euclo chat surface.
-func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter) *ChatPane {
+func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme) *ChatPane {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	if router == nil {
 		router = NewEucloEventRouter()
 	}
+	if th == nil {
+		th = theme.Default()
+	}
 	pane := &ChatPane{
 		feed:             tui.NewFeed(),
 		spinner:          sp,
+		th:               th,
 		runStates:        make(map[string]*tui.RunState),
 		context:          ctx,
 		session:          sess,
@@ -103,7 +109,7 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 		router:           router,
 		expandTarget:     "thinking",
 		astOption:        "workspace",
-		diff:             NewDiffPane(router, sessionWorkspace(sess)),
+		diff:             NewDiffPane(router, sessionWorkspace(sess), th),
 		showSidebar:      false,
 		sidebarFocused:   false,
 		sidebarEntries:   nil,
@@ -112,6 +118,7 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 	if rt != nil {
 		pane.diff.SetRuntime(rt)
 	}
+	pane.feed.SetTheme(th)
 	return pane
 }
 
@@ -210,14 +217,14 @@ func (p *ChatPane) View() string {
 	}
 	if p.width < 60 {
 		return lipgloss.JoinVertical(lipgloss.Left,
-			dimStyle.Render("Terminal too narrow. Minimum 60 columns required."),
+			p.th.Dim().Render("Terminal too narrow. Minimum 60 columns required."),
 			p.feed.View(),
 		)
 	}
 	if !p.splitSidebarVisible() {
 		if p.showSidebar && p.width < 90 {
 			return lipgloss.JoinVertical(lipgloss.Left,
-				dimStyle.Render("Sidebar collapsed automatically below 90 columns."),
+				p.th.Dim().Render("Sidebar collapsed automatically below 90 columns."),
 				p.feed.View(),
 			)
 		}
@@ -755,41 +762,41 @@ func (p *ChatPane) renderSidebar() string {
 		header += " [feed]"
 	}
 	var parts []string
-	parts = append(parts, sectionHeaderStyle.Render(header))
-	parts = append(parts, dimStyle.Render("Recipe Scope"))
+	parts = append(parts, p.th.Subhead().Render(header))
+	parts = append(parts, p.th.Dim().Render("Recipe Scope"))
 	for _, tag := range p.recipeScopeTags() {
 		parts = append(parts, "  "+p.checkbox(false)+" "+tag)
 	}
 	parts = append(parts, "")
-	parts = append(parts, dimStyle.Render("Workspace Files"))
+	parts = append(parts, p.th.Dim().Render("Workspace Files"))
 	if len(p.sidebarEntries) == 0 {
-		parts = append(parts, "  "+dimStyle.Render("no files selected"))
+		parts = append(parts, "  "+p.th.Dim().Render("no files selected"))
 	} else {
 		for i, entry := range p.sidebarEntries {
 			checked := p.isSelected(entry.Path)
 			line := fmt.Sprintf("  %s %s", p.checkbox(checked), entry.Path)
 			if i == p.sidebarSelection && p.sidebarFocused {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			} else {
-				line = panelItemStyle.Render(line)
+				line = p.th.Body().Render(line)
 			}
 			parts = append(parts, line)
 		}
 	}
 	parts = append(parts, "")
-	parts = append(parts, dimStyle.Render("AST Options"))
+	parts = append(parts, p.th.Dim().Render("AST Options"))
 	for _, opt := range p.astOptions() {
 		active := opt == p.astOption
 		line := fmt.Sprintf("  %s %s", p.checkbox(active), opt)
 		if active {
-			line = panelItemActiveStyle.Render(line)
+			line = p.th.Active().Render(line)
 		}
 		parts = append(parts, line)
 	}
 	return lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorSecondary).
+		BorderForeground(p.th.Palette().Secondary).
 		Padding(0, 1).
 		Render(strings.Join(parts, "\n"))
 }

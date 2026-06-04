@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -18,6 +19,8 @@ type WelcomePane struct {
 	selected      int
 	filter        string
 	width, height int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 type workspaceSelectedMsg struct {
@@ -25,7 +28,7 @@ type workspaceSelectedMsg struct {
 }
 
 func NewWelcomePane(sess *Session, store *SessionStore) *WelcomePane {
-	p := &WelcomePane{session: sess, store: store}
+	p := &WelcomePane{session: sess, store: store, th: theme.Default()}
 	p.Refresh()
 	return p
 }
@@ -102,15 +105,15 @@ func (p *WelcomePane) filtered() []SessionMeta {
 func (p *WelcomePane) View() string {
 	widths := splitWidths(p.width, 5, 7)
 	current := []string{
-		dimStyle.Render("workspace") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Workspace }), "(unset)"),
-		dimStyle.Render("branch") + "  " + fallback(p.gitBranch(), "(detached)"),
-		dimStyle.Render("agent") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Agent }), "none"),
-		dimStyle.Render("model") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Model }), "(unset)"),
-		dimStyle.Render("provider") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Provider }), "(unset)"),
-		dimStyle.Render("mode") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Mode }), "(unset)"),
+		p.th.Dim().Render("workspace") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Workspace }), "(unset)"),
+		p.th.Dim().Render("branch") + "  " + fallback(p.gitBranch(), "(detached)"),
+		p.th.Dim().Render("agent") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Agent }), "none"),
+		p.th.Dim().Render("model") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Model }), "(unset)"),
+		p.th.Dim().Render("provider") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Provider }), "(unset)"),
+		p.th.Dim().Render("mode") + "  " + fallback(p.sessionField(func(s *Session) string { return s.Mode }), "(unset)"),
 	}
 	if p.session != nil && p.session.Strategy != "" {
-		current = append(current, dimStyle.Render("strategy")+"  "+p.session.Strategy)
+		current = append(current, p.th.Dim().Render("strategy")+"  "+p.session.Strategy)
 	}
 	items := p.filteredWorkspaces()
 	lines := make([]string, 0, len(items))
@@ -118,13 +121,13 @@ func (p *WelcomePane) View() string {
 		lines = append(lines, fmt.Sprintf("%s  %s", meta.UpdatedAt.Format("01/02 15:04"), meta.Workspace))
 	}
 	if len(lines) == 0 {
-		lines = []string{dimStyle.Render("No recent workspaces")}
+		lines = []string{p.th.Dim().Render("No recent workspaces")}
 	}
-	left := sectionPanel("Workspace", widths[0], current...)
-	right := sectionPanel("Recent Workspaces", widths[1], sectionList(lines, p.selected, p.height-10))
-	footer := dimStyle.Render("↑↓ navigate  enter switch  r refresh  type to filter")
+	left := sectionPanel(p.th, "Workspace", widths[0], current...)
+	right := sectionPanel(p.th, "Recent Workspaces", widths[1], sectionList(p.th, lines, p.selected, p.height-10))
+	footer := p.th.Dim().Render("↑↓ navigate  enter switch  r refresh  type to filter")
 	if p.filter != "" {
-		footer = dimStyle.Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
+		footer = p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter)) + "\n" + footer
 	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
@@ -189,4 +192,11 @@ func (p *WelcomePane) gitBranch() string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// SetTheme sets the active semantic style source.
+func (p *WelcomePane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

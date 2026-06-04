@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -15,11 +16,13 @@ type CommandPalette struct {
 	sel   int
 	width int
 	label string
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewCommandPalette returns an empty palette.
 func NewCommandPalette() *CommandPalette {
-	return &CommandPalette{}
+	return &CommandPalette{th: theme.Default()}
 }
 
 // Sync mirrors the current palette state from InputBar.
@@ -67,16 +70,16 @@ func (p *CommandPalette) View() string {
 	if strings.TrimSpace(p.label) != "" {
 		header = p.label
 	}
-	lines := []string{panelHeaderStyle.Render(header)}
+	lines := []string{p.th.Subhead().Render(header)}
 	for i, item := range p.items {
 		label := item.Usage
 		if item.Description != "" {
-			label += "  " + dimStyle.Render(item.Description)
+			label += "  " + p.th.Dim().Render(item.Description)
 		}
 		if i == p.sel {
-			label = panelItemActiveStyle.Render(label)
+			label = p.th.Active().Render(label)
 		} else {
-			label = panelItemStyle.Render(label)
+			label = p.th.Body().Render(label)
 		}
 		lines = append(lines, label)
 	}
@@ -85,7 +88,7 @@ func (p *CommandPalette) View() string {
 	if width < 1 {
 		width = 1
 	}
-	return panelStyle.Width(width).Render(content)
+	return p.th.Panel().Width(width).Render(content)
 }
 
 func overlayPanelView(parts ...string) string {
@@ -96,4 +99,11 @@ func overlayPanelView(parts ...string) string {
 		}
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, visible...)
+}
+
+// SetTheme sets the active semantic style source.
+func (p *CommandPalette) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

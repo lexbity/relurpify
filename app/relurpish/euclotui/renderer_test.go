@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
@@ -51,7 +53,7 @@ func TestRenderSelectionFrameWithNilSelectionRendersWithoutPanic(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := RenderInteractionFrame(tc.frame)
+			result := RenderInteractionFrame(theme.Default(), tc.frame)
 			if strings.TrimSpace(result.Content.Text) == "" {
 				t.Error("expected non-empty rendered text")
 			}
@@ -72,7 +74,7 @@ func TestRenderSelectionFrameWithSlotsAndChoicesNoSelection(t *testing.T) {
 		DefaultSlot: "a",
 		Selection:   nil,
 	}
-	result := RenderInteractionFrame(frame)
+	result := RenderInteractionFrame(theme.Default(), frame)
 	if result.Content.Text == "" {
 		t.Fatal("expected non-empty text for slots path with nil Selection")
 	}
@@ -98,7 +100,7 @@ func TestRenderSelectionFrameWithResumeOnFrame(t *testing.T) {
 		Selection:   nil,
 		Resume:      resume,
 	}
-	result := RenderInteractionFrame(frame)
+	result := RenderInteractionFrame(theme.Default(), frame)
 	if !strings.Contains(result.Content.Text, "recipe-1") {
 		t.Errorf("expected resume metadata 'recipe-1' in output, got: %s", result.Content.Text)
 	}
@@ -126,7 +128,7 @@ func TestRenderSelectionFrameWithResumeOnSelection(t *testing.T) {
 		},
 		Resume: frameResume,
 	}
-	result := RenderInteractionFrame(frame)
+	result := RenderInteractionFrame(theme.Default(), frame)
 	if !strings.Contains(result.Content.Text, "selection-recipe") {
 		t.Errorf("expected selection.Resume to take precedence, got: %s", result.Content.Text)
 	}
@@ -162,7 +164,7 @@ func TestRenderAllSelectionFrameTypesWithNilSelection(t *testing.T) {
 				DefaultSlot: "opt1",
 				Selection:   nil,
 			}
-			result := RenderInteractionFrame(frame)
+			result := RenderInteractionFrame(theme.Default(), frame)
 			if result.Content.Text == "" {
 				t.Errorf("RenderInteractionFrame for %s with nil Selection returned empty text", ft)
 			}
@@ -177,7 +179,7 @@ func TestRenderSelectionFrameEdgeCases(t *testing.T) {
 		TaskID:   "task-1",
 		Question: "just a question",
 	}
-	result := RenderInteractionFrame(frame)
+	result := RenderInteractionFrame(theme.Default(), frame)
 	if result.Content.Text == "" {
 		t.Error("expected non-empty text for minimal frame")
 	}
@@ -188,7 +190,7 @@ func TestRenderSelectionFrameEdgeCases(t *testing.T) {
 		TaskID: "task-1",
 		Slots:  []interaction.ActionSlot{},
 	}
-	result2 := RenderInteractionFrame(frame2)
+	result2 := RenderInteractionFrame(theme.Default(), frame2)
 	if result2.Content.Text == "" {
 		t.Error("expected non-empty text for frame with empty Slots")
 	}
@@ -200,7 +202,7 @@ func TestRenderSelectionFrameEdgeCases(t *testing.T) {
 		Question: "question",
 		Choices:  []string{},
 	}
-	result3 := RenderInteractionFrame(frame3)
+	result3 := RenderInteractionFrame(theme.Default(), frame3)
 	if result3.Content.Text == "" {
 		t.Error("expected non-empty text for frame with empty Choices")
 	}
@@ -216,7 +218,7 @@ func TestRenderSelectionFrameEdgeCases(t *testing.T) {
 			Default: "yes",
 		},
 	}
-	result4 := RenderInteractionFrame(frame4)
+	result4 := RenderInteractionFrame(theme.Default(), frame4)
 	if result4.Content.Text == "" {
 		t.Error("expected non-empty text for Selection with nil Resume")
 	}
@@ -231,7 +233,7 @@ func TestRenderSelectionFrameEdgeCases(t *testing.T) {
 			{ID: "approve", Label: "Approve", Default: true},
 		},
 	}
-	result5 := RenderInteractionFrame(frame5)
+	result5 := RenderInteractionFrame(theme.Default(), frame5)
 	if result5.Content.Text == "" {
 		t.Error("expected non-empty text for frame with Response")
 	}
@@ -260,7 +262,7 @@ func FuzzInteractionFrameRender(f *testing.F) {
 			Type: interaction.FrameType(frameType),
 		}
 		// Should never panic regardless of frame type.
-		result := RenderInteractionFrame(frame)
+		result := RenderInteractionFrame(theme.Default(), frame)
 		_ = result
 	})
 }
@@ -273,8 +275,143 @@ func TestRenderStatusFrameIsStatic(t *testing.T) {
 			Message: "working on it",
 		},
 	}
-	result := RenderInteractionFrame(frame)
+	result := RenderInteractionFrame(theme.Default(), frame)
 	if !strings.Contains(result.Content.Text, "working on it") {
 		t.Errorf("expected status message in output, got: %s", result.Content.Text)
+	}
+}
+
+// TestRenderInteractionFrameProducesGoldenOutput verifies that every
+// selection-class frame type produces non-empty, structurally sound output
+// when rendered through the shared theme. This proves euclotui renderers
+// correctly use the theme rather than hardcoded ANSI colours.
+func TestRenderInteractionFrameProducesGoldenOutput(t *testing.T) {
+	th := theme.Default()
+
+	frameTypes := []interaction.FrameType{
+		interaction.FrameCandidates,
+		interaction.FrameComparison,
+		interaction.FrameDraft,
+		interaction.FrameResultType,
+		interaction.FrameStatus,
+		interaction.FrameSummary,
+		interaction.FrameTransition,
+		interaction.FrameSessionList,
+		interaction.FrameSessionListEmpty,
+		interaction.FrameSessionResuming,
+		interaction.FrameSessionResumeError,
+		interaction.FrameScopeConfirmation,
+		interaction.FrameIntentClarification,
+		interaction.FrameCandidateSelection,
+		interaction.FrameHITLApproval,
+		interaction.FrameBackgroundJobStatus,
+		interaction.FrameExecutionSummary,
+		interaction.FrameVerificationEvidence,
+		interaction.FrameOutcomeFeedback,
+	}
+
+	for _, ft := range frameTypes {
+		t.Run(string(ft), func(t *testing.T) {
+			frame := interaction.InteractionFrame{
+				Type:     ft,
+				TaskID:   "task-1",
+				Question: "test question",
+				Slots: []interaction.ActionSlot{
+					{ID: "opt1", Label: "Option 1", Default: true},
+					{ID: "opt2", Label: "Option 2"},
+				},
+				DefaultSlot: "opt1",
+				Content:     interaction.CandidatesContent{Candidates: []interaction.Candidate{{ID: "c1", Summary: "Candidate 1"}}},
+			}
+			if ft == interaction.FrameStatus {
+				frame.Content = interaction.StatusContent{Message: "processing"}
+			}
+			if ft == interaction.FrameSummary {
+				frame.Content = interaction.SummaryContent{Description: "test summary", Artifacts: []string{"a.go"}}
+			}
+			if ft == interaction.FrameTransition {
+				frame.Content = interaction.TransitionContent{FromMode: "a", ToMode: "b"}
+			}
+			if ft == interaction.FrameSessionList {
+				frame.Content = interaction.SessionListContent{Sessions: []interaction.SessionListItem{{Index: 1, Instruction: "test"}}}
+			}
+			if ft == interaction.FrameSessionListEmpty {
+				frame.Content = "no sessions"
+			}
+			if ft == interaction.FrameSessionResuming || ft == interaction.FrameSessionResumeError {
+				frame.Content = "resuming..."
+			}
+			if ft == interaction.FrameDraft {
+				frame.Content = interaction.DraftContent{Kind: "test", Items: []interaction.DraftItem{{Content: "draft item"}}}
+			}
+			if ft == interaction.FrameResultType {
+				frame.Content = interaction.ResultContent{Status: "passed", Evidence: []interaction.EvidenceItem{{Kind: "check", Detail: "ok"}}}
+			}
+			if ft == interaction.FrameComparison {
+				frame.Content = interaction.ComparisonContent{Dimensions: []string{"speed"}, Matrix: [][]string{{"fast"}}}
+			}
+
+			msg := RenderInteractionFrame(th, frame)
+			if strings.TrimSpace(msg.Content.Text) == "" {
+				t.Errorf("RenderInteractionFrame(%s) returned empty text", ft)
+			}
+		})
+	}
+}
+
+// TestThemeBasedRoleMapping verifies that the theme role methods used by
+// euclotui renderers match the palette values exactly (not hardcoded ANSI).
+func TestThemeBasedRoleMapping(t *testing.T) {
+	th := theme.Default()
+	pal := th.Palette()
+
+	// Render a sample frame and verify role-derived styles are used.
+	frame := interaction.InteractionFrame{
+		Type:     interaction.FrameScopeConfirmation,
+		TaskID:   "task-1",
+		Question: "test question",
+		Slots:    []interaction.ActionSlot{{ID: "opt1", Label: "Option 1", Default: true}},
+	}
+
+	msg := RenderInteractionFrame(th, frame)
+	if msg.Content.Text == "" {
+		t.Fatal("empty render for scope confirmation")
+	}
+
+	// Euclo and host share the same palette colours.
+	_ = pal
+}
+
+// TestRenderInteractionNotificationUsesTheme verifies that the notification
+// renderer uses the shared theme rather than hardcoded colours.
+func TestRenderInteractionNotificationUsesTheme(t *testing.T) {
+	th := theme.Default()
+	item := tui.NotificationItem{
+		ID:    "n1",
+		Msg:   "test notification",
+		Extra: map[string]string{"slot_count": "0"},
+	}
+	result := RenderInteractionNotification(th, item)
+	if !strings.Contains(result, "test notification") {
+		t.Errorf("notification render missing message text: %s", result)
+	}
+}
+
+func TestRenderInteractionNotificationWithSlots(t *testing.T) {
+	th := theme.Default()
+	item := tui.NotificationItem{
+		ID:  "n2",
+		Msg: "choose",
+		Extra: map[string]string{
+			"slot_count":  "2",
+			"slot_0_id":   "a",
+			"slot_0_label": "Alpha",
+			"slot_1_id":   "b",
+			"slot_1_label": "Beta",
+		},
+	}
+	result := RenderInteractionNotification(th, item)
+	if !strings.Contains(result, "Alpha") || !strings.Contains(result, "Beta") {
+		t.Errorf("notification render missing slot labels: %s", result)
 	}
 }

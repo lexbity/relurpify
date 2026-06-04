@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
@@ -266,6 +267,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	assertGolden(t, "sandbox_panel.txt", sandboxPane.View())
 
 	sec := &tui.SecurityGuardPane{}
+	sec.SetTheme(theme.Default())
 	sec.SetSize(96, 18)
 	assertGolden(t, "securityguard_panel.txt", sec.View())
 
@@ -305,7 +307,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	chatFrame.Metadata.Timestamp = now
 	chatFrame.CreatedAt = now
 	chatRouter.ApplyInteractionFrame(*chatFrame)
-	chat := euclotui.NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, chatRouter)
+	chat := euclotui.NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, chatRouter, nil)
 	chat.SetSize(96, 18)
 	chat.AppendMessage(tui.Message{
 		ID:        "msg-1",
@@ -313,10 +315,10 @@ func TestPanelGoldenViews(t *testing.T) {
 		Role:      tui.RoleSystem,
 		Content:   tui.MessageContent{Text: "workspace ready"},
 	})
-	chat.AppendMessage(euclotui.RenderInteractionFrame(*chatFrame))
+	chat.AppendMessage(euclotui.RenderInteractionFrame(theme.Default(), *chatFrame))
 	assertGolden(t, "euclo_chat_panel.txt", chat.View())
 
-	diff := euclotui.NewDiffPane(chatRouter, sandboxDir)
+	diff := euclotui.NewDiffPane(chatRouter, sandboxDir, nil)
 	diff.SetSize(96, 18)
 	assertGolden(t, "euclo_diff_panel.txt", diff.View())
 

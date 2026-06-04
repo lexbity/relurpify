@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -66,11 +67,14 @@ type SessionPane struct {
 	frameworkMode bool
 	width         int
 	height        int
+	// Theme is the active semantic style source.
+	th *theme.Theme
 }
 
 // NewSessionPane creates a SessionPane.
 func NewSessionPane(ctx *AgentContext, sess *Session, rt RuntimeAdapter) *SessionPane {
 	return &SessionPane{
+		th:      theme.Default(),
 		context: ctx,
 		session: sess,
 		runtime: rt,
@@ -363,29 +367,29 @@ func (p *SessionPane) View() string {
 
 func (p *SessionPane) viewFiles() string {
 	if p.loading {
-		return dimStyle.Render("Indexing workspace files...")
+		return p.th.Dim().Render("Indexing workspace files...")
 	}
 	if p.loadErr != nil {
-		return notifErrorStyle.Render(fmt.Sprintf("File index error: %v", p.loadErr))
+		return p.th.Notif(theme.NotifError).Render(fmt.Sprintf("File index error: %v", p.loadErr))
 	}
 	var b strings.Builder
 	header := "Workspace Files"
 	if p.filter != "" {
-		header += "  " + dimStyle.Render(fmt.Sprintf("filter: %q", p.filter))
+		header += "  " + p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter))
 	}
-	b.WriteString(sectionHeaderStyle.Render(header))
+	b.WriteString(p.th.Subhead().Render(header))
 	b.WriteString("\n\n")
 	if len(p.queued) > 0 {
-		b.WriteString(sectionHeaderStyle.Render("Queued Tasks") + "\n")
+		b.WriteString(p.th.Subhead().Render("Queued Tasks") + "\n")
 		for _, task := range p.queued {
-			style := taskPendingStyle
+			style := p.th.Pending()
 			icon := "☐"
 			switch task.Status {
 			case TaskCompleted:
-				style = taskDoneStyle
+				style = p.th.Success()
 				icon = "✓"
 			case TaskInProgress:
-				style = taskRunningStyle
+				style = p.th.Warning()
 				icon = "●"
 			}
 			b.WriteString(fmt.Sprintf("%s  %s\n", style.Render(icon), style.Render(task.Description)))
@@ -393,43 +397,43 @@ func (p *SessionPane) viewFiles() string {
 		b.WriteString("\n")
 	}
 	if len(p.filtered) == 0 {
-		b.WriteString(dimStyle.Render("No matching files"))
+		b.WriteString(p.th.Dim().Render("No matching files"))
 	} else {
 		for i, e := range p.filtered {
 			line := renderFileEntryLine(e)
 			if i == p.fileSel {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			} else {
-				line = panelItemStyle.Render(line)
+				line = p.th.Body().Render(line)
 			}
 			b.WriteString(line + "\n")
 		}
 	}
 	if p.context != nil && len(p.context.Files) > 0 {
-		b.WriteString("\n" + sectionHeaderStyle.Render("Context") + "\n")
+		b.WriteString("\n" + p.th.Subhead().Render("Context") + "\n")
 		for _, f := range p.context.Files {
-			b.WriteString(dimStyle.Render("  • ") + filePathStyle.Render(f) + "\n")
+			b.WriteString(p.th.Dim().Render("  • ") + p.th.Subhead().Render(f) + "\n")
 		}
 	}
-	b.WriteString("\n" + dimStyle.Render("enter=add to context  e=open in editor  tab=view changes"))
+	b.WriteString("\n" + p.th.Dim().Render("enter=add to context  e=open in editor  tab=view changes"))
 	return b.String()
 }
 
 func (p *SessionPane) viewChanges() string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Session Changes"))
+	b.WriteString(p.th.Subhead().Render("Session Changes"))
 	b.WriteString("\n\n")
 	if len(p.queued) > 0 {
-		b.WriteString(sectionHeaderStyle.Render("Queued Tasks") + "\n")
+		b.WriteString(p.th.Subhead().Render("Queued Tasks") + "\n")
 		for _, task := range p.queued {
-			style := taskPendingStyle
+			style := p.th.Pending()
 			icon := "☐"
 			switch task.Status {
 			case TaskCompleted:
-				style = taskDoneStyle
+				style = p.th.Success()
 				icon = "✓"
 			case TaskInProgress:
-				style = taskRunningStyle
+				style = p.th.Warning()
 				icon = "●"
 			}
 			b.WriteString(fmt.Sprintf("%s  %s\n", style.Render(icon), style.Render(task.Description)))
@@ -437,28 +441,28 @@ func (p *SessionPane) viewChanges() string {
 		b.WriteString("\n")
 	}
 	if len(p.changes) == 0 {
-		b.WriteString(dimStyle.Render("No changes in this session yet"))
-		b.WriteString("\n\n" + dimStyle.Render("tab=view files"))
+		b.WriteString(p.th.Dim().Render("No changes in this session yet"))
+		b.WriteString("\n\n" + p.th.Dim().Render("tab=view files"))
 		return b.String()
 	}
 	for i, c := range p.changes {
-		statusIcon, statusRender := changeStatusDisplay(c.Status)
+		statusIcon, statusRender := changeStatusDisplay(p.th, c.Status)
 		changeType := string(c.Type)
 		if changeType == "" {
 			changeType = "modify"
 		}
 		line := statusRender(statusIcon) + "  " +
-			filePathStyle.Render(c.Path) +
-			"  " + dimStyle.Render("("+changeType+")")
+			p.th.Subhead().Render(c.Path) +
+			"  " + p.th.Dim().Render("("+changeType+")")
 		if c.LinesAdded > 0 || c.LinesRemoved > 0 {
-			line += dimStyle.Render(fmt.Sprintf("  +%d/-%d", c.LinesAdded, c.LinesRemoved))
+			line += p.th.Dim().Render(fmt.Sprintf("  +%d/-%d", c.LinesAdded, c.LinesRemoved))
 		}
 		if i == p.changeSel {
-			line = panelItemActiveStyle.Render(line)
+			line = p.th.Active().Render(line)
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("\n" + dimStyle.Render("y=approve  n=reject  e=open in editor  tab=view files"))
+	b.WriteString("\n" + p.th.Dim().Render("y=approve  n=reject  e=open in editor  tab=view files"))
 	return b.String()
 }
 
@@ -469,19 +473,19 @@ func (p *SessionPane) viewLive() string {
 	if p.frameworkMode {
 		title = "AI Provider"
 	}
-	b.WriteString(sectionHeaderStyle.Render(title) + "\n\n")
+	b.WriteString(p.th.Subhead().Render(title) + "\n\n")
 	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	if filter != "" {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("filter: %q", p.filter)) + "\n\n")
+		b.WriteString(p.th.Dim().Render(fmt.Sprintf("filter: %q", p.filter)) + "\n\n")
 	}
 
 	d := p.diagnostics
 	if p.session != nil {
 		if filter == "" || strings.Contains(strings.ToLower(p.session.Workspace), filter) {
-			b.WriteString(dimStyle.Render("workspace  ") + filePathStyle.Render(p.session.Workspace) + "\n")
+			b.WriteString(p.th.Dim().Render("workspace  ") + p.th.Subhead().Render(p.session.Workspace) + "\n")
 		}
 		if filter == "" || strings.Contains(strings.ToLower(p.session.Agent), filter) {
-			b.WriteString(dimStyle.Render("agent      ") + textStyle.Render(p.session.Agent) + "\n")
+			b.WriteString(p.th.Dim().Render("agent      ") + p.th.Body().Render(p.session.Agent) + "\n")
 		}
 		if p.session.Provider != "" {
 			label := p.session.Provider
@@ -489,130 +493,130 @@ func (p *SessionPane) viewLive() string {
 				label = fmt.Sprintf("%s [%s]", label, p.session.BackendState)
 			}
 			if filter == "" || strings.Contains(strings.ToLower(label), filter) {
-				b.WriteString(dimStyle.Render("provider   ") + textStyle.Render(label) + "\n")
+				b.WriteString(p.th.Dim().Render("provider   ") + p.th.Body().Render(label) + "\n")
 			}
 		}
 		if filter == "" || strings.Contains(strings.ToLower(p.session.Model), filter) {
-			b.WriteString(dimStyle.Render("model      ") + textStyle.Render(p.session.Model) + "\n")
+			b.WriteString(p.th.Dim().Render("model      ") + p.th.Body().Render(p.session.Model) + "\n")
 		}
 		if p.session.Mode != "" && (filter == "" || strings.Contains(strings.ToLower(p.session.Mode), filter)) {
-			b.WriteString(dimStyle.Render("mode       ") + inProgressStyle.Render(p.session.Mode) + "\n")
+			b.WriteString(p.th.Dim().Render("mode       ") + p.th.Warning().Render(p.session.Mode) + "\n")
 		}
 		if p.session.Strategy != "" && (filter == "" || strings.Contains(strings.ToLower(p.session.Strategy), filter)) {
-			b.WriteString(dimStyle.Render("strategy   ") + textStyle.Render(p.session.Strategy) + "\n")
+			b.WriteString(p.th.Dim().Render("strategy   ") + p.th.Body().Render(p.session.Strategy) + "\n")
 		}
 		dur := p.session.TotalDuration.Round(1e9)
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d %s", p.session.TotalTokens, dur.String())), filter) {
-			b.WriteString(dimStyle.Render("tokens     ") + fmt.Sprintf("%d  %s", p.session.TotalTokens, dimStyle.Render(dur.String())) + "\n")
+			b.WriteString(p.th.Dim().Render("tokens     ") + fmt.Sprintf("%d  %s", p.session.TotalTokens, p.th.Dim().Render(dur.String())) + "\n")
 		}
 		b.WriteString("\n")
 	}
 
 	if d.ContextTokensMax > 0 {
 		pct := 100 * d.ContextTokensUsed / d.ContextTokensMax
-		bar := contextBar(pct, 20)
-		line := dimStyle.Render("context    ") + bar + dimStyle.Render(fmt.Sprintf("  %d/%d", d.ContextTokensUsed, d.ContextTokensMax))
+		bar := contextBar(p.th, pct, 20)
+		line := p.th.Dim().Render("context    ") + bar + p.th.Dim().Render(fmt.Sprintf("  %d/%d", d.ContextTokensUsed, d.ContextTokensMax))
 		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
 			b.WriteString(line + "\n")
 		}
 	}
 	if d.ActiveWorkflows > 0 || d.PatternEntries > 0 {
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.ActiveWorkflows)), filter) {
-			b.WriteString(dimStyle.Render("workflows  ") + fmt.Sprintf("%d", d.ActiveWorkflows) + "\n")
+			b.WriteString(p.th.Dim().Render("workflows  ") + fmt.Sprintf("%d", d.ActiveWorkflows) + "\n")
 		}
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.PatternEntries)), filter) {
-			b.WriteString(dimStyle.Render("patterns   ") + fmt.Sprintf("%d", d.PatternEntries) + "\n")
+			b.WriteString(p.th.Dim().Render("patterns   ") + fmt.Sprintf("%d", d.PatternEntries) + "\n")
 		}
 	}
 	if d.ActiveMode != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ActiveMode), filter) {
-			b.WriteString(dimStyle.Render("exec mode  ") + inProgressStyle.Render(d.ActiveMode) + "\n")
+			b.WriteString(p.th.Dim().Render("exec mode  ") + p.th.Warning().Render(d.ActiveMode) + "\n")
 		}
 	}
 	if d.ActivePhase != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ActivePhase), filter) {
-			b.WriteString(dimStyle.Render("phase      ") + textStyle.Render(d.ActivePhase) + "\n")
+			b.WriteString(p.th.Dim().Render("phase      ") + p.th.Body().Render(d.ActivePhase) + "\n")
 		}
 	}
 	if d.ActiveProfile != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ActiveProfile), filter) {
-			b.WriteString(dimStyle.Render("profile    ") + textStyle.Render(d.ActiveProfile) + "\n")
+			b.WriteString(p.th.Dim().Render("profile    ") + p.th.Body().Render(d.ActiveProfile) + "\n")
 		}
 	}
 	if d.ProfileReason != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ProfileReason), filter) {
-			b.WriteString(dimStyle.Render("reason     ") + textStyle.Render(d.ProfileReason) + "\n")
+			b.WriteString(p.th.Dim().Render("reason     ") + p.th.Body().Render(d.ProfileReason) + "\n")
 		}
 	}
 	if d.ManifestFingerprint != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ManifestFingerprint), filter) {
-			b.WriteString(dimStyle.Render("fingerprint") + "  " + textStyle.Render(d.ManifestFingerprint) + "\n")
+			b.WriteString(p.th.Dim().Render("fingerprint") + "  " + p.th.Body().Render(d.ManifestFingerprint) + "\n")
 		}
 	}
 	if len(d.ProtectedPaths) > 0 {
 		line := strings.Join(d.ProtectedPaths, ", ")
 		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
-			b.WriteString(dimStyle.Render("sandbox    ") + textStyle.Render(line) + "\n")
+			b.WriteString(p.th.Dim().Render("sandbox    ") + p.th.Body().Render(line) + "\n")
 		}
 	}
 	if d.ManifestPolicy != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ManifestPolicy), filter) {
-			b.WriteString(dimStyle.Render("policy     ") + textStyle.Render(d.ManifestPolicy) + "\n")
+			b.WriteString(p.th.Dim().Render("policy     ") + p.th.Body().Render(d.ManifestPolicy) + "\n")
 		}
 	}
 	if d.DoomLoopState != "" && d.DoomLoopState != "idle" {
 		if filter == "" || strings.Contains(strings.ToLower(d.DoomLoopState), filter) {
-			b.WriteString(dimStyle.Render("doom loop  ") + diffRemoveStyle.Render(d.DoomLoopState) + "\n")
+			b.WriteString(p.th.Dim().Render("doom loop  ") + p.th.Error().Render(d.DoomLoopState) + "\n")
 		}
 	}
 	if d.ContextStrategy != "" {
 		if filter == "" || strings.Contains(strings.ToLower(d.ContextStrategy), filter) {
-			b.WriteString(dimStyle.Render("ctx strat  ") + textStyle.Render(d.ContextStrategy) + "\n")
+			b.WriteString(p.th.Dim().Render("ctx strat  ") + p.th.Body().Render(d.ContextStrategy) + "\n")
 		}
 	}
 	if d.PruningEvents > 0 {
 		line := fmt.Sprintf("%d event(s)", d.PruningEvents)
 		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
-			b.WriteString(dimStyle.Render("pruning    ") + inProgressStyle.Render(line) + "\n")
+			b.WriteString(p.th.Dim().Render("pruning    ") + p.th.Warning().Render(line) + "\n")
 		}
 	}
 	if d.CapabilitiesTotal > 0 {
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.CapabilitiesTotal)), filter) {
-			b.WriteString(dimStyle.Render("caps       ") + fmt.Sprintf("%d", d.CapabilitiesTotal) + "\n")
+			b.WriteString(p.th.Dim().Render("caps       ") + fmt.Sprintf("%d", d.CapabilitiesTotal) + "\n")
 		}
 	}
 	if d.PendingApprovals > 0 {
 		line := fmt.Sprintf("%d", d.PendingApprovals)
 		if filter == "" || strings.Contains(strings.ToLower(line), filter) {
-			b.WriteString(dimStyle.Render("pending ✓  ") + inProgressStyle.Render(line) + "\n")
+			b.WriteString(p.th.Dim().Render("pending ✓  ") + p.th.Warning().Render(line) + "\n")
 		}
 	}
 	if d.LiveProviders > 0 {
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", d.LiveProviders)), filter) {
-			b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
+			b.WriteString(p.th.Dim().Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
 		}
 	}
 	if len(d.DeprecationNotices) > 0 {
 		if filter == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%d", len(d.DeprecationNotices))), filter) {
-			b.WriteString(dimStyle.Render("deprecate  ") + fmt.Sprintf("%d", len(d.DeprecationNotices)) + "\n")
+			b.WriteString(p.th.Dim().Render("deprecate  ") + fmt.Sprintf("%d", len(d.DeprecationNotices)) + "\n")
 		}
 	}
 
 	panels := []string{
-		sectionPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
-		sectionPanel("Workflows", widths[1], sectionList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
-		sectionPanel("Providers / Approvals", widths[2],
-			sectionHeaderStyle.Render("Providers"),
-			sectionList(p.liveProviderLines(), p.providerSel, 4),
+		sectionPanel(p.th, "Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
+		sectionPanel(p.th, "Workflows", widths[1], sectionList(p.th, p.liveWorkflowLines(), p.workflowSel, p.height-12)),
+		sectionPanel(p.th, "Providers / Approvals", widths[2],
+			p.th.Subhead().Render("Providers"),
+			sectionList(p.th, p.liveProviderLines(), p.providerSel, 4),
 			"",
-			sectionHeaderStyle.Render("Approvals"),
-			sectionList(p.liveApprovalLines(), p.approvalSel, 4),
+			p.th.Subhead().Render("Approvals"),
+			sectionList(p.th, p.liveApprovalLines(), p.approvalSel, 4),
 		),
 	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, panels...),
-		sectionPanel("Detail", p.width, p.liveDetailLines()...),
-		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate"),
+		sectionPanel(p.th, "Detail", p.width, p.liveDetailLines()...),
+		p.th.Dim().Render("tab/shift+tab switch focus  ↑↓ navigate"),
 	}, "\n")
 }
 
@@ -691,7 +695,7 @@ func (p *SessionPane) refreshLiveDetails() {
 
 func (p *SessionPane) liveWorkflowLines() []string {
 	if len(p.workflows) == 0 {
-		return []string{dimStyle.Render("no workflows")}
+		return []string{p.th.Dim().Render("no workflows")}
 	}
 	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.workflows))
@@ -701,7 +705,7 @@ func (p *SessionPane) liveWorkflowLines() []string {
 		}
 		line := fmt.Sprintf("%s  %s  %s", wf.WorkflowID, wf.Status, wf.Instruction)
 		if p.liveSection == liveSectionWorkflows && i == p.workflowSel {
-			line = panelItemActiveStyle.Render("  " + line)
+			line = p.th.Active().Render("  " + line)
 		}
 		lines = append(lines, line)
 	}
@@ -710,7 +714,7 @@ func (p *SessionPane) liveWorkflowLines() []string {
 
 func (p *SessionPane) liveProviderLines() []string {
 	if len(p.providers) == 0 {
-		return []string{dimStyle.Render("no providers")}
+		return []string{p.th.Dim().Render("no providers")}
 	}
 	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.providers))
@@ -720,7 +724,7 @@ func (p *SessionPane) liveProviderLines() []string {
 		}
 		line := fmt.Sprintf("%s  %s  %s", provider.ProviderID, provider.Kind, provider.Meta.State)
 		if p.liveSection == liveSectionProviders && i == p.providerSel {
-			line = panelItemActiveStyle.Render("  " + line)
+			line = p.th.Active().Render("  " + line)
 		}
 		lines = append(lines, line)
 	}
@@ -729,7 +733,7 @@ func (p *SessionPane) liveProviderLines() []string {
 
 func (p *SessionPane) liveApprovalLines() []string {
 	if len(p.approvals) == 0 {
-		return []string{dimStyle.Render("no approvals")}
+		return []string{p.th.Dim().Render("no approvals")}
 	}
 	filter := strings.ToLower(strings.TrimSpace(p.filter))
 	lines := make([]string, 0, len(p.approvals))
@@ -739,7 +743,7 @@ func (p *SessionPane) liveApprovalLines() []string {
 		}
 		line := fmt.Sprintf("%s  %s  %s", approval.ID, approval.Kind, approval.Action)
 		if p.liveSection == liveSectionApprovals && i == p.approvalSel {
-			line = panelItemActiveStyle.Render("  " + line)
+			line = p.th.Active().Render("  " + line)
 		}
 		lines = append(lines, line)
 	}
@@ -754,15 +758,15 @@ func (p *SessionPane) liveDetailLines() []string {
 			lines := []string{
 				p.workflow.Workflow.WorkflowID,
 				"",
-				dimStyle.Render("Status") + "  " + p.workflow.Workflow.Status,
-				dimStyle.Render("Task") + "  " + fallback(p.workflow.Workflow.TaskID, "n/a"),
-				dimStyle.Render("Cursor") + "  " + fallback(p.workflow.Workflow.CursorStepID, "n/a"),
-				dimStyle.Render("Instruction") + "  " + p.workflow.Workflow.Instruction,
-				dimStyle.Render("Delegations") + fmt.Sprintf("  %d", len(p.workflow.Delegations)),
-				dimStyle.Render("Artifacts") + fmt.Sprintf("  %d", len(p.workflow.WorkflowArtifacts)),
+				p.th.Dim().Render("Status") + "  " + p.workflow.Workflow.Status,
+				p.th.Dim().Render("Task") + "  " + fallback(p.workflow.Workflow.TaskID, "n/a"),
+				p.th.Dim().Render("Cursor") + "  " + fallback(p.workflow.Workflow.CursorStepID, "n/a"),
+				p.th.Dim().Render("Instruction") + "  " + p.workflow.Workflow.Instruction,
+				p.th.Dim().Render("Delegations") + fmt.Sprintf("  %d", len(p.workflow.Delegations)),
+				p.th.Dim().Render("Artifacts") + fmt.Sprintf("  %d", len(p.workflow.WorkflowArtifacts)),
 			}
 			if len(p.workflow.ResourceDetails) > 0 {
-				lines = append(lines, "", dimStyle.Render("Linked resources"))
+				lines = append(lines, "", p.th.Dim().Render("Linked resources"))
 				for _, resource := range p.workflow.ResourceDetails {
 					lines = append(lines, fallback(resource.Summary, resource.URI))
 				}
@@ -777,34 +781,34 @@ func (p *SessionPane) liveDetailLines() []string {
 				if len(filtered) > 0 {
 					return filtered
 				}
-				return []string{dimStyle.Render("No matching workflow detail")}
+				return []string{p.th.Dim().Render("No matching workflow detail")}
 			}
 			return lines
 		}
 		if len(p.workflows) == 0 {
-			return []string{dimStyle.Render("No workflow selected.")}
+			return []string{p.th.Dim().Render("No workflow selected.")}
 		}
 		wf := p.workflows[p.workflowSel]
 		return []string{
 			wf.WorkflowID,
 			"",
-			dimStyle.Render("Status") + "  " + wf.Status,
-			dimStyle.Render("Task") + "  " + fallback(wf.TaskID, "n/a"),
-			dimStyle.Render("Cursor") + "  " + fallback(wf.CursorStepID, "n/a"),
-			dimStyle.Render("Instruction") + "  " + wf.Instruction,
+			p.th.Dim().Render("Status") + "  " + wf.Status,
+			p.th.Dim().Render("Task") + "  " + fallback(wf.TaskID, "n/a"),
+			p.th.Dim().Render("Cursor") + "  " + fallback(wf.CursorStepID, "n/a"),
+			p.th.Dim().Render("Instruction") + "  " + wf.Instruction,
 		}
 	case liveSectionProviders:
 		if p.provider != nil {
 			lines := []string{
 				p.provider.ProviderID,
 				"",
-				dimStyle.Render("Kind") + "  " + p.provider.Kind,
-				dimStyle.Render("State") + "  " + p.provider.Meta.State,
-				dimStyle.Render("Trust") + "  " + fallback(p.provider.TrustBaseline, "n/a"),
-				dimStyle.Render("Recoverability") + "  " + fallback(p.provider.Recoverability, "n/a"),
-				dimStyle.Render("Configured from") + "  " + fallback(p.provider.ConfiguredFrom, "n/a"),
-				dimStyle.Render("Capabilities") + "  " + joinOrNA(p.provider.CapabilityIDs),
-				dimStyle.Render("Metadata") + "  " + joinOrNA(p.provider.Metadata),
+				p.th.Dim().Render("Kind") + "  " + p.provider.Kind,
+				p.th.Dim().Render("State") + "  " + p.provider.Meta.State,
+				p.th.Dim().Render("Trust") + "  " + fallback(p.provider.TrustBaseline, "n/a"),
+				p.th.Dim().Render("Recoverability") + "  " + fallback(p.provider.Recoverability, "n/a"),
+				p.th.Dim().Render("Configured from") + "  " + fallback(p.provider.ConfiguredFrom, "n/a"),
+				p.th.Dim().Render("Capabilities") + "  " + joinOrNA(p.provider.CapabilityIDs),
+				p.th.Dim().Render("Metadata") + "  " + joinOrNA(p.provider.Metadata),
 			}
 			if filter != "" {
 				var filtered []string
@@ -816,37 +820,37 @@ func (p *SessionPane) liveDetailLines() []string {
 				if len(filtered) > 0 {
 					return filtered
 				}
-				return []string{dimStyle.Render("No matching provider detail")}
+				return []string{p.th.Dim().Render("No matching provider detail")}
 			}
 			return lines
 		}
 		if len(p.providers) == 0 {
-			return []string{dimStyle.Render("No provider selected.")}
+			return []string{p.th.Dim().Render("No provider selected.")}
 		}
 		provider := p.providers[p.providerSel]
 		return []string{
 			provider.ProviderID,
 			"",
-			dimStyle.Render("Kind") + "  " + provider.Kind,
-			dimStyle.Render("State") + "  " + provider.Meta.State,
-			dimStyle.Render("Trust") + "  " + fallback(provider.TrustBaseline, "n/a"),
-			dimStyle.Render("Recoverability") + "  " + fallback(provider.Recoverability, "n/a"),
-			dimStyle.Render("Capabilities") + "  " + joinOrNA(provider.CapabilityIDs),
+			p.th.Dim().Render("Kind") + "  " + provider.Kind,
+			p.th.Dim().Render("State") + "  " + provider.Meta.State,
+			p.th.Dim().Render("Trust") + "  " + fallback(provider.TrustBaseline, "n/a"),
+			p.th.Dim().Render("Recoverability") + "  " + fallback(provider.Recoverability, "n/a"),
+			p.th.Dim().Render("Capabilities") + "  " + joinOrNA(provider.CapabilityIDs),
 		}
 	case liveSectionApprovals:
 		if p.approval != nil {
 			lines := []string{
 				p.approval.ID,
 				"",
-				dimStyle.Render("Kind") + "  " + p.approval.Kind,
-				dimStyle.Render("Action") + "  " + p.approval.Action,
-				dimStyle.Render("Resource") + "  " + fallback(p.approval.Resource, "n/a"),
-				dimStyle.Render("Scope") + "  " + fallback(p.approval.Scope, "n/a"),
-				dimStyle.Render("Risk") + "  " + fallback(p.approval.Risk, "n/a"),
-				dimStyle.Render("Justification") + "  " + fallback(p.approval.Justification, "n/a"),
+				p.th.Dim().Render("Kind") + "  " + p.approval.Kind,
+				p.th.Dim().Render("Action") + "  " + p.approval.Action,
+				p.th.Dim().Render("Resource") + "  " + fallback(p.approval.Resource, "n/a"),
+				p.th.Dim().Render("Scope") + "  " + fallback(p.approval.Scope, "n/a"),
+				p.th.Dim().Render("Risk") + "  " + fallback(p.approval.Risk, "n/a"),
+				p.th.Dim().Render("Justification") + "  " + fallback(p.approval.Justification, "n/a"),
 			}
 			if len(p.approval.Metadata) > 0 {
-				lines = append(lines, dimStyle.Render("Metadata")+"  "+joinStringMap(p.approval.Metadata))
+				lines = append(lines, p.th.Dim().Render("Metadata")+"  "+joinStringMap(p.approval.Metadata))
 			}
 			if filter != "" {
 				var filtered []string
@@ -858,29 +862,29 @@ func (p *SessionPane) liveDetailLines() []string {
 				if len(filtered) > 0 {
 					return filtered
 				}
-				return []string{dimStyle.Render("No matching approval detail")}
+				return []string{p.th.Dim().Render("No matching approval detail")}
 			}
 			return lines
 		}
 		if len(p.approvals) == 0 {
-			return []string{dimStyle.Render("No approval selected.")}
+			return []string{p.th.Dim().Render("No approval selected.")}
 		}
 		approval := p.approvals[p.approvalSel]
 		return []string{
 			approval.ID,
 			"",
-			dimStyle.Render("Kind") + "  " + approval.Kind,
-			dimStyle.Render("Action") + "  " + approval.Action,
-			dimStyle.Render("Resource") + "  " + fallback(approval.Resource, "n/a"),
-			dimStyle.Render("Scope") + "  " + fallback(approval.Scope, "n/a"),
-			dimStyle.Render("Justification") + "  " + fallback(approval.Justification, "n/a"),
+			p.th.Dim().Render("Kind") + "  " + approval.Kind,
+			p.th.Dim().Render("Action") + "  " + approval.Action,
+			p.th.Dim().Render("Resource") + "  " + fallback(approval.Resource, "n/a"),
+			p.th.Dim().Render("Scope") + "  " + fallback(approval.Scope, "n/a"),
+			p.th.Dim().Render("Justification") + "  " + fallback(approval.Justification, "n/a"),
 		}
 	}
 	return nil
 }
 
 // contextBar renders a simple fill bar for token usage.
-func contextBar(pct, width int) string {
+func contextBar(th *theme.Theme, pct, width int) string {
 	if pct < 0 {
 		pct = 0
 	}
@@ -889,18 +893,18 @@ func contextBar(pct, width int) string {
 	}
 	filled := pct * width / 100
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	style := completedStyle
+	style := th.Success()
 	if pct > 80 {
-		style = diffRemoveStyle
+		style = th.Error()
 	} else if pct > 60 {
-		style = inProgressStyle
+		style = th.Warning()
 	}
 	return style.Render(bar)
 }
 
 func (p *SessionPane) viewSessionSettings() string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Session Config") + "\n\n")
+	b.WriteString(p.th.Subhead().Render("Session Config") + "\n\n")
 
 	if p.session != nil {
 		rows := []struct{ k, v string }{
@@ -917,72 +921,72 @@ func (p *SessionPane) viewSessionSettings() string {
 			if r.v == "" {
 				continue
 			}
-			b.WriteString(dimStyle.Render(fmt.Sprintf("%-10s", r.k)) + "  " + textStyle.Render(r.v) + "\n")
+			b.WriteString(p.th.Dim().Render(fmt.Sprintf("%-10s", r.k)) + "  " + p.th.Body().Render(r.v) + "\n")
 		}
 	}
 
 	if p.context != nil {
-		b.WriteString("\n" + sectionHeaderStyle.Render("Context Files") + "\n")
+		b.WriteString("\n" + p.th.Subhead().Render("Context Files") + "\n")
 		if len(p.context.Files) == 0 {
-			b.WriteString(dimStyle.Render("  (none)") + "\n")
+			b.WriteString(p.th.Dim().Render("  (none)") + "\n")
 		} else {
 			for _, f := range p.context.Files {
-				b.WriteString(dimStyle.Render("  • ") + filePathStyle.Render(f) + "\n")
+				b.WriteString(p.th.Dim().Render("  • ") + p.th.Subhead().Render(f) + "\n")
 			}
 		}
-		b.WriteString(dimStyle.Render(fmt.Sprintf("  budget: %d tokens", p.context.MaxTokens)) + "\n")
+		b.WriteString(p.th.Dim().Render(fmt.Sprintf("  budget: %d tokens", p.context.MaxTokens)) + "\n")
 	}
 
 	if p.diagnostics.ManifestFingerprint != "" || len(p.diagnostics.ProtectedPaths) > 0 || p.diagnostics.ManifestPolicy != "" {
-		b.WriteString("\n" + sectionHeaderStyle.Render("Manifest / Permissions") + "\n")
+		b.WriteString("\n" + p.th.Subhead().Render("Manifest / Permissions") + "\n")
 		if p.diagnostics.ManifestFingerprint != "" {
-			b.WriteString(dimStyle.Render("  fingerprint") + "  " + textStyle.Render(p.diagnostics.ManifestFingerprint) + "\n")
+			b.WriteString(p.th.Dim().Render("  fingerprint") + "  " + p.th.Body().Render(p.diagnostics.ManifestFingerprint) + "\n")
 		}
 		if p.diagnostics.ManifestPolicy != "" {
-			b.WriteString(dimStyle.Render("  policy") + "  " + textStyle.Render(p.diagnostics.ManifestPolicy) + "\n")
+			b.WriteString(p.th.Dim().Render("  policy") + "  " + p.th.Body().Render(p.diagnostics.ManifestPolicy) + "\n")
 		}
 		if len(p.diagnostics.ProtectedPaths) > 0 {
-			b.WriteString(dimStyle.Render("  sandbox") + "  " + textStyle.Render(strings.Join(p.diagnostics.ProtectedPaths, ", ")) + "\n")
+			b.WriteString(p.th.Dim().Render("  sandbox") + "  " + p.th.Body().Render(strings.Join(p.diagnostics.ProtectedPaths, ", ")) + "\n")
 		}
 		if len(p.diagnostics.DeprecationNotices) > 0 {
-			b.WriteString(dimStyle.Render("  deprecations") + "  " + textStyle.Render(strings.Join(p.diagnostics.DeprecationNotices, "; ")) + "\n")
+			b.WriteString(p.th.Dim().Render("  deprecations") + "  " + p.th.Body().Render(strings.Join(p.diagnostics.DeprecationNotices, "; ")) + "\n")
 		}
 	}
 
-	b.WriteString("\n" + dimStyle.Render("full policy config → config tab"))
+	b.WriteString("\n" + p.th.Dim().Render("full policy config → config tab"))
 	return b.String()
 }
 
 func (p *SessionPane) viewServices() string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("ayenitd services") + "\n\n")
+	b.WriteString(p.th.Subhead().Render("ayenitd services") + "\n\n")
 
 	if len(p.services) == 0 {
-		b.WriteString(dimStyle.Render("No services registered.") + "\n")
+		b.WriteString(p.th.Dim().Render("No services registered.") + "\n")
 	} else {
 		for i, svc := range p.services {
 			statusBadge := ""
 			switch svc.Status {
 			case ServiceStatusRunning:
-				statusBadge = completedStyle.Render("[running]")
+				statusBadge = p.th.Success().Render("[running]")
 			case ServiceStatusStopped:
-				statusBadge = dimStyle.Render("[stopped]")
+				statusBadge = p.th.Dim().Render("[stopped]")
 			case ServiceStatusError:
-				statusBadge = diffRemoveStyle.Render("[error]")
+				statusBadge = p.th.Error().Render("[error]")
 			default:
-				statusBadge = dimStyle.Render("[unknown]")
+				statusBadge = p.th.Dim().Render("[unknown]")
 			}
 			line := fmt.Sprintf("%-24s %s", svc.ID, statusBadge)
 			if i == p.serviceSel {
-				line = panelItemActiveStyle.Render(line)
+				line = p.th.Active().Render(line)
 			} else {
-				line = panelItemStyle.Render(line)
+				line = p.th.Body().Render(line)
 			}
 			b.WriteString(line + "\n")
 			if i == p.serviceSel {
-				if detail := serviceSummaryLines(svc); len(detail) > 0 {
+				if detail := serviceSummaryLines(p.th, svc); len(detail) > 0 {
 					for _, line := range detail {
-						b.WriteString(dimStyle.Render("  ") + line + "\n")
+						b.WriteString(p.th.Dim().Render("  ") + line + "\n")
 					}
 					b.WriteString("\n")
 				}
@@ -990,40 +994,47 @@ func (p *SessionPane) viewServices() string {
 		}
 	}
 
-	b.WriteString("\n" + dimStyle.Render("[s] stop  [r] restart  [R] restart-all  ↑↓ navigate"))
+	b.WriteString("\n" + p.th.Dim().Render("[s] stop  [r] restart  [R] restart-all  ↑↓ navigate"))
 	return b.String()
 }
 
-func serviceSummaryLines(svc ServiceInfo) []string {
+func serviceSummaryLines(th *theme.Theme, svc ServiceInfo) []string {
 	if strings.TrimSpace(svc.Source) == "" && strings.TrimSpace(svc.Owner) == "" && len(svc.Notes) == 0 {
 		return nil
 	}
 	lines := make([]string, 0, 3+len(svc.Notes))
 	if strings.TrimSpace(svc.Source) != "" {
-		lines = append(lines, dimStyle.Render("source")+"  "+textStyle.Render(svc.Source))
+		lines = append(lines, th.Dim().Render("source")+"  "+th.Body().Render(svc.Source))
 	}
 	if strings.TrimSpace(svc.Owner) != "" {
-		lines = append(lines, dimStyle.Render("owner")+"  "+textStyle.Render(svc.Owner))
+		lines = append(lines, th.Dim().Render("owner")+"  "+th.Body().Render(svc.Owner))
 	}
 	if len(svc.Notes) > 0 {
-		lines = append(lines, dimStyle.Render("notes"))
+		lines = append(lines, th.Dim().Render("notes"))
 		for _, note := range svc.Notes {
-			lines = append(lines, "    "+textStyle.Render(note))
+			lines = append(lines, "    "+th.Body().Render(note))
 		}
 	}
 	return lines
 }
 
-func changeStatusDisplay(s ChangeStatus) (string, func(string) string) {
+func changeStatusDisplay(th *theme.Theme, s ChangeStatus) (string, func(string) string) {
 	wrap := func(st lipgloss.Style) func(string) string {
 		return func(v string) string { return st.Render(v) }
 	}
 	switch s {
 	case StatusApproved:
-		return "✓", wrap(taskDoneStyle)
+		return "✓", wrap(th.Success())
 	case StatusRejected:
-		return "✗", wrap(lipgloss.NewStyle().Foreground(colorError))
+		return "✗", wrap(th.Error())
 	default:
-		return "?", wrap(dimStyle)
+		return "?", wrap(th.Dim())
+	}
+}
+
+// SetTheme sets the active semantic style source.
+func (p *SessionPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
 	}
 }

@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+)
+
+import (
 	"context"
 	"fmt"
 	"os"
@@ -49,6 +53,10 @@ type DoctorPane struct {
 	status   string
 	width    int
 	height   int
+	// Theme is the active semantic style source.
+	th *theme.Theme
+	// anim is the host animation manager, set by the model via SetAnimManager.
+	anim *AnimationManager
 }
 
 // Report returns the current doctor report.
@@ -61,7 +69,7 @@ func (p *DoctorPane) SetReport(report DoctorReport) { p.report = report }
 func (p *DoctorPane) SetStatus(status string) { p.status = status }
 
 func NewDoctorPane(rt RuntimeAdapter) *DoctorPane {
-	p := &DoctorPane{runtime: rt}
+	p := &DoctorPane{th: theme.Default(), runtime: rt}
 	p.Refresh()
 	return p
 }
@@ -151,24 +159,24 @@ func (p *DoctorPane) viewChecks() string {
 		lines = append(lines, fmt.Sprintf("%-12s %-8s %s", dep.Name, state, dep.Details))
 	}
 	if len(lines) == 0 {
-		lines = []string{dimStyle.Render("No matching checks")}
+		lines = []string{p.th.Dim().Render("No matching checks")}
 	}
 	header := []string{
-		dimStyle.Render("workspace") + "  " + fallback(p.report.Workspace, "(unset)"),
-		dimStyle.Render("config") + "  " + fallback(p.report.ConfigRoot, "(unset)"),
-		dimStyle.Render("manifest") + "  " + func() string {
+		p.th.Dim().Render("workspace") + "  " + fallback(p.report.Workspace, "(unset)"),
+		p.th.Dim().Render("config") + "  " + fallback(p.report.ConfigRoot, "(unset)"),
+		p.th.Dim().Render("manifest") + "  " + func() string {
 			if p.report.ManifestExists {
 				return "present"
 			}
 			return "missing"
 		}(),
-		dimStyle.Render("fingerprint") + "  " + fallback(p.report.ManifestFingerprint, "(none)"),
+		p.th.Dim().Render("fingerprint") + "  " + fallback(p.report.ManifestFingerprint, "(none)"),
 	}
 	if len(p.report.ManifestWarnings) > 0 {
-		header = append(header, dimStyle.Render("warnings")+"  "+strings.Join(p.report.ManifestWarnings, "; "))
+		header = append(header, p.th.Dim().Render("warnings")+"  "+strings.Join(p.report.ManifestWarnings, "; "))
 	}
 	return strings.Join([]string{
-		sectionPanel("Doctor / Checks", p.width, append(header, sectionList(lines, 0, p.height-8))...),
+		sectionPanel(p.th, "Doctor / Checks", p.width, append(header, sectionList(p.th, lines, 0, p.height-8))...),
 		p.footerLine(),
 	}, "\n\n")
 }
@@ -197,10 +205,10 @@ func (p *DoctorPane) viewTemplates() string {
 		lines = append(lines, fmt.Sprintf("%-12s %s", state, path))
 	}
 	if len(lines) == 0 {
-		lines = []string{dimStyle.Render("No matching template roots")}
+		lines = []string{p.th.Dim().Render("No matching template roots")}
 	}
 	return strings.Join([]string{
-		sectionPanel("Doctor / Templates", p.width, sectionList(lines, 0, p.height-6)),
+		sectionPanel(p.th, "Doctor / Templates", p.width, sectionList(p.th, lines, 0, p.height-6)),
 		p.footerLine(),
 	}, "\n\n")
 }
@@ -228,21 +236,21 @@ func (p *DoctorPane) viewLogs() string {
 		lines = filtered
 	}
 	if len(lines) == 0 {
-		lines = []string{dimStyle.Render("No matching logs")}
+		lines = []string{p.th.Dim().Render("No matching logs")}
 	}
 	return strings.Join([]string{
-		sectionPanel("Doctor / Logs", p.width, lines...),
+		sectionPanel(p.th, "Doctor / Logs", p.width, lines...),
 		p.footerLine(),
 	}, "\n\n")
 }
 
 func (p *DoctorPane) footerLine() string {
-	footer := dimStyle.Render("tab checks/templates/logs  r refresh  h heal  p models")
+	footer := p.th.Dim().Render("tab checks/templates/logs  r refresh  h heal  p models")
 	if p.working {
-		footer = dimStyle.Render(fmt.Sprintf("%s  %s", p.action, renderPercentBar(p.progress, 18)))
+		footer = p.th.Dim().Render(fmt.Sprintf("%s  %s", p.action, renderPercentBar(p.progress, 18)))
 	}
 	if p.status != "" {
-		footer = dimStyle.Render(p.status) + "\n" + footer
+		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
 	return footer
 }
@@ -312,4 +320,11 @@ func (p *DoctorPane) progressCmd() tea.Cmd {
 	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg {
 		return doctorProgressMsg{Action: p.action, Progress: p.progress}
 	})
+}
+
+// SetTheme sets the active semantic style source.
+func (p *DoctorPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
 }

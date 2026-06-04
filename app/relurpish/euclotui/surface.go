@@ -4,14 +4,17 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // EucloSurface is the default Euclo interaction surface.
 type EucloSurface struct {
 	base   tui.AgentSurface
 	router *EucloEventRouter
+	th     *theme.Theme
 }
 
 // NewSurface returns the Euclo interaction surface.
@@ -19,6 +22,7 @@ func NewSurface() tui.AgentSurface {
 	return &EucloSurface{
 		base:   tui.NewDefaultSurfaceFactory().Resolve("none"),
 		router: NewEucloEventRouter(),
+		th:     theme.Default().WithAccent(lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"}),
 	}
 }
 
@@ -41,7 +45,7 @@ func (s *EucloSurface) RegisterCommands(reg *tui.CommandRegistry) {
 }
 
 func (s *EucloSurface) NewChat(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue) tui.ChatPaner {
-	return NewChatPane(rt, ctx, sess, notifQ, s.router)
+	return NewChatPane(rt, ctx, sess, notifQ, s.router, s.th)
 }
 
 func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {
@@ -68,7 +72,7 @@ func (s *EucloSurface) InitialSubTab(tab tui.TabID) tui.SubTabID {
 }
 
 func (s *EucloSurface) RenderNotification(item tui.NotificationItem) string {
-	return RenderInteractionNotification(item)
+	return RenderInteractionNotification(s.th, item)
 }
 
 func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tui.SurfaceFrameMsg) {
@@ -95,4 +99,8 @@ func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tu
 	if notificationAllowsFreetext(msg.Notification) {
 		m.OpenInteractionGuidance(msg.Notification.ID, frame)
 	}
+}
+
+func (s *EucloSurface) Theme() *theme.Theme {
+	return s.th
 }
