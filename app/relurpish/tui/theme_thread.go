@@ -6,3 +6,9 @@ import "codeburg.org/lexbit/relurpify/app/relurpish/theme"
 type ThemeSetter interface {
 	SetTheme(th *theme.Theme)
 }
+
+// AnimSetter is implemented by any component that accepts the animation
+// manager.
+type AnimSetter interface {
+	SetAnimManager(m *AnimationManager)
+}

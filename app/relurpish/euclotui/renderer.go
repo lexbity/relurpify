@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func RenderInteractionFrame(th *theme.Theme, frame interaction.InteractionFrame) tui.Message {
@@ -296,7 +297,7 @@ func renderStatus(th *theme.Theme, frame interaction.InteractionFrame) string {
 	if !ok {
 		return "[status]"
 	}
-	return th.Dim().Render("⟳ " + content.Message)
+	return th.Dim().Render(content.Message)
 }
 
 func renderSummary(th *theme.Theme, frame interaction.InteractionFrame) string {
@@ -445,20 +446,45 @@ func renderFramePayload(th *theme.Theme, payload map[string]any) string {
 	return b.String()
 }
 
-func RenderChatProjection(th *theme.Theme, p ChatProjection) string {
+func RenderChatProjection(th *theme.Theme, snap EucloProjectionSnapshot) string {
 	var b strings.Builder
 	b.WriteString(th.Subhead().Render("Chat Projection") + "\n")
-	if len(p.Milestones) == 0 && len(p.Outputs) == 0 && len(p.Frames) == 0 {
+	if len(snap.Chat.Milestones) == 0 && len(snap.Chat.Outputs) == 0 && len(snap.Chat.Frames) == 0 {
 		return th.Panel().Render(strings.TrimSpace(b.String()))
 	}
-	for _, line := range p.Milestones {
+	// Render phase stepper bar.
+	if snap.StepperPhase != PhaseIdle {
+		b.WriteString("  " + renderStepper(th, snap.StepperPhase) + "\n\n")
+	}
+	for _, line := range snap.Chat.Milestones {
 		b.WriteString("  " + th.Header().Render("●") + " " + line + "\n")
 	}
-	for _, line := range p.Outputs {
+	for _, line := range snap.Chat.Outputs {
 		b.WriteString("  " + th.Dim().Render("LLM") + " " + line + "\n")
 	}
-	for _, frame := range p.Frames {
+	for _, frame := range snap.Chat.Frames {
 		b.WriteString("  " + th.Dim().Render("frame") + " " + frameLabel(frame) + "\n")
 	}
 	return th.Panel().Render(strings.TrimSpace(b.String()))
+}
+
+func renderStepper(th *theme.Theme, current Phase) string {
+	if th == nil || current == PhaseIdle {
+		return ""
+	}
+	ordered := []Phase{PhaseIntake, PhasePlan, PhaseExecute, PhaseVerify, PhaseDone}
+	parts := make([]string, 0, len(ordered))
+	for _, p := range ordered {
+		label := p.String()
+		var style lipgloss.Style
+		if p < current {
+			style = th.Success()
+		} else if p == current {
+			style = th.Active()
+		} else {
+			style = th.Pending()
+		}
+		parts = append(parts, style.Render(label))
+	}
+	return strings.Join(parts, " → ")
 }

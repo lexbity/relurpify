@@ -9,7 +9,7 @@ import (
 )
 
 func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	if got := pane.sidebarWidth(89); got != 0 {
 		t.Fatalf("sidebarWidth(89) = %d, want 0", got)
@@ -37,7 +37,7 @@ func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {
 }
 
 func TestChatPaneWorkspaceSelectionWritesEnvelope(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{ID: "session-1"}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{ID: "session-1"}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	if err := pane.AddFileToSidebar("alpha.go"); err != nil {
 		t.Fatalf("AddFileToSidebar: %v", err)
@@ -64,7 +64,7 @@ func TestChatPaneWorkspaceSelectionWritesEnvelope(t *testing.T) {
 }
 
 func TestChatPaneMilestoneFiltering(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	pane.AppendMessage(tui.Message{
 		Role: tui.RoleAgent,
@@ -98,7 +98,7 @@ func TestChatPaneMilestoneFiltering(t *testing.T) {
 }
 
 func TestChatPaneSpinnerNotReArmedWhenIdle(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// With no active runs, Init should not return a spinner tick.
 	initCmd := pane.Init()
@@ -117,7 +117,7 @@ func TestChatPaneSpinnerNotReArmedWhenIdle(t *testing.T) {
 }
 
 func TestChatPaneSpinnerReArmedWhenActive(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Simulate an active run.
 	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}
@@ -139,7 +139,7 @@ func TestChatPaneSpinnerReArmedWhenActive(t *testing.T) {
 }
 
 func TestChatPaneSpinnerKickstartsOnStartRun(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Init should not return a tick (no active runs).
 	initCmd := pane.Init()
@@ -155,7 +155,7 @@ func TestChatPaneSpinnerKickstartsOnStartRun(t *testing.T) {
 }
 
 func TestChatPaneSpinnerStopsAfterRunCompletes(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil)
+	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Add active run.
 	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}

@@ -140,6 +140,19 @@ func (m *RootModel) propagateTheme() {
 	m.help.SetTheme(m.th)
 }
 
+// propagateAnimManager distributes the animation manager to components that
+// consume it for frame-by-frame animation updates.
+func (m *RootModel) propagateAnimManager() {
+	if m.anim == nil {
+		return
+	}
+	if m.chat != nil {
+		if setter, ok := m.chat.(AnimSetter); ok {
+			setter.SetAnimManager(m.anim)
+		}
+	}
+}
+
 // resolveSurfaceTheme returns the surface's preferred theme or the host default.
 func resolveSurfaceTheme(surface AgentSurface) *theme.Theme {
 	if surface == nil {
@@ -159,6 +172,7 @@ func propagateSurfaceTheme(m *RootModel, surface AgentSurface) {
 		}
 	}
 	m.propagateTheme()
+	m.propagateAnimManager()
 }
 
 func isBaseFrameworkTab(id TabID) bool {
@@ -259,6 +273,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 	m.propagateTheme()
+	m.propagateAnimManager()
 	if state.region1 != nil {
 		state.region1.SetStore(store)
 		m.baseSurface = state.region1

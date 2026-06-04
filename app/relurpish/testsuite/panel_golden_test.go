@@ -307,7 +307,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	chatFrame.Metadata.Timestamp = now
 	chatFrame.CreatedAt = now
 	chatRouter.ApplyInteractionFrame(*chatFrame)
-	chat := euclotui.NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, chatRouter, nil)
+	chat := euclotui.NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, chatRouter, nil, nil)
 	chat.SetSize(96, 18)
 	chat.AppendMessage(tui.Message{
 		ID:        "msg-1",

@@ -415,3 +415,21 @@ func TestRenderInteractionNotificationWithSlots(t *testing.T) {
 		t.Errorf("notification render missing slot labels: %s", result)
 	}
 }
+
+func TestRenderStatusNoGlyph(t *testing.T) {
+	th := theme.Default()
+	frame := interaction.InteractionFrame{
+		Type: interaction.FrameStatus,
+		Content: interaction.StatusContent{
+			Message: "processing",
+		},
+	}
+	msg := RenderInteractionFrame(th, frame)
+	if strings.Contains(msg.Content.Text, "⟳") {
+		t.Error("renderStatus should not contain static ⟳ glyph")
+	}
+	if !strings.Contains(msg.Content.Text, "processing") {
+		t.Errorf("renderStatus missing message, got: %s", msg.Content.Text)
+	}
+}
+

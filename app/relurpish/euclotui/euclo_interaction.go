@@ -161,11 +161,13 @@ type EucloEventRouter struct {
 	mu      sync.Mutex
 	chat    ChatProjection
 	diff    DiffProjection
+	stepper *Stepper
 }
 
 // NewEucloEventRouter creates an empty projection router.
 func NewEucloEventRouter() *EucloEventRouter {
 	return &EucloEventRouter{
+		stepper: NewStepper(),
 	}
 }
 
@@ -217,10 +219,14 @@ func (r *EucloEventRouter) Snapshot() EucloProjectionSnapshot {
 }
 
 func (r *EucloEventRouter) snapshotLocked() EucloProjectionSnapshot {
-	return EucloProjectionSnapshot{
-		Chat:  r.chat.clone(),
-		Diff:  r.diff.clone(),
+	snap := EucloProjectionSnapshot{
+		Chat: r.chat.clone(),
+		Diff: r.diff.clone(),
 	}
+	if r.stepper != nil {
+		snap.StepperPhase = r.stepper.Current()
+	}
+	return snap
 }
 
 func (r *EucloEventRouter) applyChatEvent(ev ExecutionEvent) {
@@ -235,6 +241,20 @@ func (r *EucloEventRouter) applyChatEvent(ev ExecutionEvent) {
 	}
 	if ev.Frame != nil {
 		r.chat.Frames = append(r.chat.Frames, *ev.Frame)
+	}
+	if r.stepper == nil {
+		return
+	}
+	switch ev.Type {
+	case reporting.EventTypeIntakeComplete:
+		r.stepper.Advance(PhaseIntake)
+	case reporting.EventTypeFamilySelected, reporting.EventTypeRouteSelected:
+		r.stepper.Advance(PhasePlan)
+	case reporting.EventTypeProjectionCompleted, reporting.EventTypeStepCompletedEuclo:
+		r.stepper.Advance(PhaseExecute)
+	case reporting.EventTypeExecutionComplete:
+		r.stepper.Advance(PhaseVerify)
+		r.stepper.Complete()
 	}
 }
 
@@ -406,8 +426,9 @@ func (p DiffProjection) clone() DiffProjection {
 
 // EucloProjectionSnapshot is the immutable view of all Euclo surfaces.
 type EucloProjectionSnapshot struct {
-	Chat  ChatProjection
-	Diff  DiffProjection
+	Chat         ChatProjection
+	Diff         DiffProjection
+	StepperPhase Phase
 }
 
 func cloneScores(in map[string]float64) map[string]float64 {

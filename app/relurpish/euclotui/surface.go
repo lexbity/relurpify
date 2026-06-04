@@ -45,7 +45,7 @@ func (s *EucloSurface) RegisterCommands(reg *tui.CommandRegistry) {
 }
 
 func (s *EucloSurface) NewChat(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue) tui.ChatPaner {
-	return NewChatPane(rt, ctx, sess, notifQ, s.router, s.th)
+	return NewChatPane(rt, ctx, sess, notifQ, s.router, s.th, nil)
 }
 
 func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {

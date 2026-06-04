@@ -26,6 +26,8 @@ import (
 const chatSidebarMinWidth = 60
 const contextFileMaxBytes = 8000
 
+var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
+
 var chatSubTabPolicies = map[tui.SubTabID]struct {
 	ModeHint           string
 	EditEnabled        bool
@@ -49,6 +51,7 @@ type ChatPane struct {
 	spinner   spinner.Model
 	runStates map[string]*tui.RunState
 	th        *theme.Theme
+	anim      *tui.AnimationManager
 
 	context *tui.AgentContext
 	session *tui.Session
@@ -73,6 +76,9 @@ type ChatPane struct {
 	compactRunID    string
 	compactMsgCount int
 
+	spinnerAnimID tui.AnimationID
+	spinnerIdx    int
+
 	showSidebar        bool
 	sidebarFocused     bool
 	sidebarEntries     []tui.ContextSidebarEntry
@@ -86,7 +92,7 @@ var _ tui.ChatPaner = (*ChatPane)(nil)
 var _ tui.ChatSidebarController = (*ChatPane)(nil)
 
 // NewChatPane constructs the Euclo chat surface.
-func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme) *ChatPane {
+func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme, anim *tui.AnimationManager) *ChatPane {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	if router == nil {
@@ -99,6 +105,7 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 		feed:             tui.NewFeed(),
 		spinner:          sp,
 		th:               th,
+		anim:             anim,
 		runStates:        make(map[string]*tui.RunState),
 		context:          ctx,
 		session:          sess,
@@ -178,6 +185,15 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 			return p, p.spinner.Tick
 		}
 		return p, nil
+	case tui.AnimationTickMsg:
+		if !p.HasActiveRuns() {
+			p.deregisterSpinnerAnim()
+			return p, nil
+		}
+		p.spinnerIdx++
+		frame := spinnerFrames[p.spinnerIdx%len(spinnerFrames)]
+		p.feed.SetSpinner(frame)
+		return p, nil
 	case tui.StreamTokenMsg:
 		return p.handleStreamToken(msg)
 	case tui.StreamCompleteMsg:
@@ -235,6 +251,25 @@ func (p *ChatPane) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, feedView, sidebarView)
 }
 
+func (p *ChatPane) registerSpinnerAnim() {
+	if p.anim == nil || p.spinnerAnimID != 0 {
+		return
+	}
+	id := p.anim.Register(func() tui.AnimationFrame {
+		return tui.AnimationFrame{Text: "", Done: false}
+	})
+	p.spinnerAnimID = id
+}
+
+func (p *ChatPane) deregisterSpinnerAnim() {
+	if p.anim == nil || p.spinnerAnimID == 0 {
+		return
+	}
+	p.anim.Deregister(p.spinnerAnimID)
+	p.spinnerAnimID = 0
+	p.spinnerIdx = 0
+}
+
 func (p *ChatPane) HandleInputSubmit(value string) tea.Cmd {
 	cleanedValue := value
 	files := extractFileTokens(value)
@@ -285,6 +320,7 @@ func (p *ChatPane) StartRunSilent(prompt string) (tea.Cmd, string) {
 		Cancel:  cancel,
 	}
 	p.runStates[runID] = run
+	p.registerSpinnerAnim()
 	metadata := p.buildMetadata(ctx)
 	metadata["compact"] = true
 	go p.runStream(ctx, run, metadata)
@@ -326,6 +362,7 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 	}
 	p.runStates[runID] = run
 	p.lastPrompt = prompt
+	p.registerSpinnerAnim()
 
 	metadata := p.buildMetadata(ctx)
 	for k, v := range extra {
@@ -596,11 +633,17 @@ func (p *ChatPane) handleStreamComplete(msg tui.StreamCompleteMsg) (tui.ChatPane
 		p.addSystemMessage(fmt.Sprintf("Stream backpressure: dropped %d update(s)", dropped))
 	}
 	delete(p.runStates, msg.RunID)
+	if !p.HasActiveRuns() {
+		p.deregisterSpinnerAnim()
+	}
 	return p, func() tea.Msg { return tui.StreamDoneMsg{RunID: msg.RunID} }
 }
 
 func (p *ChatPane) handleStreamError(msg tui.StreamErrorMsg) (tui.ChatPaner, tea.Cmd) {
 	delete(p.runStates, msg.RunID)
+	if !p.HasActiveRuns() {
+		p.deregisterSpinnerAnim()
+	}
 	if p.compactRunID != "" && msg.RunID == p.compactRunID {
 		count := p.compactMsgCount
 		p.compactRunID = ""
@@ -1259,6 +1302,13 @@ func effectClassLabels(classes []agentspec.EffectClass) []string {
 		return nil
 	}
 	return out
+}
+
+func (p *ChatPane) SetAnimManager(m *tui.AnimationManager) {
+	p.anim = m
+	if p.anim != nil && p.HasActiveRuns() {
+		p.registerSpinnerAnim()
+	}
 }
 
 func max(a, b int) int {
