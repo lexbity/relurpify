@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -404,10 +405,10 @@ ask user:
 		With("named.euclo.code.explore", "Explore the workspace.").
 		With("named.euclo.intent.clarify.question.v1", "Clarify the request.")
 	recipes := NewThoughtRecipeRegistry()
-	seedRecipe := &ThoughtRecipe{
+	seedRecipe := &surface.ThoughtRecipe{
 		ID:   "named.euclo.review.basic",
 		Name: "named.euclo.review.basic",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "named.euclo.review.basic",
 		},
 	}
@@ -500,10 +501,10 @@ run reviewer:
 `)
 
 	recipes := NewThoughtRecipeRegistry()
-	seedRecipe := &ThoughtRecipe{
+	seedRecipe := &surface.ThoughtRecipe{
 		ID:   "named.euclo.review.basic",
 		Name: "named.euclo.review.basic",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "named.euclo.review.basic",
 		},
 	}
@@ -532,10 +533,10 @@ import recipe named.euclo.review.basic as shared
 
 	prompts := prompttest.New().With("named.euclo.code.explore", "Explore.")
 	recipes := NewThoughtRecipeRegistry()
-	seedRecipe := &ThoughtRecipe{
+	seedRecipe := &surface.ThoughtRecipe{
 		ID:   "named.euclo.review.basic",
 		Name: "named.euclo.review.basic",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "named.euclo.review.basic",
 		},
 	}
@@ -563,10 +564,10 @@ import recipe demo as self
 `)
 
 	recipes := NewThoughtRecipeRegistry()
-	seedRecipe := &ThoughtRecipe{
+	seedRecipe := &surface.ThoughtRecipe{
 		ID:   "demo",
 		Name: "demo",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "demo",
 		},
 	}

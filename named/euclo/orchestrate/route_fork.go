@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -30,7 +32,6 @@ func (f *RouteForkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeC
 
 // Execute resolves the branch name and returns the next node identifier.
 func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	_ = ctx
 	routeKind := routeKindFromEnvelope(env)
 	routeKind = strings.TrimSpace(routeKind)
 	if routeKind == "" {
@@ -44,6 +45,9 @@ func (f *RouteForkNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		next = "euclo.execute_thoughtrecipe"
 	}
 	euclostate.SetForkBranch(env, branch)
+
+	emitBranchResolved(ctx, env, f.id, branch, routeKind)
+
 	return &core.Result{
 		NodeID:  f.id,
 		Success: true,
@@ -68,4 +72,18 @@ func routeKindFromEnvelope(env *contextdata.Envelope) string {
 		}
 	}
 	return ""
+}
+
+func emitBranchResolved(ctx context.Context, env *contextdata.Envelope, groupID, chosenBranch, routeKind string) {
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel.EmitBranchResolved(ctx, reporting.EventBranchResolved{
+		EventHeader: reporting.EventHeader{
+			TaskID:     env.TaskID,
+			SessionID:  env.SessionID,
+			OccurredAt: time.Now().UTC(),
+		},
+		GroupID:      groupID,
+		ChosenBranch: chosenBranch,
+		RouteKind:    routeKind,
+	})
 }

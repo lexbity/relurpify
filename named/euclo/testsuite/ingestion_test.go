@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestEndToEndFileSelectionGrounding(t *testing.T) {
@@ -17,10 +17,10 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 	writeWorkspaceFile(t, dir, "review.go", "package demo\n\nfunc Review() {}\n")
 
 	caps := newCapabilityRegistry(t)
-	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
 		ID:   "euclo.thoughtrecipe.review",
 		Name: "review",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "review",
 		},
 	})

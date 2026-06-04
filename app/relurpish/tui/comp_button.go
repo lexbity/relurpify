@@ -43,8 +43,8 @@ func (b *Button) SetTheme(th *theme.Theme) {
 func (b *Button) SetWidth(w int) { b.width = w }
 
 // Focus sets keyboard focus.
-func (b *Button) Focus()  { b.focused = true }
-func (b *Button) Blur()   { b.focused = false }
+func (b *Button) Focus()          { b.focused = true }
+func (b *Button) Blur()           { b.focused = false }
 func (b *Button) IsFocused() bool { return b.focused }
 
 // Label returns the button text.

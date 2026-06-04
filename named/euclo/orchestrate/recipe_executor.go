@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
@@ -12,7 +13,9 @@ import (
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -91,6 +94,13 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 			Data:    core.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + thoughtrecipeID),
 		}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", thoughtrecipeID)
 	}
+
+	emitRecipeSelected(ctx, env, thoughtrecipe, plan)
+
+	contextdata.SetTyped(env, "euclo.execution.step_total", len(plan.Steps))
+	contextdata.SetTyped(env, "euclo.execution.step_index", 0)
+
+	emitParallelFanouts(ctx, env, plan)
 
 	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.env, n.ingestionPipeline)
 	if err != nil {
@@ -178,4 +188,109 @@ func nextClarificationThoughtRecipeID(env *contextdata.Envelope, currentThoughtR
 		return next
 	}
 	return ""
+}
+
+// NewRecipeRegistryLookup adapts a ThoughtRecipeRegistry to the RecipeRegistryLookup
+// interface that the TUI uses for recipe rehydration on session resume.
+func NewRecipeRegistryLookup(reg *thoughtrecipepkg.ThoughtRecipeRegistry) surface.RecipeRegistryLookup {
+	return &recipeRegistryLookup{reg: reg}
+}
+
+type recipeRegistryLookup struct {
+	reg *thoughtrecipepkg.ThoughtRecipeRegistry
+}
+
+func (l *recipeRegistryLookup) LookupRecipe(recipeID string) (*surface.RecipeProjection, bool) {
+	if l == nil || l.reg == nil {
+		return nil, false
+	}
+	recipe, ok := l.reg.Get(recipeID)
+	if !ok || recipe == nil {
+		return nil, false
+	}
+	plan, ok := l.reg.GetPlan(recipeID)
+	if !ok || plan == nil {
+		// Recipe exists but no compiled plan — return minimal projection.
+		proj := surface.BuildRecipeProjection(recipe, "", nil, nil, nil)
+		return &proj, true
+	}
+	// Build full projection from plan.
+	steps := make([]surface.ThoughtRecipeStep, 0, len(plan.Steps))
+	for _, s := range plan.Steps {
+		steps = append(steps, s.Step)
+	}
+	parallelGroups := make([]surface.ParallelGroup, 0, len(plan.Parallel))
+	for _, g := range plan.Parallel {
+		if g.Group != nil {
+			parallelGroups = append(parallelGroups, *g.Group)
+		}
+	}
+	conditionalGroups := make([]surface.ConditionalGroup, 0, len(plan.Conditional))
+	for _, g := range plan.Conditional {
+		if g.Group != nil {
+			conditionalGroups = append(conditionalGroups, *g.Group)
+		}
+	}
+	proj := surface.BuildRecipeProjection(recipe, "", steps, parallelGroups, conditionalGroups)
+	return &proj, true
+}
+
+func emitParallelFanouts(ctx context.Context, env *contextdata.Envelope, plan *thoughtrecipepkg.ExecutionPlan) {
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	for _, pg := range plan.Parallel {
+		if pg.Group == nil {
+			continue
+		}
+		memberIDs := make([]string, 0, len(pg.Steps))
+		for _, s := range pg.Steps {
+			if s.Step != nil {
+				memberIDs = append(memberIDs, s.Step.ID)
+			}
+		}
+		if len(memberIDs) == 0 {
+			continue
+		}
+		tel.EmitParallelFanout(ctx, reporting.EventParallelFanout{
+			EventHeader: reporting.EventHeader{
+				TaskID:     env.TaskID,
+				SessionID:  env.SessionID,
+				OccurredAt: time.Now().UTC(),
+			},
+			GroupID:       pg.Group.ID,
+			MemberStepIDs: memberIDs,
+		})
+	}
+}
+
+func emitRecipeSelected(ctx context.Context, env *contextdata.Envelope, recipe *surface.ThoughtRecipe, plan *thoughtrecipepkg.ExecutionPlan) {
+	steps := make([]surface.ThoughtRecipeStep, 0, len(plan.Steps))
+	for _, s := range plan.Steps {
+		steps = append(steps, s.Step)
+	}
+	parallelGroups := make([]surface.ParallelGroup, 0, len(plan.Parallel))
+	for _, g := range plan.Parallel {
+		if g.Group != nil {
+			parallelGroups = append(parallelGroups, *g.Group)
+		}
+	}
+	conditionalGroups := make([]surface.ConditionalGroup, 0, len(plan.Conditional))
+	for _, g := range plan.Conditional {
+		if g.Group != nil {
+			conditionalGroups = append(conditionalGroups, *g.Group)
+		}
+	}
+
+	proj := surface.BuildRecipeProjection(recipe, "", steps, parallelGroups, conditionalGroups)
+
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel.EmitRecipeSelected(ctx, reporting.EventRecipeSelected{
+		EventHeader: reporting.EventHeader{
+			TaskID:    env.TaskID,
+			SessionID: env.SessionID,
+			Seq:       0,
+			OccurredAt: time.Now().UTC(),
+		},
+		RecipeID: recipe.ID,
+		Recipe:   proj,
+	})
 }

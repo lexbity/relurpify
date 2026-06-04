@@ -2,13 +2,16 @@ package testsuite
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
@@ -16,10 +19,10 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 	writeWorkspaceFile(t, dir, "review.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.code_review", "euclo:cap.capture", "euclo:cap.consume")
-	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
 		ID:       "euclo.thoughtrecipe.review",
 		Name:     "review",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
+		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
@@ -55,3 +58,109 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 		t.Fatalf("expected thoughtrecipe-only execution, got capability id %v", got)
 	}
 }
+
+func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkspaceFile(t, dir, "review.go", "package demo\n")
+
+	caps := newCapabilityRegistry(t, "euclo:cap.code_review", "euclo:cap.capture", "euclo:cap.consume")
+	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
+		ID:       "euclo.thoughtrecipe.review",
+		Name:     "review",
+		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
+	})
+
+	// Wire a telemetry spy to capture emitted events.
+	telemetrySpy := &captureTelemetry{}
+	graph := orchestrate.NewRootGraph(
+		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithCapabilityRegistry(caps),
+		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
+	)
+
+	env := contextdata.NewEnvelope("task-lifecycle", "session-lifecycle")
+	seedTask(env, "review the auth package", "review.go")
+	euclostate.SetRouteSelection(env, &euclotypes.RouteSelection{
+		RouteKind:       "thoughtrecipe",
+		ThoughtRecipeID: "euclo.thoughtrecipe.review",
+	})
+	runPreIngestion(t, env, dir, []string{"review.go"})
+
+	// Execute with a context that has the telemetry spy.
+	ctx := core.WithTelemetry(context.Background(), telemetrySpy)
+	if err := graph.Execute(ctx, env); err != nil {
+		t.Fatalf("graph execute failed: %v", err)
+	}
+
+	// Verify telemetry events were emitted.
+	events := telemetrySpy.Events()
+	if len(events) == 0 {
+		t.Fatal("expected telemetry events, got none")
+	}
+
+	// Check for recipe.selected event.
+	hasRecipeSelected := false
+	hasStepStarted := false
+	hasStepCompleted := false
+	hasVerifyStarted := false
+	hasExecutionComplete := false
+
+	for _, ev := range events {
+		switch ev.Type {
+		case core.EventType(reporting.EventTypeRecipeSelected):
+			hasRecipeSelected = true
+		case core.EventType(reporting.EventTypeStepStartedEuclo):
+			hasStepStarted = true
+		case core.EventType(reporting.EventTypeStepCompletedEuclo):
+			hasStepCompleted = true
+		case core.EventType(reporting.EventTypeVerifyStarted):
+			hasVerifyStarted = true
+		case core.EventType(reporting.EventTypeExecutionComplete):
+			hasExecutionComplete = true
+		}
+	}
+
+	if !hasRecipeSelected {
+		t.Error("missing recipe.selected event")
+	}
+	if !hasStepStarted {
+		t.Error("missing step.started event")
+	}
+	if !hasStepCompleted {
+		t.Error("missing step.completed event")
+	}
+	if !hasVerifyStarted {
+		t.Error("missing verify.started event")
+	}
+	if !hasExecutionComplete {
+		t.Error("missing execution.complete event")
+	}
+}
+
+// captureTelemetry is a telemetry spy that records emitted events.
+type captureTelemetry struct {
+	mu     sync.Mutex
+	events []core.Event
+}
+
+func (c *captureTelemetry) Emit(event core.Event) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, event)
+}
+
+func (c *captureTelemetry) Events() []core.Event {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]core.Event, len(c.events))
+	copy(out, c.events)
+	return out
+}
+
+

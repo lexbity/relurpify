@@ -681,6 +681,46 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ResumeSessionMsg:
+		if msg.SessionID == "" {
+			return m, nil
+		}
+		if m.store == nil || m.runtime == nil {
+			m.addSystemMessage("Resume unavailable: no session store or runtime")
+			return m, nil
+		}
+		rec, err := m.store.Load(msg.SessionID)
+		if err != nil {
+			m.addSystemMessage(fmt.Sprintf("Failed to load session: %v", err))
+			return m, nil
+		}
+		agent := rec.Agent
+		if agent == "" {
+			agent = m.activeAgentName()
+		}
+		if err := m.switchActiveAgent(agent); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Resume: agent switch failed: %v", err))
+			return m, nil
+		}
+		// Restore transcript onto the active chat pane.
+		if m.chat != nil && len(rec.Messages) > 0 {
+			m.chat.ClearMessages()
+			for _, msg := range rec.Messages {
+				m.chat.AppendMessage(msg)
+			}
+		}
+		if len(rec.Messages) > 0 {
+			m.addSystemMessage(fmt.Sprintf("Resumed session %s (%d messages)", msg.SessionID, len(rec.Messages)))
+		}
+		if rec.WorkflowID != "" {
+			if err := m.runtime.ResumeSession(context.Background(), rec.WorkflowID); err != nil {
+				m.addSystemMessage(fmt.Sprintf("Runtime resume: %v", err))
+			}
+		}
+		m.setActiveTab(TabChat)
+		m.setFocus(FocusRegionInput)
+		return m, nil
+
 	case OpenDoctorMsg:
 		if m.baseSurface != nil {
 			m.baseSurface.OpenDoctor()

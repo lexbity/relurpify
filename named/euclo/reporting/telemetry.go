@@ -106,8 +106,32 @@ func (t *EucloTelemetry) EmitJobCompleted(ctx context.Context, ev EventJobComple
 	t.emit(ctx, EventTypeJobCompleted, ev)
 }
 
+func (t *EucloTelemetry) EmitBranchResolved(ctx context.Context, ev EventBranchResolved) {
+	t.emit(ctx, EventTypeBranchResolved, ev)
+}
+
+func (t *EucloTelemetry) EmitParallelFanout(ctx context.Context, ev EventParallelFanout) {
+	t.emit(ctx, EventTypeParallelFanout, ev)
+}
+
+func (t *EucloTelemetry) EmitRecipeSelected(ctx context.Context, ev EventRecipeSelected) {
+	t.emit(ctx, EventTypeRecipeSelected, ev)
+}
+
+func (t *EucloTelemetry) EmitStepStarted(ctx context.Context, ev EventStepStarted) {
+	t.emit(ctx, EventTypeStepStartedEuclo, ev)
+}
+
 func (t *EucloTelemetry) EmitStepCompleted(ctx context.Context, ev EventStepCompleted) {
 	t.emit(ctx, EventTypeStepCompletedEuclo, ev)
+}
+
+func (t *EucloTelemetry) EmitVerifyStarted(ctx context.Context, ev EventVerifyStarted) {
+	t.emit(ctx, EventTypeVerifyStarted, ev)
+}
+
+func (t *EucloTelemetry) EmitVerifyComplete(ctx context.Context, ev EventVerifyComplete) {
+	t.emit(ctx, EventTypeVerifyComplete, ev)
 }
 
 func (t *EucloTelemetry) EmitExecutionComplete(ctx context.Context, ev EventExecutionComplete) {
@@ -215,6 +239,25 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 				Details:          mutation.Details,
 			})
 		}
+		tel.EmitVerifyStarted(ctx, EventVerifyStarted{
+			EventHeader: EventHeader{
+				TaskID:     env.TaskID,
+				SessionID:  env.SessionID,
+				Seq:        0,
+				OccurredAt: time.Now().UTC(),
+			},
+			StepCount: 0,
+		})
+		tel.EmitVerifyComplete(ctx, EventVerifyComplete{
+			EventHeader: EventHeader{
+				TaskID:     env.TaskID,
+				SessionID:  env.SessionID,
+				Seq:        0,
+				OccurredAt: time.Now().UTC(),
+			},
+			Outcome: string(outcome.Category),
+			Summary: outcome.Reason,
+		})
 		tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 			EventHeader: EventHeader{
 				TaskID:     env.TaskID,

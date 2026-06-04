@@ -63,3 +63,40 @@ func TestThoughtRecipePlanGoalProviderRendersClarificationStateView(t *testing.T
 		t.Fatalf("expected plan goal provider to avoid route-policy fields, got %q", out.Content)
 	}
 }
+
+func TestThoughtRecipePlanGoalProviderGolden(t *testing.T) {
+	env := contextdata.NewEnvelope("task-goal-golden", "session-goal-golden")
+	clarificationState := intentcontext.NewState("task-goal-golden", "session-goal-golden")
+	clarificationState.StateVersion = 11
+	clarificationState.ActiveThoughtRecipeID = "thoughtrecipe.intent.clarify"
+	clarificationState.LastCheckpointID = "checkpoint-goal"
+	clarificationState.LastCheckpointSeq = 42
+	evidence := &intentcontext.IntentEvidence{
+		ActionType:    "analyze",
+		Target:        "named/euclo/intake",
+		Scope:         "workspace",
+		RiskLevel:     "medium",
+		ExpectedVerb:  "analyze",
+		ExplicitFiles: []string{"named/euclo/intake/normalize.go"},
+		ReasonCodes:   []string{"action:analyze"},
+	}
+	interpretation := &intentcontext.IntentInterpretation{
+		ActionType:     "analyze",
+		Target:         "named/euclo/intake",
+		Scope:          "workspace",
+		RiskLevel:      "medium",
+		Rationale:      "deterministic interpretation from request evidence",
+		ConfidenceNote: "deterministic",
+		ReasonCodes:    []string{"action:analyze"},
+	}
+	contextdata.SetTyped(env, intentcontext.IntentEvidenceKey, evidence)
+	contextdata.SetTyped(env, intentcontext.IntentInterpretationKey, interpretation)
+	if err := intentcontext.NewStateStore().Write(nil, env, clarificationState); err != nil {
+		t.Fatalf("write clarification state: %v", err)
+	}
+
+	provider := &thoughtrecipePlanGoalProvider{}
+	out := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
+		WithVariable("instruction", "Analyze the intake path"))
+	assertGolden(t, "recipe_plan_goal", out.Content)
+}

@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // TriggerPolicyRequirements captures the requested effects declared by a thoughtrecipe trigger.
@@ -173,19 +174,19 @@ func TriggerAssociationsFromDecl(decl *TriggerDecl) (TriggerAssociationMetadata,
 }
 
 // TriggerRouteKindFromDecl returns the declared route kind for a trigger.
-func TriggerRouteKindFromDecl(decl *TriggerDecl) TriggerRouteKind {
+func TriggerRouteKindFromDecl(decl *TriggerDecl) surface.TriggerRouteKind {
 	if decl == nil {
-		return TriggerRouteKindUnknown
+		return surface.TriggerRouteKindUnknown
 	}
-	kind := TriggerRouteKind(strings.ToLower(strings.TrimSpace(string(decl.RouteKind))))
+	kind := surface.TriggerRouteKind(strings.ToLower(strings.TrimSpace(string(decl.RouteKind))))
 	if kind == "" {
-		kind = TriggerRouteKind(strings.ToLower(strings.TrimSpace(decl.Policy.Value)))
+		kind = surface.TriggerRouteKind(strings.ToLower(strings.TrimSpace(decl.Policy.Value)))
 	}
 	switch kind {
-	case TriggerRouteKindCapability, TriggerRouteKindIntent:
+	case surface.TriggerRouteKindCapability, surface.TriggerRouteKindIntent:
 		return kind
 	default:
-		return TriggerRouteKindUnknown
+		return surface.TriggerRouteKindUnknown
 	}
 }
 

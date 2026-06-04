@@ -1,16 +1,14 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-)
-
-import (
 	"fmt"
 	"os"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"github.com/charmbracelet/bubbles/key"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 

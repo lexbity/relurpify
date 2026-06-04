@@ -1,16 +1,15 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-)
-
-import (
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 

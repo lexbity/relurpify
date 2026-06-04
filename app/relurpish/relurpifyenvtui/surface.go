@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Surface owns the base-framework control center for the none agent.
@@ -60,6 +61,8 @@ func (s *Surface) InitialTab() tui.TabID { return tui.TabWelcome }
 func (s *Surface) InitialSubTab(tab tui.TabID) tui.SubTabID { return "" }
 
 func (s *Surface) Theme() *theme.Theme { return nil }
+
+func (s *Surface) ResumeSession(_ context.Context, _ string) tea.Cmd { return nil }
 
 func (s *Surface) RenderNotification(item tui.NotificationItem) string {
 	return item.Msg

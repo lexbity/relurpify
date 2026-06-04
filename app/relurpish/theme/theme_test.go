@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -213,7 +214,7 @@ func TestAccentRolesRenderWithoutError(t *testing.T) {
 
 func TestHexParsingEdgeCases(t *testing.T) {
 	cases := []struct {
-		hex  string
+		hex     string
 		r, g, b float64
 	}{
 		{"#000000", 0, 0, 0},
@@ -231,6 +232,38 @@ func TestHexParsingEdgeCases(t *testing.T) {
 			t.Errorf("parseHex(%q) = (%v,%v,%v), want (%v,%v,%v)",
 				tc.hex, r, g, b, tc.r, tc.g, tc.b)
 		}
+	}
+}
+
+func TestAllParadigmsHaveGlyphAndLabel(t *testing.T) {
+	th := Default()
+	for _, p := range surface.AllParadigms() {
+		t.Run(string(p), func(t *testing.T) {
+			glyph := th.ParadigmGlyph(p)
+			if glyph == "" {
+				t.Errorf("ParadigmGlyph(%q) returned empty", p)
+			}
+			label := th.ParadigmLabel(p)
+			if label == "" {
+				t.Errorf("ParadigmLabel(%q) returned empty", p)
+			}
+			display := th.ParadigmDisplay(p)
+			if !strings.Contains(display, glyph) || !strings.Contains(display, label) {
+				t.Errorf("ParadigmDisplay(%q) = %q, expected to contain glyph %q and label %q", p, display, glyph, label)
+			}
+		})
+	}
+}
+
+func TestParadigmGlyphUnique(t *testing.T) {
+	th := Default()
+	seen := make(map[string]surface.Paradigm)
+	for _, p := range surface.AllParadigms() {
+		g := th.ParadigmGlyph(p)
+		if existing, ok := seen[g]; ok {
+			t.Errorf("duplicate glyph %q for paradigms %q and %q", g, existing, p)
+		}
+		seen[g] = p
 	}
 }
 
@@ -252,5 +285,3 @@ func TestClampF64(t *testing.T) {
 		}
 	}
 }
-
-

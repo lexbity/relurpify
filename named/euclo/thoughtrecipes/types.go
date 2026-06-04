@@ -3,11 +3,12 @@ package thoughtrecipe
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // CompiledThoughtRecipe is a compiled version of ThoughtRecipe with resolved bindings.
 type CompiledThoughtRecipe struct {
-	ThoughtRecipe *ThoughtRecipe
+	ThoughtRecipe *surface.ThoughtRecipe
 	Steps         []CompiledStep
 	Parallel      []CompiledParallelGroup
 	Conditional   []CompiledConditionalGroup
@@ -15,7 +16,7 @@ type CompiledThoughtRecipe struct {
 
 // CompiledStep is a compiled thoughtrecipe step with resolved configuration.
 type CompiledStep struct {
-	Step                *ThoughtRecipeStep
+	Step                *surface.ThoughtRecipeStep
 	Node                agentgraph.Node
 	Type                string
 	ClarificationConfig *ClarificationStepConfig
@@ -24,14 +25,14 @@ type CompiledStep struct {
 
 // CompiledParallelGroup is a compiled parallel execution group.
 type CompiledParallelGroup struct {
-	Group *ParallelGroup
+	Group *surface.ParallelGroup
 	Steps []CompiledStep
 	Merge string
 }
 
 // CompiledConditionalGroup is a compiled conditional execution group.
 type CompiledConditionalGroup struct {
-	Group     *ConditionalGroup
+	Group     *surface.ConditionalGroup
 	Condition string
 	IfSteps   []CompiledStep
 	ElseSteps []CompiledStep
@@ -47,14 +48,14 @@ type ThoughtRecipeExecutionContext struct {
 
 // ExecutionPlan is the spec-shaped compilation result for a DSL thoughtrecipe.
 type ExecutionPlan struct {
-	ThoughtRecipe *ThoughtRecipe
+	ThoughtRecipe *surface.ThoughtRecipe
 	Agents        map[string]AgentBinding
 	ToolScopes    []ToolScopeFrame
 	Steps         []ExecutionStep
 	Routes        []CompiledRouteGroup
 	Pipelines     []CompiledPipelineGroup
 	Warnings      []SemanticWarning
-	RouteKind     TriggerRouteKind
+	RouteKind     surface.TriggerRouteKind
 
 	Parallel    []CompiledParallelGroup
 	Conditional []CompiledConditionalGroup
@@ -87,14 +88,14 @@ type ExecutionStep struct {
 	PromptID            string
 	Mutation            string
 	HITL                string
-	Stream              *ThoughtRecipeStreamSpec
-	Ingest              *ThoughtRecipeIngestSpec
-	Fallback            *ThoughtRecipeStepAgent
+	Stream              *surface.ThoughtRecipeStreamSpec
+	Ingest              *surface.ThoughtRecipeIngestSpec
+	Fallback            *surface.ThoughtRecipeStepAgent
 	Inherit             []string
 	Capture             []string
 	Dependencies        []string
 	ClarificationConfig *ClarificationStepConfig
-	Step                ThoughtRecipeStep
+	Step                surface.ThoughtRecipeStep
 }
 
 // ToolScopeFrame captures one lexical tool allowlist contribution.

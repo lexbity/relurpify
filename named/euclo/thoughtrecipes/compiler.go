@@ -3,6 +3,8 @@ package thoughtrecipe
 import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // CompiledNode represents a compiled thoughtrecipe step as a graph node.
@@ -26,7 +28,7 @@ func NewCompiler() *Compiler {
 }
 
 // Compile reports that the legacy graph-node compiler has been removed.
-func (c *Compiler) Compile(thoughtrecipe *ThoughtRecipe) ([]CompiledNode, error) {
+func (c *Compiler) Compile(thoughtrecipe *surface.ThoughtRecipe) ([]CompiledNode, error) {
 	_ = c
 	if thoughtrecipe == nil {
 		return nil, fmt.Errorf("thoughtrecipe is nil")
@@ -35,7 +37,7 @@ func (c *Compiler) Compile(thoughtrecipe *ThoughtRecipe) ([]CompiledNode, error)
 }
 
 // CompilePlan reports that the synthetic legacy compiler path has been removed.
-func (c *Compiler) CompilePlan(thoughtrecipe *ThoughtRecipe) (*ExecutionPlan, error) {
+func (c *Compiler) CompilePlan(thoughtrecipe *surface.ThoughtRecipe) (*ExecutionPlan, error) {
 	_ = c
 	if thoughtrecipe == nil {
 		return nil, fmt.Errorf("thoughtrecipe is nil")
@@ -43,7 +45,7 @@ func (c *Compiler) CompilePlan(thoughtrecipe *ThoughtRecipe) (*ExecutionPlan, er
 	return nil, fmt.Errorf("legacy thoughtrecipe compiler removed; lower the AST directly into an execution plan")
 }
 
-func executionParadigmForStep(step ThoughtRecipeStep) string {
+func executionParadigmForStep(step surface.ThoughtRecipeStep) string {
 	if paradigm := strings.TrimSpace(step.Parent.Paradigm); paradigm != "" {
 		return paradigm
 	}
@@ -64,7 +66,7 @@ func cloneAnyMap(m map[string]any) map[string]any {
 	return cp
 }
 
-func cloneStreamSpec(spec *ThoughtRecipeStreamSpec) *ThoughtRecipeStreamSpec {
+func cloneStreamSpec(spec *surface.ThoughtRecipeStreamSpec) *surface.ThoughtRecipeStreamSpec {
 	if spec == nil {
 		return nil
 	}
@@ -72,7 +74,7 @@ func cloneStreamSpec(spec *ThoughtRecipeStreamSpec) *ThoughtRecipeStreamSpec {
 	return &cp
 }
 
-func cloneIngestSpec(spec *ThoughtRecipeIngestSpec) *ThoughtRecipeIngestSpec {
+func cloneIngestSpec(spec *surface.ThoughtRecipeIngestSpec) *surface.ThoughtRecipeIngestSpec {
 	if spec == nil {
 		return nil
 	}
@@ -80,7 +82,7 @@ func cloneIngestSpec(spec *ThoughtRecipeIngestSpec) *ThoughtRecipeIngestSpec {
 	return &cp
 }
 
-func cloneStepAgent(agent *ThoughtRecipeStepAgent) *ThoughtRecipeStepAgent {
+func cloneStepAgent(agent *surface.ThoughtRecipeStepAgent) *surface.ThoughtRecipeStepAgent {
 	if agent == nil {
 		return nil
 	}

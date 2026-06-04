@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestLowerDocumentPreservesAgentBindingsAndRunStructure(t *testing.T) {
@@ -56,11 +57,11 @@ run reviewer:
 	if got, want := len(plan.Steps), 2; got != want {
 		t.Fatalf("step count = %d, want %d", got, want)
 	}
-	if got := plan.RouteKind; got != TriggerRouteKindCapability {
-		t.Fatalf("plan route kind = %q, want %q", got, TriggerRouteKindCapability)
+	if got := plan.RouteKind; got != surface.TriggerRouteKindCapability {
+		t.Fatalf("plan route kind = %q, want %q", got, surface.TriggerRouteKindCapability)
 	}
-	if got := plan.ThoughtRecipe.RouteKind; got != TriggerRouteKindCapability {
-		t.Fatalf("thoughtrecipe route kind = %q, want %q", got, TriggerRouteKindCapability)
+	if got := plan.ThoughtRecipe.RouteKind; got != surface.TriggerRouteKindCapability {
+		t.Fatalf("thoughtrecipe route kind = %q, want %q", got, surface.TriggerRouteKindCapability)
 	}
 	if got := plan.ThoughtRecipe.Metadata.Families; len(got) != 1 || got[0] != "debug" {
 		t.Fatalf("families = %#v, want [debug]", got)
@@ -328,11 +329,11 @@ ask user:
 	if err != nil {
 		t.Fatalf("LowerDocument failed: %v", err)
 	}
-	if got := plan.RouteKind; got != TriggerRouteKindIntent {
-		t.Fatalf("plan route kind = %q, want %q", got, TriggerRouteKindIntent)
+	if got := plan.RouteKind; got != surface.TriggerRouteKindIntent {
+		t.Fatalf("plan route kind = %q, want %q", got, surface.TriggerRouteKindIntent)
 	}
-	if got := plan.ThoughtRecipe.RouteKind; got != TriggerRouteKindIntent {
-		t.Fatalf("thoughtrecipe route kind = %q, want %q", got, TriggerRouteKindIntent)
+	if got := plan.ThoughtRecipe.RouteKind; got != surface.TriggerRouteKindIntent {
+		t.Fatalf("thoughtrecipe route kind = %q, want %q", got, surface.TriggerRouteKindIntent)
 	}
 }
 

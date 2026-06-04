@@ -8,7 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func RenderInteractionFrame(th *theme.Theme, frame interaction.InteractionFrame) tui.Message {
@@ -452,9 +451,10 @@ func RenderChatProjection(th *theme.Theme, snap EucloProjectionSnapshot) string 
 	if len(snap.Chat.Milestones) == 0 && len(snap.Chat.Outputs) == 0 && len(snap.Chat.Frames) == 0 {
 		return th.Panel().Render(strings.TrimSpace(b.String()))
 	}
-	// Render phase stepper bar.
-	if snap.StepperPhase != PhaseIdle {
-		b.WriteString("  " + renderStepper(th, snap.StepperPhase) + "\n\n")
+	// Render two-tier stepper.
+	s := NewStepper(snap.Recipe, snap.StepRuntime, snap.Macro)
+	if rendered := s.Render(th); rendered != "" {
+		b.WriteString("  " + rendered + "\n\n")
 	}
 	for _, line := range snap.Chat.Milestones {
 		b.WriteString("  " + th.Header().Render("●") + " " + line + "\n")
@@ -468,23 +468,4 @@ func RenderChatProjection(th *theme.Theme, snap EucloProjectionSnapshot) string 
 	return th.Panel().Render(strings.TrimSpace(b.String()))
 }
 
-func renderStepper(th *theme.Theme, current Phase) string {
-	if th == nil || current == PhaseIdle {
-		return ""
-	}
-	ordered := []Phase{PhaseIntake, PhasePlan, PhaseExecute, PhaseVerify, PhaseDone}
-	parts := make([]string, 0, len(ordered))
-	for _, p := range ordered {
-		label := p.String()
-		var style lipgloss.Style
-		if p < current {
-			style = th.Success()
-		} else if p == current {
-			style = th.Active()
-		} else {
-			style = th.Pending()
-		}
-		parts = append(parts, style.Render(label))
-	}
-	return strings.Join(parts, " → ")
-}
+

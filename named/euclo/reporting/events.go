@@ -3,6 +3,8 @@ package reporting
 import (
 	"encoding/json"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // EventType defines the type of reporting event.
@@ -43,6 +45,12 @@ const (
 	EventTypeJobSubmitted           EventType = "euclo.job.submitted"
 	EventTypeJobCompleted           EventType = "euclo.job.completed"
 	EventTypeStepCompletedEuclo     EventType = "euclo.step.completed"
+	EventTypeBranchResolved         EventType = "euclo.branch.resolved"
+	EventTypeParallelFanout         EventType = "euclo.parallel.fanout"
+	EventTypeRecipeSelected         EventType = "euclo.recipe.selected"
+	EventTypeStepStartedEuclo       EventType = "euclo.step.started"
+	EventTypeVerifyStarted          EventType = "euclo.verify.started"
+	EventTypeVerifyComplete         EventType = "euclo.verify.complete"
 	EventTypeExecutionComplete      EventType = "euclo.execution.complete"
 	EventTypeTaskStartedEuclo       EventType = "euclo.task.started"
 	EventTypeTaskCompletedEuclo     EventType = "euclo.task.completed"
@@ -234,6 +242,39 @@ type EventJobCompleted struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
+// EventRecipeSelected signals that a thoughtrecipe has been selected for execution.
+type EventRecipeSelected struct {
+	EventHeader
+	RecipeID        string                    `json:"recipe_id"`
+	Recipe          surface.RecipeProjection  `json:"recipe"`
+}
+
+// EventBranchResolved signals that a conditional branch or route fork was resolved.
+type EventBranchResolved struct {
+	EventHeader
+	GroupID        string   `json:"group_id"`
+	ChosenBranch   string   `json:"chosen_branch"`
+	RouteKind      string   `json:"route_kind,omitempty"`
+	SkippedStepIDs []string `json:"skipped_step_ids,omitempty"`
+}
+
+// EventParallelFanout signals that a parallel group has begun execution.
+type EventParallelFanout struct {
+	EventHeader
+	GroupID       string   `json:"group_id"`
+	MemberStepIDs []string `json:"member_step_ids"`
+}
+
+// EventStepStarted signals that a single recipe step has begun execution.
+type EventStepStarted struct {
+	EventHeader
+	StepID          string `json:"step_id"`
+	ThoughtRecipeID string `json:"thoughtrecipe_id"`
+	Paradigm        string `json:"paradigm"`
+	Index           int    `json:"index"`
+	Total           int    `json:"total"`
+}
+
 // EventStepCompleted signals thoughtrecipe step completion.
 type EventStepCompleted struct {
 	EventHeader
@@ -242,6 +283,22 @@ type EventStepCompleted struct {
 	Paradigm        string `json:"paradigm"`
 	Success         bool   `json:"success"`
 	DurationMs      int64  `json:"duration_ms"`
+	Index           int    `json:"index"`
+	Total           int    `json:"total"`
+}
+
+// EventVerifyStarted signals the beginning of the verification phase.
+type EventVerifyStarted struct {
+	EventHeader
+	StepCount int `json:"step_count"`
+}
+
+// EventVerifyComplete signals the end of the verification phase with an optional evidence summary.
+type EventVerifyComplete struct {
+	EventHeader
+	Outcome  string   `json:"outcome"`
+	Evidence []string `json:"evidence,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
 }
 
 // EventExecutionComplete signals overall execution completion.

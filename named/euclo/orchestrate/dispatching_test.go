@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
@@ -48,8 +49,8 @@ func testCapabilityDescriptor(id string, priority int, availability core.Availab
 	}
 }
 
-func testThoughtRecipe(id string) *thoughtrecipepkg.ThoughtRecipe {
-	return &thoughtrecipepkg.ThoughtRecipe{
+func testThoughtRecipe(id string) *surface.ThoughtRecipe {
+	return &surface.ThoughtRecipe{
 		ID:   id,
 		Name: id,
 	}

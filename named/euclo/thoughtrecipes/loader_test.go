@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/framework/services"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestThoughtRecipeLoaderRejectsBytes(t *testing.T) {
@@ -193,8 +194,8 @@ trigger as intent:
 	if !ok || thoughtrecipe == nil {
 		t.Fatal("expected intent thoughtrecipe to be registered")
 	}
-	if thoughtrecipe.RouteKind != TriggerRouteKindIntent {
-		t.Fatalf("thoughtrecipe route kind = %q, want %q", thoughtrecipe.RouteKind, TriggerRouteKindIntent)
+	if thoughtrecipe.RouteKind != surface.TriggerRouteKindIntent {
+		t.Fatalf("thoughtrecipe route kind = %q, want %q", thoughtrecipe.RouteKind, surface.TriggerRouteKindIntent)
 	}
 	if got := thoughtrecipe.Metadata.Families; len(got) != 1 || got[0] != "clarification" {
 		t.Fatalf("thoughtrecipe families = %#v, want [clarification]", got)
@@ -207,8 +208,8 @@ trigger as intent:
 	}
 	if plan, ok := result.Registry.GetPlan("intent_route"); !ok || plan == nil {
 		t.Fatal("expected compiled plan for intent thoughtrecipe")
-	} else if plan.RouteKind != TriggerRouteKindIntent {
-		t.Fatalf("compiled plan route kind = %q, want %q", plan.RouteKind, TriggerRouteKindIntent)
+	} else if plan.RouteKind != surface.TriggerRouteKindIntent {
+		t.Fatalf("compiled plan route kind = %q, want %q", plan.RouteKind, surface.TriggerRouteKindIntent)
 	}
 }
 

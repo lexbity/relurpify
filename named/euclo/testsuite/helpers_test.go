@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -122,7 +123,7 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRe
 	return reg
 }
 
-func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *thoughtrecipepkg.ThoughtRecipe) *thoughtrecipepkg.ThoughtRecipeRegistry {
+func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe) *thoughtrecipepkg.ThoughtRecipeRegistry {
 	t.Helper()
 	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 	if thoughtrecipe == nil {
@@ -137,13 +138,13 @@ func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *thoughtrecipepkg.Thou
 			Paradigm: "goalcon",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
-			Step: thoughtrecipepkg.ThoughtRecipeStep{
+			Step: surface.ThoughtRecipeStep{
 				ID:      stepID,
 				Type:    "run",
 				Prompt:  "Continue the thoughtrecipe.",
-				Parent:  thoughtrecipepkg.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
 				Config:  map[string]any{},
-				Context: thoughtrecipepkg.ThoughtRecipeStepContext{},
+				Context: surface.ThoughtRecipeStepContext{},
 			},
 		}},
 	}

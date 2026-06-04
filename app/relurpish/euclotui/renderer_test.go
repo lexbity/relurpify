@@ -403,10 +403,10 @@ func TestRenderInteractionNotificationWithSlots(t *testing.T) {
 		ID:  "n2",
 		Msg: "choose",
 		Extra: map[string]string{
-			"slot_count":  "2",
-			"slot_0_id":   "a",
+			"slot_count":   "2",
+			"slot_0_id":    "a",
 			"slot_0_label": "Alpha",
-			"slot_1_id":   "b",
+			"slot_1_id":    "b",
 			"slot_1_label": "Beta",
 		},
 	}
@@ -432,4 +432,3 @@ func TestRenderStatusNoGlyph(t *testing.T) {
 		t.Errorf("renderStatus missing message, got: %s", msg.Content.Text)
 	}
 }
-

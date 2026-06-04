@@ -3,6 +3,8 @@ package thoughtrecipe
 import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // NormalizeRoutePredicate converts a parsed predicate into the constrained
@@ -169,13 +171,13 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 		CaptureBindings:    captures,
 		PromptID:           promptID,
 		Prompt:             strings.Join(goals, "\n"),
-		Step:               ThoughtRecipeStep{ID: stepID},
+		Step:               surface.ThoughtRecipeStep{ID: stepID},
 	}
 	if capabilityPlan != nil {
 		step.CapabilityID = capabilityPlan.CapabilityID
 	}
 	step.Step.Parent.Paradigm = binding.Paradigm
-	step.Step.Parent.Context = ThoughtRecipeStepContext{}
+	step.Step.Parent.Context = surface.ThoughtRecipeStepContext{}
 	step.Step.Prompt = step.Prompt
 	step.Step.PromptID = promptID
 	step.Step.Type = kind
@@ -222,10 +224,10 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 		Paradigm:     "euclo",
 		CapabilityID: plan.CapabilityID,
 		Prompt:       fmt.Sprintf("do relurpic:%s", strings.TrimSpace(inv.Capability.Value)),
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:   stepID,
 			Type: "capability",
-			Parent: ThoughtRecipeStepAgent{
+			Parent: surface.ThoughtRecipeStepAgent{
 				Paradigm: "euclo",
 			},
 			Config: map[string]any{},

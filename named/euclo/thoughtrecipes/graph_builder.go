@@ -13,6 +13,7 @@ import (
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.
@@ -358,11 +359,11 @@ func buildBranchSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironm
 	return artifacts[0].entry, nil
 }
 
-func executionStepFromAgent(id string, agent *ThoughtRecipeStepAgent, parent ExecutionStep) ExecutionStep {
+func executionStepFromAgent(id string, agent *surface.ThoughtRecipeStepAgent, parent ExecutionStep) ExecutionStep {
 	if agent == nil {
 		return inheritExecutionStepScope(ExecutionStep{ID: id}, parent)
 	}
-	step := ThoughtRecipeStep{
+	step := surface.ThoughtRecipeStep{
 		ID:      id,
 		Parent:  *agent,
 		Context: agent.Context,

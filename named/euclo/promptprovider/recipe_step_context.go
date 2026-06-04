@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 type thoughtrecipeStepContextProvider struct{}
@@ -18,114 +19,115 @@ func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) pr
 		return prompt.ContextChunk{Content: ""}
 	}
 
-	var lines []string
+	sv := surface.StateView{}
 	if taskID := strings.TrimSpace(state.TaskID); taskID != "" {
-		lines = append(lines, fmt.Sprintf("Task ID: %s", taskID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Task ID: %s", taskID))
 	}
 	if sessionID := strings.TrimSpace(state.SessionID); sessionID != "" {
-		lines = append(lines, fmt.Sprintf("Session ID: %s", sessionID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Session ID: %s", sessionID))
 	}
-	lines = append(lines, fmt.Sprintf("Clarification State Version: %d", state.StateVersion))
+	sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Clarification State Version: %d", state.StateVersion))
 	if turnID := strings.TrimSpace(state.CurrentTurnID); turnID != "" {
-		lines = append(lines, fmt.Sprintf("Current Turn ID: %s", turnID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Current Turn ID: %s", turnID))
 	}
 	if thoughtrecipeID := strings.TrimSpace(state.ActiveThoughtRecipeID); thoughtrecipeID != "" {
-		lines = append(lines, fmt.Sprintf("Active ThoughtRecipe ID: %s", thoughtrecipeID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Active ThoughtRecipe ID: %s", thoughtrecipeID))
 	}
 	if checkpointID := strings.TrimSpace(state.LastCheckpointID); checkpointID != "" {
-		lines = append(lines, fmt.Sprintf("Last Checkpoint ID: %s", checkpointID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Last Checkpoint ID: %s", checkpointID))
 	}
 	if checkpointSeq := state.LastCheckpointSeq; checkpointSeq > 0 {
-		lines = append(lines, fmt.Sprintf("Last Checkpoint Seq: %d", checkpointSeq))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Last Checkpoint Seq: %d", checkpointSeq))
 	}
 	if question := firstNonEmpty(ctx.Variables["question"], ctx.Variables["instruction"]); question != "" {
-		lines = append(lines, fmt.Sprintf("Current Question: %s", question))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Current Question: %s", question))
 	}
 	if promptID := strings.TrimSpace(ctx.Variables["prompt_id"]); promptID != "" {
-		lines = append(lines, fmt.Sprintf("Prompt ID: %s", promptID))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Prompt ID: %s", promptID))
 	}
 	if evidence := intentEvidenceFromRuntime(ctx); evidence != nil {
 		if action := strings.TrimSpace(evidence.ActionType); action != "" {
-			lines = append(lines, fmt.Sprintf("Evidence Action Type: %s", action))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Evidence Action Type: %s", action))
 		}
 		if target := strings.TrimSpace(evidence.Target); target != "" {
-			lines = append(lines, fmt.Sprintf("Evidence Target: %s", target))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Evidence Target: %s", target))
 		}
 		if scope := strings.TrimSpace(evidence.Scope); scope != "" {
-			lines = append(lines, fmt.Sprintf("Evidence Scope: %s", scope))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Evidence Scope: %s", scope))
 		}
 		if risk := strings.TrimSpace(evidence.RiskLevel); risk != "" {
-			lines = append(lines, fmt.Sprintf("Evidence Risk Level: %s", risk))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Evidence Risk Level: %s", risk))
 		}
 		if verb := strings.TrimSpace(evidence.ExpectedVerb); verb != "" {
-			lines = append(lines, fmt.Sprintf("Evidence Expected Verb: %s", verb))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Evidence Expected Verb: %s", verb))
 		}
 		if len(evidence.MissingFields) > 0 {
-			lines = append(lines, "Evidence Missing Fields: "+strings.Join(evidence.MissingFields, ", "))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Evidence Missing Fields: "+strings.Join(evidence.MissingFields, ", "))
 		}
 		if len(evidence.ReasonCodes) > 0 {
-			lines = append(lines, "Evidence Reason Codes: "+strings.Join(evidence.ReasonCodes, ", "))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Evidence Reason Codes: "+strings.Join(evidence.ReasonCodes, ", "))
 		}
 	}
 	if interpretation := intentInterpretationFromRuntime(ctx); interpretation != nil {
 		if action := strings.TrimSpace(interpretation.ActionType); action != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Action Type: %s", action))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Action Type: %s", action))
 		}
 		if target := strings.TrimSpace(interpretation.Target); target != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Target: %s", target))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Target: %s", target))
 		}
 		if scope := strings.TrimSpace(interpretation.Scope); scope != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Scope: %s", scope))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Scope: %s", scope))
 		}
 		if risk := strings.TrimSpace(interpretation.RiskLevel); risk != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Risk Level: %s", risk))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Risk Level: %s", risk))
 		}
 		if len(interpretation.MissingInfo) > 0 {
-			lines = append(lines, "Interpretation Missing Info: "+strings.Join(interpretation.MissingInfo, ", "))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Interpretation Missing Info: "+strings.Join(interpretation.MissingInfo, ", "))
 		}
 		if rationale := strings.TrimSpace(interpretation.Rationale); rationale != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Rationale: %s", rationale))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Rationale: %s", rationale))
 		}
 		if note := strings.TrimSpace(interpretation.ConfidenceNote); note != "" {
-			lines = append(lines, fmt.Sprintf("Interpretation Confidence Note: %s", note))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Interpretation Confidence Note: %s", note))
 		}
 		if len(interpretation.ReasonCodes) > 0 {
-			lines = append(lines, "Interpretation Reason Codes: "+strings.Join(interpretation.ReasonCodes, ", "))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Interpretation Reason Codes: "+strings.Join(interpretation.ReasonCodes, ", "))
 		}
 	}
 	if state.Ambiguity != nil {
-		lines = append(lines, fmt.Sprintf("Ambiguity Kind: %s", state.Ambiguity.Kind))
-		lines = append(lines, fmt.Sprintf("Ambiguity Confidence: %.2f", state.Ambiguity.Confidence))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Ambiguity Kind: %s", state.Ambiguity.Kind))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Ambiguity Confidence: %.2f", state.Ambiguity.Confidence))
 		if rationale := strings.TrimSpace(state.Ambiguity.Rationale); rationale != "" {
-			lines = append(lines, fmt.Sprintf("Ambiguity Rationale: %s", rationale))
+			sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Ambiguity Rationale: %s", rationale))
 		}
 	}
 	if anchors := anchorSummaries(state.GroundedAnchors); len(anchors) > 0 {
-		lines = append(lines, "Grounded Anchors: "+strings.Join(anchors, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Grounded Anchors: "+strings.Join(anchors, ", "))
 	}
 	if entities := entitySummaries(state.ConfirmedEntities); len(entities) > 0 {
-		lines = append(lines, "Confirmed Entities: "+strings.Join(entities, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Confirmed Entities: "+strings.Join(entities, ", "))
 	}
 	if scopes := scopeSummaries(state.ConfirmedScopes); len(scopes) > 0 {
-		lines = append(lines, "Confirmed Scopes: "+strings.Join(scopes, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Confirmed Scopes: "+strings.Join(scopes, ", "))
 	}
 	if relationIntents := relationIntentSummaries(state.PendingRelationIntents); len(relationIntents) > 0 {
-		lines = append(lines, "Pending Relation Intents: "+strings.Join(relationIntents, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Pending Relation Intents: "+strings.Join(relationIntents, ", "))
 	}
 	if questions := questionSummaries(state.PendingQuestions); len(questions) > 0 {
-		lines = append(lines, "Pending Questions: "+strings.Join(questions, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Pending Questions: "+strings.Join(questions, ", "))
 	}
 	if projections := projectionSummaries(state.PendingProjection); len(projections) > 0 {
-		lines = append(lines, "Pending Projection: "+strings.Join(projections, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Pending Projection: "+strings.Join(projections, ", "))
 	}
 	if mutations := projectionRecordSummaries(state.AppliedMutations); len(mutations) > 0 {
-		lines = append(lines, "Applied Mutations: "+strings.Join(mutations, ", "))
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Applied Mutations: "+strings.Join(mutations, ", "))
 	}
 
-	if len(lines) == 0 {
+	out := sv.RenderClarificationRuntime()
+	if out == "" {
 		return prompt.ContextChunk{Content: ""}
 	}
-	return prompt.ContextChunk{Content: "Clarification Runtime:\n" + strings.Join(lines, "\n")}
+	return prompt.ContextChunk{Content: out}
 }
 
 func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
@@ -133,22 +135,7 @@ func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
 		Name:        "euclo.thoughtrecipe_step_context",
 		Description: "Provides clarification runtime context for thoughtrecipe step prompts",
 		Paradigms:   []string{"euclo"},
-		ReadsKeys: []string{
-			intentcontext.ClarificationStateKey,
-			intentcontext.IntentEvidenceKey,
-			intentcontext.IntentInterpretationKey,
-			intentcontext.ClarificationAmbiguityKey,
-			intentcontext.ClarificationTurnsKey,
-			intentcontext.ClarificationConfirmedEntitiesKey,
-			intentcontext.ClarificationConfirmedScopesKey,
-			intentcontext.ClarificationRelationIntentsKey,
-			intentcontext.ClarificationGroundedAnchorsKey,
-			intentcontext.ClarificationPendingProjectionKey,
-			intentcontext.ClarificationProjectedMutationsKey,
-			intentcontext.ClarificationActiveThoughtRecipeKey,
-			intentcontext.ClarificationLastCheckpointIDKey,
-			intentcontext.ClarificationLastCheckpointSeqKey,
-		},
+		ReadsKeys:   surface.PromptReadsKeys(),
 	}
 }
 

@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"context"
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -43,7 +44,8 @@ func (f *baseSurfaceFake) InitialTab() TabID                                    
 func (f *baseSurfaceFake) InitialSubTab(TabID) SubTabID                                   { return "" }
 func (f *baseSurfaceFake) RenderNotification(item NotificationItem) string                { return item.Msg }
 func (f *baseSurfaceFake) HandleFrame(_ context.Context, _ *RootModel, _ SurfaceFrameMsg) {}
-func (fake *baseSurfaceFake) Theme() *theme.Theme { return nil }
+func (fake *baseSurfaceFake) Theme() *theme.Theme                                         { return nil }
+func (fake *baseSurfaceFake) ResumeSession(_ context.Context, _ string) tea.Cmd           { return nil }
 
 func (f *baseSurfaceFake) SetSize(int, int)                             {}
 func (f *baseSurfaceFake) SetStore(*SessionStore)                       {}

@@ -1,116 +1,80 @@
 package euclotui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
-// Phase represents a named step in the Euclo recipe lifecycle.
-type Phase int
-
-const (
-	PhaseIdle     Phase = iota // No recipe running
-	PhaseIntake                // Understanding request, gathering context
-	PhasePlan                  // Formulating approach
-	PhaseExecute               // Making changes
-	PhaseVerify                // Checking results
-	PhaseDone                  // Recipe completed
-)
-
-func (p Phase) String() string {
-	switch p {
-	case PhaseIdle:
-		return "idle"
-	case PhaseIntake:
-		return "intake"
-	case PhasePlan:
-		return "plan"
-	case PhaseExecute:
-		return "execute"
-	case PhaseVerify:
-		return "verify"
-	case PhaseDone:
-		return "done"
-	default:
-		return "unknown"
-	}
-}
-
-// Stepper renders the recipe phase progression as a compact visual bar.
-// It is driven by milestone events emitted from the Euclo event router.
+// Stepper renders a two-tier progress view:
+//   Tier 1 — Macro lifecycle rail (idle → intake → route → execute → verify → done)
+//   Tier 2 — Dynamic recipe-step graph (one node per real step, paradigm-labelled,
+//             with live runtime status and parallel group topology).
 type Stepper struct {
-	phases []Phase
+	recipe      *surface.RecipeProjection
+	stepRuntime map[string]surface.StepRuntime
+	macro       surface.MacroPhase
 }
 
-// NewStepper creates a stepper initialised at idle.
-func NewStepper() *Stepper {
+// NewStepper creates a stepper from the current projection snapshot.
+func NewStepper(recipe *surface.RecipeProjection, stepRuntime map[string]surface.StepRuntime, macro surface.MacroPhase) *Stepper {
+	runtime := stepRuntime
+	if runtime == nil {
+		runtime = make(map[string]surface.StepRuntime)
+	}
 	return &Stepper{
-		phases: []Phase{PhaseIdle},
+		recipe:      recipe,
+		stepRuntime: runtime,
+		macro:       macro,
 	}
 }
 
-// Advance moves the stepper to the next phase. No-op if the phase is already
-// at or beyond the given phase (idempotent).
-func (s *Stepper) Advance(to Phase) {
-	if s == nil {
-		return
-	}
-	if len(s.phases) == 0 {
-		s.phases = []Phase{to}
-		return
-	}
-	last := s.phases[len(s.phases)-1]
-	if to <= last {
-		return
-	}
-	s.phases = append(s.phases, to)
+// macroOrder defines the canonical lifecycle phases in order.
+var macroOrder = []surface.MacroPhase{
+	surface.MacroIntake,
+	surface.MacroRoute,
+	surface.MacroExecute,
+	surface.MacroVerify,
+	surface.MacroDone,
 }
 
-// Current returns the latest phase.
-func (s *Stepper) Current() Phase {
-	if s == nil || len(s.phases) == 0 {
-		return PhaseIdle
-	}
-	return s.phases[len(s.phases)-1]
-}
-
-// Complete marks the recipe as done.
-func (s *Stepper) Complete() {
-	s.Advance(PhaseDone)
-}
-
-// Reset returns the stepper to idle.
-func (s *Stepper) Reset() {
-	if s != nil {
-		s.phases = []Phase{PhaseIdle}
-	}
-}
-
-// Render produces a compact visual bar of the phase progression using the
-// given theme. Each phase is rendered with its corresponding role style:
-// Active for the current phase, Success for completed, Pending for future.
+// Render produces the two-tier output: a macro lifecycle rail followed by
+// the dynamic step graph.
 func (s *Stepper) Render(th *theme.Theme) string {
 	if s == nil || th == nil {
 		return ""
 	}
-	if s.Current() == PhaseIdle {
+	if s.macro == surface.MacroIdle {
 		return ""
 	}
+	var b strings.Builder
 
-	ordered := []Phase{PhaseIntake, PhasePlan, PhaseExecute, PhaseVerify, PhaseDone}
-	parts := make([]string, 0, len(ordered))
-	current := s.Current()
+	// Tier 1: Macro lifecycle rail.
+	b.WriteString(renderMacroRail(th, s.macro))
 
-	for _, p := range ordered {
-		label := p.String()
+	// Tier 2: Dynamic step graph.
+	if s.recipe != nil && len(s.recipe.Steps) > 0 {
+		b.WriteString("\n")
+		for _, step := range s.recipe.Steps {
+			b.WriteString("\n  " + renderProjectedStep(th, step, s.stepRuntime[step.StepID]))
+		}
+	}
+	return b.String()
+}
+
+func renderMacroRail(th *theme.Theme, current surface.MacroPhase) string {
+	parts := make([]string, 0, len(macroOrder))
+	for _, p := range macroOrder {
+		label := macroPhaseLabel(p)
 		var style lipgloss.Style
-		if p < current {
-			style = th.Success()
-		} else if p == current {
+		if p == current {
 			style = th.Active()
+		} else if p.Before(current) {
+			style = th.Success()
 		} else {
 			style = th.Pending()
 		}
@@ -119,10 +83,58 @@ func (s *Stepper) Render(th *theme.Theme) string {
 	return strings.Join(parts, " → ")
 }
 
-// RenderCompact produces a single-line summary for use in constrained space.
-func (s *Stepper) RenderCompact(th *theme.Theme) string {
-	if s == nil || th == nil || s.Current() == PhaseIdle {
-		return ""
+func renderProjectedStep(th *theme.Theme, ps surface.ProjectedStep, rt surface.StepRuntime) string {
+	glyph := stepGlyph(ps, rt)
+	label := ps.Paradigm
+	if label == "" {
+		label = ps.Type
 	}
-	return th.Active().Render(s.Current().String())
+	goal := ps.Goal
+	if goal == "" {
+		goal = ps.StepID
+	}
+
+	var style lipgloss.Style
+	switch rt.Status {
+	case surface.StepActive:
+		style = th.Active()
+	case surface.StepDone:
+		style = th.Success()
+	case surface.StepFailed:
+		style = th.Error()
+	case surface.StepSkipped:
+		style = th.Pending()
+	default:
+		style = th.Dim()
+	}
+
+	parts := []string{glyph, label + ":", goal}
+	if rt.Total > 0 {
+		parts = append(parts, fmt.Sprintf("(%d/%d)", rt.Index+1, rt.Total))
+	}
+	return style.Render(strings.Join(parts, " "))
+}
+
+func stepGlyph(ps surface.ProjectedStep, rt surface.StepRuntime) string {
+	if ps.Paradigm != "" {
+		return theme.Default().ParadigmGlyph(surface.Paradigm(ps.Paradigm))
+	}
+	return "??"
+}
+
+func macroPhaseLabel(p surface.MacroPhase) string {
+	switch p {
+	case surface.MacroIntake:
+		return "intake"
+	case surface.MacroRoute:
+		return "route"
+	case surface.MacroExecute:
+		return "execute"
+	case surface.MacroVerify:
+		return "verify"
+	case surface.MacroDone:
+		return "done"
+	default:
+		return p.String()
+	}
 }

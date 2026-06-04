@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // Parser converts Euclo tokens into the source-level AST.
@@ -161,7 +163,7 @@ func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
 	decl := &TriggerDecl{
 		positioned: positioned{Span: spanFromTokens(start, colon)},
 		Policy:     Identifier{positioned: positioned{Span: spanFromToken(policyTok)}, Value: policyTok.Lexeme},
-		RouteKind:  TriggerRouteKind(strings.ToLower(strings.TrimSpace(policyTok.Lexeme))),
+		RouteKind:  surface.TriggerRouteKind(strings.ToLower(strings.TrimSpace(policyTok.Lexeme))),
 	}
 
 	for !p.atEOF() && p.peek().Kind != TokenDedent {

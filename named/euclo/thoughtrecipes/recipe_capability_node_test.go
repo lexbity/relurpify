@@ -8,11 +8,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func minimalPlan(name string) *ExecutionPlan {
 	return &ExecutionPlan{
-		ThoughtRecipe: &ThoughtRecipe{Name: name, ID: name},
+		ThoughtRecipe: &surface.ThoughtRecipe{Name: name, ID: name},
 	}
 }
 

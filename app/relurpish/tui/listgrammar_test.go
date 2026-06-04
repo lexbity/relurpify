@@ -24,19 +24,23 @@ func (e *testListEditor) Actions() []Action {
 	}
 	return actions
 }
-func (e *testListEditor) ItemCount() int       { return len(e.items) }
-func (e *testListEditor) Selected() int         { return e.sel }
+func (e *testListEditor) ItemCount() int { return len(e.items) }
+func (e *testListEditor) Selected() int  { return e.sel }
 func (e *testListEditor) Move(delta int) int {
 	e.sel += delta
-	if e.sel < 0 { e.sel = 0 }
-	if e.sel >= len(e.items) { e.sel = len(e.items) - 1 }
+	if e.sel < 0 {
+		e.sel = 0
+	}
+	if e.sel >= len(e.items) {
+		e.sel = len(e.items) - 1
+	}
 	return e.sel
 }
-func (e *testListEditor) OnActivate() tea.Cmd  { e.activate = true; return nil }
-func (e *testListEditor) OnToggle() tea.Cmd    { e.toggled = true; return nil }
-func (e *testListEditor) OnNew() tea.Cmd       { e.created = true; return nil }
-func (e *testListEditor) OnDelete() tea.Cmd    { e.deleted = true; return nil }
-func (e *testListEditor) OnFilter(q string)    { e.filter = q }
+func (e *testListEditor) OnActivate() tea.Cmd { e.activate = true; return nil }
+func (e *testListEditor) OnToggle() tea.Cmd   { e.toggled = true; return nil }
+func (e *testListEditor) OnNew() tea.Cmd      { e.created = true; return nil }
+func (e *testListEditor) OnDelete() tea.Cmd   { e.deleted = true; return nil }
+func (e *testListEditor) OnFilter(q string)   { e.filter = q }
 
 func TestListGrammarNavigateUpDown(t *testing.T) {
 	var g ListGrammar

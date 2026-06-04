@@ -107,6 +107,7 @@ func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
 func (s *fakeSurface) Theme() *theme.Theme                                      { return nil }
+func (s *fakeSurface) ResumeSession(_ context.Context, _ string) tea.Cmd        { return nil }
 func (s *fakeSurface) DoctorReport() DoctorReport                               { return s.doctorReport }
 func (s *fakeSurface) SetDoctorReport(report DoctorReport)                      { s.doctorReport = report }
 func (s *fakeSurface) SetDoctorStatus(status string)                            { s.doctorStatus = status }
@@ -130,7 +131,7 @@ type hostileInputSurface struct {
 }
 
 func (s *hostileInputSurface) SetSize(int, int) {}
-func (s *hostileInputSurface) View() string      { return "hostile-input" }
+func (s *hostileInputSurface) View() string     { return "hostile-input" }
 func (s *hostileInputSurface) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	s.keys = append(s.keys, msg.String())
 	return nil, true
@@ -141,7 +142,7 @@ type hostileNavSurface struct {
 }
 
 func (s *hostileNavSurface) SetSize(int, int) {}
-func (s *hostileNavSurface) View() string      { return "hostile-nav" }
+func (s *hostileNavSurface) View() string     { return "hostile-nav" }
 func (s *hostileNavSurface) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	s.keys = append(s.keys, msg.String())
 	return nil, true

@@ -32,12 +32,12 @@ type WelcomePane struct {
 
 func NewWelcomePane(sess *Session, store *SessionStore, factory SurfaceFactory) *WelcomePane {
 	p := &WelcomePane{
-		session:   sess,
-		store:     store,
-		factory:   factory,
-		th:        theme.Default(),
-		logo:      *NewLogo(55, 20),
-		agentDrop: *NewDropdown("agent", nil),
+		session:    sess,
+		store:      store,
+		factory:    factory,
+		th:         theme.Default(),
+		logo:       *NewLogo(55, 20),
+		agentDrop:  *NewDropdown("agent", nil),
 		resumeDrop: *NewDropdown("resume", nil),
 	}
 	p.refreshAgents()

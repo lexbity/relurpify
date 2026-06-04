@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
@@ -89,10 +89,10 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	writeWorkspaceFile(t, dir, "thoughtrecipe.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.code_review", "euclo:cap.capture")
-	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
 		ID:       "euclo.thoughtrecipe.review",
 		Name:     "review",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
+		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)

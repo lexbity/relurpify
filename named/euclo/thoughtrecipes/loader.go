@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
@@ -58,12 +60,12 @@ func (l *Loader) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Loader {
 }
 
 // LoadFromFile reports that legacy file-based thoughtrecipe loading is no longer supported.
-func (l *Loader) LoadFromFile(path string) (*ThoughtRecipe, error) {
+func (l *Loader) LoadFromFile(path string) (*surface.ThoughtRecipe, error) {
 	return nil, fmt.Errorf("%w: %s", ErrYAMLThoughtRecipeLoadingRemoved, path)
 }
 
 // LoadFromBytes reports that legacy in-memory thoughtrecipe loading is no longer supported.
-func (l *Loader) LoadFromBytes(data []byte) (*ThoughtRecipe, error) {
+func (l *Loader) LoadFromBytes(data []byte) (*surface.ThoughtRecipe, error) {
 	_ = data
 	return nil, ErrYAMLThoughtRecipeLoadingRemoved
 }

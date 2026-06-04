@@ -1,5 +1,7 @@
 package thoughtrecipe
 
+import "codeburg.org/lexbit/relurpify/named/euclo/surface"
+
 // SourceLocation identifies a concrete position in a source file.
 type SourceLocation struct {
 	File   string
@@ -98,22 +100,13 @@ type ThoughtRecipeHeader struct {
 type TriggerDecl struct {
 	positioned
 	Policy       Identifier
-	RouteKind    TriggerRouteKind
+	RouteKind    surface.TriggerRouteKind
 	Lines        []TriggerLine
 	ToolPolicies []ToolInvokePolicyDecl
 	Associations []TriggerAssociationDecl
 }
 
 func (TriggerDecl) declarationNode() {}
-
-// TriggerRouteKind identifies the route contract declared by a trigger.
-type TriggerRouteKind string
-
-const (
-	TriggerRouteKindUnknown    TriggerRouteKind = ""
-	TriggerRouteKindCapability TriggerRouteKind = "capability"
-	TriggerRouteKindIntent     TriggerRouteKind = "intent"
-)
 
 // TriggerLine preserves a single trigger policy line.
 type TriggerLine struct {

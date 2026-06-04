@@ -24,14 +24,14 @@ const (
 )
 
 type diffNode struct {
-	Key    string
-	Kind   diffNodeKind
-	Depth  int
-	Label  string
-	StepID string
+	Key     string
+	Kind    diffNodeKind
+	Depth   int
+	Label   string
+	StepID  string
 	StepIDs []string
-	File   string
-	Hunk   *DiffHunkProjection
+	File    string
+	Hunk    *DiffHunkProjection
 }
 
 type diffViewMode int
@@ -438,11 +438,11 @@ func (p *DiffPane) visibleNodesByFile(snap EucloProjectionSnapshot) []diffNode {
 			continue
 		}
 		fileNode := diffNode{
-			Key:    "file:" + filePath,
-			Kind:   diffNodeFile,
-			Depth:  0,
-			Label:  p.fileGroupLabel(*group),
-			File:   filePath,
+			Key:   "file:" + filePath,
+			Kind:  diffNodeFile,
+			Depth: 0,
+			Label: p.fileGroupLabel(*group),
+			File:  filePath,
 		}
 		out = append(out, fileNode)
 		if p.collapsed[fileNode.Key] {
@@ -451,12 +451,12 @@ func (p *DiffPane) visibleNodesByFile(snap EucloProjectionSnapshot) []diffNode {
 		for i := range group.Hunks {
 			hunk := group.Hunks[i]
 			hunkNode := diffNode{
-				Key:    "hunk:" + filePath + ":" + strconv.Itoa(i),
-				Kind:   diffNodeHunk,
-				Depth:  1,
-				Label:  p.hunkLabel(hunk, i),
-				File:   filePath,
-				Hunk:   &hunk,
+				Key:   "hunk:" + filePath + ":" + strconv.Itoa(i),
+				Kind:  diffNodeHunk,
+				Depth: 1,
+				Label: p.hunkLabel(hunk, i),
+				File:  filePath,
+				Hunk:  &hunk,
 			}
 			out = append(out, hunkNode)
 		}

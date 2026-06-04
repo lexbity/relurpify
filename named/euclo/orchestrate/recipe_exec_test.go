@@ -20,6 +20,7 @@ import (
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -33,7 +34,7 @@ func ctxWithTrigger(ctx context.Context) context.Context {
 	return contextstream.WithTrigger(ctx, contextstream.NewTrigger(noopCompiler{}))
 }
 
-func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.ThoughtRecipeRegistry, thoughtrecipe *thoughtrecipepkg.ThoughtRecipe) {
+func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.ThoughtRecipeRegistry, thoughtrecipe *surface.ThoughtRecipe) {
 	t.Helper()
 	if thoughtrecipe == nil {
 		t.Fatal("thoughtrecipe is nil")
@@ -47,13 +48,13 @@ func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.
 			Paradigm: "goalcon",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
-			Step: thoughtrecipepkg.ThoughtRecipeStep{
+			Step: surface.ThoughtRecipeStep{
 				ID:      stepID,
 				Type:    "run",
 				Prompt:  "Continue the thoughtrecipe.",
-				Parent:  thoughtrecipepkg.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
 				Config:  map[string]any{},
-				Context: thoughtrecipepkg.ThoughtRecipeStepContext{},
+				Context: surface.ThoughtRecipeStepContext{},
 			},
 		}},
 	}
@@ -80,10 +81,10 @@ func TestThoughtRecipeExecutionNodeExecute(t *testing.T) {
 		},
 	})
 	registry := thoughtrecipepkg.NewThoughtRecipeRegistry()
-	mustRegisterCompiledThoughtRecipe(t, registry, &thoughtrecipepkg.ThoughtRecipe{
+	mustRegisterCompiledThoughtRecipe(t, registry, &surface.ThoughtRecipe{
 		ID:   "fix-bug",
 		Name: "fix-bug",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "fix-bug",
 		},
 	})
@@ -121,10 +122,10 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 		},
 	})
 	registry := thoughtrecipepkg.NewThoughtRecipeRegistry()
-	if err := registry.Register(&thoughtrecipepkg.ThoughtRecipe{
+	if err := registry.Register(&surface.ThoughtRecipe{
 		ID:   "fix-bug",
 		Name: "fix-bug",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "fix-bug",
 		},
 	}); err != nil {
@@ -178,10 +179,10 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		},
 	})
 	registry := thoughtrecipepkg.NewThoughtRecipeRegistry()
-	mustRegisterCompiledThoughtRecipe(t, registry, &thoughtrecipepkg.ThoughtRecipe{
+	mustRegisterCompiledThoughtRecipe(t, registry, &surface.ThoughtRecipe{
 		ID:   "fix-bug",
 		Name: "fix-bug",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "fix-bug",
 		},
 	})
@@ -259,16 +260,16 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 		},
 	})
 	registry := thoughtrecipepkg.NewThoughtRecipeRegistry()
-	mustRegisterCompiledThoughtRecipe(t, registry, &thoughtrecipepkg.ThoughtRecipe{
+	mustRegisterCompiledThoughtRecipe(t, registry, &surface.ThoughtRecipe{
 		ID:       clarificationThoughtRecipeID,
 		Name:     "intent clarification",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "intent clarification"},
+		Metadata: surface.ThoughtRecipeMetadata{Name: "intent clarification"},
 	})
 	node.WithThoughtRecipeRegistry(registry)
-	mustRegisterCompiledThoughtRecipe(t, node.registry, &thoughtrecipepkg.ThoughtRecipe{
+	mustRegisterCompiledThoughtRecipe(t, node.registry, &surface.ThoughtRecipe{
 		ID:       "euclo.thoughtrecipe.code_review.custom",
 		Name:     "code review custom",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "code review custom"},
+		Metadata: surface.ThoughtRecipeMetadata{Name: "code review custom"},
 	})
 	state.SetClarificationNextThoughtRecipeID(env, "euclo.thoughtrecipe.code_review.custom")
 

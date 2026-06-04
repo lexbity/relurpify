@@ -1,12 +1,10 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-)
-
-import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // TabBar renders the bottom tab strip from the registered tab set.

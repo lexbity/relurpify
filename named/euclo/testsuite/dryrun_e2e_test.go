@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -90,10 +90,10 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 
 	thoughtrecipeID := "euclo.thoughtrecipe.review"
 	caps := capability.NewRegistry()
-	thoughtrecipes := newThoughtRecipeRegistry(t, &thoughtrecipepkg.ThoughtRecipe{
+	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
 		ID:       thoughtrecipeID,
 		Name:     "review",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{Name: "review"},
+		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
 	graph := orchestrate.NewRootGraph(
 		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),

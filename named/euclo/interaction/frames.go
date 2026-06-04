@@ -6,6 +6,7 @@ import (
 	"time"
 
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // generateID creates a simple unique ID without external dependencies.
@@ -92,6 +93,47 @@ func NewCandidateSelectionFrame(taskID, sessionID string, candidates []string) *
 	return newClarificationFrame(taskID, sessionID, FrameCandidateSelection, "Select the best candidate.", append([]string(nil), candidates...), nil, map[string]any{
 		"candidates": candidates,
 	}, slots, defaultChoice, 5*time.Minute)
+}
+
+// NewThoughtRecipeSelectionFrame creates a selection frame for choosing a thoughtrecipe.
+// Each recipe projection is carried in the payload so the frontend can render
+// structured recipe info (steps, paradigms, HITL gates, groups, etc.).
+func NewThoughtRecipeSelectionFrame(taskID, sessionID string, recipes []surface.RecipeProjection) *InteractionFrame {
+	n := len(recipes)
+	candidates := make([]string, n)
+	slots := make([]ActionSlot, n)
+	var projs []surface.RecipeProjection
+	if n > 0 {
+		projs = make([]surface.RecipeProjection, n)
+	}
+	for i, r := range recipes {
+		name := r.Name
+		if name == "" {
+			name = r.RecipeID
+		}
+		candidates[i] = name
+		if projs != nil {
+			projs[i] = r
+		}
+		slots[i] = ActionSlot{
+			ID:      r.RecipeID,
+			Label:   name,
+			Action:  r.RecipeID,
+			Risk:    "low",
+			Default: i == 0,
+		}
+	}
+	defaultChoice := ""
+	if n > 0 {
+		defaultChoice = candidates[0]
+	}
+	payload := map[string]any{
+		"candidates": candidates,
+	}
+	if len(projs) > 0 {
+		payload["recipes"] = projs
+	}
+	return newClarificationFrame(taskID, sessionID, FrameThoughtRecipeSelection, "Select a thoughtrecipe.", candidates, nil, payload, slots, defaultChoice, 5*time.Minute)
 }
 
 // NewOutcomeFeedbackFrame creates an outcome feedback frame.
@@ -376,4 +418,21 @@ func (f *InteractionFrame) PayloadString(key string) string {
 		return strings.TrimSpace(fmt.Sprint(value))
 	}
 	return ""
+}
+
+// RecipeProjections returns the recipe projections carried by a thoughtrecipe
+// selection frame, if any.
+func (f *InteractionFrame) RecipeProjections() []surface.RecipeProjection {
+	if f == nil || f.Payload == nil {
+		return nil
+	}
+	raw, ok := f.Payload["recipes"]
+	if !ok {
+		return nil
+	}
+	projs, ok := raw.([]surface.RecipeProjection)
+	if !ok || len(projs) == 0 {
+		return nil
+	}
+	return projs
 }

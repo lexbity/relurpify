@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 const NotifKindInteraction tui.NotificationKind = "interaction"
@@ -158,16 +159,18 @@ func RenderActionSlots(actions []interaction.ActionSlot) string {
 // EucloEventRouter fans normalized execution events into the projections used
 // by the Euclo surfaces.
 type EucloEventRouter struct {
-	mu      sync.Mutex
-	chat    ChatProjection
-	diff    DiffProjection
-	stepper *Stepper
+	mu          sync.Mutex
+	chat        ChatProjection
+	diff        DiffProjection
+	recipe      *surface.RecipeProjection
+	stepRuntime map[string]surface.StepRuntime
+	macro       surface.MacroPhase
 }
 
 // NewEucloEventRouter creates an empty projection router.
 func NewEucloEventRouter() *EucloEventRouter {
 	return &EucloEventRouter{
-		stepper: NewStepper(),
+		stepRuntime: make(map[string]surface.StepRuntime),
 	}
 }
 
@@ -181,6 +184,7 @@ func (r *EucloEventRouter) ApplyExecutionEvent(ev ExecutionEvent) EucloProjectio
 
 	r.applyChatEvent(ev)
 	r.applyDiffEvent(ev)
+	r.applyRecipeEvent(ev)
 	return r.snapshotLocked()
 }
 
@@ -223,9 +227,17 @@ func (r *EucloEventRouter) snapshotLocked() EucloProjectionSnapshot {
 		Chat: r.chat.clone(),
 		Diff: r.diff.clone(),
 	}
-	if r.stepper != nil {
-		snap.StepperPhase = r.stepper.Current()
+	if r.recipe != nil {
+		cp := *r.recipe
+		snap.Recipe = &cp
 	}
+	if len(r.stepRuntime) > 0 {
+		snap.StepRuntime = make(map[string]surface.StepRuntime, len(r.stepRuntime))
+		for k, v := range r.stepRuntime {
+			snap.StepRuntime[k] = v
+		}
+	}
+	snap.Macro = r.macro
 	return snap
 }
 
@@ -242,20 +254,150 @@ func (r *EucloEventRouter) applyChatEvent(ev ExecutionEvent) {
 	if ev.Frame != nil {
 		r.chat.Frames = append(r.chat.Frames, *ev.Frame)
 	}
-	if r.stepper == nil {
-		return
-	}
+}
+
+func (r *EucloEventRouter) applyRecipeEvent(ev ExecutionEvent) {
 	switch ev.Type {
 	case reporting.EventTypeIntakeComplete:
-		r.stepper.Advance(PhaseIntake)
+		r.macro = surface.MacroIntake
 	case reporting.EventTypeFamilySelected, reporting.EventTypeRouteSelected:
-		r.stepper.Advance(PhasePlan)
-	case reporting.EventTypeProjectionCompleted, reporting.EventTypeStepCompletedEuclo:
-		r.stepper.Advance(PhaseExecute)
-	case reporting.EventTypeExecutionComplete:
-		r.stepper.Advance(PhaseVerify)
-		r.stepper.Complete()
+		r.macro = surface.MacroRoute
+	case reporting.EventTypeRecipeSelected:
+		r.recipe = cloneRecipeProjectionFromPayload(ev.Payload)
+		r.macro = surface.MacroExecute
+	case reporting.EventTypeProjectionCompleted:
+		if r.macro < surface.MacroExecute {
+			r.macro = surface.MacroExecute
+		}
+	case reporting.EventTypeStepStartedEuclo:
+		rt := surface.StepRuntime{
+			StepID:   ev.StepID,
+			Status:   surface.StepActive,
+			Index:    ev.Index,
+			Total:    ev.Total,
+			Paradigm: ev.Paradigm,
+		}
+		r.stepRuntime[ev.StepID] = rt
+	case reporting.EventTypeStepCompletedEuclo:
+		if r.macro < surface.MacroExecute {
+			r.macro = surface.MacroExecute
+		}
+		status := surface.StepDone
+		if !ev.Success {
+			status = surface.StepFailed
+		}
+		rt := surface.StepRuntime{
+			StepID:     ev.StepID,
+			Status:     status,
+			Index:      ev.Index,
+			Total:      ev.Total,
+			Paradigm:   ev.Paradigm,
+			DurationMs: ev.DurationMs,
+		}
+		if ev.Payload != nil {
+			if errStr, ok := ev.Payload["error"].(string); ok {
+				rt.Err = errStr
+			}
+		}
+		r.stepRuntime[ev.StepID] = rt
+	case reporting.EventTypeBranchResolved:
+		// Branch resolution may skip some steps — mark them.
+		if ev.Payload != nil {
+			if skipped, ok := ev.Payload["skipped_step_ids"].([]string); ok {
+				for _, id := range skipped {
+					if existing, ok := r.stepRuntime[id]; ok {
+						existing.Status = surface.StepSkipped
+						r.stepRuntime[id] = existing
+					} else {
+						r.stepRuntime[id] = surface.StepRuntime{
+							StepID: id,
+							Status: surface.StepSkipped,
+						}
+					}
+				}
+			}
+		}
+	case reporting.EventTypeVerifyStarted:
+		r.macro = surface.MacroVerify
+	case reporting.EventTypeVerifyComplete, reporting.EventTypeExecutionComplete:
+		r.macro = surface.MacroDone
 	}
+}
+
+// ResumeData returns a minimal durable snapshot for session persistence.
+func (r *EucloEventRouter) ResumeData() RecipeResumeData {
+	if r == nil {
+		return RecipeResumeData{}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	data := RecipeResumeData{
+		Macro: r.macro,
+	}
+	if r.recipe != nil {
+		data.RecipeID = r.recipe.RecipeID
+	}
+	if len(r.stepRuntime) > 0 {
+		data.StepRuntime = make(map[string]surface.StepRuntime, len(r.stepRuntime))
+		for k, v := range r.stepRuntime {
+			// Persist only status-relevant fields.
+			data.StepRuntime[k] = surface.StepRuntime{
+				StepID:     v.StepID,
+				Status:     v.Status,
+				Index:      v.Index,
+				Total:      v.Total,
+				Paradigm:   v.Paradigm,
+				DurationMs: v.DurationMs,
+				Err:        v.Err,
+			}
+		}
+	}
+	return data
+}
+
+// ApplyResumeData restores router state from a minimal RecipeResumeData.
+// It rebuilds the RecipeProjection by looking up the recipe from the provided
+// lookup, then re-applies the persisted step statuses and macro phase.
+func (r *EucloEventRouter) ApplyResumeData(data RecipeResumeData, lookup surface.RecipeRegistryLookup) {
+	if r == nil || data.RecipeID == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if lookup != nil {
+		if proj, ok := lookup.LookupRecipe(data.RecipeID); ok && proj != nil {
+			cp := *proj
+			r.recipe = &cp
+		}
+	}
+
+	// Re-apply persisted step statuses.
+	if len(data.StepRuntime) > 0 {
+		if r.stepRuntime == nil {
+			r.stepRuntime = make(map[string]surface.StepRuntime, len(data.StepRuntime))
+		}
+		for k, v := range data.StepRuntime {
+			r.stepRuntime[k] = v
+		}
+	}
+	r.macro = data.Macro
+}
+
+func cloneRecipeProjectionFromPayload(payload map[string]any) *surface.RecipeProjection {
+	if payload == nil {
+		return nil
+	}
+	raw, ok := payload["recipe"]
+	if !ok {
+		return nil
+	}
+	proj, ok := raw.(surface.RecipeProjection)
+	if !ok {
+		return nil
+	}
+	return &proj
 }
 
 func (r *EucloEventRouter) applyDiffEvent(ev ExecutionEvent) {
@@ -428,8 +570,21 @@ func (p DiffProjection) clone() DiffProjection {
 type EucloProjectionSnapshot struct {
 	Chat         ChatProjection
 	Diff         DiffProjection
-	StepperPhase Phase
+	Recipe      *surface.RecipeProjection        `json:"recipe,omitempty"`
+	StepRuntime map[string]surface.StepRuntime    `json:"step_runtime,omitempty"`
+	Macro       surface.MacroPhase                `json:"macro"`
 }
+
+// RecipeResumeData holds the minimal durable state needed to restore the recipe
+// view on session resume. Only the recipe ID, per-step statuses, and macro phase
+// are persisted — never the full recipe structure (DEC-6).
+type RecipeResumeData struct {
+	RecipeID    string                       `json:"recipe_id"`
+	StepRuntime map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
+	Macro       surface.MacroPhase            `json:"macro"`
+}
+
+
 
 func cloneScores(in map[string]float64) map[string]float64 {
 	if len(in) == 0 {

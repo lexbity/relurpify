@@ -19,4 +19,5 @@ func RegisterEucloTabs(reg *tui.TabRegistry) {
 		},
 	})
 	reg.Register(tui.TabDefinition{ID: tui.TabDiff, Label: "diff", AgentFilter: []string{"euclo"}})
+	reg.Register(tui.TabDefinition{ID: TabRecipe, Label: "recipe", AgentFilter: []string{"euclo"}})
 }

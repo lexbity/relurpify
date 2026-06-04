@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -36,7 +37,7 @@ type PromptRegistryLookup interface {
 // ThoughtRecipeRegistryLookup is the minimal thoughtrecipe registry contract
 // required by semantic validation.
 type ThoughtRecipeRegistryLookup interface {
-	Get(id string) (*ThoughtRecipe, bool)
+	Get(id string) (*surface.ThoughtRecipe, bool)
 }
 
 // SymbolTable stores the resolved names for a Euclo document.
@@ -262,7 +263,7 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 		}
 	}
 	switch TriggerRouteKindFromDecl(decl) {
-	case TriggerRouteKindCapability, TriggerRouteKindIntent:
+	case surface.TriggerRouteKindCapability, surface.TriggerRouteKindIntent:
 	default:
 		return fmt.Errorf("%s:%d:%d: unsupported trigger route %q",
 			decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, decl.Policy.Value)
@@ -756,7 +757,7 @@ func (s *SymbolTable) validateCapabilityPolicy() error {
 	if len(s.invocations) > 0 && s.capability == nil {
 		return fmt.Errorf("%s:%d:%d: capability registry is required to validate capability invocations", s.invocations[0].GetSpan().Start.File, s.invocations[0].GetSpan().Start.Line, s.invocations[0].GetSpan().Start.Column)
 	}
-	if triggerKind == TriggerRouteKindCapability {
+	if triggerKind == surface.TriggerRouteKindCapability {
 		if hasAskUserDecl(s.Document) {
 			if !triggerPolicy.AskUser {
 				return fmt.Errorf("%s:%d:%d: ask user blocks require trigger policy line 'may ask user'", s.trigger.GetSpan().Start.File, s.trigger.GetSpan().Start.Line, s.trigger.GetSpan().Start.Column)
@@ -820,7 +821,7 @@ func validateAgentParadigm(agent *AgentDecl) error {
 	if paradigm == "" {
 		return fmt.Errorf("%s:%d:%d: agent type is required", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column)
 	}
-	if !isSupportedAgentParadigm(paradigm) {
+	if !surface.IsSupported(surface.Paradigm(paradigm)) {
 		return fmt.Errorf("%s:%d:%d: unsupported agent paradigm %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, paradigm)
 	}
 	return nil

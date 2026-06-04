@@ -1,21 +1,25 @@
 package thoughtrecipe
 
-import "testing"
+import (
+	"testing"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+)
 
 func TestThoughtRecipeRegistryUsesThoughtRecipeNameAndPreservesFirstWins(t *testing.T) {
 	reg := NewThoughtRecipeRegistry()
 
-	first := &ThoughtRecipe{
+	first := &surface.ThoughtRecipe{
 		ID:   "thoughtrecipe-a",
 		Name: "shared",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "shared",
 		},
 	}
-	second := &ThoughtRecipe{
+	second := &surface.ThoughtRecipe{
 		ID:   "thoughtrecipe-b",
 		Name: "shared",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "shared",
 		},
 	}
@@ -51,10 +55,10 @@ func TestThoughtRecipeRegistryUsesThoughtRecipeNameAndPreservesFirstWins(t *test
 func TestThoughtRecipeRegistrySearchesTriggerMetadataTags(t *testing.T) {
 	reg := NewThoughtRecipeRegistry()
 
-	recipe := &ThoughtRecipe{
+	recipe := &surface.ThoughtRecipe{
 		ID:   "debug_recipe",
 		Name: "debug_recipe",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name:           "debug_recipe",
 			Families:       []string{"debug"},
 			Keywords:       []string{"panic", "trace"},

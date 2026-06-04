@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -47,7 +48,7 @@ type Theme struct {
 type NotifKind int
 
 const (
-	NotifInfo    NotifKind = iota
+	NotifInfo NotifKind = iota
 	NotifHITL
 	NotifSuccess
 	NotifError
@@ -227,4 +228,23 @@ func clampF64(v float64) float64 {
 		return 255
 	}
 	return v
+}
+
+// ── Paradigm rendering ──────────────────────────────────────────────────────
+
+// ParadigmGlyph returns the canonical 2-character glyph for the given paradigm.
+func (t *Theme) ParadigmGlyph(p surface.Paradigm) string {
+	return p.Describe().ShortGlyph
+}
+
+// ParadigmLabel returns the human-readable label for the given paradigm.
+func (t *Theme) ParadigmLabel(p surface.Paradigm) string {
+	return p.Describe().Label
+}
+
+// ParadigmDisplay returns the full display string (glyph + label) for the
+// given paradigm, styled for use in compact contexts.
+func (t *Theme) ParadigmDisplay(p surface.Paradigm) string {
+	meta := p.Describe()
+	return fmt.Sprintf("%s %s", meta.ShortGlyph, meta.Label)
 }

@@ -27,6 +27,11 @@ type ExecutionEvent struct {
 	NodeID      string
 	RecipeID    string
 	StepID      string
+	Paradigm    string
+	Index       int
+	Total       int
+	Success     bool
+	DurationMs  int64
 	Surface     string
 	Summary     string
 	Milestone   string

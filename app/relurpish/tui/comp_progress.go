@@ -10,15 +10,15 @@ import (
 // manager. It uses spring easing toward the target value and honours the
 // reduce-motion flag by jumping directly to the target.
 type ProgressBar struct {
-	model    progress.Model
-	target   float64
-	current  float64
-	animID   AnimationID
-	animMgr  *AnimationManager
-	reduce   *ReduceMotion
-	width    int
-	dirty    bool
-	started  bool
+	model   progress.Model
+	target  float64
+	current float64
+	animID  AnimationID
+	animMgr *AnimationManager
+	reduce  *ReduceMotion
+	width   int
+	dirty   bool
+	started bool
 }
 
 // NewProgressBar creates a progress bar at 0 %.
@@ -141,5 +141,3 @@ func (b *ProgressBar) deregister() {
 	b.animMgr.Deregister(b.animID)
 	b.animID = 0
 }
-
-

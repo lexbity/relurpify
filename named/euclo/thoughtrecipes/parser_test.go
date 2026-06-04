@@ -3,6 +3,8 @@ package thoughtrecipe
 import (
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestParseSourceParsesCoreThoughtRecipeConstructs(t *testing.T) {
@@ -97,8 +99,8 @@ pipeline:
 	if got := len(trigger.Lines); got != 2 {
 		t.Fatalf("trigger lines = %d, want 2", got)
 	}
-	if got := trigger.RouteKind; got != TriggerRouteKindCapability {
-		t.Fatalf("trigger route kind = %q, want %q", got, TriggerRouteKindCapability)
+	if got := trigger.RouteKind; got != surface.TriggerRouteKindCapability {
+		t.Fatalf("trigger route kind = %q, want %q", got, surface.TriggerRouteKindCapability)
 	}
 	if got := len(trigger.Associations); got != 3 {
 		t.Fatalf("trigger associations = %d, want 3", got)
@@ -298,8 +300,8 @@ trigger as intent:
 		t.Fatalf("ParseSource failed: %v", err)
 	}
 	trigger := doc.Declarations[0].(*TriggerDecl)
-	if got := trigger.RouteKind; got != TriggerRouteKindIntent {
-		t.Fatalf("trigger route kind = %q, want %q", got, TriggerRouteKindIntent)
+	if got := trigger.RouteKind; got != surface.TriggerRouteKindIntent {
+		t.Fatalf("trigger route kind = %q, want %q", got, surface.TriggerRouteKindIntent)
 	}
 	if got := len(trigger.Associations); got != 3 {
 		t.Fatalf("trigger associations = %d, want 3", got)

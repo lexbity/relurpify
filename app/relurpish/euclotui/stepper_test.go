@@ -5,192 +5,168 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
-func TestStepperInitialState(t *testing.T) {
-	s := NewStepper()
-	if s.Current() != PhaseIdle {
-		t.Errorf("initial phase = %v, want idle", s.Current())
-	}
-	if s.Render(theme.Default()) != "" {
-		t.Error("idle stepper should render empty")
+func TestStepperIdle(t *testing.T) {
+	s := NewStepper(nil, nil, surface.MacroIdle)
+	r := s.Render(theme.Default())
+	if r != "" {
+		t.Errorf("idle render should be empty, got: %q", r)
 	}
 }
 
-func TestStepperAdvancesOnEvents(t *testing.T) {
-	s := NewStepper()
-
-	s.Advance(PhaseIntake)
-	if s.Current() != PhaseIntake {
-		t.Errorf("after intake = %v, want intake", s.Current())
+func TestStepperMacroRailOnly(t *testing.T) {
+	s := NewStepper(nil, nil, surface.MacroExecute)
+	r := s.Render(theme.Default())
+	if r == "" {
+		t.Fatal("expected non-empty render for Execute phase")
 	}
-
-	s.Advance(PhasePlan)
-	if s.Current() != PhasePlan {
-		t.Errorf("after plan = %v, want plan", s.Current())
+	if !strings.Contains(r, "intake") {
+		t.Errorf("expected intake in rail, got: %s", r)
 	}
-
-	s.Advance(PhaseExecute)
-	if s.Current() != PhaseExecute {
-		t.Errorf("after execute = %v, want execute", s.Current())
+	if !strings.Contains(r, "execute") {
+		t.Errorf("expected execute in rail, got: %s", r)
 	}
 }
 
-func TestStepperComplete(t *testing.T) {
-	s := NewStepper()
-	s.Advance(PhaseIntake)
-	s.Advance(PhasePlan)
-	s.Advance(PhaseExecute)
-	s.Advance(PhaseVerify)
-	s.Complete()
-
-	if s.Current() != PhaseDone {
-		t.Errorf("after complete = %v, want done", s.Current())
+func TestStepperWithRecipeSteps(t *testing.T) {
+	proj := &surface.RecipeProjection{
+		RecipeID: "recipe.test",
+		Name:     "Test Recipe",
+		Steps: []surface.ProjectedStep{
+			{StepID: "step.1", Paradigm: "goalcon", Goal: "Analyze input"},
+			{StepID: "step.2", Paradigm: "react", Goal: "Process request"},
+			{StepID: "step.3", Paradigm: "euclo", Goal: "Verify result"},
+		},
+	}
+	runtime := map[string]surface.StepRuntime{
+		"step.1": {StepID: "step.1", Status: surface.StepDone, Index: 0, Total: 3, Paradigm: "goalcon"},
+		"step.2": {StepID: "step.2", Status: surface.StepActive, Index: 1, Total: 3, Paradigm: "react"},
+	}
+	s := NewStepper(proj, runtime, surface.MacroExecute)
+	r := s.Render(theme.Default())
+	if r == "" {
+		t.Fatal("expected non-empty render")
+	}
+	if !strings.Contains(r, "Analyze input") {
+		t.Errorf("expected step.1 goal in render, got: %s", r)
+	}
+	if !strings.Contains(r, "Process request") {
+		t.Errorf("expected step.2 goal in render, got: %s", r)
+	}
+	if !strings.Contains(r, "Verify result") {
+		t.Errorf("expected step.3 goal in render, got: %s", r)
+	}
+	if !strings.Contains(r, "(1/3)") {
+		t.Errorf("expected (1/3) for step.2 (active), got: %s", r)
 	}
 }
 
-func TestStepperIdempotent(t *testing.T) {
-	s := NewStepper()
-	s.Advance(PhaseIntake)
-	s.Advance(PhaseIntake) // second advance to same phase
-	if s.Current() != PhaseIntake {
-		t.Errorf("after duplicate = %v, still want intake", s.Current())
+func TestStepperParallelGroup(t *testing.T) {
+	proj := &surface.RecipeProjection{
+		RecipeID: "recipe.parallel",
+		Name:     "Parallel Recipe",
+		Steps: []surface.ProjectedStep{
+			{StepID: "intro", Paradigm: "goalcon", Goal: "Intro"},
+			{StepID: "left", Paradigm: "react", Goal: "Left branch"},
+			{StepID: "right", Paradigm: "react", Goal: "Right branch"},
+			{StepID: "merge", Paradigm: "goalcon", Goal: "Merge results"},
+		},
+		Groups: []surface.ProjectedGroup{
+			{GroupID: "fanout", Kind: "parallel", MemberStepIDs: []string{"left", "right"}, Merge: "all"},
+		},
+	}
+	runtime := map[string]surface.StepRuntime{
+		"intro": {StepID: "intro", Status: surface.StepDone, Index: 0, Total: 4, Paradigm: "goalcon"},
+		"left":  {StepID: "left", Status: surface.StepActive, Index: 1, Total: 4, Paradigm: "react"},
+		"right": {StepID: "right", Status: surface.StepActive, Index: 2, Total: 4, Paradigm: "react"},
+	}
+	s := NewStepper(proj, runtime, surface.MacroExecute)
+	r := s.Render(theme.Default())
+	if !strings.Contains(r, "Left branch") || !strings.Contains(r, "Right branch") {
+		t.Errorf("parallel steps should be visible, got: %s", r)
 	}
 }
 
-func TestStepperNoRegression(t *testing.T) {
-	s := NewStepper()
-	s.Advance(PhaseExecute)
-	s.Advance(PhasePlan) // should be no-op (regression)
-	if s.Current() != PhaseExecute {
-		t.Errorf("after regression = %v, want execute", s.Current())
+func TestStepperConditionalWithSkippedBranch(t *testing.T) {
+	proj := &surface.RecipeProjection{
+		RecipeID: "recipe.conditional",
+		Name:     "Conditional Recipe",
+		Steps: []surface.ProjectedStep{
+			{StepID: "preamble", Paradigm: "euclo", Goal: "Setup"},
+			{StepID: "if.branch", Paradigm: "goalcon", Goal: "Primary path"},
+			{StepID: "else.branch", Paradigm: "react", Goal: "Fallback path", Optional: true},
+		},
+		Groups: []surface.ProjectedGroup{
+			{GroupID: "decision", Kind: "conditional", MemberStepIDs: []string{"if.branch", "else.branch"}, Condition: "thoughtrecipe.branch"},
+		},
+	}
+	runtime := map[string]surface.StepRuntime{
+		"preamble":   {StepID: "preamble", Status: surface.StepDone, Index: 0, Total: 3, Paradigm: "euclo"},
+		"if.branch":  {StepID: "if.branch", Status: surface.StepDone, Index: 1, Total: 3, Paradigm: "goalcon"},
+		"else.branch": {StepID: "else.branch", Status: surface.StepSkipped, Index: 2, Total: 3, Paradigm: "react"},
+	}
+	s := NewStepper(proj, runtime, surface.MacroVerify)
+	r := s.Render(theme.Default())
+	if !strings.Contains(r, "Primary path") {
+		t.Errorf("primary branch should be visible, got: %s", r)
+	}
+	if !strings.Contains(r, "Fallback path") {
+		t.Errorf("skipped fallback should still render, got: %s", r)
 	}
 }
 
-func TestStepperReset(t *testing.T) {
-	s := NewStepper()
-	s.Advance(PhaseExecute)
-	s.Reset()
-	if s.Current() != PhaseIdle {
-		t.Errorf("after reset = %v, want idle", s.Current())
+func TestStepperFailedStep(t *testing.T) {
+	proj := &surface.RecipeProjection{
+		RecipeID: "recipe.fail",
+		Name:     "Failing Recipe",
+		Steps: []surface.ProjectedStep{
+			{StepID: "step.1", Paradigm: "goalcon", Goal: "Will fail"},
+		},
+	}
+	runtime := map[string]surface.StepRuntime{
+		"step.1": {StepID: "step.1", Status: surface.StepFailed, Index: 0, Total: 1, Paradigm: "goalcon", DurationMs: 50, Err: "error"},
+	}
+	s := NewStepper(proj, runtime, surface.MacroDone)
+	r := s.Render(theme.Default())
+	if !strings.Contains(r, "Will fail") {
+		t.Errorf("failed step should be visible, got: %s", r)
 	}
 }
 
 func TestStepperNilSafe(t *testing.T) {
 	var s *Stepper
-	s.Advance(PhaseIntake) // should not panic
-	if s.Current() != PhaseIdle {
-		t.Error("nil stepper should report idle")
-	}
-	if s.Render(theme.Default()) != "" {
-		t.Error("nil stepper should render empty")
-	}
-	s.Reset() // should not panic
-}
-
-func TestStepperRenderShowsProgression(t *testing.T) {
-	s := NewStepper()
-	th := theme.Default()
-
-	s.Advance(PhaseIntake)
-	r := s.Render(th)
-	if !strings.Contains(r, "intake") {
-		t.Errorf("render missing intake phase: %s", r)
-	}
-	if !strings.Contains(r, "plan") {
-		t.Errorf("render should show plan as pending: %s", r)
-	}
-
-	s.Advance(PhasePlan)
-	r = s.Render(th)
-	if !strings.Contains(r, "intake") || !strings.Contains(r, "plan") {
-		t.Errorf("render should show both phases: %s", r)
+	r := s.Render(theme.Default())
+	if r != "" {
+		t.Errorf("nil stepper should render empty, got: %q", r)
 	}
 }
 
-func TestStepperRenderFullCycle(t *testing.T) {
-	s := NewStepper()
-	th := theme.Default()
+func TestStepperNilTheme(t *testing.T) {
+	s := NewStepper(nil, nil, surface.MacroExecute)
+	r := s.Render(nil)
+	if r != "" {
+		t.Errorf("nil theme should render empty, got: %q", r)
+	}
+}
 
-	s.Advance(PhaseIntake)
-	s.Advance(PhasePlan)
-	s.Advance(PhaseExecute)
-	s.Advance(PhaseVerify)
-	s.Complete()
-
-	r := s.Render(th)
-	for _, phase := range []string{"intake", "plan", "execute", "verify", "done"} {
-		if !strings.Contains(r, phase) {
-			t.Errorf("render missing %s: %s", phase, r)
+func TestStepperMacroRailLabels(t *testing.T) {
+	tests := []struct {
+		macro surface.MacroPhase
+		want  string
+	}{
+		{surface.MacroIntake, "intake"},
+		{surface.MacroRoute, "route"},
+		{surface.MacroExecute, "execute"},
+		{surface.MacroVerify, "verify"},
+		{surface.MacroDone, "done"},
+	}
+	for _, tt := range tests {
+		s := NewStepper(nil, nil, tt.macro)
+		r := s.Render(theme.Default())
+		if !strings.Contains(r, tt.want) {
+			t.Errorf("macro=%v: expected %q in render, got: %s", tt.macro, tt.want, r)
 		}
-	}
-}
-
-func TestStepperRenderCompact(t *testing.T) {
-	s := NewStepper()
-	th := theme.Default()
-
-	if s.RenderCompact(th) != "" {
-		t.Error("idle compact render should be empty")
-	}
-
-	s.Advance(PhaseExecute)
-	compact := s.RenderCompact(th)
-	if !strings.Contains(compact, "execute") {
-		t.Errorf("compact render = %q, want execute", compact)
-	}
-}
-
-func TestStepperRenderFromPhases(t *testing.T) {
-	th := theme.Default()
-	r := renderStepper(th, PhaseExecute)
-	if !strings.Contains(r, "intake") || !strings.Contains(r, "plan") || !strings.Contains(r, "execute") {
-		t.Errorf("renderStepper missing phases: %s", r)
-	}
-	if !strings.Contains(r, "verify") {
-		t.Errorf("renderStepper should show verify as pending: %s", r)
-	}
-}
-
-func TestStepperRenderFromPhasesIdle(t *testing.T) {
-	if r := renderStepper(theme.Default(), PhaseIdle); r != "" {
-		t.Errorf("idle renderStepper should be empty, got: %s", r)
-	}
-}
-
-func TestEventRouterAdvancesStepper(t *testing.T) {
-	router := NewEucloEventRouter()
-	if router.stepper == nil {
-		t.Fatal("NewEucloEventRouter should create a stepper")
-	}
-
-	// Simulate a full recipe run through events.
-	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeIntakeComplete,
-	})
-	if router.stepper.Current() != PhaseIntake {
-		t.Errorf("after intake event = %v, want intake", router.stepper.Current())
-	}
-
-	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeRouteSelected,
-	})
-	if router.stepper.Current() != PhasePlan {
-		t.Errorf("after route event = %v, want plan", router.stepper.Current())
-	}
-
-	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeStepCompletedEuclo,
-	})
-	if router.stepper.Current() != PhaseExecute {
-		t.Errorf("after execute event = %v, want execute", router.stepper.Current())
-	}
-
-	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeExecutionComplete,
-	})
-	if router.stepper.Current() != PhaseDone {
-		t.Errorf("after complete event = %v, want done", router.stepper.Current())
 	}
 }

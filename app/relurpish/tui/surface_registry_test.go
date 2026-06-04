@@ -63,7 +63,8 @@ func (s *registrySurface) InitialSubTab(tab TabID) SubTabID {
 func (s *registrySurface) RenderNotification(item NotificationItem) string { return item.Msg }
 
 func (s *registrySurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
-func (s *registrySurface) Theme() *theme.Theme { return nil }
+func (s *registrySurface) Theme() *theme.Theme                                      { return nil }
+func (s *registrySurface) ResumeSession(_ context.Context, _ string) tea.Cmd        { return nil }
 
 type registryFactory struct {
 	defaultSurface AgentSurface

@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // ThoughtRecipeEntry stores a thoughtrecipe and its compiled DSL plan.
 type ThoughtRecipeEntry struct {
 	Name          string
-	ThoughtRecipe *ThoughtRecipe
+	ThoughtRecipe *surface.ThoughtRecipe
 	Plan          *ExecutionPlan
 	Source        string
 }
@@ -29,28 +31,28 @@ func NewThoughtRecipeRegistry() *ThoughtRecipeRegistry {
 }
 
 // Register registers a thoughtrecipe in the registry.
-func (r *ThoughtRecipeRegistry) Register(thoughtrecipe *ThoughtRecipe) error {
+func (r *ThoughtRecipeRegistry) Register(thoughtrecipe *surface.ThoughtRecipe) error {
 	_, err := r.registerThoughtRecipe(thoughtrecipe, nil, "", false)
 	return err
 }
 
 // RegisterFirstWins registers a thoughtrecipe if the name is not already present.
-func (r *ThoughtRecipeRegistry) RegisterFirstWins(thoughtrecipe *ThoughtRecipe) (bool, error) {
+func (r *ThoughtRecipeRegistry) RegisterFirstWins(thoughtrecipe *surface.ThoughtRecipe) (bool, error) {
 	return r.registerThoughtRecipe(thoughtrecipe, nil, "", true)
 }
 
 // RegisterCompiled registers a compiled thoughtrecipe and its source thoughtrecipe.
-func (r *ThoughtRecipeRegistry) RegisterCompiled(thoughtrecipe *ThoughtRecipe, plan *ExecutionPlan, source string) error {
+func (r *ThoughtRecipeRegistry) RegisterCompiled(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) error {
 	_, err := r.registerThoughtRecipe(thoughtrecipe, plan, source, false)
 	return err
 }
 
 // RegisterCompiledFirstWins registers a compiled thoughtrecipe only if the name is new.
-func (r *ThoughtRecipeRegistry) RegisterCompiledFirstWins(thoughtrecipe *ThoughtRecipe, plan *ExecutionPlan, source string) (bool, error) {
+func (r *ThoughtRecipeRegistry) RegisterCompiledFirstWins(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) (bool, error) {
 	return r.registerThoughtRecipe(thoughtrecipe, plan, source, true)
 }
 
-func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *ThoughtRecipe, plan *ExecutionPlan, source string, firstWins bool) (bool, error) {
+func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string, firstWins bool) (bool, error) {
 	if thoughtrecipe == nil {
 		return false, fmt.Errorf("thoughtrecipe is nil")
 	}
@@ -80,7 +82,7 @@ func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *ThoughtReci
 }
 
 // Get retrieves a thoughtrecipe by ID.
-func (r *ThoughtRecipeRegistry) Get(id string) (*ThoughtRecipe, bool) {
+func (r *ThoughtRecipeRegistry) Get(id string) (*surface.ThoughtRecipe, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -282,7 +284,7 @@ func (r *ThoughtRecipeRegistry) findByTags(tags []string) []ThoughtRecipeEntry {
 	return out
 }
 
-func recipeEntryMatchesTags(recipe *ThoughtRecipe, tags map[string]struct{}) bool {
+func recipeEntryMatchesTags(recipe *surface.ThoughtRecipe, tags map[string]struct{}) bool {
 	if recipe == nil {
 		return false
 	}
@@ -304,7 +306,7 @@ func recipeEntryMatchesTags(recipe *ThoughtRecipe, tags map[string]struct{}) boo
 	return false
 }
 
-func recipeEntryMatchesHandoffTarget(recipe *ThoughtRecipe, target string) bool {
+func recipeEntryMatchesHandoffTarget(recipe *surface.ThoughtRecipe, target string) bool {
 	if recipe == nil {
 		return false
 	}
@@ -316,7 +318,7 @@ func recipeEntryMatchesHandoffTarget(recipe *ThoughtRecipe, target string) bool 
 	return false
 }
 
-func scoreThoughtRecipeEntry(recipe *ThoughtRecipe, tokens map[string]struct{}) (int, []string) {
+func scoreThoughtRecipeEntry(recipe *surface.ThoughtRecipe, tokens map[string]struct{}) (int, []string) {
 	if recipe == nil {
 		return 0, nil
 	}
@@ -381,7 +383,7 @@ func normalizeSearchTokens(tokens ...string) map[string]struct{} {
 	return normalized
 }
 
-func registryKeyForThoughtRecipe(thoughtrecipe *ThoughtRecipe) string {
+func registryKeyForThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe) string {
 	if thoughtrecipe == nil {
 		return ""
 	}

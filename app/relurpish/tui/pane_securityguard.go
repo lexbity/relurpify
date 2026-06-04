@@ -1,10 +1,6 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
 )

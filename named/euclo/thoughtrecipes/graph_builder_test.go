@@ -6,13 +6,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestBuildThoughtRecipeGraphWiresLinearParallelAndConditionalSections(t *testing.T) {
-	thoughtrecipe := &ThoughtRecipe{
+	thoughtrecipe := &surface.ThoughtRecipe{
 		ID:   "graph-thoughtrecipe",
 		Name: "Graph ThoughtRecipe",
-		Metadata: ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "Graph ThoughtRecipe",
 		},
 	}
@@ -25,38 +26,38 @@ func TestBuildThoughtRecipeGraphWiresLinearParallelAndConditionalSections(t *tes
 			Paradigm: "goalcon",
 			Goal:     "Introduce the thoughtrecipe and continue.",
 			Prompt:   "Introduce the thoughtrecipe and continue.",
-			Step: ThoughtRecipeStep{
+			Step: surface.ThoughtRecipeStep{
 				ID:      "intro",
 				Type:    "run",
 				Prompt:  "Introduce the thoughtrecipe and continue.",
-				Parent:  ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
 				Config:  map[string]any{},
-				Context: ThoughtRecipeStepContext{},
+				Context: surface.ThoughtRecipeStepContext{},
 			},
 		}},
 		Parallel: []CompiledParallelGroup{{
-			Group: &ParallelGroup{ID: "fanout", Merge: MergePolicyAll},
+			Group: &surface.ParallelGroup{ID: "fanout", Merge: surface.MergePolicyAll},
 			Steps: []CompiledStep{
 				{
-					Step: &ThoughtRecipeStep{ID: "fanout.parallel.0.left", Type: "run", Prompt: "Process the left branch.", Parent: ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: ThoughtRecipeStepContext{}},
+					Step: &surface.ThoughtRecipeStep{ID: "fanout.parallel.0.left", Type: "run", Prompt: "Process the left branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
 					Type: "run",
 				},
 				{
-					Step: &ThoughtRecipeStep{ID: "fanout.parallel.1.right", Type: "run", Prompt: "Process the right branch.", Parent: ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: ThoughtRecipeStepContext{}},
+					Step: &surface.ThoughtRecipeStep{ID: "fanout.parallel.1.right", Type: "run", Prompt: "Process the right branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
 					Type: "run",
 				},
 			},
-			Merge: string(MergePolicyAll),
+			Merge: string(surface.MergePolicyAll),
 		}},
 		Conditional: []CompiledConditionalGroup{{
-			Group:     &ConditionalGroup{ID: "branch", Condition: "thoughtrecipe.branch"},
+			Group:     &surface.ConditionalGroup{ID: "branch", Condition: "thoughtrecipe.branch"},
 			Condition: "thoughtrecipe.branch",
 			IfSteps: []CompiledStep{{
-				Step: &ThoughtRecipeStep{ID: "branch.if.0.if_step", Type: "run", Prompt: "Handle the primary branch.", Parent: ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: ThoughtRecipeStepContext{}},
+				Step: &surface.ThoughtRecipeStep{ID: "branch.if.0.if_step", Type: "run", Prompt: "Handle the primary branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
 				Type: "run",
 			}},
 			ElseSteps: []CompiledStep{{
-				Step: &ThoughtRecipeStep{ID: "branch.else.0.else_step", Type: "run", Prompt: "Handle the fallback branch.", Parent: ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: ThoughtRecipeStepContext{}},
+				Step: &surface.ThoughtRecipeStep{ID: "branch.else.0.else_step", Type: "run", Prompt: "Handle the fallback branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
 				Type: "run",
 			}},
 		}},
@@ -224,7 +225,7 @@ func TestExecutionStepFromAgentInheritsParentToolScope(t *testing.T) {
 		ID:                 "parent.step",
 		ToolScopes:         []ToolScopeFrame{{ScopeKind: "run", ToolNames: []string{"file_write"}}},
 		EffectiveToolNames: []string{"file_write"},
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID: "parent.step",
 			Config: map[string]any{
 				"tool_scopes":          []map[string]any{{"scope_kind": "run", "tool_names": []string{"file_write"}}},
@@ -232,7 +233,7 @@ func TestExecutionStepFromAgentInheritsParentToolScope(t *testing.T) {
 			},
 		},
 	}
-	step := executionStepFromAgent("fallback.step", &ThoughtRecipeStepAgent{
+	step := executionStepFromAgent("fallback.step", &surface.ThoughtRecipeStepAgent{
 		Paradigm: "react",
 		Prompt:   "fallback",
 	}, parent)

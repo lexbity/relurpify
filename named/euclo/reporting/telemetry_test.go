@@ -340,8 +340,8 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected result to be non-nil")
 	}
-	if got := len(sink.events); got != 2 {
-		t.Fatalf("expected 2 events, got %d", got)
+	if got := len(sink.events); got != 4 {
+		t.Fatalf("expected 4 events, got %d", got)
 	}
 	projection, ok := result["projection"].(map[string]any)
 	if !ok {
@@ -359,8 +359,14 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 	if sink.events[0].Metadata["plan_id"] != "plan-1" {
 		t.Fatalf("unexpected plan id: %#v", sink.events[0].Metadata["plan_id"])
 	}
-	if sink.events[1].Type != core.EventType(EventTypeExecutionComplete) {
-		t.Fatalf("expected execution event second, got %q", sink.events[1].Type)
+	if sink.events[1].Type != core.EventType(EventTypeVerifyStarted) {
+		t.Fatalf("expected verify.started at idx 1, got %q", sink.events[1].Type)
+	}
+	if sink.events[2].Type != core.EventType(EventTypeVerifyComplete) {
+		t.Fatalf("expected verify.complete at idx 2, got %q", sink.events[2].Type)
+	}
+	if sink.events[3].Type != core.EventType(EventTypeExecutionComplete) {
+		t.Fatalf("expected execution event at idx 3, got %q", sink.events[3].Type)
 	}
 }
 
@@ -376,14 +382,23 @@ func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
 	if _, err := node.Execute(context.Background(), env); err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	if got := len(sink.events); got != 2 {
-		t.Fatalf("expected 2 events, got %d", got)
+	if got := len(sink.events); got != 4 {
+		t.Fatalf("expected 4 events, got %d", got)
 	}
-	if sink.events[1].Type != core.EventType(EventTypeClarificationCompleted) {
-		t.Fatalf("expected clarification completion event, got %q", sink.events[1].Type)
+	if sink.events[0].Type != core.EventType(EventTypeVerifyStarted) {
+		t.Fatalf("expected verify.started at idx 0, got %q", sink.events[0].Type)
 	}
-	if sink.events[1].Metadata["thoughtrecipe_id"] != "euclo.thoughtrecipe.intent.clarify" {
-		t.Fatalf("unexpected thoughtrecipe id: %#v", sink.events[1].Metadata["thoughtrecipe_id"])
+	if sink.events[1].Type != core.EventType(EventTypeVerifyComplete) {
+		t.Fatalf("expected verify.complete at idx 1, got %q", sink.events[1].Type)
+	}
+	if sink.events[2].Type != core.EventType(EventTypeExecutionComplete) {
+		t.Fatalf("expected execution at idx 2, got %q", sink.events[2].Type)
+	}
+	if sink.events[3].Type != core.EventType(EventTypeClarificationCompleted) {
+		t.Fatalf("expected clarification completion event at idx 3, got %q", sink.events[3].Type)
+	}
+	if sink.events[3].Metadata["thoughtrecipe_id"] != "euclo.thoughtrecipe.intent.clarify" {
+		t.Fatalf("unexpected thoughtrecipe id: %#v", sink.events[3].Metadata["thoughtrecipe_id"])
 	}
 }
 

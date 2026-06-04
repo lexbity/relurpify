@@ -1,12 +1,10 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-)
-
-import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	blackboardagent "codeburg.org/lexbit/relurpify/agents/blackboard"
 	chaineragent "codeburg.org/lexbit/relurpify/agents/chainer"
@@ -29,7 +30,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 const (
@@ -62,10 +65,19 @@ func (n *ThoughtRecipeStepNode) Type() agentgraph.NodeType { return agentgraph.N
 
 // Execute builds the selected paradigm agent, runs it, and writes captures back
 // to the envelope.
-func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (retResult *core.Result, retErr error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
+
+	start := time.Now()
+	emitStepStarted(ctx, env, n.step)
+
+	defer func() {
+		success := retResult != nil && retResult.Success && retErr == nil
+		dur := time.Since(start)
+		emitStepCompleted(ctx, env, n.step, success, dur)
+	}()
 
 	if strings.TrimSpace(n.step.CapabilityID) != "" {
 		return n.executeCapability(ctx, env)
@@ -112,11 +124,50 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 	}
 
 	if execErr != nil {
-		// Preserve the failure in the result while keeping graph control flow
-		// conditional instead of aborting immediately.
 		return result, nil
 	}
 	return result, nil
+}
+
+func emitStepStarted(ctx context.Context, env *contextdata.Envelope, step ExecutionStep) {
+	total, _ := contextdata.GetTyped[int](env, "euclo.execution.step_total")
+	idx, _ := contextdata.GetTyped[int](env, "euclo.execution.step_index")
+	contextdata.SetTyped(env, "euclo.execution.step_index", idx+1)
+
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel.EmitStepStarted(ctx, reporting.EventStepStarted{
+		EventHeader: reporting.EventHeader{
+			TaskID:     env.TaskID,
+			SessionID:  env.SessionID,
+			OccurredAt: time.Now().UTC(),
+		},
+		StepID:          step.ID,
+		ThoughtRecipeID: "",
+		Paradigm:        step.Paradigm,
+		Index:           idx,
+		Total:           total,
+	})
+}
+
+func emitStepCompleted(ctx context.Context, env *contextdata.Envelope, step ExecutionStep, success bool, dur time.Duration) {
+	total, _ := contextdata.GetTyped[int](env, "euclo.execution.step_total")
+	idx, _ := contextdata.GetTyped[int](env, "euclo.execution.step_index")
+
+	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel.EmitStepCompleted(ctx, reporting.EventStepCompleted{
+		EventHeader: reporting.EventHeader{
+			TaskID:     env.TaskID,
+			SessionID:  env.SessionID,
+			OccurredAt: time.Now().UTC(),
+		},
+		StepID:          step.ID,
+		ThoughtRecipeID: "",
+		Paradigm:        step.Paradigm,
+		Success:         success,
+		DurationMs:      dur.Milliseconds(),
+		Index:           idx - 1,
+		Total:           total,
+	})
 }
 
 func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
@@ -1047,7 +1098,7 @@ func lookupCaptureValue(data map[string]any, alias string) (any, bool) {
 	return value, ok
 }
 
-func extractAllowedCapabilities(step ThoughtRecipeStep) []string {
+func extractAllowedCapabilities(step surface.ThoughtRecipeStep) []string {
 	if len(step.Config) == 0 {
 		return nil
 	}

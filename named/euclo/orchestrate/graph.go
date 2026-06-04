@@ -20,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -447,10 +448,10 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 	if _, ok := reg.Get(clarificationThoughtRecipeID); ok {
 		return
 	}
-	thoughtrecipe := &thoughtrecipepkg.ThoughtRecipe{
+	thoughtrecipe := &surface.ThoughtRecipe{
 		ID:   clarificationThoughtRecipeID,
 		Name: "intent clarification",
-		Metadata: thoughtrecipepkg.ThoughtRecipeMetadata{
+		Metadata: surface.ThoughtRecipeMetadata{
 			Name: "intent clarification",
 		},
 	}
@@ -463,14 +464,14 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 			CapabilityID: clarificationCapabilityID,
 			Prompt:       "Clarify the user's request.",
 			Goal:         "Clarify the user's request.",
-			Step: thoughtrecipepkg.ThoughtRecipeStep{
-				ID:      clarificationThoughtRecipeID + ".step0",
-				Type:    "run",
-				Prompt:  "Clarify the user's request.",
-				Parent:  thoughtrecipepkg.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-				Config:  map[string]any{},
-				Context: thoughtrecipepkg.ThoughtRecipeStepContext{},
-			},
+		Step: surface.ThoughtRecipeStep{
+			ID:      clarificationThoughtRecipeID + ".step0",
+			Type:    "run",
+			Prompt:  "Clarify the user's request.",
+			Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+			Config:  map[string]any{},
+			Context: surface.ThoughtRecipeStepContext{},
+		},
 		}},
 	}
 	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")

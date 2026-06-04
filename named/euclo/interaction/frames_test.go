@@ -3,6 +3,8 @@ package interaction
 import (
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestNewClarificationFrameCarriesStructuredState(t *testing.T) {
@@ -55,6 +57,74 @@ func TestNewAskUserFrameFallsBackToAnswerSlot(t *testing.T) {
 	}
 	if len(frame.Slots) != 1 || frame.Slots[0].ID != "answer" {
 		t.Fatalf("slots = %#v", frame.Slots)
+	}
+}
+
+func TestNewThoughtRecipeSelectionFrameCarriesProjectionSummaries(t *testing.T) {
+	recipes := []surface.RecipeProjection{
+		{
+			RecipeID:  "recipe.review",
+			Name:      "Code Review",
+			RouteKind: "capability",
+			Steps: []surface.ProjectedStep{
+				{StepID: "scan", Paradigm: "goalcon", Goal: "Scan code"},
+				{StepID: "review", Paradigm: "react", Goal: "Review findings"},
+			},
+		},
+		{
+			RecipeID:  "recipe.refactor",
+			Name:      "Refactor",
+			RouteKind: "capability",
+			Steps: []surface.ProjectedStep{
+				{StepID: "analyze", Paradigm: "planner", Goal: "Analyze structure"},
+			},
+			HITLGates: []string{"approve"},
+		},
+	}
+
+	frame := NewThoughtRecipeSelectionFrame("task-1", "session-1", recipes)
+	if frame == nil {
+		t.Fatal("expected frame")
+	}
+	if frame.Type != FrameThoughtRecipeSelection {
+		t.Fatalf("frame type = %q, want %q", frame.Type, FrameThoughtRecipeSelection)
+	}
+	if len(frame.Slots) != 2 {
+		t.Fatalf("expected 2 slots, got %d", len(frame.Slots))
+	}
+	if frame.Slots[0].ID != "recipe.review" || frame.Slots[0].Label != "Code Review" {
+		t.Fatalf("slot[0] = %+v", frame.Slots[0])
+	}
+	if frame.Slots[1].ID != "recipe.refactor" || frame.Slots[1].Label != "Refactor" {
+		t.Fatalf("slot[1] = %+v", frame.Slots[1])
+	}
+
+	// Verify recipe projections are retrievable from payload.
+	projs := frame.RecipeProjections()
+	if len(projs) != 2 {
+		t.Fatalf("expected 2 recipe projections, got %d", len(projs))
+	}
+	if projs[0].RecipeID != "recipe.review" || len(projs[0].Steps) != 2 {
+		t.Fatalf("projection[0] = %+v", projs[0])
+	}
+	if projs[1].RecipeID != "recipe.refactor" || len(projs[1].HITLGates) != 1 {
+		t.Fatalf("projection[1] = %+v", projs[1])
+	}
+	if projs[1].HITLGates[0] != "approve" {
+		t.Fatalf("expected HITL gate 'approve', got %q", projs[1].HITLGates[0])
+	}
+}
+
+func TestNewThoughtRecipeSelectionFrameEmpty(t *testing.T) {
+	frame := NewThoughtRecipeSelectionFrame("task-1", "session-1", nil)
+	if frame == nil {
+		t.Fatal("expected frame even with empty recipes")
+	}
+	if frame.Type != FrameThoughtRecipeSelection {
+		t.Fatalf("frame type = %q", frame.Type)
+	}
+	if frame.RecipeProjections() != nil {
+		t.Fatal("expected nil projections for empty input")
 	}
 }
 

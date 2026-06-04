@@ -20,14 +20,14 @@ type DropdownSelectedMsg struct {
 // items. Both keyboard (↑↓ enter esc) and mouse (click to open, click item)
 // are supported.
 type Dropdown struct {
-	label    string
-	items    []DropdownItem
-	open     bool
-	sel      int
-	focused  bool
-	x, y     int // last known render position for mouse hit-testing
-	width    int
-	th       *theme.Theme
+	label   string
+	items   []DropdownItem
+	open    bool
+	sel     int
+	focused bool
+	x, y    int // last known render position for mouse hit-testing
+	width   int
+	th      *theme.Theme
 }
 
 // DropdownItem is a single option in a dropdown list.
@@ -57,8 +57,8 @@ func (d *Dropdown) SetWidth(w int) {
 }
 
 // Focus sets keyboard focus.
-func (d *Dropdown) Focus()  { d.focused = true }
-func (d *Dropdown) Blur()   { d.focused = false }
+func (d *Dropdown) Focus()       { d.focused = true }
+func (d *Dropdown) Blur()        { d.focused = false }
 func (d *Dropdown) IsOpen() bool { return d.open }
 
 // Selected returns the currently selected item (or zero value).

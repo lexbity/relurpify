@@ -20,8 +20,8 @@ const (
 
 // Guest tab IDs — registered by the active surface on init.
 const (
-	TabChat    TabID = "chat"
-	TabDiff    TabID = "diff"
+	TabChat TabID = "chat"
+	TabDiff TabID = "diff"
 )
 
 // SubTabID identifies a subtab within a main tab. Alias so string literals are

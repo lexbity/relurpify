@@ -166,6 +166,73 @@ func TestThoughtRecipeStepContextProviderReadsClarificationStateFromEnvelope(t *
 	}
 }
 
+func TestThoughtRecipeStepContextProviderGolden(t *testing.T) {
+	env := contextdata.NewEnvelope("task-golden", "session-golden")
+	state := intentcontext.NewState("task-golden", "session-golden")
+	state.StateVersion = 9
+	state.CurrentTurnID = "turn-9"
+	state.ActiveThoughtRecipeID = "thoughtrecipe.intent.clarify"
+	state.LastCheckpointID = "checkpoint-9"
+	state.LastCheckpointSeq = 99
+	state.ConfirmedEntities = []intentcontext.ConfirmedEntity{
+		{StableID: "entity-9", Name: "Envelope", Kind: intentcontext.EntityKindType},
+	}
+	state.ConfirmedScopes = []intentcontext.ConfirmedScope{
+		{StableID: "scope-9", Name: "named/euclo/promptprovider", AnchorClass: intentcontext.AnchorClassClarifiedScope},
+	}
+	state.PendingProjection = []intentcontext.ProjectionIntent{
+		{
+			StableID:       "projection-9",
+			MutationKind:   "upsert_node",
+			RevisionRootID: "root-9",
+			IdempotencyKey: "idem-9",
+			NodeKind:       "clarified_node",
+			SubjectIDs:     []string{"entity-9"},
+			ObjectIDs:      []string{"entity-10"},
+		},
+	}
+	state.AppliedMutations = []intentcontext.ProjectionRecord{
+		{
+			StableID:       "mutation-9",
+			RevisionRootID: "root-9",
+			IdempotencyKey: "idem-9",
+			Result:         intentcontext.ProjectionStatusApplied,
+			AppliedBy:      "test",
+		},
+	}
+	state.GroundedAnchors = []retrieval.AnchorRef{
+		{AnchorID: "anchor-9", ChunkID: "chunk-9", Term: "Envelope", Definition: "type anchor", Class: "clarified_entity", Active: true},
+	}
+	evidence := &intentcontext.IntentEvidence{
+		ActionType:    "review",
+		Target:        "named/euclo/promptprovider",
+		Scope:         "single_file",
+		RiskLevel:     "low",
+		ExpectedVerb:  "review",
+		ReasonCodes:   []string{"action:review"},
+	}
+	interpretation := &intentcontext.IntentInterpretation{
+		ActionType:     "review",
+		Target:         "named/euclo/promptprovider",
+		Scope:          "single_file",
+		RiskLevel:      "low",
+		Rationale:      "deterministic interpretation from request evidence",
+		ConfidenceNote: "deterministic",
+		ReasonCodes:    []string{"action:review"},
+	}
+	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
+		t.Fatalf("write clarification state: %v", err)
+	}
+
+	provider := &thoughtrecipeStepContextProvider{}
+	out := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
+		WithStateValue(intentcontext.ClarificationStateKey, state.Clone()).
+		WithStateValue(intentcontext.IntentEvidenceKey, evidence).
+		WithStateValue(intentcontext.IntentInterpretationKey, interpretation).
+		WithVariable("question", "Which module should be updated?"))
+	assertGolden(t, "recipe_step_context", out.Content)
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

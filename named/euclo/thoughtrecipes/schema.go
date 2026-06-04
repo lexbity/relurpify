@@ -5,19 +5,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
-
-// ThoughtRecipe defines the DSL-native in-memory thoughtrecipe model used by Euclo.
-//
-// The runtime consumes the spec-shaped DSL model and lowered execution plans.
-// Execution semantics live in ExecutionPlan, not in this struct.
-type ThoughtRecipe struct {
-	RouteKind   TriggerRouteKind
-	ID          string
-	Name        string
-	Description string
-	Metadata    ThoughtRecipeMetadata
-}
 
 // ClarificationStepType identifies a clarification-specific thoughtrecipe step.
 type ClarificationStepType string
@@ -42,147 +31,6 @@ type ClarificationStepConfig struct {
 	RequeryOnSuccess bool
 }
 
-// ThoughtRecipeMetadata contains optional metadata about a thoughtrecipe.
-type ThoughtRecipeMetadata struct {
-	Name           string
-	Version        string
-	Author         string
-	Tags           []string
-	Families       []string
-	Keywords       []string
-	HandoffTargets []string
-	Category       string
-	CreatedAt      string
-	UpdatedAt      string
-}
-
-// ThoughtRecipeStep represents a single step in the thoughtrecipe sequence (minimal DSL-native).
-type ThoughtRecipeStep struct {
-	ID           string
-	Type         string
-	CapabilityID string
-	Description  string
-	Prompt       string
-	PromptID     string
-	Mutation     string
-	HITL         string
-	Parent       ThoughtRecipeStepAgent
-	Fallback     *ThoughtRecipeStepAgent
-	Context      ThoughtRecipeStepContext
-	Config       map[string]any
-	Captures     map[string]string
-	Bindings     map[string]string
-	Dependencies []string
-
-	// OnError defines error handling behavior for this step.
-	OnError *StepErrorPolicy
-
-	// Retry defines retry policy for this step.
-	Retry *StepRetryPolicy
-}
-
-// ThoughtRecipeStepAgent describes the paradigm-specific agent invocation for a step.
-type ThoughtRecipeStepAgent struct {
-	Paradigm string
-	Prompt   string
-	Context  ThoughtRecipeStepContext
-}
-
-// ThoughtRecipeStepContext mirrors the spec's per-step context block.
-type ThoughtRecipeStepContext struct {
-	Stream  *ThoughtRecipeStreamSpec
-	Ingest  *ThoughtRecipeIngestSpec
-	Inherit []string
-	Capture []string
-}
-
-// ThoughtRecipeStreamSpec configures a context stream request.
-type ThoughtRecipeStreamSpec struct {
-	QueryTemplate string
-	MaxTokens     int
-	Mode          string
-}
-
-// ThoughtRecipeIngestSpec configures ingestion for a thoughtrecipe or step.
-type ThoughtRecipeIngestSpec struct {
-	Mode          string
-	IncludeGlobs  []string
-	ExcludeGlobs  []string
-	WorkspaceRoot string
-}
-
-// StepErrorPolicy defines error handling for a step.
-type StepErrorPolicy struct {
-	Action   string
-	RetryMax int
-	Fallback string
-}
-
-// StepRetryPolicy defines retry behavior for a step.
-type StepRetryPolicy struct {
-	MaxAttempts int
-	Delay       string
-	Backoff     string
-	MaxDelay    string
-}
-
-// ParallelGroup defines a group of steps to execute in parallel.
-type ParallelGroup struct {
-	ID    string
-	Steps []ThoughtRecipeStep
-	Merge MergePolicy
-}
-
-// ConditionalGroup defines conditional execution logic.
-type ConditionalGroup struct {
-	ID        string
-	Condition string
-	If        []ThoughtRecipeStep
-	Else      []ThoughtRecipeStep
-}
-
-// MergePolicy defines how to merge parallel step results.
-type MergePolicy string
-
-const (
-	MergePolicyAll    MergePolicy = "all"    // All branches must succeed
-	MergePolicyAny    MergePolicy = "any"    // At least one branch must succeed
-	MergePolicyFirst  MergePolicy = "first"  // Use first successful result
-	MergePolicyConcat MergePolicy = "concat" // Concatenate all results
-)
-
-// EffectiveName returns the best available human-readable thoughtrecipe name.
-func (r *ThoughtRecipe) EffectiveName() string {
-	if r == nil {
-		return ""
-	}
-	if strings.TrimSpace(r.Metadata.Name) != "" {
-		return strings.TrimSpace(r.Metadata.Name)
-	}
-	if strings.TrimSpace(r.Name) != "" {
-		return strings.TrimSpace(r.Name)
-	}
-	return strings.TrimSpace(r.ID)
-}
-
-// Validate validates the ThoughtRecipe model.
-func (r *ThoughtRecipe) Validate() error {
-	if r == nil {
-		return fmt.Errorf("thoughtrecipe is nil")
-	}
-	if kind := strings.TrimSpace(string(r.RouteKind)); kind != "" {
-		switch TriggerRouteKind(kind) {
-		case TriggerRouteKindCapability, TriggerRouteKindIntent:
-		default:
-			return fmt.Errorf("thoughtrecipe has unsupported route kind %q", kind)
-		}
-	}
-	if strings.TrimSpace(r.EffectiveName()) == "" {
-		return fmt.Errorf("thoughtrecipe missing required field: name")
-	}
-	return nil
-}
-
 // IsClarificationStepType reports whether stepType is one of the clarification-only types.
 func IsClarificationStepType(stepType string) bool {
 	switch strings.TrimSpace(stepType) {
@@ -194,7 +42,7 @@ func IsClarificationStepType(stepType string) bool {
 }
 
 // DecodeClarificationStepConfig converts a raw step config into the typed clarification config.
-func DecodeClarificationStepConfig(step ThoughtRecipeStep) (*ClarificationStepConfig, error) {
+func DecodeClarificationStepConfig(step surface.ThoughtRecipeStep) (*ClarificationStepConfig, error) {
 	if len(step.Config) == 0 {
 		return nil, nil
 	}
@@ -245,13 +93,11 @@ func validateClarificationStepConfigFields(stepType string, cfg *ClarificationSt
 	}
 	switch ClarificationStepType(strings.TrimSpace(stepType)) {
 	case ClarificationStepTypeClarify:
-		// No schema required; the step emits the turn/question itself.
 	case ClarificationStepTypeExtract, ClarificationStepTypeGround, ClarificationStepTypeProject, ClarificationStepTypeRetrieve:
 		if strings.TrimSpace(cfg.OutputSchemaID) == "" {
 			return fmt.Errorf("missing required field: config.output_schema_id")
 		}
 	case ClarificationStepTypeHandoff:
-		// Handoff selects a downstream normal thoughtrecipe and does not require an output schema.
 	}
 	return nil
 }
@@ -273,12 +119,14 @@ func truthyValue(value any) bool {
 }
 
 func validateStepParadigm(value string) error {
-	switch strings.TrimSpace(value) {
-	case "", "react", "planner", "htn", "reflection", "blackboard", "chainer", "pipeline", "rewoo", "goalcon", "euclo":
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return nil
-	default:
+	}
+	if !surface.IsSupported(surface.Paradigm(trimmed)) && surface.Paradigm(trimmed) != surface.ParadigmEuclo {
 		return fmt.Errorf("invalid paradigm value: %s", value)
 	}
+	return nil
 }
 
 func cloneClarificationStepConfig(cfg *ClarificationStepConfig) *ClarificationStepConfig {

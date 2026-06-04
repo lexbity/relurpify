@@ -3,6 +3,8 @@ package thoughtrecipe
 import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // LowerDocument converts a source-level Euclo thoughtrecipe document into an
@@ -13,10 +15,10 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 	}
 
 	plan := &ExecutionPlan{
-		ThoughtRecipe: &ThoughtRecipe{
+		ThoughtRecipe: &surface.ThoughtRecipe{
 			ID:   doc.Name,
 			Name: doc.Name,
-			Metadata: ThoughtRecipeMetadata{
+			Metadata: surface.ThoughtRecipeMetadata{
 				Name: doc.Name,
 			},
 		},
@@ -49,7 +51,7 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 		switch node := decl.(type) {
 		case *AgentDecl:
 			paradigm := strings.TrimSpace(node.AgentType.Value)
-			if !isSupportedAgentParadigm(paradigm) {
+			if !surface.IsSupported(surface.Paradigm(paradigm)) {
 				return nil, fmt.Errorf("%s:%d:%d: unsupported agent paradigm %q", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column, paradigm)
 			}
 			plan.Agents[strings.TrimSpace(node.Name.Value)] = AgentBinding{
@@ -191,7 +193,7 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 		CaptureBindings: captures,
 		Prompt:          question,
 		PromptID:        promptID,
-		Step:            ThoughtRecipeStep{ID: stepID, Type: "ask"},
+		Step:           surface.ThoughtRecipeStep{ID: stepID, Type: "ask"},
 	}
 	step.Step.Parent.Paradigm = "euclo"
 	step.Step.Prompt = question
@@ -324,7 +326,7 @@ func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIn
 		Type:           "pipeline",
 		Paradigm:       "euclo",
 		PipelineStages: append([]PipelineStageSpec(nil), stages...),
-		Step:           ThoughtRecipeStep{ID: pipelineID, Type: "pipeline"},
+		Step:           surface.ThoughtRecipeStep{ID: pipelineID, Type: "pipeline"},
 	}
 	step.Step.Parent.Paradigm = "euclo"
 	step.Step.Type = "pipeline"
@@ -512,15 +514,6 @@ func gatherLoweredFromExecutionItem(item ExecutionItem, plan *ExecutionPlan, run
 		plan.Steps = append(plan.Steps, step)
 	}
 	return nil
-}
-
-func isSupportedAgentParadigm(paradigm string) bool {
-	switch strings.TrimSpace(paradigm) {
-	case "react", "planner", "htn", "reflection", "blackboard", "chainer", "pipeline", "rewoo", "goalcon":
-		return true
-	default:
-		return false
-	}
 }
 
 func rawValueExprList(values []ValueExpr) []string {

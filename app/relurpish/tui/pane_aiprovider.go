@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 

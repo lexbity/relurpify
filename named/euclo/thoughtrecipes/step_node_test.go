@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -65,7 +66,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	step := ExecutionStep{
 		ID:           "step1",
 		CapabilityID: "euclo:cap.ast_query",
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:           "step1",
 			CapabilityID: "euclo:cap.ast_query",
 			Config: map[string]any{
@@ -130,7 +131,7 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 		ID:       "clarify.step",
 		Paradigm: "euclo",
 		Prompt:   "Which module should be updated?",
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:     "clarify.step",
 			Prompt: "Which module should be updated?",
 		},
@@ -176,7 +177,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 		Paradigm: "euclo",
 		PromptID: "euclo.intent.clarify.question.v1",
 		Prompt:   "inline fallback should not be used",
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:       "clarify.step",
 			PromptID: "euclo.intent.clarify.question.v1",
 			Prompt:   "inline fallback should not be used",
@@ -220,7 +221,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		ID:                 "scope.step",
 		Paradigm:           "react",
 		EffectiveToolNames: []string{"file_write"},
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID: "scope.step",
 		},
 	}
@@ -251,7 +252,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 	nextStep := ExecutionStep{
 		ID:       "scope.next",
 		Paradigm: "react",
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID: "scope.next",
 		},
 	}
@@ -271,7 +272,7 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 		ID:       "clarify.step",
 		Paradigm: "euclo",
 		PromptID: "euclo.intent.clarify.question.v1",
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:       "clarify.step",
 			PromptID: "euclo.intent.clarify.question.v1",
 		},
@@ -329,7 +330,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 			StateWriteKeys:   []string{"euclo.intent.clarification.confirmed_entities"},
 			ProjectionPolicy: "apply",
 		},
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:   "extract.step",
 			Type: string(ClarificationStepTypeExtract),
 			Config: map[string]any{
@@ -392,7 +393,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 				Destination: PathExpr{positioned: positioned{Span: NewSpan("delegate.euclo", 4, 15, 4, 26)}, Raw: "state.plan", Parts: []Identifier{{Value: "state"}, {Value: "plan"}}},
 			},
 		},
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:   "delegate.step",
 			Type: "delegate",
 		},
@@ -468,7 +469,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 				Destination: PathExpr{positioned: positioned{Span: NewSpan("ask.euclo", 4, 15, 4, 26)}, Raw: "state.intent", Parts: []Identifier{{Value: "state"}, {Value: "intent"}}},
 			},
 		},
-		Step: ThoughtRecipeStep{
+		Step: surface.ThoughtRecipeStep{
 			ID:     "ask.step",
 			Type:   "ask",
 			Prompt: "Choose a mode.",

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	tea "github.com/charmbracelet/bubbletea"
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
