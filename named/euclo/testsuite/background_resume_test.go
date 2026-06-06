@@ -7,11 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type backgroundContinuationNode struct{}
@@ -20,17 +20,17 @@ func (n *backgroundContinuationNode) ID() string { return "euclo.background.resu
 
 func (n *backgroundContinuationNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
-func (n *backgroundContinuationNode) Execute(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *backgroundContinuationNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if euclostate.GetBackgroundJobID(env) == "" {
-		return &core.Result{NodeID: n.ID(), Success: false}, nil
+		return &execution.Result{NodeID: n.ID(), Success: false}, nil
 	}
 	contextdata.SetTyped(env, "euclo.background.resume_completed", true)
 	contextdata.SetTyped(env, "euclo.final_response", "background work resumed and completed")
 	euclostate.SetExecutionCompleted(env, true)
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.ID(),
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"final_response": "background work resumed and completed",
 		}),
 	}, nil
@@ -49,7 +49,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 		WithWriter(writer)
 
 	env := contextdata.NewEnvelope("task-background", "session-background")
-	contextdata.SetTyped(env, euclostate.KeyTaskInput, &core.Task{ID: "task-background", Instruction: "run background work"})
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, &execution.Task{ID: "task-background", Instruction: "run background work"})
 	contextdata.SetTyped(env, euclostate.KeyBackgroundJobPayload, map[string]any{"mode": "long-run"})
 
 	if result, err := backgroundNode.Execute(context.Background(), env); err != nil {

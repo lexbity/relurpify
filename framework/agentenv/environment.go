@@ -3,6 +3,7 @@ package agentenv
 import (
 	"context"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/artifactstore"
 	"codeburg.org/lexbit/relurpify/framework/ast"
@@ -10,12 +11,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -49,7 +48,7 @@ type CompatibilitySurfaceExtractor interface {
 // - framework/graphdb for durable backend implementation
 type WorkspaceEnvironment struct {
 	// Identity + model
-	Config        *core.Config
+	Config        *execution.Config
 	Model         contracts.LanguageModel
 	CommandPolicy sandbox.CommandPolicy
 	FileScope     *sandbox.FileScopePolicy
@@ -89,7 +88,7 @@ type WorkspaceEnvironment struct {
 	// IngestOutputs enables runtime output ingestion for agents that opt in.
 	IngestOutputs bool
 	// PatternStore is the pattern store interface.
-	PatternStore patterns.PatternStore
+	PatternStore PatternStore
 	// AgentLifecycle is the runtime agent lifecycle management interface.
 	// This handles delegation, event, and lineage persistence.
 	AgentLifecycle agentlifecycle.Repository

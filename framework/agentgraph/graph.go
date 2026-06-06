@@ -11,11 +11,14 @@ import (
 	"sync"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
-	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	ftelemetry "codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // NodeType enumerates supported node categories.
@@ -35,11 +38,11 @@ const (
 type Node interface {
 	ID() string
 	Type() NodeType
-	Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error)
+	Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error)
 }
 
 // ConditionFunc determines whether an edge should be followed.
-type ConditionFunc func(result *core.Result, env *contextdata.Envelope) bool
+type ConditionFunc func(result *execution.Result, env *contextdata.Envelope) bool
 
 // Edge describes a transition between nodes.
 type Edge struct {
@@ -67,7 +70,7 @@ type Graph struct {
 	edges             map[string][]Edge
 	startNodeID       string
 	maxNodeVisits     int
-	telemetry         core.Telemetry
+	telemetry         telemetry.Telemetry
 	execMu            sync.Mutex
 	visitCounts       map[string]int
 	executionPath     []string
@@ -97,7 +100,7 @@ func NewGraph() *Graph {
 }
 
 // SetTelemetry wires a telemetry sink for execution traces.
-func (g *Graph) SetTelemetry(t core.Telemetry) {
+func (g *Graph) SetTelemetry(t telemetry.Telemetry) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.telemetry = t
@@ -125,7 +128,7 @@ func (g *Graph) SetMaxNodeVisits(limit int) {
 }
 
 // emit sends telemetry events when a sink is configured; a no-op otherwise.
-func (g *Graph) emit(event core.Event) {
+func (g *Graph) emit(event telemetry.Event) {
 	g.mu.RLock()
 	telemetry := g.telemetry
 	g.mu.RUnlock()
@@ -215,7 +218,7 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 }
 
 // Execute runs the graph from its start node.
-func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -225,8 +228,8 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*core.R
 
 	taskID := g.extractTaskID(env)
 	taskMeta := g.extractTaskMeta(env)
-	g.emit(core.Event{
-		Type:      core.EventGraphStart,
+	g.emit(telemetry.Event{
+		Type:      telemetry.EventGraphStart,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  taskMeta,
@@ -237,8 +240,8 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*core.R
 		if execErr != nil {
 			status = "error"
 		}
-		g.emit(core.Event{
-			Type:      core.EventGraphFinish,
+		g.emit(telemetry.Event{
+			Type:      telemetry.EventGraphFinish,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]interface{}{
@@ -257,7 +260,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*core.R
 	return lastResult, err
 }
 
-func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*core.Result, error) {
+func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*execution.Result, error) {
 	g.execMu.Lock()
 	defer g.execMu.Unlock()
 	if reset {
@@ -269,7 +272,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 	// adds step nodes/edges dynamically). Holding a read lock here would
 	// deadlock against the write lock those mutations require.
 
-	var lastResult *core.Result
+	var lastResult *execution.Result
 	for current != "" {
 		select {
 		case <-ctx.Done():
@@ -287,24 +290,24 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, fmt.Errorf("potential cycle detected at node %s", current)
 		}
 		g.executionPath = append(g.executionPath, current)
-		g.emit(core.Event{
-			Type:      core.EventNodeStart,
+		g.emit(telemetry.Event{
+			Type:      telemetry.EventNodeStart,
 			NodeID:    current,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 		})
 
-		taskType := core.TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
+		taskType := execution.TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
 		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
-		nodeCtx := core.WithTaskContext(ctx, core.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
+		nodeCtx := execution.WithTaskContext(ctx, execution.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
 		if g.telemetry != nil {
-			nodeCtx = core.WithTelemetry(nodeCtx, g.telemetry)
+			nodeCtx = telemetry.WithTelemetry(nodeCtx, g.telemetry)
 		}
 		result, err := node.Execute(nodeCtx, env)
 		if err != nil {
 			err = fmt.Errorf("node %s execution failed: %w", current, err)
-			g.emit(core.Event{
-				Type:      core.EventNodeError,
+			g.emit(telemetry.Event{
+				Type:      telemetry.EventNodeError,
 				NodeID:    current,
 				TaskID:    taskID,
 				Timestamp: time.Now().UTC(),
@@ -313,15 +316,15 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, err
 		}
 		if result == nil {
-			result = &core.Result{NodeID: current, Success: true}
+			result = &execution.Result{NodeID: current, Success: true}
 		}
 		result.NodeID = current
 		lastResult = result
-		for key, value := range core.ResultFields(result.Data) {
+		for key, value := range execution.ResultFields(result.Data) {
 			env.SetWorkingValue(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
-		g.emit(core.Event{
-			Type:      core.EventNodeFinish,
+		g.emit(telemetry.Event{
+			Type:      telemetry.EventNodeFinish,
 			NodeID:    current,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
@@ -374,7 +377,7 @@ func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]interface{
 // executed optimistically on cloned contexts while serial edges behave like a
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
-func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *core.Result) (string, string, error) {
+func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *execution.Result) (string, string, error) {
 	g.mu.RLock()
 	outEdges := make([]Edge, len(g.edges[node.ID()]))
 	copy(outEdges, g.edges[node.ID()])
@@ -480,7 +483,7 @@ func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []paral
 // executeBranch runs a detached sub-graph that starts at the provided node.
 // The parent graph shares the node/edge definitions but each branch receives a
 // cloned Envelope, which preserves determinism until Merge recombines updates.
-func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*core.Result, error) {
+func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*execution.Result, error) {
 	// We reuse the same node/edge maps because branch graphs are read-only. The
 	// only mutable data lives inside the cloned Envelope passed to this function.
 	subGraph := &Graph{
@@ -571,12 +574,12 @@ func (n *ToolNode) SetTraceID(traceID string) {
 // nextSpanID generates a unique child span ID for each tool call.
 func (n *ToolNode) nextSpanID() string {
 	n.spanCount++
-	return telemetry.NewSpanID()
+	return ftelemetry.NewSpanID()
 }
 
 // nextTraceContext derives a child trace context for a tool invocation.
-func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
-	return telemetry.TraceContext{
+func (n *ToolNode) nextTraceContext() ftelemetry.TraceContext {
+	return ftelemetry.TraceContext{
 		TraceID: n.traceID,
 		SpanID:  n.nextSpanID(),
 	}
@@ -586,8 +589,8 @@ func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
 // capability-routed execution without importing the concrete registry package.
 type CapabilityInvoker interface {
 	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
-	CapturePolicySnapshot() *core.PolicySnapshot
-	GetCapability(idOrName string) (core.CapabilityDescriptor, bool)
+	CapturePolicySnapshot() *capability.PolicySnapshot
+	GetCapability(idOrName string) (capability.CapabilityDescriptor, bool)
 }
 
 // NewToolNode constructs a tool node with a required capability invoker.
@@ -616,7 +619,7 @@ func (n *ToolNode) Contract() NodeContract {
 }
 
 // Execute calls the tool through the capability registry.
-func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.Tool == nil {
 		return nil, errors.New("tool node missing tool")
 	}
@@ -625,10 +628,10 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*cor
 	}
 	// Attach trace context for child span generation in instrumentedTool.
 	if n.traceID == "" {
-		n.traceID = telemetry.NewTraceID()
+		n.traceID = ftelemetry.NewTraceID()
 	}
 	tc := n.nextTraceContext()
-	ctx = telemetry.WithTraceContext(ctx, tc)
+	ctx = ftelemetry.WithTraceContext(ctx, tc)
 	res, err := n.Registry.InvokeCapability(ctx, env, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err
@@ -661,15 +664,15 @@ func (n *ConditionalNode) ID() string { return n.id }
 func (n *ConditionalNode) Type() NodeType { return NodeTypeConditional }
 
 // Execute just evaluates the condition and stores the decision.
-func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	to, err := n.Condition(env)
 	if err != nil {
 		return nil, err
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{"next": to}),
+		Data:    execution.NewToolResultPayload(map[string]any{"next": to}),
 	}, nil
 }
 
@@ -691,12 +694,12 @@ func (n *HumanNode) Contract() NodeContract {
 	return NodeContract{
 		SideEffectClass: SideEffectHuman,
 		Idempotency:     IdempotencySingleShot,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "approval.*"},
 			WriteKeys:                []string{"approval.*"},
 			AllowHistoryAccess:       true,
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 16,
 		},
@@ -704,13 +707,13 @@ func (n *HumanNode) Contract() NodeContract {
 }
 
 // Execute pauses execution until callback completes.
-func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.Callback != nil {
 		if err := n.Callback(env); err != nil {
 			return nil, err
 		}
 	}
-	return &core.Result{NodeID: n.id, Success: true}, nil
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 // TerminalNode marks the end of the workflow.
@@ -734,11 +737,11 @@ func (n *TerminalNode) Contract() NodeContract {
 	return NodeContract{
 		SideEffectClass: SideEffectNone,
 		Idempotency:     IdempotencyReplaySafe,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "plan.*", "react.*", "architect.*"},
 			WriteKeys:                []string{},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassRoutingFlag, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassRoutingFlag, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 32,
 		},
@@ -746,8 +749,8 @@ func (n *TerminalNode) Contract() NodeContract {
 }
 
 // Execute completes immediately.
-func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{NodeID: n.id, Success: true}, nil
+func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 // errorFromString reconstructs an error from a stored message, enabling tool
@@ -759,20 +762,20 @@ func errorFromString(err string) error {
 	return errors.New(err)
 }
 
-func resultFromToolExecution(nodeID string, res *contracts.ToolResult) *core.Result {
+func resultFromToolExecution(nodeID string, res *contracts.ToolResult) *execution.Result {
 	if res == nil {
-		return &core.Result{NodeID: nodeID, Success: true}
+		return &execution.Result{NodeID: nodeID, Success: true}
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID:   nodeID,
 		Success:  res.Success,
-		Data:     core.NewToolResultPayload(res.Data),
+		Data:     execution.NewToolResultPayload(res.Data),
 		Metadata: res.Metadata,
 		Error:    res.Error,
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool contracts.Tool, env *contextdata.Envelope, res *contracts.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool contracts.Tool, env *contextdata.Envelope, res *contracts.ToolResult, args map[string]interface{}) *capability.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}
@@ -783,27 +786,27 @@ func attachCapabilityEnvelope(registry CapabilityInvoker, tool contracts.Tool, e
 		return nil
 	}
 
-	desc, ok := res.Metadata["capability_descriptor"].(core.CapabilityDescriptor)
+	desc, ok := res.Metadata["capability_descriptor"].(capability.CapabilityDescriptor)
 	if !ok || desc.ID == "" {
 		desc, ok = registry.GetCapability(tool.Name())
 		if !ok || desc.ID == "" {
-			desc = core.ToolDescriptor(context.Background(), tool)
+			desc = capability.ToolDescriptor(context.Background(), tool)
 		}
 	}
 
-	var approval *core.ApprovalBinding
+	var approval *capability.ApprovalBinding
 	if raw := res.Metadata["approval_binding"]; raw != nil {
-		if typed, ok := raw.(*core.ApprovalBinding); ok {
+		if typed, ok := raw.(*capability.ApprovalBinding); ok {
 			approval = typed
 		}
 	}
 	if approval == nil {
-		approval = core.ApprovalBindingFromCapability(desc, env.Snapshot(), args)
+		approval = capability.ApprovalBindingFromCapability(desc, env.Snapshot(), args)
 	}
 
-	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)
-	if decision, ok := res.Metadata["insertion_decision"].(core.InsertionDecision); ok {
-		envelope = core.ApplyInsertionDecision(envelope, decision)
+	envelope := capability.NewCapabilityResultEnvelope(desc, res, capability.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)
+	if decision, ok := res.Metadata["insertion_decision"].(capability.InsertionDecision); ok {
+		envelope = capability.ApplyInsertionDecision(envelope, decision)
 	}
 	res.Metadata["insertion_decision"] = envelope.Insertion
 	res.Metadata["capability_envelope_created"] = true

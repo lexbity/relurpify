@@ -9,10 +9,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")
@@ -33,7 +35,7 @@ type RuntimeProvider interface {
 // policy can gate activation before initialization.
 type DescribedRuntimeProvider interface {
 	RuntimeProvider
-	Descriptor() core.ProviderDescriptor
+	Descriptor() capability.ProviderDescriptor
 }
 
 // SessionManagedProvider supports forced shutdown of individual live provider sessions.
@@ -43,16 +45,16 @@ type SessionManagedProvider interface {
 }
 
 type runtimeProviderHealthReporter interface {
-	HealthSnapshot(ctx context.Context) (core.ProviderHealthSnapshot, error)
+	HealthSnapshot(ctx context.Context) (capability.ProviderHealthSnapshot, error)
 }
 
 type runtimeProviderSessionLister interface {
-	ListSessions(ctx context.Context) ([]core.ProviderSession, error)
+	ListSessions(ctx context.Context) ([]capability.ProviderSession, error)
 }
 
 type runtimeProviderRecord struct {
 	provider RuntimeProvider
-	desc     core.ProviderDescriptor
+	desc     capability.ProviderDescriptor
 }
 
 // RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
@@ -72,20 +74,20 @@ func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	return nil
 }
 
-func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []core.ProviderConfig {
+func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []capability.ProviderConfig {
 	if spec == nil || len(spec.Providers) == 0 {
 		return nil
 	}
-	out := make([]core.ProviderConfig, len(spec.Providers))
+	out := make([]capability.ProviderConfig, len(spec.Providers))
 	for i, provider := range spec.Providers {
-		out[i] = core.ProviderConfig{
+		out[i] = capability.ProviderConfig{
 			ID:              provider.ID,
-			Kind:            core.ProviderKind(provider.Kind),
+			Kind:            capability.ProviderKind(provider.Kind),
 			Enabled:         provider.Enabled,
 			Target:          provider.Target,
 			ActivationScope: provider.ActivationScope,
 			TrustBaseline:   agentspec.TrustClass(provider.TrustBaseline),
-			Recoverability:  core.RecoverabilityMode(provider.Recoverability),
+			Recoverability:  policy.RecoverabilityMode(provider.Recoverability),
 		}
 		if len(provider.Config) > 0 {
 			out[i].Config = make(map[string]any, len(provider.Config))
@@ -132,7 +134,7 @@ func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider
 	return nil
 }
 
-func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.ProviderDescriptor) error {
+func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capability.ProviderDescriptor) error {
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
@@ -144,8 +146,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		_, err := fauthorization.EnforcePolicyRequest(ctx, r.AgentWorkspace().Registration.Policy, core.PolicyRequest{
-			Target:         core.PolicyTargetProvider,
+		_, err := fauthorization.EnforcePolicyRequest(ctx, r.AgentWorkspace().Registration.Policy, policy.PolicyRequest{
+			Target:         policy.PolicyTargetProvider,
 			Actor:          identity.EventActor{Kind: "agent", ID: r.AgentWorkspace().Registration.ID},
 			CapabilityID:   "provider:" + desc.ID + ":activate",
 			CapabilityName: "provider:" + desc.ID + ":activate",
@@ -174,10 +176,10 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		return nil
 	}
 	level := agentspec.AgentPermissionAllow
-	if desc.Security.Origin == core.ProviderOriginRemote || desc.Kind == core.ProviderKindMCPClient || desc.Kind == core.ProviderKindMCPServer {
+	if desc.Security.Origin == capability.ProviderOriginRemote {
 		level = agentspec.AgentPermissionAsk
 	}
-	if desc.Kind == core.ProviderKindBuiltin || desc.Kind == core.ProviderKindAgentRuntime {
+	if desc.Kind == capability.ProviderKindBuiltin || desc.Kind == capability.ProviderKindAgentRuntime {
 		level = agentspec.AgentPermissionAllow
 	}
 	if r.AgentWorkspace().AgentSpec != nil && r.AgentWorkspace().AgentSpec.ProviderPolicies != nil {
@@ -278,7 +280,7 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 	return nil
 }
 
-func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]core.ProviderSnapshot, []core.ProviderSessionSnapshot, error) {
+func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]capability.ProviderSnapshot, []capability.ProviderSessionSnapshot, error) {
 	return nil, nil, nil
 }
 
@@ -313,11 +315,11 @@ func (r *Runtime) removeProviderRecord(providerID string) (runtimeProviderRecord
 	return runtimeProviderRecord{}, false
 }
 
-func providerDescriptor(provider RuntimeProvider) core.ProviderDescriptor {
+func providerDescriptor(provider RuntimeProvider) capability.ProviderDescriptor {
 	if described, ok := provider.(DescribedRuntimeProvider); ok {
 		return described.Descriptor()
 	}
-	return core.ProviderDescriptor{}
+	return capability.ProviderDescriptor{}
 }
 
 func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]interface{}) {
@@ -337,8 +339,8 @@ func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reaso
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	r.AgentWorkspace().Telemetry.Emit(core.Event{
-		Type:      core.EventStateChange,
+	r.AgentWorkspace().Telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventStateChange,
 		Timestamp: time.Now().UTC(),
 		Message:   strings.ReplaceAll(event, "_", " "),
 		Metadata:  metadata,

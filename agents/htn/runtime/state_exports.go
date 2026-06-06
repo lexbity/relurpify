@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Public wrapper functions for persistence package integration.
@@ -46,7 +46,7 @@ func CompletedStepsFromEnvelope(env *contextdata.Envelope) []string {
 }
 
 // PublishTaskState is the exported version of publishTaskState.
-func PublishTaskState(env *contextdata.Envelope, task *core.Task) {
+func PublishTaskState(env *contextdata.Envelope, task *execution.Task) {
 	publishTaskState(env, task)
 }
 

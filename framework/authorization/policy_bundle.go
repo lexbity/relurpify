@@ -5,7 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // CompiledPolicyBundle captures the compiled rules and executable policy
@@ -13,13 +13,13 @@ import (
 type CompiledPolicyBundle struct {
 	AgentID string
 	Spec    *agentspec.AgentRuntimeSpec
-	Rules   []core.PolicyRule
+	Rules   []policy.PolicyRule
 	Engine  PolicyEngine
 }
 
 // BuildFromSpec compiles policy rules and constructs a bundle directly from an
 // agent identifier and effective runtime spec.
-func BuildFromSpec(agentID string, spec *agentspec.AgentRuntimeSpec, engine PolicyEngine, rules []core.PolicyRule) (*CompiledPolicyBundle, error) {
+func BuildFromSpec(agentID string, spec *agentspec.AgentRuntimeSpec, engine PolicyEngine, rules []policy.PolicyRule) (*CompiledPolicyBundle, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent id required")
 	}
@@ -36,7 +36,7 @@ func BuildFromSpec(agentID string, spec *agentspec.AgentRuntimeSpec, engine Poli
 
 // BuildFromContract constructs a compiled policy bundle from an effective
 // contract.
-func BuildFromContract(contract *cfgload.EffectiveAgentContract, engine PolicyEngine, rules []core.PolicyRule) (*CompiledPolicyBundle, error) {
+func BuildFromContract(contract *cfgload.EffectiveAgentContract, engine PolicyEngine, rules []policy.PolicyRule) (*CompiledPolicyBundle, error) {
 	if contract == nil {
 		return nil, fmt.Errorf("effective agent contract required")
 	}

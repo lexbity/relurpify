@@ -9,10 +9,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestPermissionToAuditToTelemetryFlow validates the complete flow from
@@ -23,7 +24,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	// Step 1: Create permission set
-	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
 
 	// Step 2: Create permission manager with audit sink
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -66,8 +67,8 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 	}
 
 	// Step 6: Emit telemetry event (transition point: telemetry emission)
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventNodeFinish,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventNodeFinish,
 		NodeID:    "test-node",
 		TaskID:    "test-task",
 		Message:   "permission decision completed",
@@ -86,7 +87,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 
 	foundTelemetryEvent := false
 	for _, event := range events {
-		if event.Type == core.EventNodeFinish {
+		if event.Type == telemetry.EventNodeFinish {
 			foundTelemetryEvent = true
 			if event.NodeID != "test-node" {
 				t.Errorf("expected node ID 'test-node', got %s", event.NodeID)
@@ -113,7 +114,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	// Step 1: Create permission manager (permission seam)
-	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("permission manager creation failed: %v", err)
@@ -192,8 +193,8 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	}
 
 	// Step 6: Emit and verify telemetry (telemetry seam)
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventGraphFinish,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventGraphFinish,
 		NodeID:    "full-flow-node",
 		TaskID:    envelope.TaskID,
 		Message:   "full framework flow completed",
@@ -212,7 +213,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	// Transition assertion: telemetry captured
 	foundGraphFinish := false
 	for _, event := range telemetryEvents {
-		if event.Type == core.EventGraphFinish {
+		if event.Type == telemetry.EventGraphFinish {
 			foundGraphFinish = true
 			if event.TaskID != envelope.TaskID {
 				t.Errorf("expected task ID %s, got %s", envelope.TaskID, event.TaskID)

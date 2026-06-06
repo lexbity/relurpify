@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // envelopeGet retrieves a value from envelope working memory.
@@ -33,7 +33,7 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 // HTNRunSummary captures end-of-run execution metrics and outcomes.
 type HTNRunSummary struct {
 	SchemaVersion      int           `json:"schema_version"`
-	TaskType           core.TaskType `json:"task_type"`
+	TaskType           execution.TaskType `json:"task_type"`
 	SelectedMethod     string        `json:"selected_method"`
 	PlannedStepCount   int           `json:"planned_step_count"`
 	CompletedStepCount int           `json:"completed_step_count"`
@@ -48,7 +48,7 @@ type HTNRunSummary struct {
 type OperatorOutcome struct {
 	OperatorName string                 `json:"operator_name"`
 	StepID       string                 `json:"step_id"`
-	TaskType     core.TaskType          `json:"task_type"`
+	TaskType     execution.TaskType          `json:"task_type"`
 	Success      bool                   `json:"success"`
 	Duration     int                    `json:"duration_seconds"`
 	CostClass    string                 `json:"cost_class,omitempty"`

@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
@@ -37,16 +37,16 @@ func TestIngestionNodeFilesOnlyUsesFrameworkPipeline(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got, ok := core.ResultField(result.Data, "mode"); !ok || got != IngestionModeFilesOnly {
+	if got, ok := execution.ResultField(result.Data, "mode"); !ok || got != IngestionModeFilesOnly {
 		t.Fatalf("unexpected mode: %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "user_files_ingested"); !ok || got != 0 {
+	if got, ok := execution.ResultField(result.Data, "user_files_ingested"); !ok || got != 0 {
 		t.Fatalf("expected user file count 0, got %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "session_pins_ingested"); !ok || got != 0 {
+	if got, ok := execution.ResultField(result.Data, "session_pins_ingested"); !ok || got != 0 {
 		t.Fatalf("expected session pin count 0, got %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
+	if got, ok := execution.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
 		t.Fatal("expected chunks to be created")
 	}
 	if _, ok := contextdata.GetTyped[*IngestionResult](env, "euclo.ingestion_result"); !ok {
@@ -79,10 +79,10 @@ func TestIngestionNodeFullScanUsesWorkspaceScanner(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got, ok := core.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
+	if got, ok := execution.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
 		t.Fatal("expected files_scanned to be populated")
 	}
-	if got, ok := core.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
+	if got, ok := execution.ResultField(result.Data, "chunks_created"); !ok || got == 0 {
 		t.Fatal("expected chunks_created to be populated")
 	}
 }
@@ -118,10 +118,10 @@ func TestIngestionNodeIncrementalScanUsesGitDiff(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got, ok := core.ResultField(result.Data, "since_ref"); !ok || got != strings.TrimSpace(base) {
+	if got, ok := execution.ResultField(result.Data, "since_ref"); !ok || got != strings.TrimSpace(base) {
 		t.Fatalf("unexpected since_ref: %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
+	if got, ok := execution.ResultField(result.Data, "files_scanned"); !ok || got == 0 {
 		t.Fatal("expected files_scanned to be populated")
 	}
 }
@@ -137,7 +137,7 @@ func TestIngestionNodeHandlesMissingTaskEnvelope(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result")
 	}
-	if got, ok := core.ResultField(result.Data, "skipped"); !ok || got != true {
+	if got, ok := execution.ResultField(result.Data, "skipped"); !ok || got != true {
 		t.Fatalf("expected skipped result, got %v", got)
 	}
 }

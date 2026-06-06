@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
@@ -154,8 +154,8 @@ func TestRankerRegistry_PolicyAdmission(t *testing.T) {
 	registry.Register(&mockRanker{name: "ast_proximity", results: []knowledge.ChunkID{"c"}})
 	registry.Register(&mockRanker{name: "trust", results: []knowledge.ChunkID{"d"}})
 
-	policy := &contextpolicy.ContextPolicyBundle{
-		Rankers: []contextpolicy.RankerRef{
+	policy := &execctx.ContextPolicyBundle{
+		Rankers: []execctx.RankerRef{
 			{ID: "keyword", Priority: 10},
 			{ID: "recency", Priority: 5},
 		},

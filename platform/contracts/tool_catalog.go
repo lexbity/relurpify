@@ -12,7 +12,6 @@ const (
 	ToolBackendSubprocess ToolBackend = "subprocess"
 	ToolBackendGoNative   ToolBackend = "go_native"
 	ToolBackendComposite  ToolBackend = "composite"
-	ToolBackendMCP        ToolBackend = "mcp"
 )
 
 // ToolRateLimit configures per-tool rate limiting for automatic enforcement.
@@ -80,8 +79,7 @@ type ToolManifestExecution struct {
 	Stdin            string                         `yaml:"stdin,omitempty" json:"stdin,omitempty"`
 	DefaultArgs      []string                       `yaml:"default_args,omitempty" json:"default_args,omitempty"`
 	AllowStdin       bool                           `yaml:"allow_stdin,omitempty" json:"allow_stdin,omitempty"`
-	SupportsWorkdir  bool                           `yaml:"supports_workdir,omitempty" json:"supports_workdir,omitempty"`
-	MCP              *ToolManifestMCP               `yaml:"mcp,omitempty" json:"mcp,omitempty"`
+	SupportsWorkdir  bool `yaml:"supports_workdir,omitempty" json:"supports_workdir,omitempty"`
 }
 
 // ToolManifestCommand describes a command template.
@@ -130,12 +128,6 @@ type ToolManifestSandbox struct {
 	PidsLimit      int64    `yaml:"pids_limit,omitempty" json:"pids_limit,omitempty"`
 	CPUs           float64  `yaml:"cpus,omitempty" json:"cpus,omitempty"`
 	AllowHosts     []string `yaml:"allow_hosts,omitempty" json:"allow_hosts,omitempty"`
-}
-
-// ToolManifestMCP describes MCP execution routing.
-type ToolManifestMCP struct {
-	Server string `yaml:"server,omitempty" json:"server,omitempty"`
-	Method string `yaml:"method,omitempty" json:"method,omitempty"`
 }
 
 // ToolManifestReturns captures the structured output shape and chunking hints.

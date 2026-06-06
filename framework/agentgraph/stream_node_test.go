@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
@@ -78,9 +78,9 @@ func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node-bg", result.NodeID)
-	mode, _ := core.ResultField(result.Data, "mode")
+	mode, _ := execution.ResultField(result.Data, "mode")
 	require.Equal(t, "background", mode)
-	jobID, _ := core.ResultField(result.Data, "contextstream_job_id")
+	jobID, _ := execution.ResultField(result.Data, "contextstream_job_id")
 	require.Equal(t, "stream-node-bg.stream", jobID)
 
 	require.Eventually(t, func() bool {

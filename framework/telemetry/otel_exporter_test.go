@@ -4,16 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestToolSpanExporterEmitsSpanOnToolResult(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type:    core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type:    telemetry.EventToolResult,
 		Message: "tool cli_jq completed",
 		Metadata: map[string]interface{}{
 			"tool":         "cli_jq",
@@ -39,8 +39,8 @@ func TestToolSpanExporterEmitsSpanOnToolCall(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type:    core.EventToolCall,
+	exporter.Emit(telemetry.Event{
+		Type:    telemetry.EventToolCall,
 		Message: "tool cli_rg invoked",
 		Metadata: map[string]interface{}{
 			"tool":       "cli_rg",
@@ -57,9 +57,9 @@ func TestToolSpanExporterSkipsNonToolEvents(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{Type: core.EventGraphStart})
-	exporter.Emit(core.Event{Type: core.EventLLMPrompt})
-	exporter.Emit(core.Event{Type: core.EventStateChange})
+	exporter.Emit(telemetry.Event{Type: telemetry.EventGraphStart})
+	exporter.Emit(telemetry.Event{Type: telemetry.EventLLMPrompt})
+	exporter.Emit(telemetry.Event{Type: telemetry.EventStateChange})
 
 	require.Empty(t, mem.Spans, "non-tool events must not generate spans")
 }
@@ -67,8 +67,8 @@ func TestToolSpanExporterSkipsNonToolEvents(t *testing.T) {
 func TestToolSpanExporterNopWhenNoSpanBackend(t *testing.T) {
 	// When no WithSpanExporter is provided, the NopExporter is used — no crash
 	exporter := NewToolSpanExporter(nil)
-	exporter.Emit(core.Event{
-		Type: core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventToolResult,
 		Metadata: map[string]interface{}{
 			"tool":       "cli_echo",
 			"span_attrs": map[string]interface{}{},
@@ -81,8 +81,8 @@ func TestToolSpanExporterErrorStatus(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type: core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventToolResult,
 		Metadata: map[string]interface{}{
 			"tool":       "cli_fail",
 			"success":    false,
@@ -103,8 +103,8 @@ func TestToolSpanExporterExtraAttributes(t *testing.T) {
 		WithExtraAttributes([]string{"pattern"}),
 	)
 
-	exporter.Emit(core.Event{
-		Type: core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventToolResult,
 		Metadata: map[string]interface{}{
 			"tool":       "cli_rg",
 			"span_attrs": map[string]interface{}{"tool.name": "cli_rg"},
@@ -126,8 +126,8 @@ func TestToolSpanExporterDuration(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type: core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventToolResult,
 		Metadata: map[string]interface{}{
 			"tool":        "cli_echo",
 			"duration_ms": float64(2500),
@@ -144,8 +144,8 @@ func TestInMemoryExporterRecordsMultipleSpans(t *testing.T) {
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
 	for i := 0; i < 3; i++ {
-		exporter.Emit(core.Event{
-			Type: core.EventToolResult,
+		exporter.Emit(telemetry.Event{
+			Type: telemetry.EventToolResult,
 			Metadata: map[string]interface{}{
 				"tool":       "tool",
 				"span_attrs": map[string]interface{}{},
@@ -160,8 +160,8 @@ func TestSpanContextPassedToExporter(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type: core.EventToolResult,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventToolResult,
 		Metadata: map[string]interface{}{
 			"tool":            "cli_curl",
 			"trace_id":        "abc123",
@@ -180,10 +180,10 @@ func TestSpanContextPassedToExporter(t *testing.T) {
 }
 
 type recordingTelemetry struct {
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (r *recordingTelemetry) Emit(event core.Event) {
+func (r *recordingTelemetry) Emit(event telemetry.Event) {
 	r.events = append(r.events, event)
 }
 
@@ -193,11 +193,11 @@ func TestToolSpanExporterForwardsToNextSink(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(next, WithSpanExporter(mem))
 
-	exporter.Emit(core.Event{
-		Type: core.EventGraphStart,
+	exporter.Emit(telemetry.Event{
+		Type: telemetry.EventGraphStart,
 	})
 
 	require.Len(t, mem.Spans, 0, "non-tool events don't create spans")
 	require.Len(t, next.events, 1, "all events are forwarded to next sink")
-	require.Equal(t, core.EventGraphStart, next.events[0].Type)
+	require.Equal(t, telemetry.EventGraphStart, next.events[0].Type)
 }

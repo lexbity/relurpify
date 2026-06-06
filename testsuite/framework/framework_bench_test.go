@@ -11,10 +11,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // BenchmarkPolicyEvaluation measures the performance of policy evaluation
@@ -30,7 +31,7 @@ func BenchmarkPolicyEvaluation(b *testing.B) {
 	}
 
 	// Create permission manager
-	perms := core.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemList)
 	auditSink := &recordingAuditSink{}
 	manager, err := authorization.NewPermissionManager(workspace, perms, auditSink, nil)
 	if err != nil {
@@ -147,8 +148,8 @@ func BenchmarkContextStreaming(b *testing.B) {
 func BenchmarkTelemetryEmission(b *testing.B) {
 	telemetrySink := &recordingTelemetrySink{}
 
-	event := core.Event{
-		Type:      core.EventNodeFinish,
+	event := telemetry.Event{
+		Type:      telemetry.EventNodeFinish,
 		NodeID:    "bench-node",
 		TaskID:    "bench-task",
 		Message:   "benchmark event",
@@ -168,7 +169,7 @@ func BenchmarkAuditLogging(b *testing.B) {
 	auditSink := &recordingAuditSink{}
 
 	ctx := context.Background()
-	record := core.AuditRecord{
+	record := policy.AuditRecord{
 		AgentID:    "bench-agent",
 		Type:       string(contracts.PermissionTypeFilesystem),
 		Action:     "file:read",

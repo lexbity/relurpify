@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
@@ -53,7 +53,7 @@ func (r *RankerRegistry) Register(ranker Ranker) {
 }
 
 // Admitted returns rankers that are admitted by the context policy.
-func (r *RankerRegistry) Admitted(policy *contextpolicy.ContextPolicyBundle) []AdmittedRanker {
+func (r *RankerRegistry) Admitted(policy *execctx.ContextPolicyBundle) []AdmittedRanker {
 	if r == nil {
 		return nil
 	}

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
@@ -44,10 +44,10 @@ func (r *Runtime) ResumeSession(ctx context.Context, workflowID string) (*Resume
 		instruction = fmt.Sprintf("Resume workflow %s", workflowID)
 	}
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          fmt.Sprintf("resume-%s-%d", workflowID, time.Now().UnixNano()),
 		Instruction: instruction,
-		Type:        string(core.TaskTypeExecute),
+		Type:        string(execution.TaskTypeExecute),
 		Metadata:    workflow.Metadata,
 	}
 

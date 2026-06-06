@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
-func evaluateCompiledRules(rules []core.PolicyRule, req core.PolicyRequest) *core.PolicyDecision {
+func evaluateCompiledRules(rules []policy.PolicyRule, req policy.PolicyRequest) *policy.PolicyDecision {
 	for i := range rules {
 		rule := rules[i]
 		if !rule.Enabled {
@@ -23,18 +24,18 @@ func evaluateCompiledRules(rules []core.PolicyRule, req core.PolicyRequest) *cor
 	return nil
 }
 
-func decisionForRule(rule *core.PolicyRule) core.PolicyDecision {
+func decisionForRule(rule *policy.PolicyRule) policy.PolicyDecision {
 	switch rule.Effect.Action {
 	case "allow":
-		return core.PolicyDecision{Effect: "allow", Rule: rule, Reason: rule.Effect.Reason}
+		return policy.PolicyDecision{Effect: "allow", Rule: rule, Reason: rule.Effect.Reason}
 	case "deny":
-		return core.PolicyDecision{Effect: "deny", Rule: rule, Reason: rule.Effect.Reason}
+		return policy.PolicyDecision{Effect: "deny", Rule: rule, Reason: rule.Effect.Reason}
 	default:
-		return core.PolicyDecisionRequireApproval(rule)
+		return policy.PolicyDecisionRequireApproval(rule)
 	}
 }
 
-func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
+func ruleMatchesRequest(rule policy.PolicyRule, req policy.PolicyRequest) bool {
 	c := rule.Conditions
 	if len(c.Actors) > 0 && !matchAnyActor(c.Actors, req) {
 		return false
@@ -111,7 +112,7 @@ func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
 	return true
 }
 
-func matchAnyActor(values []core.ActorMatch, req core.PolicyRequest) bool {
+func matchAnyActor(values []policy.ActorMatch, req policy.PolicyRequest) bool {
 	for _, actor := range values {
 		if actor.Kind != "" && !strings.EqualFold(actor.Kind, req.Actor.Kind) {
 			continue
@@ -139,7 +140,7 @@ func matchesMinRiskClasses(minValues []agentspec.RiskClass, actual []agentspec.R
 	return false
 }
 
-func matchesTimeWindow(window core.TimeWindow, ts time.Time) bool {
+func matchesTimeWindow(window policy.TimeWindow, ts time.Time) bool {
 	if ts.IsZero() {
 		ts = time.Now().UTC()
 	}
@@ -166,7 +167,7 @@ func containsFold(values []string, want string) bool {
 	return false
 }
 
-func containsProviderKind(values []core.ProviderKind, want core.ProviderKind) bool {
+func containsProviderKind(values []capability.ProviderKind, want capability.ProviderKind) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -222,7 +223,7 @@ func containsEffectClass(values []agentspec.EffectClass, actual []agentspec.Effe
 	return false
 }
 
-func containsSessionScope(values []core.SessionScope, want core.SessionScope) bool {
+func containsSessionScope(values []policy.SessionScope, want policy.SessionScope) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -231,7 +232,7 @@ func containsSessionScope(values []core.SessionScope, want core.SessionScope) bo
 	return false
 }
 
-func containsSessionOperation(values []core.SessionOperation, want core.SessionOperation) bool {
+func containsSessionOperation(values []policy.SessionOperation, want policy.SessionOperation) bool {
 	for _, value := range values {
 		if value == want {
 			return true

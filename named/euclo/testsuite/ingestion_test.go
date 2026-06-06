@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestEndToEndFileSelectionGrounding(t *testing.T) {
@@ -32,7 +32,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-file-grounding", "session-file-grounding")
 	seedTask(env, "review the auth package", "review.go")
-	contextdata.SetTyped(env, euclostate.KeyTaskInput, &core.Task{
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, &execution.Task{
 		ID:          "task-file-grounding",
 		Type:        "euclo",
 		Instruction: "review the auth package",
@@ -41,7 +41,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 		},
 		Metadata: map[string]any{},
 	})
-	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, &core.Task{
+	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, &execution.Task{
 		ID:          "task-file-grounding",
 		Type:        "euclo",
 		Instruction: "review the auth package",

@@ -5,14 +5,15 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PolicyEngine evaluates whether a capability invocation is permitted.
 type PolicyEngine interface {
-	Evaluate(ctx context.Context, req core.PolicyRequest) (core.PolicyDecision, error)
+	Evaluate(ctx context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error)
 }
 
 // ManifestPolicyEngine implements PolicyEngine using PermissionManager rules
@@ -20,7 +21,7 @@ type PolicyEngine interface {
 type ManifestPolicyEngine struct {
 	agentID string
 	manager *PermissionManager
-	rules   []core.PolicyRule
+	rules   []policy.PolicyRule
 }
 
 // FromManifestWithConfig constructs a ManifestPolicyEngine for the given agent.
@@ -53,87 +54,87 @@ func FromAgentSpecWithConfig(spec *agentspec.AgentRuntimeSpec, agentID string, m
 //   - BuiltinTrusted / WorkspaceTrusted → always allow (declared in manifest or built in).
 //   - All remote / untrusted classes → apply the agent's configured default policy.
 //     Allow → pass through; Deny → hard block; Ask (default) → require approval.
-func (e *ManifestPolicyEngine) Evaluate(_ context.Context, req core.PolicyRequest) (core.PolicyDecision, error) {
+func (e *ManifestPolicyEngine) Evaluate(_ context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error) {
 	if e == nil {
-		return core.PolicyDecisionAllow("no policy manager"), nil
+		return policy.PolicyDecisionAllow("no policy manager"), nil
 	}
 	if decision := evaluateCompiledRules(e.rules, req); decision != nil {
 		e.emitDecision(context.Background(), req, *decision)
 		return *decision, nil
 	}
 	if e.manager == nil {
-		return core.PolicyDecisionAllow("no policy manager"), nil
+		return policy.PolicyDecisionAllow("no policy manager"), nil
 	}
 	decision := e.fallbackDecision(req)
 	e.emitDecision(context.Background(), req, decision)
 	return decision, nil
 }
 
-func (e *ManifestPolicyEngine) fallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+func (e *ManifestPolicyEngine) fallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	switch req.Target {
-	case core.PolicyTargetProvider:
+	case policy.PolicyTargetProvider:
 		return e.providerFallbackDecision(req)
-	case core.PolicyTargetSession:
+	case policy.PolicyTargetSession:
 		return e.sessionFallbackDecision(req)
-	case core.PolicyTargetResume:
+	case policy.PolicyTargetResume:
 		return e.resumeFallbackDecision(req)
 	default:
 		return e.capabilityFallbackDecision(req)
 	}
 }
 
-func (e *ManifestPolicyEngine) sessionFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+func (e *ManifestPolicyEngine) sessionFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	if req.RestrictedExternal {
-		return core.PolicyDecisionRequireApproval(nil)
+		return policy.PolicyDecisionRequireApproval(nil)
 	}
 	if !req.IsOwner && !req.IsDelegated {
-		return core.PolicyDecisionDeny("session access requires ownership or explicit delegation")
+		return policy.PolicyDecisionDeny("session access requires ownership or explicit delegation")
 	}
 	return e.capabilityFallbackDecision(req)
 }
 
-func (e *ManifestPolicyEngine) resumeFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+func (e *ManifestPolicyEngine) resumeFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	if !req.IsOwner && !req.IsDelegated {
-		return core.PolicyDecisionDeny("resume requires ownership or explicit delegation")
+		return policy.PolicyDecisionDeny("resume requires ownership or explicit delegation")
 	}
 	if req.RestrictedExternal {
-		return core.PolicyDecisionRequireApproval(nil)
+		return policy.PolicyDecisionRequireApproval(nil)
 	}
 	return e.capabilityFallbackDecision(req)
 }
 
-func (e *ManifestPolicyEngine) capabilityFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+func (e *ManifestPolicyEngine) capabilityFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	switch req.TrustClass {
 	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
-		return core.PolicyDecisionAllow("workspace trusted")
+		return policy.PolicyDecisionAllow("workspace trusted")
 	default:
 		switch e.manager.DefaultPolicy() {
 		case agentspec.AgentPermissionAllow:
-			return core.PolicyDecisionAllow("default policy: allow")
+			return policy.PolicyDecisionAllow("default policy: allow")
 		case agentspec.AgentPermissionDeny:
-			return core.PolicyDecisionDeny(
+			return policy.PolicyDecisionDeny(
 				fmt.Sprintf("capability %q denied by default policy for agent %s", req.CapabilityName, e.agentID),
 			)
 		default:
-			return core.PolicyDecisionRequireApproval(nil)
+			return policy.PolicyDecisionRequireApproval(nil)
 		}
 	}
 }
 
-func (e *ManifestPolicyEngine) providerFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+func (e *ManifestPolicyEngine) providerFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	switch req.ProviderKind {
-	case core.ProviderKindBuiltin, core.ProviderKindAgentRuntime:
-		return core.PolicyDecisionAllow("provider kind trusted by default")
+	case capability.ProviderKindBuiltin, capability.ProviderKindAgentRuntime:
+		return policy.PolicyDecisionAllow("provider kind trusted by default")
 	}
-	if req.ProviderOrigin == core.ProviderOriginRemote ||
-		req.ProviderKind == core.ProviderKindMCPClient ||
-		req.ProviderKind == core.ProviderKindMCPServer {
-		return core.PolicyDecisionRequireApproval(nil)
+	if req.ProviderOrigin == capability.ProviderOriginRemote ||
+		req.ProviderKind == capability.ProviderKindMCPClient ||
+		req.ProviderKind == capability.ProviderKindMCPServer {
+		return policy.PolicyDecisionRequireApproval(nil)
 	}
-	return core.PolicyDecisionAllow("provider allowed by default")
+	return policy.PolicyDecisionAllow("provider allowed by default")
 }
 
-func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req core.PolicyRequest, decision core.PolicyDecision) {
+func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req policy.PolicyRequest, decision policy.PolicyDecision) {
 	if e == nil || e.manager == nil {
 		return
 	}
@@ -152,24 +153,24 @@ func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req core.Policy
 	e.manager.emitPolicyDecision(ctx, desc, decision.Effect, decision.Reason, fields)
 }
 
-func permissionActionForRequest(req core.PolicyRequest) string {
+func permissionActionForRequest(req policy.PolicyRequest) string {
 	switch {
 	case req.CapabilityName != "":
 		return req.CapabilityName
 	case req.CapabilityID != "":
 		return req.CapabilityID
-	case req.Target == core.PolicyTargetResume && req.ExportName != "":
+	case req.Target == policy.PolicyTargetResume && req.ExportName != "":
 		return "resume:" + req.ExportName
-	case req.Target == core.PolicyTargetSession:
+	case req.Target == policy.PolicyTargetSession:
 		return "session:" + string(req.SessionOperation)
-	case req.Target == core.PolicyTargetProvider:
+	case req.Target == policy.PolicyTargetProvider:
 		return "provider"
 	default:
 		return "capability"
 	}
 }
 
-func permissionResourceForRequest(req core.PolicyRequest) string {
+func permissionResourceForRequest(req policy.PolicyRequest) string {
 	switch {
 	case req.LineageID != "":
 		return req.LineageID

@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Phase 10: Persistence automation and knowledge integration.
@@ -365,7 +365,7 @@ func ShouldRetryStep(stepID string, retryClass authoring.RetryClass, lastError e
 // BuildKnowledgeQuery creates a structured query for retrieving relevant past executions.
 type KnowledgeQuery struct {
 	MethodName   string
-	TaskType     core.TaskType
+	TaskType     execution.TaskType
 	OperatorName string
 	SuccessOnly  bool
 	SinceTime    time.Time

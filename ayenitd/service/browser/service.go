@@ -14,10 +14,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
@@ -49,7 +49,7 @@ type BrowserService struct {
 	registry          *capability.Registry
 	permissionManager *fauthorization.PermissionManager
 	fileScope         *sandbox.FileScopePolicy
-	telemetry         core.Telemetry
+	telemetry         telemetry.Telemetry
 
 	workspaceRoot   string
 	registration    *fauthorization.AgentRegistration

@@ -6,10 +6,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
@@ -32,10 +32,10 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	})
 
 	firstTelemetry := &recordingTelemetry{}
-	if err := missingGraph.Execute(core.WithTelemetry(context.Background(), firstTelemetry), env); err == nil {
+	if err := missingGraph.Execute(telemetry.WithTelemetry(context.Background(), firstTelemetry), env); err == nil {
 		t.Fatal("expected unresolved route failure on first pass")
 	}
-	if !hasEventType(firstTelemetry.types(), core.EventType("euclo.route.unavailable")) {
+	if !hasEventType(firstTelemetry.types(), telemetry.EventType("euclo.route.unavailable")) {
 		t.Fatalf("expected route unavailable warning, got %v", firstTelemetry.types())
 	}
 
@@ -62,7 +62,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	)
 
 	secondTelemetry := &recordingTelemetry{}
-	if err := resolvedGraph.Execute(core.WithTelemetry(context.Background(), secondTelemetry), env); err != nil {
+	if err := resolvedGraph.Execute(telemetry.WithTelemetry(context.Background(), secondTelemetry), env); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
 	if got := mustStringValue(t, env, "euclo.execution.kind"); got != "capability" {
@@ -87,7 +87,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	}
 }
 
-func hasEventType(got []core.EventType, want core.EventType) bool {
+func hasEventType(got []telemetry.EventType, want telemetry.EventType) bool {
 	for _, eventType := range got {
 		if eventType == want {
 			return true

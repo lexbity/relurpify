@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestRunnerRestoreAndPartitionDefaults(t *testing.T) {
 	log := &memoryLog{}
-	_, err := log.Append(context.Background(), "local", []core.FrameworkEvent{
-		{Timestamp: time.Now().UTC(), Type: core.FrameworkEventSystemStarted, Partition: "local"},
+	_, err := log.Append(context.Background(), "local", []telemetry.FrameworkEvent{
+		{Timestamp: time.Now().UTC(), Type: telemetry.FrameworkEventSystemStarted, Partition: "local"},
 	})
 	require.NoError(t, err)
 	mat := &recordingMaterializer{}

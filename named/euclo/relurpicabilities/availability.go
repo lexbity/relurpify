@@ -9,23 +9,22 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type relurpicCapabilitySpec struct {
-	Handler       core.InvocableCapabilityHandler
+	Handler       capability.InvocableCapabilityHandler
 	RequiredTools []string
 }
 
 type availabilityWrappedInvocableHandler struct {
-	handler    core.InvocableCapabilityHandler
-	descriptor core.CapabilityDescriptor
+	handler    capability.InvocableCapabilityHandler
+	descriptor capability.CapabilityDescriptor
 }
 
-func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.NormalizeCapabilityDescriptor(h.descriptor)
+func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.NormalizeCapabilityDescriptor(h.descriptor)
 }
 
 func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
@@ -35,7 +34,7 @@ func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *co
 	return h.handler.Invoke(ctx, env, args)
 }
 
-func (h availabilityWrappedInvocableHandler) Availability(ctx context.Context, env *contextdata.Envelope) core.AvailabilitySpec {
+func (h availabilityWrappedInvocableHandler) Availability(ctx context.Context, env *contextdata.Envelope) capability.AvailabilitySpec {
 	return h.descriptor.Availability
 }
 
@@ -57,12 +56,12 @@ func (h availabilityWrappedInvocableHandler) SetSandboxScope(scope *sandbox.File
 	}
 }
 
-func computeAvailability(reg *capability.Registry, requiredTools []string) core.AvailabilitySpec {
+func computeAvailability(reg *capability.Registry, requiredTools []string) capability.AvailabilitySpec {
 	if len(requiredTools) == 0 {
-		return core.AvailabilitySpec{Available: true}
+		return capability.AvailabilitySpec{Available: true}
 	}
 	if reg == nil {
-		return core.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s", requiredTools[0])}
+		return capability.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s", requiredTools[0])}
 	}
 	for _, name := range requiredTools {
 		toolName := strings.TrimSpace(name)
@@ -71,13 +70,13 @@ func computeAvailability(reg *capability.Registry, requiredTools []string) core.
 		}
 		desc, ok := reg.GetCapability(toolName)
 		if !ok {
-			return core.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s", toolName)}
+			return capability.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s", toolName)}
 		}
-		if reg.EffectiveExposure(desc) != core.CapabilityExposureCallable {
-			return core.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s (not callable)", toolName)}
+		if reg.EffectiveExposure(desc) != capability.CapabilityExposureCallable {
+			return capability.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s (not callable)", toolName)}
 		}
 	}
-	return core.AvailabilitySpec{Available: true}
+	return capability.AvailabilitySpec{Available: true}
 }
 
 func registerRelurpicCapability(reg *capability.Registry, spec relurpicCapabilitySpec) error {

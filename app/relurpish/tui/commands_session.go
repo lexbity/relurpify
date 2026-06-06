@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // rootHandleCheckpoint saves the current session as a named checkpoint.
@@ -89,15 +89,15 @@ func rootHandleCompact(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return m, cmd
 }
 
-// extractCompactSummary pulls the text output from a core.Result returned by
+// extractCompactSummary pulls the text output from a execution.Result returned by
 // the agent. It checks the standard output keys in order of preference:
 // "final_output" (ReActAgent), "text" (compressed summary), "summary" (PlannerAgent).
 // Used as a fallback when the streamed builder text is empty.
-func extractCompactSummary(result *core.Result) string {
+func extractCompactSummary(result *execution.Result) string {
 	if result == nil {
 		return ""
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	if len(fields) == 0 {
 		return ""
 	}

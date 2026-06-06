@@ -5,7 +5,7 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ReplanNode is a conditional node that decides whether to replan or proceed to synthesis.
@@ -41,14 +41,14 @@ func (n *ReplanNode) Type() graph.NodeType {
 }
 
 // Execute decides the next node based on execution results.
-func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	// Get tool results from state
 	results, ok := env.GetWorkingValue("rewoo.tool_results")
 	if !ok {
 		// No results yet (early in execution)
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
 			}),
 		}, nil
@@ -56,9 +56,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 
 	stepResults, ok := results.([]RewooStepResult)
 	if !ok {
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
 			}),
 		}, nil
@@ -66,9 +66,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 
 	// Calculate failure ratio
 	if len(stepResults) == 0 {
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"next_node": "synthesize",
 			}),
 		}, nil
@@ -100,9 +100,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 		env.SetWorkingValue("rewoo.replan_context", replanContext, contextdata.MemoryClassTask)
 		env.SetWorkingValue("rewoo.attempt", n.CurrentAttempt+1, contextdata.MemoryClassTask)
 
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"next_node":      "plan",
 				"replan_attempt": n.CurrentAttempt + 1,
 				"failure_ratio":  failureRatio,
@@ -116,9 +116,9 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 			failureRatio*100, n.ReplanThreshold*100)
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next_node":     "synthesize",
 			"failure_ratio": failureRatio,
 			"steps_failed":  failed,

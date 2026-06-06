@@ -170,26 +170,6 @@ func TestBuildCompositeTool(t *testing.T) {
 	require.Equal(t, "shell", tools[0].Category(), "composite tool category comes from manifest family")
 }
 
-func TestBuildMCPToolSkipped(t *testing.T) {
-	tools := Build("/ws", nil, []*contracts.ToolManifest{
-		{
-			Name:        "mcp_tool",
-			Family:      "mcp",
-			Description: "MCP tool",
-			Execution: contracts.ToolManifestExecution{
-				Backend: contracts.ToolBackendMCP,
-				MCP:     &contracts.ToolManifestMCP{Server: "server", Method: "method"},
-			},
-			Capability: contracts.ToolManifestCapability{
-				TrustClass:  "builtin_trusted",
-				RiskClass:   []string{"execute"},
-				EffectClass: []string{"filesystem_read"},
-			},
-		},
-	})
-	require.Empty(t, tools, "MCP tools must be skipped in local tool build")
-}
-
 func TestBuildNonStrictModeGoNativeMissingImplSkipped(t *testing.T) {
 	// Without StrictMode, a missing implementation is logged and skipped (not hard-fail)
 	tools := Build("/ws", nil, []*contracts.ToolManifest{

@@ -5,8 +5,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // RuntimeContext is the full input to Resolve. All fields are optional unless
@@ -21,9 +22,9 @@ type RuntimeContext struct {
 	ConsumerID string // agent or capability id invoking resolve
 
 	// Extended: available to providers that need more than the envelope.
-	Task         *core.Task
+	Task         *execution.Task
 	Tools        []contracts.Tool
-	Capabilities []core.CapabilityDescriptor
+	Capabilities []capability.CapabilityDescriptor
 	AgentSpec    *agentspec.AgentRuntimeSpec
 }
 

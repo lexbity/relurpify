@@ -459,8 +459,8 @@ func TestSubprocessToolPermissionsNotEmptyWithCommand(t *testing.T) {
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
-	require.Len(t, perms.Permissions.Executables, 1, "Permissions must derive Executables from command.base")
-	require.Equal(t, "jq", perms.Permissions.Executables[0].Binary)
+	require.Len(t, ps(perms.Permissions).Executables, 1, "Permissions must derive Executables from command.base")
+	require.Equal(t, "jq", ps(perms.Permissions).Executables[0].Binary)
 }
 
 func TestSubprocessToolTagsFromCapability(t *testing.T) {
@@ -508,8 +508,8 @@ func TestPermissionsDerivesBinaryFromCommandBase(t *testing.T) {
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
-	require.Len(t, perms.Permissions.Executables, 1)
-	require.Equal(t, "jq", perms.Permissions.Executables[0].Binary)
+	require.Len(t, ps(perms.Permissions).Executables, 1)
+	require.Equal(t, "jq", ps(perms.Permissions).Executables[0].Binary)
 }
 
 func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
@@ -523,7 +523,7 @@ func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
-	require.Empty(t, perms.Permissions.Executables)
+	require.Empty(t, ps(perms.Permissions).Executables)
 }
 
 func TestPermissionsIncludesDefaultArgs(t *testing.T) {
@@ -538,8 +538,8 @@ func TestPermissionsIncludesDefaultArgs(t *testing.T) {
 	}, nil)
 
 	perms := tool.Permissions()
-	require.Len(t, perms.Permissions.Executables, 1)
-	require.Equal(t, []string{"-p"}, perms.Permissions.Executables[0].Args)
+	require.Len(t, ps(perms.Permissions).Executables, 1)
+	require.Equal(t, []string{"-p"}, ps(perms.Permissions).Executables[0].Args)
 }
 
 func TestPermissionsHITLFalseByDefault(t *testing.T) {
@@ -555,7 +555,7 @@ func TestPermissionsHITLFalseByDefault(t *testing.T) {
 		},
 	}, nil)
 
-	require.False(t, tool.Permissions().Permissions.Executables[0].HITLRequired)
+	require.False(t, ps(tool.Permissions().Permissions).Executables[0].HITLRequired)
 }
 
 func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
@@ -571,7 +571,7 @@ func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
 		},
 	}, nil)
 
-	require.True(t, tool.Permissions().Permissions.Executables[0].HITLRequired)
+	require.True(t, ps(tool.Permissions().Permissions).Executables[0].HITLRequired)
 }
 
 // --- Panic recovery tests ---
@@ -629,4 +629,13 @@ func (r *exitCodeRunner) Run(_ context.Context, req contracts.CommandRequest) (*
 		ExitCode: r.exitCode,
 		Stderr:   r.stderr,
 	}, nil
+}
+
+
+func ps(v interface{}) *contracts.PermissionSet {
+	if v == nil {
+		return nil
+	}
+	p, _ := v.(*contracts.PermissionSet)
+	return p
 }

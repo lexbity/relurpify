@@ -6,9 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestForkNodeThoughtRecipeBranch(t *testing.T) {
@@ -25,14 +25,14 @@ func TestForkNodeThoughtRecipeBranch(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
+	if got, ok := execution.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
 		t.Errorf("Expected branch thoughtrecipe_execution, got %v", got)
 	}
 
 	if branch := state.GetForkBranch(env); branch != "thoughtrecipe_execution" {
 		t.Errorf("Expected fork.branch thoughtrecipe_execution, got %v", branch)
 	}
-	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
+	if got, ok := execution.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
 		t.Fatalf("expected next euclo.execute_thoughtrecipe, got %v (ok=%v)", got, ok)
 	}
 }
@@ -51,14 +51,14 @@ func TestForkNodeCapabilityBranch(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "capability_execution" {
+	if got, ok := execution.ResultField(result.Data, "branch"); !ok || got != "capability_execution" {
 		t.Errorf("Expected branch capability_execution, got %v", got)
 	}
 
 	if branch := state.GetForkBranch(env); branch != "capability_execution" {
 		t.Errorf("Expected fork.branch capability_execution, got %v", branch)
 	}
-	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_capability" {
+	if got, ok := execution.ResultField(result.Data, "next"); !ok || got != "euclo.execute_capability" {
 		t.Fatalf("expected next euclo.execute_capability, got %v (ok=%v)", got, ok)
 	}
 }
@@ -77,10 +77,10 @@ func TestForkNodeIntentBranchUsesThoughtRecipeExecution(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
+	if got, ok := execution.ResultField(result.Data, "branch"); !ok || got != "thoughtrecipe_execution" {
 		t.Errorf("Expected branch thoughtrecipe_execution for intent route, got %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
+	if got, ok := execution.ResultField(result.Data, "next"); !ok || got != "euclo.execute_thoughtrecipe" {
 		t.Fatalf("expected next euclo.execute_thoughtrecipe, got %v (ok=%v)", got, ok)
 	}
 }

@@ -11,10 +11,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type phase12RecordingRunner struct {
@@ -53,7 +53,7 @@ func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.Works
 	}
 
 	env := agentenv.WorkspaceEnvironment{
-		Config:        &core.Config{},
+		Config:        &execution.Config{},
 		Registry:      capability.NewRegistry(),
 		IndexManager:  manager,
 		CommandPolicy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
@@ -65,7 +65,7 @@ func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.Works
 func TestPhase12Descriptors(t *testing.T) {
 	tests := []struct {
 		name string
-		desc core.CapabilityDescriptor
+		desc capability.CapabilityDescriptor
 	}{
 		{"targeted_refactor", NewTargetedRefactorHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
 		{"rename_symbol", NewRenameSymbolHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
@@ -84,7 +84,7 @@ func TestPhase12Descriptors(t *testing.T) {
 
 func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
 					"euclo:cap.targeted_refactor",

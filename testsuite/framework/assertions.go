@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // AssertAuditRecordExists verifies that at least one audit record matching the given filter exists.
-func AssertAuditRecordExists(t *testing.T, env *TestEnvironment, filter core.AuditQuery) {
+func AssertAuditRecordExists(t *testing.T, env *TestEnvironment, filter policy.AuditQuery) {
 	t.Helper()
 
 	records := env.AuditSink.Records()
@@ -34,7 +35,7 @@ func AssertAuditRecordExists(t *testing.T, env *TestEnvironment, filter core.Aud
 
 // AssertNormalizedAuditRecordsEqual verifies that the provided audit records match
 // after canonical normalization.
-func AssertNormalizedAuditRecordsEqual(t *testing.T, got, want []core.AuditRecord) {
+func AssertNormalizedAuditRecordsEqual(t *testing.T, got, want []policy.AuditRecord) {
 	t.Helper()
 
 	normalizedGot := NormalizeAuditRecords(got)
@@ -46,7 +47,7 @@ func AssertNormalizedAuditRecordsEqual(t *testing.T, got, want []core.AuditRecor
 
 // AssertNormalizedTelemetryEventsEqual verifies that the provided telemetry
 // events match after canonical normalization.
-func AssertNormalizedTelemetryEventsEqual(t *testing.T, got, want []core.Event) {
+func AssertNormalizedTelemetryEventsEqual(t *testing.T, got, want []telemetry.Event) {
 	t.Helper()
 
 	normalizedGot := NormalizeTelemetryEvents(got)
@@ -82,7 +83,7 @@ func AssertNormalizedNetworkPermissionsEqual(t *testing.T, got, want []contracts
 
 // AssertNormalizedPolicyRulesEqual verifies that policy rules match after
 // canonical normalization.
-func AssertNormalizedPolicyRulesEqual(t *testing.T, got, want []core.PolicyRule) {
+func AssertNormalizedPolicyRulesEqual(t *testing.T, got, want []policy.PolicyRule) {
 	t.Helper()
 
 	normalizedGot := NormalizePolicyRules(got)
@@ -93,7 +94,7 @@ func AssertNormalizedPolicyRulesEqual(t *testing.T, got, want []core.PolicyRule)
 }
 
 // AssertAuditRecordCount verifies that the exact number of audit records matching the filter exist.
-func AssertAuditRecordCount(t *testing.T, env *TestEnvironment, filter core.AuditQuery, expectedCount int) {
+func AssertAuditRecordCount(t *testing.T, env *TestEnvironment, filter policy.AuditQuery, expectedCount int) {
 	t.Helper()
 
 	records := env.AuditSink.Records()
@@ -110,7 +111,7 @@ func AssertAuditRecordCount(t *testing.T, env *TestEnvironment, filter core.Audi
 }
 
 // AssertTelemetryEventExists verifies that at least one telemetry event of the given type exists.
-func AssertTelemetryEventExists(t *testing.T, env *TestEnvironment, eventType core.EventType) {
+func AssertTelemetryEventExists(t *testing.T, env *TestEnvironment, eventType telemetry.EventType) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()
@@ -133,7 +134,7 @@ func AssertTelemetryEventExists(t *testing.T, env *TestEnvironment, eventType co
 }
 
 // AssertTelemetryEventCount verifies that the exact number of telemetry events of the given type exist.
-func AssertTelemetryEventCount(t *testing.T, env *TestEnvironment, eventType core.EventType, expectedCount int) {
+func AssertTelemetryEventCount(t *testing.T, env *TestEnvironment, eventType telemetry.EventType, expectedCount int) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()
@@ -150,7 +151,7 @@ func AssertTelemetryEventCount(t *testing.T, env *TestEnvironment, eventType cor
 }
 
 // AssertTelemetryEventMetadata verifies that a telemetry event has specific metadata.
-func AssertTelemetryEventMetadata(t *testing.T, env *TestEnvironment, eventType core.EventType, key string, expectedValue interface{}) {
+func AssertTelemetryEventMetadata(t *testing.T, env *TestEnvironment, eventType telemetry.EventType, key string, expectedValue interface{}) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()
@@ -175,7 +176,7 @@ func AssertTelemetryEventMetadata(t *testing.T, env *TestEnvironment, eventType 
 func AssertPermissionGranted(t *testing.T, env *TestEnvironment, permissionType, resource string) {
 	t.Helper()
 
-	filter := core.AuditQuery{
+	filter := policy.AuditQuery{
 		Type:       permissionType,
 		Permission: resource,
 		Result:     "granted",
@@ -188,7 +189,7 @@ func AssertPermissionGranted(t *testing.T, env *TestEnvironment, permissionType,
 func AssertPermissionDenied(t *testing.T, env *TestEnvironment, permissionType, resource string) {
 	t.Helper()
 
-	filter := core.AuditQuery{
+	filter := policy.AuditQuery{
 		Type:       permissionType,
 		Permission: resource,
 		Result:     "denied",
@@ -198,7 +199,7 @@ func AssertPermissionDenied(t *testing.T, env *TestEnvironment, permissionType, 
 }
 
 // matchesAuditFilter checks if an audit record matches the given filter.
-func matchesAuditFilter(record core.AuditRecord, filter core.AuditQuery) bool {
+func matchesAuditFilter(record policy.AuditRecord, filter policy.AuditQuery) bool {
 	if filter.AgentID != "" && record.AgentID != filter.AgentID {
 		return false
 	}
@@ -224,7 +225,7 @@ func matchesAuditFilter(record core.AuditRecord, filter core.AuditQuery) bool {
 }
 
 // AssertEventOrder verifies that events occurred in the expected order.
-func AssertEventOrder(t *testing.T, env *TestEnvironment, expectedTypes []core.EventType) {
+func AssertEventOrder(t *testing.T, env *TestEnvironment, expectedTypes []telemetry.EventType) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()
@@ -240,7 +241,7 @@ func AssertEventOrder(t *testing.T, env *TestEnvironment, expectedTypes []core.E
 }
 
 // AssertNoAuditRecords verifies that no audit records exist matching the filter.
-func AssertNoAuditRecords(t *testing.T, env *TestEnvironment, filter core.AuditQuery) {
+func AssertNoAuditRecords(t *testing.T, env *TestEnvironment, filter policy.AuditQuery) {
 	t.Helper()
 
 	records := env.AuditSink.Records()
@@ -253,7 +254,7 @@ func AssertNoAuditRecords(t *testing.T, env *TestEnvironment, filter core.AuditQ
 }
 
 // AssertNoTelemetryEvents verifies that no telemetry events of the given type exist.
-func AssertNoTelemetryEvents(t *testing.T, env *TestEnvironment, eventType core.EventType) {
+func AssertNoTelemetryEvents(t *testing.T, env *TestEnvironment, eventType telemetry.EventType) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()
@@ -266,7 +267,7 @@ func AssertNoTelemetryEvents(t *testing.T, env *TestEnvironment, eventType core.
 }
 
 // AssertEventWithinTimeRange verifies that an event occurred within the specified time range.
-func AssertEventWithinTimeRange(t *testing.T, env *TestEnvironment, eventType core.EventType, start, end time.Time) {
+func AssertEventWithinTimeRange(t *testing.T, env *TestEnvironment, eventType telemetry.EventType, start, end time.Time) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()

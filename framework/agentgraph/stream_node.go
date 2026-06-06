@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
@@ -42,7 +43,7 @@ func (n *StreamTriggerNode) Contract() NodeContract {
 	return streamTriggerNodeContract(n)
 }
 
-func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("stream trigger node is nil")
 	}
@@ -76,10 +77,10 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 				env.SetWorkingValue("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
 			}
 		}()
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"contextstream_job_id": job.ID,
 				"mode":                 string(req.Mode),
 				"requested_query":      n.Query.Text,
@@ -105,10 +106,10 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 			data["trimmed"] = result.Trim.ShortfallTokens > 0 || len(result.Trim.Substitutions) > 0
 			data["streamed_ref_count"] = len(result.Compilation.StreamedRefs)
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data:    core.NewToolResultPayload(data),
+			Data:    execution.NewToolResultPayload(data),
 		}, nil
 	}
 }
@@ -150,11 +151,11 @@ func streamTriggerNodeContract(n *StreamTriggerNode) NodeContract {
 	return NodeContract{
 		SideEffectClass: SideEffectContext,
 		Idempotency:     IdempotencyReplaySafe,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "contextstream.*"},
 			WriteKeys:                []string{"contextstream.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 16,
 		},

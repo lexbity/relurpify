@@ -3,6 +3,8 @@ package agentspec
 import (
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type CapabilityKind string
@@ -15,13 +17,13 @@ const (
 	CapabilityKindSubscription CapabilityKind = "subscription"
 )
 
-type CapabilityScope string
+type CapabilityScope = taxonomy.CapabilityScope
 
 const (
-	CapabilityScopeBuiltin   CapabilityScope = "builtin"
-	CapabilityScopeWorkspace CapabilityScope = "workspace"
-	CapabilityScopeProvider  CapabilityScope = "provider"
-	CapabilityScopeRemote    CapabilityScope = "remote"
+	CapabilityScopeBuiltin   = taxonomy.CapabilityScopeBuiltin
+	CapabilityScopeWorkspace = taxonomy.CapabilityScopeWorkspace
+	CapabilityScopeProvider  = taxonomy.CapabilityScopeProvider
+	CapabilityScopeRemote    = taxonomy.CapabilityScopeRemote
 )
 
 type CapabilityRuntimeFamily string
@@ -78,26 +80,26 @@ const (
 	TrustClassRemoteApproved         TrustClass = "remote-approved"
 )
 
-type RiskClass string
+type RiskClass = taxonomy.RiskClass
 
 const (
-	RiskClassReadOnly     RiskClass = "read-only"
-	RiskClassDestructive  RiskClass = "destructive"
-	RiskClassExecute      RiskClass = "execute"
-	RiskClassNetwork      RiskClass = "network"
-	RiskClassCredentialed RiskClass = "credentialed"
-	RiskClassExfiltration RiskClass = "exfiltration-sensitive"
-	RiskClassSessioned    RiskClass = "sessioned"
+	RiskClassReadOnly     = taxonomy.RiskClassReadOnly
+	RiskClassDestructive  = taxonomy.RiskClassDestructive
+	RiskClassExecute      = taxonomy.RiskClassExecute
+	RiskClassNetwork      = taxonomy.RiskClassNetwork
+	RiskClassCredentialed = taxonomy.RiskClassCredentialed
+	RiskClassExfiltration = taxonomy.RiskClassExfiltration
+	RiskClassSessioned    = taxonomy.RiskClassSessioned
 )
 
-type EffectClass string
+type EffectClass = taxonomy.EffectClass
 
 const (
-	EffectClassFilesystemMutation EffectClass = "filesystem-mutation"
-	EffectClassProcessSpawn       EffectClass = "process-spawn"
-	EffectClassNetworkEgress      EffectClass = "network-egress"
-	EffectClassCredentialUse      EffectClass = "credential-use"
-	EffectClassExternalState      EffectClass = "external-state-change"
+	EffectClassFilesystemMutation = taxonomy.EffectClassFilesystemMutation
+	EffectClassProcessSpawn       = taxonomy.EffectClassProcessSpawn
+	EffectClassNetworkEgress      = taxonomy.EffectClassNetworkEgress
+	EffectClassCredentialUse      = taxonomy.EffectClassCredentialUse
+	EffectClassExternalState      = taxonomy.EffectClassExternalState
 	EffectClassSessionCreation    EffectClass = "long-lived-session-creation"
 	EffectClassContextInsertion   EffectClass = "model-context-insertion"
 )
@@ -215,6 +217,13 @@ const (
 	ProviderKindAgentRuntime ProviderKind = "agent-runtime"
 	ProviderKindLSP          ProviderKind = "lsp"
 	ProviderKindNodeDevice   ProviderKind = "node-device"
+)
+
+type ProviderOriginKind string
+
+const (
+	ProviderOriginLocal  ProviderOriginKind = "local"
+	ProviderOriginRemote ProviderOriginKind = "remote"
 )
 
 type RecoverabilityMode string
@@ -348,7 +357,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch c.Kind {
-	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
+	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
 	default:
 		return fmt.Errorf("provider kind %s invalid", c.Kind)
 	}

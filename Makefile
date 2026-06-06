@@ -1,6 +1,10 @@
 .PHONY: test-unit test-integ test-scenario test-all
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
-.PHONY: lint-layering lint-invariants lint-all
+.PHONY: lint-layering lint-invariants lint-all lint-arch
+
+# Architecture invariant gates (GP-9). Replaces the shelved scripts/boundaryaudit.
+lint-arch:
+	go run ./tooling/arch/cmd/archcheck
 
 lint-layering:
 	@bash scripts/lint-layering.sh

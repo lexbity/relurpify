@@ -14,9 +14,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestGraphCapabilityExecutionMigration validates the migrated graph + capability
@@ -30,7 +32,7 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 		t.Fatalf("write note: %v", err)
 	}
 
-	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("permission manager: %v", err)
@@ -50,9 +52,9 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 		t.Fatalf("register tool: %v", err)
 	}
 
-	telemetry := &migrationTelemetry{}
+	rec := &migrationTelemetry{}
 	g := graph.NewGraph()
-	g.SetTelemetry(telemetry)
+	g.SetTelemetry(rec)
 
 	planner := &migrationPlannerNode{id: "planner", message: "plan workspace note inspection"}
 	exec := &migrationCapabilityNode{id: "read-note", registry: registry, toolName: "read_note"}
@@ -73,8 +75,8 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 	if err := g.AddEdge(exec.ID(), gate.ID(), nil, false); err != nil {
 		t.Fatalf("edge tool->gate: %v", err)
 	}
-	if err := g.AddEdge(gate.ID(), terminal.ID(), func(result *core.Result, _ *contextdata.Envelope) bool {
-		next, _ := core.ResultField(result.Data, "next")
+	if err := g.AddEdge(gate.ID(), terminal.ID(), func(result *execution.Result, _ *contextdata.Envelope) bool {
+		next, _ := execution.ResultField(result.Data, "next")
 		return next == "done"
 	}, false); err != nil {
 		t.Fatalf("edge gate->done: %v", err)
@@ -98,11 +100,11 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 	if len(state.GetInteractions()) < 2 {
 		t.Fatalf("expected planner and tool interactions, got %d", len(state.GetInteractions()))
 	}
-	if telemetry.count(core.EventGraphStart) != 1 || telemetry.count(core.EventGraphFinish) != 1 {
-		t.Fatalf("graph telemetry mismatch: %+v", telemetry.events)
+	if rec.count(telemetry.EventGraphStart) != 1 || rec.count(telemetry.EventGraphFinish) != 1 {
+		t.Fatalf("graph telemetry mismatch: %+v", rec.events)
 	}
-	if telemetry.count(core.EventNodeStart) != 4 || telemetry.count(core.EventNodeFinish) != 4 {
-		t.Fatalf("node telemetry mismatch: %+v", telemetry.events)
+	if rec.count(telemetry.EventNodeStart) != 4 || rec.count(telemetry.EventNodeFinish) != 4 {
+		t.Fatalf("node telemetry mismatch: %+v", rec.events)
 	}
 }
 
@@ -177,16 +179,16 @@ func TestHybridSearchFeedsSharedContextMigration(t *testing.T) {
 
 type migrationTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (r *migrationTelemetry) Emit(event core.Event) {
+func (r *migrationTelemetry) Emit(event telemetry.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 }
 
-func (r *migrationTelemetry) count(eventType core.EventType) int {
+func (r *migrationTelemetry) count(eventType telemetry.EventType) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	total := 0
@@ -236,7 +238,7 @@ func (t *migrationWorkspaceTool) Execute(ctx context.Context, args map[string]in
 }
 func (t *migrationWorkspaceTool) IsAvailable(context.Context) bool { return true }
 func (t *migrationWorkspaceTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.basePath, contracts.FileSystemRead)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.basePath, contracts.FileSystemRead)}
 }
 func (t *migrationWorkspaceTool) Tags() []string { return nil }
 
@@ -247,12 +249,12 @@ type migrationPlannerNode struct {
 
 func (n *migrationPlannerNode) ID() string           { return n.id }
 func (n *migrationPlannerNode) Type() graph.NodeType { return graph.NodeTypeSystem }
-func (n *migrationPlannerNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *migrationPlannerNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	state.AddInteraction(map[string]any{"actor": "assistant", "content": n.message, "node": n.id})
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next":    "run-tool",
 			"message": n.message,
 		}),
@@ -267,7 +269,7 @@ type migrationCapabilityNode struct {
 
 func (n *migrationCapabilityNode) ID() string           { return n.id }
 func (n *migrationCapabilityNode) Type() graph.NodeType { return graph.NodeTypeTool }
-func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	capabilityTool, ok := n.registry.Get(n.toolName)
 	if !ok {
 		return nil, fmt.Errorf("capability %q not found", n.toolName)
@@ -286,10 +288,10 @@ func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdat
 		}
 	}
 	state.AddInteraction(map[string]any{"actor": "tool:" + n.toolName, "result": result.Data})
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": "done",
 		}),
 	}, nil
@@ -302,7 +304,7 @@ type migrationGateNode struct {
 
 func (n *migrationGateNode) ID() string           { return n.id }
 func (n *migrationGateNode) Type() graph.NodeType { return graph.NodeTypeConditional }
-func (n *migrationGateNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *migrationGateNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.expectedKey != "" {
 		value, ok := state.GetWorkingValue(n.expectedKey)
 		if !ok {
@@ -312,7 +314,7 @@ func (n *migrationGateNode) Execute(ctx context.Context, state *contextdata.Enve
 			return nil, fmt.Errorf("expected envelope key %q to carry a non-empty value", n.expectedKey)
 		}
 	}
-	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"next": "done"})}, nil
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"next": "done"})}, nil
 }
 
 type migrationVectorStore struct {

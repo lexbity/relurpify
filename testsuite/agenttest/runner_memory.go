@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type preparedMemoryStore struct {
@@ -25,7 +26,7 @@ func (p *preparedMemoryStore) Close() error {
 	return p.cleanup()
 }
 
-func prepareCaseMemory(workspace string, suite *Suite, c CaseSpec, telemetry core.Telemetry) (*preparedMemoryStore, error) {
+func prepareCaseMemory(workspace string, suite *Suite, c CaseSpec, telemetry telemetry.Telemetry) (*preparedMemoryStore, error) {
 	spec := resolveMemorySpec(suite, c)
 	paths := cfgload.New(workspace)
 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
@@ -89,7 +90,7 @@ func seedRuntimeMemory(ctx context.Context, store *memory.WorkingMemoryStore, sp
 			"artifact_ref": record.ArtifactRef,
 			"tags":         append([]string{}, record.Tags...),
 			"verified":     record.Verified,
-		}, core.MemoryClassWorking)
+		}, relurpctx.MemoryClassWorking)
 	}
 	if len(spec.Procedural) == 0 {
 		return nil
@@ -108,7 +109,7 @@ func seedRuntimeMemory(ctx context.Context, store *memory.WorkingMemoryStore, sp
 			"verified":    record.Verified,
 			"version":     record.Version,
 			"reuse_count": record.ReuseCount,
-		}, core.MemoryClassWorking)
+		}, relurpctx.MemoryClassWorking)
 	}
 	return nil
 }

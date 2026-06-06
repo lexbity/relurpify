@@ -12,9 +12,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // DiffSummaryHandler implements the diff summary capability.
@@ -29,8 +30,8 @@ func NewDiffSummaryHandler(env agentenv.WorkspaceEnvironment) *DiffSummaryHandle
 }
 
 // Descriptor returns the capability descriptor for the diff summary handler.
-func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.diff_summary",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -39,7 +40,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 		Description:   "Summarizes git diff output and identifies risk areas",
 		Category:      "review_synthesis",
 		Tags:          []string{"git", "diff", "review", "relurpic"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
@@ -208,7 +209,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]interface{}) (string, error) {
 	runtimeEnv := h.env
 	if runtimeEnv.Config == nil {
-		runtimeEnv.Config = &core.Config{}
+		runtimeEnv.Config = &execution.Config{}
 	}
 	agent := reactpkg.New(&runtimeEnv)
 	if agent == nil {
@@ -225,9 +226,9 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 	contextdata.SetTyped(scopedEnv, "diff.deletions", deletions)
 	contextdata.SetTyped(scopedEnv, "diff.risk_areas", riskAreas)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "euclo:cap.diff_summary",
-		Type:        string(core.TaskTypeExplain),
+		Type:        string(execution.TaskTypeExplain),
 		Instruction: buildDiffSummaryInstruction(baseRef, headRef, scope, statOut, changedFiles, additions, deletions, riskAreas),
 		Data: map[string]interface{}{
 			"base_ref":      baseRef,
@@ -250,10 +251,10 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 		return summary, nil
 	}
 	if result != nil {
-		if summary, ok := core.ResultField(result.Data, "summary"); ok && strings.TrimSpace(fmt.Sprint(summary)) != "" {
+		if summary, ok := execution.ResultField(result.Data, "summary"); ok && strings.TrimSpace(fmt.Sprint(summary)) != "" {
 			return fmt.Sprint(summary), nil
 		}
-		if text, ok := core.ResultField(result.Data, "text"); ok && strings.TrimSpace(fmt.Sprint(text)) != "" {
+		if text, ok := execution.ResultField(result.Data, "text"); ok && strings.TrimSpace(fmt.Sprint(text)) != "" {
 			return fmt.Sprint(text), nil
 		}
 	}
@@ -294,7 +295,7 @@ Payload:
 %s`, string(payload))
 }
 
-func summaryFromReActResult(env *contextdata.Envelope, result *core.Result) string {
+func summaryFromReActResult(env *contextdata.Envelope, result *execution.Result) string {
 	if env != nil {
 		if summary, ok := contextdata.GetTyped[string](env, "react.synthetic_summary"); ok && strings.TrimSpace(summary) != "" {
 			return strings.TrimSpace(summary)
@@ -306,12 +307,12 @@ func summaryFromReActResult(env *contextdata.Envelope, result *core.Result) stri
 		}
 	}
 	if result != nil {
-		if s, ok := core.ResultField(result.Data, "summary"); ok {
+		if s, ok := execution.ResultField(result.Data, "summary"); ok {
 			if trimmed := strings.TrimSpace(fmt.Sprint(s)); trimmed != "" && trimmed != "<nil>" {
 				return trimmed
 			}
 		}
-		if s, ok := core.ResultField(result.Data, "text"); ok {
+		if s, ok := execution.ResultField(result.Data, "text"); ok {
 			if trimmed := strings.TrimSpace(fmt.Sprint(s)); trimmed != "" && trimmed != "<nil>" {
 				return trimmed
 			}

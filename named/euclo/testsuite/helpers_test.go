@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
@@ -23,6 +22,8 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type stubLanguageModel struct{}
@@ -53,19 +54,19 @@ func (noopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*
 
 type recordingTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (r *recordingTelemetry) Emit(event core.Event) {
+func (r *recordingTelemetry) Emit(event telemetry.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 }
 
-func (r *recordingTelemetry) types() []core.EventType {
+func (r *recordingTelemetry) types() []telemetry.EventType {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]core.EventType, 0, len(r.events))
+	out := make([]telemetry.EventType, 0, len(r.events))
 	for _, event := range r.events {
 		out = append(out, event.Type)
 	}
@@ -73,11 +74,11 @@ func (r *recordingTelemetry) types() []core.EventType {
 }
 
 type testCapabilityHandler struct {
-	descriptor core.CapabilityDescriptor
+	descriptor capability.CapabilityDescriptor
 	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error)
 }
 
-func (h *testCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
+func (h *testCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
 	return h.descriptor
 }
 
@@ -98,12 +99,12 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRe
 	reg := capability.NewRegistry()
 	for _, id := range ids {
 		if err := reg.RegisterInvocableCapability(&testCapabilityHandler{
-			descriptor: core.CapabilityDescriptor{
+			descriptor: capability.CapabilityDescriptor{
 				ID:            id,
 				Name:          id,
 				Kind:          agentspec.CapabilityKindTool,
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-				Availability:  core.AvailabilitySpec{Available: true},
+				Availability:  capability.AvailabilitySpec{Available: true},
 			},
 			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {
 				return func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {
@@ -154,8 +155,8 @@ func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe
 	return reg
 }
 
-func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string) *core.Task {
-	task := &core.Task{
+func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string) *execution.Task {
+	task := &execution.Task{
 		ID:          env.TaskID,
 		Type:        "euclo",
 		Instruction: instruction,
@@ -218,7 +219,7 @@ func mustBoolValue(t *testing.T, env *contextdata.Envelope, key string) bool {
 	return b
 }
 
-func assertEventOrder(t *testing.T, got []core.EventType, want []core.EventType) {
+func assertEventOrder(t *testing.T, got []telemetry.EventType, want []telemetry.EventType) {
 	t.Helper()
 	pos := 0
 	for _, eventType := range got {
@@ -242,7 +243,7 @@ func workspaceEnvWithModel(reg *capability.CapabilityRegistry, model contracts.L
 	return agentenv.WorkspaceEnvironment{
 		Registry: reg,
 		Model:    model,
-		Config:   &core.Config{Name: "testsuite", Model: "stub"},
+		Config:   &execution.Config{Name: "testsuite", Model: "stub"},
 	}
 }
 

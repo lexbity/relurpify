@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func (a *Agent) registerTools() {
@@ -57,7 +57,7 @@ func (t *agentTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	if t == nil || t.agent == nil {
 		return nil, fmt.Errorf("testfu tool unavailable")
 	}
-	task := &core.Task{Instruction: "", Context: map[string]any{}}
+	task := &execution.Task{Instruction: "", Context: map[string]any{}}
 	switch t.name {
 	case "testfu:list_suites":
 		task.Instruction = "list_suites"
@@ -87,7 +87,7 @@ func (t *agentTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{Success: result.Success, Data: core.ResultFields(result.Data)}, nil
+	return &contracts.ToolResult{Success: result.Success, Data: execution.ResultFields(result.Data)}, nil
 }
 func (t *agentTool) IsAvailable(context.Context) bool { return true }
 func (t *agentTool) Permissions() contracts.ToolPermissions {

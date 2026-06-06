@@ -13,9 +13,10 @@ import (
 	"strings"
 	"testing"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
@@ -399,7 +400,7 @@ func TestShouldRestrictAllowedCapabilitiesForCase(t *testing.T) {
 
 func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 	state := contextdata.NewEnvelope("task-1", "session-1")
-	task := &core.Task{
+	task := &execution.Task{
 		Instruction: "Summarize README.md",
 		Context: map[string]any{
 			"mode":        "architect",
@@ -434,7 +435,7 @@ func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 
 func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge(t *testing.T) {
 	state := contextdata.NewEnvelope("task-2", "session-1")
-	task := &core.Task{
+	task := &execution.Task{
 		Instruction: "Execute the compiled plan",
 		Context: map[string]any{
 			"mode":        "planning",
@@ -626,8 +627,8 @@ func TestClassifyCaseFailure(t *testing.T) {
 }
 
 func TestCountTokenUsage(t *testing.T) {
-	usage := CountTokenUsage([]core.Event{{
-		Type: core.EventLLMResponse,
+	usage := CountTokenUsage([]telemetry.Event{{
+		Type: telemetry.EventLLMResponse,
 		Metadata: map[string]any{
 			"usage": map[string]any{
 				"prompt_tokens":     11.0,
@@ -635,7 +636,7 @@ func TestCountTokenUsage(t *testing.T) {
 			},
 		},
 	}, {
-		Type: core.EventLLMResponse,
+		Type: telemetry.EventLLMResponse,
 		Metadata: map[string]any{
 			"usage": map[string]any{
 				"prompt_tokens":     5.0,

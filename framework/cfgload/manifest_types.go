@@ -10,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
@@ -39,10 +40,6 @@ func (p Paths) WorkspaceFile() string {
 
 func (p Paths) AgentsDir() string {
 	return filepath.Join(p.ConfigRoot(), "agents")
-}
-
-func (p Paths) SkillsDir() string {
-	return filepath.Join(p.ConfigRoot(), "skills")
 }
 
 func (p Paths) StateRoot() string {
@@ -380,13 +377,11 @@ func (m *ManifestSpec) Validate() error {
 		return fmt.Errorf("runtime must be gVisor, got %s", m.Runtime)
 	}
 	policy := m.effectivePolicy()
-	if hasPermissionScopes(policy.Permissions) {
-		if err := policy.Permissions.Validate(); err != nil {
-			return fmt.Errorf("permissions invalid: %w", err)
-		}
+	if err := validateManifestPermissions(&policy.Permissions); err != nil {
+		return fmt.Errorf("permissions invalid: %w", err)
 	}
 	if policy.Defaults != nil && policy.Defaults.Permissions != nil {
-		if err := policy.Defaults.Permissions.Validate(); err != nil {
+		if err := validateManifestPermissions(policy.Defaults.Permissions); err != nil {
 			return fmt.Errorf("defaults permissions invalid: %w", err)
 		}
 	}
@@ -567,7 +562,7 @@ func hasPermissionScopes(perms contracts.PermissionSet) bool {
 }
 
 // ContextPolicy defines the context policy section in an agent manifest.
-// This mirrors contextpolicy.ContextPolicy to avoid import cycles.
+// This mirrors execution/context.ContextPolicyBundle to avoid import cycles.
 type ContextPolicy struct {
 	CompilationMode       string                    `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
 	DefaultTrustClass     agentspec.TrustClass      `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
@@ -596,103 +591,13 @@ type RateLimitSpec struct {
 	BurstSize         int     `yaml:"burst_size,omitempty" json:"burst_size,omitempty"`
 }
 
+func validateManifestPermissions(p *contracts.PermissionSet) error {
+	return permissions.ValidatePermissionSet(p)
+}
+
 // SubstitutionPreference defines how to substitute content.
 type SubstitutionPreference struct {
 	SourceContentType string `yaml:"source_content_type,omitempty" json:"source_content_type,omitempty"`
 	TargetContentType string `yaml:"target_content_type,omitempty" json:"target_content_type,omitempty"`
 	Strategy          string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
-}
-
-// SkillManifest defines a reusable skill package.
-type SkillManifest struct {
-	APIVersion string           `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string           `yaml:"kind" json:"kind"`
-	Metadata   ManifestMetadata `yaml:"metadata" json:"metadata"`
-	Spec       SkillSpec        `yaml:"spec" json:"spec"`
-	SourcePath string           `yaml:"-" json:"-"`
-}
-
-// SkillSpec defines the thin skill bundle surface: tools and prompts.
-type SkillSpec struct {
-	Requires            SkillRequiresSpec              `yaml:"requires,omitempty" json:"requires,omitempty"`
-	PromptSnippets      []string                       `yaml:"prompt_snippets,omitempty" json:"prompt_snippets,omitempty"`
-	AllowedCapabilities []agentspec.CapabilitySelector `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
-}
-
-// SkillRequiresSpec declares binary prerequisites for a skill.
-type SkillRequiresSpec struct {
-	Bins []string `yaml:"bins,omitempty" json:"bins,omitempty"`
-}
-
-// LoadSkillManifest parses and validates a skill manifest file.
-func LoadSkillManifest(path string) (*SkillManifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var manifest SkillManifest
-	if _, err := DecodeWithSchema(path, data, NewSchemaRegistry(), &manifest); err != nil {
-		return nil, err
-	}
-	if err := manifest.Validate(); err != nil {
-		return nil, err
-	}
-	manifest.SourcePath = path
-	return &manifest, nil
-}
-
-// Validate enforces skill manifest semantics.
-func (m *SkillManifest) Validate() error {
-	if m.APIVersion == "" {
-		return fmt.Errorf("skill manifest missing apiVersion")
-	}
-	if m.Kind == "" {
-		return fmt.Errorf("skill manifest missing kind")
-	}
-	if m.Metadata.Name == "" {
-		return fmt.Errorf("skill manifest missing metadata.name")
-	}
-	if strings.ToLower(m.Kind) != strings.ToLower("SkillManifest") {
-		return fmt.Errorf("skill manifest kind must be SkillManifest")
-	}
-	for _, bin := range m.Spec.Requires.Bins {
-		if strings.TrimSpace(bin) == "" {
-			return fmt.Errorf("requires.bins contains empty entry")
-		}
-		if strings.Contains(bin, "/") {
-			return fmt.Errorf("requires.bins entry %q must not contain '/'", bin)
-		}
-	}
-	for i, selector := range m.Spec.AllowedCapabilities {
-		if err := agentspec.ValidateCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("allowed_capabilities[%d] invalid: %w", i, err)
-		}
-	}
-	return nil
-}
-
-// LoadSkill loads a skill manifest from the canonical workspace skills directory.
-func LoadSkill(workspace, name string) (*SkillManifest, error) {
-	if strings.TrimSpace(workspace) == "" {
-		return nil, fmt.Errorf("workspace required")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, fmt.Errorf("skill name required")
-	}
-	manifestPath := filepath.Join(New(workspace).SkillsDir(), name+".skill.yaml")
-	return LoadSkillManifest(manifestPath)
-}
-
-// LoadSkillList loads a collection of skills by name.
-func LoadSkillList(workspace string, names []string) []*SkillManifest {
-	var loaded []*SkillManifest
-	for _, name := range names {
-		skill, err := LoadSkill(workspace, name)
-		if err != nil {
-			continue
-		}
-		loaded = append(loaded, skill)
-	}
-	return loaded
 }

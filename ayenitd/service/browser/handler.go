@@ -11,8 +11,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -51,7 +52,7 @@ func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) 
 }
 
 func (h *browserCapability) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(".", contracts.FileSystemRead)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(".", contracts.FileSystemRead)}
 }
 
 func (h *browserCapability) Tags() []string { return []string{contracts.TagNetwork, "browser", "web"} }
@@ -69,15 +70,15 @@ func (h *browserCapability) SetPermissionManager(manager *fauthorization.Permiss
 	}
 }
 
-func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
-	desc := core.CapabilityDescriptor{
+func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+	desc := capability.CapabilityDescriptor{
 		ID:          "tool:browser",
 		Kind:        agentspec.CapabilityKindTool,
 		Name:        "browser",
 		Version:     "v1",
 		Description: "Controls a browser session via a single action-dispatch tool.",
 		Category:    "browser",
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			ProviderID: "browser",
 			Scope:      agentspec.CapabilityScopeProvider,
 		},
@@ -85,14 +86,14 @@ func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) c
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassNetwork, agentspec.RiskClassSessioned, agentspec.RiskClassExfiltration},
 		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassNetworkEgress, agentspec.EffectClassContextInsertion, agentspec.EffectClassSessionCreation},
 		InputSchema:   browserInputSchema(),
-		Availability: core.AvailabilitySpec{
+		Availability: capability.AvailabilitySpec{
 			Available: true,
 		},
 		Annotations: map[string]any{
 			"provider_id": "browser",
 		},
 	}
-	return core.NormalizeCapabilityDescriptor(desc)
+	return capability.NormalizeCapabilityDescriptor(desc)
 }
 
 func browserInputSchema() *contracts.Schema {

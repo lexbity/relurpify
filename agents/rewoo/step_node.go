@@ -7,8 +7,8 @@ import (
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // StepNode is a graph node that executes a single plan step.
@@ -49,7 +49,7 @@ func (n *StepNode) Type() graph.NodeType {
 }
 
 // Execute runs the step via the executor.
-func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.Registry == nil {
 		return nil, fmt.Errorf("step_node: registry unavailable")
 	}
@@ -69,9 +69,9 @@ func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*cor
 	env.SetWorkingValue(fmt.Sprintf("rewoo.step.%s", n.Step.ID), result, contextdata.MemoryClassTask)
 
 	// Return result to graph
-	return &core.Result{
+	return &execution.Result{
 		Success: result.Success,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"step_result": result,
 		}),
 	}, err

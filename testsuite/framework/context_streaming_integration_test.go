@@ -8,10 +8,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestStreamingSuccess validates that a streaming request can be completed successfully
@@ -491,13 +491,13 @@ func TestStreamingWithTelemetry(t *testing.T) {
 type mockStreamingCompiler struct {
 	chunks    []knowledge.ChunkID
 	source    string
-	telemetry core.Telemetry
+	telemetry telemetry.Telemetry
 }
 
 func (m *mockStreamingCompiler) Compile(ctx context.Context, req compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
 	// Emit telemetry event
 	if m.telemetry != nil {
-		m.telemetry.Emit(core.Event{
+		m.telemetry.Emit(telemetry.Event{
 			Type:      "context_stream_request",
 			NodeID:    "mock-compiler",
 			TaskID:    "test-task",

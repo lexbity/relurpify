@@ -297,7 +297,6 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	stateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
 		paths.AgentsDir(),
-		paths.SkillsDir(),
 		stateDir,
 		filepath.Join(stateDir, "logs"),
 		filepath.Join(stateDir, "telemetry"),

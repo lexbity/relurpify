@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
@@ -23,8 +23,8 @@ func NewCallGraphHandler(env agentenv.WorkspaceEnvironment) *CallGraphHandler {
 }
 
 // Descriptor returns the capability descriptor for the call graph handler.
-func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.call_graph",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -33,7 +33,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		Description:   "Traverses call relationships to build a structured graph of nodes and edges",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "graph", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 	base := time.Date(2026, 4, 11, 12, 0, 0, 0, time.UTC)
-	artifact := BuildToolTranscript([]core.Event{
+	artifact := BuildToolTranscript([]telemetry.Event{
 		{
-			Type:      core.EventToolCall,
+			Type:      telemetry.EventToolCall,
 			Timestamp: base,
 			Message:   "tool file_search invoked",
 			Metadata: map[string]any{
@@ -24,7 +24,7 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 			},
 		},
 		{
-			Type:      core.EventToolResult,
+			Type:      telemetry.EventToolResult,
 			Timestamp: base.Add(2 * time.Second),
 			Message:   "tool file_search completed",
 			Metadata: map[string]any{
@@ -57,9 +57,9 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 }
 
 func TestBuildToolTranscriptSkipsUnpairedResults(t *testing.T) {
-	artifact := BuildToolTranscript([]core.Event{
+	artifact := BuildToolTranscript([]telemetry.Event{
 		{
-			Type:      core.EventToolResult,
+			Type:      telemetry.EventToolResult,
 			Timestamp: time.Now().UTC(),
 			Message:   "tool missing completed",
 			Metadata: map[string]any{

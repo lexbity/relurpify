@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type reactWorkflowRetrievalProvider struct{}
@@ -183,7 +183,7 @@ func toAnyFloat(v any) float64 {
 }
 
 // extractTaskBytes extracts a []byte value from task context by key.
-func extractTaskBytes(task *core.Task, key string) []byte {
+func extractTaskBytes(task *execution.Task, key string) []byte {
 	if task == nil || task.Context == nil {
 		return nil
 	}

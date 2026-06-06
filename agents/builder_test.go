@@ -7,13 +7,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
 	env := &agentenv.WorkspaceEnvironment{
-		Config:   &core.Config{},
+		Config:   &execution.Config{},
 		Registry: capability.NewRegistry(),
 	}
 
@@ -29,7 +29,7 @@ func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
 
 func TestBuildFromSpec_ReturnsPipelineForPipelineType(t *testing.T) {
 	env := &agentenv.WorkspaceEnvironment{
-		Config:   &core.Config{},
+		Config:   &execution.Config{},
 		Registry: capability.NewRegistry(),
 	}
 
@@ -45,7 +45,7 @@ func TestBuildFromSpec_ReturnsPipelineForPipelineType(t *testing.T) {
 
 func TestBuildFromSpec_UnknownTypeReturnsError(t *testing.T) {
 	env := &agentenv.WorkspaceEnvironment{
-		Config:   &core.Config{},
+		Config:   &execution.Config{},
 		Registry: capability.NewRegistry(),
 	}
 

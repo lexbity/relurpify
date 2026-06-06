@@ -8,18 +8,20 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func (r *Runtime) StartDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationStartOptions) (*core.DelegationSnapshot, error) {
+func (r *Runtime) StartDelegation(ctx context.Context, request policy.DelegationRequest, opts fauthorization.DelegationStartOptions) (*policy.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
 	return r.Delegations.StartDelegation(ctx, request, opts)
 }
 
-func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationExecutionOptions) (*core.DelegationSnapshot, error) {
+func (r *Runtime) ExecuteDelegation(ctx context.Context, request policy.DelegationRequest, opts fauthorization.DelegationExecutionOptions) (*policy.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil || r.Tools == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
@@ -37,28 +39,28 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 	return r.Delegations.ExecuteDelegation(ctx, request, opts)
 }
 
-func (r *Runtime) CompleteDelegation(id string, result *core.DelegationResult) (*core.DelegationSnapshot, error) {
+func (r *Runtime) CompleteDelegation(id string, result *policy.DelegationResult) (*policy.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
 	return r.Delegations.CompleteDelegation(id, result)
 }
 
-func (r *Runtime) CancelDelegation(ctx context.Context, id, reason string) (*core.DelegationSnapshot, error) {
+func (r *Runtime) CancelDelegation(ctx context.Context, id, reason string) (*policy.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
 	return r.Delegations.CancelDelegation(ctx, id, reason)
 }
 
-func (r *Runtime) ListDelegations(filter core.DelegationFilter) []core.DelegationSnapshot {
+func (r *Runtime) ListDelegations(filter policy.DelegationFilter) []policy.DelegationSnapshot {
 	if r == nil || r.Delegations == nil {
 		return nil
 	}
 	return r.Delegations.ListDelegations(filter)
 }
 
-func (r *Runtime) SnapshotDelegations() []core.DelegationSnapshot {
+func (r *Runtime) SnapshotDelegations() []policy.DelegationSnapshot {
 	if r == nil || r.Delegations == nil {
 		return nil
 	}
@@ -98,7 +100,7 @@ func (r *Runtime) ensureBackgroundDelegationProvider(ctx context.Context) (*back
 	return provider, nil
 }
 
-func shouldUseBackgroundDelegation(request core.DelegationRequest) bool {
+func shouldUseBackgroundDelegation(request policy.DelegationRequest) bool {
 	if request.Metadata == nil {
 		return false
 	}
@@ -116,7 +118,7 @@ func shouldUseBackgroundDelegation(request core.DelegationRequest) bool {
 	}
 }
 
-func (r *Runtime) observeDelegationSnapshot(snapshot core.DelegationSnapshot) {
+func (r *Runtime) observeDelegationSnapshot(snapshot policy.DelegationSnapshot) {
 	if r == nil {
 		return
 	}
@@ -124,16 +126,16 @@ func (r *Runtime) observeDelegationSnapshot(snapshot core.DelegationSnapshot) {
 	r.logDelegationAudit(snapshot)
 }
 
-func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
+func (r *Runtime) emitDelegationTelemetry(snapshot policy.DelegationSnapshot) {
 	if r == nil || r.AgentWorkspace().Telemetry == nil {
 		return
 	}
-	eventType := core.EventDelegationFinish
+	eventType := telemetry.EventDelegationFinish
 	switch snapshot.State {
-	case core.DelegationStateRunning:
-		eventType = core.EventDelegationStart
-	case core.DelegationStateCancelled:
-		eventType = core.EventDelegationCancel
+	case policy.DelegationStateRunning:
+		eventType = telemetry.EventDelegationStart
+	case policy.DelegationStateCancelled:
+		eventType = telemetry.EventDelegationCancel
 	}
 	metadata := map[string]interface{}{
 		"delegation_id":        snapshot.Request.ID,
@@ -150,10 +152,14 @@ func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
 	}
 	if snapshot.Result != nil {
 		metadata["result_success"] = snapshot.Result.Success
-		metadata["insertion_action"] = snapshot.Result.Insertion.Action
-		metadata["result_trust_class"] = snapshot.Result.Provenance.TrustClass
+		if ins, ok := snapshot.Result.Insertion.(capability.InsertionDecision); ok {
+			metadata["insertion_action"] = ins.Action
+		}
+		if prov, ok := snapshot.Result.Provenance.(capability.ContentProvenance); ok {
+			metadata["result_trust_class"] = prov.TrustClass
+		}
 	}
-	r.AgentWorkspace().Telemetry.Emit(core.Event{
+	r.AgentWorkspace().Telemetry.Emit(telemetry.Event{
 		Type:      eventType,
 		TaskID:    firstDelegationTaskID(snapshot),
 		Message:   delegationTelemetryMessage(snapshot),
@@ -162,7 +168,7 @@ func (r *Runtime) emitDelegationTelemetry(snapshot core.DelegationSnapshot) {
 	})
 }
 
-func (r *Runtime) logDelegationAudit(snapshot core.DelegationSnapshot) {
+func (r *Runtime) logDelegationAudit(snapshot policy.DelegationSnapshot) {
 	if r == nil || r.AgentWorkspace().Registration == nil || r.AgentWorkspace().Registration.Audit == nil {
 		return
 	}
@@ -183,10 +189,12 @@ func (r *Runtime) logDelegationAudit(snapshot core.DelegationSnapshot) {
 		"trust_class":          snapshot.TrustClass,
 	}
 	if snapshot.Result != nil {
-		metadata["insertion_action"] = snapshot.Result.Insertion.Action
 		metadata["result_success"] = snapshot.Result.Success
+		if ins, ok := snapshot.Result.Insertion.(capability.InsertionDecision); ok {
+			metadata["insertion_action"] = ins.Action
+		}
 	}
-	_ = r.AgentWorkspace().Registration.Audit.Log(context.Background(), core.AuditRecord{
+	_ = r.AgentWorkspace().Registration.Audit.Log(context.Background(), policy.AuditRecord{
 		Timestamp: time.Now().UTC(),
 		AgentID:   r.AgentWorkspace().Registration.ID,
 		Action:    "delegation",
@@ -196,26 +204,26 @@ func (r *Runtime) logDelegationAudit(snapshot core.DelegationSnapshot) {
 	})
 }
 
-func delegationTelemetryMessage(snapshot core.DelegationSnapshot) string {
+func delegationTelemetryMessage(snapshot policy.DelegationSnapshot) string {
 	target := snapshot.Request.TargetCapabilityID
 	if target == "" {
 		target = snapshot.Request.TargetProviderID
 	}
 	switch snapshot.State {
-	case core.DelegationStateRunning:
+	case policy.DelegationStateRunning:
 		return fmt.Sprintf("delegation %s started for %s", snapshot.Request.ID, target)
-	case core.DelegationStateCancelled:
+	case policy.DelegationStateCancelled:
 		return fmt.Sprintf("delegation %s cancelled for %s", snapshot.Request.ID, target)
-	case core.DelegationStateSucceeded:
+	case policy.DelegationStateSucceeded:
 		return fmt.Sprintf("delegation %s succeeded for %s", snapshot.Request.ID, target)
-	case core.DelegationStateFailed:
+	case policy.DelegationStateFailed:
 		return fmt.Sprintf("delegation %s failed for %s", snapshot.Request.ID, target)
 	default:
 		return fmt.Sprintf("delegation %s updated for %s", snapshot.Request.ID, target)
 	}
 }
 
-func firstDelegationTaskID(snapshot core.DelegationSnapshot) string {
+func firstDelegationTaskID(snapshot policy.DelegationSnapshot) string {
 	if strings.TrimSpace(snapshot.Request.TaskID) != "" {
 		return snapshot.Request.TaskID
 	}

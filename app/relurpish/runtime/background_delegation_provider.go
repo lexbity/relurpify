@@ -8,8 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 const backgroundDelegationProviderID = "delegation-runtime"
@@ -21,7 +22,7 @@ type backgroundDelegationProvider struct {
 }
 
 type backgroundDelegationSession struct {
-	snapshot core.ProviderSessionSnapshot
+	snapshot capability.ProviderSessionSnapshot
 	cancel   context.CancelFunc
 	results  chan fauthorization.BackgroundDelegationOutcome
 }
@@ -32,16 +33,16 @@ func newBackgroundDelegationProvider() *backgroundDelegationProvider {
 	}
 }
 
-func (p *backgroundDelegationProvider) Descriptor() core.ProviderDescriptor {
-	return core.ProviderDescriptor{
+func (p *backgroundDelegationProvider) Descriptor() capability.ProviderDescriptor {
+	return capability.ProviderDescriptor{
 		ID:                 backgroundDelegationProviderID,
-		Kind:               core.ProviderKindAgentRuntime,
+		Kind:               capability.ProviderKindAgentRuntime,
 		ActivationScope:    "runtime",
 		TrustBaseline:      agentspec.TrustClassBuiltinTrusted,
-		RecoverabilityMode: core.RecoverabilityInProcess,
+		RecoverabilityMode: policy.RecoverabilityInProcess,
 		SupportsHealth:     true,
-		Security: core.ProviderSecurityProfile{
-			Origin:                     core.ProviderOriginLocal,
+		Security: capability.ProviderSecurityProfile{
+			Origin:                     capability.ProviderOriginLocal,
 			RequiresFrameworkMediation: true,
 		},
 	}
@@ -86,10 +87,10 @@ func (p *backgroundDelegationProvider) CloseSession(_ context.Context, sessionID
 	return nil
 }
 
-func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (core.ProviderHealthSnapshot, error) {
+func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (capability.ProviderHealthSnapshot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return core.ProviderHealthSnapshot{
+	return capability.ProviderHealthSnapshot{
 		Status: "ok",
 		Metadata: map[string]interface{}{
 			"active_sessions": len(p.sessions),
@@ -97,27 +98,27 @@ func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (core.Pro
 	}, nil
 }
 
-func (p *backgroundDelegationProvider) ListSessions(context.Context) ([]core.ProviderSession, error) {
+func (p *backgroundDelegationProvider) ListSessions(context.Context) ([]capability.ProviderSession, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make([]core.ProviderSession, 0, len(p.sessions))
+	out := make([]capability.ProviderSession, 0, len(p.sessions))
 	for _, session := range p.sessions {
 		out = append(out, session.snapshot.Session)
 	}
 	return out, nil
 }
 
-func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]core.ProviderSessionSnapshot, error) {
+func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]capability.ProviderSessionSnapshot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make([]core.ProviderSessionSnapshot, 0, len(p.sessions))
+	out := make([]capability.ProviderSessionSnapshot, 0, len(p.sessions))
 	for _, session := range p.sessions {
 		out = append(out, cloneProviderSessionSnapshot(session.snapshot))
 	}
 	return out, nil
 }
 
-func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fauthorization.DelegationExecutionOptions) (*fauthorization.BackgroundDelegationHandle, error) {
+func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts fauthorization.DelegationExecutionOptions) (*fauthorization.BackgroundDelegationHandle, error) {
 	if p == nil || p.runtime == nil || p.runtime.Tools == nil {
 		return nil, fmt.Errorf("background delegation provider unavailable")
 	}
@@ -135,21 +136,21 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	sessionID := fmt.Sprintf("%s:%s", p.Descriptor().ID, request.ID)
 	results := make(chan fauthorization.BackgroundDelegationOutcome, 1)
 	session := &backgroundDelegationSession{
-		snapshot: core.ProviderSessionSnapshot{
-			Session: core.ProviderSession{
+		snapshot: capability.ProviderSessionSnapshot{
+			Session: capability.ProviderSession{
 				ID:             sessionID,
 				ProviderID:     p.Descriptor().ID,
 				WorkflowID:     request.WorkflowID,
 				TaskID:         request.TaskID,
-				TrustClass:     target.TrustClass,
+				TrustClass:     target.CapabilityTrustClass(),
 				Recoverability: p.Descriptor().RecoverabilityMode,
 				CreatedAt:      now,
 				LastActivityAt: now,
 				Health:         "running",
 				Metadata: map[string]interface{}{
 					"delegation_id":      request.ID,
-					"target_capability":  target.ID,
-					"target_public_name": target.Name,
+					"target_capability":  target.CapabilityID(),
+					"target_public_name": target.CapabilityName(),
 					"task_type":          request.TaskType,
 				},
 			},
@@ -172,20 +173,20 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 		SessionID:      sessionID,
 		Recoverability: p.Descriptor().RecoverabilityMode,
 		Results:        results,
-		Cancel: func(ctx context.Context, snapshot core.DelegationSnapshot) error {
+		Cancel: func(ctx context.Context, snapshot policy.DelegationSnapshot) error {
 			p.markSession(sessionID, "cancelled", map[string]any{"reason": "delegation cancelled"})
 			return p.CloseSession(ctx, sessionID)
 		},
 	}, nil
 }
 
-func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
+func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
 	defer close(session.results)
 	state := opts.State
 	if state == nil {
 		state = contextdata.NewEnvelope(request.ID, sessionID)
 	}
-	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.ID, args)
+	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.CapabilityID(), args)
 	status := "completed"
 	if err != nil {
 		status = "failed"
@@ -229,7 +230,7 @@ func (p *backgroundDelegationProvider) removeSessionLater(sessionID string) {
 	})
 }
 
-func cloneProviderSessionSnapshot(snapshot core.ProviderSessionSnapshot) core.ProviderSessionSnapshot {
+func cloneProviderSessionSnapshot(snapshot capability.ProviderSessionSnapshot) capability.ProviderSessionSnapshot {
 	out := snapshot
 	if snapshot.Session.CapabilityIDs != nil {
 		out.Session.CapabilityIDs = append([]string(nil), snapshot.Session.CapabilityIDs...)
@@ -252,5 +253,5 @@ func cloneProviderSessionSnapshot(snapshot core.ProviderSessionSnapshot) core.Pr
 var _ RuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ DescribedRuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ SessionManagedProvider = (*backgroundDelegationProvider)(nil)
-var _ core.ProviderSessionSnapshotter = (*backgroundDelegationProvider)(nil)
+var _ capability.ProviderSessionSnapshotter = (*backgroundDelegationProvider)(nil)
 var _ fauthorization.DelegationBackgroundRunner = (*backgroundDelegationProvider)(nil)

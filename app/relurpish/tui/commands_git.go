@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // gitStatusMsg is returned when git status is queried.
@@ -92,7 +92,7 @@ func gitAutoCommitCmd(rt RuntimeAdapter) tea.Cmd {
 				"Return only the message text, no explanation.\n\nChanges:\n%s",
 			diff,
 		)
-		llmResult, err := rt.ExecuteInstruction(context.Background(), prompt, core.TaskTypeAnalysis, map[string]any{
+		llmResult, err := rt.ExecuteInstruction(context.Background(), prompt, execution.TaskTypeAnalysis, map[string]any{
 			"compact": true,
 		})
 		if err != nil {

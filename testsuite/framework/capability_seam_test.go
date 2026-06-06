@@ -6,8 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // TestCapabilityDiscovery validates that capability descriptors can be
@@ -37,7 +37,7 @@ func TestCapabilityDiscovery(t *testing.T) {
 			name:        "test-tool",
 			description: "test tool for discovery",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -72,7 +72,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			name:        "registered-tool",
 			description: "tool for registration test",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -92,7 +92,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			name:        "duplicate-tool",
 			description: "tool for duplicate test",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -108,7 +108,7 @@ func TestCapabilityRegistration(t *testing.T) {
 
 	t.Run("permission set is preserved", func(t *testing.T) {
 		registry := capability.NewRegistry()
-		perms := core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead, contracts.FileSystemWrite)
 		tool := &testTool{
 			name:        "permission-tool",
 			description: "tool for permission test",
@@ -127,9 +127,11 @@ func TestCapabilityRegistration(t *testing.T) {
 		}
 
 		toolPerms := cap.Permissions()
-		// ToolPermissions is a struct with a Permissions field
-		// Normalize and compare permissions
-		normalized := NormalizeFileSystemPermissions(toolPerms.Permissions.FileSystem)
+		ps := toolPerms.Permissions
+		var normalized []contracts.FileSystemPermission
+		if ps != nil {
+			normalized = NormalizeFileSystemPermissions(ps.FileSystem)
+		}
 		expected := NormalizeFileSystemPermissions(perms.FileSystem)
 
 		if len(normalized) != len(expected) {
@@ -152,7 +154,7 @@ func TestInvocationGating(t *testing.T) {
 			name:        "ungated-tool",
 			description: "tool without permission manager",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -173,7 +175,7 @@ func TestInvocationGating(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -187,7 +189,7 @@ func TestInvocationGating(t *testing.T) {
 			name:        "permissioned-tool",
 			description: "tool with permission checks",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,
@@ -215,7 +217,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager with no permissions
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -228,7 +230,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			name:        "denied-tool",
 			description: "tool that should be denied",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,
@@ -261,7 +263,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager with read permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -274,7 +276,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			name:        "allowed-tool",
 			description: "tool that should be allowed",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,

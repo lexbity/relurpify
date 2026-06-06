@@ -7,7 +7,7 @@ import (
 
 	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func RequireModelExhausted(tb testing.TB, f *Fixture) {
@@ -58,7 +58,7 @@ func RequireChainerEventKind(tb testing.TB, recorder *chaintelemetry.EventRecord
 	}
 }
 
-func RequireResultSuccess(tb testing.TB, result *core.Result) {
+func RequireResultSuccess(tb testing.TB, result *execution.Result) {
 	tb.Helper()
 	if result == nil {
 		tb.Fatal("result unexpectedly nil")

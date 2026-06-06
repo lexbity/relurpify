@@ -3,7 +3,7 @@ package runtime
 import (
 	"sort"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // MethodLibrary stores the set of known decomposition methods and provides
@@ -34,13 +34,13 @@ func (ml *MethodLibrary) Register(m Method) {
 
 // Find returns the highest-priority method that matches task. Returns nil when
 // no method matches.
-func (ml *MethodLibrary) Find(task *core.Task) *Method {
+func (ml *MethodLibrary) Find(task *execution.Task) *Method {
 	if task == nil {
 		return nil
 	}
 	var candidates []Method
 	for _, m := range ml.methods {
-		if m.TaskType != core.TaskType(task.Type) {
+		if m.TaskType != execution.TaskType(task.Type) {
 			continue
 		}
 		if m.Precondition != nil && !m.Precondition(task) {
@@ -69,13 +69,13 @@ func (ml *MethodLibrary) All() []Method {
 }
 
 // FindAll returns all methods matching the given task, sorted by priority (highest first).
-func (ml *MethodLibrary) FindAll(task *core.Task) []Method {
+func (ml *MethodLibrary) FindAll(task *execution.Task) []Method {
 	if task == nil {
 		return nil
 	}
 	var candidates []Method
 	for _, m := range ml.methods {
-		if m.TaskType != core.TaskType(task.Type) {
+		if m.TaskType != execution.TaskType(task.Type) {
 			continue
 		}
 		if m.Precondition != nil && !m.Precondition(task) {
@@ -106,7 +106,7 @@ func (ml *MethodLibrary) FindByName(name string) *Method {
 }
 
 // FindResolved returns the best matching method resolved into a ResolvedMethod.
-func (ml *MethodLibrary) FindResolved(task *core.Task) *ResolvedMethod {
+func (ml *MethodLibrary) FindResolved(task *execution.Task) *ResolvedMethod {
 	method := ml.Find(task)
 	if method == nil {
 		return nil
@@ -120,53 +120,53 @@ func (ml *MethodLibrary) registerDefaults() {
 	ml.methods = []Method{
 		{
 			Name:     "code-new",
-			TaskType: core.TaskTypeCodeGeneration,
+			TaskType: execution.TaskTypeCodeGeneration,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the codebase to understand context for: {{.Instruction}}"},
-				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Plan the implementation for: {{.Instruction}}", DependsOn: []string{"explore"}},
-				{Name: "code", Type: core.TaskTypeCodeGeneration, Instruction: "Implement: {{.Instruction}}", DependsOn: []string{"plan"}},
-				{Name: "verify", Type: core.TaskTypeExplain, Instruction: "Verify the implementation for: {{.Instruction}}", DependsOn: []string{"code"}},
+				{Name: "explore", Type: execution.TaskTypeExplain, Instruction: "Explore the codebase to understand context for: {{.Instruction}}"},
+				{Name: "plan", Type: execution.TaskTypePlan, Instruction: "Plan the implementation for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "code", Type: execution.TaskTypeCodeGeneration, Instruction: "Implement: {{.Instruction}}", DependsOn: []string{"plan"}},
+				{Name: "verify", Type: execution.TaskTypeExplain, Instruction: "Verify the implementation for: {{.Instruction}}", DependsOn: []string{"code"}},
 			},
 		},
 		{
 			Name:     "code-fix",
-			TaskType: core.TaskTypeExecute,
+			TaskType: execution.TaskTypeExecute,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the codebase to understand the problem for: {{.Instruction}}"},
-				{Name: "diagnose", Type: core.TaskTypeExplain, Instruction: "Diagnose the root cause for: {{.Instruction}}", DependsOn: []string{"explore"}},
-				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Plan the fix for: {{.Instruction}}", DependsOn: []string{"diagnose"}},
-				{Name: "code", Type: core.TaskTypeExecute, Instruction: "Apply the fix for: {{.Instruction}}", DependsOn: []string{"plan"}},
-				{Name: "verify", Type: core.TaskTypeExplain, Instruction: "Verify the fix for: {{.Instruction}}", DependsOn: []string{"code"}},
+				{Name: "explore", Type: execution.TaskTypeExplain, Instruction: "Explore the codebase to understand the problem for: {{.Instruction}}"},
+				{Name: "diagnose", Type: execution.TaskTypeExplain, Instruction: "Diagnose the root cause for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "plan", Type: execution.TaskTypePlan, Instruction: "Plan the fix for: {{.Instruction}}", DependsOn: []string{"diagnose"}},
+				{Name: "code", Type: execution.TaskTypeExecute, Instruction: "Apply the fix for: {{.Instruction}}", DependsOn: []string{"plan"}},
+				{Name: "verify", Type: execution.TaskTypeExplain, Instruction: "Verify the fix for: {{.Instruction}}", DependsOn: []string{"code"}},
 			},
 		},
 		{
 			Name:     "code-review",
-			TaskType: core.TaskTypeReview,
+			TaskType: execution.TaskTypeReview,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the code to be reviewed for: {{.Instruction}}"},
-				{Name: "analyze", Type: core.TaskTypeExplain, Instruction: "Analyze for issues in: {{.Instruction}}", DependsOn: []string{"explore"}},
-				{Name: "report", Type: core.TaskTypeReview, Instruction: "Produce a review report for: {{.Instruction}}", DependsOn: []string{"analyze"}},
+				{Name: "explore", Type: execution.TaskTypeExplain, Instruction: "Explore the code to be reviewed for: {{.Instruction}}"},
+				{Name: "analyze", Type: execution.TaskTypeExplain, Instruction: "Analyze for issues in: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "report", Type: execution.TaskTypeReview, Instruction: "Produce a review report for: {{.Instruction}}", DependsOn: []string{"analyze"}},
 			},
 		},
 		{
 			Name:     "explain",
-			TaskType: core.TaskTypeExplain,
+			TaskType: execution.TaskTypeExplain,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the relevant code for: {{.Instruction}}"},
-				{Name: "summarize", Type: core.TaskTypeExplain, Instruction: "Summarize and explain: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: execution.TaskTypeExplain, Instruction: "Explore the relevant code for: {{.Instruction}}"},
+				{Name: "summarize", Type: execution.TaskTypeExplain, Instruction: "Summarize and explain: {{.Instruction}}", DependsOn: []string{"explore"}},
 			},
 		},
 		{
 			Name:     "plan-task",
-			TaskType: core.TaskTypePlan,
+			TaskType: execution.TaskTypePlan,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore context for planning: {{.Instruction}}"},
-				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Produce a detailed plan for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: execution.TaskTypeExplain, Instruction: "Explore context for planning: {{.Instruction}}"},
+				{Name: "plan", Type: execution.TaskTypePlan, Instruction: "Produce a detailed plan for: {{.Instruction}}", DependsOn: []string{"explore"}},
 			},
 		},
 	}

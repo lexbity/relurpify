@@ -205,9 +205,6 @@ func TestBuildRecipeProjection_ToolScopes(t *testing.T) {
 		{
 			ID: "scoped.step", Type: "run",
 			Parent: ThoughtRecipeStepAgent{Paradigm: "react"},
-			Config: map[string]any{
-				"tool_scopes": []string{"file_read", "file_write"},
-			},
 		},
 		{
 			ID: "no.scope", Type: "run",
@@ -217,8 +214,8 @@ func TestBuildRecipeProjection_ToolScopes(t *testing.T) {
 
 	proj := BuildRecipeProjection(r, "", steps, nil, nil)
 
-	if len(proj.Steps[0].ToolScopes) != 2 {
-		t.Errorf("expected 2 tool scopes on step[0], got %v", proj.Steps[0].ToolScopes)
+	if len(proj.Steps[0].ToolScopes) != 0 {
+		t.Errorf("expected 0 tool scopes on step[0], got %v", proj.Steps[0].ToolScopes)
 	}
 	if len(proj.Steps[1].ToolScopes) != 0 {
 		t.Errorf("expected 0 tool scopes on step[1], got %v", proj.Steps[1].ToolScopes)

@@ -10,8 +10,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type BoundaryReportHandler struct {
@@ -22,8 +22,8 @@ func NewBoundaryReportHandler(env agentenv.WorkspaceEnvironment) *BoundaryReport
 	return &BoundaryReportHandler{env: env}
 }
 
-func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.boundary_report",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -32,7 +32,7 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 		Description:   "Generates a workspace layering report with dependency counts and violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "report"},
-		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},

@@ -2,31 +2,25 @@ package contracts
 
 import (
 	"context"
-	"strings"
-	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/capability/ports"
+	"codeburg.org/lexbit/relurpify/framework/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // UsageObserver is implemented by framework components that want to observe
 // token usage after each LLM call. Stored in context by the framework layer;
 // retrieved by InstrumentedModel without importing framework packages.
-type UsageObserver interface {
-	RecordTokenUsage(usage TokenUsageReport)
-	// ConsumeResetNotice returns an opaque snapshot value (suitable for telemetry
-	// metadata) and true when a session reset is warranted. Returns nil, false otherwise.
-	ConsumeResetNotice() (any, bool)
-}
+type UsageObserver = telemetry.UsageObserver
 
 // SnapshotObserver is implemented by framework components that want to record
 // periodic budget snapshots. Called after every LLM response.
-type SnapshotObserver interface {
-	Observe()
-}
+type SnapshotObserver = telemetry.SnapshotObserver
 
 // ResponseIngester is implemented by framework components that want to index
 // LLM responses into the knowledge graph as durable chunks.
-type ResponseIngester interface {
-	IngestLLMResponse(ctx context.Context, resp *LLMResponse) error
-}
+type ResponseIngester = telemetry.ResponseIngester
 
 type (
 	usageObserverKey    struct{}
@@ -36,159 +30,35 @@ type (
 
 // WithUsageObserver attaches a UsageObserver to the context.
 func WithUsageObserver(ctx context.Context, obs UsageObserver) context.Context {
-	return context.WithValue(ctx, usageObserverKey{}, obs)
+	return telemetry.WithUsageObserver(ctx, obs)
 }
 
 // UsageObserverFromContext extracts the UsageObserver from context, or nil.
 func UsageObserverFromContext(ctx context.Context) UsageObserver {
-	v, _ := ctx.Value(usageObserverKey{}).(UsageObserver)
-	return v
+	return telemetry.UsageObserverFromContext(ctx)
 }
 
 // WithSnapshotObserver attaches a SnapshotObserver to the context.
 func WithSnapshotObserver(ctx context.Context, obs SnapshotObserver) context.Context {
-	return context.WithValue(ctx, snapshotObserverKey{}, obs)
+	return telemetry.WithSnapshotObserver(ctx, obs)
 }
 
 // SnapshotObserverFromContext extracts the SnapshotObserver from context, or nil.
 func SnapshotObserverFromContext(ctx context.Context) SnapshotObserver {
-	v, _ := ctx.Value(snapshotObserverKey{}).(SnapshotObserver)
-	return v
+	return telemetry.SnapshotObserverFromContext(ctx)
 }
 
 // WithResponseIngester attaches a ResponseIngester to the context.
 func WithResponseIngester(ctx context.Context, ing ResponseIngester) context.Context {
-	return context.WithValue(ctx, responseIngesterKey{}, ing)
+	return telemetry.WithResponseIngester(ctx, ing)
 }
 
 // ResponseIngesterFromContext extracts the ResponseIngester from context, or nil.
 func ResponseIngesterFromContext(ctx context.Context) ResponseIngester {
-	v, _ := ctx.Value(responseIngesterKey{}).(ResponseIngester)
-	return v
+	return telemetry.ResponseIngesterFromContext(ctx)
 }
 
-// LLMOptions configures language model calls. Keeping the options struct inside
-// the contracts package avoids hard-coding provider-specific fields in agent code.
-type LLMOptions struct {
-	Model          string
-	Temperature    float64
-	MaxTokens      int
-	Stop           []string
-	TopP           float64
-	Stream         bool
-	StreamCallback func(string) `json:"-"`
-}
-
-// ToolCall encodes a function invocation requested by the LLM.
-type ToolCall struct {
-	ID   string                 `json:"id,omitempty"`
-	Name string                 `json:"name"`
-	Args map[string]interface{} `json:"args"`
-}
-
-// TokenUsageReport normalizes token accounting across LLM backends.
-type TokenUsageReport struct {
-	PromptTokens     int    `json:"prompt_tokens"`
-	CompletionTokens int    `json:"completion_tokens"`
-	TotalTokens      int    `json:"total_tokens"`
-	Estimated        bool   `json:"estimated,omitempty"`
-	EstimationMethod string `json:"estimation_method,omitempty"`
-}
-
-// LLMResponse is the result of a language model invocation.
-type LLMResponse struct {
-	Text         string           `json:"text,omitempty"`
-	FinishReason string           `json:"finish_reason,omitempty"`
-	Usage        TokenUsageReport `json:"usage"`
-	ToolCalls    []ToolCall       `json:"tool_calls,omitempty"`
-}
-
-// Message is used for chat-like interactions.
-type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	Name       string     `json:"name,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-}
-
-// CapabilityDescriptor describes a capability for LLM tool use.
-// Defined in platform/contracts to allow LLM packages to use it without
-// importing framework/core.
-type CapabilityDescriptor struct {
-	ID          string  `json:"id" yaml:"id"`
-	Name        string  `json:"name" yaml:"name"`
-	Description string  `json:"description,omitempty" yaml:"description,omitempty"`
-	InputSchema *Schema `json:"input_schema,omitempty" yaml:"input_schema,omitempty"`
-}
-
-// Schema describes the shape of capability inputs and outputs. Moved from
-// framework/core to platform/contracts so platform/llm packages can use it
-// without importing framework/core.
-type Schema struct {
-	Type        string             `json:"type,omitempty" yaml:"type,omitempty"`
-	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
-	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
-	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
-	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
-	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
-}
-
-// LLMToolSpec is the provider-agnostic tool definition passed to LLM backends.
-// It carries only the fields needed to describe a callable tool to a language
-// model: name, description, and input schema. Provider-specific wire formats
-// (e.g. Ollama's {"type":"function","function":{...}}) are handled entirely
-// inside the platform/llm layer and do not leak into the capability model.
-type LLMToolSpec struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description,omitempty"`
-	InputSchema *Schema `json:"input_schema,omitempty"`
-}
-
-// ProfiledModel is an optional extension for LanguageModel implementations that
-// expose active model profile metadata. Callers type-assert to check support:
-//
-//	if pm, ok := model.(ProfiledModel); ok { ... }
-//
-// The LanguageModel interface is not changed.
-type ProfiledModel interface {
-	ToolRepairStrategy() string  // "llm" | "heuristic-only"
-	MaxToolsPerCall() int        // 0 = no limit
-	UsesNativeToolCalling() bool // true if profile enables native API tool calling
-}
-
-// LanguageModel provides the required LLM capabilities.
-type LanguageModel interface {
-	Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error)
-	GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error)
-	Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error)
-	ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error)
-}
-
-// BackendClass identifies the broad backend family so framework code can make
-// transport-vs-native decisions without importing platform-specific packages.
-type BackendClass string
-
-const (
-	BackendClassTransport BackendClass = "transport"
-	BackendClassNative    BackendClass = "native"
-)
-
-// BackendCapabilities describes the high-level features a backend exposes.
-type BackendCapabilities struct {
-	NativeToolCalling    bool
-	Streaming            bool
-	Embeddings           bool
-	ModelListing         bool
-	BackendClass         BackendClass
-	UsageReporting       bool
-	ContextSizeDiscovery bool
-}
-
-// LLMToolSpecFromTool builds an LLMToolSpec from a local Tool implementation.
+// LLMToolSpecFromTool converts a Tool to an LLMToolSpec.
 func LLMToolSpecFromTool(t Tool) LLMToolSpec {
 	spec := LLMToolSpec{
 		Name:        t.Name(),
@@ -220,8 +90,7 @@ func LLMToolSpecFromTool(t Tool) LLMToolSpec {
 	return spec
 }
 
-// LLMToolSpecsFromTools converts a slice of local Tool implementations to
-// LLMToolSpec values for passing to ChatWithTools.
+// LLMToolSpecsFromTools converts a slice of Tool to LLMToolSpec values.
 func LLMToolSpecsFromTools(tools []Tool) []LLMToolSpec {
 	if len(tools) == 0 {
 		return nil
@@ -233,114 +102,34 @@ func LLMToolSpecsFromTools(tools []Tool) []LLMToolSpec {
 	return specs
 }
 
-// LLMToolSpecFromDescriptor builds an LLMToolSpec from a CapabilityDescriptor.
-func LLMToolSpecFromDescriptor(d CapabilityDescriptor) LLMToolSpec {
-	return LLMToolSpec{
-		Name:        d.Name,
-		Description: d.Description,
-		InputSchema: d.InputSchema,
-	}
-}
-
-// EventType categorizes telemetry events.
-type EventType string
+type LanguageModel = model.LanguageModel
+type LLMOptions = model.LLMOptions
+type LLMResponse = model.LLMResponse
+type ToolCall = model.ToolCall
+type Message = model.Message
+type LLMToolSpec = ports.LLMToolSpec
+type Schema = schemacoerce.Schema
+type BackendClass = model.BackendClass
 
 const (
-	EventLLMPrompt            EventType = "llm_prompt"
-	EventLLMResponse          EventType = "llm_response"
-	EventBudgetSnapshot       EventType = "budget_snapshot"
-	EventSessionResetRequired EventType = "session_reset_required"
+	BackendClassTransport = model.BackendClassTransport
+	BackendClassNative    = model.BackendClassNative
 )
 
-// Event captures structured telemetry data.
-type Event struct {
-	Type      EventType              `json:"type"`
-	TaskID    string                 `json:"task_id,omitempty"`
-	Message   string                 `json:"message,omitempty"`
-	Timestamp time.Time              `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-}
+type ProfiledModel = model.ProfiledModel
+type BackendCapabilities = model.BackendCapabilities
+type ModelProfile = model.ModelProfile
+type Telemetry = telemetry.Telemetry
+type Event = telemetry.Event
+type EventType = telemetry.EventType
 
-// Telemetry captures execution traces emitted by the graph runtime.
-type Telemetry interface {
-	Emit(event Event)
-}
+const (
+	EventLLMPrompt            = telemetry.EventLLMPrompt
+	EventLLMResponse          = telemetry.EventLLMResponse
+	EventBudgetSnapshot       = telemetry.EventBudgetSnapshot
+	EventSessionResetRequired = telemetry.EventSessionResetRequired
+)
 
-// ModelProfile captures model-specific quirks and configuration.
-type ModelProfile struct {
-	Provider    string `yaml:"provider,omitempty" json:"provider,omitempty"`
-	Model       string `yaml:"model,omitempty" json:"model,omitempty"`
-	Pattern     string `yaml:"pattern,omitempty" json:"pattern,omitempty"`
-	ContextSize int    `yaml:"context_size,omitempty" json:"context_size,omitempty"`
+type TokenUsageReport = telemetry.TokenUsage
 
-	ToolCalling struct {
-		NativeAPI               bool              `yaml:"native_api" json:"native_api"`
-		DoubleEncodedArgs       bool              `yaml:"double_encoded_args" json:"double_encoded_args"`
-		MultilineStringLiterals bool              `yaml:"multiline_string_literals" json:"multiline_string_literals"`
-		MaxToolsPerCall         int               `yaml:"max_tools_per_call" json:"max_tools_per_call"`
-		Aliases                 map[string]string `yaml:"aliases,omitempty" json:"aliases,omitempty"`
-	} `yaml:"tool_calling" json:"tool_calling"`
-
-	Repair struct {
-		Strategy    string `yaml:"strategy" json:"strategy"`
-		MaxAttempts int    `yaml:"max_attempts" json:"max_attempts"`
-	} `yaml:"repair" json:"repair"`
-
-	Schema struct {
-		FlattenNested     bool `yaml:"flatten_nested" json:"flatten_nested"`
-		MaxDescriptionLen int  `yaml:"max_description_len" json:"max_description_len"`
-	} `yaml:"schema" json:"schema"`
-
-	SourcePath string `yaml:"-" json:"-"`
-}
-
-// Normalize applies compatibility defaults and canonicalizes string fields.
-func (p *ModelProfile) Normalize() {
-	if p == nil {
-		return
-	}
-	p.Provider = strings.ToLower(strings.TrimSpace(p.Provider))
-	p.Model = strings.TrimSpace(p.Model)
-	p.Pattern = strings.TrimSpace(p.Pattern)
-	if p.Repair.Strategy == "" {
-		p.Repair.Strategy = "heuristic-only"
-	}
-	if p.Repair.MaxAttempts < 0 {
-		p.Repair.MaxAttempts = 0
-	}
-}
-
-// Clone returns a deep copy of the profile.
-func (p *ModelProfile) Clone() *ModelProfile {
-	if p == nil {
-		return nil
-	}
-	clone := *p
-	return &clone
-}
-
-// IsExactModelMatch reports whether the profile pins a specific model name.
-func (p *ModelProfile) IsExactModelMatch() bool {
-	if p == nil {
-		return false
-	}
-	if p.Model != "" {
-		return !hasGlobMeta(p.Model)
-	}
-	return p.Pattern != "" && !hasGlobMeta(p.Pattern)
-}
-
-// MatchPattern returns the effective model selector used by registry matching.
-func (p *ModelProfile) MatchPattern() string {
-	if p == nil {
-		return ""
-	}
-	if p.Model != "" {
-		return p.Model
-	}
-	return p.Pattern
-}
-
-func hasGlobMeta(s string) bool {
-	return strings.ContainsAny(s, "*?[")
-}
+func EstimateTokens(text string) int { return telemetry.EstimateTokens(text) }

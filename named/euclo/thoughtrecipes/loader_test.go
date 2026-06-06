@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
-	"codeburg.org/lexbit/relurpify/framework/services"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -281,7 +281,7 @@ run reviewer:
 
 func TestThoughtRecipeLoaderValidatesPromptImportsWithRepositoryPromptRegistry(t *testing.T) {
 	repoRoot := filepath.Join("..", "..", "..")
-	promptRegistry, err := services.BuildPromptRegistry(repoRoot, nil)
+	promptRegistry, err := agentenv.BuildPromptRegistry(repoRoot, nil)
 	if err != nil {
 		t.Fatalf("BuildPromptRegistry: %v", err)
 	}

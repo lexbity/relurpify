@@ -10,8 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // saveHTNCheckpoint persists the current HTN execution state as a workflow artifact.
@@ -86,7 +87,7 @@ func RestoreCheckpoint(ctx context.Context, env *contextdata.Envelope, repo agen
 		return fmt.Errorf("htn: failed to restore checkpoint state: %w", err)
 	}
 
-	env.SetWorkingValue(runtime.ContextKeyCheckpointRef, core.ArtifactReference{
+	env.SetWorkingValue(runtime.ContextKeyCheckpointRef, relurpctx.ArtifactReference{
 		ArtifactID: latestCheckpoint.ArtifactID,
 		WorkflowID: latestCheckpoint.WorkflowID,
 		RunID:      latestCheckpoint.RunID,
@@ -127,7 +128,7 @@ func restoreSnapshotToContext(env *contextdata.Envelope, snapshot *runtime.HTNSt
 
 	// Restore task state.
 	if snapshot.Task.ID != "" {
-		runtime.PublishTaskState(env, &core.Task{
+		runtime.PublishTaskState(env, &execution.Task{
 			ID:          snapshot.Task.ID,
 			Type:        string(snapshot.Task.Type),
 			Instruction: snapshot.Task.Instruction,

@@ -6,18 +6,17 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	fwtelemetry "codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // PermissionAware allows tools to receive the permission manager for fine-grained
 // runtime checks (e.g. verifying file paths against allowlists).
 type PermissionAware interface {
-	SetPermissionManager(manager *authorization.PermissionManager, agentID string)
+	SetPermissionManager(manager PermissionManagerHandle, agentID string)
 }
 
 // AgentSpecAware allows tools to consume the agent manifest runtime spec for
@@ -40,13 +39,13 @@ type Registry = CapabilityRegistry
 // migration away from generic tool-shaped invocation.
 type CapabilityRegistry struct {
 	mu                  sync.RWMutex
-	capabilities        map[string]core.CapabilityDescriptor
+	capabilities        map[string]CapabilityDescriptor
 	entries             map[string]*capabilityEntry
 	capabilityNameIndex map[string][]string
 	localToolNameIndex  map[string]string
 	prechecks           []InvocationPrecheck
 	postchecks          []PostInvocationHook
-	permissionManager   *authorization.PermissionManager
+	permissionManager   PermissionManagerHandle
 	registeredAgentID   string
 	agentSpec           *agentspec.AgentRuntimeSpec
 	sandboxScope        *sandbox.FileScopePolicy
@@ -55,19 +54,19 @@ type CapabilityRegistry struct {
 	allowedMatchers     []compiledSelector
 	toolPolicies        map[string]agentspec.ToolPolicy
 	capabilityPolicies  []agentspec.CapabilityPolicy
-	exposurePolicies    []core.CapabilityExposurePolicy
+	exposurePolicies    []CapabilityExposurePolicy
 	globalPolicies      map[string]agentspec.AgentPermissionLevel
 	guidanceBroker      RecoveryGuidanceBroker
-	telemetry           core.Telemetry
+	telemetry           Telemetry
 	safety              *runtimeSafetyController
-	policyEngine        authorization.PolicyEngine
-	nodeProviders       map[string]core.NodeProvider
+	policyEngine        PolicyEngine
+	nodeProviders       map[string]NodeProvider
 	modelProfile        *contracts.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
 	rollbackTokens  map[string]contracts.RollbackToken
 	rollbackMu      sync.Mutex
-	metrics         *telemetry.ToolCallMetrics
+	metrics         *fwtelemetry.ToolCallMetrics
 	delegate        *CapabilityRegistry
 	toolIDAllowlist map[string]struct{}
 }
@@ -75,7 +74,7 @@ type CapabilityRegistry struct {
 // NewRegistry builds a capability registry instance.
 func NewRegistry() *CapabilityRegistry {
 	return &CapabilityRegistry{
-		capabilities:        make(map[string]core.CapabilityDescriptor),
+		capabilities:        make(map[string]CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
 		capabilityNameIndex: make(map[string][]string),
 		localToolNameIndex:  make(map[string]string),
@@ -87,7 +86,7 @@ func NewRegistry() *CapabilityRegistry {
 
 // SetMetrics attaches a metrics collector to the registry. A nil value is a
 // valid no-op (default behaviour before this method is called).
-func (r *CapabilityRegistry) SetMetrics(metrics *telemetry.ToolCallMetrics) {
+func (r *CapabilityRegistry) SetMetrics(metrics *fwtelemetry.ToolCallMetrics) {
 	if r == nil {
 		return
 	}
@@ -141,25 +140,25 @@ func (r *CapabilityRegistry) isAllowlisted(id string) bool {
 }
 
 type capabilityEntry struct {
-	descriptor core.CapabilityDescriptor
+	descriptor CapabilityDescriptor
 	profile    descriptorProfile
-	handler    core.CapabilityHandler
+	handler    CapabilityHandler
 	legacyTool contracts.Tool
 	providerID string
 	sessionID  string
 }
 
 type RegistrationBatchItem struct {
-	Descriptor       core.CapabilityDescriptor
-	InvocableHandler core.InvocableCapabilityHandler
-	PromptHandler    core.PromptCapabilityHandler
-	ResourceHandler  core.ResourceCapabilityHandler
+	Descriptor       CapabilityDescriptor
+	InvocableHandler InvocableCapabilityHandler
+	PromptHandler    PromptCapabilityHandler
+	ResourceHandler  ResourceCapabilityHandler
 	LegacyTool       contracts.Tool
 }
 
 type admissionEvent struct {
-	descriptor core.CapabilityDescriptor
-	exposure   core.CapabilityExposure
+	descriptor CapabilityDescriptor
+	exposure   CapabilityExposure
 }
 
 func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
@@ -310,7 +309,7 @@ func (r *CapabilityRegistry) indexEntryLocked(id string, entry *capabilityEntry)
 	}
 }
 
-func (r *CapabilityRegistry) registerEntryLocked(desc core.CapabilityDescriptor, entry *capabilityEntry) {
+func (r *CapabilityRegistry) registerEntryLocked(desc CapabilityDescriptor, entry *capabilityEntry) {
 	if r == nil || entry == nil {
 		return
 	}
@@ -330,29 +329,29 @@ func (r *CapabilityRegistry) registerEntryLocked(desc core.CapabilityDescriptor,
 }
 
 // RegisterCapability adds a non-tool capability descriptor to the shared registry.
-func (r *CapabilityRegistry) RegisterCapability(descriptor core.CapabilityDescriptor) error {
+func (r *CapabilityRegistry) RegisterCapability(descriptor CapabilityDescriptor) error {
 	return r.RegisterBatch([]RegistrationBatchItem{{Descriptor: descriptor}})
 }
 
-// RegisterInvocableCapability registers a runtime-backed invocable capability.
-func (r *CapabilityRegistry) RegisterInvocableCapability(handler core.InvocableCapabilityHandler) error {
+// RegisterInvocableCapability registers a runtime-backed invocable 
+func (r *CapabilityRegistry) RegisterInvocableCapability(handler InvocableCapabilityHandler) error {
 	return r.RegisterBatch([]RegistrationBatchItem{{InvocableHandler: handler}})
 }
 
-// RegisterPromptCapability registers a runtime-backed prompt capability.
-func (r *CapabilityRegistry) RegisterPromptCapability(handler core.PromptCapabilityHandler) error {
+// RegisterPromptCapability registers a runtime-backed prompt 
+func (r *CapabilityRegistry) RegisterPromptCapability(handler PromptCapabilityHandler) error {
 	return r.RegisterBatch([]RegistrationBatchItem{{PromptHandler: handler}})
 }
 
-// RegisterResourceCapability registers a runtime-backed resource capability.
-func (r *CapabilityRegistry) RegisterResourceCapability(handler core.ResourceCapabilityHandler) error {
+// RegisterResourceCapability registers a runtime-backed resource 
+func (r *CapabilityRegistry) RegisterResourceCapability(handler ResourceCapabilityHandler) error {
 	return r.RegisterBatch([]RegistrationBatchItem{{ResourceHandler: handler}})
 }
 
 // ProviderCapabilityRegistrar returns a registrar that normalizes provider-
 // backed capabilities against provider metadata and agent policy before
 // registration.
-func (r *CapabilityRegistry) ProviderCapabilityRegistrar(provider core.ProviderDescriptor, policy agentspec.ProviderPolicy) (core.CapabilityRegistrar, error) {
+func (r *CapabilityRegistry) ProviderCapabilityRegistrar(provider ProviderDescriptor, policy agentspec.ProviderPolicy) (CapabilityRegistrar, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -371,22 +370,22 @@ func (r *CapabilityRegistry) ProviderCapabilityRegistrar(provider core.ProviderD
 
 type providerCapabilityRegistrar struct {
 	registry *CapabilityRegistry
-	provider core.ProviderDescriptor
+	provider ProviderDescriptor
 	policy   agentspec.ProviderPolicy
 }
 
-func (r providerCapabilityRegistrar) RegisterCapability(descriptor core.CapabilityDescriptor) error {
-	normalized, err := core.NormalizeProviderCapability(descriptor, r.provider, r.policy)
+func (r providerCapabilityRegistrar) RegisterCapability(descriptor CapabilityDescriptor) error {
+	normalized, err := NormalizeProviderCapability(descriptor, r.provider, r.policy)
 	if err != nil {
 		return err
 	}
 	return r.registry.RegisterCapability(normalized)
 }
 
-func (r providerCapabilityRegistrar) RegisterCapabilitiesBatch(descriptors []core.CapabilityDescriptor) error {
+func (r providerCapabilityRegistrar) RegisterCapabilitiesBatch(descriptors []CapabilityDescriptor) error {
 	items := make([]RegistrationBatchItem, 0, len(descriptors))
 	for _, descriptor := range descriptors {
-		normalized, err := core.NormalizeProviderCapability(descriptor, r.provider, r.policy)
+		normalized, err := NormalizeProviderCapability(descriptor, r.provider, r.policy)
 		if err != nil {
 			return err
 		}
@@ -406,7 +405,7 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool contracts.Tool) error {
 	return r.RegisterBatch([]RegistrationBatchItem{{LegacyTool: tool}})
 }
 
-func (r *CapabilityRegistry) RegisterCapabilitiesBatch(descriptors []core.CapabilityDescriptor) error {
+func (r *CapabilityRegistry) RegisterCapabilitiesBatch(descriptors []CapabilityDescriptor) error {
 	items := make([]RegistrationBatchItem, 0, len(descriptors))
 	for _, descriptor := range descriptors {
 		items = append(items, RegistrationBatchItem{Descriptor: descriptor})
@@ -448,7 +447,7 @@ func (r *CapabilityRegistry) RegisterBatch(items []RegistrationBatchItem) error 
 	return nil
 }
 
-func (r *CapabilityRegistry) prepareBatchEntryLocked(item RegistrationBatchItem, seenIDs, seenToolNames map[string]struct{}) (core.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareBatchEntryLocked(item RegistrationBatchItem, seenIDs, seenToolNames map[string]struct{}) (CapabilityDescriptor, *capabilityEntry, error) {
 	switch {
 	case item.LegacyTool != nil:
 		return r.prepareLegacyToolBatchEntryLocked(item.LegacyTool, seenIDs, seenToolNames)
@@ -461,28 +460,28 @@ func (r *CapabilityRegistry) prepareBatchEntryLocked(item RegistrationBatchItem,
 	case item.Descriptor.ID != "" || item.Descriptor.Name != "":
 		return r.prepareDescriptorBatchEntryLocked(item.Descriptor, seenIDs)
 	default:
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("batch item missing registration payload")
+		return CapabilityDescriptor{}, nil, fmt.Errorf("batch item missing registration payload")
 	}
 }
 
-func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(descriptor core.CapabilityDescriptor, seenIDs map[string]struct{}) (core.CapabilityDescriptor, *capabilityEntry, error) {
-	descriptor = core.NormalizeCapabilityDescriptor(descriptor)
+func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(descriptor CapabilityDescriptor, seenIDs map[string]struct{}) (CapabilityDescriptor, *capabilityEntry, error) {
+	descriptor = NormalizeCapabilityDescriptor(descriptor)
 	if descriptor.ID == "" {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability id required")
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability id required")
 	}
 	if err := validateCoordinationDescriptor(descriptor); err != nil {
-		return core.CapabilityDescriptor{}, nil, err
+		return CapabilityDescriptor{}, nil, err
 	}
 	if _, ok := r.capabilities[descriptor.ID]; ok {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", descriptor.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", descriptor.ID)
 	}
 	if _, ok := seenIDs[descriptor.ID]; ok {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", descriptor.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", descriptor.ID)
 	}
 	seenIDs[descriptor.ID] = struct{}{}
 	profile := buildDescriptorProfile(descriptor)
 	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, profile) {
-		return core.CapabilityDescriptor{}, nil, nil
+		return CapabilityDescriptor{}, nil, nil
 	}
 	return descriptor, &capabilityEntry{
 		descriptor: descriptor,
@@ -492,27 +491,27 @@ func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(descriptor core.C
 	}, nil
 }
 
-func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler core.CapabilityHandler, seenIDs map[string]struct{}) (core.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler CapabilityHandler, seenIDs map[string]struct{}) (CapabilityDescriptor, *capabilityEntry, error) {
 	if handler == nil {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability handler required")
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability handler required")
 	}
-	desc := core.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
+	desc := NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
 	if desc.ID == "" {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability id required")
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability id required")
 	}
 	if err := validateCoordinationDescriptor(desc); err != nil {
-		return core.CapabilityDescriptor{}, nil, err
+		return CapabilityDescriptor{}, nil, err
 	}
 	if _, ok := r.entries[desc.ID]; ok {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
 	}
 	if _, ok := seenIDs[desc.ID]; ok {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
 	}
 	seenIDs[desc.ID] = struct{}{}
 	profile := buildDescriptorProfile(desc)
 	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, profile) {
-		return core.CapabilityDescriptor{}, nil, nil
+		return CapabilityDescriptor{}, nil, nil
 	}
 	return desc, &capabilityEntry{
 		descriptor: desc,
@@ -523,41 +522,41 @@ func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler core.Capabil
 	}, nil
 }
 
-func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool contracts.Tool, seenIDs, seenToolNames map[string]struct{}) (core.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool contracts.Tool, seenIDs, seenToolNames map[string]struct{}) (CapabilityDescriptor, *capabilityEntry, error) {
 	if tool == nil {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("tool required")
+		return CapabilityDescriptor{}, nil, fmt.Errorf("tool required")
 	}
 	if r.toolAdmission != nil {
 		allowed, err := r.toolAdmission.Admit(tool)
 		if err != nil {
-			return core.CapabilityDescriptor{}, nil, err
+			return CapabilityDescriptor{}, nil, err
 		}
 		if !allowed {
-			return core.CapabilityDescriptor{}, nil, nil
+			return CapabilityDescriptor{}, nil, nil
 		}
 	}
-	desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), tool))
+	desc := NormalizeCapabilityDescriptor(ToolDescriptor(context.Background(), tool))
 	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyLocalTool {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
 	}
 	normalizedName := normalizeComparable(tool.Name())
 	if _, exists := r.localToolEntryByNameLocked(tool.Name()); exists {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("tool %s already registered", tool.Name())
+		return CapabilityDescriptor{}, nil, fmt.Errorf("tool %s already registered", tool.Name())
 	}
 	if _, exists := seenToolNames[normalizedName]; exists {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("tool %s already registered", tool.Name())
+		return CapabilityDescriptor{}, nil, fmt.Errorf("tool %s already registered", tool.Name())
 	}
 	if _, exists := r.capabilities[desc.ID]; exists {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
 	}
 	if _, exists := seenIDs[desc.ID]; exists {
-		return core.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
 	}
 	seenIDs[desc.ID] = struct{}{}
 	profile := buildDescriptorProfile(desc)
 	seenToolNames[normalizedName] = struct{}{}
 	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, profile) {
-		return core.CapabilityDescriptor{}, nil, nil
+		return CapabilityDescriptor{}, nil, nil
 	}
 	if r.permissionManager != nil {
 		if aware, ok := tool.(PermissionAware); ok {
@@ -610,7 +609,7 @@ func (r *CapabilityRegistry) CallableTools() []contracts.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]contracts.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
 			continue
 		}
 		if !toolAvailableForPrompt(entry.legacyTool) {
@@ -628,7 +627,7 @@ func (r *CapabilityRegistry) InspectableTools() []contracts.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]contracts.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) == core.CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, entry.legacyTool)
@@ -637,9 +636,9 @@ func (r *CapabilityRegistry) InspectableTools() []contracts.Tool {
 }
 
 // GetCapability resolves a tool by either capability ID or public name.
-func (r *CapabilityRegistry) GetCapability(idOrName string) (core.CapabilityDescriptor, bool) {
+func (r *CapabilityRegistry) GetCapability(idOrName string) (CapabilityDescriptor, bool) {
 	if r == nil {
-		return core.CapabilityDescriptor{}, false
+		return CapabilityDescriptor{}, false
 	}
 	if r.delegate != nil {
 		return r.delegate.GetCapability(idOrName)
@@ -657,37 +656,37 @@ func (r *CapabilityRegistry) GetCapability(idOrName string) (core.CapabilityDesc
 			}
 		}
 	}
-	return core.CapabilityDescriptor{}, false
+	return CapabilityDescriptor{}, false
 }
 
 // GetCoordinationTarget returns a non-hidden capability that is explicitly
 // marked as a coordination target.
-func (r *CapabilityRegistry) GetCoordinationTarget(idOrName string) (core.CapabilityDescriptor, bool) {
+func (r *CapabilityRegistry) GetCoordinationTarget(idOrName string) (policy.DelegationTarget, bool) {
 	if r == nil {
-		return core.CapabilityDescriptor{}, false
+		return CapabilityDescriptor{}, false
 	}
 	desc, ok := r.GetCapability(idOrName)
 	if !ok || desc.Coordination == nil || !desc.Coordination.Target {
-		return core.CapabilityDescriptor{}, false
+		return CapabilityDescriptor{}, false
 	}
-	if r.EffectiveExposure(desc) == core.CapabilityExposureHidden {
-		return core.CapabilityDescriptor{}, false
+	if r.EffectiveExposure(desc) == CapabilityExposureHidden {
+		return CapabilityDescriptor{}, false
 	}
 	return desc, true
 }
 
 // AllCapabilities returns non-hidden capability descriptors.
-func (r *CapabilityRegistry) AllCapabilities() []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) AllCapabilities() []CapabilityDescriptor {
 	return r.InspectableCapabilities()
 }
 
 // CallableCapabilities returns descriptors exposed as callable to agents.
-func (r *CapabilityRegistry) CallableCapabilities() []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) CallableCapabilities() []CapabilityDescriptor {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]core.CapabilityDescriptor, 0, len(r.capabilities))
+	res := make([]CapabilityDescriptor, 0, len(r.capabilities))
 	for _, capability := range r.capabilities {
-		if r.effectiveExposureLocked(capability) != core.CapabilityExposureCallable {
+		if r.effectiveExposureLocked(capability) != CapabilityExposureCallable {
 			continue
 		}
 		res = append(res, capability)
@@ -697,18 +696,18 @@ func (r *CapabilityRegistry) CallableCapabilities() []core.CapabilityDescriptor 
 
 // CoordinationTargets returns admitted, non-hidden coordination target
 // capabilities that match all provided selectors.
-func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.CapabilitySelector) []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.CapabilitySelector) []policy.DelegationTarget {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]core.CapabilityDescriptor, 0, len(r.entries))
+	out := make([]policy.DelegationTarget, 0, len(r.entries))
 	for _, entry := range r.entries {
 		if entry == nil || entry.descriptor.Coordination == nil || !entry.descriptor.Coordination.Target {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) == core.CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
 			continue
 		}
 		matched := true
@@ -726,12 +725,12 @@ func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.Capabili
 }
 
 // InspectableCapabilities returns non-hidden capability descriptors.
-func (r *CapabilityRegistry) InspectableCapabilities() []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) InspectableCapabilities() []CapabilityDescriptor {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]core.CapabilityDescriptor, 0, len(r.capabilities))
+	res := make([]CapabilityDescriptor, 0, len(r.capabilities))
 	for _, capability := range r.capabilities {
-		if r.effectiveExposureLocked(capability) == core.CapabilityExposureHidden {
+		if r.effectiveExposureLocked(capability) == CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, capability)
@@ -748,7 +747,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(contracts.Tool) bool) *Capa
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	clone := &CapabilityRegistry{
-		capabilities:        make(map[string]core.CapabilityDescriptor),
+		capabilities:        make(map[string]CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
 		capabilityNameIndex: make(map[string][]string),
 		localToolNameIndex:  make(map[string]string),
@@ -757,13 +756,13 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(contracts.Tool) bool) *Capa
 		registeredAgentID:   r.registeredAgentID,
 		agentSpec:           r.agentSpec,
 		runtimePolicy:       r.currentRuntimePolicyLocked(),
-		allowedCapabilities: core.CloneCapabilitySelectors(r.allowedCapabilities),
+		allowedCapabilities: CloneCapabilitySelectors(r.allowedCapabilities),
 		allowedMatchers:     append([]compiledSelector{}, r.allowedMatchers...),
 		telemetry:           r.telemetry,
 		safety:              r.safety,
 		toolPolicies:        make(map[string]agentspec.ToolPolicy, len(r.toolPolicies)),
 		capabilityPolicies:  append([]agentspec.CapabilityPolicy{}, r.capabilityPolicies...),
-		exposurePolicies:    append([]core.CapabilityExposurePolicy{}, r.exposurePolicies...),
+		exposurePolicies:    append([]CapabilityExposurePolicy{}, r.exposurePolicies...),
 		globalPolicies:      cloneGlobalPolicies(r.globalPolicies),
 	}
 	for name, pol := range r.toolPolicies {
@@ -791,7 +790,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(contracts.Tool) bool) *Capa
 			continue
 		}
 		clonedTool := cloneTool(entry.legacyTool, clone)
-		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), unwrapTool(clonedTool)))
+		desc := NormalizeCapabilityDescriptor(ToolDescriptor(context.Background(), unwrapTool(clonedTool)))
 		clone.capabilities[desc.ID] = desc
 		clonedEntry := *entry
 		clonedEntry.descriptor = desc
@@ -817,8 +816,8 @@ func cloneTool(tool contracts.Tool, registry *CapabilityRegistry) contracts.Tool
 	return tool
 }
 
-func validateCoordinationDescriptor(desc core.CapabilityDescriptor) error {
-	if err := core.ValidateCoordinationTargetMetadata(desc.Coordination); err != nil {
+func validateCoordinationDescriptor(desc CapabilityDescriptor) error {
+	if err := ValidateCoordinationTargetMetadata(desc.Coordination); err != nil {
 		return fmt.Errorf("coordination metadata invalid for %s: %w", desc.ID, err)
 	}
 	return nil

@@ -10,19 +10,21 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
 
 type DelegationCapabilityRegistry interface {
-	CapturePolicySnapshot() *core.PolicySnapshot
-	GetCoordinationTarget(idOrName string) (core.CapabilityDescriptor, bool)
-	CoordinationTargets(selectors ...agentspec.CapabilitySelector) []core.CapabilityDescriptor
+	CapturePolicySnapshot() *capability.PolicySnapshot
+	GetCoordinationTarget(idOrName string) (policy.DelegationTarget, bool)
+	CoordinationTargets(selectors ...agentspec.CapabilitySelector) []policy.DelegationTarget
 	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*contracts.ToolResult, error)
 }
 
@@ -34,13 +36,13 @@ type BackgroundDelegationOutcome struct {
 type BackgroundDelegationHandle struct {
 	ProviderID     string
 	SessionID      string
-	Recoverability core.RecoverabilityMode
+	Recoverability policy.RecoverabilityMode
 	Results        <-chan BackgroundDelegationOutcome
-	Cancel         func(context.Context, core.DelegationSnapshot) error
+	Cancel         func(context.Context, policy.DelegationSnapshot) error
 }
 
 type DelegationBackgroundRunner interface {
-	StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
+	StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
 }
 
 type DelegationExecutionOptions struct {
@@ -53,29 +55,29 @@ type DelegationExecutionOptions struct {
 	WorkflowStepID   string
 	CallerAgentID    string
 	CallerTrust      agentspec.TrustClass
-	Recoverability   core.RecoverabilityMode
+	Recoverability   policy.RecoverabilityMode
 	Background       bool
 	Metadata         map[string]any
 }
 
 type DelegationStartOptions struct {
 	TrustClass     agentspec.TrustClass
-	Recoverability core.RecoverabilityMode
+	Recoverability policy.RecoverabilityMode
 	Background     bool
-	PolicySnapshot *core.PolicySnapshot
+	PolicySnapshot *capability.PolicySnapshot
 	Metadata       map[string]any
-	OnCancel       func(context.Context, core.DelegationSnapshot) error
+	OnCancel       func(context.Context, policy.DelegationSnapshot) error
 }
 
 type DelegationManager struct {
 	mu          sync.RWMutex
 	delegations map[string]*delegationRecord
-	observer    func(core.DelegationSnapshot)
+	observer    func(policy.DelegationSnapshot)
 }
 
 type delegationRecord struct {
-	snapshot core.DelegationSnapshot
-	cancel   func(context.Context, core.DelegationSnapshot) error
+	snapshot policy.DelegationSnapshot
+	cancel   func(context.Context, policy.DelegationSnapshot) error
 }
 
 func NewDelegationManager() *DelegationManager {
@@ -84,7 +86,7 @@ func NewDelegationManager() *DelegationManager {
 	}
 }
 
-func (m *DelegationManager) SetObserver(observer func(core.DelegationSnapshot)) {
+func (m *DelegationManager) SetObserver(observer func(policy.DelegationSnapshot)) {
 	if m == nil {
 		return
 	}
@@ -93,7 +95,7 @@ func (m *DelegationManager) SetObserver(observer func(core.DelegationSnapshot)) 
 	m.observer = observer
 }
 
-func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request core.DelegationRequest, opts DelegationExecutionOptions) (*core.DelegationSnapshot, error) {
+func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request policy.DelegationRequest, opts DelegationExecutionOptions) (*policy.DelegationSnapshot, error) {
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
@@ -178,7 +180,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request core.
 	return completed, nil
 }
 
-func (m *DelegationManager) StartDelegation(ctx context.Context, request core.DelegationRequest, opts DelegationStartOptions) (*core.DelegationSnapshot, error) {
+func (m *DelegationManager) StartDelegation(ctx context.Context, request policy.DelegationRequest, opts DelegationStartOptions) (*policy.DelegationSnapshot, error) {
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
@@ -192,11 +194,11 @@ func (m *DelegationManager) StartDelegation(ctx context.Context, request core.De
 	if request.PolicySnapshotID == "" && opts.PolicySnapshot != nil {
 		request.PolicySnapshotID = opts.PolicySnapshot.ID
 	}
-	snapshot := core.DelegationSnapshot{
+	snapshot := policy.DelegationSnapshot{
 		Request:        request,
-		State:          core.DelegationStateRunning,
-		TrustClass:     opts.TrustClass,
-		Recoverability: opts.Recoverability,
+		State:          policy.DelegationStateRunning,
+		TrustClass:     string(opts.TrustClass),
+		Recoverability: string(opts.Recoverability),
 		Background:     opts.Background,
 		Metadata:       cloneAnyMap(opts.Metadata),
 		StartedAt:      time.Now().UTC(),
@@ -223,7 +225,7 @@ func (m *DelegationManager) StartDelegation(ctx context.Context, request core.De
 	return &out, nil
 }
 
-func (m *DelegationManager) CompleteDelegation(id string, result *core.DelegationResult) (*core.DelegationSnapshot, error) {
+func (m *DelegationManager) CompleteDelegation(id string, result *policy.DelegationResult) (*policy.DelegationSnapshot, error) {
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
@@ -242,7 +244,7 @@ func (m *DelegationManager) CompleteDelegation(id string, result *core.Delegatio
 		return nil, err
 	}
 	switch candidate.State {
-	case core.DelegationStateSucceeded, core.DelegationStateFailed, core.DelegationStateCancelled:
+	case policy.DelegationStateSucceeded, policy.DelegationStateFailed, policy.DelegationStateCancelled:
 	default:
 		return nil, fmt.Errorf("delegation result state %s not terminal", candidate.State)
 	}
@@ -252,7 +254,7 @@ func (m *DelegationManager) CompleteDelegation(id string, result *core.Delegatio
 		m.mu.Unlock()
 		return nil, ErrDelegationNotFound
 	}
-	if record.snapshot.State == core.DelegationStateSucceeded || record.snapshot.State == core.DelegationStateFailed || record.snapshot.State == core.DelegationStateCancelled {
+	if record.snapshot.State == policy.DelegationStateSucceeded || record.snapshot.State == policy.DelegationStateFailed || record.snapshot.State == policy.DelegationStateCancelled {
 		out := cloneDelegationSnapshot(record.snapshot)
 		m.mu.Unlock()
 		return &out, nil
@@ -270,7 +272,7 @@ func (m *DelegationManager) CompleteDelegation(id string, result *core.Delegatio
 	return &out, nil
 }
 
-func (m *DelegationManager) CancelDelegation(ctx context.Context, id, reason string) (*core.DelegationSnapshot, error) {
+func (m *DelegationManager) CancelDelegation(ctx context.Context, id, reason string) (*policy.DelegationSnapshot, error) {
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
@@ -297,16 +299,14 @@ func (m *DelegationManager) CancelDelegation(ctx context.Context, id, reason str
 		}
 	}
 
-	result := core.NewDelegationResult(
+	result := policy.NewDelegationResult(
 		snapshot.Request,
 		snapshot.Request.TargetCapabilityID,
 		snapshot.Request.TargetProviderID,
 		snapshot.Request.TargetSessionID,
-		snapshot.TrustClass,
-		core.DelegationStateCancelled,
+		policy.DelegationStateCancelled,
 		false,
 		map[string]any{"reason": strings.TrimSpace(reason)},
-		&core.PolicySnapshot{ID: snapshot.Request.PolicySnapshotID},
 	)
 	if trimmed := strings.TrimSpace(reason); trimmed != "" {
 		result.Diagnostics = []string{trimmed}
@@ -314,7 +314,7 @@ func (m *DelegationManager) CancelDelegation(ctx context.Context, id, reason str
 	return m.CompleteDelegation(id, result)
 }
 
-func (m *DelegationManager) GetDelegation(id string) (*core.DelegationSnapshot, error) {
+func (m *DelegationManager) GetDelegation(id string) (*policy.DelegationSnapshot, error) {
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
@@ -332,13 +332,13 @@ func (m *DelegationManager) GetDelegation(id string) (*core.DelegationSnapshot, 
 	return &out, nil
 }
 
-func (m *DelegationManager) ListDelegations(filter core.DelegationFilter) []core.DelegationSnapshot {
+func (m *DelegationManager) ListDelegations(filter policy.DelegationFilter) []policy.DelegationSnapshot {
 	if m == nil {
 		return nil
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]core.DelegationSnapshot, 0, len(m.delegations))
+	out := make([]policy.DelegationSnapshot, 0, len(m.delegations))
 	for _, record := range m.delegations {
 		if !delegationMatchesFilter(record.snapshot, filter) {
 			continue
@@ -354,8 +354,8 @@ func (m *DelegationManager) ListDelegations(filter core.DelegationFilter) []core
 	return out
 }
 
-func (m *DelegationManager) SnapshotDelegations() []core.DelegationSnapshot {
-	return m.ListDelegations(core.DelegationFilter{})
+func (m *DelegationManager) SnapshotDelegations() []policy.DelegationSnapshot {
+	return m.ListDelegations(policy.DelegationFilter{})
 }
 
 func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentlifecycle.Repository, workflowID, runID string) error {
@@ -418,15 +418,19 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentli
 	return nil
 }
 
-func resolveDelegationTarget(request core.DelegationRequest, registry DelegationCapabilityRegistry, coordination agentspec.AgentCoordinationSpec) (core.CapabilityDescriptor, error) {
+func resolveDelegationTarget(request policy.DelegationRequest, registry DelegationCapabilityRegistry, coordination agentspec.AgentCoordinationSpec) (capability.CapabilityDescriptor, error) {
 	if registry == nil {
-		return core.CapabilityDescriptor{}, fmt.Errorf("delegation registry required")
+		return capability.CapabilityDescriptor{}, fmt.Errorf("delegation registry required")
 	}
 	targetID := strings.TrimSpace(request.TargetCapabilityID)
 	if targetID != "" {
-		target, ok := registry.GetCoordinationTarget(targetID)
+		dt, ok := registry.GetCoordinationTarget(targetID)
 		if !ok {
-			return core.CapabilityDescriptor{}, fmt.Errorf("delegation target %s not admitted", targetID)
+			return capability.CapabilityDescriptor{}, fmt.Errorf("delegation target %s not admitted", targetID)
+		}
+		target, ok := dt.(capability.CapabilityDescriptor)
+		if !ok {
+			return capability.CapabilityDescriptor{}, fmt.Errorf("delegation target %s has unexpected descriptor type", targetID)
 		}
 		return target, nil
 	}
@@ -435,8 +439,12 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 		selectors = append(selectors, selector)
 	}
 	candidates := registry.CoordinationTargets(selectors...)
-	for _, candidate := range candidates {
-		if !core.SelectorMatchesDescriptor(agentspec.CapabilitySelector{
+	for _, dt := range candidates {
+		candidate, ok := dt.(capability.CapabilityDescriptor)
+		if !ok {
+			continue
+		}
+		if !capability.SelectorMatchesDescriptor(agentspec.CapabilitySelector{
 			CoordinationTaskTypes: []string{request.TaskType},
 		}, candidate) {
 			continue
@@ -447,12 +455,12 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 		return candidate, nil
 	}
 	if role := delegationRequestedRole(request); role != "" {
-		return core.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s and role %s", request.TaskType, role)
+		return capability.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s and role %s", request.TaskType, role)
 	}
-	return core.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s", request.TaskType)
+	return capability.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s", request.TaskType)
 }
 
-func validateDelegationTargetPolicy(request core.DelegationRequest, target core.CapabilityDescriptor, coordination agentspec.AgentCoordinationSpec) error {
+func validateDelegationTargetPolicy(request policy.DelegationRequest, target capability.CapabilityDescriptor, coordination agentspec.AgentCoordinationSpec) error {
 	if target.Coordination == nil || !target.Coordination.Target {
 		return fmt.Errorf("capability %s is not a coordination target", target.ID)
 	}
@@ -462,10 +470,10 @@ func validateDelegationTargetPolicy(request core.DelegationRequest, target core.
 	if target.RuntimeFamily == agentspec.CapabilityRuntimeFamilyProvider && target.Source.Scope == agentspec.CapabilityScopeRemote && !coordination.AllowRemoteDelegation {
 		return fmt.Errorf("remote delegation to %s is not allowed", target.Name)
 	}
-	if target.Coordination.LongRunning == core.EnabledStateEnabled && !coordination.AllowBackgroundDelegation {
+	if target.Coordination.LongRunning == capability.EnabledStateEnabled && !coordination.AllowBackgroundDelegation {
 		return fmt.Errorf("background delegation to %s is not allowed", target.Name)
 	}
-	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.Coordination.ExecutionModes) && target.Coordination.LongRunning != core.EnabledStateEnabled {
+	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.Coordination.ExecutionModes) && target.Coordination.LongRunning != capability.EnabledStateEnabled {
 		return fmt.Errorf("delegation target %s is not background-capable", target.Name)
 	}
 	if requestPrefersBackground(request) && !coordination.AllowBackgroundDelegation {
@@ -474,7 +482,7 @@ func validateDelegationTargetPolicy(request core.DelegationRequest, target core.
 	return nil
 }
 
-func resolveDelegationResourceRefs(request core.DelegationRequest, target core.CapabilityDescriptor, opts DelegationExecutionOptions) []string {
+func resolveDelegationResourceRefs(request policy.DelegationRequest, target capability.CapabilityDescriptor, opts DelegationExecutionOptions) []string {
 	if len(request.ResourceRefs) > 0 {
 		return dedupeStringSlice(request.ResourceRefs)
 	}
@@ -483,7 +491,7 @@ func resolveDelegationResourceRefs(request core.DelegationRequest, target core.C
 	return nil
 }
 
-func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, opts DelegationExecutionOptions) (map[string]any, error) {
+func buildDelegationInvocationArgs(ctx context.Context, request policy.DelegationRequest, target capability.CapabilityDescriptor, opts DelegationExecutionOptions) (map[string]any, error) {
 	args := map[string]any{
 		"instruction":   request.Instruction,
 		"task_id":       request.TaskID,
@@ -518,41 +526,45 @@ func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationR
 	return args, nil
 }
 
-func buildDelegationResult(request core.DelegationRequest, target core.CapabilityDescriptor, result *contracts.ToolResult, invokeErr error, snapshot *core.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust agentspec.TrustClass) *core.DelegationResult {
+func buildDelegationResult(request policy.DelegationRequest, target capability.CapabilityDescriptor, result *contracts.ToolResult, invokeErr error, snapshot *capability.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust agentspec.TrustClass) *policy.DelegationResult {
 	if invokeErr != nil {
-		failed := core.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, target.TrustClass, core.DelegationStateFailed, false, nil, snapshot)
+		failed := policy.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, policy.DelegationStateFailed, false, nil)
 		failed.Diagnostics = []string{invokeErr.Error()}
 		return failed
 	}
 	if result == nil {
 		result = &contracts.ToolResult{Success: true}
 	}
-	state := core.DelegationStateSucceeded
+	state := policy.DelegationStateSucceeded
 	if !result.Success {
-		state = core.DelegationStateFailed
+		state = policy.DelegationStateFailed
 	}
-	delegationResult := core.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, target.TrustClass, state, result.Success, result.Data, snapshot)
+	delegationResult := policy.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, state, result.Success, result.Data)
 	if result.Error != "" {
 		delegationResult.Diagnostics = append(delegationResult.Diagnostics, result.Error)
 	}
-	envelope := core.NewCapabilityResultEnvelope(target, result, core.ContentDispositionRaw, snapshot, core.ApprovalBindingFromDelegation(request, delegationResult))
-	decision := core.EffectiveInsertionDecision(spec, envelope)
-	if target.Coordination != nil && target.Coordination.DirectInsertionAllowed != core.EnabledStateEnabled && decision.Action == core.InsertionActionDirect {
-		decision.Action = core.InsertionActionSummarized
+	var approval *capability.ApprovalBinding
+	if pb := policy.ApprovalBindingFromDelegation(request, delegationResult); pb != nil {
+		approval = &capability.ApprovalBinding{CapabilityID: pb.CapabilityID, TaskID: pb.TaskID, WorkflowID: pb.WorkflowID}
+	}
+	envelope := capability.NewCapabilityResultEnvelope(target, result, capability.ContentDispositionRaw, snapshot, approval)
+	decision := capability.EffectiveInsertionDecision(spec, envelope)
+	if target.Coordination != nil && target.Coordination.DirectInsertionAllowed != capability.EnabledStateEnabled && decision.Action == capability.InsertionActionDirect {
+		decision.Action = capability.InsertionActionSummarized
 		decision.Reason = "coordination target requires summarized insertion"
 	}
 	if requiresCrossTrustApproval(callerTrust, target.TrustClass, spec, request) {
-		decision.Action = core.InsertionActionHITLRequired
+		decision.Action = capability.InsertionActionHITLRequired
 		decision.RequiresHITL = true
 		decision.Reason = "cross-trust delegation requires approval"
 	}
 	delegationResult.Provenance = envelope.Provenance
 	delegationResult.Disposition = envelope.Disposition
-	core.ApplyDelegationInsertionDecision(delegationResult, decision)
+	policy.ApplyDelegationInsertionDecision(delegationResult, decision)
 	return delegationResult
 }
 
-func (m *DelegationManager) awaitBackgroundDelegation(id string, request core.DelegationRequest, target core.CapabilityDescriptor, handle *BackgroundDelegationHandle, snapshot *core.PolicySnapshot, opts DelegationExecutionOptions) {
+func (m *DelegationManager) awaitBackgroundDelegation(id string, request policy.DelegationRequest, target capability.CapabilityDescriptor, handle *BackgroundDelegationHandle, snapshot *capability.PolicySnapshot, opts DelegationExecutionOptions) {
 	if m == nil || handle == nil || handle.Results == nil {
 		return
 	}
@@ -564,7 +576,7 @@ func (m *DelegationManager) awaitBackgroundDelegation(id string, request core.De
 	_, _ = m.CompleteDelegation(id, result)
 }
 
-func delegationMatchesFilter(snapshot core.DelegationSnapshot, filter core.DelegationFilter) bool {
+func delegationMatchesFilter(snapshot policy.DelegationSnapshot, filter policy.DelegationFilter) bool {
 	if filter.WorkflowID != "" && !strings.EqualFold(strings.TrimSpace(filter.WorkflowID), snapshot.Request.WorkflowID) {
 		return false
 	}
@@ -601,19 +613,19 @@ func projectDelegationResources(ctx context.Context, refs []string, repo agentli
 	return nil, nil
 }
 
-func summarizeResourceRead(result *core.ResourceReadResult) string {
+func summarizeResourceRead(result *capability.ResourceReadResult) string {
 	if result == nil || len(result.Contents) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(result.Contents))
 	for _, block := range result.Contents {
 		switch typed := block.(type) {
-		case core.TextContentBlock:
+		case capability.TextContentBlock:
 			text := strings.TrimSpace(typed.Text)
 			if text != "" {
 				parts = append(parts, text)
 			}
-		case core.StructuredContentBlock:
+		case capability.StructuredContentBlock:
 			encoded, err := json.Marshal(typed.Data)
 			if err == nil && len(encoded) > 0 {
 				parts = append(parts, string(encoded))
@@ -623,16 +635,16 @@ func summarizeResourceRead(result *core.ResourceReadResult) string {
 	return strings.Join(parts, "\n")
 }
 
-func effectiveDelegationRecoverability(mode core.RecoverabilityMode) core.RecoverabilityMode {
+func effectiveDelegationRecoverability(mode policy.RecoverabilityMode) policy.RecoverabilityMode {
 	switch mode {
-	case core.RecoverabilityEphemeral, core.RecoverabilityInProcess, core.RecoverabilityPersistedRestore:
+	case policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
 		return mode
 	default:
-		return core.RecoverabilityInProcess
+		return policy.RecoverabilityInProcess
 	}
 }
 
-func firstRecoverability(values ...core.RecoverabilityMode) core.RecoverabilityMode {
+func firstRecoverability(values ...policy.RecoverabilityMode) policy.RecoverabilityMode {
 	for _, value := range values {
 		if value != "" {
 			return value
@@ -649,7 +661,7 @@ func effectiveDelegationState(env *contextdata.Envelope) *contextdata.Envelope {
 	return contextdata.NewEnvelope("default", "default")
 }
 
-func delegationRequestedRole(request core.DelegationRequest) agentspec.CoordinationRole {
+func delegationRequestedRole(request policy.DelegationRequest) agentspec.CoordinationRole {
 	if request.Metadata == nil {
 		return ""
 	}
@@ -674,7 +686,7 @@ func containsBackgroundExecutionMode(modes []agentspec.CoordinationExecutionMode
 	return false
 }
 
-func requestPrefersBackground(request core.DelegationRequest) bool {
+func requestPrefersBackground(request policy.DelegationRequest) bool {
 	if request.Metadata == nil {
 		return false
 	}
@@ -692,11 +704,11 @@ func requestPrefersBackground(request core.DelegationRequest) bool {
 	}
 }
 
-func shouldRunDelegationInBackground(target core.CapabilityDescriptor, requested bool) bool {
+func shouldRunDelegationInBackground(target capability.CapabilityDescriptor, requested bool) bool {
 	if target.Coordination == nil {
 		return false
 	}
-	if target.Coordination.LongRunning == core.EnabledStateEnabled {
+	if target.Coordination.LongRunning == capability.EnabledStateEnabled {
 		return true
 	}
 	return requested && containsBackgroundExecutionMode(target.Coordination.ExecutionModes)
@@ -759,7 +771,7 @@ func normalizeArgumentMap(value any) map[string]any {
 	return map[string]any{}
 }
 
-func requiresCrossTrustApproval(callerTrust, targetTrust agentspec.TrustClass, spec *agentspec.AgentRuntimeSpec, request core.DelegationRequest) bool {
+func requiresCrossTrustApproval(callerTrust, targetTrust agentspec.TrustClass, spec *agentspec.AgentRuntimeSpec, request policy.DelegationRequest) bool {
 	if request.ApprovalRequired {
 		return true
 	}
@@ -786,7 +798,7 @@ func mergeAnyMaps(parts ...map[string]any) map[string]any {
 	return out
 }
 
-func cloneDelegationSnapshot(input core.DelegationSnapshot) core.DelegationSnapshot {
+func cloneDelegationSnapshot(input policy.DelegationSnapshot) policy.DelegationSnapshot {
 	out := input
 	out.Request = cloneDelegationRequest(input.Request)
 	out.Metadata = cloneAnyMap(input.Metadata)
@@ -797,16 +809,16 @@ func cloneDelegationSnapshot(input core.DelegationSnapshot) core.DelegationSnaps
 	return out
 }
 
-func cloneDelegationRequest(input core.DelegationRequest) core.DelegationRequest {
+func cloneDelegationRequest(input policy.DelegationRequest) policy.DelegationRequest {
 	out := input
 	out.ResourceRefs = append([]string{}, input.ResourceRefs...)
 	out.Metadata = cloneAnyMap(input.Metadata)
 	return out
 }
 
-func cloneDelegationResult(input *core.DelegationResult) core.DelegationResult {
+func cloneDelegationResult(input *policy.DelegationResult) policy.DelegationResult {
 	if input == nil {
-		return core.DelegationResult{}
+		return policy.DelegationResult{}
 	}
 	out := *input
 	out.Data = cloneAnyMap(input.Data)
@@ -836,7 +848,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func delegationTransitionID(snapshot core.DelegationSnapshot) string {
+func delegationTransitionID(snapshot policy.DelegationSnapshot) string {
 	when := snapshot.UpdatedAt
 	if when.IsZero() {
 		when = snapshot.StartedAt
@@ -844,8 +856,8 @@ func delegationTransitionID(snapshot core.DelegationSnapshot) string {
 	return fmt.Sprintf("%s:%s:%d", snapshot.Request.ID, snapshot.State, when.UTC().UnixNano())
 }
 
-func promotedDelegationArtifact(snapshot core.DelegationSnapshot, workflowID, runID string) *agentlifecycle.WorkflowArtifactRecord {
-	if snapshot.Result == nil || (snapshot.State != core.DelegationStateSucceeded && snapshot.State != core.DelegationStateFailed && snapshot.State != core.DelegationStateCancelled) {
+func promotedDelegationArtifact(snapshot policy.DelegationSnapshot, workflowID, runID string) *agentlifecycle.WorkflowArtifactRecord {
+	if snapshot.Result == nil || (snapshot.State != policy.DelegationStateSucceeded && snapshot.State != policy.DelegationStateFailed && snapshot.State != policy.DelegationStateCancelled) {
 		return nil
 	}
 	return &agentlifecycle.WorkflowArtifactRecord{
@@ -864,21 +876,21 @@ func promotedDelegationArtifact(snapshot core.DelegationSnapshot, workflowID, ru
 	}
 }
 
-func delegationSummary(snapshot core.DelegationSnapshot) string {
+func delegationSummary(snapshot policy.DelegationSnapshot) string {
 	target := firstNonEmpty(snapshot.Request.TargetCapabilityID, delegationResultTarget(snapshot.Result))
 	switch snapshot.State {
-	case core.DelegationStateSucceeded:
+	case policy.DelegationStateSucceeded:
 		return fmt.Sprintf("delegation %s to %s succeeded", snapshot.Request.ID, target)
-	case core.DelegationStateFailed:
+	case policy.DelegationStateFailed:
 		return fmt.Sprintf("delegation %s to %s failed", snapshot.Request.ID, target)
-	case core.DelegationStateCancelled:
+	case policy.DelegationStateCancelled:
 		return fmt.Sprintf("delegation %s to %s cancelled", snapshot.Request.ID, target)
 	default:
 		return fmt.Sprintf("delegation %s to %s updated", snapshot.Request.ID, target)
 	}
 }
 
-func delegationArtifactMetadata(snapshot core.DelegationSnapshot) map[string]any {
+func delegationArtifactMetadata(snapshot policy.DelegationSnapshot) map[string]any {
 	metadata := map[string]any{
 		"delegation_id":        snapshot.Request.ID,
 		"state":                snapshot.State,
@@ -894,20 +906,20 @@ func delegationArtifactMetadata(snapshot core.DelegationSnapshot) map[string]any
 	return metadata
 }
 
-func marshalDelegationArtifact(snapshot core.DelegationSnapshot) string {
+func marshalDelegationArtifact(snapshot policy.DelegationSnapshot) string {
 	payload := map[string]any{
 		"request": snapshot.Request,
 		"state":   snapshot.State,
 		"result":  snapshot.Result,
 	}
-	data, err := json.Marshal(core.RedactAny(payload))
+	data, err := json.Marshal(execution.RedactAny(payload))
 	if err != nil {
 		return "{}"
 	}
 	return string(data)
 }
 
-func delegationResultTarget(result *core.DelegationResult) string {
+func delegationResultTarget(result *policy.DelegationResult) string {
 	if result == nil {
 		return ""
 	}

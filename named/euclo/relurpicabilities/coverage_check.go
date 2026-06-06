@@ -8,9 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -25,8 +25,8 @@ func NewCoverageCheckHandler(env agentenv.WorkspaceEnvironment) *CoverageCheckHa
 }
 
 // Descriptor returns the capability descriptor for the coverage check handler.
-func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.coverage_check",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +35,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 		Description:   "Runs test coverage analysis and reports per-package coverage percentages",
 		Category:      "verification",
 		Tags:          []string{"testing", "coverage", "shell", "tool"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

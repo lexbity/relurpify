@@ -10,9 +10,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // NodeTypeLLM represents an LLM call node type.
@@ -59,11 +60,11 @@ func (n *LLMNode) Contract() agentgraph.NodeContract {
 	return agentgraph.NodeContract{
 		SideEffectClass: agentgraph.SideEffectNone,
 		Idempotency:     agentgraph.IdempotencyReplaySafe,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "llm.*"},
 			WriteKeys:                []string{"llm.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 16,
 		},
@@ -72,7 +73,7 @@ func (n *LLMNode) Contract() agentgraph.NodeContract {
 
 // Execute runs the prompt against the language model.
 // If CompilationTrigger is set, context is compiled and added to the prompt.
-func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.Model == nil {
 		return nil, errors.New("llm node missing model")
 	}
@@ -115,10 +116,10 @@ func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*co
 		data["compilation_shortfall"] = compilationShortfall
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(data),
+		Data:    execution.NewToolResultPayload(data),
 	}, nil
 }
 

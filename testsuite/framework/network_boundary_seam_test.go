@@ -9,8 +9,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // TestNetworkBoundaryEnforcement validates that network permissions are
@@ -20,7 +20,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager with network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -62,7 +62,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager with network permission for specific host
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -119,7 +119,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// Create permission manager with HITL-required network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 		}
@@ -184,7 +184,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// Create permission manager with HITL-required network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 		}
@@ -235,7 +235,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager with network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -253,7 +253,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 			name:        "network-tool",
 			description: "tool with network access",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 			networkPerms: []contracts.NetworkPermission{
 				{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 			},
@@ -280,15 +280,15 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		if tool.executed == false {
 			t.Error("expected network tool to execute when permission is granted")
 		}
-		AssertAuditRecordExists(t, env, core.AuditQuery{Type: string(contracts.PermissionTypeHITL), Action: "tool:network-tool", Permission: "test-agent", Result: "tool_allowed"})
-		AssertAuditRecordExists(t, env, core.AuditQuery{Type: string(contracts.PermissionTypeNetwork), Permission: "example.com:443", Result: "granted"})
+		AssertAuditRecordExists(t, env, policy.AuditQuery{Type: string(contracts.PermissionTypeHITL), Action: "tool:network-tool", Permission: "test-agent", Result: "tool_allowed"})
+		AssertAuditRecordExists(t, env, policy.AuditQuery{Type: string(contracts.PermissionTypeNetwork), Permission: "example.com:443", Result: "granted"})
 	})
 
 	t.Run("tool without network permission is denied", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager without network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -303,7 +303,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 			name:        "denied-network-tool",
 			description: "tool without network permission",
 			category:    "test",
-			permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 			networkPerms: []contracts.NetworkPermission{
 				{Direction: "egress", Protocol: "tcp", Host: "denied.com", Port: 443},
 			},
@@ -330,8 +330,8 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		if len(records) == 0 {
 			t.Error("expected audit record for denied tool execution")
 		}
-		AssertAuditRecordExists(t, env, core.AuditQuery{Type: string(contracts.PermissionTypeHITL), Action: "tool:denied-network-tool", Permission: "test-agent", Result: "tool_allowed"})
-		AssertAuditRecordExists(t, env, core.AuditQuery{Type: string(contracts.PermissionTypeNetwork), Action: "net:egress:tcp:denied.com:443", Permission: "denied.com", Result: "denied"})
+		AssertAuditRecordExists(t, env, policy.AuditQuery{Type: string(contracts.PermissionTypeHITL), Action: "tool:denied-network-tool", Permission: "test-agent", Result: "tool_allowed"})
+		AssertAuditRecordExists(t, env, policy.AuditQuery{Type: string(contracts.PermissionTypeNetwork), Action: "net:egress:tcp:denied.com:443", Permission: "denied.com", Result: "denied"})
 	})
 }
 

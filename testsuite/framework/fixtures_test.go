@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestDeterministicFixtureGeneration validates that fixture generation produces
@@ -56,14 +57,14 @@ func TestDeterministicFixtureGeneration(t *testing.T) {
 	t.Run("telemetry fixture", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 
-		event := core.Event{Type: core.EventNodeFinish, TaskID: "test-task", NodeID: "test-node", Message: "deterministic test message"}
+		event := telemetry.Event{Type: telemetry.EventNodeFinish, TaskID: "test-task", NodeID: "test-node", Message: "deterministic test message"}
 		env.TelemetrySink.Emit(event)
 
 		events := env.TelemetrySink.Events()
 		if len(events) != 1 {
 			t.Fatalf("expected 1 event, got %d", len(events))
 		}
-		AssertNormalizedTelemetryEventsEqual(t, events, []core.Event{event})
+		AssertNormalizedTelemetryEventsEqual(t, events, []telemetry.Event{event})
 	})
 
 	t.Run("audit fixture", func(t *testing.T) {
@@ -78,7 +79,7 @@ func TestDeterministicFixtureGeneration(t *testing.T) {
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
 		}
-		AssertNormalizedAuditRecordsEqual(t, records, []core.AuditRecord{record})
+		AssertNormalizedAuditRecordsEqual(t, records, []policy.AuditRecord{record})
 	})
 }
 
@@ -320,16 +321,16 @@ func TestPolicyRuleFixtureBuilder(t *testing.T) {
 		builder := AllowAllPolicy()
 		rules := builder.Build()
 
-		AssertNormalizedPolicyRulesEqual(t, rules, []core.PolicyRule{{ID: "allow-1", Name: "allow-1", Enabled: true, Priority: 100, Conditions: core.PolicyConditions{Capabilities: []string{"tool:*"}}, Effect: core.PolicyEffect{Action: "allow"}}})
+		AssertNormalizedPolicyRulesEqual(t, rules, []policy.PolicyRule{{ID: "allow-1", Name: "allow-1", Enabled: true, Priority: 100, Conditions: policy.PolicyConditions{Capabilities: []string{"tool:*"}}, Effect: policy.PolicyEffect{Action: "allow"}}})
 	})
 
 	t.Run("deny specific policy", func(t *testing.T) {
 		builder := DenySpecificPolicy("dangerous_tool")
 		rules := builder.Build()
 
-		AssertNormalizedPolicyRulesEqual(t, rules, []core.PolicyRule{
-			{ID: "allow-all", Name: "allow-all", Enabled: true, Priority: 100, Conditions: core.PolicyConditions{Capabilities: []string{"tool:*"}}, Effect: core.PolicyEffect{Action: "allow"}},
-			{ID: "deny-specific", Name: "deny-specific", Enabled: true, Priority: 100, Conditions: core.PolicyConditions{Capabilities: []string{"dangerous_tool"}}, Effect: core.PolicyEffect{Action: "deny", Reason: "security restriction"}},
+		AssertNormalizedPolicyRulesEqual(t, rules, []policy.PolicyRule{
+			{ID: "allow-all", Name: "allow-all", Enabled: true, Priority: 100, Conditions: policy.PolicyConditions{Capabilities: []string{"tool:*"}}, Effect: policy.PolicyEffect{Action: "allow"}},
+			{ID: "deny-specific", Name: "deny-specific", Enabled: true, Priority: 100, Conditions: policy.PolicyConditions{Capabilities: []string{"dangerous_tool"}}, Effect: policy.PolicyEffect{Action: "deny", Reason: "security restriction"}},
 		})
 	})
 
@@ -339,9 +340,9 @@ func TestPolicyRuleFixtureBuilder(t *testing.T) {
 			WithDenyRule("rule-2", "tool:delete", "data protection")
 		rules := builder.Build()
 
-		AssertNormalizedPolicyRulesEqual(t, rules, []core.PolicyRule{
-			{ID: "rule-1", Name: "rule-1", Enabled: true, Priority: 100, Conditions: core.PolicyConditions{Capabilities: []string{"tool:read"}}, Effect: core.PolicyEffect{Action: "allow"}},
-			{ID: "rule-2", Name: "rule-2", Enabled: true, Priority: 100, Conditions: core.PolicyConditions{Capabilities: []string{"tool:delete"}}, Effect: core.PolicyEffect{Action: "deny", Reason: "data protection"}},
+		AssertNormalizedPolicyRulesEqual(t, rules, []policy.PolicyRule{
+			{ID: "rule-1", Name: "rule-1", Enabled: true, Priority: 100, Conditions: policy.PolicyConditions{Capabilities: []string{"tool:read"}}, Effect: policy.PolicyEffect{Action: "allow"}},
+			{ID: "rule-2", Name: "rule-2", Enabled: true, Priority: 100, Conditions: policy.PolicyConditions{Capabilities: []string{"tool:delete"}}, Effect: policy.PolicyEffect{Action: "deny", Reason: "data protection"}},
 		})
 	})
 }
@@ -380,7 +381,7 @@ func TestAuditRecordFixtureBuilder(t *testing.T) {
 			WithCorrelation("custom-correlation")
 		record := builder.Build()
 
-		AssertNormalizedAuditRecordsEqual(t, []core.AuditRecord{record}, []core.AuditRecord{{AgentID: "custom-agent", Action: "custom_action", Type: "custom_type", Permission: "custom_permission", Result: "custom_result", Metadata: map[string]interface{}{"source": "fixture"}, Correlation: "custom-correlation"}})
+		AssertNormalizedAuditRecordsEqual(t, []policy.AuditRecord{record}, []policy.AuditRecord{{AgentID: "custom-agent", Action: "custom_action", Type: "custom_type", Permission: "custom_permission", Result: "custom_result", Metadata: map[string]interface{}{"source": "fixture"}, Correlation: "custom-correlation"}})
 	})
 }
 
@@ -475,9 +476,9 @@ func TestNormalizationHelpers(t *testing.T) {
 	})
 
 	t.Run("audit and telemetry normalization", func(t *testing.T) {
-		timestamp := core.AuditRecord{}.Timestamp
-		audit := []core.AuditRecord{{AgentID: "agent", Action: "action", Type: "type", Permission: "permission", Result: "granted", Timestamp: timestamp, Metadata: map[string]interface{}{"reason": "fixture"}}}
-		telemetry := []core.Event{{Type: core.EventNodeFinish, TaskID: "task", NodeID: "node", Message: "msg", Timestamp: timestamp, Metadata: map[string]interface{}{"source": "fixture"}}}
+		timestamp := policy.AuditRecord{}.Timestamp
+		audit := []policy.AuditRecord{{AgentID: "agent", Action: "action", Type: "type", Permission: "permission", Result: "granted", Timestamp: timestamp, Metadata: map[string]interface{}{"reason": "fixture"}}}
+		telemetry := []telemetry.Event{{Type: telemetry.EventNodeFinish, TaskID: "task", NodeID: "node", Message: "msg", Timestamp: timestamp, Metadata: map[string]interface{}{"source": "fixture"}}}
 
 		normalizedAudit := NormalizeAuditRecords(audit)
 		normalizedTelemetry := NormalizeTelemetryEvents(telemetry)
@@ -509,7 +510,7 @@ func TestNormalizationHelpers(t *testing.T) {
 			t.Fatalf("network normalization mismatch: %#v", net)
 		}
 
-		rules := NormalizePolicyRules([]core.PolicyRule{{ID: "rule-2", Priority: 20, Effect: core.PolicyEffect{Action: "deny"}}, {ID: "rule-1", Priority: 10, Effect: core.PolicyEffect{Action: "allow"}}})
+		rules := NormalizePolicyRules([]policy.PolicyRule{{ID: "rule-2", Priority: 20, Effect: policy.PolicyEffect{Action: "deny"}}, {ID: "rule-1", Priority: 10, Effect: policy.PolicyEffect{Action: "allow"}}})
 		if len(rules) != 2 || rules[0].ID != "rule-1" || rules[1].ID != "rule-2" {
 			t.Fatalf("policy rule normalization mismatch: %#v", rules)
 		}

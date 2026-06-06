@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestTelemetryEventEmission validates that telemetry events can be emitted
@@ -13,8 +13,8 @@ func TestTelemetryEventEmission(t *testing.T) {
 	t.Run("event can be emitted to sink", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		event := core.Event{
-			Type:      core.EventAgentStart,
+		event := telemetry.Event{
+			Type:      telemetry.EventAgentStart,
 			NodeID:    "node-1",
 			TaskID:    "task-1",
 			Message:   "agent started",
@@ -31,8 +31,8 @@ func TestTelemetryEventEmission(t *testing.T) {
 			t.Fatalf("expected 1 event, got %d", len(events))
 		}
 
-		if events[0].Type != core.EventAgentStart {
-			t.Errorf("expected event type %s, got %s", core.EventAgentStart, events[0].Type)
+		if events[0].Type != telemetry.EventAgentStart {
+			t.Errorf("expected event type %s, got %s", telemetry.EventAgentStart, events[0].Type)
 		}
 		if events[0].NodeID != "node-1" {
 			t.Errorf("expected node ID 'node-1', got %s", events[0].NodeID)
@@ -45,23 +45,23 @@ func TestTelemetryEventEmission(t *testing.T) {
 	t.Run("multiple events can be emitted", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		events := []core.Event{
+		events := []telemetry.Event{
 			{
-				Type:      core.EventAgentStart,
+				Type:      telemetry.EventAgentStart,
 				NodeID:    "node-1",
 				TaskID:    "task-1",
 				Message:   "agent started",
 				Timestamp: time.Now().UTC(),
 			},
 			{
-				Type:      core.EventLLMPrompt,
+				Type:      telemetry.EventLLMPrompt,
 				NodeID:    "node-2",
 				TaskID:    "task-1",
 				Message:   "LLM prompt",
 				Timestamp: time.Now().UTC(),
 			},
 			{
-				Type:      core.EventLLMResponse,
+				Type:      telemetry.EventLLMResponse,
 				NodeID:    "node-2",
 				TaskID:    "task-1",
 				Message:   "LLM response",
@@ -82,8 +82,8 @@ func TestTelemetryEventEmission(t *testing.T) {
 	t.Run("event metadata is preserved", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		event := core.Event{
-			Type:      core.EventToolCall,
+		event := telemetry.Event{
+			Type:      telemetry.EventToolCall,
 			NodeID:    "node-1",
 			TaskID:    "task-1",
 			Message:   "tool called",
@@ -121,8 +121,8 @@ func TestTelemetrySinkCollection(t *testing.T) {
 	t.Run("sink returns copy of events", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		event := core.Event{
-			Type:      core.EventAgentStart,
+		event := telemetry.Event{
+			Type:      telemetry.EventAgentStart,
 			NodeID:    "node-1",
 			TaskID:    "task-1",
 			Message:   "agent started",
@@ -151,8 +151,8 @@ func TestTelemetrySinkCollection(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
 		for i := 0; i < 5; i++ {
-			sink.Emit(core.Event{
-				Type:      core.EventAgentStart,
+			sink.Emit(telemetry.Event{
+				Type:      telemetry.EventAgentStart,
 				NodeID:    "node-1",
 				TaskID:    "task-1",
 				Message:   "event",
@@ -178,8 +178,8 @@ func TestTelemetrySinkCollection(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			go func(id int) {
 				for j := 0; j < 100; j++ {
-					sink.Emit(core.Event{
-						Type:      core.EventAgentStart,
+					sink.Emit(telemetry.Event{
+						Type:      telemetry.EventAgentStart,
 						NodeID:    "node-1",
 						TaskID:    "task-1",
 						Message:   "event",
@@ -207,11 +207,11 @@ func TestTelemetryEventFiltering(t *testing.T) {
 	t.Run("events can be filtered by type", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		events := []core.Event{
-			{Type: core.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMResponse, NodeID: "node-2", TaskID: "task-1", Message: "response", Timestamp: time.Now().UTC()},
-			{Type: core.EventToolCall, NodeID: "node-3", TaskID: "task-1", Message: "call", Timestamp: time.Now().UTC()},
+		events := []telemetry.Event{
+			{Type: telemetry.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMResponse, NodeID: "node-2", TaskID: "task-1", Message: "response", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventToolCall, NodeID: "node-3", TaskID: "task-1", Message: "call", Timestamp: time.Now().UTC()},
 		}
 
 		for _, event := range events {
@@ -221,9 +221,9 @@ func TestTelemetryEventFiltering(t *testing.T) {
 		allEvents := sink.Events()
 
 		// Filter by LLM events
-		var llmEvents []core.Event
+		var llmEvents []telemetry.Event
 		for _, event := range allEvents {
-			if event.Type == core.EventLLMPrompt || event.Type == core.EventLLMResponse {
+			if event.Type == telemetry.EventLLMPrompt || event.Type == telemetry.EventLLMResponse {
 				llmEvents = append(llmEvents, event)
 			}
 		}
@@ -236,10 +236,10 @@ func TestTelemetryEventFiltering(t *testing.T) {
 	t.Run("events can be filtered by node ID", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		events := []core.Event{
-			{Type: core.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMResponse, NodeID: "node-2", TaskID: "task-1", Message: "response", Timestamp: time.Now().UTC()},
+		events := []telemetry.Event{
+			{Type: telemetry.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMResponse, NodeID: "node-2", TaskID: "task-1", Message: "response", Timestamp: time.Now().UTC()},
 		}
 
 		for _, event := range events {
@@ -249,7 +249,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 		allEvents := sink.Events()
 
 		// Filter by node ID
-		var node2Events []core.Event
+		var node2Events []telemetry.Event
 		for _, event := range allEvents {
 			if event.NodeID == "node-2" {
 				node2Events = append(node2Events, event)
@@ -264,10 +264,10 @@ func TestTelemetryEventFiltering(t *testing.T) {
 	t.Run("events can be filtered by task ID", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		events := []core.Event{
-			{Type: core.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
-			{Type: core.EventLLMResponse, NodeID: "node-2", TaskID: "task-2", Message: "response", Timestamp: time.Now().UTC()},
+		events := []telemetry.Event{
+			{Type: telemetry.EventAgentStart, NodeID: "node-1", TaskID: "task-1", Message: "start", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMPrompt, NodeID: "node-2", TaskID: "task-1", Message: "prompt", Timestamp: time.Now().UTC()},
+			{Type: telemetry.EventLLMResponse, NodeID: "node-2", TaskID: "task-2", Message: "response", Timestamp: time.Now().UTC()},
 		}
 
 		for _, event := range events {
@@ -277,7 +277,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 		allEvents := sink.Events()
 
 		// Filter by task ID
-		var task1Events []core.Event
+		var task1Events []telemetry.Event
 		for _, event := range allEvents {
 			if event.TaskID == "task-1" {
 				task1Events = append(task1Events, event)
@@ -292,9 +292,9 @@ func TestTelemetryEventFiltering(t *testing.T) {
 	t.Run("events can be filtered by metadata", func(t *testing.T) {
 		sink := &recordingTelemetrySink{}
 
-		events := []core.Event{
+		events := []telemetry.Event{
 			{
-				Type:      core.EventToolCall,
+				Type:      telemetry.EventToolCall,
 				NodeID:    "node-1",
 				TaskID:    "task-1",
 				Message:   "call",
@@ -302,7 +302,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				Metadata:  map[string]interface{}{"status": "success"},
 			},
 			{
-				Type:      core.EventToolCall,
+				Type:      telemetry.EventToolCall,
 				NodeID:    "node-2",
 				TaskID:    "task-1",
 				Message:   "call",
@@ -310,7 +310,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				Metadata:  map[string]interface{}{"status": "failed"},
 			},
 			{
-				Type:      core.EventToolCall,
+				Type:      telemetry.EventToolCall,
 				NodeID:    "node-3",
 				TaskID:    "task-1",
 				Message:   "call",
@@ -326,7 +326,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 		allEvents := sink.Events()
 
 		// Filter by metadata status
-		var successEvents []core.Event
+		var successEvents []telemetry.Event
 		for _, event := range allEvents {
 			if event.Metadata != nil && event.Metadata["status"] == "success" {
 				successEvents = append(successEvents, event)

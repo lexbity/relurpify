@@ -9,11 +9,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *agentenv.ServiceManager, tel core.Telemetry) error {
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil

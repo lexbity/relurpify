@@ -6,14 +6,14 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/pipeline"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // ExploreStage identifies the most relevant files and next tools for a task.
 type ExploreStage struct {
-	Task     *core.Task
+	Task     *execution.Task
 	PromptID string
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
@@ -102,7 +102,7 @@ func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // AnalyzeStage converts explored context into a structured issue list.
 type AnalyzeStage struct {
-	Task     *core.Task
+	Task     *execution.Task
 	PromptID string
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
@@ -185,7 +185,7 @@ func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // PlanStage turns issues into an ordered fix plan.
 type PlanStage struct {
-	Task     *core.Task
+	Task     *execution.Task
 	PromptID string
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
@@ -253,7 +253,7 @@ func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // CodeStage proposes concrete edits derived from the fix plan.
 type CodeStage struct {
-	Task     *core.Task
+	Task     *execution.Task
 	PromptID string
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
@@ -346,7 +346,7 @@ func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
 
 // VerifyStage summarizes the verification outcome for the planned edits.
 type VerifyStage struct {
-	Task     *core.Task
+	Task     *execution.Task
 	PromptID string
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
@@ -374,7 +374,7 @@ func (s *VerifyStage) AllowedToolNames() []string {
 	}
 }
 
-func (s *VerifyStage) RequiresToolExecution(task *core.Task, state *contextdata.Envelope, tools []contracts.Tool) bool {
+func (s *VerifyStage) RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []contracts.Tool) bool {
 	if task == nil || len(tools) == 0 {
 		return false
 	}
@@ -465,7 +465,7 @@ func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
 }
 
 // buildPipelineRuntimeContext creates a prompt.RuntimeContext for pipeline stages.
-func buildPipelineRuntimeContext(env *contextdata.Envelope, task *core.Task, paradigm string) interface{} {
+func buildPipelineRuntimeContext(env *contextdata.Envelope, task *execution.Task, paradigm string) interface{} {
 	// Return a map that matches the expected RuntimeContext structure
 	// Using interface{} to avoid import cycles with framework/prompt
 	return map[string]interface{}{

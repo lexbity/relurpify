@@ -9,11 +9,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.
@@ -493,7 +493,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment
 		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, env, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
-		if err := graph.AddEdge(execNodeID, fallbackID, func(result *core.Result, env *contextdata.Envelope) bool {
+		if err := graph.AddEdge(execNodeID, fallbackID, func(result *execution.Result, env *contextdata.Envelope) bool {
 			_ = env
 			return result != nil && !result.Success
 		}, false); err != nil {
@@ -580,14 +580,14 @@ func wireStepTransitions(graph *agentgraph.Graph, artifact stepArtifacts, next s
 	return nil
 }
 
-func successCondition(result *core.Result, env *contextdata.Envelope) bool {
+func successCondition(result *execution.Result, env *contextdata.Envelope) bool {
 	_ = env
 	return result == nil || result.Success
 }
 
 func conditionTrue(groupID string) agentgraph.ConditionFunc {
 	key := conditionResultKey(groupID)
-	return func(result *core.Result, env *contextdata.Envelope) bool {
+	return func(result *execution.Result, env *contextdata.Envelope) bool {
 		_ = result
 		return envBool(env, key)
 	}
@@ -595,7 +595,7 @@ func conditionTrue(groupID string) agentgraph.ConditionFunc {
 
 func conditionFalse(groupID string) agentgraph.ConditionFunc {
 	key := conditionResultKey(groupID)
-	return func(result *core.Result, env *contextdata.Envelope) bool {
+	return func(result *execution.Result, env *contextdata.Envelope) bool {
 		_ = result
 		return !envBool(env, key)
 	}
@@ -662,7 +662,7 @@ func newThoughtRecipeStageNode(id string, nodeType agentgraph.NodeType, op strin
 
 func (n *thoughtrecipeStageNode) ID() string                { return n.id }
 func (n *thoughtrecipeStageNode) Type() agentgraph.NodeType { return agentgraph.NodeType(n.kind) }
-func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	_ = ctx
 	if env != nil && n.data != nil {
 		// envelope: intentional dynamic key — stage metadata is keyed by stage ID and field name.
@@ -698,10 +698,10 @@ func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.E
 			n.data["condition_met"] = matched
 		}
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(n.data),
+		Data:    execution.NewToolResultPayload(n.data),
 	}, nil
 }
 
@@ -841,7 +841,7 @@ func routeConditionResultKey(groupID, branchID string) string {
 
 func routeConditionTrue(groupID, branchID string) agentgraph.ConditionFunc {
 	key := routeConditionResultKey(groupID, branchID)
-	return func(result *core.Result, env *contextdata.Envelope) bool {
+	return func(result *execution.Result, env *contextdata.Envelope) bool {
 		_ = result
 		return envBool(env, key)
 	}
@@ -849,7 +849,7 @@ func routeConditionTrue(groupID, branchID string) agentgraph.ConditionFunc {
 
 func routeConditionFalse(groupID, branchID string) agentgraph.ConditionFunc {
 	key := routeConditionResultKey(groupID, branchID)
-	return func(result *core.Result, env *contextdata.Envelope) bool {
+	return func(result *execution.Result, env *contextdata.Envelope) bool {
 		_ = result
 		return !envBool(env, key)
 	}

@@ -7,9 +7,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -24,8 +24,8 @@ func NewBlameTraceHandler(env agentenv.WorkspaceEnvironment) *BlameTraceHandler 
 }
 
 // Descriptor returns the capability descriptor for the blame trace handler.
-func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.blame_trace",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -34,7 +34,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		Description:   "Parses git blame output to determine commit and author information for code lines",
 		Category:      "git",
 		Tags:          []string{"git", "blame", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

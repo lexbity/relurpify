@@ -10,8 +10,8 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // StepExecutionRequest encapsulates parameters for executing a single plan step.
@@ -144,7 +144,7 @@ func (e *StepExecutor) Execute(ctx context.Context, req StepExecutionRequest) *S
 	}
 
 	result.Success = toolResult.Success
-	result.Output = core.ResultFields(toolResult.Data)
+	result.Output = execution.ResultFields(toolResult.Data)
 
 	// Update world state based on success
 	if result.Success && req.Context != nil {
@@ -159,7 +159,7 @@ func (e *StepExecutor) Execute(ctx context.Context, req StepExecutionRequest) *S
 }
 
 // lookupCapability finds a capability by name.
-func (e *StepExecutor) lookupCapability(toolName string) *core.CapabilityDescriptor {
+func (e *StepExecutor) lookupCapability(toolName string) *capability.CapabilityDescriptor {
 	if e == nil || e.registry == nil {
 		return nil
 	}
@@ -182,8 +182,8 @@ func (e *StepExecutor) executeToolStep(
 	ctx context.Context,
 	step plan.PlanStep,
 	state *contextdata.Envelope,
-	cap *core.CapabilityDescriptor,
-) (*core.Result, error) {
+	cap *capability.CapabilityDescriptor,
+) (*execution.Result, error) {
 	if cap == nil {
 		return nil, fmt.Errorf("capability is nil")
 	}
@@ -191,9 +191,9 @@ func (e *StepExecutor) executeToolStep(
 	// Phase 4: Placeholder implementation
 	// Returns success for all capabilities
 	// In Phase 5+, would actually invoke the capability via agent
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"step_id":     step.ID,
 			"tool":        step.Tool,
 			"capability":  cap.Name,
@@ -219,15 +219,15 @@ func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step plan.Pla
 }
 
 // recordAudit records the capability invocation to the audit trail (Phase 5).
-func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanStep, cap *core.CapabilityDescriptor, toolResult *core.Result) {
+func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanStep, cap *capability.CapabilityDescriptor, toolResult *execution.Result) {
 	if e == nil || e.auditTrail == nil || cap == nil {
 		return
 	}
 
-	// Convert core.Result to contracts.ToolResult for the envelope
+	// Convert execution.Result to contracts.ToolResult for the envelope
 	toolResultEnv := &contracts.ToolResult{
 		Success: toolResult.Success,
-		Data:    core.ResultFields(toolResult.Data),
+		Data:    execution.ResultFields(toolResult.Data),
 		Error:   "",
 	}
 	if strings.TrimSpace(toolResult.Error) != "" {
@@ -235,16 +235,16 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 	}
 
 	// Create a minimal CapabilityResultEnvelope from the step execution
-	envelope := &core.CapabilityResultEnvelope{
+	envelope := &capability.CapabilityResultEnvelope{
 		Descriptor:  *cap,
 		Result:      toolResultEnv,
-		Disposition: core.ContentDispositionMetadataOnly,
+		Disposition: capability.ContentDispositionMetadataOnly,
 		RecordedAt:  time.Now().UTC(),
 	}
 
 	// For Phase 5 placeholder, we use metadata-only insertion
-	decision := core.InsertionDecision{
-		Action: core.InsertionActionMetadataOnly,
+	decision := capability.InsertionDecision{
+		Action: capability.InsertionActionMetadataOnly,
 		Reason: "phase-5-placeholder-execution",
 	}
 

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ToolSpanExporter converts tool call/result telemetry events into
@@ -13,7 +13,7 @@ import (
 // EventToolCall and EventToolResult events and produces SpanEvents that
 // can be consumed by a SpanExporter backend (OTel adapter, JSONL, etc.).
 type ToolSpanExporter struct {
-	next   core.Telemetry     // chain to next sink
+	next   telemetry.Telemetry     // chain to next sink
 	spans  SpanExporter       // span backend (nil = no-op)
 	attrs  map[string]struct{} // allowlisted extra attribute keys
 	agentID string
@@ -39,7 +39,7 @@ func WithExtraAttributes(attrs []string) ToolSpanExporterOption {
 }
 
 // NewToolSpanExporter wraps a Telemetry sink with tool span export.
-func NewToolSpanExporter(next core.Telemetry, opts ...ToolSpanExporterOption) *ToolSpanExporter {
+func NewToolSpanExporter(next telemetry.Telemetry, opts ...ToolSpanExporterOption) *ToolSpanExporter {
 	e := &ToolSpanExporter{next: next, spans: NopExporter{}}
 	for _, o := range opts {
 		o(e)
@@ -47,9 +47,9 @@ func NewToolSpanExporter(next core.Telemetry, opts ...ToolSpanExporterOption) *T
 	return e
 }
 
-// Emit implements core.Telemetry. It forwards the event to the next sink
+// Emit implements telemetry.Telemetry. It forwards the event to the next sink
 // and, for tool events, also generates a span via the configured exporter.
-func (e *ToolSpanExporter) Emit(event core.Event) {
+func (e *ToolSpanExporter) Emit(event telemetry.Event) {
 	if e.next != nil {
 		e.next.Emit(event)
 	}
@@ -58,14 +58,14 @@ func (e *ToolSpanExporter) Emit(event core.Event) {
 	}
 
 	switch event.Type {
-	case core.EventToolResult:
+	case telemetry.EventToolResult:
 		e.emitToolSpan(event)
-	case core.EventToolCall:
+	case telemetry.EventToolCall:
 		e.emitToolCallSpan(event)
 	}
 }
 
-func (e *ToolSpanExporter) emitToolSpan(event core.Event) {
+func (e *ToolSpanExporter) emitToolSpan(event telemetry.Event) {
 	attrs := e.spanAttrsFromEvent(event)
 	spanCtx := spanContextFromEvent(event)
 	parentCtx := parentSpanContextFromEvent(event)
@@ -82,7 +82,7 @@ func (e *ToolSpanExporter) emitToolSpan(event core.Event) {
 	)
 }
 
-func (e *ToolSpanExporter) emitToolCallSpan(event core.Event) {
+func (e *ToolSpanExporter) emitToolCallSpan(event telemetry.Event) {
 	// ToolCall events are the span start — the span is completed on ToolResult.
 	// For now, we emit a brief span for the call itself.
 	attrs := e.spanAttrsFromEvent(event)
@@ -101,7 +101,7 @@ func (e *ToolSpanExporter) emitToolCallSpan(event core.Event) {
 
 // spanAttrsFromEvent extracts span attributes from the event metadata's
 // "span_attrs" key, merging in runtime values from the event top level.
-func (e *ToolSpanExporter) spanAttrsFromEvent(event core.Event) SpanAttributes {
+func (e *ToolSpanExporter) spanAttrsFromEvent(event telemetry.Event) SpanAttributes {
 	attrs := SpanAttributes{}
 
 	if raw, ok := event.Metadata["span_attrs"]; ok {
@@ -148,7 +148,7 @@ func (e *ToolSpanExporter) spanAttrsFromEvent(event core.Event) SpanAttributes {
 	return attrs
 }
 
-func nameFromEvent(event core.Event, fallback string) string {
+func nameFromEvent(event telemetry.Event, fallback string) string {
 	if event.Message != "" {
 		return event.Message
 	}
@@ -158,21 +158,21 @@ func nameFromEvent(event core.Event, fallback string) string {
 	return fallback
 }
 
-func spanContextFromEvent(event core.Event) SpanContext {
+func spanContextFromEvent(event telemetry.Event) SpanContext {
 	return SpanContext{
 		TraceID: stringField(event.Metadata, "trace_id"),
 		SpanID:  stringField(event.Metadata, "span_id"),
 	}
 }
 
-func parentSpanContextFromEvent(event core.Event) SpanContext {
+func parentSpanContextFromEvent(event telemetry.Event) SpanContext {
 	return SpanContext{
 		TraceID: stringField(event.Metadata, "parent_trace_id"),
 		SpanID:  stringField(event.Metadata, "parent_span_id"),
 	}
 }
 
-func durationFromEvent(event core.Event) time.Duration {
+func durationFromEvent(event telemetry.Event) time.Duration {
 	if raw, ok := event.Metadata["duration_ms"]; ok {
 		switch v := raw.(type) {
 		case float64:
@@ -190,7 +190,7 @@ func durationFromEvent(event core.Event) time.Duration {
 	return 0
 }
 
-func spanStatus(event core.Event) string {
+func spanStatus(event telemetry.Event) string {
 	if success, ok := event.Metadata["success"]; ok {
 		if b, ok := success.(bool); ok && b {
 			return "ok"
@@ -236,4 +236,4 @@ func (e *InMemoryExporter) ExportSpan(name string, attrs SpanAttributes, spanCtx
 }
 
 // Ensure compile-time interface satisfaction.
-var _ core.Telemetry = (*ToolSpanExporter)(nil)
+var _ telemetry.Telemetry = (*ToolSpanExporter)(nil)

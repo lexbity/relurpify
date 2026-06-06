@@ -8,36 +8,36 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type telemetrySink struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (s *telemetrySink) Emit(event core.Event) {
+func (s *telemetrySink) Emit(event telemetry.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.events = append(s.events, event)
 }
 
-func (s *telemetrySink) snapshot() []core.Event {
+func (s *telemetrySink) snapshot() []telemetry.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]core.Event, len(s.events))
+	out := make([]telemetry.Event, len(s.events))
 	copy(out, s.events)
 	return out
 }
 
-func testCapabilityDescriptor(id string, priority int, availability core.AvailabilitySpec) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func testCapabilityDescriptor(id string, priority int, availability capability.AvailabilitySpec) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            id,
 		Name:          id,
 		Kind:          agentspec.CapabilityKindTool,
@@ -58,7 +58,7 @@ func testThoughtRecipe(id string) *surface.ThoughtRecipe {
 
 func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.T) {
 	reg := capability.NewRegistry()
-	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, core.AvailabilitySpec{Available: true})
+	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, capability.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
@@ -165,8 +165,8 @@ func mustStringRouteValue(t *testing.T, env *contextdata.Envelope, key string) s
 
 func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 	reg := capability.NewRegistry()
-	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, core.AvailabilitySpec{Available: true})
-	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, core.AvailabilitySpec{Available: true})
+	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, capability.AvailabilitySpec{Available: true})
+	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, capability.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(low); err != nil {
 		t.Fatalf("register low capability: %v", err)
 	}
@@ -187,8 +187,8 @@ func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 }
 
 func TestRouteMatchesFamily_EmptyFamilyUsesAnalysisHints(t *testing.T) {
-	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
-	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, core.AvailabilitySpec{Available: true})
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, capability.AvailabilitySpec{Available: true})
+	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, capability.AvailabilitySpec{Available: true})
 
 	if !routeMatchesFamily(queryCap, "", "analyze the codebase and explain the flow") {
 		t.Fatal("expected analysis instruction to match query capability")
@@ -199,8 +199,8 @@ func TestRouteMatchesFamily_EmptyFamilyUsesAnalysisHints(t *testing.T) {
 }
 
 func TestRouteMatchesFamily_EmptyFamilyUsesMutationHints(t *testing.T) {
-	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
-	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, core.AvailabilitySpec{Available: true})
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, capability.AvailabilitySpec{Available: true})
+	refactorCap := testCapabilityDescriptor("euclo:cap.targeted_refactor", 0, capability.AvailabilitySpec{Available: true})
 
 	if !routeMatchesFamily(refactorCap, "", "modify the handler to support retries") {
 		t.Fatal("expected mutation instruction to match mutation capability")
@@ -211,7 +211,7 @@ func TestRouteMatchesFamily_EmptyFamilyUsesMutationHints(t *testing.T) {
 }
 
 func TestRouteMatchesFamily_EmptyFamilyRejectsUnrelatedInstruction(t *testing.T) {
-	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, core.AvailabilitySpec{Available: true})
+	queryCap := testCapabilityDescriptor("euclo:cap.ast_query", 0, capability.AvailabilitySpec{Available: true})
 	if routeMatchesFamily(queryCap, "", "write a release note") {
 		t.Fatal("expected unrelated instruction to not match query capability")
 	}
@@ -219,8 +219,8 @@ func TestRouteMatchesFamily_EmptyFamilyRejectsUnrelatedInstruction(t *testing.T)
 
 func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	reg := capability.NewRegistry()
-	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, core.AvailabilitySpec{Available: true})
-	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, core.AvailabilitySpec{Available: true})
+	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, capability.AvailabilitySpec{Available: true})
+	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, capability.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(low); err != nil {
 		t.Fatalf("register low capability: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	}
 
 	sink := &telemetrySink{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	report, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{FamilyID: "query", DryRun: true}, reg, nil)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	events := sink.snapshot()
 	found := false
 	for _, event := range events {
-		if event.Type == core.EventType("euclo.route.dry_run") {
+		if event.Type == telemetry.EventType("euclo.route.dry_run") {
 			found = true
 			break
 		}
@@ -256,13 +256,13 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 
 func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 	reg := capability.NewRegistry()
-	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, core.AvailabilitySpec{Available: true})
+	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, capability.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
 	sink := &telemetrySink{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	if _, err := Dispatch(ctx, env, RouteRequest{CapabilityID: desc.ID}, reg, nil); err != nil {
@@ -272,7 +272,7 @@ func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 	events := sink.snapshot()
 	found := false
 	for _, event := range events {
-		if event.Type == core.EventType("euclo.route.selected") {
+		if event.Type == telemetry.EventType("euclo.route.selected") {
 			found = true
 			if got := event.Metadata["route_id"]; got != desc.ID {
 				t.Fatalf("expected selected event route_id %q, got %v", desc.ID, got)
@@ -287,7 +287,7 @@ func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 
 func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 	reg := capability.NewRegistry()
-	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
+	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, capability.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
 	})
@@ -303,11 +303,11 @@ func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 
 func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 	reg := capability.NewRegistry()
-	primary := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
+	primary := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, capability.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
 	})
-	fallback := testCapabilityDescriptor("euclo:cap.ast_query", 1, core.AvailabilitySpec{Available: true})
+	fallback := testCapabilityDescriptor("euclo:cap.ast_query", 1, capability.AvailabilitySpec{Available: true})
 	if err := reg.RegisterCapability(primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 
 func TestDispatch_AllUnavailable_HardFailure(t *testing.T) {
 	reg := capability.NewRegistry()
-	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, core.AvailabilitySpec{
+	desc := testCapabilityDescriptor("euclo:cap.targeted_refactor", 10, capability.AvailabilitySpec{
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
 	})

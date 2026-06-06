@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 )
 
 // CheckpointSnapshot describes the minimal state needed to persist and restore a checkpoint artifact.
@@ -23,7 +23,7 @@ type CheckpointSnapshot struct {
 }
 
 // SaveCheckpointArtifact writes a checkpoint artifact and stores its reference back into the envelope.
-func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, repo agentlifecycle.Repository, snapshot CheckpointSnapshot) (*core.ArtifactReference, error) {
+func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, repo agentlifecycle.Repository, snapshot CheckpointSnapshot) (*relurpctx.ArtifactReference, error) {
 	if env == nil || repo == nil {
 		return nil, nil
 	}
@@ -51,7 +51,7 @@ func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, repo
 	if err := repo.UpsertArtifact(ctx, artifact); err != nil {
 		return nil, fmt.Errorf("checkpoint: save artifact: %w", err)
 	}
-	ref := core.ArtifactReference{
+	ref := relurpctx.ArtifactReference{
 		ArtifactID: artifact.ArtifactID,
 		WorkflowID: artifact.WorkflowID,
 		RunID:      artifact.RunID,

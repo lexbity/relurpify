@@ -77,7 +77,7 @@ func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []co
 		)
 		if invoker == nil {
 			return observations, fmt.Errorf(
-				"pipeline stage: capability invoker required — "+
+				"pipeline stage: capability invoker required — " +
 					"direct tool.Execute() bypass has been removed")
 		}
 		result, err = invoker.InvokeCapability(ctx, env, call.Name, call.Args)

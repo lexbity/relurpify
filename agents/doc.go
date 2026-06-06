@@ -37,9 +37,8 @@
 //   - relurpic:executor.invoke — narrows the active capability set to a single
 //     non-coordination callable.
 //
-// # Skill system
+// # Orchestration policy
 //
-// Skills are reusable capability bundles declared in SkillManifest YAML files.
-// Framework-owned skill resolution and capability admission live under
-// framework/skills.
+// Agent orchestration config drives per-strategy policy for planning, verification, and review
+// (see governance/policy).
 package agents

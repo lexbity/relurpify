@@ -1,8 +1,8 @@
 package runtime
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import capability "codeburg.org/lexbit/relurpify/framework/capability"
 
-func providerFromConfig(config core.ProviderConfig) (RuntimeProvider, error) {
+func providerFromConfig(config capability.ProviderConfig) (RuntimeProvider, error) {
 	_ = config
 	return nil, nil
 }

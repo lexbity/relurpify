@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -22,6 +21,7 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type noopCompiler struct{}
@@ -75,7 +75,7 @@ func TestThoughtRecipeExecutionNodeExecute(t *testing.T) {
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
-		Config: &core.Config{
+		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
 			Model: "stub",
 		},
@@ -116,7 +116,7 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
-		Config: &core.Config{
+		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
 			Model: "stub",
 		},
@@ -140,7 +140,7 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 	if result == nil || result.Success {
 		t.Fatalf("expected failed result, got %+v", result)
 	}
-	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "compiled plan not found for thoughtrecipe: fix-bug" {
+	if got, ok := execution.ResultField(result.Data, "error"); !ok || got != "compiled plan not found for thoughtrecipe: fix-bug" {
 		t.Fatalf("unexpected error payload: %#v", got)
 	}
 }
@@ -173,7 +173,7 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
-		Config: &core.Config{
+		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
 			Model: "stub",
 		},
@@ -254,7 +254,7 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 		Model:         stubThoughtRecipeModel{},
 		Registry:      capability.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
-		Config: &core.Config{
+		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-handoff-test",
 			Model: "stub",
 		},
@@ -383,13 +383,13 @@ type recordingCapabilityHandler struct {
 	args   map[string]any
 }
 
-func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Name:          "code_review",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
-		Availability:  core.AvailabilitySpec{Available: true},
+		Availability:  capability.AvailabilitySpec{Available: true},
 	}
 }
 
@@ -444,7 +444,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	env := agentenv.WorkspaceEnvironment{
 		Model:    model,
 		Registry: runtimeReg,
-		Config:   &core.Config{Model: "test-model", NativeToolCalling: nativeToolCalling},
+		Config:   &execution.Config{Model: "test-model", NativeToolCalling: nativeToolCalling},
 	}
 
 	taskEnv := contextdata.NewEnvelope("task-scope", "session-scope")

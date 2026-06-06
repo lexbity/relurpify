@@ -3,7 +3,7 @@ package agentlifecycle
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // WorkflowRecord represents a workflow lifecycle entity.
@@ -35,8 +35,8 @@ type DelegationEntry struct {
 	TrustClass     string
 	Recoverability string
 	Background     bool
-	Request        core.DelegationRequest
-	Result         *core.DelegationResult
+	Request        policy.DelegationRequest
+	Result         *policy.DelegationResult
 	Metadata       map[string]any
 	StartedAt      time.Time
 	UpdatedAt      time.Time

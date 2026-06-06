@@ -11,8 +11,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // TargetedRefactorHandler implements the targeted refactor capability.
@@ -27,8 +27,8 @@ func NewTargetedRefactorHandler(env agentenv.WorkspaceEnvironment) *TargetedRefa
 }
 
 // Descriptor returns the capability descriptor for the targeted refactor handler.
-func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.targeted_refactor",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -37,7 +37,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextda
 		Description:   "Applies a focused refactoring to a specific symbol or code block via AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "ast", "write"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

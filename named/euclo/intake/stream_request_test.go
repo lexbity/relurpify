@@ -6,9 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestBuildStreamRequestQueryTemplate(t *testing.T) {
@@ -175,7 +175,7 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	contextdata.SetTyped(env, "task.input", &core.Task{Instruction: "analyze the codebase"})
+	contextdata.SetTyped(env, "task.input", &execution.Task{Instruction: "analyze the codebase"})
 	result, err := node.Execute(context.Background(), env)
 
 	if err != nil {
@@ -203,13 +203,13 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	}
 
 	// Check result
-	if got, ok := core.ResultField(result.Data, "intent_evidence"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "intent_evidence"); !ok || got == nil {
 		t.Fatal("Expected result data to include intent evidence")
 	}
-	if got, ok := core.ResultField(result.Data, "missing_fields"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "missing_fields"); !ok || got == nil {
 		t.Fatal("Expected result data to include missing fields")
 	}
-	if got, ok := core.ResultField(result.Data, "stream_result"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "stream_result"); !ok || got == nil {
 		t.Fatal("Expected result data to include structured stream result")
 	}
 }

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // StatePayload retrieves workflow retrieval payload from state.
@@ -30,7 +30,7 @@ func StatePayload(state interface{}, key string) []byte {
 	return nil
 }
 
-func buildStagePrompt(stageName string, task *core.Task, state *contextdata.Envelope, primaryLabel string, primaryValue any, toolNames []string, schema string) string {
+func buildStagePrompt(stageName string, task *execution.Task, state *contextdata.Envelope, primaryLabel string, primaryValue any, toolNames []string, schema string) string {
 	var sections []string
 	sections = append(sections, fmt.Sprintf("You are the %s stage of a coding pipeline.", stageName))
 	if instruction := taskInstruction(task); instruction != "" {

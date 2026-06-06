@@ -3,7 +3,7 @@ package chainer
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type Option func(*ChainerAgent)
@@ -14,7 +14,7 @@ func WithChain(chain *Chain) Option {
 	}
 }
 
-func WithChainBuilder(builder func(*core.Task) (*Chain, error)) Option {
+func WithChainBuilder(builder func(*execution.Task) (*Chain, error)) Option {
 	return func(agent *ChainerAgent) {
 		agent.ChainBuilder = builder
 	}

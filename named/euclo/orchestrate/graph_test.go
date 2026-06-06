@@ -7,7 +7,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -139,13 +138,13 @@ func testGraphCapabilityRegistry(t *testing.T) *capability.CapabilityRegistry {
 
 type testGraphCapability struct{}
 
-func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Name:          "ast_query",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-		Availability:  core.AvailabilitySpec{Available: true},
+		Availability:  capability.AvailabilitySpec{Available: true},
 	}
 }
 

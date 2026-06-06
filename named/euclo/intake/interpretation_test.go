@@ -3,9 +3,9 @@ package intake
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestBuildIntentInterpretationFromEvidence(t *testing.T) {
@@ -71,7 +71,7 @@ func TestBuildIntentInterpretationIncludesClassificationConfidence(t *testing.T)
 }
 
 func TestTaskEnvelopeCarriesInterpretation(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-1",
 		Instruction: "review the intake path",
 	}

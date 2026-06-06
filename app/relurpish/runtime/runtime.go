@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents"
-	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
@@ -23,44 +24,40 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	ftelemetry "codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
-	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config            Config
-	Workspace         *agentenv.Workspace
-	Tools             *capability.Registry
-	Memory            *memory.WorkingMemoryStore
-	Agent             agentgraph.WorkflowExecutor
-	Model             contracts.LanguageModel
-	IndexManager      *ast.IndexManager
-	GraphDB           *graphdb.Engine
-	SearchEngine      *search.SearchEngine
-	AgentLifecycle    agentlifecycle.Repository
-	Delegations       *fauthorization.DelegationManager
-	WorkspaceConfig   cfgload.RuntimeWorkspaceConfig
-	NexusNodeProvider core.NodeProvider
-	NexusClient       *NexusClient
-	secrets           cfgload.Secrets
+	Config          Config
+	Workspace       *agentenv.Workspace
+	Tools           *capability.Registry
+	Memory          *memory.WorkingMemoryStore
+	Agent           agentgraph.WorkflowExecutor
+	Model           contracts.LanguageModel
+	IndexManager    *ast.IndexManager
+	GraphDB         *graphdb.Engine
+	SearchEngine    *search.SearchEngine
+	AgentLifecycle  agentlifecycle.Repository
+	Delegations     *fauthorization.DelegationManager
+	WorkspaceConfig cfgload.RuntimeWorkspaceConfig
+	secrets         cfgload.Secrets
 
-	hitlCancel  func()
-	nexusCancel func()
+	hitlCancel func()
 
 	providersMu          sync.Mutex
 	providers            []runtimeProviderRecord
@@ -68,8 +65,6 @@ type Runtime struct {
 	interactionEnvelopes map[string]*contextdata.Envelope
 	delegationMu         sync.Mutex
 	delegationBG         *backgroundDelegationProvider
-	mcpMu                sync.Mutex
-	mcpElicit            MCPElicitationHandler
 }
 
 // AgentWorkspace returns the framework/agentenv Workspace for this Runtime.
@@ -91,10 +86,6 @@ func (r *Runtime) Secrets() cfgload.Secrets {
 		return cfgload.Secrets{}
 	}
 	return r.secrets
-}
-
-type MCPElicitationHandler interface {
-	HandleMCPElicitation(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error)
 }
 
 // New builds a fruntime for the TUI and status surfaces.
@@ -175,10 +166,6 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
-	agentDefs, err := cfgload.LoadAgentDefinitions(cfg.Workspace, cfg.AgentsDir)
-	if err != nil {
-		return nil, fmt.Errorf("load agent definitions: %w", err)
-	}
 	ws, err := agentenv.OpenWorkspace(ctx, agentenv.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
@@ -202,11 +189,10 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		LoadedConfig:               loadedConfig,
 		ManifestSnapshot:           manifestSnapshot,
 		ProfileResolution:          profileResolution,
-		AgentDefinitions:           agentDefs,
 		SecurityBundle:             &securityBundle,
 		Scope:                      agentenv.ScopeFull,
 		EventLogFactory: func(path string) (event.Log, error) {
-			return nexusdb.NewSQLiteEventLog(path)
+			return persistence.NewSQLiteEventLog(path)
 		},
 	}, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, euclo.GetRegistrationFuncs())
 	if err != nil {
@@ -228,12 +214,12 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	// Extend telemetry with an event log sink. The event log is now created
 	// by framework/agentenv via EventLogFactory, so we just need to wire it into
 	// the telemetry chain.
-	var eventTelemetry telemetry.EventTelemetry
+	var eventTelemetry ftelemetry.EventTelemetry
 	if cfg.EventsPath != "" && registration != nil {
 		// The event log is now owned by Workspace and will be closed by Workspace.Close()
 		// We need to get it from the Workspace's Environment
 		if env.EventLog != nil {
-			eventTelemetry = telemetry.EventTelemetry{
+			eventTelemetry = ftelemetry.EventTelemetry{
 				Log:       env.EventLog,
 				Partition: "local",
 				Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
@@ -250,9 +236,9 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 						"metadata":        fields,
 					}
 					if data, err := json.Marshal(payload); err == nil {
-						_, _ = env.EventLog.Append(ctx, "local", []core.FrameworkEvent{{
+						_, _ = env.EventLog.Append(ctx, "local", []telemetry.FrameworkEvent{{
 							Timestamp: time.Now().UTC(),
-							Type:      core.FrameworkEventPolicyEvaluated,
+							Type:      telemetry.FrameworkEventPolicyEvaluated,
 							Payload:   data,
 							Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 							Partition: "local",
@@ -270,10 +256,10 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 
 	// Assemble the final telemetry (base + event log if available).
 	if eventTelemetry.Log != nil {
-		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
+		if mt, ok := baseTelemetry.(ftelemetry.MultiplexTelemetry); ok {
 			mt.Sinks = append(mt.Sinks, eventTelemetry)
 		} else {
-			baseTelemetry = telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{baseTelemetry, eventTelemetry}}
+			baseTelemetry = ftelemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{baseTelemetry, eventTelemetry}}
 		}
 	}
 
@@ -308,7 +294,8 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		rt.hitlCancel = cancel
 		go func() {
 			for ev := range ch {
-				eventTelemetry.EmitHITLEvent(ev)
+				resolved := ev.Type == fauthorization.HITLEventResolved || ev.Type == fauthorization.HITLEventExpired
+				eventTelemetry.EmitHITLEvent(resolved, ev)
 			}
 		}()
 	}
@@ -317,16 +304,9 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		_ = rt.Close()
 		return nil, fmt.Errorf("register builtin providers: %w", err)
 	}
-	if err := registerNexusGatewayProvider(ctx, rt); err != nil {
-		_ = rt.Close()
-		return nil, fmt.Errorf("register nexus gateway provider: %w", err)
-	}
-	if err := registerLocalNexusNodeProvider(ctx, rt); err != nil {
-		_ = rt.Close()
-		return nil, fmt.Errorf("register local nexus node: %w", err)
-	}
+	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
-	agent := instantiateAgent(cfg, agentEnv, ws.AgentDefinitions)
+	agent := instantiateAgent(cfg, agentEnv)
 	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
@@ -364,10 +344,6 @@ func (r *Runtime) Close() error {
 		r.hitlCancel()
 		r.hitlCancel = nil
 	}
-	if r.nexusCancel != nil {
-		r.nexusCancel()
-		r.nexusCancel = nil
-	}
 
 	// Close workspace (handles backend, services, logs, etc.)
 	if r.Workspace != nil {
@@ -392,14 +368,6 @@ func (r *Runtime) AvailableAgents() []string {
 		"reflection": {},
 		"expert":     {},
 	}
-	if r != nil {
-		for name := range r.Workspace.AgentDefinitions {
-			if name == "" {
-				continue
-			}
-			seen[name] = struct{}{}
-		}
-	}
 	out := make([]string, 0, len(seen))
 	for name := range seen {
 		out = append(out, name)
@@ -419,11 +387,11 @@ func (r *Runtime) SwitchAgent(name string) error {
 	if r.Workspace.Registration == nil || r.Workspace.Registration.Manifest == nil || r.Workspace.Registration.Manifest.Spec.Agent == nil {
 		return errors.New("agent manifest missing")
 	}
-	effectiveContract, compiledPolicy, agentDefs, err := r.resolveEffectiveContractForAgent(name)
+	effectiveContract, compiledPolicy, err := r.resolveEffectiveContractForAgent(name)
 	if err != nil {
 		return err
 	}
-	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
+	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy)
 }
 
 // ReloadEffectiveContract reapplies the effective contract and compiled policy
@@ -440,14 +408,14 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	if name == "" {
 		return errors.New("agent name required")
 	}
-	effectiveContract, compiledPolicy, agentDefs, err := r.resolveEffectiveContractForAgent(name)
+	effectiveContract, compiledPolicy, err := r.resolveEffectiveContractForAgent(name)
 	if err != nil {
 		return err
 	}
-	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
+	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgload.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle, agentDefs map[string]*agentspec.AgentDefinition) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgload.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -462,10 +430,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgloa
 	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.InferenceModel {
 		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
 	}
-	if err := ensureStableSkillCapabilityTopology(r.Workspace.EffectiveContract, effectiveContract); err != nil {
-		return err
-	}
-	agentCfg := &core.Config{
+	agentCfg := &execution.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.InferenceModel,
 		MaxIterations:     8,
@@ -480,7 +445,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgloa
 		SearchEngine: r.SearchEngine,
 		Memory:       r.Memory,
 		Config:       agentCfg,
-	}, agentDefs)
+	})
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
 	}
@@ -489,33 +454,16 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgloa
 	r.Workspace.Registration.Policy = nil
 	r.Agent = agent
 	r.Workspace.AgentSpec = effectiveContract.AgentSpec
-	r.Workspace.AgentDefinitions = agentDefs
 	r.Workspace.EffectiveContract = effectiveContract
 	r.Workspace.CompiledPolicy = compiledPolicy
 	r.Workspace.CapabilityAdmissions = nil
-	r.syncSkillContextPaths(effectiveContract.SkillResults)
 	r.Config.AgentName = name
 	return nil
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*agentspec.AgentDefinition) agentgraph.WorkflowExecutor {
+func instantiateAgent(cfg Config, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
 	paths := cfgload.New(cfg.Workspace)
-	// Check file-based definitions first
-	if def, ok := defs[cfg.AgentName]; ok {
-		spec := env.Config.AgentSpec
-		if spec == nil {
-			spec = &def.Spec
-			env.Config.AgentSpec = spec
-		}
-		env.Config.NativeToolCalling = spec.NativeToolCallingEnabled()
-		if spec.Model.Name != "" {
-			env.Config.Model = spec.Model.Name
-		}
-
-		return instantiateDefinitionAgent(cfg, def, env)
-	}
-
 	workspaceEnv := agents.ToWorkspace(env)
 	builder := agents.NewAgentBuilder().WithEnvironment(&workspaceEnv)
 	switch cfg.AgentLabel() {
@@ -534,47 +482,16 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 	}
 }
 
-func instantiateDefinitionAgent(cfg Config, def *agentspec.AgentDefinition, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
-	paths := cfgload.New(cfg.Workspace)
-	spec := def.Spec
-	if env.Config != nil && env.Config.AgentSpec != nil {
-		spec = *env.Config.AgentSpec
-	}
-	workspaceEnv := agents.ToWorkspace(env)
-	agent, err := agents.BuildFromSpec(&workspaceEnv, spec)
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*cfgload.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, error) {
+	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, cfgload.ResolveOptions{})
 	if err != nil {
-		agent, _ = agents.BuildFromSpec(&workspaceEnv, agentspec.AgentRuntimeSpec{Implementation: "react"})
-	}
-	return configureBuiltAgent(agent, paths)
-}
-
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*cfgload.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, map[string]*agentspec.AgentDefinition, error) {
-	agentDefs := r.Workspace.AgentDefinitions
-	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, cfgload.ResolveOptions{
-		AgentOverlays: agentspec.AgentSpecOverlaysForName(name, agentDefs),
-	}, nil)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
+		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
 	compiledPolicy, err := fauthorization.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, nil, nil)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
+		return nil, nil, fmt.Errorf("compile effective policy: %w", err)
 	}
-	return effectiveContract, compiledPolicy, agentDefs, nil
-}
-
-func ensureStableSkillCapabilityTopology(current, next *cfgload.EffectiveAgentContract) error {
-	return nil
-}
-
-func skillCapabilityIDSet(contract *cfgload.EffectiveAgentContract) map[string]struct{} {
-	_ = contract
-	return nil
-}
-
-func (r *Runtime) syncSkillContextPaths(results []cfgload.SkillResolution) {
-	_ = r
-	_ = results
+	return effectiveContract, compiledPolicy, nil
 }
 
 func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths cfgload.Paths) agentgraph.WorkflowExecutor {
@@ -589,7 +506,7 @@ func (r *Runtime) wireRuntimeAgentDependencies(agent agentgraph.WorkflowExecutor
 
 // RunTask executes a task against the configured agent while preserving shared
 // context state for future status screens.
-func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, error) {
+func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
 	if task == nil {
 		return nil, errors.New("task required")
 	}
@@ -653,12 +570,12 @@ func (r *Runtime) ResolveInteractionFrame(ctx context.Context, taskID, frameID, 
 }
 
 // ExecuteInstruction convenience helper.
-func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error) {
+func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error) {
 	if taskType == "" {
-		taskType = core.TaskTypeExecute
+		taskType = execution.TaskTypeExecute
 	}
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          fmt.Sprintf("chat-%d", time.Now().UnixNano()),
 		Instruction: instruction,
 		Type:        string(taskType),
@@ -674,7 +591,7 @@ func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, ta
 
 // ExecuteInstructionStream is like ExecuteInstruction but wires a streaming
 // callback so the LLM emits tokens incrementally via callback as they arrive.
-func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error) {
+func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
 	if metadata == nil {
 		metadata = make(map[string]any)
 	}
@@ -740,7 +657,7 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 	return nil
 }
 
-func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if r == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
@@ -751,7 +668,7 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	if !ok || value == nil {
 		return nil, fmt.Errorf("task input unavailable for resume")
 	}
-	task, ok := value.(*core.Task)
+	task, ok := value.(*execution.Task)
 	if !ok || task == nil {
 		return nil, fmt.Errorf("task input has unexpected type %T", value)
 	}
@@ -830,9 +747,9 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 		"warnings":      append([]string(nil), snapshot.Warnings...),
 	}
 	if data, err := json.Marshal(payload); err == nil {
-		_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
+		_, _ = eventLog.Append(ctx, "local", []telemetry.FrameworkEvent{{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventManifestReloaded,
+			Type:      telemetry.FrameworkEventManifestReloaded,
 			Payload:   data,
 			Actor:     identity.EventActor{Kind: "agent", ID: agentID, Label: label},
 			Partition: "local",
@@ -879,26 +796,4 @@ func (r *Runtime) DenyHITL(requestID, reason string) error {
 		return errors.New("hitl broker unavailable")
 	}
 	return r.Workspace.Registration.HITL.Deny(requestID, reason)
-}
-
-func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {
-	if r == nil {
-		return
-	}
-	r.mcpMu.Lock()
-	defer r.mcpMu.Unlock()
-	r.mcpElicit = handler
-}
-
-func (r *Runtime) handleMCPElicitation(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error) {
-	if r == nil {
-		return &protocol.ElicitationResult{Action: "decline"}, nil
-	}
-	r.mcpMu.Lock()
-	handler := r.mcpElicit
-	r.mcpMu.Unlock()
-	if handler == nil {
-		return &protocol.ElicitationResult{Action: "decline"}, nil
-	}
-	return handler.HandleMCPElicitation(ctx, params)
 }

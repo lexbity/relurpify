@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type dispatchDecision struct {
@@ -19,7 +20,7 @@ type dispatchDecision struct {
 	Selectors       []agentspec.CapabilitySelector
 }
 
-func dispatchMetadata(task *core.Task) (string, []agentspec.CapabilitySelector, map[string]any) {
+func dispatchMetadata(task *execution.Task) (string, []agentspec.CapabilitySelector, map[string]any) {
 	args := map[string]any{}
 	if task != nil {
 		args["instruction"] = task.Instruction
@@ -82,7 +83,7 @@ func operatorName(step plan.PlanStep) string {
 	return step.ID
 }
 
-func operatorNameFromTask(task *core.Task) string {
+func operatorNameFromTask(task *execution.Task) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}
@@ -138,15 +139,15 @@ func resolveDispatchTarget(registry *capability.Registry, explicitTarget string,
 		}
 	}
 	for _, selector := range selectors {
-		targets := sortedCapabilities(registry.CoordinationTargets(selector))
+		targets := sortedDelegationTargets(registry.CoordinationTargets(selector))
 		if len(targets) > 0 {
-			if targets[0].Name != "" {
-				return targets[0].Name, "selector_coordination_target"
+			if targets[0].CapabilityName() != "" {
+				return targets[0].CapabilityName(), "selector_coordination_target"
 			}
-			return targets[0].ID, "selector_coordination_target"
+			return targets[0].CapabilityID(), "selector_coordination_target"
 		}
 		for _, desc := range sortedCapabilities(registry.AllCapabilities()) {
-			if core.SelectorMatchesDescriptor(selector, desc) {
+			if capability.SelectorMatchesDescriptor(selector, desc) {
 				if desc.Name != "" {
 					return desc.Name, "selector_capability"
 				}
@@ -160,11 +161,31 @@ func resolveDispatchTarget(registry *capability.Registry, explicitTarget string,
 	return "", "no_matching_selector"
 }
 
-func sortedCapabilities(input []core.CapabilityDescriptor) []core.CapabilityDescriptor {
+func sortedDelegationTargets(input []policy.DelegationTarget) []policy.DelegationTarget {
 	if len(input) == 0 {
 		return nil
 	}
-	out := append([]core.CapabilityDescriptor(nil), input...)
+	out := append([]policy.DelegationTarget(nil), input...)
+	sort.Slice(out, func(i, j int) bool {
+		left := delegationTargetSortKey(out[i])
+		right := delegationTargetSortKey(out[j])
+		return left < right
+	})
+	return out
+}
+
+func delegationTargetSortKey(target policy.DelegationTarget) string {
+	if name := strings.TrimSpace(target.CapabilityName()); name != "" {
+		return strings.ToLower(name)
+	}
+	return strings.ToLower(strings.TrimSpace(target.CapabilityID()))
+}
+
+func sortedCapabilities(input []capability.CapabilityDescriptor) []capability.CapabilityDescriptor {
+	if len(input) == 0 {
+		return nil
+	}
+	out := append([]capability.CapabilityDescriptor(nil), input...)
 	sort.Slice(out, func(i, j int) bool {
 		left := capabilitySortKey(out[i])
 		right := capabilitySortKey(out[j])
@@ -173,7 +194,7 @@ func sortedCapabilities(input []core.CapabilityDescriptor) []core.CapabilityDesc
 	return out
 }
 
-func capabilitySortKey(desc core.CapabilityDescriptor) string {
+func capabilitySortKey(desc capability.CapabilityDescriptor) string {
 	if strings.TrimSpace(desc.Name) != "" {
 		return strings.ToLower(strings.TrimSpace(desc.Name))
 	}

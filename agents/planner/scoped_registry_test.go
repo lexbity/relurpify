@@ -7,8 +7,8 @@ import (
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type scopedPlannerTool struct {
@@ -52,7 +52,7 @@ func TestPlannerExecuteNodeUsesScopedRegistryDirectly(t *testing.T) {
 	}
 
 	scoped := reg.WithAllowlist([]string{plannerToolCapabilityID("scope_read")})
-	agent := &PlannerAgent{Tools: scoped, Config: &core.Config{}}
+	agent := &PlannerAgent{Tools: scoped, Config: &execution.Config{}}
 	node := &plannerExecuteNode{id: "planner_execute", agent: agent}
 	env := contextdata.NewEnvelope("planner-task", "session")
 	env.SetWorkingValue("planner.plan", pl.Plan{

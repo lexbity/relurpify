@@ -5,19 +5,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const maxBlackboardAuditEntries = 32
 
-func emitBlackboardEvent(telemetry core.Telemetry, state *contextdata.Envelope, eventType core.EventType, nodeID, taskID, message string, metadata map[string]any) {
+func emitBlackboardEvent(sink telemetry.Telemetry, state *contextdata.Envelope, eventType telemetry.EventType, nodeID, taskID, message string, metadata map[string]any) {
 	if state != nil {
 		appendBlackboardAudit(state, strings.TrimSpace(message), metadata)
 	}
-	if telemetry == nil {
+	if sink == nil {
 		return
 	}
-	telemetry.Emit(core.Event{
+	sink.Emit(telemetry.Event{
 		Type:      eventType,
 		NodeID:    strings.TrimSpace(nodeID),
 		TaskID:    strings.TrimSpace(taskID),

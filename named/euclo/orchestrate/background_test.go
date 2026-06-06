@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type recordingSubmitter struct {
@@ -36,10 +37,10 @@ func (r *recordingSubmitter) Submit(_ context.Context, spec jobs.JobSpec) (*jobs
 
 type recordingTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (r *recordingTelemetry) Emit(event core.Event) {
+func (r *recordingTelemetry) Emit(event telemetry.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
@@ -76,13 +77,13 @@ func TestBackgroundJobNodeSubmitsJobAndInvokesCompletionHook(t *testing.T) {
 	if !hookCalled {
 		t.Fatal("expected completion hook to be called")
 	}
-	if got, ok := core.ResultField(result.Data, "job_started"); !ok || got != true {
+	if got, ok := execution.ResultField(result.Data, "job_started"); !ok || got != true {
 		t.Fatalf("expected job_started true, got %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "job_id"); !ok || got != "job-1" {
+	if got, ok := execution.ResultField(result.Data, "job_id"); !ok || got != "job-1" {
 		t.Fatalf("unexpected job id: %v", got)
 	}
-	if got, ok := core.ResultField(result.Data, "job_completed"); !ok || got != true {
+	if got, ok := execution.ResultField(result.Data, "job_completed"); !ok || got != true {
 		t.Fatalf("expected job_completed true, got %v", got)
 	}
 	if submitter.spec.Kind != "euclo.background.build" {
@@ -101,29 +102,29 @@ func TestBackgroundJobNodeSubmitsJobAndInvokesCompletionHook(t *testing.T) {
 
 func TestBackgroundJobNodeEmitsTelemetry(t *testing.T) {
 	submitter := &recordingSubmitter{}
-	telemetry := &recordingTelemetry{}
+	rec := &recordingTelemetry{}
 	node := NewBackgroundJobNode("background2").
 		WithSubmitter(submitter).
-		WithTelemetry(reporting.NewEucloTelemetry(telemetry))
+		WithTelemetry(reporting.NewEucloTelemetry(rec))
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
 	state.SetBackgroundJobKind(env, "euclo.background.test")
 	contextdata.SetTyped(env, "euclo.background.payload", map[string]any{"target": "test"})
 
-	_, err := node.Execute(core.WithTelemetry(context.Background(), telemetry), env)
+	_, err := node.Execute(telemetry.WithTelemetry(context.Background(), rec), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	telemetry.mu.Lock()
-	defer telemetry.mu.Unlock()
-	if len(telemetry.events) < 2 {
-		t.Fatalf("expected submit and complete telemetry events, got %d", len(telemetry.events))
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.events) < 2 {
+		t.Fatalf("expected submit and complete telemetry events, got %d", len(rec.events))
 	}
-	if telemetry.events[0].Type != core.EventType(reporting.EventTypeJobSubmitted) {
-		t.Fatalf("unexpected first event type: %s", telemetry.events[0].Type)
+	if rec.events[0].Type != telemetry.EventType(reporting.EventTypeJobSubmitted) {
+		t.Fatalf("unexpected first event type: %s", rec.events[0].Type)
 	}
-	if telemetry.events[1].Type != core.EventType(reporting.EventTypeJobCompleted) {
-		t.Fatalf("unexpected second event type: %s", telemetry.events[1].Type)
+	if rec.events[1].Type != telemetry.EventType(reporting.EventTypeJobCompleted) {
+		t.Fatalf("unexpected second event type: %s", rec.events[1].Type)
 	}
 }

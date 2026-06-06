@@ -7,10 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestEndToEndAgentExecution validates that all seams work together
@@ -52,7 +53,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		name:        "e2e-tool",
 		description: "end-to-end test tool",
 		category:    "test",
-		permissions: core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+		permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
 		manager:     manager,
 		agent:       "test-agent",
 		basePath:    env.WorkspacePath,
@@ -63,8 +64,8 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 4: Emit telemetry event for agent start (telemetry seam)
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventAgentStart,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventAgentStart,
 		NodeID:    "agent-node",
 		TaskID:    "task-1",
 		Message:   "agent started",
@@ -91,8 +92,8 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 6: Emit telemetry event for tool call
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventToolCall,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventToolCall,
 		NodeID:    "tool-node",
 		TaskID:    "task-1",
 		Message:   "tool called",
@@ -130,8 +131,8 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 8: Emit telemetry event for agent finish
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventAgentFinish,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventAgentFinish,
 		NodeID:    "agent-node",
 		TaskID:    "task-1",
 		Message:   "agent finished",

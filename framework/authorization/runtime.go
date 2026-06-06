@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
 )
@@ -41,7 +42,7 @@ type AgentRegistration struct {
 	Runtime          sandbox.SandboxRuntime
 	Permissions      *PermissionManager
 	Policy           PolicyEngine
-	Audit            core.AuditLogger
+	Audit            policy.AuditLogger
 	HITL             *HITLBroker
 }
 
@@ -90,7 +91,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
-	audit := core.NewInMemoryAuditLogger(cfg.AuditLimit)
+	audit := policy.NewInMemoryAuditLogger(cfg.AuditLimit)
 	var permissions *PermissionManager
 	if len(agentManifest.Spec.Permissions.FileSystem) > 0 ||
 		len(agentManifest.Spec.Permissions.Executables) > 0 ||
@@ -210,21 +211,21 @@ func buildNetworkPolicy(perms []contracts.NetworkPermission) []sandbox.NetworkRu
 }
 
 // Execute enforces permissions prior to delegating to the runtime executor.
-func (r *AgentRegistration) Execute(ctx context.Context, agent core.AgentExecutor, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
+func (r *AgentRegistration) Execute(ctx context.Context, agent execution.AgentExecutor, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	if agent == nil {
 		return nil, errors.New("agent missing")
 	}
 	if r == nil || r.Permissions == nil {
 		return nil, errors.New("permission subsystem missing")
 	}
-	if err := agent.Initialize(&core.Config{Name: r.ID, NativeToolCalling: true}); err != nil {
+	if err := agent.Initialize(&execution.Config{Name: r.ID, NativeToolCalling: true}); err != nil {
 		return nil, err
 	}
 	return agent.Execute(ctx, task, state)
 }
 
 // QueryAudit proxies queries to the audit store.
-func (r *AgentRegistration) QueryAudit(ctx context.Context, filter core.AuditQuery) ([]core.AuditRecord, error) {
+func (r *AgentRegistration) QueryAudit(ctx context.Context, filter policy.AuditQuery) ([]policy.AuditRecord, error) {
 	if r == nil || r.Audit == nil {
 		return nil, errors.New("audit logger missing")
 	}

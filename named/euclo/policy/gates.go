@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
@@ -43,7 +43,7 @@ type GateNode struct {
 	hitlBroker        HITLBroker
 	agentID           string
 	approvalTimeout   time.Duration
-	eventLog          core.Telemetry
+	eventLog          telemetry.Telemetry
 }
 
 // NewGateNode creates a new gate node.
@@ -82,7 +82,7 @@ func (n *GateNode) WithApprovalTimeout(timeout time.Duration) *GateNode {
 }
 
 // WithTelemetry wires a telemetry sink for frame emission.
-func (n *GateNode) WithTelemetry(telemetry core.Telemetry) *GateNode {
+func (n *GateNode) WithTelemetry(telemetry telemetry.Telemetry) *GateNode {
 	n.eventLog = telemetry
 	return n
 }
@@ -256,7 +256,7 @@ func (n *GateNode) resourceID(env *contextdata.Envelope) string {
 	return strings.TrimSpace(n.agentID)
 }
 
-func (n *GateNode) telemetry() core.Telemetry {
+func (n *GateNode) telemetry() telemetry.Telemetry {
 	if n != nil && n.eventLog != nil {
 		return n.eventLog
 	}

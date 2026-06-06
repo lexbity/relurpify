@@ -17,7 +17,6 @@ import (
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/runtimeenv"
 )
 
 var (
@@ -29,7 +28,7 @@ var (
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
 func main() {
-	envSnapshot = runtimeenv.Capture()
+	envSnapshot = os.Environ()
 	var ovErr error
 	envOverrides, ovErr = cfgload.LoadEnvOverrides(envSnapshot)
 	if ovErr != nil {

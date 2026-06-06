@@ -117,7 +117,7 @@ func testSandboxManifest() *cfgload.AgentManifest {
 					Default:       agentspec.AgentPermissionAsk,
 				},
 				ProviderPolicies: map[string]agentspec.ProviderPolicy{
-					"remote-mcp": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
+					"remote-plugin": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
 				},
 				ToolExecutionPolicy: map[string]agentspec.ToolPolicy{
 					"cli_mkdir": {Execute: agentspec.AgentPermissionAllow},

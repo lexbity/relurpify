@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type stubExecutor struct {
@@ -17,11 +17,11 @@ type stubExecutor struct {
 	steps []string
 }
 
-func (s *stubExecutor) Initialize(config *core.Config) error { return nil }
+func (s *stubExecutor) Initialize(config *execution.Config) error { return nil }
 
 func (s *stubExecutor) Capabilities() []string { return nil }
 
-func (s *stubExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error) {
+func (s *stubExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	stepVal, ok := task.Context["current_step"]
 	if ok {
 		if step, ok := stepVal.(PlanStep); ok {
@@ -45,7 +45,7 @@ func TestPlanExecutorSerializesReadyStepsWithoutBranchIsolation(t *testing.T) {
 		Dependencies: make(map[string][]string),
 	}
 	state := contextdata.NewEnvelope("task-1", "")
-	task := &core.Task{ID: "task-1", Instruction: "parallel steps"}
+	task := &execution.Task{ID: "task-1", Instruction: "parallel steps"}
 
 	pe := &PlanExecutor{}
 	result, err := pe.Execute(context.Background(), executor, task, plan, state)
@@ -79,7 +79,7 @@ func TestPlanExecutorSkipsPreviouslyCompletedSteps(t *testing.T) {
 		Dependencies: make(map[string][]string),
 	}
 	state := contextdata.NewEnvelope("task-2", "")
-	task := &core.Task{ID: "task-2", Instruction: "resume"}
+	task := &execution.Task{ID: "task-2", Instruction: "resume"}
 
 	pe := &PlanExecutor{
 		Options: PlanExecutionOptions{
@@ -101,9 +101,9 @@ type flakyExecutor struct {
 	attempts int
 }
 
-func (f *flakyExecutor) Initialize(config *core.Config) error { return nil }
+func (f *flakyExecutor) Initialize(config *execution.Config) error { return nil }
 func (f *flakyExecutor) Capabilities() []string               { return nil }
-func (f *flakyExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error) {
+func (f *flakyExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	f.attempts++
 	if f.attempts == 1 {
 		return nil, errors.New("first attempt failed")
@@ -121,12 +121,12 @@ func TestPlanExecutorAppliesStructuredRecoveryBeforeRetry(t *testing.T) {
 		Steps: []PlanStep{{ID: "step-1", Description: "retry with recovery"}},
 	}
 	state := contextdata.NewEnvelope("task-2", "")
-	task := &core.Task{ID: "task-3", Instruction: "recover"}
+	task := &execution.Task{ID: "task-3", Instruction: "recover"}
 
 	pe := &PlanExecutor{
 		Options: PlanExecutionOptions{
 			MaxRecoveryAttempts: 1,
-			Recover: func(ctx context.Context, step PlanStep, stepTask *core.Task, env *contextdata.Envelope, err error) (*StepRecovery, error) {
+			Recover: func(ctx context.Context, step PlanStep, stepTask *execution.Task, env *contextdata.Envelope, err error) (*StepRecovery, error) {
 				return &StepRecovery{
 					Diagnosis: "inspect the failing file",
 					Notes:     []string{"read the target file", "retry with a smaller edit"},
@@ -159,7 +159,7 @@ func TestBuildStepTaskDoesNotReadArchitectState(t *testing.T) {
 	step := PlanStep{ID: "s1", Description: "do work"}
 	state := contextdata.NewEnvelope("task-2", "")
 	state.SetWorkingValue("architect.last_step_summary", "framework should not read this", contextdata.MemoryClassTask)
-	task := buildStepTask(&core.Task{}, nil, step, state)
+	task := buildStepTask(&execution.Task{}, nil, step, state)
 	_ = task
 	if _, ok := task.Context["previous_step_result"]; ok {
 		t.Fatal("expected framework step task builder not to inject architect-specific context")
@@ -168,7 +168,7 @@ func TestBuildStepTaskDoesNotReadArchitectState(t *testing.T) {
 
 func TestBuildStepTaskDoesNotCopyCallerSpecificContext(t *testing.T) {
 	step := PlanStep{ID: "s1", Description: "do work"}
-	task := buildStepTask(&core.Task{
+	task := buildStepTask(&execution.Task{
 		Context: map[string]any{
 			"mode":                       "debug",
 			"stream_callback":            func(string) {},
@@ -195,14 +195,14 @@ type isolatedExecutorShared struct {
 	maxConcurrent int32
 }
 
-func (e *isolatedExecutor) Initialize(config *core.Config) error { return nil }
+func (e *isolatedExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *isolatedExecutor) Capabilities() []string               { return nil }
 
 func (e *isolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &isolatedExecutor{shared: e.shared}, nil
 }
 
-func (e *isolatedExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *isolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	stepVal, ok := task.Context["current_step"]
 	if !ok {
 		return &Result{Success: true}, nil
@@ -242,7 +242,7 @@ func TestPlanExecutorRunsReadyStepsInParallelWithIsolatedBranchAgents(t *testing
 		Dependencies: make(map[string][]string),
 	}
 	state := contextdata.NewEnvelope("task-2", "")
-	task := &core.Task{ID: "task-parallel", Instruction: "parallel steps"}
+	task := &execution.Task{ID: "task-parallel", Instruction: "parallel steps"}
 
 	done := make(chan error, 1)
 	go func() {

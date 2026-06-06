@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // EmitFrame writes a frame to the envelope and publishes to the event log.
-func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.Envelope, eventLog core.Telemetry) error {
+func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.Envelope, eventLog telemetry.Telemetry) error {
 	if frame == nil {
 		return nil
 	}
@@ -28,13 +28,13 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 	env.SetWorkingValue(frameKey, frame, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.interaction.frame_seq", seq+1, contextdata.MemoryClassTask)
 
-	telemetry := eventLog
-	if telemetry == nil {
-		telemetry = core.TelemetryFromContext(ctx)
+	sink := eventLog
+	if sink == nil {
+		sink = telemetry.TelemetryFromContext(ctx)
 	}
-	if telemetry != nil {
-		telemetry.Emit(core.Event{
-			Type:      core.EventType("euclo.interaction.frame.emitted"),
+	if sink != nil {
+		sink.Emit(telemetry.Event{
+			Type:      telemetry.EventType("euclo.interaction.frame.emitted"),
 			TaskID:    env.TaskID,
 			NodeID:    frame.ID,
 			Timestamp: time.Now().UTC(),

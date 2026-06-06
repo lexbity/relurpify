@@ -3,15 +3,14 @@ package capability
 import (
 	"sort"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // CapabilitySnapshot pairs an admitted capability descriptor with its current
 // effective exposure. It includes hidden capabilities so callers can inspect
 // policy-denied entries without consulting live registry internals.
 type CapabilitySnapshot struct {
-	Descriptor core.CapabilityDescriptor
-	Exposure   core.CapabilityExposure
+	Descriptor CapabilityDescriptor
+	Exposure   CapabilityExposure
 }
 
 // AllCapabilitySnapshots returns every admitted capability together with its

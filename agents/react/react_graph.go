@@ -5,11 +5,11 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // BuildGraph constructs the ReAct workflow.
-func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *ReActAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if a.Model == nil {
 		return nil, fmt.Errorf("react agent missing language model")
 	}
@@ -66,13 +66,13 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 			return nil, err
 		}
 	}
-	if err := g.AddEdge(observe.ID(), think.ID(), func(result *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(observe.ID(), think.ID(), func(result *execution.Result, env *contextdata.Envelope) bool {
 		done, _ := env.GetWorkingValue("react.done")
 		return done == false || done == nil
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(observe.ID(), done.ID(), func(result *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(observe.ID(), done.ID(), func(result *execution.Result, env *contextdata.Envelope) bool {
 		done, _ := env.GetWorkingValue("react.done")
 		return done == true
 	}, false); err != nil {

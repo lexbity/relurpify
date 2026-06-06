@@ -9,15 +9,18 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type reactActNode struct {
 	id    string
 	agent *ReActAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 // ID returns the node identifier for the "act" step.
@@ -34,12 +37,12 @@ func (n *reactActNode) Contract() agentgraph.NodeContract {
 		}},
 		SideEffectClass: agentgraph.SideEffectExternal,
 		Idempotency:     agentgraph.IdempotencyUnknown,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "react.decision", "react.tool_calls", "react.*"},
 			WriteKeys:                []string{"react.last_tool_result", "react.last_tool_result_*", "react.tool_observations", "react.*"},
 			AllowHistoryAccess:       true,
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassArtifactRef, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassArtifactRef, relurpctx.StateDataClassMemoryRef, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 16,
 			PreferArtifactReferences: true,
@@ -49,7 +52,7 @@ func (n *reactActNode) Contract() agentgraph.NodeContract {
 
 // Execute runs any pending tool calls or directly invokes the requested tool
 // referenced in the latest decision payload.
-func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValue("react.execution_phase", "executing", contextdata.MemoryClassTask)
 	activeTools := activeToolSet(env)
 	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
@@ -59,7 +62,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
 			} else {
 				results := make(map[string]interface{})
-				envelopes := make(map[string]*core.CapabilityResultEnvelope)
+				envelopes := make(map[string]*capability.CapabilityResultEnvelope)
 				toolErrors := make([]string, 0)
 				overallSuccess := true
 				for _, call := range calls {
@@ -124,10 +127,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				env.SetWorkingValue("react.last_tool_result", results, contextdata.MemoryClassTask)
 				env.SetWorkingValue("react.last_tool_result_envelopes", envelopes, contextdata.MemoryClassTask)
 				env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
-				result := &core.Result{
+				result := &execution.Result{
 					NodeID:  n.id,
 					Success: overallSuccess,
-					Data:    core.NewToolResultPayload(results),
+					Data:    execution.NewToolResultPayload(results),
 					Metadata: map[string]any{
 						"capability_results": envelopes,
 					},
@@ -151,7 +154,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	toolName := strings.TrimSpace(decision.Tool)
 	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
 		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
-		result := &core.Result{NodeID: n.id, Success: true}
+		result := &execution.Result{NodeID: n.id, Success: true}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
@@ -159,21 +162,21 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		lower := strings.ToLower(toolName)
 		if lower == "" || strings.Contains(lower, "none") {
 			env.SetWorkingValue("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
-			result := &core.Result{NodeID: n.id, Success: true}
+			result := &execution.Result{NodeID: n.id, Success: true}
 			env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 			return result, nil
 		}
 		// Feed error back to the LLM so it can retry with a valid tool name.
 		errMsg := fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", toolName)
 		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
-		result := &core.Result{NodeID: n.id, Success: false, Error: errMsg}
+		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	if !n.agent.Tools.CapabilityAvailable(ctx, env, toolName) {
 		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
 		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
-		result := &core.Result{NodeID: n.id, Success: false, Error: errMsg}
+		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
@@ -192,10 +195,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.last_tool_result_envelope", envelope, contextdata.MemoryClassTask)
 	n.agent.debugf("%s tool=%s result=%v", n.id, decision.Tool, res.Data)
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: res.Success,
-		Data:    core.NewToolResultPayload(res.Data),
+		Data:    execution.NewToolResultPayload(res.Data),
 		Metadata: map[string]any{
 			"capability_result": envelope,
 		},
@@ -215,7 +218,7 @@ func (n *reactActNode) latchVerificationSuccess(env *contextdata.Envelope, toolN
 	}
 	// Allow the latch even when no prior file edit was observed — the agent
 	// may be verifying already-correct code (verify-only pass, no edits needed).
-	if !verificationToolMatches(toolName, n.agent.verificationSuccessTools(n.task)) {
+	if !verificationToolMatches(toolName, n.agent.verificationSuccessTools()) {
 		return
 	}
 	summary := verificationSuccessSummary(toolName, fmt.Sprint(res.Data["stdout"]))
@@ -233,11 +236,11 @@ func (n *reactActNode) capabilityAllowed(name string, active map[string]struct{}
 	return true
 }
 
-func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.Envelope, tool contracts.Tool, call contracts.ToolCall, res *contracts.ToolResult) *core.CapabilityResultEnvelope {
-	var desc core.CapabilityDescriptor
+func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.Envelope, tool contracts.Tool, call contracts.ToolCall, res *contracts.ToolResult) *capability.CapabilityResultEnvelope {
+	var desc capability.CapabilityDescriptor
 	if res != nil && res.Metadata != nil {
 		if raw, ok := res.Metadata["capability_descriptor"]; ok {
-			if typed, ok := raw.(core.CapabilityDescriptor); ok {
+			if typed, ok := raw.(capability.CapabilityDescriptor); ok {
 				desc = typed
 			}
 		}
@@ -251,38 +254,38 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	}
 	if desc.ID == "" {
 		if tool != nil {
-			desc = core.ToolDescriptor(ctx, tool)
+			desc = capability.ToolDescriptor(ctx, tool)
 		} else {
-			desc = core.CapabilityDescriptor{
+			desc = capability.CapabilityDescriptor{
 				ID:          "tool:" + call.Name,
 				Kind:        agentspec.CapabilityKindTool,
 				Name:        call.Name,
 				Description: call.Name,
 				TrustClass:  agentspec.TrustClassWorkspaceTrusted,
-				Source: core.CapabilitySource{
+				Source: capability.CapabilitySource{
 					Scope: agentspec.CapabilityScopeWorkspace,
 				},
 			}
 		}
 	}
-	var approval *core.ApprovalBinding
+	var approval *capability.ApprovalBinding
 	if res != nil && res.Metadata != nil {
 		if raw, ok := res.Metadata["approval_binding"]; ok {
-			if typed, ok := raw.(*core.ApprovalBinding); ok {
+			if typed, ok := raw.(*capability.ApprovalBinding); ok {
 				approval = typed
 			}
 		}
 	}
 	if approval == nil {
 		// ApprovalBindingFromCapability already works with envelope WorkingData
-		approval = core.ApprovalBindingFromCapability(desc, env.WorkingData, call.Args)
+		approval = capability.ApprovalBindingFromCapability(desc, env.WorkingData, call.Args)
 	}
-	var snapshot *core.PolicySnapshot
+	var snapshot *capability.PolicySnapshot
 	if n != nil && n.agent != nil {
 		snapshot = n.agent.executionPolicySnapshot()
 	}
-	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, snapshot, approval)
-	envelope = core.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
+	envelope := capability.NewCapabilityResultEnvelope(desc, res, capability.ContentDispositionRaw, snapshot, approval)
+	envelope = capability.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
 	if n != nil && n.agent != nil && n.agent.Config != nil && n.agent.Config.Telemetry != nil {
 		metadata := map[string]interface{}{
 			"security_event": "insertion_decision",
@@ -299,12 +302,12 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 		if envelope.Descriptor.Source.SessionID != "" {
 			metadata["session_id"] = envelope.Descriptor.Source.SessionID
 		}
-		n.agent.Config.Telemetry.Emit(core.Event{
-			Type:      core.EventStateChange,
+		n.agent.Config.Telemetry.Emit(telemetry.Event{
+			Type:      telemetry.EventStateChange,
 			TaskID:    strings.TrimSpace(envGetString(env, "task.id")),
 			Message:   "insertion decision recorded",
 			Timestamp: time.Now().UTC(),
-			Metadata:  core.RedactMetadataMap(metadata),
+			Metadata:  execution.RedactMetadataMap(metadata),
 		})
 	}
 	if res != nil {
@@ -316,7 +319,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	return envelope
 }
 
-func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) {
+func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) {
 	appendToolMessage(n.agent, n.task, env, call, res, envelope)
 	decision := resolveInsertionDecision(n.agent, n.task, envelope)
 	observation := summarizeToolResult(env, call, res, decision)
@@ -324,7 +327,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contrac
 	if visible {
 		observation.Summary = displaySummary
 		switch decision.Action {
-		case core.InsertionActionMetadataOnly, core.InsertionActionHITLRequired:
+		case capability.InsertionActionMetadataOnly, capability.InsertionActionHITLRequired:
 			observation.Data = nil
 		}
 	}
@@ -344,7 +347,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contrac
 	// TODO: ContextManager integration requires framework-level fixes for missing types
 	// (core.ToolResultContextItem, core.FileContextItem)
 	// if visible && n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {
-	// 	summaryEnvelope := core.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)
+	// 	summaryEnvelope := capability.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)
 	// 	item := &core.ToolResultContextItem{
 	// 		ToolName:     call.Name,
 	// 		Result:       &contracts.ToolResult{Success: res.Success, Data: map[string]interface{}{"summary": observation.Summary}, Error: res.Error},

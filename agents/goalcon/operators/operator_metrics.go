@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 )
 
 // OperatorMetrics tracks execution statistics for a single operator.
@@ -94,7 +94,7 @@ func SaveMetricsToMemory(store *memory.WorkingMemoryStore, metrics OperatorMetri
 	if err != nil {
 		return err
 	}
-	store.Scope("goalcon").Set("goalcon.operator_metrics", string(data), core.MemoryClassWorking)
+	store.Scope("goalcon").Set("goalcon.operator_metrics", string(data), relurpctx.MemoryClassWorking)
 	return nil
 }
 

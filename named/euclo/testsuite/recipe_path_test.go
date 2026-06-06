@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
@@ -87,7 +87,7 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 	runPreIngestion(t, env, dir, []string{"review.go"})
 
 	// Execute with a context that has the telemetry spy.
-	ctx := core.WithTelemetry(context.Background(), telemetrySpy)
+	ctx := telemetry.WithTelemetry(context.Background(), telemetrySpy)
 	if err := graph.Execute(ctx, env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
@@ -107,15 +107,15 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 
 	for _, ev := range events {
 		switch ev.Type {
-		case core.EventType(reporting.EventTypeRecipeSelected):
+		case telemetry.EventType(reporting.EventTypeRecipeSelected):
 			hasRecipeSelected = true
-		case core.EventType(reporting.EventTypeStepStartedEuclo):
+		case telemetry.EventType(reporting.EventTypeStepStartedEuclo):
 			hasStepStarted = true
-		case core.EventType(reporting.EventTypeStepCompletedEuclo):
+		case telemetry.EventType(reporting.EventTypeStepCompletedEuclo):
 			hasStepCompleted = true
-		case core.EventType(reporting.EventTypeVerifyStarted):
+		case telemetry.EventType(reporting.EventTypeVerifyStarted):
 			hasVerifyStarted = true
-		case core.EventType(reporting.EventTypeExecutionComplete):
+		case telemetry.EventType(reporting.EventTypeExecutionComplete):
 			hasExecutionComplete = true
 		}
 	}
@@ -140,10 +140,10 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 // captureTelemetry is a telemetry spy that records emitted events.
 type captureTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (c *captureTelemetry) Emit(event core.Event) {
+func (c *captureTelemetry) Emit(event telemetry.Event) {
 	if c == nil {
 		return
 	}
@@ -152,13 +152,13 @@ func (c *captureTelemetry) Emit(event core.Event) {
 	c.events = append(c.events, event)
 }
 
-func (c *captureTelemetry) Events() []core.Event {
+func (c *captureTelemetry) Events() []telemetry.Event {
 	if c == nil {
 		return nil
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := make([]core.Event, len(c.events))
+	out := make([]telemetry.Event, len(c.events))
 	copy(out, c.events)
 	return out
 }

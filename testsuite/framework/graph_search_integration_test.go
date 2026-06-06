@@ -6,8 +6,8 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // TestGraphExecutionStatePropagation validates that node execution can update
@@ -248,11 +248,11 @@ type stateSetterNode struct {
 func (n *stateSetterNode) ID() string           { return n.id }
 func (n *stateSetterNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValue(n.key, n.value, contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		NodeID: n.id,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": "continue",
 		}),
 	}, nil
@@ -273,7 +273,7 @@ type stateReaderNode struct {
 func (n *stateReaderNode) ID() string           { return n.id }
 func (n *stateReaderNode) Type() graph.NodeType { return graph.NodeTypeConditional }
 
-func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	value, ok := env.GetWorkingValue(n.key)
 	if !ok {
 		return nil, &contracts.PermissionDeniedError{
@@ -285,9 +285,9 @@ func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope
 			Message: "value mismatch in envelope",
 		}
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID: n.id,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": "continue",
 		}),
 	}, nil
@@ -308,11 +308,11 @@ type stateModifierNode struct {
 func (n *stateModifierNode) ID() string           { return n.id }
 func (n *stateModifierNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *stateModifierNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stateModifierNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValue(n.key, n.modifyValue, contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		NodeID: n.id,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": "continue",
 		}),
 	}, nil
@@ -334,7 +334,7 @@ type stateTransferNode struct {
 func (n *stateTransferNode) ID() string           { return n.id }
 func (n *stateTransferNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	inputValue, ok := env.GetWorkingValue(n.inputKey)
 	if !ok {
 		return nil, &contracts.PermissionDeniedError{
@@ -343,9 +343,9 @@ func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 	outputValue := n.transform(inputValue)
 	env.SetWorkingValue(n.outputKey, outputValue, contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		NodeID: n.id,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": "continue",
 		}),
 	}, nil

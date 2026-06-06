@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // Decoder decodes a config file's bytes into out.
@@ -19,7 +19,7 @@ type Bundle struct {
 	Sandbox   *sandbox.SandboxPolicy
 	Shell     *sandbox.ShellBlacklist
 	LocalTool map[string]agentspec.ToolPolicy
-	Ingestion []core.PolicyRule
+	Ingestion []policy.PolicyRule
 }
 
 // LoadBundle loads the full security policy set for a workspace.

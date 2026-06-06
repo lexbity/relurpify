@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func taskInstruction(task *core.Task) string {
+func taskInstruction(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
 	return strings.TrimSpace(task.Instruction)
 }
 
-func workspaceRoot(task *core.Task) string {
+func workspaceRoot(task *execution.Task) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}
@@ -29,7 +29,7 @@ func workspaceRoot(task *core.Task) string {
 	return strings.TrimSpace(s)
 }
 
-func renderContextFiles(task *core.Task, maxBytes int) string {
+func renderContextFiles(task *execution.Task, maxBytes int) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}

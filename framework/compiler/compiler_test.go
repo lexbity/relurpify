@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -597,8 +597,8 @@ func TestCompilerTrySummarySubstitution(t *testing.T) {
 	}
 
 	// Test with policy but no summarizers - returns chunks unchanged
-	c.policy = &contextpolicy.ContextPolicyBundle{
-		Summarizers: []contextpolicy.SummarizerRef{}, // Empty
+	c.policy = &execctx.ContextPolicyBundle{
+		Summarizers: []execctx.SummarizerRef{}, // Empty
 	}
 	result, subs = c.trySummarySubstitution(context.Background(), chunks, 100)
 	if len(result) != 2 || len(subs) != 0 {

@@ -13,13 +13,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // IngestionNode runs the framework ingestion pipeline for Euclo tasks.
@@ -52,10 +52,10 @@ func (n *IngestionNode) Contract() agentgraph.NodeContract {
 }
 
 // Execute runs the configured ingestion mode.
-func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	taskEnvelope := taskEnvelopeFromEnv(env)
 	if taskEnvelope == nil {
-		result := &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"skipped": true})}
+		result := &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"skipped": true})}
 		return result, nil
 	}
 
@@ -87,19 +87,19 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		if err := n.ingestExplicitFiles(ctx, env, taskEnvelope, store, result, summary); err != nil {
 			result.Error = err.Error()
 			n.writeSummary(env, result, summary, err)
-			return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
+			return &execution.Result{NodeID: n.id, Success: false, Data: execution.NewToolResultPayload(summary), Error: err.Error()}, err
 		}
 	case IngestionModeIncremental, IngestionModeFull:
 		if err := n.ingestWorkspace(ctx, env, taskEnvelope, store, result, summary, mode); err != nil {
 			result.Error = err.Error()
 			n.writeSummary(env, result, summary, err)
-			return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
+			return &execution.Result{NodeID: n.id, Success: false, Data: execution.NewToolResultPayload(summary), Error: err.Error()}, err
 		}
 	default:
 		err := fmt.Errorf("unknown ingestion mode: %s", mode)
 		result.Error = err.Error()
 		n.writeSummary(env, result, summary, err)
-		return &core.Result{NodeID: n.id, Success: false, Data: core.NewToolResultPayload(summary), Error: err.Error()}, err
+		return &execution.Result{NodeID: n.id, Success: false, Data: execution.NewToolResultPayload(summary), Error: err.Error()}, err
 	}
 
 	if mode == IngestionModeFilesOnly {
@@ -114,7 +114,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	n.writeSummary(env, result, summary, nil)
-	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(summary)}, nil
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(summary)}, nil
 }
 
 func (n *IngestionNode) resolveMode(task *intake.TaskEnvelope) IngestionMode {
@@ -239,8 +239,8 @@ func (n *IngestionNode) ensureStore() (*knowledge.ChunkStore, func(), error) {
 	return &knowledge.ChunkStore{Graph: engine}, cleanup, nil
 }
 
-func (n *IngestionNode) policyBundle() *contextpolicy.ContextPolicyBundle {
-	return &contextpolicy.ContextPolicyBundle{
+func (n *IngestionNode) policyBundle() *execctx.ContextPolicyBundle {
+	return &execctx.ContextPolicyBundle{
 		DefaultTrustClass: agentspec.TrustClassBuiltinTrusted,
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // StreamTokenMsg represents a streamed token from the agent pipeline.
@@ -30,7 +30,7 @@ type StreamCompleteMsg struct {
 	RunID      string
 	Duration   time.Duration
 	TokensUsed int
-	Result     *core.Result
+	Result     *execution.Result
 }
 
 // StreamErrorMsg wraps runtime failures for display.

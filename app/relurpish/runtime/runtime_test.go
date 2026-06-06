@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -62,29 +62,29 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 type recordingExecutor struct {
 	mu        sync.Mutex
 	execCount int
-	lastTask  *core.Task
+	lastTask  *execution.Task
 	lastEnv   *contextdata.Envelope
 }
 
-func (r *recordingExecutor) Initialize(*core.Config) error { return nil }
+func (r *recordingExecutor) Initialize(*execution.Config) error { return nil }
 
-func (r *recordingExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (r *recordingExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.execCount++
 	r.lastTask = task
 	r.lastEnv = env
-	return &core.Result{NodeID: "recording", Success: true}, nil
+	return &execution.Result{NodeID: "recording", Success: true}, nil
 }
 
 func (r *recordingExecutor) Capabilities() []string { return nil }
 
-func (r *recordingExecutor) BuildGraph(*core.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (r *recordingExecutor) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
 
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	task := &core.Task{ID: "task-1", Instruction: "clarify request"}
+	task := &execution.Task{ID: "task-1", Instruction: "clarify request"}
 	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 
@@ -122,7 +122,7 @@ func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 
 func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	task := &core.Task{ID: "task-2", Instruction: "collect feedback"}
+	task := &execution.Task{ID: "task-2", Instruction: "collect feedback"}
 	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
 	env.SetWorkingValue("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 

@@ -8,7 +8,6 @@ func RegisterAll(r prompt.Registry) error {
 	providers := []prompt.DescribingProvider{
 		reactToolsProvider{},
 		reactCapabilityCatalogProvider{},
-		reactSkillPolicyProvider{},
 		reactPhaseProvider{},
 		reactPlanGoalProvider{},
 		reactCurrentStepProvider{},

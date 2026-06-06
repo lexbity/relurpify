@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Decompose converts a Method into a plan.Plan relative to the given task.
 // Each SubtaskSpec becomes a PlanStep with DependsOn wired into
 // Plan.Dependencies.
-func Decompose(task *core.Task, method *Method) (*plan.Plan, error) {
+func Decompose(task *execution.Task, method *Method) (*plan.Plan, error) {
 	if method == nil {
 		return nil, fmt.Errorf("htn: no method provided for decomposition")
 	}
@@ -53,7 +53,7 @@ func Decompose(task *core.Task, method *Method) (*plan.Plan, error) {
 
 // DecomposeResolved converts a ResolvedMethod into a plan.Plan relative to the given task.
 // Each OperatorSpec becomes a PlanStep with the Executor as the Tool.
-func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*plan.Plan, error) {
+func DecomposeResolved(task *execution.Task, resolved *ResolvedMethod) (*plan.Plan, error) {
 	if resolved == nil || resolved.Method == nil {
 		return nil, fmt.Errorf("htn: no resolved method provided for decomposition")
 	}

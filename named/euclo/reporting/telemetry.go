@@ -5,19 +5,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-// EucloTelemetry wraps core.Telemetry with typed Emit helpers.
+// EucloTelemetry wraps telemetry.Telemetry with typed Emit helpers.
 type EucloTelemetry struct {
-	sink core.Telemetry
+	sink telemetry.Telemetry
 }
 
 // NewEucloTelemetry creates a new telemetry wrapper.
-func NewEucloTelemetry(sink core.Telemetry) *EucloTelemetry {
+func NewEucloTelemetry(sink telemetry.Telemetry) *EucloTelemetry {
 	if sink == nil {
 		sink = noopTelemetry{}
 	}
@@ -30,8 +30,8 @@ func (t *EucloTelemetry) emit(ctx context.Context, eventType EventType, payload 
 	}
 	meta := eventPayloadMap(payload)
 	taskID, _ := meta["task_id"].(string)
-	t.sink.Emit(core.Event{
-		Type:      core.EventType(eventType),
+	t.sink.Emit(telemetry.Event{
+		Type:      telemetry.EventType(eventType),
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  meta,
@@ -140,7 +140,7 @@ func (t *EucloTelemetry) EmitExecutionComplete(ctx context.Context, ev EventExec
 
 type noopTelemetry struct{}
 
-func (noopTelemetry) Emit(core.Event) {}
+func (noopTelemetry) Emit(telemetry.Event) {}
 
 // TelemetryNode reports execution metrics and outcomes.
 type TelemetryNode struct {
@@ -211,7 +211,7 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	tel := n.telemetry
 	if tel == nil {
-		tel = NewEucloTelemetry(core.TelemetryFromContext(ctx))
+		tel = NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	}
 	planIDStr, _ := contextdata.GetTyped[string](env, "euclo.projection.plan_id")
 	if tel != nil {
@@ -410,12 +410,12 @@ func EmitRouteFallback(ctx context.Context, taskID, sessionID, primaryID, fallba
 }
 
 func emitRouteEvent(ctx context.Context, eventType EventType, taskID, sessionID string, data map[string]any) {
-	telemetry := core.TelemetryFromContext(ctx)
-	if telemetry == nil {
+	sink := telemetry.TelemetryFromContext(ctx)
+	if sink == nil {
 		return
 	}
-	telemetry.Emit(core.Event{
-		Type:      core.EventType(string(eventType)),
+	sink.Emit(telemetry.Event{
+		Type:      telemetry.EventType(string(eventType)),
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  data,

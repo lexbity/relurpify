@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/policyresolve"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 const (
@@ -32,7 +32,7 @@ func defaultIterationsForMode(mode string) int {
 	}
 }
 
-func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *core.Task) {
+func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *execution.Task) {
 	if env == nil {
 		return
 	}
@@ -69,7 +69,7 @@ func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *core.Task)
 	env.SetWorkingValue("react.phase", phase, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *core.Task) []contracts.Tool {
+func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *execution.Task) []contracts.Tool {
 	catalog := a.executionCapabilityCatalog()
 	if catalog == nil && a.Tools == nil {
 		return nil
@@ -110,7 +110,7 @@ func (a *ReActAgent) executionCapabilityCatalog() *capability.ExecutionCapabilit
 	return a.Tools.CaptureExecutionCatalogSnapshot()
 }
 
-func (a *ReActAgent) executionPolicySnapshot() *core.PolicySnapshot {
+func (a *ReActAgent) executionPolicySnapshot() *capability.PolicySnapshot {
 	if catalog := a.executionCapabilityCatalog(); catalog != nil {
 		return catalog.PolicySnapshot()
 	}
@@ -120,14 +120,14 @@ func (a *ReActAgent) executionPolicySnapshot() *core.PolicySnapshot {
 	return a.Tools.CapturePolicySnapshot()
 }
 
-func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (core.CapabilityDescriptor, bool) {
+func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (capability.CapabilityDescriptor, bool) {
 	if catalog := a.executionCapabilityCatalog(); catalog != nil {
 		if entry, ok := catalog.GetCapability(idOrName); ok {
 			return entry.Descriptor, true
 		}
 	}
 	if a == nil || a.Tools == nil {
-		return core.CapabilityDescriptor{}, false
+		return capability.CapabilityDescriptor{}, false
 	}
 	return a.Tools.GetCapability(idOrName)
 }
@@ -142,7 +142,7 @@ func executionCallableTools(registry *capability.Registry, catalog *capability.E
 	return registry.ModelCallableTools()
 }
 
-func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *core.Task, phase string, tool contracts.Tool) bool {
+func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *execution.Task, phase string, tool contracts.Tool) bool {
 	if tool == nil {
 		return false
 	}
@@ -181,11 +181,11 @@ func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, ta
 	return true
 }
 
-func (a *ReActAgent) recoveryToolAllowed(env *contextdata.Envelope, task *core.Task, toolName string) bool {
+func (a *ReActAgent) recoveryToolAllowed(env *contextdata.Envelope, task *execution.Task, toolName string) bool {
 	if env == nil || !hasFailureFromState(env) {
 		return false
 	}
-	for _, probe := range a.recoveryProbeTools(task) {
+	for _, probe := range a.recoveryProbeTools() {
 		if strings.EqualFold(strings.TrimSpace(probe), toolName) {
 			return true
 		}
@@ -193,8 +193,8 @@ func (a *ReActAgent) recoveryToolAllowed(env *contextdata.Envelope, task *core.T
 	return false
 }
 
-func (a *ReActAgent) toolAllowedBySkillConfig(task *core.Task, phase, toolName string) bool {
-	resolved := a.resolvedSkillPolicy(task)
+func (a *ReActAgent) toolAllowedBySkillConfig(task *execution.Task, phase, toolName string) bool {
+	resolved := a.resolvedAgentPolicy()
 	if len(resolved.PhaseCapabilities) == 0 {
 		return true
 	}
@@ -210,28 +210,24 @@ func (a *ReActAgent) toolAllowedBySkillConfig(task *core.Task, phase, toolName s
 	return false
 }
 
-func (a *ReActAgent) resolvedSkillPolicy(task *core.Task) frameworkskills.ResolvedSkillPolicy {
-	return frameworkskills.ResolveEffectiveSkillPolicy(task, a.effectiveAgentSpec(task), a.Tools).Policy
+func (a *ReActAgent) resolvedAgentPolicy() policy.ResolvedAgentPolicy {
+	if a == nil || a.Config == nil || a.Config.AgentSpec == nil {
+		return policy.ResolvedAgentPolicy{}
+	}
+	return policyresolve.ResolveAgentPolicy(a.Tools, a.Config.AgentSpec.Orchestration)
 }
 
-func (a *ReActAgent) recoveryProbeTools(task *core.Task) []string {
-	resolved := a.resolvedSkillPolicy(task)
+func (a *ReActAgent) recoveryProbeTools() []string {
+	resolved := a.resolvedAgentPolicy()
 	return append([]string{}, resolved.RecoveryProbeCapabilities...)
 }
 
-func (a *ReActAgent) verificationSuccessTools(task *core.Task) []string {
-	resolved := a.resolvedSkillPolicy(task)
+func (a *ReActAgent) verificationSuccessTools() []string {
+	resolved := a.resolvedAgentPolicy()
 	return append([]string{}, resolved.VerificationSuccessCapabilities...)
 }
 
-func (a *ReActAgent) effectiveAgentSpec(task *core.Task) *agentspec.AgentRuntimeSpec {
-	if a == nil || a.Config == nil {
-		return frameworkskills.EffectiveAgentSpec(task, nil)
-	}
-	return frameworkskills.EffectiveAgentSpec(task, a.Config.AgentSpec)
-}
-
-func toolAllowedForPhase(tool contracts.Tool, phase string, task *core.Task) bool {
+func toolAllowedForPhase(tool contracts.Tool, phase string, task *execution.Task) bool {
 	if tool == nil {
 		return false
 	}
@@ -276,7 +272,7 @@ func toolAllowedForPhase(tool contracts.Tool, phase string, task *core.Task) boo
 	}
 }
 
-func isLanguageExecutionTool(name string, task *core.Task) bool {
+func isLanguageExecutionTool(name string, task *execution.Task) bool {
 	name = strings.ToLower(name)
 	if _, ok := explicitlyRequestedToolNames(task)[name]; ok {
 		return true
@@ -300,7 +296,7 @@ func isLanguageExecutionTool(name string, task *core.Task) bool {
 	return strings.Contains(text, "test") || strings.Contains(text, "build") || strings.Contains(text, "lint")
 }
 
-func taskMode(task *core.Task) string {
+func taskMode(task *execution.Task) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}

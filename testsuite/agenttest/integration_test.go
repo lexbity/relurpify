@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestCapabilityCoverage_ExercisesAllTools verifies the coverage framework works
@@ -258,10 +258,10 @@ func TestConsistencyReport_AggregatesMultipleRuns(t *testing.T) {
 // TestRecoveryDetection_IdentifiesToolFailureRecovery verifies recovery detection
 func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 	// Events showing recovery: success -> failure -> success
-	recoveryEvents := []core.Event{
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+	recoveryEvents := []telemetry.Event{
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
 	}
 
 	if !HasRecoveryFromToolFailure(recoveryEvents) {
@@ -269,9 +269,9 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 	}
 
 	// Events showing no recovery: all success
-	noFailureEvents := []core.Event{
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+	noFailureEvents := []telemetry.Event{
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
 	}
 
 	if HasRecoveryFromToolFailure(noFailureEvents) {
@@ -279,9 +279,9 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 	}
 
 	// Events showing no recovery: failure at end
-	failureAtEndEvents := []core.Event{
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
+	failureAtEndEvents := []telemetry.Event{
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
 	}
 
 	if HasRecoveryFromToolFailure(failureAtEndEvents) {
@@ -291,11 +291,11 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 
 // TestToolSuccessRate_ComputesCorrectly verifies success rate calculation
 func TestToolSuccessRate_ComputesCorrectly(t *testing.T) {
-	events := []core.Event{
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
+	events := []telemetry.Event{
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
 	}
 
 	successes, failures, rate := ToolSuccessRate(events, "go_test")

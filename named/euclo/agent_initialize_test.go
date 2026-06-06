@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 var testRelurpicCapabilities = []string{
@@ -29,7 +29,7 @@ var testRelurpicCapabilities = []string{
 func TestAgentInitializeDoesNotPanic(t *testing.T) {
 	// Create a minimal WorkspaceEnvironment
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},

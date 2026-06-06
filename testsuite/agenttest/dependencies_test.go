@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestDependencyValidatorValidate(t *testing.T) {
@@ -358,11 +358,11 @@ func containsStringInSlice(slice []string, substr string) bool {
 
 // Integration test with BuildToolTranscript
 func TestDependencyValidationWithRealTranscript(t *testing.T) {
-	events := []core.Event{
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_write"}},
-		{Type: core.EventToolResult, Metadata: map[string]any{"tool": "file_write", "success": true}},
+	events := []telemetry.Event{
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_write"}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_write", "success": true}},
 	}
 
 	transcript := BuildToolTranscript(events)

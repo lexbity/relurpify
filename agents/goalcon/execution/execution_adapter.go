@@ -9,7 +9,7 @@ import (
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // PlanStepAgent adapts a step executor to the graph.WorkflowExecutor interface.
@@ -32,7 +32,7 @@ func NewPlanStepAgent(registry *capability.Registry, plan *plan.Plan) *PlanStepA
 }
 
 // Initialize sets up the agent.
-func (a *PlanStepAgent) Initialize(cfg *core.Config) error {
+func (a *PlanStepAgent) Initialize(cfg *execution.Config) error {
 	if a.stepExecutor == nil {
 		return fmt.Errorf("step executor is nil")
 	}
@@ -45,7 +45,7 @@ func (a *PlanStepAgent) Capabilities() []string {
 }
 
 // BuildGraph creates an execution graph for plan steps.
-func (a *PlanStepAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *PlanStepAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if a.plan == nil || len(a.plan.Steps) == 0 {
 		// Empty plan: return terminal node
 		g := graph.NewGraph()
@@ -108,11 +108,11 @@ func (a *PlanStepAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 }
 
 // Execute runs the plan step execution.
-func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
+func (a *PlanStepAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	if a.plan == nil || len(a.plan.Steps) == 0 {
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"steps_executed":  0,
 				"steps_succeeded": 0,
 			}),
@@ -142,9 +142,9 @@ func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *con
 	// Overall success: all steps succeeded
 	allSucceeded := chain.FailureCount() == 0
 
-	return &core.Result{
+	return &execution.Result{
 		Success: allSucceeded,
-		Data:    core.NewToolResultPayload(output),
+		Data:    execution.NewToolResultPayload(output),
 	}, nil
 }
 
@@ -173,11 +173,11 @@ func (n *stepExecutionNode) Type() graph.NodeType {
 }
 
 // Execute runs the step and returns the result.
-func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.executor == nil || n.executor.plan == nil {
-		return &core.Result{
+		return &execution.Result{
 			Success: false,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"error": "executor or plan is nil",
 			}),
 		}, nil
@@ -193,9 +193,9 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 
 	if step == nil {
-		return &core.Result{
+		return &execution.Result{
 			Success: false,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"error": fmt.Sprintf("step not found: %s", n.stepID),
 			}),
 		}, nil
@@ -213,10 +213,10 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	n.executor.results[result.StepID] = result
 
 	// Convert to graph result
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.stepID,
 		Success: result.Success,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"tool":     result.ToolName,
 			"duration": result.Duration.String(),
 			"output":   result.Output,
@@ -258,20 +258,20 @@ func (a *ExecutionAdapter) ExecutePlan(
 	ctx context.Context,
 	plan *plan.Plan,
 	env *contextdata.Envelope,
-) *core.Result {
+) *execution.Result {
 	if a == nil || plan == nil {
-		return &core.Result{
+		return &execution.Result{
 			Success: false,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"error": "adapter or plan is nil",
 			}),
 		}
 	}
 
 	if len(plan.Steps) == 0 {
-		return &core.Result{
+		return &execution.Result{
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"steps_executed":  0,
 				"steps_succeeded": 0,
 				"summary":         "No steps to execute",
@@ -311,9 +311,9 @@ func (a *ExecutionAdapter) ExecutePlan(
 	// Overall success
 	allSucceeded := chain.FailureCount() == 0
 
-	return &core.Result{
+	return &execution.Result{
 		Success: allSucceeded,
-		Data:    core.NewToolResultPayload(output),
+		Data:    execution.NewToolResultPayload(output),
 	}
 }
 

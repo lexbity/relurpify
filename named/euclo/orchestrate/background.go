@@ -8,10 +8,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // BackgroundJobNode submits work to the framework job boundary and records
@@ -94,7 +95,7 @@ func (n *BackgroundJobNode) Type() agentgraph.NodeType {
 }
 
 // Execute submits a background job and records submission/completion metadata.
-func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.submitter == nil {
 		return nil, fmt.Errorf("background job node %q missing submitter", n.id)
 	}
@@ -117,7 +118,7 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 
 	tel := n.telemetry
 	if tel == nil {
-		tel = reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+		tel = reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	}
 	if tel != nil {
 		tel.EmitJobSubmitted(ctx, reporting.EventJobSubmitted{
@@ -160,10 +161,10 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 		})
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"job_started":   true,
 			"job_submitted": true,
 			"job_id":        job.ID,

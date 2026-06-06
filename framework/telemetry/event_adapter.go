@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // EventTelemetry mirrors legacy telemetry events into the framework event log.
@@ -19,7 +18,7 @@ type EventTelemetry struct {
 	Clock     func() time.Time
 }
 
-func (e EventTelemetry) Emit(ev core.Event) {
+func (e EventTelemetry) Emit(ev telemetry.Event) {
 	if e.Log == nil {
 		return
 	}
@@ -31,7 +30,7 @@ func (e EventTelemetry) Emit(ev core.Event) {
 	if when.IsZero() {
 		when = e.now()
 	}
-	_, _ = e.Log.Append(context.Background(), e.partition(), []core.FrameworkEvent{{
+	_, _ = e.Log.Append(context.Background(), e.partition(), []telemetry.FrameworkEvent{{
 		Timestamp: when.UTC(),
 		Type:      e.mapEventType(ev),
 		Payload:   payload,
@@ -40,7 +39,12 @@ func (e EventTelemetry) Emit(ev core.Event) {
 	}})
 }
 
-func (e EventTelemetry) EmitHITLEvent(ev fauthorization.HITLEvent) {
+// EmitHITLEvent records a human-in-the-loop lifecycle event. resolved selects
+// the resolved-vs-requested framework event type; ev is marshaled as-is. The
+// concrete HITL event type is owned by the authorization domain; telemetry stays
+// decoupled from it so the dependency points one way (authorization ->
+// telemetry, never the reverse).
+func (e EventTelemetry) EmitHITLEvent(resolved bool, ev any) {
 	if e.Log == nil {
 		return
 	}
@@ -48,12 +52,11 @@ func (e EventTelemetry) EmitHITLEvent(ev fauthorization.HITLEvent) {
 	if err != nil {
 		return
 	}
-	eventType := core.FrameworkEventHITLRequested
-	switch ev.Type {
-	case fauthorization.HITLEventResolved, fauthorization.HITLEventExpired:
-		eventType = core.FrameworkEventHITLResolved
+	eventType := telemetry.FrameworkEventHITLRequested
+	if resolved {
+		eventType = telemetry.FrameworkEventHITLResolved
 	}
-	_, _ = e.Log.Append(context.Background(), e.partition(), []core.FrameworkEvent{{
+	_, _ = e.Log.Append(context.Background(), e.partition(), []telemetry.FrameworkEvent{{
 		Timestamp: e.now().UTC(),
 		Type:      eventType,
 		Payload:   payload,
@@ -83,23 +86,23 @@ func (e EventTelemetry) now() time.Time {
 	return time.Now().UTC()
 }
 
-func (e EventTelemetry) mapEventType(ev core.Event) string {
+func (e EventTelemetry) mapEventType(ev telemetry.Event) string {
 	switch ev.Type {
-	case core.EventAgentStart:
-		return core.FrameworkEventAgentRunStarted
-	case core.EventAgentFinish:
+	case telemetry.EventAgentStart:
+		return telemetry.FrameworkEventAgentRunStarted
+	case telemetry.EventAgentFinish:
 		if status, ok := metadataValue(ev.Metadata, "status"); ok && status == "failed" {
-			return core.FrameworkEventAgentRunFailed
+			return telemetry.FrameworkEventAgentRunFailed
 		}
-		return core.FrameworkEventAgentRunCompleted
-	case core.EventLLMPrompt:
-		return core.FrameworkEventLLMRequested
-	case core.EventLLMResponse:
-		return core.FrameworkEventLLMResponded
-	case core.EventCapabilityCall, core.EventToolCall:
-		return core.FrameworkEventCapabilityInvoked
-	case core.EventCapabilityResult, core.EventToolResult:
-		return core.FrameworkEventCapabilityResult
+		return telemetry.FrameworkEventAgentRunCompleted
+	case telemetry.EventLLMPrompt:
+		return telemetry.FrameworkEventLLMRequested
+	case telemetry.EventLLMResponse:
+		return telemetry.FrameworkEventLLMResponded
+	case telemetry.EventCapabilityCall, telemetry.EventToolCall:
+		return telemetry.FrameworkEventCapabilityInvoked
+	case telemetry.EventCapabilityResult, telemetry.EventToolResult:
+		return telemetry.FrameworkEventCapabilityResult
 	default:
 		return "telemetry." + string(ev.Type) + ".v1"
 	}

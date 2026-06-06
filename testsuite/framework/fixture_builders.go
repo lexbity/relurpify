@@ -12,8 +12,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // WorkspaceBuilder builds deterministic workspace fixtures.
@@ -199,16 +201,6 @@ func (b *ManifestBuilder) Build() *cfgload.AgentManifest {
 	if err != nil {
 		return b.manifest
 	}
-	clone.Spec.Permissions.Sort()
-	if clone.Spec.Policy != nil {
-		clone.Spec.Policy.Permissions.Sort()
-		if clone.Spec.Policy.Defaults != nil && clone.Spec.Policy.Defaults.Permissions != nil {
-			clone.Spec.Policy.Defaults.Permissions.Sort()
-		}
-	}
-	if clone.Spec.Defaults != nil && clone.Spec.Defaults.Permissions != nil {
-		clone.Spec.Defaults.Permissions.Sort()
-	}
 	return clone
 }
 
@@ -253,27 +245,27 @@ func InvalidManifestMissingKind() *ManifestBuilder {
 
 // PolicyRuleBuilder builds deterministic policy rule fixtures.
 type PolicyRuleBuilder struct {
-	rules []core.PolicyRule
+	rules []policy.PolicyRule
 }
 
 // NewPolicyRuleBuilder creates a new policy rule builder.
 func NewPolicyRuleBuilder() *PolicyRuleBuilder {
 	return &PolicyRuleBuilder{
-		rules: make([]core.PolicyRule, 0),
+		rules: make([]policy.PolicyRule, 0),
 	}
 }
 
 // WithAllowRule adds an allow rule.
 func (b *PolicyRuleBuilder) WithAllowRule(id, capability string) *PolicyRuleBuilder {
-	b.rules = append(b.rules, core.PolicyRule{
+	b.rules = append(b.rules, policy.PolicyRule{
 		ID:       id,
 		Name:     id,
 		Enabled:  true,
 		Priority: 100,
-		Conditions: core.PolicyConditions{
+		Conditions: policy.PolicyConditions{
 			Capabilities: []string{capability},
 		},
-		Effect: core.PolicyEffect{
+		Effect: policy.PolicyEffect{
 			Action: "allow",
 		},
 	})
@@ -282,15 +274,15 @@ func (b *PolicyRuleBuilder) WithAllowRule(id, capability string) *PolicyRuleBuil
 
 // WithDenyRule adds a deny rule.
 func (b *PolicyRuleBuilder) WithDenyRule(id, capability, reason string) *PolicyRuleBuilder {
-	b.rules = append(b.rules, core.PolicyRule{
+	b.rules = append(b.rules, policy.PolicyRule{
 		ID:       id,
 		Name:     id,
 		Enabled:  true,
 		Priority: 100,
-		Conditions: core.PolicyConditions{
+		Conditions: policy.PolicyConditions{
 			Capabilities: []string{capability},
 		},
-		Effect: core.PolicyEffect{
+		Effect: policy.PolicyEffect{
 			Action: "deny",
 			Reason: reason,
 		},
@@ -299,11 +291,11 @@ func (b *PolicyRuleBuilder) WithDenyRule(id, capability, reason string) *PolicyR
 }
 
 // Build returns the constructed policy rules.
-func (b *PolicyRuleBuilder) Build() []core.PolicyRule {
+func (b *PolicyRuleBuilder) Build() []policy.PolicyRule {
 	if b == nil || len(b.rules) == 0 {
 		return nil
 	}
-	rules := make([]core.PolicyRule, len(b.rules))
+	rules := make([]policy.PolicyRule, len(b.rules))
 	for i, rule := range b.rules {
 		rules[i] = clonePolicyRule(rule)
 	}
@@ -391,17 +383,17 @@ func MinimalEnvelope() *EnvelopeBuilder {
 
 // AuditRecordBuilder builds deterministic audit record fixtures.
 type AuditRecordBuilder struct {
-	record core.AuditRecord
+	record policy.AuditRecord
 	meta   map[string]interface{}
 }
 
 // NewAuditRecordBuilder creates a new audit record builder.
 func NewAuditRecordBuilder() *AuditRecordBuilder {
 	return &AuditRecordBuilder{
-		record: core.AuditRecord{
+		record: policy.AuditRecord{
 			AgentID:     "test-agent",
-			Action:      string(core.AuditActionRequest),
-			Type:        string(core.AuditActionRequest),
+			Action:      string(policy.AuditActionRequest),
+			Type:        string(policy.AuditActionRequest),
 			Permission:  "test_permission",
 			Result:      "granted",
 			Correlation: "test-correlation",
@@ -456,9 +448,9 @@ func (b *AuditRecordBuilder) WithCorrelation(correlation string) *AuditRecordBui
 }
 
 // Build returns the constructed audit record.
-func (b *AuditRecordBuilder) Build() core.AuditRecord {
+func (b *AuditRecordBuilder) Build() policy.AuditRecord {
 	if b == nil {
-		return core.AuditRecord{}
+		return policy.AuditRecord{}
 	}
 	out := b.record
 	if len(b.meta) > 0 {
@@ -518,11 +510,11 @@ func BuildWorkspace(t *testing.T, builder *WorkspaceBuilder) string {
 }
 
 // NormalizeTelemetryEvents normalizes telemetry events for deterministic comparison.
-func NormalizeTelemetryEvents(events []core.Event) []core.Event {
+func NormalizeTelemetryEvents(events []telemetry.Event) []telemetry.Event {
 	if len(events) == 0 {
 		return nil
 	}
-	normalized := make([]core.Event, len(events))
+	normalized := make([]telemetry.Event, len(events))
 	for i, event := range events {
 		normalized[i] = event
 		normalized[i].Timestamp = time.Time{}
@@ -532,11 +524,11 @@ func NormalizeTelemetryEvents(events []core.Event) []core.Event {
 }
 
 // NormalizeAuditRecords normalizes audit records for deterministic comparison.
-func NormalizeAuditRecords(records []core.AuditRecord) []core.AuditRecord {
+func NormalizeAuditRecords(records []policy.AuditRecord) []policy.AuditRecord {
 	if len(records) == 0 {
 		return nil
 	}
-	normalized := make([]core.AuditRecord, len(records))
+	normalized := make([]policy.AuditRecord, len(records))
 	for i, record := range records {
 		normalized[i] = record
 		normalized[i].Timestamp = time.Time{}
@@ -602,11 +594,11 @@ func NormalizeNetworkPermissions(perms []contracts.NetworkPermission) []contract
 }
 
 // NormalizePolicyRules normalizes policy rules for deterministic comparison.
-func NormalizePolicyRules(rules []core.PolicyRule) []core.PolicyRule {
+func NormalizePolicyRules(rules []policy.PolicyRule) []policy.PolicyRule {
 	if len(rules) == 0 {
 		return nil
 	}
-	normalized := make([]core.PolicyRule, len(rules))
+	normalized := make([]policy.PolicyRule, len(rules))
 	for i, rule := range rules {
 		normalized[i] = clonePolicyRule(rule)
 	}
@@ -622,17 +614,17 @@ func NormalizePolicyRules(rules []core.PolicyRule) []core.PolicyRule {
 	return normalized
 }
 
-func clonePolicyRule(rule core.PolicyRule) core.PolicyRule {
+func clonePolicyRule(rule policy.PolicyRule) policy.PolicyRule {
 	cloned := rule
-	cloned.Conditions = core.PolicyConditions{
-		Actors:                    append([]core.ActorMatch(nil), rule.Conditions.Actors...),
+	cloned.Conditions = policy.PolicyConditions{
+		Actors:                    append([]policy.ActorMatch(nil), rule.Conditions.Actors...),
 		Capabilities:              append([]string(nil), rule.Conditions.Capabilities...),
 		ExportNames:               append([]string(nil), rule.Conditions.ExportNames...),
 		SourceDomains:             append([]string(nil), rule.Conditions.SourceDomains...),
 		ContextClasses:            append([]string(nil), rule.Conditions.ContextClasses...),
 		SensitivityClasses:        append([]string(nil), rule.Conditions.SensitivityClasses...),
 		RouteModes:                append([]string(nil), rule.Conditions.RouteModes...),
-		ProviderKinds:             append([]core.ProviderKind(nil), rule.Conditions.ProviderKinds...),
+		ProviderKinds:             append([]capability.ProviderKind(nil), rule.Conditions.ProviderKinds...),
 		ExternalProviders:         append([]string(nil), rule.Conditions.ExternalProviders...),
 		MinRiskClasses:            append([]agentspec.RiskClass(nil), rule.Conditions.MinRiskClasses...),
 		TrustClasses:              append([]agentspec.TrustClass(nil), rule.Conditions.TrustClasses...),
@@ -641,8 +633,8 @@ func clonePolicyRule(rule core.PolicyRule) core.PolicyRule {
 		EffectClasses:             append([]agentspec.EffectClass(nil), rule.Conditions.EffectClasses...),
 		Partitions:                append([]string(nil), rule.Conditions.Partitions...),
 		ChannelIDs:                append([]string(nil), rule.Conditions.ChannelIDs...),
-		SessionScopes:             append([]core.SessionScope(nil), rule.Conditions.SessionScopes...),
-		SessionOperations:         append([]core.SessionOperation(nil), rule.Conditions.SessionOperations...),
+		SessionScopes:             append([]policy.SessionScope(nil), rule.Conditions.SessionScopes...),
+		SessionOperations:         append([]policy.SessionOperation(nil), rule.Conditions.SessionOperations...),
 		RequireOwnership:          cloneBoolPtr(rule.Conditions.RequireOwnership),
 		RequireDelegation:         cloneBoolPtr(rule.Conditions.RequireDelegation),
 		RequireExternalBinding:    cloneBoolPtr(rule.Conditions.RequireExternalBinding),
@@ -650,7 +642,7 @@ func clonePolicyRule(rule core.PolicyRule) core.PolicyRule {
 		RequireRestrictedExternal: cloneBoolPtr(rule.Conditions.RequireRestrictedExternal),
 		TimeWindow:                cloneTimeWindow(rule.Conditions.TimeWindow),
 	}
-	cloned.Effect = core.PolicyEffect{
+	cloned.Effect = policy.PolicyEffect{
 		Action:      rule.Effect.Action,
 		Approvers:   append([]string(nil), rule.Effect.Approvers...),
 		ApprovalTTL: rule.Effect.ApprovalTTL,
@@ -668,7 +660,7 @@ func cloneBoolPtr(v *bool) *bool {
 	return &cloned
 }
 
-func cloneTimeWindow(v *core.TimeWindow) *core.TimeWindow {
+func cloneTimeWindow(v *policy.TimeWindow) *policy.TimeWindow {
 	if v == nil {
 		return nil
 	}
@@ -677,7 +669,7 @@ func cloneTimeWindow(v *core.TimeWindow) *core.TimeWindow {
 	return &cloned
 }
 
-func cloneRateLimit(v *core.RateLimit) *core.RateLimit {
+func cloneRateLimit(v *policy.RateLimit) *policy.RateLimit {
 	if v == nil {
 		return nil
 	}

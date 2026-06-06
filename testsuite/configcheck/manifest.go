@@ -74,7 +74,7 @@ func CheckManifest(manifest contracts.ToolManifest) []string {
 
 	expectedRisk, expectedEffect := DeriveExpectedCapability(manifest)
 	if expectedRisk == nil && expectedEffect == nil {
-		return nil // go_native, composite, mcp — skip
+		return nil // go_native, composite — skip
 	}
 
 	declaredRisk := normalizeSet(manifest.Capability.RiskClass)

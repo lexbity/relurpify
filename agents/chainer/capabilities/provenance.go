@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // ProvenanceTracker records and wraps tool invocations for audit and provenance.
@@ -25,7 +25,7 @@ type ProvenanceRecord struct {
 	TaskID          string
 	LinkName        string
 	ToolID          string
-	InsertionAction core.InsertionAction
+	InsertionAction capability.InsertionAction
 	TrustClass      agentspec.TrustClass
 	ApprovedBy      string // User/system identifier (if approval required)
 	PolicySnapshot  string // Policy ID or description
@@ -41,7 +41,7 @@ func NewProvenanceTracker(taskID string) *ProvenanceTracker {
 }
 
 // Record documents a tool invocation.
-func (t *ProvenanceTracker) Record(linkName, toolID string, action core.InsertionAction) error {
+func (t *ProvenanceTracker) Record(linkName, toolID string, action capability.InsertionAction) error {
 	if t == nil {
 		return fmt.Errorf("provenance tracker not initialized")
 	}
@@ -62,7 +62,7 @@ func (t *ProvenanceTracker) Record(linkName, toolID string, action core.Insertio
 }
 
 // RecordWithApproval documents a tool invocation with approval info.
-func (t *ProvenanceTracker) RecordWithApproval(linkName, toolID string, action core.InsertionAction, approvedBy string) error {
+func (t *ProvenanceTracker) RecordWithApproval(linkName, toolID string, action capability.InsertionAction, approvedBy string) error {
 	if t == nil {
 		return fmt.Errorf("provenance tracker not initialized")
 	}
@@ -190,15 +190,15 @@ func (t *ProvenanceTracker) Summary() *ProvenanceSummary {
 		toolSet[record.ToolID] = true
 
 		switch record.InsertionAction {
-		case core.InsertionActionDirect:
+		case capability.InsertionActionDirect:
 			summary.DirectInclusions++
-		case core.InsertionActionSummarized:
+		case capability.InsertionActionSummarized:
 			summary.SummarizedResults++
-		case core.InsertionActionMetadataOnly:
+		case capability.InsertionActionMetadataOnly:
 			summary.MetadataOnlyResults++
-		case core.InsertionActionHITLRequired:
+		case capability.InsertionActionHITLRequired:
 			summary.ApprovalRequired++
-		case core.InsertionActionDenied:
+		case capability.InsertionActionDenied:
 			summary.Denied++
 		}
 	}
@@ -211,7 +211,7 @@ func (t *ProvenanceTracker) Summary() *ProvenanceSummary {
 //
 // Phase 6 stub: Records the insertion action for the tool result.
 // Full CapabilityResultEnvelope wrapping deferred to Phase 6+.
-func (t *ProvenanceTracker) WrapResult(toolID string, result any, action core.InsertionAction) map[string]any {
+func (t *ProvenanceTracker) WrapResult(toolID string, result any, action capability.InsertionAction) map[string]any {
 	return map[string]any{
 		"result":           result,
 		"insertion_action": action,

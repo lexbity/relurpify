@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type runtimeSafetyController struct {
 	mu sync.Mutex
 
-	spec *core.RuntimeSafetySpec
+	spec *RuntimeSafetySpec
 
 	capabilityCalls     map[string]int
 	providerCalls       map[string]int
@@ -39,7 +38,7 @@ func newRuntimeSafetyController() *runtimeSafetyController {
 	}
 }
 
-func (c *runtimeSafetyController) Configure(spec *core.RuntimeSafetySpec) {
+func (c *runtimeSafetyController) Configure(spec *RuntimeSafetySpec) {
 	if c == nil {
 		return
 	}
@@ -53,7 +52,7 @@ func (c *runtimeSafetyController) Configure(spec *core.RuntimeSafetySpec) {
 	c.spec = &clone
 }
 
-func (c *runtimeSafetyController) SnapshotSpec() *core.RuntimeSafetySpec {
+func (c *runtimeSafetyController) SnapshotSpec() *RuntimeSafetySpec {
 	if c == nil {
 		return nil
 	}
@@ -66,13 +65,13 @@ func (c *runtimeSafetyController) SnapshotSpec() *core.RuntimeSafetySpec {
 	return &clone
 }
 
-func (c *runtimeSafetyController) RevocationSnapshot() core.RevocationSnapshot {
+func (c *runtimeSafetyController) RevocationSnapshot() RevocationSnapshot {
 	if c == nil {
-		return core.RevocationSnapshot{}
+		return RevocationSnapshot{}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return core.RevocationSnapshot{
+	return RevocationSnapshot{
 		Capabilities: cloneReasonMap(c.revokedCapabilities),
 		Providers:    cloneReasonMap(c.revokedProviders),
 		Sessions:     cloneReasonMap(c.revokedSessions),
@@ -133,7 +132,7 @@ func (c *runtimeSafetyController) ReinstateSession(id string) {
 	delete(c.revokedSessions, id)
 }
 
-func (c *runtimeSafetyController) CheckBeforeExecution(desc core.CapabilityDescriptor) error {
+func (c *runtimeSafetyController) CheckBeforeExecution(desc CapabilityDescriptor) error {
 	if c == nil {
 		return nil
 	}
@@ -174,7 +173,7 @@ func (c *runtimeSafetyController) CheckBeforeExecution(desc core.CapabilityDescr
 	return nil
 }
 
-func (c *runtimeSafetyController) RecordResult(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
+func (c *runtimeSafetyController) RecordResult(desc CapabilityDescriptor, result *contracts.ToolResult) error {
 	if c == nil || c.spec == nil {
 		return nil
 	}
@@ -184,8 +183,8 @@ func (c *runtimeSafetyController) RecordResult(desc core.CapabilityDescriptor, r
 	if sessionID == "" {
 		return nil
 	}
-	bytes := core.EstimatePayloadBytes(result)
-	tokens := core.EstimatePayloadTokens(result)
+	bytes := EstimatePayloadBytes(result)
+	tokens := EstimatePayloadTokens(result)
 	if limit := c.spec.MaxBytesPerSession; limit > 0 && c.sessionBytes[sessionID]+bytes > limit {
 		return fmt.Errorf("session %s blocked: byte budget exceeded", sessionID)
 	}
@@ -215,7 +214,7 @@ func (c *runtimeSafetyController) RecordSessionNetworkRequest(sessionID string, 
 	return c.consumeSessionBudgetLocked(sessionID, count, c.specMaxNetworkRequests, c.sessionNetworkReqs, "network request budget exceeded")
 }
 
-func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*core.RuntimeSafetySpec) int, bucket map[string]int, message string) error {
+func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*RuntimeSafetySpec) int, bucket map[string]int, message string) error {
 	if sessionID == "" || c.spec == nil {
 		return nil
 	}
@@ -227,21 +226,21 @@ func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, c
 	return nil
 }
 
-func (c *runtimeSafetyController) specMaxSubprocesses(spec *core.RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxSubprocesses(spec *RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}
 	return spec.MaxSubprocessesPerSession
 }
 
-func (c *runtimeSafetyController) specMaxNetworkRequests(spec *core.RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxNetworkRequests(spec *RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}
 	return spec.MaxNetworkRequestsSession
 }
 
-func runtimeSafetySessionID(desc core.CapabilityDescriptor, result *contracts.ToolResult) string {
+func runtimeSafetySessionID(desc CapabilityDescriptor, result *contracts.ToolResult) string {
 	if desc.Source.SessionID != "" {
 		return desc.Source.SessionID
 	}

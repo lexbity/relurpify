@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const (
@@ -27,7 +27,7 @@ type primitiveDispatcher struct {
 // and falls back to the provided workflow executor when no capability target
 // resolves. Use NewPrimitiveDispatcher when an executor-shaped wrapper is
 // required, such as plan execution with branch isolation.
-func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, env)
 }
 
@@ -57,7 +57,7 @@ func (d *primitiveDispatcher) BranchExecutor() (plan.WorkflowExecutor, error) {
 	return branch, nil
 }
 
-func (d *primitiveDispatcher) Initialize(cfg *core.Config) error {
+func (d *primitiveDispatcher) Initialize(cfg *execution.Config) error {
 	if d == nil || d.fallback == nil {
 		return nil
 	}
@@ -71,7 +71,7 @@ func (d *primitiveDispatcher) Capabilities() []string {
 	return d.fallback.Capabilities()
 }
 
-func (d *primitiveDispatcher) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (d *primitiveDispatcher) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if d == nil || d.fallback == nil {
 		g := graph.NewGraph()
 		done := graph.NewTerminalNode("htn_dispatch_done")
@@ -86,7 +86,7 @@ func (d *primitiveDispatcher) BuildGraph(task *core.Task) (*graph.Graph, error) 
 	return d.fallback.BuildGraph(task)
 }
 
-func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (d *primitiveDispatcher) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	target, selectors, args := dispatchMetadata(task)
 	operator := operatorNameFromTask(task)
 	if result, decision, ok, err := d.invokeCapability(ctx, env, target, operator, selectors, args); err != nil {
@@ -116,7 +116,7 @@ func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, env 
 	return d.fallback.Execute(ctx, task, env)
 }
 
-func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *contextdata.Envelope, target, operator string, selectors []agentspec.CapabilitySelector, args map[string]any) (*core.Result, dispatchDecision, bool, error) {
+func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *contextdata.Envelope, target, operator string, selectors []agentspec.CapabilitySelector, args map[string]any) (*execution.Result, dispatchDecision, bool, error) {
 	decision := dispatchDecision{
 		RequestedTarget: target,
 		Operator:        operator,
@@ -139,16 +139,16 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *context
 	}
 	if result == nil {
 		decision.Mode = "capability"
-		return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, decision, true, nil
+		return &execution.Result{Success: true, Data: execution.NewToolResultPayload(map[string]any{})}, decision, true, nil
 	}
 	var execErr error
 	if result.Error != "" {
 		execErr = fmt.Errorf("%s", result.Error)
 	}
 	decision.Mode = "capability"
-	coreResult := &core.Result{
+	coreResult := &execution.Result{
 		Success:  result.Success,
-		Data:     core.NewToolResultPayload(cloneAnyMap(result.Data)),
+		Data:     execution.NewToolResultPayload(cloneAnyMap(result.Data)),
 		Metadata: cloneAnyMap(result.Metadata),
 		Error:    result.Error,
 	}

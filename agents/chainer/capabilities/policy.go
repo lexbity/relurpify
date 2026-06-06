@@ -5,7 +5,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/chainer"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // PolicyEvaluator determines whether a link can invoke a tool based on
@@ -106,7 +105,7 @@ func checkLinkConstraints(link *chainer.Link, toolID string) bool {
 //   - InsertionActionMetadataOnly: Include only metadata (no content)
 //   - InsertionActionHITLRequired: Require human approval
 //   - InsertionActionDenied: Block tool completely
-func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) core.InsertionAction {
+func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) capability.InsertionAction {
 	// Ensure we have an evaluator to use CanInvoke
 	evaluator := e
 	if evaluator == nil {
@@ -115,7 +114,7 @@ func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) 
 
 	// Check if tool is allowed
 	if !evaluator.CanInvoke(link, toolID) {
-		return core.InsertionActionDenied
+		return capability.InsertionActionDenied
 	}
 
 	// Phase 6: Default to direct inclusion
@@ -124,7 +123,7 @@ func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) 
 	// - Tool risk class (high-risk → HITL required)
 	// - Link data sensitivity
 
-	return core.InsertionActionDirect
+	return capability.InsertionActionDirect
 }
 
 // ValidateRequiredTools checks that all required tools are available.
@@ -159,14 +158,14 @@ type ToolAccessPolicy struct {
 	LinkName      string
 	AllowedTools  []string // Allowed tools (nil = all)
 	RequiredTools []string // Required tools
-	DefaultAction core.InsertionAction
+	DefaultAction capability.InsertionAction
 }
 
 // GetAccessPolicy returns the tool access policy for a link.
 func (e *PolicyEvaluator) GetAccessPolicy(link *chainer.Link) *ToolAccessPolicy {
 	if link == nil {
 		return &ToolAccessPolicy{
-			DefaultAction: core.InsertionActionDirect,
+			DefaultAction: capability.InsertionActionDirect,
 		}
 	}
 
@@ -174,6 +173,6 @@ func (e *PolicyEvaluator) GetAccessPolicy(link *chainer.Link) *ToolAccessPolicy 
 		LinkName:      link.Name,
 		AllowedTools:  link.AllowedTools,
 		RequiredTools: link.RequiredTools,
-		DefaultAction: core.InsertionActionDirect, // Phase 6 default
+		DefaultAction: capability.InsertionActionDirect, // Phase 6 default
 	}
 }

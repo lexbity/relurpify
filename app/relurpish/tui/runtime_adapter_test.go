@@ -6,34 +6,34 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type profileAgent struct{}
 
-func (profileAgent) Initialize(*core.Config) error { return nil }
+func (profileAgent) Initialize(*execution.Config) error { return nil }
 
-func (profileAgent) Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
+func (profileAgent) Execute(context.Context, *execution.Task, *contextdata.Envelope) (*execution.Result, error) {
 	return nil, nil
 }
 
 func (profileAgent) Capabilities() []string { return nil }
 
-func (profileAgent) BuildGraph(*core.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (profileAgent) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
 
 func (profileAgent) RuntimeProfile() (string, string) { return "analysis", "route-dispatch" }
 
 type plainAgent struct{}
 
-func (plainAgent) Initialize(*core.Config) error { return nil }
+func (plainAgent) Initialize(*execution.Config) error { return nil }
 
-func (plainAgent) Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
+func (plainAgent) Execute(context.Context, *execution.Task, *contextdata.Envelope) (*execution.Result, error) {
 	return nil, nil
 }
 
 func (plainAgent) Capabilities() []string { return nil }
 
-func (plainAgent) BuildGraph(*core.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (plainAgent) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
 
 func TestDescribeAgentRuntimeUsesOptionalProfileInterface(t *testing.T) {
 	mode, strategy := describeAgentRuntime(profileAgent{})

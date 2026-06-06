@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // EnvelopeBuilder constructs TaskEnvelope instances with a fluent API.
@@ -25,7 +25,7 @@ func NewEnvelopeBuilder() *EnvelopeBuilder {
 }
 
 // FromTask initializes the builder from a framework Task.
-func (b *EnvelopeBuilder) FromTask(task *core.Task) *EnvelopeBuilder {
+func (b *EnvelopeBuilder) FromTask(task *execution.Task) *EnvelopeBuilder {
 	if task == nil {
 		b.errors = append(b.errors, fmt.Errorf("task is nil"))
 		return b
@@ -198,8 +198,8 @@ func (b *EnvelopeBuilder) Errors() []error {
 	return b.errors
 }
 
-// BuildFromTask is a convenience function to build a TaskEnvelope from a core.Task.
-func BuildFromTask(task *core.Task) (*TaskEnvelope, error) {
+// BuildFromTask is a convenience function to build a TaskEnvelope from a execution.Task.
+func BuildFromTask(task *execution.Task) (*TaskEnvelope, error) {
 	return NewEnvelopeBuilder().
 		FromTask(task).
 		ParseAndNormalize().

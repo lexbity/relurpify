@@ -13,9 +13,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type suiteRunner interface {
@@ -23,16 +22,10 @@ type suiteRunner interface {
 }
 
 type Agent struct {
-	Config    *core.Config
+	Config    *execution.Config
 	Tools     *capability.Registry
 	Workspace string
 	Runner    suiteRunner
-}
-
-func init() {
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
-		return New(env, WithWorkspace(workspace))
-	})
 }
 
 func New(env agentenv.WorkspaceEnvironment, opts ...Option) *Agent {
@@ -61,7 +54,7 @@ func (a *Agent) InitializeEnvironment(env agentenv.WorkspaceEnvironment) error {
 	return a.Initialize(env.Config)
 }
 
-func (a *Agent) Initialize(cfg *core.Config) error {
+func (a *Agent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Runner == nil {
 		a.Runner = &agenttestpkg.Runner{}
@@ -73,7 +66,7 @@ func (a *Agent) Capabilities() []string {
 	return []string{"execute", "explain"}
 }
 
-func (a *Agent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
+func (a *Agent) BuildGraph(_ *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("testfu_done")
 	if err := g.AddNode(done); err != nil {
@@ -85,7 +78,7 @@ func (a *Agent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
 	return g, nil
 }
 
-func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if env == nil {
 		env = contextdata.NewEnvelope("", "")
 	}
@@ -101,9 +94,9 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 	env.SetWorkingValue("testfu.report", report, contextdata.MemoryClassTask)
 	env.SetWorkingValue("testfu.passed", allPassed, contextdata.MemoryClassTask)
 	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		Success: allPassed,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"report":       report,
 			"passed":       allPassed,
 			"failed_cases": failedCases,
@@ -111,7 +104,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 	}, nil
 }
 
-func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contextdata.Envelope) (*core.Result, error) {
+func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contextdata.Envelope) (*execution.Result, error) {
 	suiteReports, allPassed, err := a.runAgentSuites(ctx, req)
 	if err != nil {
 		return nil, err
@@ -130,9 +123,9 @@ func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contex
 	env.SetWorkingValue("testfu.total_failed", totalFailed, contextdata.MemoryClassTask)
 	env.SetWorkingValue("testfu.total_skipped", totalSkipped, contextdata.MemoryClassTask)
 	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		Success: allPassed,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"report":        suiteReports,
 			"passed":        allPassed,
 			"total_passed":  totalPassed,
@@ -283,7 +276,7 @@ func (a *Agent) runCase(ctx context.Context, req runRequest) (*agenttestpkg.Case
 	return &report.Cases[0], nil
 }
 
-func workspaceFromContext(task *core.Task) string {
+func workspaceFromContext(task *execution.Task) string {
 	if task != nil && task.Context != nil {
 		if value := strings.TrimSpace(fmt.Sprint(task.Context["workspace"])); value != "" && value != "<nil>" {
 			return value

@@ -3,7 +3,6 @@ package capability
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -34,7 +33,7 @@ func (r *CapabilityRegistry) ModelCallableTools() []contracts.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]contracts.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
 			continue
 		}
 		if !toolAvailableForPrompt(entry.legacyTool) {
@@ -61,7 +60,7 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec
 		if entry == nil {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
 			continue
 		}
 		if entry.legacyTool != nil {
@@ -69,8 +68,8 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []contracts.LLMToolSpec
 				continue
 			}
 			res = append(res, contracts.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
-		} else if _, ok := entry.handler.(core.InvocableCapabilityHandler); ok {
-			res = append(res, core.LLMToolSpecFromDescriptor(entry.descriptor))
+		} else if _, ok := entry.handler.(InvocableCapabilityHandler); ok {
+			res = append(res, LLMToolSpecFromDescriptor(entry.descriptor))
 		}
 	}
 	return res
@@ -92,7 +91,7 @@ func (r *CapabilityRegistry) GetModelTool(name string) (contracts.Tool, bool) {
 	if !ok || entry == nil || entry.legacyTool == nil {
 		return nil, false
 	}
-	if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
+	if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
 		return nil, false
 	}
 	return entry.legacyTool, true

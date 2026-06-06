@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // PlanExecutor runs plan steps with dependency awareness.
@@ -18,7 +18,7 @@ type PlanExecutor struct {
 }
 
 // Execute runs the plan using the provided executor agent and shared state.
-func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *Plan, state *contextdata.Envelope) (*Result, error) {
+func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, state *contextdata.Envelope) (*Result, error) {
 	if executor == nil {
 		return nil, fmt.Errorf("executor agent required")
 	}
@@ -28,7 +28,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 	if plan == nil || len(plan.Steps) == 0 {
 		return &Result{
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"steps_completed": 0}),
+			Data:    execution.NewToolResultPayload(map[string]any{"steps_completed": 0}),
 		}, nil
 	}
 	if err := validatePlanDependencies(plan); err != nil {
@@ -101,7 +101,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 
 	return &Result{
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{"steps_completed": len(completedSteps)}),
+		Data:    execution.NewToolResultPayload(map[string]any{"steps_completed": len(completedSteps)}),
 	}, nil
 }
 
@@ -118,7 +118,7 @@ func (p *PlanExecutor) completedStepIDs(state *contextdata.Envelope) []string {
 	return nil
 }
 
-func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *Plan, step PlanStep, state *contextdata.Envelope, maxRecovery int) error {
+func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, step PlanStep, state *contextdata.Envelope, maxRecovery int) error {
 	stepTask := defaultBuildStepTask(task, plan, step)
 	if p.Options.BuildStepTask != nil {
 		stepTask = p.Options.BuildStepTask(task, plan, step, state)
@@ -167,7 +167,7 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecuto
 	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
 }
 
-func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
+func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
 	if len(readySteps) == 0 {
 		return nil, nil
 	}
@@ -184,7 +184,7 @@ func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowE
 	return p.executeReadyStepsParallel(ctx, provider, task, plan, readySteps, state, maxRecovery)
 }
 
-func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
+func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
 	executed := make([]PlanStep, 0, len(readySteps))
 	for _, step := range readySteps {
 		if err := p.executeStep(ctx, executor, task, plan, step, state, maxRecovery); err != nil {
@@ -195,7 +195,7 @@ func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor Wor
 	return executed, nil
 }
 
-func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchExecutorProvider, task *core.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
+func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchExecutorProvider, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
 	type branchResult struct {
 		index int
 		step  PlanStep
@@ -257,14 +257,14 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 	return readySteps, nil
 }
 
-func buildStepTask(task *core.Task, plan *Plan, step PlanStep, state *contextdata.Envelope) *core.Task {
+func buildStepTask(task *execution.Task, plan *Plan, step PlanStep, state *contextdata.Envelope) *execution.Task {
 	return defaultBuildStepTask(task, plan, step)
 }
 
-func defaultBuildStepTask(task *core.Task, plan *Plan, step PlanStep) *core.Task {
+func defaultBuildStepTask(task *execution.Task, plan *Plan, step PlanStep) *execution.Task {
 	var metadata map[string]string
 	var taskID string
-	var taskType core.TaskType
+	var taskType execution.TaskType
 	var instruction string
 	if task != nil && task.Metadata != nil {
 		metadata = make(map[string]string, len(task.Metadata))
@@ -276,13 +276,13 @@ func defaultBuildStepTask(task *core.Task, plan *Plan, step PlanStep) *core.Task
 	}
 	if task != nil {
 		taskID = task.ID
-		taskType = core.TaskType(task.Type)
+		taskType = execution.TaskType(task.Type)
 		instruction = task.Instruction
 	}
 	if strings.TrimSpace(instruction) == "" {
 		instruction = step.Description
 	}
-	stepTask := &core.Task{
+	stepTask := &execution.Task{
 		ID:          taskID,
 		Type:        string(taskType),
 		Instruction: instruction,
@@ -311,7 +311,7 @@ func defaultBuildStepTask(task *core.Task, plan *Plan, step PlanStep) *core.Task
 	return stepTask
 }
 
-func applyStepRecovery(stepTask *core.Task, _ *contextdata.Envelope, _ PlanStep, recovery *StepRecovery) {
+func applyStepRecovery(stepTask *execution.Task, _ *contextdata.Envelope, _ PlanStep, recovery *StepRecovery) {
 	if stepTask == nil || recovery == nil {
 		return
 	}

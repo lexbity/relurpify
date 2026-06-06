@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
@@ -28,7 +28,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 		orchestrate.WithPersistenceWriter(writer),
 	)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-resume-checkpoint",
 		Type:        "euclo",
 		Instruction: "add a cache to the handler",
@@ -104,7 +104,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		orchestrate.WithPersistenceWriter(writer),
 	)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-resume-thoughtrecipe",
 		Type:        "euclo",
 		Instruction: "review the auth package",

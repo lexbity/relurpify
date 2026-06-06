@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -85,7 +85,7 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	facts := make([]Fact, 0, len(snapshot.Facts))
 	for _, fact := range snapshot.Facts {
 		if fact.Derivation == nil {
-			origin := core.OriginDerivation("blackboard")
+			origin := relurpctx.OriginDerivation("blackboard")
 			derived := origin.Derive("blackboard_inject", "blackboard", 0.0, "")
 			fact.Derivation = &derived
 		}
@@ -96,7 +96,7 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	hypotheses := make([]Hypothesis, 0, len(snapshot.Hypotheses))
 	for _, hyp := range snapshot.Hypotheses {
 		if hyp.Derivation == nil {
-			origin := core.OriginDerivation("blackboard")
+			origin := relurpctx.OriginDerivation("blackboard")
 			derived := origin.Derive("blackboard_inject", "blackboard", 0.0, "")
 			hyp.Derivation = &derived
 		}
@@ -107,7 +107,7 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	issues := make([]Issue, 0, len(snapshot.Issues))
 	for _, issue := range snapshot.Issues {
 		if issue.Derivation == nil {
-			origin := core.OriginDerivation("blackboard")
+			origin := relurpctx.OriginDerivation("blackboard")
 			derived := origin.Derive("blackboard_inject", "blackboard", 0.0, "")
 			issue.Derivation = &derived
 		}
@@ -189,7 +189,7 @@ func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
 	}
 	for _, key := range keys {
 		if value, ok := state.GetWorkingValue(key); ok {
-			task.Set(key, value, core.MemoryClassWorking)
+			task.Set(key, value, relurpctx.MemoryClassWorking)
 		}
 	}
 }

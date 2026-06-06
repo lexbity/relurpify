@@ -7,11 +7,12 @@ import (
 	"context"
 	"testing"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
@@ -24,12 +25,12 @@ func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *capability.Regist
 }
 
 // Execute implements graph.WorkflowExecutor
-func (m *mockCapabilityRegistryProvider) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
+func (m *mockCapabilityRegistryProvider) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	return nil, nil
 }
 
 // Initialize implements graph.WorkflowExecutor
-func (m *mockCapabilityRegistryProvider) Initialize(config *core.Config) error {
+func (m *mockCapabilityRegistryProvider) Initialize(config *execution.Config) error {
 	return nil
 }
 
@@ -39,7 +40,7 @@ func (m *mockCapabilityRegistryProvider) Capabilities() []string {
 }
 
 // BuildGraph implements graph.WorkflowExecutor
-func (m *mockCapabilityRegistryProvider) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (m *mockCapabilityRegistryProvider) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 
@@ -221,11 +222,11 @@ func TestBuildCoverageFromEvents(t *testing.T) {
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
-	events := []core.Event{
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
-		{Type: core.EventLLMResponse, Metadata: map[string]any{}},
+	events := []telemetry.Event{
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{}},
 	}
 
 	coverage, err := BuildCoverageFromEvents(agent, events)
@@ -299,11 +300,11 @@ func TestCoverageReport_Nil(t *testing.T) {
 // mockNoRegistryAgent implements graph.WorkflowExecutor without capability registry
 type mockNoRegistryAgent struct{}
 
-func (m *mockNoRegistryAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
+func (m *mockNoRegistryAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	return nil, nil
 }
 
-func (m *mockNoRegistryAgent) Initialize(config *core.Config) error {
+func (m *mockNoRegistryAgent) Initialize(config *execution.Config) error {
 	return nil
 }
 
@@ -311,7 +312,7 @@ func (m *mockNoRegistryAgent) Capabilities() []string {
 	return nil
 }
 
-func (m *mockNoRegistryAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (m *mockNoRegistryAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 

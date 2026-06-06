@@ -7,17 +7,17 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type captureTelemetry struct {
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (c *captureTelemetry) Emit(event core.Event) {
+func (c *captureTelemetry) Emit(event telemetry.Event) {
 	c.events = append(c.events, event)
 }
 
@@ -105,7 +105,7 @@ func TestTelemetryNodeIncompleteExecution(t *testing.T) {
 
 func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	EmitRouteSelected(ctx, "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 3, false)
 
@@ -113,7 +113,7 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
 	}
 	event := sink.events[0]
-	if event.Type != core.EventType(EventTypeRouteSelected) {
+	if event.Type != telemetry.EventType(EventTypeRouteSelected) {
 		t.Fatalf("expected event type %q, got %q", EventTypeRouteSelected, event.Type)
 	}
 	if event.Metadata["family"] != "query" {
@@ -129,7 +129,7 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 
 func TestEmitRouteCompleted_IncludesElapsed(t *testing.T) {
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	EmitRouteCompleted(ctx, "task-1", "session-1", "thoughtrecipe", "euclo:thoughtrecipe.default", RouteOutcomeSuccess, []string{"artifact"}, 125*time.Millisecond)
 
@@ -137,7 +137,7 @@ func TestEmitRouteCompleted_IncludesElapsed(t *testing.T) {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
 	}
 	event := sink.events[0]
-	if event.Type != core.EventType(EventTypeRouteCompleted) {
+	if event.Type != telemetry.EventType(EventTypeRouteCompleted) {
 		t.Fatalf("expected completed event type, got %q", event.Type)
 	}
 	if got := event.Metadata["elapsed_ms"]; got != int64(125) && got != 125 {
@@ -150,7 +150,7 @@ func TestEmitRouteCompleted_IncludesElapsed(t *testing.T) {
 
 func TestEmitRouteUnavailable_IncludesReason(t *testing.T) {
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	EmitRouteUnavailable(ctx, "task-1", "session-1", "euclo:cap.targeted_refactor", "unavailable:tool_not_enabled", "tool dependency missing: file_write")
 
@@ -158,7 +158,7 @@ func TestEmitRouteUnavailable_IncludesReason(t *testing.T) {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
 	}
 	event := sink.events[0]
-	if event.Type != core.EventType(EventTypeRouteUnavailable) {
+	if event.Type != telemetry.EventType(EventTypeRouteUnavailable) {
 		t.Fatalf("expected unavailable event type, got %q", event.Type)
 	}
 	if event.Metadata["availability"] != "unavailable:tool_not_enabled" {
@@ -171,7 +171,7 @@ func TestEmitRouteUnavailable_IncludesReason(t *testing.T) {
 
 func TestEmitRouteDryRun_FullReport(t *testing.T) {
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 	report := map[string]any{"selected_route": "euclo:cap.ast_query", "candidate_count": 2}
 
 	EmitRouteDryRun(ctx, "task-1", "session-1", report)
@@ -180,7 +180,7 @@ func TestEmitRouteDryRun_FullReport(t *testing.T) {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
 	}
 	event := sink.events[0]
-	if event.Type != core.EventType(EventTypeRouteDryRun) {
+	if event.Type != telemetry.EventType(EventTypeRouteDryRun) {
 		t.Fatalf("expected dry-run event type, got %q", event.Type)
 	}
 	if event.Metadata["report"] == nil {
@@ -190,7 +190,7 @@ func TestEmitRouteDryRun_FullReport(t *testing.T) {
 
 func TestEmitRouteFallback_BothIDs(t *testing.T) {
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	EmitRouteFallback(ctx, "task-1", "session-1", "euclo:cap.primary", "euclo:cap.fallback", "primary unavailable")
 
@@ -198,7 +198,7 @@ func TestEmitRouteFallback_BothIDs(t *testing.T) {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
 	}
 	event := sink.events[0]
-	if event.Type != core.EventType(EventTypeRouteFallback) {
+	if event.Type != telemetry.EventType(EventTypeRouteFallback) {
 		t.Fatalf("expected fallback event type, got %q", event.Type)
 	}
 	if event.Metadata["primary_id"] != "euclo:cap.primary" {
@@ -215,41 +215,41 @@ func TestEmitRouteSelected_NilTelemetry_NoOp(t *testing.T) {
 
 func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 	sink := &captureTelemetry{}
-	telemetry := NewEucloTelemetry(sink)
+	tel := NewEucloTelemetry(sink)
 	ctx := context.Background()
 
-	telemetry.EmitIntakeComplete(ctx, EventIntakeComplete{
+	tel.EmitIntakeComplete(ctx, EventIntakeComplete{
 		EventHeader:   EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 1},
 		WinningFamily: "analysis",
 		Confidence:    0.9,
 		Ambiguous:     false,
 	})
-	telemetry.EmitFamilySelected(ctx, EventFamilySelected{
+	tel.EmitFamilySelected(ctx, EventFamilySelected{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 2},
 		FamilyID:    "analysis",
 		Confidence:  0.8,
 		Keywords:    []string{"explain"},
 	})
-	telemetry.EmitIngestionComplete(ctx, EventIngestionComplete{
+	tel.EmitIngestionComplete(ctx, EventIngestionComplete{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 3},
 		Mode:        "files_only",
 		FileCount:   2,
 		ChunkCount:  5,
 	})
-	telemetry.EmitStreamRequested(ctx, EventStreamRequested{
+	tel.EmitStreamRequested(ctx, EventStreamRequested{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 4},
 		Query:       "summarize",
 		MaxTokens:   1024,
 		Mode:        "analysis",
 	})
-	telemetry.EmitCapabilityClassified(ctx, EventCapabilityClassified{
+	tel.EmitCapabilityClassified(ctx, EventCapabilityClassified{
 		EventHeader:  EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 5},
 		FamilyID:     "analysis",
 		Capabilities: []string{"query"},
 		Operator:     "llm",
 		LLMCalls:     1,
 	})
-	telemetry.EmitRouteSelected(ctx, EventRouteSelected{
+	tel.EmitRouteSelected(ctx, EventRouteSelected{
 		EventHeader:    EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 6},
 		FamilyID:       "analysis",
 		RouteKind:      "capability",
@@ -257,37 +257,37 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		CandidateCount: 2,
 		FallbackTaken:  false,
 	})
-	telemetry.EmitGateResult(ctx, EventGateResult{
+	tel.EmitGateResult(ctx, EventGateResult{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 7},
 		GateID:      "gate-1",
 		Passed:      true,
 		Decision:    "allow",
 	})
-	telemetry.EmitFrameEmitted(ctx, EventFrameEmitted{
+	tel.EmitFrameEmitted(ctx, EventFrameEmitted{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 8},
 		FrameID:     "frame-1",
 		FrameType:   "hitl_approval",
 		SlotCount:   2,
 	})
-	telemetry.EmitFrameResolved(ctx, EventFrameResolved{
+	tel.EmitFrameResolved(ctx, EventFrameResolved{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 9},
 		FrameID:     "frame-1",
 		ChosenSlot:  "approve",
 		RespondedBy: "user-1",
 	})
-	telemetry.EmitJobSubmitted(ctx, EventJobSubmitted{
+	tel.EmitJobSubmitted(ctx, EventJobSubmitted{
 		EventHeader:   EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 10},
 		JobID:         "job-1",
 		RouteID:       "euclo:cap.ast_query",
 		ExecutionMode: "background",
 	})
-	telemetry.EmitJobCompleted(ctx, EventJobCompleted{
+	tel.EmitJobCompleted(ctx, EventJobCompleted{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 11},
 		JobID:       "job-1",
 		Status:      "completed",
 		DurationMs:  42,
 	})
-	telemetry.EmitStepCompleted(ctx, EventStepCompleted{
+	tel.EmitStepCompleted(ctx, EventStepCompleted{
 		EventHeader:     EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 12},
 		StepID:          "step-1",
 		ThoughtRecipeID: "thoughtrecipe-1",
@@ -295,7 +295,7 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		Success:         true,
 		DurationMs:      17,
 	})
-	telemetry.EmitExecutionComplete(ctx, EventExecutionComplete{
+	tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 		EventHeader: EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 13},
 		Outcome:     "success",
 		OutcomeKind: "execution completed successfully",
@@ -307,7 +307,7 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 	if got := len(sink.events); got != 13 {
 		t.Fatalf("expected 13 events, got %d", got)
 	}
-	if sink.events[0].Type != core.EventType(EventTypeIntakeComplete) {
+	if sink.events[0].Type != telemetry.EventType(EventTypeIntakeComplete) {
 		t.Fatalf("unexpected first event type %q", sink.events[0].Type)
 	}
 	if sink.events[12].Metadata["outcome"] != "success" {
@@ -350,7 +350,7 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 	if projection["plan_id"] != "plan-1" {
 		t.Fatalf("unexpected projection plan id: %#v", projection["plan_id"])
 	}
-	if sink.events[0].Type != core.EventType(EventTypeProjectionCompleted) {
+	if sink.events[0].Type != telemetry.EventType(EventTypeProjectionCompleted) {
 		t.Fatalf("expected projection event first, got %q", sink.events[0].Type)
 	}
 	if sink.events[0].Metadata["mutation_stable_id"] != "mutation-1" {
@@ -359,13 +359,13 @@ func TestTelemetryNodeEmitsProjectionMutationEvent(t *testing.T) {
 	if sink.events[0].Metadata["plan_id"] != "plan-1" {
 		t.Fatalf("unexpected plan id: %#v", sink.events[0].Metadata["plan_id"])
 	}
-	if sink.events[1].Type != core.EventType(EventTypeVerifyStarted) {
+	if sink.events[1].Type != telemetry.EventType(EventTypeVerifyStarted) {
 		t.Fatalf("expected verify.started at idx 1, got %q", sink.events[1].Type)
 	}
-	if sink.events[2].Type != core.EventType(EventTypeVerifyComplete) {
+	if sink.events[2].Type != telemetry.EventType(EventTypeVerifyComplete) {
 		t.Fatalf("expected verify.complete at idx 2, got %q", sink.events[2].Type)
 	}
-	if sink.events[3].Type != core.EventType(EventTypeExecutionComplete) {
+	if sink.events[3].Type != telemetry.EventType(EventTypeExecutionComplete) {
 		t.Fatalf("expected execution event at idx 3, got %q", sink.events[3].Type)
 	}
 }
@@ -385,16 +385,16 @@ func TestTelemetryNodeEmitsClarificationCompletionEvent(t *testing.T) {
 	if got := len(sink.events); got != 4 {
 		t.Fatalf("expected 4 events, got %d", got)
 	}
-	if sink.events[0].Type != core.EventType(EventTypeVerifyStarted) {
+	if sink.events[0].Type != telemetry.EventType(EventTypeVerifyStarted) {
 		t.Fatalf("expected verify.started at idx 0, got %q", sink.events[0].Type)
 	}
-	if sink.events[1].Type != core.EventType(EventTypeVerifyComplete) {
+	if sink.events[1].Type != telemetry.EventType(EventTypeVerifyComplete) {
 		t.Fatalf("expected verify.complete at idx 1, got %q", sink.events[1].Type)
 	}
-	if sink.events[2].Type != core.EventType(EventTypeExecutionComplete) {
+	if sink.events[2].Type != telemetry.EventType(EventTypeExecutionComplete) {
 		t.Fatalf("expected execution at idx 2, got %q", sink.events[2].Type)
 	}
-	if sink.events[3].Type != core.EventType(EventTypeClarificationCompleted) {
+	if sink.events[3].Type != telemetry.EventType(EventTypeClarificationCompleted) {
 		t.Fatalf("expected clarification completion event at idx 3, got %q", sink.events[3].Type)
 	}
 	if sink.events[3].Metadata["thoughtrecipe_id"] != "euclo.thoughtrecipe.intent.clarify" {

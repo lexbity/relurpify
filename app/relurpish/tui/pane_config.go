@@ -467,17 +467,6 @@ func (p *ConfigPane) viewContract() string {
 			}
 			b.WriteString(p.th.Dim().Render(fmt.Sprintf("%-14s", r.k)) + "  " + r.v + "\n")
 		}
-		if len(c.AppliedSkills) > 0 {
-			b.WriteString("\n" + p.th.Dim().Render("skills\n"))
-			for _, s := range c.AppliedSkills {
-				b.WriteString(p.th.Success().Render("  ✓ ") + s + "\n")
-			}
-		}
-		if len(c.FailedSkills) > 0 {
-			for _, s := range c.FailedSkills {
-				b.WriteString(p.th.Error().Render("  ✗ ") + s + "\n")
-			}
-		}
 	}
 
 	b.WriteString("\n")

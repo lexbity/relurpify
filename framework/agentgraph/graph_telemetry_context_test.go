@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type telemetryAwareTestNode struct {
 	id       string
-	sink     core.Telemetry
+	sink     telemetry.Telemetry
 	nilCheck bool
 }
 
@@ -18,10 +19,10 @@ func (n *telemetryAwareTestNode) ID() string { return n.id }
 
 func (n *telemetryAwareTestNode) Type() NodeType { return NodeTypeSystem }
 
-func (n *telemetryAwareTestNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
-	n.sink = core.TelemetryFromContext(ctx)
+func (n *telemetryAwareTestNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	n.sink = telemetry.TelemetryFromContext(ctx)
 	n.nilCheck = n.sink == nil
-	return &core.Result{NodeID: n.id, Success: true}, nil
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 func TestGraph_InjectsTelemetryIntoContext(t *testing.T) {
@@ -89,9 +90,9 @@ func TestGraph_NilTelemetry_NoInjection(t *testing.T) {
 }
 
 type coreTestTelemetrySink struct {
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (s *coreTestTelemetrySink) Emit(event core.Event) {
+func (s *coreTestTelemetrySink) Emit(event telemetry.Event) {
 	s.events = append(s.events, event)
 }

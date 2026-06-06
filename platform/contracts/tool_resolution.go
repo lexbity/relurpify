@@ -34,10 +34,6 @@ func BuildToolExecutionPlan(entry ToolManifest, args map[string]any) (ToolResolu
 		if strings.TrimSpace(entry.Execution.Implementation) == "" && len(entry.Execution.Command.Base) == 0 {
 			return ToolResolution{}, CommandRequest{}, fmt.Errorf("execution.implementation required for go_native backend")
 		}
-	case ToolBackendMCP:
-		if entry.Execution.MCP == nil {
-			return ToolResolution{}, CommandRequest{}, fmt.Errorf("execution.mcp required for mcp backend")
-		}
 	default:
 		return ToolResolution{}, CommandRequest{}, fmt.Errorf("execution.backend unsupported")
 	}

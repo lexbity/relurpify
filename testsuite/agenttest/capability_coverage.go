@@ -7,8 +7,7 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/named/rex"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // CapabilityCoverage tracks which registered capabilities were exercised
@@ -117,9 +116,6 @@ func extractCapabilityRegistry(agent graph.WorkflowExecutor) *capability.Registr
 	if provider, ok := agent.(capabilityRegistryProvider); ok {
 		return provider.CapabilityRegistry()
 	}
-	if rexAgent, ok := agent.(*rex.Agent); ok && rexAgent.Environment != nil {
-		return rexAgent.Environment.Registry
-	}
 	return nil
 }
 
@@ -184,7 +180,7 @@ func ValidateToolsRequired(coverage *CapabilityCoverage, requiredTools []string)
 }
 
 // BuildCoverageFromEvents creates a CapabilityCoverage from telemetry events
-func BuildCoverageFromEvents(agent graph.WorkflowExecutor, events []core.Event) (*CapabilityCoverage, error) {
+func BuildCoverageFromEvents(agent graph.WorkflowExecutor, events []telemetry.Event) (*CapabilityCoverage, error) {
 	coverage, err := ExtractCapabilityRegistry(agent)
 	if err != nil {
 		return nil, err

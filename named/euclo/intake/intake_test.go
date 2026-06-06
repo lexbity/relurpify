@@ -7,8 +7,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // === Phase 3 Unit Tests ===
@@ -160,7 +160,7 @@ func TestEnvelopeBuilderBuildMissingInstruction(t *testing.T) {
 }
 
 func TestBuildFromTask(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID: "task-999",
 		Instruction: `context-hint: typescript
 Please add type safety to the API client.`,
@@ -268,7 +268,7 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	trigger := &MockStreamTrigger{}
 	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
-	contextdata.SetTyped(env, "task.input", &core.Task{Instruction: "analyze code"})
+	contextdata.SetTyped(env, "task.input", &execution.Task{Instruction: "analyze code"})
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -282,7 +282,7 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	if got, ok := contextdata.GetTyped[*IntentClassification](env, "euclo.intent_classification"); !ok || got == nil {
 		t.Fatal("expected intent classification to be written")
 	}
-	if got, ok := core.ResultField(result.Data, "stream_result"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "stream_result"); !ok || got == nil {
 		t.Fatal("expected structured stream result in result data")
 	}
 }

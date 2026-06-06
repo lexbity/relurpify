@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/agents"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
@@ -13,13 +14,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // StartupState captures the first-screen startup decision for the TUI shell.
@@ -39,13 +40,12 @@ type AgentBootstrapOptions struct {
 	ManifestSnapshot    *cfgload.AgentManifestSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
 	ProfileResolution   llm.ProfileResolution
-	AgentDefinitions    map[string]*agentspec.AgentDefinition
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               contracts.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
-	Telemetry           core.Telemetry
+	Telemetry           telemetry.Telemetry
 	SkipASTIndex        bool
 	MaxIterations       int
 	AllowedCapabilities []agentspec.CapabilitySelector
@@ -60,11 +60,9 @@ type BootstrappedAgentRuntime struct {
 	SearchEngine         *search.SearchEngine
 	Memory               *memory.WorkingMemoryStore
 	AgentSpec            *agentspec.AgentRuntimeSpec
-	AgentConfig          *core.Config
+	AgentConfig          *execution.Config
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
-	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	SkillResults         []cfgload.SkillResolution
 	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *cfgload.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
@@ -84,7 +82,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		ManifestSnapshot:    opts.ManifestSnapshot,
 		SecurityBundle:      opts.SecurityBundle,
 		ProfileResolution:   opts.ProfileResolution,
-		AgentDefinitions:    opts.AgentDefinitions,
 		PermissionManager:   opts.PermissionManager,
 		Runner:              opts.Runner,
 		Model:               opts.Model,
@@ -122,8 +119,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentConfig:          boot.AgentConfig,
 		Backend:              boot.Backend,
 		Environment:          env,
-		AgentDefinitions:     boot.AgentDefinitions,
-		SkillResults:         boot.SkillResults,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		Contract:             boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,

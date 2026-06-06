@@ -4,19 +4,19 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // publishTaskState records the active task in envelope working memory under htn.* namespace.
-func publishTaskState(env *contextdata.Envelope, task *core.Task) {
+func publishTaskState(env *contextdata.Envelope, task *execution.Task) {
 	if env == nil || task == nil {
 		return
 	}
 	summary := TaskState{
 		ID:          task.ID,
-		Type:        core.TaskType(task.Type),
+		Type:        execution.TaskType(task.Type),
 		Instruction: task.Instruction,
 	}
 	if len(task.Metadata) > 0 {
@@ -295,12 +295,12 @@ func loadCheckpointState(env *contextdata.Envelope) (*CheckpointState, bool) {
 }
 
 // executionTaskType extracts the current task type from envelope working memory.
-func executionTaskType(env *contextdata.Envelope) core.TaskType {
+func executionTaskType(env *contextdata.Envelope) execution.TaskType {
 	if env == nil {
 		return ""
 	}
 	if raw, ok := env.GetWorkingValue(contextKeyTaskType); ok {
-		var taskType core.TaskType
+		var taskType execution.TaskType
 		if decodeContextValue(raw, &taskType) {
 			return taskType
 		}

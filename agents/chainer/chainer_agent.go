@@ -9,9 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ChainerAgent executes a deterministic chain of isolated LLM links.
@@ -23,16 +23,16 @@ import (
 type ChainerAgent struct {
 	Model           contracts.LanguageModel
 	Tools           *capability.Registry
-	Config          *core.Config
+	Config          *execution.Config
 	Chain           *Chain
-	ChainBuilder    func(*core.Task) (*Chain, error)
+	ChainBuilder    func(*execution.Task) (*Chain, error)
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
 	initialised     bool
 }
 
-func (a *ChainerAgent) Initialize(cfg *core.Config) error {
+func (a *ChainerAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
@@ -45,7 +45,7 @@ func (a *ChainerAgent) Capabilities() []string {
 	return []string{"plan", "execute", "explain"}
 }
 
-func (a *ChainerAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
+func (a *ChainerAgent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	chain, err := a.resolveChain(task)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 	return ""
 }
 
-func (a *ChainerAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *ChainerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -109,7 +109,7 @@ func (a *ChainerAgent) Execute(ctx context.Context, task *core.Task, env *contex
 }
 
 // executeChain runs the chain using the envelope-native chainRunner.
-func (a *ChainerAgent) executeChain(ctx context.Context, task *core.Task, env *contextdata.Envelope, chain *Chain) (*core.Result, error) {
+func (a *ChainerAgent) executeChain(ctx context.Context, task *execution.Task, env *contextdata.Envelope, chain *Chain) (*execution.Result, error) {
 	if err := (&chainRunner{Model: a.Model}).Run(ctx, task, chain, env); err != nil {
 		return nil, err
 	}
@@ -120,10 +120,10 @@ func (a *ChainerAgent) executeChain(ctx context.Context, task *core.Task, env *c
 			data[link.OutputKey] = value
 		}
 	}
-	return &core.Result{Success: true, Data: core.NewToolResultPayload(data)}, nil
+	return &execution.Result{Success: true, Data: execution.NewToolResultPayload(data)}, nil
 }
 
-func (a *ChainerAgent) resolveChain(task *core.Task) (*Chain, error) {
+func (a *ChainerAgent) resolveChain(task *execution.Task) (*Chain, error) {
 	switch {
 	case a.ChainBuilder != nil:
 		return a.ChainBuilder(task)
@@ -141,7 +141,7 @@ func (a *ChainerAgent) streamMode() contextstream.Mode {
 	return contextstream.ModeBlocking
 }
 
-func (a *ChainerAgent) streamQuery(task *core.Task) string {
+func (a *ChainerAgent) streamQuery(task *execution.Task) string {
 	if strings.TrimSpace(a.StreamQuery) != "" {
 		return strings.TrimSpace(a.StreamQuery)
 	}
@@ -158,7 +158,7 @@ func (a *ChainerAgent) streamMaxTokens() int {
 	return 256
 }
 
-func (a *ChainerAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
+func (a *ChainerAgent) streamTriggerNode(task *execution.Task) agentgraph.Node {
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
@@ -170,7 +170,7 @@ func (a *ChainerAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
 	return node
 }
 
-func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
+func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *execution.Task, env *contextdata.Envelope) error {
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
@@ -203,11 +203,11 @@ type chainerLinkNode struct {
 
 func (n *chainerLinkNode) ID() string                { return n.id }
 func (n *chainerLinkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
-func (n *chainerLinkNode) Execute(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *chainerLinkNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if env != nil {
 		env.SetWorkingValue("chainer.inspect_link", n.name, contextdata.MemoryClassTask)
 	}
-	return &core.Result{NodeID: n.id, Success: true}, nil
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 func sanitizeLinkName(name string) string {

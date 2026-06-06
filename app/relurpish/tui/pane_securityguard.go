@@ -12,11 +12,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type securityGuardRuntime interface {
@@ -39,7 +39,7 @@ type SecurityGuardPane struct {
 	runtime securityGuardRuntime
 
 	shellRules []sandbox.BlacklistRule
-	guardRules []core.PolicyRule
+	guardRules []policy.PolicyRule
 
 	activePanel securityPanel
 	shellSel    int
@@ -226,13 +226,13 @@ func (p *SecurityGuardPane) loadGuardRules() {
 		p.guardRules = nil
 		return
 	}
-	var rules []core.PolicyRule
+	var rules []policy.PolicyRule
 	if err := json.Unmarshal(data, &rules); err != nil {
 		p.status = fmt.Sprintf("policy rules parse failed: %v", err)
 		p.guardRules = nil
 		return
 	}
-	p.guardRules = append([]core.PolicyRule(nil), rules...)
+	p.guardRules = append([]policy.PolicyRule(nil), rules...)
 }
 
 func (p *SecurityGuardPane) beginEdit() {
@@ -288,12 +288,12 @@ func (p *SecurityGuardPane) addNewRule() {
 		p.shellSel = len(p.shellRules) - 1
 		p.beginEdit()
 	case securityPanelIngestion:
-		p.guardRules = append(p.guardRules, core.PolicyRule{
+		p.guardRules = append(p.guardRules, policy.PolicyRule{
 			ID:       fmt.Sprintf("policy-%d", time.Now().UnixNano()),
 			Name:     "new guardrail",
 			Priority: len(p.guardRules) + 100,
 			Enabled:  true,
-			Effect: core.PolicyEffect{
+			Effect: policy.PolicyEffect{
 				Action: "deny",
 				Reason: "created from SecurityGuard",
 			},
@@ -423,7 +423,7 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	shellRules := append([]sandbox.BlacklistRule(nil), p.shellRules...)
-	guardRules := append([]core.PolicyRule(nil), p.guardRules...)
+	guardRules := append([]policy.PolicyRule(nil), p.guardRules...)
 	return func() tea.Msg {
 		if workspace == "" {
 			return sandboxPersistedMsg{Err: fmt.Errorf("workspace unavailable")}
@@ -470,7 +470,7 @@ func (p *SecurityGuardPane) selectedShellRule() *sandbox.BlacklistRule {
 	return &p.shellRules[idx]
 }
 
-func (p *SecurityGuardPane) selectedGuardRule() *core.PolicyRule {
+func (p *SecurityGuardPane) selectedGuardRule() *policy.PolicyRule {
 	if len(p.guardRules) == 0 {
 		return nil
 	}

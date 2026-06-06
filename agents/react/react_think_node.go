@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type reactThinkNode struct {
 	id    string
 	agent *ReActAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 // ID returns the think node identifier.
@@ -28,7 +29,7 @@ func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 
 // Execute drives the "think" portion of the ReAct loop and either emits a tool
 // call or final answer instructions.
-func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValue("react.execution_phase", "planning", contextdata.MemoryClassTask)
 	n.agent.enforceBudget(env)
 	n.agent.manageContextSignals(env)
@@ -41,10 +42,10 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		}
 		env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
 		env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"decision": decision,
 			}),
 		}, nil
@@ -101,10 +102,10 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	env.SetWorkingValue("react.tool_calls", toolCalls, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
 	n.agent.debugf("%s decision=%+v tool_calls=%d", n.id, decision, len(resp.ToolCalls))
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"decision": decision,
 		}),
 	}, nil
@@ -242,7 +243,7 @@ type contextFilePayload struct {
 	Truncated bool
 }
 
-func renderContextFiles(task *core.Task, maxBytes int) string {
+func renderContextFiles(task *execution.Task, maxBytes int) string {
 	files := extractContextFiles(task)
 	if len(files) == 0 {
 		return ""
@@ -278,7 +279,7 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 	return strings.TrimSpace(b.String())
 }
 
-func extractContextFiles(task *core.Task) []contextFilePayload {
+func extractContextFiles(task *execution.Task) []contextFilePayload {
 	if task == nil || task.Context == nil {
 		return nil
 	}
@@ -363,7 +364,7 @@ func (n *reactThinkNode) streamCallback() func(string) {
 }
 
 // buildVariables seeds runtime variables from the task.
-func buildVariables(task *core.Task) map[string]string {
+func buildVariables(task *execution.Task) map[string]string {
 	vars := make(map[string]string)
 	if task != nil {
 		vars["instruction"] = task.Instruction
@@ -372,7 +373,7 @@ func buildVariables(task *core.Task) map[string]string {
 }
 
 // buildState seeds state values evaluated by when-expressions.
-func buildState(env *contextdata.Envelope, task *core.Task) map[string]any {
+func buildState(env *contextdata.Envelope, task *execution.Task) map[string]any {
 	state := make(map[string]any)
 
 	// React phase state
@@ -406,7 +407,10 @@ func buildState(env *contextdata.Envelope, task *core.Task) map[string]any {
 // buildRuntimeContext assembles a prompt.RuntimeContext from the agent and task.
 func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []contracts.Tool) prompt.RuntimeContext {
 	caps := n.agent.Tools.AllCapabilities()
-	agentSpec := n.agent.effectiveAgentSpec(n.task)
+	var agentSpec *agentspec.AgentRuntimeSpec
+	if n.agent != nil && n.agent.Config != nil {
+		agentSpec = n.agent.Config.AgentSpec
+	}
 	variables := buildVariables(n.task)
 	state := buildState(env, n.task)
 
@@ -473,7 +477,7 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contr
 
 // promptIDFromTask reads "prompt_id" from task.Context, falling back to the
 // default react prompt ID.
-func promptIDFromTask(task *core.Task) string {
+func promptIDFromTask(task *execution.Task) string {
 	if task != nil && task.Context != nil {
 		if id, ok := task.Context["prompt_id"].(string); ok && id != "" {
 			return id
@@ -524,7 +528,7 @@ Return ONLY structured JSON. No prose outside the JSON object.`, strings.Join(li
 }
 
 // minimalReactUserPrompt is the inline fallback prompt body.
-func minimalReactUserPrompt(task *core.Task, tools []contracts.Tool) string {
+func minimalReactUserPrompt(task *execution.Task, tools []contracts.Tool) string {
 	toolSection := frameworktools.RenderToolsToPrompt(tools)
 	instruction := ""
 	if task != nil {

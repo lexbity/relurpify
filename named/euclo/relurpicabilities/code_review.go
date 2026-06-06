@@ -13,8 +13,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // CodeReviewHandler implements the code review capability via an LLM sub-agent.
@@ -28,8 +29,8 @@ func NewCodeReviewHandler(env agentenv.WorkspaceEnvironment) *CodeReviewHandler 
 }
 
 // Descriptor returns the capability descriptor for the code review handler.
-func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -38,7 +39,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		Description:   "Reviews code for correctness, security, style, and architecture issues",
 		Category:      "review_synthesis",
 		Tags:          []string{"review", "llm", "relurpic"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
@@ -212,10 +213,10 @@ func buildCodeReviewPrompt(focus, contextText string) string {
 	return b.String()
 }
 
-func buildReflectionReviewTask(focus, contextText string) *core.Task {
-	return &core.Task{
+func buildReflectionReviewTask(focus, contextText string) *execution.Task {
+	return &execution.Task{
 		ID:   "euclo:cap.code_review",
-		Type: string(core.TaskTypeReview),
+		Type: string(execution.TaskTypeReview),
 		Instruction: fmt.Sprintf(
 			"Perform a code review with focus %q. Analyze the provided workspace context and return concise, actionable findings as JSON. Context:\n%s",
 			focus,
@@ -253,7 +254,7 @@ func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contex
 	task := buildReflectionReviewTask(focus, contextText)
 	runtimeEnv := h.env
 	if runtimeEnv.Config == nil {
-		runtimeEnv.Config = &core.Config{}
+		runtimeEnv.Config = &execution.Config{}
 	}
 	agent := reflectionagent.New(&runtimeEnv, reactpkg.New(&runtimeEnv))
 	if agent == nil {
@@ -309,8 +310,8 @@ func extractReflectionReview(env *contextdata.Envelope) ([]map[string]interface{
 			return findings, summary, true
 		}
 	}
-	if result, ok := contextdata.GetTyped[*core.Result](env, "reflection.last_result"); ok && result != nil {
-		if review, ok := core.ResultField(result.Data, "review"); ok {
+	if result, ok := contextdata.GetTyped[*execution.Result](env, "reflection.last_result"); ok && result != nil {
+		if review, ok := execution.ResultField(result.Data, "review"); ok {
 			if findings, summary, ok := decodeReflectionReview(review); ok {
 				return findings, summary, true
 			}
@@ -441,7 +442,7 @@ func focusCategory(focus string) string {
 	}
 }
 
-func configuredModelName(cfg *core.Config) string {
+func configuredModelName(cfg *execution.Config) string {
 	if cfg != nil {
 		if name := strings.TrimSpace(cfg.Model); name != "" {
 			return name

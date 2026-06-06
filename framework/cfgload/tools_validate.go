@@ -84,13 +84,6 @@ func validateToolManifestExecution(exec contracts.ToolManifestExecution) error {
 		}
 	case contracts.ToolBackendComposite:
 		// composition.steps validated during build, not here
-	case contracts.ToolBackendMCP:
-		if exec.MCP == nil {
-			return fmt.Errorf("execution.mcp required for mcp backend")
-		}
-		if strings.TrimSpace(exec.MCP.Server) == "" || strings.TrimSpace(exec.MCP.Method) == "" {
-			return fmt.Errorf("execution.mcp.server and execution.mcp.method required")
-		}
 	default:
 		return fmt.Errorf("execution.backend unsupported")
 	}

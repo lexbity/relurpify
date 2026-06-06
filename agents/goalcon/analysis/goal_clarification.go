@@ -9,9 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 )
 
 // ClassificationResponse is defined in classification_prompt.go
@@ -267,7 +267,7 @@ func (session *ClarificationSession) PersistToMemory(
 	// Store in memory with project scope for plan-level persistence
 	// Key format: "clarification:<session_id>:<plan_id>"
 	key := fmt.Sprintf("clarification:%s:%s", session.ID, planID)
-	ms.Scope("goalcon").Set(key, data, core.MemoryClassWorking)
+	ms.Scope("goalcon").Set(key, data, relurpctx.MemoryClassWorking)
 	return nil
 }
 

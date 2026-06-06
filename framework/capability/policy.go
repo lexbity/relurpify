@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -38,7 +37,7 @@ func (r *CapabilityRegistry) SetGuidanceBroker(broker RecoveryGuidanceBroker) {
 	r.guidanceBroker = broker
 }
 
-func (r *CapabilityRegistry) runPrechecks(desc core.CapabilityDescriptor, args map[string]interface{}) error {
+func (r *CapabilityRegistry) runPrechecks(desc CapabilityDescriptor, args map[string]interface{}) error {
 	r.mu.RLock()
 	prechecks := append([]InvocationPrecheck{}, r.prechecks...)
 	r.mu.RUnlock()
@@ -50,7 +49,7 @@ func (r *CapabilityRegistry) runPrechecks(desc core.CapabilityDescriptor, args m
 	return nil
 }
 
-func (r *CapabilityRegistry) runPostchecks(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
+func (r *CapabilityRegistry) runPostchecks(desc CapabilityDescriptor, result *contracts.ToolResult) error {
 	r.mu.RLock()
 	postchecks := append([]PostInvocationHook{}, r.postchecks...)
 	r.mu.RUnlock()

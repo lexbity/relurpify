@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestGateNodeExecute(t *testing.T) {
@@ -197,10 +197,10 @@ func TestGateNodeDecisionWritten(t *testing.T) {
 
 type gateTelemetrySink struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (s *gateTelemetrySink) Emit(event core.Event) {
+func (s *gateTelemetrySink) Emit(event telemetry.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.events = append(s.events, event)

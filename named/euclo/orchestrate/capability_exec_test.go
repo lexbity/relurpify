@@ -6,9 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestCapabilityExecutionNodeExecute(t *testing.T) {
@@ -31,7 +31,7 @@ func TestCapabilityExecutionNodeExecute(t *testing.T) {
 	if result.Success {
 		t.Fatalf("Expected failure, got success result: %+v", result)
 	}
-	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
+	if got, ok := execution.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
 		t.Fatalf("Expected registry error, got %v", got)
 	}
 }

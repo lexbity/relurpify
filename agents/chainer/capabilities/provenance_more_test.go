@@ -3,7 +3,7 @@ package capabilities
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // TestNewProvenanceTracker tests the constructor
@@ -64,8 +64,8 @@ func TestProvenanceTrackerClear(t *testing.T) {
 	tracker := NewProvenanceTracker("task-123")
 
 	// Add some records
-	tracker.Record("link1", "tool1", core.InsertionActionDirect)
-	tracker.Record("link2", "tool2", core.InsertionActionSummarized)
+	tracker.Record("link1", "tool1", capability.InsertionActionDirect)
+	tracker.Record("link2", "tool2", capability.InsertionActionSummarized)
 
 	if tracker.Count() != 2 {
 		t.Fatalf("expected 2 records, got %d", tracker.Count())
@@ -101,12 +101,12 @@ func TestProvenanceTrackerSummary(t *testing.T) {
 	t.Run("tracker with records summary", func(t *testing.T) {
 		tracker := NewProvenanceTracker("task-full")
 
-		tracker.Record("link1", "tool1", core.InsertionActionDirect)
-		tracker.Record("link2", "tool1", core.InsertionActionDirect) // Same tool
-		tracker.Record("link3", "tool2", core.InsertionActionSummarized)
-		tracker.Record("link4", "tool3", core.InsertionActionDenied)
-		tracker.Record("link5", "tool4", core.InsertionActionMetadataOnly)
-		tracker.Record("link6", "tool5", core.InsertionActionHITLRequired)
+		tracker.Record("link1", "tool1", capability.InsertionActionDirect)
+		tracker.Record("link2", "tool1", capability.InsertionActionDirect) // Same tool
+		tracker.Record("link3", "tool2", capability.InsertionActionSummarized)
+		tracker.Record("link4", "tool3", capability.InsertionActionDenied)
+		tracker.Record("link5", "tool4", capability.InsertionActionMetadataOnly)
+		tracker.Record("link6", "tool5", capability.InsertionActionHITLRequired)
 
 		summary := tracker.Summary()
 
@@ -141,7 +141,7 @@ func TestProvenanceTrackerSummary(t *testing.T) {
 func TestProvenanceTrackerWrapResult(t *testing.T) {
 	t.Run("nil tracker wrap result", func(t *testing.T) {
 		var nilTracker *ProvenanceTracker
-		result := nilTracker.WrapResult("tool1", "data", core.InsertionActionDirect)
+		result := nilTracker.WrapResult("tool1", "data", capability.InsertionActionDirect)
 
 		if result == nil {
 			t.Fatal("expected non-nil result")
@@ -153,14 +153,14 @@ func TestProvenanceTrackerWrapResult(t *testing.T) {
 		if result["result"] != "data" {
 			t.Error("expected result data")
 		}
-		if result["insertion_action"] != core.InsertionActionDirect {
+		if result["insertion_action"] != capability.InsertionActionDirect {
 			t.Error("expected insertion_action")
 		}
 	})
 
 	t.Run("valid tracker wrap result", func(t *testing.T) {
 		tracker := NewProvenanceTracker("task-123")
-		result := tracker.WrapResult("tool1", map[string]any{"key": "value"}, core.InsertionActionSummarized)
+		result := tracker.WrapResult("tool1", map[string]any{"key": "value"}, capability.InsertionActionSummarized)
 
 		if result == nil {
 			t.Fatal("expected non-nil result")

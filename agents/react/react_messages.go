@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 const reactMessagesKey = "react.messages"
@@ -178,7 +179,7 @@ func appendAssistantMessage(state *contextdata.Envelope, resp *contracts.LLMResp
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) {
+func appendToolMessage(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
@@ -225,7 +226,7 @@ func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	}
 }
 
-func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, decision core.InsertionDecision) ToolObservation {
+func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, decision capability.InsertionDecision) ToolObservation {
 	phase := ""
 	if state != nil {
 		phase = getWorkingValueAsString(state, "react.phase")
@@ -250,20 +251,20 @@ func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, r
 // clipSizeForDecision returns the max characters for tool output in
 // observations, based on the insertion decision. Direct → generous budget,
 // Summarized → moderate, MetadataOnly → minimal.
-func clipSizeForDecision(decision core.InsertionDecision) int {
+func clipSizeForDecision(decision capability.InsertionDecision) int {
 	switch decision.Action {
-	case core.InsertionActionDirect:
+	case capability.InsertionActionDirect:
 		return 4000
-	case core.InsertionActionSummarized:
+	case capability.InsertionActionSummarized:
 		return 900
-	case core.InsertionActionMetadataOnly:
+	case capability.InsertionActionMetadataOnly:
 		return 120
 	default:
 		return 320
 	}
 }
 
-func compactToolData(call contracts.ToolCall, res *contracts.ToolResult, decision core.InsertionDecision) (string, map[string]interface{}) {
+func compactToolData(call contracts.ToolCall, res *contracts.ToolResult, decision capability.InsertionDecision) (string, map[string]interface{}) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}

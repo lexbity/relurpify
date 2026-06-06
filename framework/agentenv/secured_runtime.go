@@ -17,26 +17,26 @@ import (
 // When ExistingRunner is set it is used directly; otherwise a new runner is
 // built from SandboxBackend + SecurityBundle + Manifest.
 type SecuredRuntimeInput struct {
-	Context          context.Context
-	Workspace        string
-	SandboxBackend   string
-	AgentID          string
-	AgentSpec        *agentspec.AgentRuntimeSpec
+	Context           context.Context
+	Workspace         string
+	SandboxBackend    string
+	AgentID           string
+	AgentSpec         *agentspec.AgentRuntimeSpec
 	PermissionManager *fauthorization.PermissionManager
-	SecurityBundle   *cfgsecurity.Bundle
-	ExistingRunner   sandbox.CommandRunner
-	Manifest         *cfgload.AgentManifest
-	Strict           bool
+	SecurityBundle    *cfgsecurity.Bundle
+	ExistingRunner    sandbox.CommandRunner
+	Manifest          *cfgload.AgentManifest
+	Strict            bool
 }
 
 // SecuredRuntime bundles the result of the non-bypassable security foundation.
 // It is the only way to obtain an AuthorizedRunner + PolicyEngine pair.
 type SecuredRuntime struct {
-	Runner       *sandbox.AuthorizedRunner
-	PolicyEngine fauthorization.PolicyEngine
+	Runner        *sandbox.AuthorizedRunner
+	PolicyEngine  fauthorization.PolicyEngine
 	CommandPolicy sandbox.CommandPolicy
-	Permissions  *fauthorization.PermissionManager
-	RunnerConfig *contracts.CommandRunnerConfig
+	Permissions   *fauthorization.PermissionManager
+	RunnerConfig  *contracts.CommandRunnerConfig
 }
 
 // buildSecuredRuntime is the single non-bypassable security foundation.
@@ -103,11 +103,11 @@ func buildSecuredRuntime(ctx context.Context, in SecuredRuntimeInput) (*SecuredR
 	}
 
 	return &SecuredRuntime{
-		Runner:       authRunner,
-		PolicyEngine: policyEngine,
+		Runner:        authRunner,
+		PolicyEngine:  policyEngine,
 		CommandPolicy: cmdPolicy,
-		Permissions:  permManager,
-		RunnerConfig: runnerConfig,
+		Permissions:   permManager,
+		RunnerConfig:  runnerConfig,
 	}, nil
 }
 

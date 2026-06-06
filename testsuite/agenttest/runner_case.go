@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestModel, endpoint, recordingMode, tapePath, workspace, artifactsDir, errMsg, failureKind string, attempts int) CaseReport {
@@ -48,7 +48,7 @@ func resolveCaseMaxRetries(opts RunOptions) int {
 	}
 }
 
-func seedWorkflowRetrievalStateForCase(state *contextdata.Envelope, task *core.Task, c CaseSpec) {
+func seedWorkflowRetrievalStateForCase(state *contextdata.Envelope, task *execution.Task, c CaseSpec) {
 	if state == nil || task == nil || task.Context == nil {
 		return
 	}

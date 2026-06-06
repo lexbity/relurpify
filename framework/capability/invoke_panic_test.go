@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -131,7 +130,7 @@ func TestHashArgsEmptyMap(t *testing.T) {
 func TestRecordResultNilDataNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		core.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
 		&contracts.ToolResult{Success: true, Data: nil},
 	)
 	if err != nil {
@@ -142,7 +141,7 @@ func TestRecordResultNilDataNoPanic(t *testing.T) {
 func TestRecordResultNilResultNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		core.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
 		nil,
 	)
 	if err != nil {
@@ -153,7 +152,7 @@ func TestRecordResultNilResultNoPanic(t *testing.T) {
 func TestRecordResultNilMetadataNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		core.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
 		&contracts.ToolResult{Success: true, Data: map[string]interface{}{"path": "/tmp/test"}, Metadata: nil},
 	)
 	if err != nil {

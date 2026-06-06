@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 	"github.com/stretchr/testify/require"
 )
 

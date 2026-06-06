@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Envelope, task *core.Task, lastMap map[string]interface{}) map[string]interface{} {
+func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Envelope, task *execution.Task, lastMap map[string]interface{}) map[string]interface{} {
 	if agent == nil || agent.Tools == nil {
 		return nil
 	}

@@ -5,21 +5,21 @@ import (
 	"encoding/json"
 	"os"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func ReadTelemetryJSONL(path string) ([]core.Event, error) {
+func ReadTelemetryJSONL(path string) ([]telemetry.Event, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	var events []core.Event
+	var events []telemetry.Event
 	sc := bufio.NewScanner(f)
 	// Allow large lines (debug prompt logging).
 	sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	for sc.Scan() {
-		var ev core.Event
+		var ev telemetry.Event
 		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
 			continue
 		}
@@ -31,10 +31,10 @@ func ReadTelemetryJSONL(path string) ([]core.Event, error) {
 	return events, nil
 }
 
-func CountToolCalls(events []core.Event) (total int, byTool map[string]int) {
+func CountToolCalls(events []telemetry.Event) (total int, byTool map[string]int) {
 	byTool = make(map[string]int)
 	for _, ev := range events {
-		if ev.Type != core.EventToolCall {
+		if ev.Type != telemetry.EventToolCall {
 			continue
 		}
 		total++
@@ -46,10 +46,10 @@ func CountToolCalls(events []core.Event) (total int, byTool map[string]int) {
 	return total, byTool
 }
 
-func CountTokenUsage(events []core.Event) TokenUsageReport {
+func CountTokenUsage(events []telemetry.Event) TokenUsageReport {
 	var usage TokenUsageReport
 	for _, ev := range events {
-		if ev.Type != core.EventLLMResponse {
+		if ev.Type != telemetry.EventLLMResponse {
 			continue
 		}
 		rawUsage, ok := ev.Metadata["usage"]

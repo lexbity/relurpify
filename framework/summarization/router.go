@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
@@ -13,17 +13,13 @@ const DefaultDerivationGenerationCap = 3
 
 // Route selects the appropriate summarizer for a chunk set and invokes it.
 // It enforces generation cap before selecting a summarizer.
-func Route(ctx context.Context, chunks []knowledge.KnowledgeChunk, budget int, summarizers []Summarizer, policy *contextpolicy.ContextPolicyBundle) (*SummarizationResult, error) {
+func Route(ctx context.Context, chunks []knowledge.KnowledgeChunk, budget int, summarizers []Summarizer, policy *execctx.ContextPolicyBundle) (*SummarizationResult, error) {
 	if len(chunks) == 0 {
 		return nil, fmt.Errorf("no chunks to summarize")
 	}
 
 	// 1. Enforce generation cap
 	generationCap := DefaultDerivationGenerationCap
-	if policy != nil && policy.BudgetShortfallPolicy != "" {
-		// Could be configured via policy - for now use default
-	}
-
 	for _, chunk := range chunks {
 		if chunk.DerivationGeneration >= generationCap {
 			return nil, &GenerationCapError{
@@ -79,7 +75,7 @@ func Route(ctx context.Context, chunks []knowledge.KnowledgeChunk, budget int, s
 }
 
 // RouteWithKind selects a specific summarizer by kind and invokes it.
-func RouteWithKind(ctx context.Context, chunks []knowledge.KnowledgeChunk, kind SummarizerKind, budget int, summarizers []Summarizer, policy *contextpolicy.ContextPolicyBundle) (*SummarizationResult, error) {
+func RouteWithKind(ctx context.Context, chunks []knowledge.KnowledgeChunk, kind SummarizerKind, budget int, summarizers []Summarizer, policy *execctx.ContextPolicyBundle) (*SummarizationResult, error) {
 	if len(chunks) == 0 {
 		return nil, fmt.Errorf("no chunks to summarize")
 	}

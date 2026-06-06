@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Persist persists a single artifact to the knowledge store.
@@ -50,12 +50,6 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 
 	// 5. Deduplication
 	contentHash := w.computeContentHash(req.Content)
-	if existing := w.checkDuplicate(contentHash, req.SourceOrigin); existing != "" {
-		result.Action = ActionDeduplicated
-		result.ChunkID = existing
-		w.writeAuditRecord(req, result, "duplicate detected")
-		return result, nil
-	}
 
 	// 6. Build and commit chunk
 	chunk := w.buildChunk(req, trustClass, contentHash)
@@ -72,7 +66,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 
 	// 7. Emit event
 	if w.Events != nil {
-		w.Events.Emit(string(core.EventChunkCommitted), map[string]any{
+		w.Events.Emit(string(telemetry.EventChunkCommitted), map[string]any{
 			"chunk_id":         string(savedChunk.ID),
 			"content_hash":     contentHash,
 			"source_principal": req.SourcePrincipal.ID,
@@ -203,14 +197,6 @@ func (w *Writer) computeContentHash(content []byte) string {
 	return fmt.Sprintf("%x", hash[:16]) // Use first 16 bytes
 }
 
-// checkDuplicate checks if a chunk with the same content hash and source origin exists.
-func (w *Writer) checkDuplicate(contentHash string, sourceOrigin knowledge.SourceOrigin) knowledge.ChunkID {
-	// In a real implementation, this would query the ChunkStore
-	// For now, return empty string (no duplicate found)
-	// This is a placeholder - actual implementation would search by content hash
-	return ""
-}
-
 // buildChunk builds a KnowledgeChunk from a persistence request.
 func (w *Writer) buildChunk(req PersistenceRequest, trustClass agentspec.TrustClass, contentHash string) *knowledge.KnowledgeChunk {
 	return &knowledge.KnowledgeChunk{
@@ -260,12 +246,12 @@ func (w *Writer) generateAuditID() string {
 }
 
 // NewWriter creates a new persistence writer.
-func NewWriter(store *knowledge.ChunkStore, events EventLog, policy *contextpolicy.ContextPolicyBundle) *Writer {
+func NewWriter(store *knowledge.ChunkStore, events EventLog, policy *execctx.ContextPolicyBundle) *Writer {
 	return &Writer{
 		Store:     store,
 		Events:    events,
 		Policy:    policy,
-		Evaluator: contextpolicy.NewEvaluator(policy),
+		Evaluator: execctx.NewEvaluator(policy),
 		AuditLog:  make([]PersistenceAuditRecord, 0),
 	}
 }

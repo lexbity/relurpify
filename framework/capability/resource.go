@@ -5,11 +5,10 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ReadResource executes a runtime-backed resource capability by capability ID or public name.
-func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdata.Envelope, idOrName string) (*core.ResourceReadResult, error) {
+func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdata.Envelope, idOrName string) (*ResourceReadResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -17,7 +16,7 @@ func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdat
 	if err != nil {
 		return nil, err
 	}
-	resourceHandler, ok := entry.handler.(core.ResourceCapabilityHandler)
+	resourceHandler, ok := entry.handler.(ResourceCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not a resource handler", entry.descriptor.ID)
 	}

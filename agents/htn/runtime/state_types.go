@@ -2,9 +2,9 @@ package runtime
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const (
@@ -45,17 +45,17 @@ const (
 
 // TaskState summarizes the active HTN task in a durable, serializable form.
 type TaskState struct {
-	ID          string            `json:"id"`
-	Type        core.TaskType     `json:"type"`
-	Instruction string            `json:"instruction"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	ID          string             `json:"id"`
+	Type        execution.TaskType `json:"type"`
+	Instruction string             `json:"instruction"`
+	Metadata    map[string]string  `json:"metadata,omitempty"`
 }
 
 // MethodState summarizes the selected decomposition method without retaining
 // executable function fields.
 type MethodState struct {
 	Name                 string                         `json:"name"`
-	TaskType             core.TaskType                  `json:"task_type"`
+	TaskType             execution.TaskType             `json:"task_type"`
 	Priority             int                            `json:"priority"`
 	SubtaskCount         int                            `json:"subtask_count"`
 	OperatorCount        int                            `json:"operator_count"`

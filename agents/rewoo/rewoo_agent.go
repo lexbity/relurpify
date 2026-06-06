@@ -11,10 +11,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // RewooAgent executes a ReWOO-style plan with mechanical tool execution.
@@ -22,7 +22,7 @@ type RewooAgent struct {
 	Model        contracts.LanguageModel
 	Tools        *capability.Registry
 	Memory       *memory.WorkingMemoryStore
-	Config       *core.Config
+	Config       *execution.Config
 	IndexManager *ast.IndexManager
 	SearchEngine *search.SearchEngine
 
@@ -33,7 +33,7 @@ type RewooAgent struct {
 }
 
 // Initialize configures the agent.
-func (a *RewooAgent) Initialize(cfg *core.Config) error {
+func (a *RewooAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	a.initialized = true
 	return nil
@@ -45,7 +45,7 @@ func (a *RewooAgent) Capabilities() []string {
 }
 
 // Execute runs the graph workflow for a ReWOO task.
-func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *RewooAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialized {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -65,7 +65,7 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, env *contextd
 }
 
 // BuildGraph builds a minimal ReWOO execution graph.
-func (a *RewooAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *RewooAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if a == nil {
 		return nil, fmt.Errorf("rewoo agent unavailable")
 	}
@@ -113,7 +113,7 @@ func (a *RewooAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) e
 	return a.Initialize(env.Config)
 }
 
-func taskIDForRewoo(task *core.Task) string {
+func taskIDForRewoo(task *execution.Task) string {
 	if task == nil {
 		return "rewoo"
 	}
@@ -126,31 +126,31 @@ func taskIDForRewoo(task *core.Task) string {
 type rewooPlanNode struct {
 	id    string
 	agent *RewooAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 func (n *rewooPlanNode) ID() string           { return n.id }
 func (n *rewooPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
-func (n *rewooPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *rewooPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	plan, err := loadRewooPlan(n.task)
 	if err != nil {
 		return nil, err
 	}
 	env.SetWorkingValue("rewoo.plan", plan, contextdata.MemoryClassTask)
-	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"plan_steps": len(plan.Steps)})}, nil
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_steps": len(plan.Steps)})}, nil
 }
 
 type rewooExecuteNode struct {
 	id    string
 	agent *RewooAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 func (n *rewooExecuteNode) ID() string           { return n.id }
 func (n *rewooExecuteNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	raw, ok := env.GetWorkingValue("rewoo.plan")
 	if !ok || raw == nil {
 		return nil, fmt.Errorf("rewoo: plan unavailable")
@@ -165,21 +165,21 @@ func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelop
 		env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
 	}
 	if err != nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
 			Error:   err.Error(),
-			Data:    core.NewToolResultPayload(map[string]any{"step_results": results}),
+			Data:    execution.NewToolResultPayload(map[string]any{"step_results": results}),
 		}, err
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{"step_results": results}),
+		Data:    execution.NewToolResultPayload(map[string]any{"step_results": results}),
 	}, nil
 }
 
-func loadRewooPlan(task *core.Task) (*RewooPlan, error) {
+func loadRewooPlan(task *execution.Task) (*RewooPlan, error) {
 	if task == nil || task.Context == nil {
 		return nil, fmt.Errorf("rewoo: plan missing")
 	}

@@ -3,7 +3,6 @@ package capability
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -24,7 +23,7 @@ func NewDoomLoopPrecheck() DoomLoopPrecheck {
 
 // Check implements InvocationPrecheck. It runs the detector before the call
 // and blocks if a doom loop is detected.
-func (p DoomLoopPrecheck) Check(desc core.CapabilityDescriptor, args map[string]any) error {
+func (p DoomLoopPrecheck) Check(desc CapabilityDescriptor, args map[string]any) error {
 	if p.detector == nil {
 		return nil
 	}
@@ -40,7 +39,7 @@ func (p DoomLoopPrecheck) Check(desc core.CapabilityDescriptor, args map[string]
 
 // Record implements PostInvocationHook. It feeds the completed call's result
 // into the detector so future prechecks can detect patterns.
-func (p DoomLoopPrecheck) Record(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
+func (p DoomLoopPrecheck) Record(desc CapabilityDescriptor, result *contracts.ToolResult) error {
 	if p.detector == nil {
 		return nil
 	}
@@ -72,7 +71,7 @@ func asDoomLoopError(err error, target **DoomLoopError) bool {
 // that tells the model what went wrong and how to recover.
 type actionableDoomLoopError struct {
 	inner *DoomLoopError
-	desc  core.CapabilityDescriptor
+	desc  CapabilityDescriptor
 }
 
 func (e *actionableDoomLoopError) Error() string {

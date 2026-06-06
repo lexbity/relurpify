@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // WorkflowStateStore defines the interface for workflow state persistence.
@@ -80,8 +81,8 @@ type DelegationEntry struct {
 	TrustClass     string
 	Recoverability string
 	Background     bool
-	Request        core.DelegationRequest
-	Result         *core.DelegationResult
+	Request        policy.DelegationRequest
+	Result         *policy.DelegationResult
 	Metadata       map[string]any
 	StartedAt      time.Time
 	UpdatedAt      time.Time
@@ -144,14 +145,12 @@ type WorkflowProjectionService struct {
 }
 
 // Project projects a workflow resource based on the provided URI.
-func (s *WorkflowProjectionService) Project(ctx context.Context, uri WorkflowResourceURI) (*core.ResourceReadResult, error) {
-	// Implementation would query the store and return the projected resource.
-	// This is a simplified implementation.
+func (s *WorkflowProjectionService) Project(ctx context.Context, uri WorkflowResourceURI) (*capability.ResourceReadResult, error) {
 	if s.Store == nil {
 		return nil, nil
 	}
-	return &core.ResourceReadResult{
-		Contents: []core.ContentBlock{},
+	return &capability.ResourceReadResult{
+		Contents: []capability.ContentBlock{},
 		Metadata: map[string]any{
 			"uri": uri.String(),
 		},

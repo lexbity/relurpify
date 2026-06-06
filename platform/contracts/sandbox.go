@@ -6,43 +6,17 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"codeburg.org/lexbit/relurpify/framework/capability/ports"
 )
 
 // CommandRequest captures process execution metadata routed through a sandbox.
-type CommandRequest struct {
-	Workdir       string
-	Args          []string
-	Env           []string
-	Input         string
-	Timeout       time.Duration
-	UsePTY        bool          // allocate a pseudo-terminal for the subprocess
-	MemoryBytes   int64         // 0 => default (512 MiB)
-	PidsLimit     int64         // 0 => default (256)
-	CPUs          float64       // 0 => default (1.0)
-	OutputCeiling int64         // 0 => default (32 MiB/stream); teardown trigger
-	GracePeriod   time.Duration // SIGTERM→SIGKILL grace (default 3s)
-}
+type CommandRequest = ports.CommandRequest
 
 // CommandResult is the canonical output of a sandboxed command execution.
-type CommandResult struct {
-	Stdout      string        // bounded by the artifact-store spill, not a prompt cap
-	Stderr      string
-	ExitCode    int           // -1 when the process was killed by signal/teardown
-	Signaled    bool          // true if terminated by signal (timeout/teardown/OOM)
-	TimedOut    bool          // true if the deadline fired
-	TornDown    bool          // true if the container was force-removed
-	OOMKilled   bool          // true if killed by the output ceiling or cgroup OOM
-	Duration    time.Duration
-	StdoutBytes int64         // total bytes produced (may exceed len(Stdout) if spilled)
-	StderrBytes int64
-	StdoutRef   string        // artifact-store handle for full stdout (Phase 5+)
-	StderrRef   string        // artifact-store handle for full stderr
-}
+type CommandResult = ports.CommandResult
 
 // CommandRunner describes a primitive capable of executing commands in a sandbox.
-type CommandRunner interface {
-	Run(ctx context.Context, req CommandRequest) (*CommandResult, error)
-}
+type CommandRunner = ports.CommandRunner
 
 // CommandPolicy decides whether a command request may proceed.
 // Implemented by framework/sandbox.CommandPolicy.
@@ -113,6 +87,7 @@ const (
 	CapabilityUserMapping       Capability = "user_mapping"
 	CapabilityPerCommandWorkdir Capability = "per_command_workdir"
 	CapabilityEnvFiltering      Capability = "env_filtering"
+
 )
 
 // Capabilities reports the enforcement features a backend can actually apply.

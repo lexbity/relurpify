@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestEnvironmentConstruction validates that a test environment can be created and torn down.
@@ -69,8 +70,8 @@ func TestEnvironmentTeardownOnFailure(t *testing.T) {
 		t.Fatal("expected empty audit sink before cleanup")
 	}
 
-	env.TelemetrySink.Emit(core.Event{Type: core.EventNodeFinish, NodeID: "teardown-node", TaskID: "teardown-task"})
-	if err := env.AuditSink.Log(context.Background(), core.AuditRecord{AgentID: "teardown-agent", Action: "teardown-action"}); err != nil {
+	env.TelemetrySink.Emit(telemetry.Event{Type: telemetry.EventNodeFinish, NodeID: "teardown-node", TaskID: "teardown-task"})
+	if err := env.AuditSink.Log(context.Background(), policy.AuditRecord{AgentID: "teardown-agent", Action: "teardown-action"}); err != nil {
 		t.Fatalf("failed to write audit record: %v", err)
 	}
 

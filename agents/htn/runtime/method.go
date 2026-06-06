@@ -1,13 +1,13 @@
 package runtime
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import execution "codeburg.org/lexbit/relurpify/execution"
 
 // SubtaskSpec describes a single primitive step in a decomposition thoughtrecipe.
 type SubtaskSpec struct {
 	// Name is a short identifier used in the generated plan step ID.
 	Name string
 	// Type is the task type forwarded to the primitive executor.
-	Type core.TaskType
+	Type execution.TaskType
 	// Instruction is a template describing what this subtask should do.
 	// The string may reference the parent task instruction for context.
 	Instruction string
@@ -24,10 +24,10 @@ type Method struct {
 	Name string
 	// TaskType is the primary selector — the method matches tasks whose Type
 	// equals this value.
-	TaskType core.TaskType
+	TaskType execution.TaskType
 	// Precondition is an optional additional guard. When non-nil the method is
 	// only chosen when Precondition(task) returns true.
-	Precondition func(*core.Task) bool
+	Precondition func(*execution.Task) bool
 	// Subtasks is the ordered decomposition thoughtrecipe executed by this method.
 	Subtasks []SubtaskSpec
 	// Priority breaks ties when multiple methods match the same task type.

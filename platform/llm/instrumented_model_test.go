@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextbudget"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
@@ -137,11 +137,11 @@ func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
 }
 
 func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
-	advisor := &contextbudget.ContextBudgetAdvisor{ModelContextSize: 1024}
+	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 1024}
 	sink := &llmEventSink{}
 	model := NewInstrumentedModel(stubUsageResponseModel{}, sink, false)
-	ctx := contextbudget.WithAdvisor(context.Background(), advisor)
-	ctx = contextbudget.WithSnapshotEmitter(ctx, contextbudget.NewSnapshotEmitter(advisor, sink, 1))
+	ctx := telemetry.WithAdvisor(context.Background(), advisor)
+	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, sink, 1))
 
 	_, err := model.Chat(ctx, []contracts.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
 		}
 	}
 	require.NotNil(t, resetEvent)
-	snapshot, ok := resetEvent.Metadata["budget_snapshot"].(contextbudget.BudgetSnapshot)
+	snapshot, ok := resetEvent.Metadata["budget_snapshot"].(telemetry.BudgetSnapshot)
 	require.True(t, ok)
 	require.True(t, snapshot.ShouldReset)
 }

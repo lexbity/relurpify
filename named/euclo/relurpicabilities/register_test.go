@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 var declaredRelurpicIDs = []string{
@@ -66,7 +66,7 @@ func TestRegisterAllNilRegistryErrors(t *testing.T) {
 
 func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
 					"euclo:cap.test_run",
@@ -88,7 +88,7 @@ func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
 
 func TestRegisterAllValidRegistryNoError(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
 			},
@@ -105,7 +105,7 @@ func TestRegisterAllValidRegistryNoError(t *testing.T) {
 func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 	reg := capability.NewRegistry()
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
 			},
@@ -151,7 +151,7 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
 
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
 			},
@@ -193,7 +193,7 @@ func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
 			},
@@ -232,9 +232,9 @@ func TestComputeAvailability_EmptyRequirements(t *testing.T) {
 func TestComputeAvailability_NonCallableToolCounts(t *testing.T) {
 	reg := capability.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
-	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: "file_write"},
-		Access:   core.CapabilityExposureHidden,
+		Access:   capability.CapabilityExposureHidden,
 	}})
 
 	got := computeAvailability(reg, []string{"file_write"})

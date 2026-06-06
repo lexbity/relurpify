@@ -29,7 +29,6 @@ type AppConfig struct {
 	Security    security.Bundle
 	Model       ModelConfig
 	Tools       contracts.ToolRegistry
-	Agents      AgentRegistry
 	Editor      string
 	SharedRoot  string
 	Fingerprint string
@@ -247,21 +246,11 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	}
 	sharedRoot := ResolveSharedRoot(overrides.XDGDataHome)
 
-	if err := resolveAgentModels(workspaceCfg.Agents, workspaceCfg.Model, providers); err != nil {
-		return nil, nil, fmt.Errorf("agent model resolution: %w", err)
-	}
-
-	agentRegistry, err := buildAgentRegistry(workspaceCfg.Agents)
-	if err != nil {
-		return nil, nil, fmt.Errorf("build agent registry: %w", err)
-	}
-
 	appConfig := &AppConfig{
 		Workspace:  *workspaceCfg,
 		Security:   *securityBundle,
 		Model:      modelConfig,
 		Tools:      toolRegistry,
-		Agents:     *agentRegistry,
 		Editor:     editor,
 		SharedRoot: sharedRoot,
 	}
@@ -270,7 +259,7 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 		return nil, nil, fmt.Errorf("fingerprint config: %w", err)
 	}
 	appConfig.Fingerprint = fingerprint
-	log.Printf("INFO config loaded workspace_root=%s model_provider=%s model_name=%s sandbox_backend=%s agents=%v tools_loaded=%d strict_mode=%t config_fingerprint=%s", absWorkspace, appConfig.Workspace.Model.Provider, appConfig.Workspace.Model.Name, stringValue(appConfig.Workspace.Sandbox.Backend), agentRegistry.Names(), len(toolRegistry.ListTools()), strictMode, appConfig.Fingerprint)
+	log.Printf("INFO config loaded workspace_root=%s model_provider=%s model_name=%s sandbox_backend=%s tools_loaded=%d strict_mode=%t config_fingerprint=%s", absWorkspace, appConfig.Workspace.Model.Provider, appConfig.Workspace.Model.Name, stringValue(appConfig.Workspace.Sandbox.Backend), len(toolRegistry.ListTools()), strictMode, appConfig.Fingerprint)
 
 	return appConfig, &secrets, nil
 }
@@ -286,7 +275,6 @@ func ConfigFingerprint(cfg *AppConfig) (string, error) {
 		Security   security.Bundle          `json:"security"`
 		Model      ModelConfig              `json:"model"`
 		Tools      []contracts.ToolManifest `json:"tools"`
-		Agents     []*AgentEntry            `json:"agents"`
 		Editor     string                   `json:"editor"`
 		SharedRoot string                   `json:"shared_root"`
 	}{
@@ -294,7 +282,6 @@ func ConfigFingerprint(cfg *AppConfig) (string, error) {
 		Security:   cfg.Security,
 		Model:      cfg.Model,
 		Tools:      nil,
-		Agents:     cfg.Agents.All(),
 		Editor:     cfg.Editor,
 		SharedRoot: cfg.SharedRoot,
 	}

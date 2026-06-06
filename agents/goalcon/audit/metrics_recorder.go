@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ExecutionMetrics captures timing and success information for a single execution.
@@ -141,7 +142,7 @@ func SaveMetricsToMemory(store *memory.WorkingMemoryStore, metrics OperatorMetri
 	if err != nil {
 		return err
 	}
-	store.Scope(metricsMemoryScope).Set(metricsMemoryKey, string(data), core.MemoryClassWorking)
+	store.Scope(metricsMemoryScope).Set(metricsMemoryKey, string(data), relurpctx.MemoryClassWorking)
 	return nil
 }
 
@@ -303,7 +304,7 @@ func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 interface{}) bool 
 
 // RecordPlanExecution records metrics for a complete plan execution.
 // Called after solving and executing a plan.
-func (r *MetricsRecorder) RecordPlanExecution(plan *plan.Plan, result *core.Result, duration time.Duration) error {
+func (r *MetricsRecorder) RecordPlanExecution(plan *plan.Plan, result *execution.Result, duration time.Duration) error {
 	if r == nil || plan == nil || result == nil {
 		return nil
 	}

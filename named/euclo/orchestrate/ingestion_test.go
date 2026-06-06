@@ -6,9 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestIngestionNodeIngestsUserFiles(t *testing.T) {
@@ -29,7 +29,7 @@ func TestIngestionNodeIngestsUserFiles(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "user_files_ingested"); !ok || got != 2 {
+	if got, ok := execution.ResultField(result.Data, "user_files_ingested"); !ok || got != 2 {
 		t.Errorf("Expected user_files_ingested 2, got %v", got)
 	}
 
@@ -63,7 +63,7 @@ func TestIngestionNodeIngestsSessionPins(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "session_pins_ingested"); !ok || got != 2 {
+	if got, ok := execution.ResultField(result.Data, "session_pins_ingested"); !ok || got != 2 {
 		t.Errorf("Expected session_pins_ingested 2, got %v", got)
 	}
 
@@ -98,11 +98,11 @@ func TestIngestionNodeHandlesEmptyLists(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	if got, ok := core.ResultField(result.Data, "user_files_ingested"); !ok || got != 0 {
+	if got, ok := execution.ResultField(result.Data, "user_files_ingested"); !ok || got != 0 {
 		t.Errorf("Expected user_files_ingested 0, got %v", got)
 	}
 
-	if got, ok := core.ResultField(result.Data, "session_pins_ingested"); !ok || got != 0 {
+	if got, ok := execution.ResultField(result.Data, "session_pins_ingested"); !ok || got != 0 {
 		t.Errorf("Expected session_pins_ingested 0, got %v", got)
 	}
 }
@@ -171,7 +171,7 @@ func TestIngestionNodeNoTaskEnvelope(t *testing.T) {
 		t.Fatal("Expected non-nil result when no task envelope")
 	}
 
-	if got, ok := core.ResultField(result.Data, "skipped"); !ok || got != true {
+	if got, ok := execution.ResultField(result.Data, "skipped"); !ok || got != true {
 		t.Errorf("Expected skipped result when no task envelope, got %v", got)
 	}
 }

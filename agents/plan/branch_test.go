@@ -5,20 +5,20 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type conflictingIsolatedExecutor struct {
 	shared *isolatedExecutorShared
 }
 
-func (e *conflictingIsolatedExecutor) Initialize(config *core.Config) error { return nil }
+func (e *conflictingIsolatedExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *conflictingIsolatedExecutor) Capabilities() []string               { return nil }
 func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &conflictingIsolatedExecutor{shared: e.shared}, nil
 }
-func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	stepVal, _ := task.Context["current_step"]
 	step, _ := stepVal.(PlanStep)
 	env.SetWorkingValue("shared.conflict", step.ID, contextdata.MemoryClassTask)
@@ -35,7 +35,7 @@ func TestPlanExecutorRejectsConflictingParallelStateMergesByDefault(t *testing.T
 		Dependencies: make(map[string][]string),
 	}
 	state := contextdata.NewEnvelope("task-conflict", "")
-	task := &core.Task{ID: "task-conflict", Instruction: "parallel conflict"}
+	task := &execution.Task{ID: "task-conflict", Instruction: "parallel conflict"}
 
 	_, err := (&PlanExecutor{}).Execute(context.Background(), executor, task, plan, state)
 	require.NoError(t, err)
@@ -43,12 +43,12 @@ func TestPlanExecutorRejectsConflictingParallelStateMergesByDefault(t *testing.T
 
 type historyMutatingExecutor struct{}
 
-func (e *historyMutatingExecutor) Initialize(config *core.Config) error { return nil }
+func (e *historyMutatingExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *historyMutatingExecutor) Capabilities() []string               { return nil }
 func (e *historyMutatingExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &historyMutatingExecutor{}, nil
 }
-func (e *historyMutatingExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	// Add interaction to history stored in _history key.
 	var history []any
 	if h, ok := env.GetWorkingValue("_history"); ok {
@@ -69,7 +69,7 @@ func TestPlanExecutorRejectsParallelHistoryMutationWithoutCustomMergePolicy(t *t
 		},
 		Dependencies: make(map[string][]string),
 	}
-	_, err := (&PlanExecutor{}).Execute(context.Background(), &historyMutatingExecutor{}, &core.Task{ID: "task-history"}, plan, contextdata.NewEnvelope("task-history", ""))
+	_, err := (&PlanExecutor{}).Execute(context.Background(), &historyMutatingExecutor{}, &execution.Task{ID: "task-history"}, plan, contextdata.NewEnvelope("task-history", ""))
 	require.NoError(t, err)
 }
 
@@ -83,7 +83,7 @@ func TestPlanExecutorAllowsCustomParallelMergePolicy(t *testing.T) {
 		Dependencies: make(map[string][]string),
 	}
 	state := contextdata.NewEnvelope("task-2", "")
-	task := &core.Task{ID: "task-custom-merge", Instruction: "parallel conflict"}
+	task := &execution.Task{ID: "task-custom-merge", Instruction: "parallel conflict"}
 
 	_, err := (&PlanExecutor{Options: PlanExecutionOptions{
 		MergeBranches: func(parent *contextdata.Envelope, branches []BranchExecutionResult) error {

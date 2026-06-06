@@ -10,9 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type APICompatHandler struct {
@@ -24,8 +24,8 @@ func NewAPICompatHandler(env agentenv.WorkspaceEnvironment) *APICompatHandler {
 	return &APICompatHandler{env: env}
 }
 
-func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.api_compat",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -34,7 +34,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		Description:   "Compares exported signatures between git refs and flags breaking changes",
 		Category:      "migration_compat",
 		Tags:          []string{"migration", "compatibility", "git", "api"},
-		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},

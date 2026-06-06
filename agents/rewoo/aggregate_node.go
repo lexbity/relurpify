@@ -6,7 +6,7 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // AggregateNode collects all step results into a single tool_results array.
@@ -36,7 +36,7 @@ func (n *AggregateNode) Type() graph.NodeType {
 }
 
 // Execute aggregates all step results from state.
-func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	plan := n.Plan
 	if plan == nil {
 		if v, ok := env.GetWorkingValue("rewoo.plan"); ok {
@@ -89,9 +89,9 @@ func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		n.Debugf("aggregated %d steps: %d ok, %d failed", len(results), stepsOK, stepsFailed)
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"steps_run":    len(results),
 			"steps_ok":     stepsOK,
 			"steps_failed": stepsFailed,

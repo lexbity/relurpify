@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type mockRegistry struct {
@@ -20,7 +20,7 @@ func (m *mockRegistry) InvokeCapability(ctx context.Context, state *contextdata.
 
 func TestInvokeCapability_ExtractsArgsFromTask(t *testing.T) {
 	registry := &mockRegistry{}
-	task := &core.Task{
+	task := &execution.Task{
 		Data: map[string]any{
 			"path":    "/tmp/test.txt",
 			"content": "hello",
@@ -74,7 +74,7 @@ func TestInvokeCapability_NilTask(t *testing.T) {
 
 func TestInvokeCapability_TaskContext(t *testing.T) {
 	registry := &mockRegistry{}
-	task := &core.Task{
+	task := &execution.Task{
 		Data: map[string]any{},
 		Context: map[string]any{
 			"query": "test",
@@ -104,7 +104,7 @@ func TestInvokeCapability_TaskContext(t *testing.T) {
 
 func TestInvokeCapability_TaskDataPriority(t *testing.T) {
 	registry := &mockRegistry{}
-	task := &core.Task{
+	task := &execution.Task{
 		Data: map[string]any{
 			"query": "from_data",
 		},
@@ -129,7 +129,7 @@ func TestInvokeCapability_TaskDataPriority(t *testing.T) {
 }
 
 func TestInvokeCapability_NilRegistry(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		Data: map[string]any{
 			"path": "/tmp/test.txt",
 		},
@@ -146,7 +146,7 @@ func TestInvokeCapability_NilRegistry(t *testing.T) {
 	if result.Success != false {
 		t.Fatalf("expected success=false, got %v", result.Success)
 	}
-	if got, ok := core.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
+	if got, ok := execution.ResultField(result.Data, "error"); !ok || got != "capability registry unavailable" {
 		t.Fatalf("expected registry error, got %v", got)
 	}
 }

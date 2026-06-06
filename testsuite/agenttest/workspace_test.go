@@ -123,7 +123,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	}
 }
 
-func TestMaterializeDerivedWorkspaceCopiesReferencedSkills(t *testing.T) {
+func TestMaterializeDerivedWorkspace(t *testing.T) {
 	shared := t.TempDir()
 
 	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", cfgload.DirName)
@@ -136,11 +136,8 @@ func TestMaterializeDerivedWorkspaceCopiesReferencedSkills(t *testing.T) {
 
 	target := t.TempDir()
 	manifestPath := filepath.Join(target, cfgload.DirName, "agent.yaml")
-	skillPath := filepath.Join(target, cfgload.DirName, "skills", "system", "skill.yaml")
-	for _, dir := range []string{filepath.Dir(manifestPath), filepath.Dir(skillPath)} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
 apiVersion: relurpify/v1alpha1
@@ -156,8 +153,6 @@ spec:
     model:
       provider: ollama
       name: test-model
-  skills:
-    - system
   defaults:
     permissions:
       filesystem:
@@ -169,9 +164,6 @@ spec:
 	}
 	if _, err := cfgload.LoadAgentManifest(manifestPath); err != nil {
 		t.Fatalf("LoadAgentManifest: %v", err)
-	}
-	if err := os.WriteFile(skillPath, []byte("schema: relurpify/skill/v1\napiVersion: relurpify/v1alpha1\nkind: SkillManifest\nmetadata:\n  name: system\n"), 0o644); err != nil {
-		t.Fatal(err)
 	}
 
 	derived := filepath.Join(t.TempDir(), "run", "workspace")
@@ -186,7 +178,6 @@ spec:
 	); err != nil {
 		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
 	}
-
 	if _, err := os.Stat(filepath.Join(derived, cfgload.DirName, "skills", "system", "skill.yaml")); err != nil {
 		t.Fatalf("expected referenced skill to be copied into derived workspace: %v", err)
 	}

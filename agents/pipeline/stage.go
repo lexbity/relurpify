@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -28,7 +28,7 @@ type ToolScopedStage interface {
 // ToolRequiredStage marks stages that require at least one allowed tool to run
 // before the stage output is accepted.
 type ToolRequiredStage interface {
-	RequiresToolExecution(task *core.Task, state *contextdata.Envelope, tools []contracts.Tool) bool
+	RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []contracts.Tool) bool
 }
 
 // ValidateStage checks stage identity and its declared contract metadata.

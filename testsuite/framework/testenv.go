@@ -9,8 +9,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestEnvironment provides a reusable test environment for framework integration tests.
@@ -43,22 +44,22 @@ type TestEnvironment struct {
 
 // recordingTelemetrySink captures telemetry events in memory for test assertions.
 type recordingTelemetrySink struct {
-	events []core.Event
+	events []telemetry.Event
 	mu     sync.Mutex
 }
 
 // Emit records a telemetry event.
-func (r *recordingTelemetrySink) Emit(event core.Event) {
+func (r *recordingTelemetrySink) Emit(event telemetry.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 }
 
 // Events returns a copy of all captured events.
-func (r *recordingTelemetrySink) Events() []core.Event {
+func (r *recordingTelemetrySink) Events() []telemetry.Event {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	copies := make([]core.Event, len(r.events))
+	copies := make([]telemetry.Event, len(r.events))
 	copy(copies, r.events)
 	return copies
 }
@@ -72,12 +73,12 @@ func (r *recordingTelemetrySink) Clear() {
 
 // recordingAuditSink captures audit records in memory for test assertions.
 type recordingAuditSink struct {
-	records []core.AuditRecord
+	records []policy.AuditRecord
 	mu      sync.Mutex
 }
 
 // Log records an audit entry.
-func (r *recordingAuditSink) Log(ctx context.Context, record core.AuditRecord) error {
+func (r *recordingAuditSink) Log(ctx context.Context, record policy.AuditRecord) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.records = append(r.records, record)
@@ -85,10 +86,10 @@ func (r *recordingAuditSink) Log(ctx context.Context, record core.AuditRecord) e
 }
 
 // Query filters audit records based on the supplied query.
-func (r *recordingAuditSink) Query(ctx context.Context, filter core.AuditQuery) ([]core.AuditRecord, error) {
+func (r *recordingAuditSink) Query(ctx context.Context, filter policy.AuditQuery) ([]policy.AuditRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var result []core.AuditRecord
+	var result []policy.AuditRecord
 	for _, record := range r.records {
 		if filter.AgentID != "" && record.AgentID != filter.AgentID {
 			continue
@@ -117,10 +118,10 @@ func (r *recordingAuditSink) Query(ctx context.Context, filter core.AuditQuery) 
 }
 
 // Records returns a copy of all captured audit records.
-func (r *recordingAuditSink) Records() []core.AuditRecord {
+func (r *recordingAuditSink) Records() []policy.AuditRecord {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	copies := make([]core.AuditRecord, len(r.records))
+	copies := make([]policy.AuditRecord, len(r.records))
 	copy(copies, r.records)
 	return copies
 }
@@ -148,7 +149,7 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 		t.Fatalf("failed to create manifest root: %v", err)
 	}
 
-	perms := core.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemWrite, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemWrite, contracts.FileSystemList)
 
 	auditSink := &recordingAuditSink{}
 

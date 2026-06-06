@@ -4,18 +4,18 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // AgentEnvironment is the shared agent dependency container.
 // It contains the common fields that all agent paradigms need.
 // This is a subset of WorkspaceEnvironment for use by generic agents.
 type AgentEnvironment struct {
-	Config         *core.Config
+	Config         *execution.Config
 	Model          contracts.LanguageModel
 	Registry       *capability.Registry
 	Memory         *memory.WorkingMemoryStore

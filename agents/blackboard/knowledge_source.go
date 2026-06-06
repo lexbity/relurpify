@@ -3,10 +3,10 @@ package blackboard
 import (
 	"context"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -101,7 +101,7 @@ func hasKnowledgeSourceContract(contract graph.NodeContract) bool {
 		hasStateBoundaryPolicy(contract.ContextPolicy)
 }
 
-func hasStateBoundaryPolicy(policy core.StateBoundaryPolicy) bool {
+func hasStateBoundaryPolicy(policy relurpctx.StateBoundaryPolicy) bool {
 	return len(policy.ReadKeys) > 0 ||
 		len(policy.WriteKeys) > 0 ||
 		policy.AllowHistoryAccess ||
@@ -118,11 +118,11 @@ func defaultKnowledgeSourceContract() graph.NodeContract {
 		Idempotency:      graph.IdempotencyReplaySafe,
 		Recoverability:   graph.NodeRecoverabilityInProcess,
 		CheckpointPolicy: graph.CheckpointPolicyPreferred,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "blackboard.*", "bkc.*", "ast.*"},
 			WriteKeys:                []string{"blackboard.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState, core.StateDataClassRoutingFlag},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState, relurpctx.StateDataClassRoutingFlag},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 32,
 		},

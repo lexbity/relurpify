@@ -17,7 +17,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
@@ -25,6 +24,7 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	platformcontracts "codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
@@ -80,7 +80,7 @@ func WithPersistenceWriter(writer *persistence.Writer) Option {
 	}
 }
 
-func (a *Agent) Initialize(config *core.Config) error {
+func (a *Agent) Initialize(config *execution.Config) error {
 	if a.initialized {
 		return nil
 	}
@@ -126,7 +126,7 @@ func (a *Agent) Initialize(config *core.Config) error {
 	return nil
 }
 
-func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialized {
 		if err := a.Initialize(nil); err != nil {
 			return nil, fmt.Errorf("failed to initialize agent: %w", err)
@@ -155,7 +155,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 	return result, nil
 }
 
-func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
+func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	if !a.initialized {
 		if err := a.Initialize(nil); err != nil {
 			return nil, fmt.Errorf("failed to initialize agent: %w", err)
@@ -200,7 +200,7 @@ func workspaceRootPath(env agentenv.WorkspaceEnvironment) string {
 	return strings.TrimSpace(env.IndexManager.WorkspacePath())
 }
 
-func seedTaskEnvelope(env *contextdata.Envelope, task *core.Task) {
+func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 	if task == nil {
 		return
 	}

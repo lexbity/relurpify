@@ -11,7 +11,7 @@
 //
 //   - tui: Bubble Tea user interface (chat, planner, debug, config, session;
 //     HITL/guidance overlays; streaming output; session export).
-//   - runtime: agent runtime — capability provider registration (builtin, MCP,
+//   - runtime: agent runtime — capability provider registration (builtin,
 //     Nexus node, background delegation, browser); session orchestration;
 //     Nexus HTTP client.
 package main

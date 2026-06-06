@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestDiagnosticFailureMessages verifies that failure messages identify the seam,
@@ -107,7 +108,7 @@ func TestFixtureValidation(t *testing.T) {
 			setup: func(t *testing.T) error {
 				// Try to create a test environment with an invalid workspace
 				invalidPath := "/nonexistent/path/that/does/not/exist"
-				_, err := authorization.NewPermissionManager(invalidPath, core.NewFileSystemPermissionSet(invalidPath), nil, nil)
+				_, err := authorization.NewPermissionManager(invalidPath, policy.NewFileSystemPermissionSet(invalidPath), nil, nil)
 				return err
 			},
 			expectedError: "workspace",
@@ -118,7 +119,7 @@ func TestFixtureValidation(t *testing.T) {
 			setup: func(t *testing.T) error {
 				// Try to create a permission manager with empty permissions
 				workspace := t.TempDir()
-				emptyPerms := core.NewFileSystemPermissionSet(workspace)
+				emptyPerms := policy.NewFileSystemPermissionSet(workspace)
 				_, err := authorization.NewPermissionManager(workspace, emptyPerms, nil, nil)
 				if err != nil {
 					return err
@@ -280,8 +281,8 @@ func TestAssertionHelperClarity(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	// Emit a telemetry event for testing with proper metadata
-	env.TelemetrySink.Emit(core.Event{
-		Type:      core.EventNodeFinish,
+	env.TelemetrySink.Emit(telemetry.Event{
+		Type:      telemetry.EventNodeFinish,
 		NodeID:    "test-node",
 		TaskID:    "test-task",
 		Message:   "test message",
@@ -292,13 +293,13 @@ func TestAssertionHelperClarity(t *testing.T) {
 	})
 
 	// Test AssertTelemetryEventExists with clear error message
-	AssertTelemetryEventExists(t, env, core.EventNodeFinish)
+	AssertTelemetryEventExists(t, env, telemetry.EventNodeFinish)
 
 	// Test AssertTelemetryEventCount with clear error message
-	AssertTelemetryEventCount(t, env, core.EventNodeFinish, 1)
+	AssertTelemetryEventCount(t, env, telemetry.EventNodeFinish, 1)
 
 	// Test AssertTelemetryEventMetadata with clear error message
-	AssertTelemetryEventMetadata(t, env, core.EventNodeFinish, "NodeID", "test-node")
+	AssertTelemetryEventMetadata(t, env, telemetry.EventNodeFinish, "NodeID", "test-node")
 
 	t.Log("Assertion helper clarity verified")
 }

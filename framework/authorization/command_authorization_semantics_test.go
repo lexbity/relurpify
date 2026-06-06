@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -49,7 +49,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 		},
 	}
 
-	audit := core.NewInMemoryAuditLogger(10)
+	audit := policy.NewInMemoryAuditLogger(10)
 	hitl := &mockHITLProvider{}
 	pm, err := NewPermissionManager("/home/workspace", declared, audit, hitl)
 	if err != nil {

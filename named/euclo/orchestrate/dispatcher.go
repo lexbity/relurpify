@@ -7,12 +7,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Dispatcher resolves the execution route from the envelope and persists the
@@ -60,7 +60,7 @@ func (d *Dispatcher) ID() string { return d.id }
 func (d *Dispatcher) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute selects thoughtrecipe or capability execution and writes the route to the envelope.
-func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	req := routeRequestFromEnvelope(env)
 	if env != nil {
 		req.TelemetryOff = euclostate.GetRouteTelemetryOff(env)
@@ -74,14 +74,6 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 	}
 
 	caps := d.capabilityRegistry
-	skillFilterName := strings.TrimSpace(req.SkillFilter)
-	if skillFilterName != "" && caps != nil {
-		scopedCaps, err := applySkillFilterToRegistry(d.workspace, skillFilterName, caps)
-		if err != nil {
-			return &core.Result{NodeID: d.id, Success: false, Data: core.NewErrorResultPayload(err.Error())}, err
-		}
-		caps = scopedCaps
-	}
 
 	var (
 		result *RouteResult
@@ -91,7 +83,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry)
 		err = dryRunErr
 		if err != nil {
-			return &core.Result{NodeID: d.id, Success: false, Data: core.NewErrorResultPayload(err.Error())}, err
+			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
 		result = &RouteResult{
 			RouteKind:           report.SelectedKind,
@@ -107,19 +99,16 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*c
 	} else {
 		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry)
 		if err != nil {
-			return &core.Result{NodeID: d.id, Success: false, Data: core.NewErrorResultPayload(err.Error())}, err
-		}
-		if result != nil && skillFilterName != "" {
-			result.SkillFilterName = skillFilterName
+			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
 	}
 
 	applyRouteResultToEnvelope(env, result)
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  d.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"route_kind":      result.RouteKind,
 			"route_id":        result.RouteID,
 			"skill_filter":    result.SkillFilterName,

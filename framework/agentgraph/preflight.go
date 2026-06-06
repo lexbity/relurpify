@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type CapabilityCatalog interface {
-	InspectableCapabilities() []core.CapabilityDescriptor
+	InspectableCapabilities() []capability.CapabilityDescriptor
 }
 
 type PreflightIssue struct {
@@ -22,13 +22,13 @@ type PreflightIssue struct {
 }
 
 type PlacementDecision struct {
-	NodeID                 string                       `json:"node_id,omitempty" yaml:"node_id,omitempty"`
-	RequiredSelector       agentspec.CapabilitySelector `json:"required_selector,omitempty" yaml:"required_selector,omitempty"`
-	Preference             PlacementPreference          `json:"preference,omitempty" yaml:"preference,omitempty"`
-	SelectedCapabilityID   string                       `json:"selected_capability_id,omitempty" yaml:"selected_capability_id,omitempty"`
-	SelectedCapability     core.CapabilityDescriptor    `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
-	CandidateCapabilityIDs []string                     `json:"candidate_capability_ids,omitempty" yaml:"candidate_capability_ids,omitempty"`
-	Reason                 string                       `json:"reason,omitempty" yaml:"reason,omitempty"`
+	NodeID                 string                          `json:"node_id,omitempty" yaml:"node_id,omitempty"`
+	RequiredSelector       agentspec.CapabilitySelector    `json:"required_selector,omitempty" yaml:"required_selector,omitempty"`
+	Preference             PlacementPreference             `json:"preference,omitempty" yaml:"preference,omitempty"`
+	SelectedCapabilityID   string                          `json:"selected_capability_id,omitempty" yaml:"selected_capability_id,omitempty"`
+	SelectedCapability     capability.CapabilityDescriptor `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
+	CandidateCapabilityIDs []string                        `json:"candidate_capability_ids,omitempty" yaml:"candidate_capability_ids,omitempty"`
+	Reason                 string                          `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
 
 type PreflightReport struct {
@@ -87,7 +87,7 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	g.mu.RUnlock()
 
 	report := &PreflightReport{GeneratedAt: time.Now().UTC()}
-	var descriptors []core.CapabilityDescriptor
+	var descriptors []capability.CapabilityDescriptor
 	if catalog != nil {
 		descriptors = append(descriptors, catalog.InspectableCapabilities()...)
 	}
@@ -122,7 +122,7 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	return report, err
 }
 
-func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySelector, contract NodeContract, descriptors []core.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
+func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySelector, contract NodeContract, descriptors []capability.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
 	decision := PlacementDecision{
 		NodeID:           nodeID,
 		RequiredSelector: selector,
@@ -158,18 +158,18 @@ func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySele
 	return decision, nil
 }
 
-func matchingDescriptors(selector agentspec.CapabilitySelector, descriptors []core.CapabilityDescriptor) []core.CapabilityDescriptor {
-	out := make([]core.CapabilityDescriptor, 0, len(descriptors))
+func matchingDescriptors(selector agentspec.CapabilitySelector, descriptors []capability.CapabilityDescriptor) []capability.CapabilityDescriptor {
+	out := make([]capability.CapabilityDescriptor, 0, len(descriptors))
 	for _, desc := range descriptors {
-		if core.SelectorMatchesDescriptor(selector, desc) {
+		if capability.SelectorMatchesDescriptor(selector, desc) {
 			out = append(out, desc)
 		}
 	}
 	return out
 }
 
-func filterDescriptorsForContract(contract NodeContract, descriptors []core.CapabilityDescriptor) []core.CapabilityDescriptor {
-	out := make([]core.CapabilityDescriptor, 0, len(descriptors))
+func filterDescriptorsForContract(contract NodeContract, descriptors []capability.CapabilityDescriptor) []capability.CapabilityDescriptor {
+	out := make([]capability.CapabilityDescriptor, 0, len(descriptors))
 	for _, desc := range descriptors {
 		if contract.RequiredTrustClass != "" && trustRank(desc.TrustClass) < trustRank(contract.RequiredTrustClass) {
 			continue
@@ -182,7 +182,7 @@ func filterDescriptorsForContract(contract NodeContract, descriptors []core.Capa
 	return out
 }
 
-func placementScore(preference PlacementPreference, desc core.CapabilityDescriptor) int {
+func placementScore(preference PlacementPreference, desc capability.CapabilityDescriptor) int {
 	score := trustRank(desc.TrustClass) * 100
 	score -= maxRiskRank(desc.RiskClasses) * 10
 	switch preference {
@@ -202,7 +202,7 @@ func placementScore(preference PlacementPreference, desc core.CapabilityDescript
 	return score
 }
 
-func placementReason(preference PlacementPreference, desc core.CapabilityDescriptor) string {
+func placementReason(preference PlacementPreference, desc capability.CapabilityDescriptor) string {
 	switch preference {
 	case PlacementPreferenceLocal:
 		if desc.Source.ProviderID == "" {

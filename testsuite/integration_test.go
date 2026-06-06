@@ -8,23 +8,25 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type recordingTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (r *recordingTelemetry) Emit(event core.Event) {
+func (r *recordingTelemetry) Emit(event telemetry.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 }
 
-func (r *recordingTelemetry) count(eventType core.EventType) int {
+func (r *recordingTelemetry) count(eventType telemetry.EventType) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	total := 0
@@ -69,7 +71,7 @@ func (t *integrationFileTool) IsAvailable(context.Context) bool { return true }
 
 func (t *integrationFileTool) Permissions() contracts.ToolPermissions {
 	return contracts.ToolPermissions{
-		Permissions: core.NewFileSystemPermissionSet(t.base, contracts.FileSystemRead),
+		Permissions: policy.NewFileSystemPermissionSet(t.base, contracts.FileSystemRead),
 	}
 }
 func (t *integrationFileTool) Tags() []string { return nil }
@@ -112,7 +114,7 @@ func (n *llmPlanNode) ID() string { return n.name }
 
 func (n *llmPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
-func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.model == nil {
 		return nil, fmt.Errorf("llm model missing")
 	}
@@ -121,10 +123,10 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) 
 		return nil, err
 	}
 	state.AddInteraction(map[string]any{"actor": "assistant", "content": resp.Text, "node": n.name})
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.name,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"text": resp.Text,
 		}),
 	}, nil
@@ -140,7 +142,7 @@ func (n *toolExecNode) ID() string { return n.name }
 
 func (n *toolExecNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.tool == nil {
 		return nil, fmt.Errorf("tool missing")
 	}
@@ -169,10 +171,10 @@ func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope)
 		state.SetWorkingValue("use-tool.content", content, contextdata.MemoryClassTask)
 	}
 	state.AddInteraction(map[string]any{"actor": "tool:" + n.name, "result": data})
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.name,
 		Success: success,
-		Data:    core.NewToolResultPayload(data),
+		Data:    execution.NewToolResultPayload(data),
 		Error: func() string {
 			if execErr != nil {
 				return execErr.Error()
@@ -191,7 +193,7 @@ func (n *stateConditionalNode) ID() string { return n.name }
 
 func (n *stateConditionalNode) Type() graph.NodeType { return graph.NodeTypeConditional }
 
-func (n *stateConditionalNode) Execute(ctx context.Context, state *contextdata.Envelope) (*core.Result, error) {
+func (n *stateConditionalNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.decide == nil {
 		return nil, fmt.Errorf("conditional missing decision function")
 	}
@@ -199,10 +201,10 @@ func (n *stateConditionalNode) Execute(ctx context.Context, state *contextdata.E
 	if err != nil {
 		return nil, err
 	}
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.name,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"next": next,
 		}),
 	}, nil

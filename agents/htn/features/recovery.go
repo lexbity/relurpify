@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Note: VerificationHint and FileFocus need to be defined as structs with proper fields
@@ -214,7 +214,7 @@ type VerificationContext struct {
 	// OperatorName is the operator that executed the step.
 	OperatorName string
 	// ExecutionResult is the result from execution.
-	ExecutionResult *core.Result
+	ExecutionResult *execution.Result
 	// Hint provides guidance on verification.
 	Hint *VerificationHint
 	// Files are relevant files for verification.

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // TestFileAccessAllowDeny validates file access permission enforcement
@@ -24,7 +24,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		}
 
 		// Grant read permission for the workspace
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -50,7 +50,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission for the workspace
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -69,7 +69,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant list permission for the workspace
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemList)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemList)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -92,7 +92,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		}
 
 		// Grant write permission only (not read)
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -118,7 +118,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant only read permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -137,7 +137,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant read permission for the workspace
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -166,7 +166,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant read permission for the workspace
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -190,7 +190,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant network permission
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -219,7 +219,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant filesystem permission but no network permissions
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -245,7 +245,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant permission for example.com only
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -265,7 +265,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant permission for port 443 only
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -285,7 +285,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant permission for tcp only
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -315,7 +315,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Grant read permission with HITL required
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		for i := range perms.FileSystem {
 			perms.FileSystem[i].HITLRequired = true
 		}
@@ -344,7 +344,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant network permission with HITL required
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
 		perms.Network = []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "api.example.com", Port: 443, HITLRequired: true},
 		}
@@ -392,7 +392,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Grant read permission with HITL required
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		for i := range perms.FileSystem {
 			perms.FileSystem[i].HITLRequired = true
 		}
@@ -421,7 +421,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission only (not read)
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -457,7 +457,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant filesystem permission but no network permissions
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -488,7 +488,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission only (not read)
-		perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)

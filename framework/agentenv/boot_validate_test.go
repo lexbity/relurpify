@@ -14,10 +14,10 @@ import (
 // runtime: gvisor with a docker sandbox backend is rejected at boot.
 func TestRejectsBackendManifestRuntimeMismatch(t *testing.T) {
 	tests := []struct {
-		name      string
-		manifest  *cfgload.AgentManifest
-		backend   string
-		wantOK    bool
+		name     string
+		manifest *cfgload.AgentManifest
+		backend  string
+		wantOK   bool
 	}{
 		{
 			name: "gvisor manifest + empty backend (defaults gvisor) is OK",
@@ -52,7 +52,7 @@ func TestRejectsBackendManifestRuntimeMismatch(t *testing.T) {
 			wantOK:  true,
 		},
 		{
-			name: "nil manifest is OK (no constraint)",
+			name:     "nil manifest is OK (no constraint)",
 			manifest: nil,
 			backend:  "docker",
 			wantOK:   true,

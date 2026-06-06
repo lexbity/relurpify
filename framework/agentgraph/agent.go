@@ -3,8 +3,8 @@ package agentgraph
 import (
 	"context"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // WorkflowExecutor is the runtime execution contract consumed by graph-level
@@ -12,8 +12,8 @@ import (
 // contract itself is framework-owned and runtime-oriented rather than specific
 // to any single agent paradigm.
 type WorkflowExecutor interface {
-	Initialize(config *core.Config) error
-	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error)
+	Initialize(config *execution.Config) error
+	Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error)
 	Capabilities() []string
-	BuildGraph(task *core.Task) (*Graph, error)
+	BuildGraph(task *execution.Task) (*Graph, error)
 }

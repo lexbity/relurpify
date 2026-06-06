@@ -10,9 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type plannerStreamCompilerStub struct {
@@ -72,14 +72,14 @@ func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning
 	agent := &PlannerAgent{
 		Model:           model,
 		Tools:           nil,
-		Config:          &core.Config{},
+		Config:          &execution.Config{},
 		StreamMode:      contextstream.ModeBlocking,
 		StreamMaxTokens: 128,
 		StreamQuery:     "workspace query",
 	}
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	task := &core.Task{ID: "task-1", Instruction: "build a plan"}
+	task := &execution.Task{ID: "task-1", Instruction: "build a plan"}
 
 	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
 	result, err := agent.Execute(ctx, task, env)
@@ -120,14 +120,14 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	}
 	agent := &PlannerAgent{
 		Model:           model,
-		Config:          &core.Config{},
+		Config:          &execution.Config{},
 		StreamMode:      contextstream.ModeBackground,
 		StreamMaxTokens: 64,
 		StreamQuery:     "background query",
 	}
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	task := &core.Task{ID: "task-2", Instruction: "build a plan"}
+	task := &execution.Task{ID: "task-2", Instruction: "build a plan"}
 
 	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
 	result, err := agent.Execute(ctx, task, env)

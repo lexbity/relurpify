@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type descriptorProfile struct {
@@ -50,11 +49,11 @@ type compiledCapabilityPolicy struct {
 }
 
 type compiledExposurePolicy struct {
-	access   core.CapabilityExposure
+	access   CapabilityExposure
 	selector compiledSelector
 }
 
-func buildDescriptorProfile(desc core.CapabilityDescriptor) descriptorProfile {
+func buildDescriptorProfile(desc CapabilityDescriptor) descriptorProfile {
 	profile := descriptorProfile{
 		id:            normalizeComparable(desc.ID),
 		name:          normalizeComparable(desc.Name),
@@ -137,7 +136,7 @@ func compileCapabilityPolicies(policies []agentspec.CapabilityPolicy) []compiled
 	return out
 }
 
-func compileExposurePolicies(policies []core.CapabilityExposurePolicy) []compiledExposurePolicy {
+func compileExposurePolicies(policies []CapabilityExposurePolicy) []compiledExposurePolicy {
 	if len(policies) == 0 {
 		return nil
 	}

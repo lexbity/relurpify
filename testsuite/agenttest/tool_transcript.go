@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type ToolTranscriptArtifact struct {
@@ -27,7 +27,7 @@ type ToolTranscriptEntry struct {
 	Error          string         `json:"error,omitempty"`
 }
 
-func BuildToolTranscript(events []core.Event) *ToolTranscriptArtifact {
+func BuildToolTranscript(events []telemetry.Event) *ToolTranscriptArtifact {
 	if len(events) == 0 {
 		return nil
 	}
@@ -38,7 +38,7 @@ func BuildToolTranscript(events []core.Event) *ToolTranscriptArtifact {
 	)
 	for _, ev := range events {
 		switch ev.Type {
-		case core.EventToolCall:
+		case telemetry.EventToolCall:
 			entry := ToolTranscriptEntry{
 				Index:        pendingCnt,
 				Tool:         stringValue(ev.Metadata["tool"]),
@@ -50,7 +50,7 @@ func BuildToolTranscript(events []core.Event) *ToolTranscriptArtifact {
 			entries = append(entries, entry)
 			pendingIx[entry.Tool] = append(pendingIx[entry.Tool], len(entries)-1)
 			pendingCnt++
-		case core.EventToolResult:
+		case telemetry.EventToolResult:
 			tool := stringValue(ev.Metadata["tool"])
 			if tool == "" {
 				continue

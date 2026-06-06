@@ -10,9 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // BisectHandler implements the git bisect capability.
@@ -27,8 +27,8 @@ func NewBisectHandler(env agentenv.WorkspaceEnvironment) *BisectHandler {
 }
 
 // Descriptor returns the capability descriptor for the bisect handler.
-func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.bisect",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -37,7 +37,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 		Description:   "Performs git bisect to find the commit that introduced a bug",
 		Category:      "git",
 		Tags:          []string{"git", "bisect", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

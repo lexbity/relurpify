@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -35,7 +34,7 @@ func (t *availabilityToggleTool) Tags() []string { return nil }
 
 func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 	reg := NewRegistry()
-	desc := core.CapabilityDescriptor{
+	desc := CapabilityDescriptor{
 		ID:            "cap:callable",
 		Name:          "callable",
 		Kind:          agentspec.CapabilityKindTool,
@@ -52,14 +51,14 @@ func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 	if snapshots[0].Descriptor.ID != desc.ID {
 		t.Fatalf("expected descriptor %q, got %q", desc.ID, snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != core.CapabilityExposureInspectable {
+	if snapshots[0].Exposure != CapabilityExposureInspectable {
 		t.Fatalf("expected inspectable exposure, got %q", snapshots[0].Exposure)
 	}
 }
 
 func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 	reg := NewRegistry()
-	desc := core.CapabilityDescriptor{
+	desc := CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "hidden",
 		Kind:          agentspec.CapabilityKindTool,
@@ -68,9 +67,9 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
-	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: desc.Name},
-		Access:   core.CapabilityExposureHidden,
+		Access:   CapabilityExposureHidden,
 	}})
 
 	if got := reg.AllCapabilities(); len(got) != 0 {
@@ -84,7 +83,7 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 	if snapshots[0].Descriptor.ID != desc.ID {
 		t.Fatalf("expected descriptor %q, got %q", desc.ID, snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != core.CapabilityExposureHidden {
+	if snapshots[0].Exposure != CapabilityExposureHidden {
 		t.Fatalf("expected hidden exposure, got %q", snapshots[0].Exposure)
 	}
 }
@@ -99,13 +98,13 @@ func TestAllCapabilitySnapshots_Empty(t *testing.T) {
 
 func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 	reg := NewRegistry()
-	visible := core.CapabilityDescriptor{
+	visible := CapabilityDescriptor{
 		ID:            "cap:visible",
 		Name:          "visible",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
-	hidden := core.CapabilityDescriptor{
+	hidden := CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "delegate-hidden",
 		Kind:          agentspec.CapabilityKindTool,
@@ -117,9 +116,9 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 	if err := reg.RegisterCapability(hidden); err != nil {
 		t.Fatalf("register hidden capability: %v", err)
 	}
-	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{ID: hidden.ID},
-		Access:   core.CapabilityExposureHidden,
+		Access:   CapabilityExposureHidden,
 	}})
 
 	scoped := reg.WithAllowlist([]string{hidden.ID})
@@ -130,7 +129,7 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 	if snapshots[0].Descriptor.ID != hidden.ID {
 		t.Fatalf("expected hidden capability in scoped snapshot, got %q", snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != core.CapabilityExposureHidden {
+	if snapshots[0].Exposure != CapabilityExposureHidden {
 		t.Fatalf("expected hidden exposure in scoped snapshot, got %q", snapshots[0].Exposure)
 	}
 }
@@ -143,7 +142,7 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < total; i++ {
 		go func(i int) {
-			desc := core.CapabilityDescriptor{
+			desc := CapabilityDescriptor{
 				ID:            "cap:concurrent:" + string(rune('a'+i)),
 				Name:          "concurrent",
 				Kind:          agentspec.CapabilityKindTool,

@@ -17,14 +17,12 @@ func TestToolManifestBackendConstants(t *testing.T) {
 	require.Equal(t, ToolBackendSubprocess, ToolBackend("subprocess"))
 	require.Equal(t, ToolBackendGoNative, ToolBackend("go_native"))
 	require.Equal(t, ToolBackendComposite, ToolBackend("composite"))
-	require.Equal(t, ToolBackendMCP, ToolBackend("mcp"))
 	distinct := map[ToolBackend]bool{
 		ToolBackendSubprocess: true,
 		ToolBackendGoNative:   true,
 		ToolBackendComposite:  true,
-		ToolBackendMCP:        true,
 	}
-	require.Len(t, distinct, 4, "all ToolBackend constants must have distinct values")
+	require.Len(t, distinct, 3, "all ToolBackend constants must have distinct values")
 }
 
 func TestToolManifestFlagStyleConstants(t *testing.T) {

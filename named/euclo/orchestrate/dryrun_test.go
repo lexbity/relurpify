@@ -8,19 +8,19 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type dryRunCountingHandler struct {
 	id           string
 	invocations  int
 	mu           sync.Mutex
-	availability core.AvailabilitySpec
+	availability capability.AvailabilitySpec
 }
 
-func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
 		Kind:          agentspec.CapabilityKindTool,
@@ -46,7 +46,7 @@ func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
 	reg := capability.NewRegistry()
 	handler := &dryRunCountingHandler{
 		id:           "euclo:cap.ast_query",
-		availability: core.AvailabilitySpec{Available: true},
+		availability: capability.AvailabilitySpec{Available: true},
 	}
 	if err := reg.RegisterInvocableCapability(handler); err != nil {
 		t.Fatalf("register handler: %v", err)
@@ -66,8 +66,8 @@ func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
 
 func TestDryRun_IncludesAllCandidates(t *testing.T) {
 	reg := capability.NewRegistry()
-	one := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
-	two := &dryRunCountingHandler{id: "euclo:cap.symbol_trace", availability: core.AvailabilitySpec{Available: true}}
+	one := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: capability.AvailabilitySpec{Available: true}}
+	two := &dryRunCountingHandler{id: "euclo:cap.symbol_trace", availability: capability.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(one); err != nil {
 		t.Fatalf("register one: %v", err)
 	}
@@ -86,17 +86,17 @@ func TestDryRun_IncludesAllCandidates(t *testing.T) {
 
 func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 	reg := capability.NewRegistry()
-	visible := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
-	hidden := &dryRunCountingHandler{id: "euclo:cap.code_review", availability: core.AvailabilitySpec{Available: true}}
+	visible := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: capability.AvailabilitySpec{Available: true}}
+	hidden := &dryRunCountingHandler{id: "euclo:cap.code_review", availability: capability.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(visible); err != nil {
 		t.Fatalf("register visible: %v", err)
 	}
 	if err := reg.RegisterInvocableCapability(hidden); err != nil {
 		t.Fatalf("register hidden: %v", err)
 	}
-	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{ID: hidden.id},
-		Access:   core.CapabilityExposureHidden,
+		Access:   capability.CapabilityExposureHidden,
 	}})
 
 	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{
@@ -128,7 +128,7 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 
 func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 	reg := capability.NewRegistry()
-	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
+	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: capability.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
@@ -151,20 +151,20 @@ func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 
 func TestDryRun_EmitsDryRunEvent(t *testing.T) {
 	reg := capability.NewRegistry()
-	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: core.AvailabilitySpec{Available: true}}
+	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: capability.AvailabilitySpec{Available: true}}
 	if err := reg.RegisterInvocableCapability(primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
 
 	sink := &telemetrySink{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 	if _, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: primary.id, DryRun: true}, reg, nil); err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
 
 	found := false
 	for _, event := range sink.snapshot() {
-		if event.Type == core.EventType("euclo.route.dry_run") {
+		if event.Type == telemetry.EventType("euclo.route.dry_run") {
 			found = true
 			break
 		}

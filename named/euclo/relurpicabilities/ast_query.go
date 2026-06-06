@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -23,8 +23,8 @@ func NewASTQueryHandler(env agentenv.WorkspaceEnvironment) *ASTQueryHandler {
 }
 
 // Descriptor returns the capability descriptor for the AST query handler.
-func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -33,7 +33,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 		Description:   "Queries the AST index to find symbols, functions, classes, and other code structure elements",
 		Category:      "code_analysis",
 		Tags:          []string{"ast", "query", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

@@ -9,7 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -17,6 +16,8 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ThoughtRecipeExecutorNode executes a resolved thought thoughtrecipe through the thoughtrecipe compiler.
@@ -66,7 +67,7 @@ func (n *ThoughtRecipeExecutorNode) ID() string { return n.id }
 func (n *ThoughtRecipeExecutorNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute resolves the route's thoughtrecipe and executes it as a subgraph.
-func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	_ = ctx
 	if n.registry == nil {
 		n.registry = thoughtrecipepkg.NewThoughtRecipeRegistry()
@@ -79,19 +80,19 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 
 	thoughtrecipe, ok := n.registry.Get(thoughtrecipeID)
 	if !ok || thoughtrecipe == nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data:    core.NewErrorResultPayload("thoughtrecipe not found: " + thoughtrecipeID),
+			Data:    execution.NewErrorResultPayload("thoughtrecipe not found: " + thoughtrecipeID),
 		}, fmt.Errorf("thoughtrecipe not found: %s", thoughtrecipeID)
 	}
 
 	plan, ok := n.registry.GetPlan(thoughtrecipeID)
 	if !ok || plan == nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data:    core.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + thoughtrecipeID),
+			Data:    execution.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + thoughtrecipeID),
 		}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", thoughtrecipeID)
 	}
 
@@ -104,19 +105,19 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 
 	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.env, n.ingestionPipeline)
 	if err != nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
-			Data:    core.NewErrorResultPayload(err.Error()),
+			Data:    execution.NewErrorResultPayload(err.Error()),
 		}, err
 	}
 
 	if resumeNodeID := resumeNodeIDFromEnvelope(env); resumeNodeID != "" {
 		if err := graph.SetStart(resumeNodeID); err != nil {
-			return &core.Result{
+			return &execution.Result{
 				NodeID:  n.id,
 				Success: false,
-				Data:    core.NewErrorResultPayload(err.Error()),
+				Data:    execution.NewErrorResultPayload(err.Error()),
 			}, err
 		}
 	}
@@ -126,18 +127,18 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		if nextThoughtRecipe, ok := n.registry.Get(nextThoughtRecipeID); ok && nextThoughtRecipe != nil {
 			nextPlan, ok := n.registry.GetPlan(nextThoughtRecipeID)
 			if !ok || nextPlan == nil {
-				return &core.Result{
+				return &execution.Result{
 					NodeID:  n.id,
 					Success: false,
-					Data:    core.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID),
+					Data:    execution.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID),
 				}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", nextThoughtRecipeID)
 			}
 			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.env, n.ingestionPipeline)
 			if nextErr != nil {
-				return &core.Result{
+				return &execution.Result{
 					NodeID:  n.id,
 					Success: false,
-					Data:    core.NewErrorResultPayload(nextErr.Error()),
+					Data:    execution.NewErrorResultPayload(nextErr.Error()),
 				}, nextErr
 			}
 			if env != nil {
@@ -163,7 +164,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		euclostate.SetExecutionCompleted(env, err == nil && subResult != nil && subResult.Success)
 	}
 	if subResult == nil {
-		subResult = &core.Result{NodeID: n.id, Success: err == nil}
+		subResult = &execution.Result{NodeID: n.id, Success: err == nil}
 	}
 	subResult.NodeID = n.id
 	return subResult, err
@@ -236,7 +237,7 @@ func (l *recipeRegistryLookup) LookupRecipe(recipeID string) (*surface.RecipePro
 }
 
 func emitParallelFanouts(ctx context.Context, env *contextdata.Envelope, plan *thoughtrecipepkg.ExecutionPlan) {
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	for _, pg := range plan.Parallel {
 		if pg.Group == nil {
 			continue
@@ -282,7 +283,7 @@ func emitRecipeSelected(ctx context.Context, env *contextdata.Envelope, recipe *
 
 	proj := surface.BuildRecipeProjection(recipe, "", steps, parallelGroups, conditionalGroups)
 
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitRecipeSelected(ctx, reporting.EventRecipeSelected{
 		EventHeader: reporting.EventHeader{
 			TaskID:    env.TaskID,

@@ -7,7 +7,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
@@ -875,7 +874,7 @@ func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, toke
 	return score, reasons
 }
 
-func scoreCapabilityCandidate(desc core.CapabilityDescriptor, tokens []string) (int, []string) {
+func scoreCapabilityCandidate(desc capability.CapabilityDescriptor, tokens []string) (int, []string) {
 	score := 0
 	reasons := make([]string, 0, 4)
 	if exactTokenMatch(tokens, desc.ID, desc.Name) {
@@ -905,7 +904,7 @@ func scoreCapabilityCandidate(desc core.CapabilityDescriptor, tokens []string) (
 	return score, reasons
 }
 
-func capabilityRiskTokens(desc core.CapabilityDescriptor) []string {
+func capabilityRiskTokens(desc capability.CapabilityDescriptor) []string {
 	if len(desc.RiskClasses) == 0 {
 		return nil
 	}
@@ -978,7 +977,7 @@ func exactTokenMatch(tokens []string, values ...string) bool {
 }
 
 func routeAvailabilityFromSnapshot(snapshot capability.CapabilitySnapshot) (RouteAvailability, string) {
-	if snapshot.Exposure == core.CapabilityExposureHidden {
+	if snapshot.Exposure == capability.CapabilityExposureHidden {
 		return RouteUnavailablePolicyDenied, "policy denied"
 	}
 	if snapshot.Descriptor.Availability.Available {
@@ -995,7 +994,7 @@ func routeAvailabilityFromSnapshot(snapshot capability.CapabilitySnapshot) (Rout
 	}
 }
 
-func familyMatchBonus(desc core.CapabilityDescriptor, family string) bool {
+func familyMatchBonus(desc capability.CapabilityDescriptor, family string) bool {
 	family = strings.ToLower(strings.TrimSpace(family))
 	if family == "" {
 		return false
@@ -1020,7 +1019,7 @@ func familyMatchBonus(desc core.CapabilityDescriptor, family string) bool {
 	}
 }
 
-func routeMatchesFamily(desc core.CapabilityDescriptor, family, instruction string) bool {
+func routeMatchesFamily(desc capability.CapabilityDescriptor, family, instruction string) bool {
 	family = strings.ToLower(strings.TrimSpace(family))
 	if family == "" {
 		return instructionMatchesRouteFamily(desc, instruction)
@@ -1032,7 +1031,7 @@ func routeMatchesFamily(desc core.CapabilityDescriptor, family, instruction stri
 	return strings.Contains(strings.ToLower(desc.ID), family) || strings.Contains(strings.ToLower(desc.Name), family) || strings.Contains(strings.ToLower(desc.Category), family) || strings.Contains(instruction, family)
 }
 
-func instructionMatchesRouteFamily(desc core.CapabilityDescriptor, instruction string) bool {
+func instructionMatchesRouteFamily(desc capability.CapabilityDescriptor, instruction string) bool {
 	instruction = strings.ToLower(strings.TrimSpace(instruction))
 	if instruction == "" {
 		return false
@@ -1091,7 +1090,7 @@ func instructionLooksMutating(instruction string) bool {
 	return false
 }
 
-func capabilityPriorityScore(desc core.CapabilityDescriptor) int {
+func capabilityPriorityScore(desc capability.CapabilityDescriptor) int {
 	if desc.Annotations == nil {
 		return 0
 	}
@@ -1108,7 +1107,7 @@ func capabilityPriorityScore(desc core.CapabilityDescriptor) int {
 	return 0
 }
 
-func compatibilityScore(desc core.CapabilityDescriptor, inputs map[string]any) int {
+func compatibilityScore(desc capability.CapabilityDescriptor, inputs map[string]any) int {
 	if desc.InputSchema == nil || len(desc.InputSchema.Required) == 0 {
 		return 0
 	}
@@ -1124,7 +1123,7 @@ func compatibilityScore(desc core.CapabilityDescriptor, inputs map[string]any) i
 	return score
 }
 
-func riskPenalty(desc core.CapabilityDescriptor) int {
+func riskPenalty(desc capability.CapabilityDescriptor) int {
 	return len(desc.RiskClasses)
 }
 

@@ -7,11 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
@@ -23,9 +23,9 @@ func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-clarification", "session-clarification")
 	seedTask(env, "help me with this")
-	telemetry := &recordingTelemetry{}
+	rec := &recordingTelemetry{}
 
-	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
+	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
@@ -58,14 +58,14 @@ func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
 		t.Fatal("expected execution to complete")
 	}
-	for _, eventType := range []core.EventType{
-		core.EventType("euclo.clarification.started"),
-		core.EventType("euclo.route.selected"),
-		core.EventType("euclo.route.completed"),
-		core.EventType("euclo.execution.complete"),
+	for _, eventType := range []telemetry.EventType{
+		telemetry.EventType("euclo.clarification.started"),
+		telemetry.EventType("euclo.route.selected"),
+		telemetry.EventType("euclo.route.completed"),
+		telemetry.EventType("euclo.execution.complete"),
 	} {
-		if !hasEventType(telemetry.types(), eventType) {
-			t.Fatalf("expected telemetry event %s, got %v", eventType, telemetry.types())
+		if !hasEventType(rec.types(), eventType) {
+			t.Fatalf("expected telemetry event %s, got %v", eventType, rec.types())
 		}
 	}
 }

@@ -4,40 +4,41 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
-func resolveInsertionDecision(agent *ReActAgent, task *core.Task, envelope *core.CapabilityResultEnvelope) core.InsertionDecision {
-	if agent == nil {
-		return core.EffectiveInsertionDecision(nil, envelope)
+func resolveInsertionDecision(agent *ReActAgent, task *execution.Task, envelope *capability.CapabilityResultEnvelope) capability.InsertionDecision {
+	if agent == nil || agent.Config == nil {
+		return capability.EffectiveInsertionDecision(nil, envelope)
 	}
-	return core.EffectiveInsertionDecision(agent.effectiveAgentSpec(task), envelope)
+	return capability.EffectiveInsertionDecision(agent.Config.AgentSpec, envelope)
 }
 
-func renderInsertionFilteredSummary(agent *ReActAgent, task *core.Task, toolName string, payload *contracts.ToolResult, envelope *core.CapabilityResultEnvelope) (string, bool) {
+func renderInsertionFilteredSummary(agent *ReActAgent, task *execution.Task, toolName string, payload *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) (string, bool) {
 	if payload == nil {
 		return "", false
 	}
 	decision := resolveInsertionDecision(agent, task, envelope)
 	switch decision.Action {
-	case core.InsertionActionDirect, core.InsertionActionSummarized:
+	case capability.InsertionActionDirect, capability.InsertionActionSummarized:
 		if summary, ok := visibleBlockSummary(envelope); ok {
 			return summary, true
 		}
 		return summarizeToolPayload(payload), true
-	case core.InsertionActionMetadataOnly:
+	case capability.InsertionActionMetadataOnly:
 		return metadataOnlyInsertionText(toolName, envelope), true
-	case core.InsertionActionHITLRequired:
+	case capability.InsertionActionHITLRequired:
 		return fmt.Sprintf("output withheld pending approval for capability %s", capabilityDisplayName(toolName, envelope)), true
-	case core.InsertionActionDenied:
+	case capability.InsertionActionDenied:
 		return "", false
 	default:
 		return "", false
 	}
 }
 
-func visibleBlockSummary(envelope *core.CapabilityResultEnvelope) (string, bool) {
+func visibleBlockSummary(envelope *capability.CapabilityResultEnvelope) (string, bool) {
 	if envelope == nil || len(envelope.ContentBlocks) == 0 || len(envelope.BlockInsertions) == 0 {
 		return "", false
 	}
@@ -47,22 +48,22 @@ func visibleBlockSummary(envelope *core.CapabilityResultEnvelope) (string, bool)
 			break
 		}
 		switch envelope.BlockInsertions[i].Decision.Action {
-		case core.InsertionActionDirect, core.InsertionActionSummarized:
+		case capability.InsertionActionDirect, capability.InsertionActionSummarized:
 		default:
 			continue
 		}
 		switch typed := block.(type) {
-		case core.TextContentBlock:
+		case capability.TextContentBlock:
 			text := trimToBudget(strings.TrimSpace(typed.Text), 220)
 			if text != "" {
 				parts = append(parts, text)
 			}
-		case core.StructuredContentBlock:
+		case capability.StructuredContentBlock:
 			text := trimToBudget(fmt.Sprint(typed.Data), 220)
 			if text != "" && text != "<nil>" {
 				parts = append(parts, text)
 			}
-		case core.ErrorContentBlock:
+		case capability.ErrorContentBlock:
 			text := trimToBudget(strings.TrimSpace(typed.Message), 220)
 			if text != "" {
 				parts = append(parts, text)
@@ -75,7 +76,7 @@ func visibleBlockSummary(envelope *core.CapabilityResultEnvelope) (string, bool)
 	return strings.Join(parts, " "), true
 }
 
-func metadataOnlyInsertionText(toolName string, envelope *core.CapabilityResultEnvelope) string {
+func metadataOnlyInsertionText(toolName string, envelope *capability.CapabilityResultEnvelope) string {
 	name := capabilityDisplayName(toolName, envelope)
 	if envelope == nil {
 		return fmt.Sprintf("metadata-only result retained for %s", name)
@@ -95,7 +96,7 @@ func metadataOnlyInsertionText(toolName string, envelope *core.CapabilityResultE
 	return fmt.Sprintf("metadata-only result retained for %s (%s)", name, strings.Join(attrs, ", "))
 }
 
-func capabilityDisplayName(toolName string, envelope *core.CapabilityResultEnvelope) string {
+func capabilityDisplayName(toolName string, envelope *capability.CapabilityResultEnvelope) string {
 	if envelope != nil {
 		if name := strings.TrimSpace(envelope.Descriptor.Name); name != "" {
 			return name

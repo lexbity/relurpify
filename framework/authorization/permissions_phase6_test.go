@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -89,7 +89,7 @@ func TestCheckNetworkBlocksPrivateEvenIfDeclared(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "10.0.0.1", Port: 443},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -106,7 +106,7 @@ func TestCheckNetworkAllowsPublicIP(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -123,7 +123,7 @@ func TestDefaultPolicyAllowRejectedAtRegistration(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -137,7 +137,7 @@ func TestDefaultPolicyAskIsValid(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -151,7 +151,7 @@ func TestDefaultPolicyDenyIsValid(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -165,7 +165,7 @@ func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -188,7 +188,7 @@ func testPermissionManager(t *testing.T) *PermissionManager {
 			{Binary: "echo"},
 		},
 	}
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -201,14 +201,14 @@ type testTool struct {
 	name string
 }
 
-func (t *testTool) Name() string                           { return t.name }
-func (t *testTool) Description() string                    { return "test tool" }
-func (t *testTool) Category() string                       { return "test" }
-func (t *testTool) Parameters() []contracts.ToolParameter  { return nil }
+func (t *testTool) Name() string                          { return t.name }
+func (t *testTool) Description() string                   { return "test tool" }
+func (t *testTool) Category() string                      { return "test" }
+func (t *testTool) Parameters() []contracts.ToolParameter { return nil }
 func (t *testTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	return &contracts.ToolResult{Success: true}, nil
 }
-func (t *testTool) IsAvailable(ctx context.Context) bool    { return true }
+func (t *testTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *testTool) Permissions() contracts.ToolPermissions {
 	return contracts.ToolPermissions{
 		Permissions: &contracts.PermissionSet{

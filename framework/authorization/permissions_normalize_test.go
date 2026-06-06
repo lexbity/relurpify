@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -181,7 +181,7 @@ func TestNormalizePathDotInMiddle(t *testing.T) {
 // testPermManager creates a PermissionManager with basePath set to the given
 // workspace directory, with minimal permissions for initialization.
 func testPermManager(ws string) *PermissionManager {
-	audit := core.NewInMemoryAuditLogger(100)
+	audit := policy.NewInMemoryAuditLogger(100)
 	declared := &contracts.PermissionSet{
 		Executables: []contracts.ExecutablePermission{
 			{Binary: "echo"},

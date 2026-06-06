@@ -7,7 +7,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -145,9 +144,9 @@ agent reviewer uses react
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
 		t.Fatalf("register hidden_tool: %v", err)
 	}
-	reg.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: "hidden_tool"},
-		Access:   core.CapabilityExposureHidden,
+		Access:   capability.CapabilityExposureHidden,
 	}})
 
 	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()

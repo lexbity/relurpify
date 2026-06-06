@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestComputeFingerprint(t *testing.T) {
@@ -172,10 +172,10 @@ func TestDeterminismScore(t *testing.T) {
 }
 
 func TestExtractLLMFingerprints(t *testing.T) {
-	events := []core.Event{
-		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: core.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
-		{Type: core.EventLLMResponse, Metadata: map[string]any{"content": "response2"}},
+	events := []telemetry.Event{
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response2"}},
 	}
 
 	fingerprints := ExtractLLMFingerprints(events)
@@ -190,8 +190,8 @@ func TestExtractLLMFingerprints(t *testing.T) {
 	}
 
 	// Check that same content produces same fingerprint
-	events2 := []core.Event{
-		{Type: core.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
+	events2 := []telemetry.Event{
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
 	}
 	fingerprints2 := ExtractLLMFingerprints(events2)
 

@@ -8,9 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // CapabilityExecutionNode executes a selected capability through the framework registry.
@@ -41,7 +41,7 @@ func (n *CapabilityExecutionNode) ID() string { return n.id }
 func (n *CapabilityExecutionNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 
 // Execute invokes the selected capability and persists execution metadata.
-func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	_ = ctx
 	capabilityID := "euclo:cap.ast_query"
 	if env != nil {
@@ -53,7 +53,7 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 	}
 
 	// Build task with capability arguments from envelope
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          n.id,
 		Type:        "capability_execution",
 		Instruction: fmt.Sprintf("Execute capability: %s", capabilityID),
@@ -73,7 +73,7 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 	}
 
 	var (
-		result *core.Result
+		result *execution.Result
 		err    error
 	)
 	if n.registry == nil {
@@ -87,7 +87,7 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		euclostate.SetExecutionCompleted(env, result != nil && result.Success)
 	}
 	if result == nil {
-		result = &core.Result{NodeID: n.id, Success: err == nil}
+		result = &execution.Result{NodeID: n.id, Success: err == nil}
 	}
 	result.NodeID = n.id
 	return result, err

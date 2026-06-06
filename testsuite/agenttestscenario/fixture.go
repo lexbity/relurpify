@@ -5,7 +5,8 @@ import (
 
 	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type Fixture struct {
@@ -28,10 +29,10 @@ type NoopExecutor struct {
 }
 
 type TelemetryRecorder struct {
-	Events []core.Event
+	Events []telemetry.Event
 }
 
-func (t *TelemetryRecorder) Emit(event core.Event) {
+func (t *TelemetryRecorder) Emit(event telemetry.Event) {
 	t.Events = append(t.Events, event)
 }
 
@@ -41,7 +42,7 @@ func NewFixture(t testing.TB, turns ...ScenarioModelTurn) *Fixture {
 	t.Helper()
 
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
+		Config: &execution.Config{Name: "test", Model: "stub", MaxIterations: 1},
 	}
 	model := &ScenarioStubModel{}
 	telemetry := &TelemetryRecorder{}
@@ -52,7 +53,7 @@ func newFixture(t testing.TB, env agentenv.WorkspaceEnvironment, model *Scenario
 	t.Helper()
 
 	if env.Config == nil {
-		env.Config = &core.Config{Name: "test", Model: "stub", MaxIterations: 1}
+		env.Config = &execution.Config{Name: "test", Model: "stub", MaxIterations: 1}
 	}
 	env.Config.Telemetry = telemetry
 	return &Fixture{

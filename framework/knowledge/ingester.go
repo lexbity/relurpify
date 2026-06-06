@@ -54,8 +54,15 @@ func NewOutputIngester(store *ChunkStore, events *EventBus) *OutputIngester {
 
 // IngestLLMResponse implements contracts.ResponseIngester.
 // The returned chunk is discarded; callers needing the chunk use IngestLLMResponseFull.
-func (ing *OutputIngester) IngestLLMResponse(ctx context.Context, resp *contracts.LLMResponse) error {
-	_, err := ing.IngestLLMResponseFull(ctx, resp)
+func (ing *OutputIngester) IngestLLMResponse(ctx context.Context, resp interface{}) error {
+	if resp == nil {
+		return nil
+	}
+	typed, ok := resp.(*contracts.LLMResponse)
+	if !ok {
+		return nil
+	}
+	_, err := ing.IngestLLMResponseFull(ctx, typed)
 	return err
 }
 

@@ -9,9 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type checkpointArtifactRepo struct {
@@ -158,8 +158,8 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 		CompletedAt: time.Now(),
 	})
 
-	telemetry := &recordingTelemetry{}
-	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
+	rec := &recordingTelemetry{}
+	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 

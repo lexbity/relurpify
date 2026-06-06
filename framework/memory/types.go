@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 )
 
 // WorkingMemoryStore holds per-task ephemeral state.
@@ -72,7 +72,7 @@ type TaskMemory struct {
 }
 
 // Set stores a value with the given key and memory class.
-func (m *TaskMemory) Set(key string, value any, class core.MemoryClass) {
+func (m *TaskMemory) Set(key string, value any, class relurpctx.MemoryClass) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -150,7 +150,7 @@ func (m *TaskMemory) TaskID() string {
 // MemoryEntry stores a single memory value.
 type MemoryEntry struct {
 	Value     any
-	Class     core.MemoryClass
+	Class     relurpctx.MemoryClass
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -159,7 +159,7 @@ type MemoryEntry struct {
 type MemoryQuery struct {
 	TaskID    string
 	KeyPrefix string
-	Class     core.MemoryClass
+	Class     relurpctx.MemoryClass
 	Limit     int
 }
 

@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestFrameworkSuiteSmoke validates that the framework suite can construct real runtime
@@ -44,10 +45,10 @@ func TestFrameworkSuiteSmoke(t *testing.T) {
 		t.Fatalf("permission check failed: %v", err)
 	}
 
-	if err := env.AuditSink.Log(ctx, core.AuditRecord{AgentID: "smoke-agent", Action: "smoke-action", Type: "filesystem", Permission: testFile, Result: "granted"}); err != nil {
+	if err := env.AuditSink.Log(ctx, policy.AuditRecord{AgentID: "smoke-agent", Action: "smoke-action", Type: "filesystem", Permission: testFile, Result: "granted"}); err != nil {
 		t.Fatalf("audit logging failed: %v", err)
 	}
-	env.TelemetrySink.Emit(core.Event{Type: core.EventNodeFinish, NodeID: "smoke-node", TaskID: "smoke-task", Message: "smoke test completed"})
+	env.TelemetrySink.Emit(telemetry.Event{Type: telemetry.EventNodeFinish, NodeID: "smoke-node", TaskID: "smoke-task", Message: "smoke test completed"})
 
 	if got := env.AuditSink.Records(); len(got) == 0 {
 		t.Fatal("expected audit records to be captured")

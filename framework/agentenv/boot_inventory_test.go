@@ -62,12 +62,12 @@ func TestBootRootInventory(t *testing.T) {
 	}
 
 	knownOWCallers := []string{
-		"app/relurpish/runtime/runtime.go",                     // primary entry point
-		"app/dev-agent-cli/agenttest_workspace.go",             // inspection+prepared-run entry
-		"app/dev-agent-cli/workspace.go",                       // workspaceOpenFn var assignment
-		"app/nexus/server/rex_runtime.go",                      // nexus entry point
+		"app/relurpish/runtime/runtime.go",                       // primary entry point
+		"app/dev-agent-cli/agenttest_workspace.go",               // inspection+prepared-run entry
+		"app/dev-agent-cli/workspace.go",                         // workspaceOpenFn var assignment
+		"app/nexus/server/rex_runtime.go",                        // nexus entry point
 		"named/euclo/testsuite/live_workspace_handshake_test.go", // integration test
-		"named/euclo/doc.go",                                   // doc-comment reference
+		"named/euclo/doc.go",                                     // doc-comment reference
 	}
 
 	for _, line := range grepLines(owOut) {
@@ -134,12 +134,12 @@ func TestBackendVocabularyInventory(t *testing.T) {
 	}
 
 	knownBackendSites := []string{
-		"framework/authorization/runtime.go",       // SelectSandboxRuntime — single source of truth
-		"framework/authorization/runtime_test.go",   // tests for SelectSandboxRuntime
-		"app/relurpish/tui/runtime_adapter.go",     // TUI backend display — legitimate leaf use
-		"framework/sandbox/sandbox.go",             // checkContainerRuntime — container-runtime check
-		"framework/sandbox/container_handle.go",    // ContainerHandle.Teardown — Phase 2 lifecycle
-		"framework/agentenv/boot_validate.go",      // backendsCompatible — Phase 10 boot invariant check
+		"framework/authorization/runtime.go",      // SelectSandboxRuntime — single source of truth
+		"framework/authorization/runtime_test.go", // tests for SelectSandboxRuntime
+		"app/relurpish/tui/runtime_adapter.go",    // TUI backend display — legitimate leaf use
+		"framework/sandbox/sandbox.go",            // checkContainerRuntime — container-runtime check
+		"framework/sandbox/container_handle.go",   // ContainerHandle.Teardown — Phase 2 lifecycle
+		"framework/agentenv/boot_validate.go",     // backendsCompatible — Phase 10 boot invariant check
 	}
 
 	violations := 0
@@ -249,8 +249,8 @@ func TestSingleBootRootScriptFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	violation := tmpDir + "/violation.go"
 	if err := os.WriteFile(violation, []byte(`package violation
-import "codeburg.org/lexbit/relurpify/framework/services"
-func f() { services.BuildBuiltinCapabilityBundle("", nil) }
+import "codeburg.org/lexbit/relurpify/framework/agentenv"
+func f() { agentenv.BuildBuiltinCapabilityBundle("", nil) }
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -268,8 +268,8 @@ func f() { services.BuildBuiltinCapabilityBundle("", nil) }
 	// Use a non-_test.go name so the script does not filter it out.
 	violation2 := filepath.Join(root, "zz_violation_check.go")
 	if err := os.WriteFile(violation2, []byte(`package main
-import "codeburg.org/lexbit/relurpify/framework/services"
-func f() { services.BuildBuiltinCapabilityBundle("/tmp", nil) }
+import "codeburg.org/lexbit/relurpify/framework/agentenv"
+func f() { agentenv.BuildBuiltinCapabilityBundle("/tmp", nil) }
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}

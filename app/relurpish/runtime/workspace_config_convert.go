@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func convertRuntimeCapabilitySelectors(values []cfgload.RuntimeCapabilitySelector) []agentspec.CapabilitySelector {
@@ -62,22 +62,22 @@ func convertCoreCapabilitySelectors(values []agentspec.CapabilitySelector) []cfg
 	return out
 }
 
-func convertNodePlatformString(value string) core.NodePlatform {
+func convertNodePlatformString(value string) capability.NodePlatform {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case string(core.NodePlatformMacOS):
-		return core.NodePlatformMacOS
-	case string(core.NodePlatformLinux):
-		return core.NodePlatformLinux
-	case string(core.NodePlatformIOS):
-		return core.NodePlatformIOS
-	case string(core.NodePlatformAndroid):
-		return core.NodePlatformAndroid
-	case string(core.NodePlatformWindows):
-		return core.NodePlatformWindows
-	case string(core.NodePlatformHeadless):
-		return core.NodePlatformHeadless
+	case string(capability.NodePlatformMacOS):
+		return capability.NodePlatformMacOS
+	case string(capability.NodePlatformLinux):
+		return capability.NodePlatformLinux
+	case string(capability.NodePlatformIOS):
+		return capability.NodePlatformIOS
+	case string(capability.NodePlatformAndroid):
+		return capability.NodePlatformAndroid
+	case string(capability.NodePlatformWindows):
+		return capability.NodePlatformWindows
+	case string(capability.NodePlatformHeadless):
+		return capability.NodePlatformHeadless
 	default:
-		return core.NodePlatformHeadless
+		return capability.NodePlatformHeadless
 	}
 }
 

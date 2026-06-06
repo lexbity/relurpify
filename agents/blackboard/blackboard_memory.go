@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -16,7 +16,7 @@ type blackboardScopedMemoryRetriever struct {
 	store       *memory.WorkingMemoryStore
 	taskID      string
 	keyPrefix   string
-	memoryClass core.MemoryClass
+	memoryClass relurpctx.MemoryClass
 }
 
 // RetrievalServiceProvider is a placeholder interface for retrieval services.
@@ -25,7 +25,7 @@ type blackboardRetrievalServiceProvider interface {
 	// RetrievalService() retrieval.RetrieverService
 }
 
-func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error) {
+func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]relurpctx.MemoryRecordEnvelope, error) {
 	publication, err := r.RetrievePublication(ctx, query, limit)
 	if err != nil || publication == nil {
 		return nil, err
@@ -55,11 +55,11 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	out := make([]core.MemoryRecordEnvelope, 0, len(records))
+	out := make([]relurpctx.MemoryRecordEnvelope, 0, len(records))
 	for _, record := range records {
 		entry := record.Entry
 		summary, text := summarizeMemoryEntry(entry.Value)
-		out = append(out, core.MemoryRecordEnvelope{
+		out = append(out, relurpctx.MemoryRecordEnvelope{
 			Key:         record.Key,
 			MemoryClass: r.memoryClass,
 			Scope:       record.TaskID,
@@ -100,7 +100,7 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 						// Stamp derivation and origin on the newly added fact
 						if len(bb.Facts) > 0 {
 							lastFact := &bb.Facts[len(bb.Facts)-1]
-							origin := core.OriginDerivation("memory")
+							origin := relurpctx.OriginDerivation("memory")
 							recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
 							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
 							lastFact.Derivation = &derived
@@ -119,13 +119,13 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 		}
 	} else if raw, ok := state.GetWorkingValue("graph.declarative_memory"); ok {
 		if payload, ok := raw.(map[string]any); ok {
-			if results, ok := payload["results"].([]core.MemoryRecordEnvelope); ok {
+			if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
 				for _, record := range results {
 					if bb.AddFact("memory:"+record.Key, strings.TrimSpace(record.Summary), "memory:declarative") {
 						// Stamp derivation and origin on the newly added fact
 						if len(bb.Facts) > 0 {
 							lastFact := &bb.Facts[len(bb.Facts)-1]
-							origin := core.OriginDerivation("memory")
+							origin := relurpctx.OriginDerivation("memory")
 							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
 							lastFact.Derivation = &derived
 							// Add origin tracking
@@ -163,7 +163,7 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 						// Stamp derivation and origin on the newly added hypothesis
 						if len(bb.Hypotheses) > 0 {
 							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
-							origin := core.OriginDerivation("memory")
+							origin := relurpctx.OriginDerivation("memory")
 							recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
 							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
 							lastHyp.Derivation = &derived
@@ -182,7 +182,7 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 		}
 	} else if raw, ok := state.GetWorkingValue("graph.procedural_memory"); ok {
 		if payload, ok := raw.(map[string]any); ok {
-			if results, ok := payload["results"].([]core.MemoryRecordEnvelope); ok {
+			if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
 				for _, record := range results {
 					id := "memory:routine:" + strings.TrimSpace(record.Key)
 					description := strings.TrimSpace(record.Summary)
@@ -193,7 +193,7 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 						// Stamp derivation and origin on the newly added hypothesis
 						if len(bb.Hypotheses) > 0 {
 							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
-							origin := core.OriginDerivation("memory")
+							origin := relurpctx.OriginDerivation("memory")
 							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
 							lastHyp.Derivation = &derived
 							// Add origin tracking

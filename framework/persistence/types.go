@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
 // PersistenceRequest is the caller-facing write contract.
@@ -30,7 +30,6 @@ type PersistenceAction string
 const (
 	ActionCreated      PersistenceAction = "created"
 	ActionUpdated      PersistenceAction = "updated"
-	ActionDeduplicated PersistenceAction = "deduplicated"
 	ActionQuarantined  PersistenceAction = "quarantined"
 	ActionRejected     PersistenceAction = "rejected"
 )
@@ -60,8 +59,8 @@ type PersistenceAuditRecord struct {
 type Writer struct {
 	Store     *knowledge.ChunkStore
 	Events    EventLog
-	Policy    *contextpolicy.ContextPolicyBundle
-	Evaluator *contextpolicy.Evaluator
+	Policy    *execctx.ContextPolicyBundle
+	Evaluator *execctx.Evaluator
 	AuditLog  []PersistenceAuditRecord
 }
 

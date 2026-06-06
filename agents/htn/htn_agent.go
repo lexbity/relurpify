@@ -13,9 +13,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // RuntimeSurfaces holds runtime surface references for workflow operations.
@@ -51,7 +51,7 @@ func Hydrate(ctx context.Context, surface interface{}, workflowID string, query 
 }
 
 // TaskPaths extracts file paths from task metadata.
-func TaskPaths(task *core.Task) []string {
+func TaskPaths(task *execution.Task) []string {
 	if task == nil || task.Metadata == nil {
 		return nil
 	}
@@ -63,7 +63,7 @@ func TaskPaths(task *core.Task) []string {
 }
 
 // ApplyTaskRetrieval applies retrieval payload to task context.
-func ApplyTaskRetrieval(task *core.Task, payload interface{}) *core.Task {
+func ApplyTaskRetrieval(task *execution.Task, payload interface{}) *execution.Task {
 	if task == nil || payload == nil {
 		return task
 	}
@@ -87,7 +87,7 @@ type HTNAgent struct {
 	// Tools is the capability registry passed to the primitive executor.
 	Tools *capability.Registry
 	// Config holds runtime configuration.
-	Config *core.Config
+	Config *execution.Config
 	// Methods is the method library. Defaults to NewMethodLibrary() when nil.
 	Methods *MethodLibrary
 	// PrimitiveExec is the executor used for leaf subtasks.
@@ -109,7 +109,7 @@ type HTNAgent struct {
 
 // Initialize satisfies agentgraph.WorkflowExecutor. It wires configuration and ensures the
 // method library is populated.
-func (a *HTNAgent) Initialize(cfg *core.Config) error {
+func (a *HTNAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Methods == nil {
 		a.Methods = NewMethodLibrary()
@@ -139,7 +139,7 @@ func (a *HTNAgent) Capabilities() []string {
 
 // BuildGraph returns a minimal single-node graph suitable for agenttest and
 // visualisation. HTN execution is driven by Execute, not a static graph walk.
-func (a *HTNAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
+func (a *HTNAgent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("htn_done")
 	if err := g.AddNode(done); err != nil {
@@ -153,7 +153,7 @@ func (a *HTNAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 
 // Execute decomposes the task and runs each subtask through the primitive
 // executor.
-func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -170,7 +170,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	// Classify task type if not already set.
 	resolvedTask := task
 	if task != nil && task.Type == "" {
-		resolvedTask = &core.Task{
+		resolvedTask = &execution.Task{
 			ID:          task.ID,
 			Type:        string(ClassifyTask(task)),
 			Instruction: task.Instruction,
@@ -248,7 +248,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 			CompletedStepIDs: func(s *contextdata.Envelope) []string {
 				return runtime.CompletedStepsFromEnvelope(s)
 			},
-			Recover: func(ctx context.Context, step pl.PlanStep, stepTask *core.Task, s *contextdata.Envelope, err error) (*pl.StepRecovery, error) {
+			Recover: func(ctx context.Context, step pl.PlanStep, stepTask *execution.Task, s *contextdata.Envelope, err error) (*pl.StepRecovery, error) {
 				diagnosis := fmt.Sprintf("retrying step %q after failure: %v", step.ID, err)
 				notes := []string{fmt.Sprintf("step %q failed with: %v", step.ID, err)}
 				s.SetWorkingValue(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
@@ -319,8 +319,8 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	return result, nil
 }
 
-func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, compiledPlan *pl.Plan, step pl.PlanStep, env *contextdata.Envelope) *core.Task {
-	stepTask := &core.Task{
+func (a *HTNAgent) buildPlanStepTask(parentTask *execution.Task, compiledPlan *pl.Plan, step pl.PlanStep, env *contextdata.Envelope) *execution.Task {
+	stepTask := &execution.Task{
 		ID:          parentTask.ID,
 		Type:        parentTask.Type,
 		Instruction: parentTask.Instruction,
@@ -367,7 +367,7 @@ func (a *HTNAgent) afterStep(
 	stepIndexes map[string]int,
 	wfStore interface{},
 	workflowID, runID string,
-	task *core.Task,
+	task *execution.Task,
 ) {
 	completed := runtime.CompletedStepsFromEnvelope(env)
 	if !containsStepID(completed, step.ID) {
@@ -417,7 +417,7 @@ func (a *HTNAgent) afterStep(
 }
 
 // delegateToPrimitive passes the task through the capability dispatcher.
-func (a *HTNAgent) delegateToPrimitive(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *HTNAgent) delegateToPrimitive(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	return runtime.DispatchTask(ctx, a.Tools, a.primitiveAgent(), task, env)
 }
 
@@ -442,20 +442,20 @@ func containsStepID(values []string, stepID string) bool {
 // used in tests that want to exercise HTN decomposition without a real LLM.
 type noopAgent struct{}
 
-func (n *noopAgent) Initialize(_ *core.Config) error { return nil }
+func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
 func (n *noopAgent) Capabilities() []string          { return nil }
-func (n *noopAgent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
+func (n *noopAgent) BuildGraph(_ *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("noop_done")
 	_ = g.AddNode(done)
 	_ = g.SetStart("noop_done")
 	return g, nil
 }
-func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, nil
+func (n *noopAgent) Execute(_ context.Context, _ *execution.Task, _ *contextdata.Envelope) (*execution.Result, error) {
+	return &execution.Result{Success: true, Data: execution.NewToolResultPayload(map[string]any{})}, nil
 }
 
-func taskID(task *core.Task) string {
+func taskID(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
@@ -467,7 +467,7 @@ func timePtr(value time.Time) *time.Time {
 }
 
 // resumeCheckpoint is temporarily disabled - memory/db package being rebuilt
-func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store any, workflowID, runID string, task *core.Task, env *contextdata.Envelope) error {
+func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store any, workflowID, runID string, task *execution.Task, env *contextdata.Envelope) error {
 	_ = ctx
 	_ = store
 	_ = workflowID
@@ -477,18 +477,18 @@ func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store any, workflowID, 
 	return nil
 }
 
-func resultData(result *core.Result) any {
+func resultData(result *execution.Result) any {
 	if result == nil {
 		return nil
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	if len(fields) == 0 {
 		return nil
 	}
 	return fields
 }
 
-func resultErrorText(result *core.Result) string {
+func resultErrorText(result *execution.Result) string {
 	if result == nil || result.Success {
 		return ""
 	}
@@ -504,7 +504,7 @@ func (a *HTNAgent) streamMode() contextstream.Mode {
 }
 
 // streamQuery returns the query for streaming, defaulting to task instruction.
-func (a *HTNAgent) streamQuery(task *core.Task) string {
+func (a *HTNAgent) streamQuery(task *execution.Task) string {
 	if a.StreamQuery != "" {
 		return a.StreamQuery
 	}
@@ -523,7 +523,7 @@ func (a *HTNAgent) streamMaxTokens() int {
 }
 
 // streamTriggerNode creates a streaming trigger node for the HTN agent.
-func (a *HTNAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
+func (a *HTNAgent) streamTriggerNode(task *execution.Task) agentgraph.Node {
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
@@ -539,7 +539,7 @@ func (a *HTNAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
 }
 
 // executeStreamingTrigger runs the streaming trigger before method decomposition.
-func (a *HTNAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
+func (a *HTNAgent) executeStreamingTrigger(ctx context.Context, task *execution.Task, env *contextdata.Envelope) error {
 	node := a.streamTriggerNode(task)
 	if node == nil {
 		return nil

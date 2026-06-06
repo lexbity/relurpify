@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -30,15 +28,15 @@ func (r *CapabilityRegistry) wrapTool(tool contracts.Tool) contracts.Tool {
 	}
 }
 
-func (r *CapabilityRegistry) wrapCapabilityHandler(handler core.CapabilityHandler) core.CapabilityHandler {
+func (r *CapabilityRegistry) wrapCapabilityHandler(handler CapabilityHandler) CapabilityHandler {
 	if handler == nil {
 		return nil
 	}
-	desc := core.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
+	desc := NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
 	return r.wrapCapabilityHandlerPrepared(handler, desc, buildDescriptorProfile(desc))
 }
 
-func (r *CapabilityRegistry) wrapCapabilityHandlerPrepared(handler core.CapabilityHandler, desc core.CapabilityDescriptor, profile descriptorProfile) core.CapabilityHandler {
+func (r *CapabilityRegistry) wrapCapabilityHandlerPrepared(handler CapabilityHandler, desc CapabilityDescriptor, profile descriptorProfile) CapabilityHandler {
 	if handler == nil {
 		return nil
 	}
@@ -71,9 +69,9 @@ type instrumentedTool struct {
 }
 
 type instrumentCapabilityHandler struct {
-	handler    core.CapabilityHandler
+	handler    CapabilityHandler
 	registry   *CapabilityRegistry
-	descriptor core.CapabilityDescriptor
+	descriptor CapabilityDescriptor
 	profile    descriptorProfile
 }
 
@@ -119,25 +117,25 @@ func toolParametersFromSchema(schema *contracts.Schema) []contracts.ToolParamete
 	return out
 }
 
-func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
+func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor {
 	if h.descriptor.ID != "" {
 		return h.descriptor
 	}
 	if h.handler == nil {
-		return core.CapabilityDescriptor{}
+		return CapabilityDescriptor{}
 	}
-	return core.NormalizeCapabilityDescriptor(h.handler.Descriptor(ctx, env))
+	return NormalizeCapabilityDescriptor(h.handler.Descriptor(ctx, env))
 }
 
-func (h instrumentCapabilityHandler) Availability(ctx context.Context, env *contextdata.Envelope) core.AvailabilitySpec {
-	if aware, ok := h.handler.(core.AvailabilityAwareCapabilityHandler); ok {
+func (h instrumentCapabilityHandler) Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec {
+	if aware, ok := h.handler.(AvailabilityAwareCapabilityHandler); ok {
 		return aware.Availability(ctx, env)
 	}
-	return core.AvailabilitySpec{Available: true}
+	return AvailabilitySpec{Available: true}
 }
 
 func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
-	invocable, ok := h.handler.(core.InvocableCapabilityHandler)
+	invocable, ok := h.handler.(InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}
@@ -149,13 +147,13 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	if env != nil {
 		workingData = env.WorkingData
 	}
-	approvalBinding := core.ApprovalBindingFromCapability(desc, workingData, args)
+	approvalBinding := ApprovalBindingFromCapability(desc, workingData, args)
 	approvalMetadata := map[string]string(nil)
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
 	stateSnapshot := h.runtimeState()
-	if err := core.ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
+	if err := ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
 	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, approvalMetadata); err != nil {
@@ -170,7 +168,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	startedAt := time.Now().UTC()
 	result, err := invocable.Invoke(ctx, env, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
-		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
+		if schemaErr := ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
 			err = fmt.Errorf("capability %s blocked: output schema invalid: %w", desc.ID, schemaErr)
 			result.Success = false
 			result.Error = err.Error()
@@ -195,14 +193,14 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 		if approvalBinding != nil {
 			result.Metadata["approval_binding"] = approvalBinding
 		}
-		result.Metadata["insertion_decision"] = core.DefaultInsertionDecision(desc, core.ContentDispositionRaw)
+		result.Metadata["insertion_decision"] = DefaultInsertionDecision(desc, ContentDispositionRaw)
 	}
 	emitCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.PromptRenderResult, error) {
-	promptHandler, ok := h.handler.(core.PromptCapabilityHandler)
+func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*PromptRenderResult, error) {
+	promptHandler, ok := h.handler.(PromptCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("prompt handler unavailable")
 	}
@@ -211,7 +209,7 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *cont
 		desc = h.Descriptor(ctx, env)
 	}
 	stateSnapshot := h.runtimeState()
-	if err := core.ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
+	if err := ValidateAndCoerce(args, desc.InputSchema, nil); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
 	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, nil); err != nil {
@@ -229,8 +227,8 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *cont
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env *contextdata.Envelope) (*core.ResourceReadResult, error) {
-	resourceHandler, ok := h.handler.(core.ResourceCapabilityHandler)
+func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env *contextdata.Envelope) (*ResourceReadResult, error) {
+	resourceHandler, ok := h.handler.(ResourceCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("resource handler unavailable")
 	}
@@ -254,7 +252,7 @@ func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env *cont
 	return result, err
 }
 
-func requestCapabilityApproval(ctx context.Context, desc core.CapabilityDescriptor, stateSnapshot executionRuntimeState, metadata map[string]string, reason string) error {
+func requestCapabilityApproval(ctx context.Context, desc CapabilityDescriptor, stateSnapshot executionRuntimeState, metadata map[string]string, reason string) error {
 	if stateSnapshot.manager == nil {
 		return fmt.Errorf("capability %s blocked: approval required but permission manager missing", desc.ID)
 	}
@@ -264,14 +262,14 @@ func requestCapabilityApproval(ctx context.Context, desc core.CapabilityDescript
 		Resource:     stateSnapshot.agentID,
 		Metadata:     metadata,
 		RequiresHITL: true,
-	}, reason, authorization.GrantScopeOneTime, authorization.RiskLevelMedium, 0)
+	}, reason, GrantScopeOneTime, RiskLevelMedium, 0)
 }
 
-func enforceDescriptorExecutionPolicies(ctx context.Context, desc core.CapabilityDescriptor, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
+func enforceDescriptorExecutionPolicies(ctx context.Context, desc CapabilityDescriptor, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
 	return enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, buildDescriptorProfile(desc), stateSnapshot, approvalMetadata)
 }
 
-func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc core.CapabilityDescriptor, profile descriptorProfile, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
+func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc CapabilityDescriptor, profile descriptorProfile, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
 	if desc.Kind == agentspec.CapabilityKindTool && desc.RuntimeFamily == agentspec.CapabilityRuntimeFamilyLocalTool && stateSnapshot.policy.agentSpec != nil {
 		switch stateSnapshot.policy.toolPolicies[desc.Name].Execute {
 		case agentspec.AgentPermissionDeny:
@@ -303,14 +301,14 @@ func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc cor
 
 // Execute authorizes the wrapped tool before delegating to the original implementation.
 func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	desc := core.ToolDescriptor(ctx, t.Tool)
-	approvalBinding := core.ApprovalBindingFromCapability(desc, nil, args)
+	desc := ToolDescriptor(ctx, t.Tool)
+	approvalBinding := ApprovalBindingFromCapability(desc, nil, args)
 	approvalMetadata := map[string]string(nil)
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
 	stateSnapshot := t.runtimeState()
-	if err := core.ValidateAndCoerce(args, desc.InputSchema, t.Tool.Parameters()); err != nil {
+	if err := ValidateAndCoerce(args, desc.InputSchema, t.Tool.Parameters()); err != nil {
 		return nil, fmt.Errorf("tool %s blocked: input schema invalid: %w", t.Tool.Name(), err)
 	}
 	if err := enforceDescriptorExecutionPolicies(ctx, desc, stateSnapshot, approvalMetadata); err != nil {
@@ -343,8 +341,8 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			meta["trace_id"] = traceCtx.TraceID
 			meta["span_id"] = traceCtx.SpanID
 		}
-		stateSnapshot.telemetry.Emit(core.Event{
-			Type:      core.EventToolCall,
+		stateSnapshot.telemetry.Emit(Event{
+			Type:      EventToolCall,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s invoked", t.Tool.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
@@ -353,7 +351,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 	startedAt := time.Now().UTC()
 	result, err := t.Tool.Execute(ctx, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
-		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
+		if schemaErr := ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
 			err = fmt.Errorf("tool %s blocked: output schema invalid: %w", t.Tool.Name(), schemaErr)
 			result.Success = false
 			result.Error = err.Error()
@@ -378,7 +376,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		if approvalBinding != nil {
 			result.Metadata["approval_binding"] = approvalBinding
 		}
-		result.Metadata["insertion_decision"] = core.DefaultInsertionDecision(desc, core.ContentDispositionRaw)
+		result.Metadata["insertion_decision"] = DefaultInsertionDecision(desc, ContentDispositionRaw)
 	}
 	if err != nil {
 		var denied *contracts.PermissionDeniedError
@@ -410,8 +408,8 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			metadata["error"] = err.Error()
 		}
 		metadata["duration_ms"] = time.Since(startedAt).Milliseconds()
-		stateSnapshot.telemetry.Emit(core.Event{
-			Type:      core.EventToolResult,
+		stateSnapshot.telemetry.Emit(Event{
+			Type:      EventToolResult,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s completed", t.Tool.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, metadata),
@@ -437,10 +435,10 @@ func redactTelemetryMetadata(controller *runtimeSafetyController, metadata map[s
 			return metadata
 		}
 	}
-	return core.RedactMetadataMap(metadata)
+	return RedactMetadataMap(metadata)
 }
 
-func emitCapabilitySecurityEvent(telemetry core.Telemetry, event string, desc core.CapabilityDescriptor, exposure core.CapabilityExposure, reason string) {
+func emitCapabilitySecurityEvent(telemetry Telemetry, event string, desc CapabilityDescriptor, exposure CapabilityExposure, reason string) {
 	if telemetry == nil || desc.ID == "" {
 		return
 	}
@@ -462,11 +460,11 @@ func emitCapabilitySecurityEvent(telemetry core.Telemetry, event string, desc co
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	telemetry.Emit(core.Event{
-		Type:      core.EventStateChange,
+	telemetry.Emit(Event{
+		Type:      EventStateChange,
 		Timestamp: time.Now().UTC(),
 		Message:   strings.ReplaceAll(event, "_", " "),
-		Metadata:  core.RedactMetadataMap(metadata),
+		Metadata:  RedactMetadataMap(metadata),
 	})
 }
 
@@ -477,7 +475,7 @@ func unwrapTool(tool contracts.Tool) contracts.Tool {
 	return tool
 }
 
-func unwrapCapabilityHandler(handler core.CapabilityHandler) core.CapabilityHandler {
+func unwrapCapabilityHandler(handler CapabilityHandler) CapabilityHandler {
 	if wrapped, ok := handler.(instrumentCapabilityHandler); ok {
 		return wrapped.handler
 	}
@@ -488,8 +486,8 @@ type legacyToolHandler struct {
 	tool contracts.Tool
 }
 
-func (h legacyToolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.ToolDescriptor(ctx, unwrapTool(h.tool))
+func (h legacyToolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor {
+	return ToolDescriptor(ctx, unwrapTool(h.tool))
 }
 
 func (h legacyToolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
@@ -499,22 +497,22 @@ func (h legacyToolHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	return h.tool.Execute(ctx, args)
 }
 
-func (h legacyToolHandler) Availability(ctx context.Context, env *contextdata.Envelope) core.AvailabilitySpec {
+func (h legacyToolHandler) Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec {
 	if h.tool == nil {
-		return core.AvailabilitySpec{Available: false, Reason: "tool handler unavailable"}
+		return AvailabilitySpec{Available: false, Reason: "tool handler unavailable"}
 	}
 	if !h.tool.IsAvailable(ctx) {
-		return core.AvailabilitySpec{Available: false, Reason: "tool unavailable"}
+		return AvailabilitySpec{Available: false, Reason: "tool unavailable"}
 	}
-	return core.AvailabilitySpec{Available: true}
+	return AvailabilitySpec{Available: true}
 }
 
-func emitCapabilityInvocationTelemetry(telemetry core.Telemetry, desc core.CapabilityDescriptor, agentID string, args map[string]interface{}) {
+func emitCapabilityInvocationTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, args map[string]interface{}) {
 	if telemetry == nil {
 		return
 	}
-	telemetry.Emit(core.Event{
-		Type:      core.EventCapabilityCall,
+	telemetry.Emit(Event{
+		Type:      EventCapabilityCall,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
 		Metadata: redactTelemetryMetadata(nil, map[string]interface{}{
@@ -528,7 +526,7 @@ func emitCapabilityInvocationTelemetry(telemetry core.Telemetry, desc core.Capab
 	})
 }
 
-func emitCapabilityResultTelemetry(telemetry core.Telemetry, desc core.CapabilityDescriptor, agentID string, result *contracts.CapabilityExecutionResult, err error, duration time.Duration) {
+func emitCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *contracts.CapabilityExecutionResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -549,15 +547,15 @@ func emitCapabilityResultTelemetry(telemetry core.Telemetry, desc core.Capabilit
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(core.Event{
-		Type:      core.EventCapabilityResult,
+	telemetry.Emit(Event{
+		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
 	})
 }
 
-func emitPromptCapabilityResultTelemetry(telemetry core.Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.PromptRenderResult, err error, duration time.Duration) {
+func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *PromptRenderResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -575,15 +573,15 @@ func emitPromptCapabilityResultTelemetry(telemetry core.Telemetry, desc core.Cap
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(core.Event{
-		Type:      core.EventCapabilityResult,
+	telemetry.Emit(Event{
+		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
 	})
 }
 
-func emitResourceCapabilityResultTelemetry(telemetry core.Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.ResourceReadResult, err error, duration time.Duration) {
+func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *ResourceReadResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -601,8 +599,8 @@ func emitResourceCapabilityResultTelemetry(telemetry core.Telemetry, desc core.C
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(core.Event{
-		Type:      core.EventCapabilityResult,
+	telemetry.Emit(Event{
+		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
@@ -613,25 +611,25 @@ func summarizeArgs(args map[string]interface{}) interface{} {
 	if len(args) == 0 {
 		return nil
 	}
-	return core.RedactMetadataMap(args)
+	return RedactMetadataMap(args)
 }
 
 // buildSpanAttrs extracts span-compatible attributes from the capability
 // descriptor and the tool implementation.
-func buildSpanAttrs(desc core.CapabilityDescriptor, tool contracts.Tool) map[string]interface{} {
+func buildSpanAttrs(desc CapabilityDescriptor, tool contracts.Tool) map[string]interface{} {
 	attrs := map[string]interface{}{
 		"tool.name":   tool.Name(),
 		"tool.family": tool.Category(),
 	}
 	if desc.TrustClass != "" {
-		attrs["capability.trust_class"] = string(desc.TrustClass)
+		attrs["trust_class"] = string(desc.TrustClass)
 	}
 	for i, ec := range desc.EffectClasses {
 		var key string
 		if i == 0 {
-			key = "capability.effect_class"
+			key = "effect_class"
 		} else {
-			key = fmt.Sprintf("capability.effect_class_%d", i)
+			key = fmt.Sprintf("effect_class_%d", i)
 		}
 		attrs[key] = string(ec)
 	}

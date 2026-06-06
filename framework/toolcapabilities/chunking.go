@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // ChunkToolResult decomposes a tool result into content blocks according to
@@ -18,33 +18,33 @@ import (
 //	per_item  → one block per array element at item_path
 //	per_field → one block per top-level field
 //	whole     → single block (fallback)
-func ChunkToolResult(result *contracts.ToolResult, returns contracts.ToolManifestReturns, provenance core.ContentProvenance) []core.ContentBlock {
+func ChunkToolResult(result *contracts.ToolResult, returns contracts.ToolManifestReturns, provenance capability.ContentProvenance) []capability.ContentBlock {
 	if result == nil {
 		return nil
 	}
 
 	chunking := returns.Chunking
 	if chunking == nil || chunking.Mode == "" || chunking.Mode == contracts.ChunkingModeWhole {
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
 	stdout, ok := result.Data["stdout"].(string)
 	if !ok || strings.TrimSpace(stdout) == "" {
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
 	switch returns.Type {
 	case "json":
 		return chunkJSON(stdout, *chunking, result, provenance)
 	default:
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 }
 
-func chunkJSON(stdout string, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance core.ContentProvenance) []core.ContentBlock {
+func chunkJSON(stdout string, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	var parsed any
 	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
 	switch chunking.Mode {
@@ -53,11 +53,11 @@ func chunkJSON(stdout string, chunking contracts.ToolManifestReturnsChunking, re
 	case contracts.ChunkingModePerField:
 		return chunkJSONPerField(parsed, chunking, result, provenance)
 	default:
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 }
 
-func chunkJSONPerItem(parsed any, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance core.ContentProvenance) []core.ContentBlock {
+func chunkJSONPerItem(parsed any, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	var items []any
 
 	if chunking.ItemPath != "" {
@@ -76,10 +76,10 @@ func chunkJSONPerItem(parsed any, chunking contracts.ToolManifestReturnsChunking
 	}
 
 	if len(items) == 0 {
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
-	blocks := make([]core.ContentBlock, 0, len(items))
+	blocks := make([]capability.ContentBlock, 0, len(items))
 	for _, item := range items {
 		itemData := map[string]any{
 			"stdout": item,
@@ -91,7 +91,7 @@ func chunkJSONPerItem(parsed any, chunking contracts.ToolManifestReturnsChunking
 				}
 			}
 		}
-		blocks = append(blocks, core.StructuredContentBlock{
+		blocks = append(blocks, capability.StructuredContentBlock{
 			Data:       itemData,
 			Provenance: provenance,
 		})
@@ -99,13 +99,13 @@ func chunkJSONPerItem(parsed any, chunking contracts.ToolManifestReturnsChunking
 	return blocks
 }
 
-func chunkJSONPerField(parsed any, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance core.ContentProvenance) []core.ContentBlock {
+func chunkJSONPerField(parsed any, chunking contracts.ToolManifestReturnsChunking, result *contracts.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	m, ok := parsed.(map[string]any)
 	if !ok || len(m) == 0 {
-		return core.CapabilityResultBlocks(result, provenance)
+		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
-	blocks := make([]core.ContentBlock, 0, len(m))
+	blocks := make([]capability.ContentBlock, 0, len(m))
 	for key, val := range m {
 		fieldData := map[string]any{
 			key: val,
@@ -117,7 +117,7 @@ func chunkJSONPerField(parsed any, chunking contracts.ToolManifestReturnsChunkin
 				}
 			}
 		}
-		blocks = append(blocks, core.StructuredContentBlock{
+		blocks = append(blocks, capability.StructuredContentBlock{
 			Data:       fieldData,
 			Provenance: provenance,
 		})

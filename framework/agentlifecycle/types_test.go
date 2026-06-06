@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 func TestDelegationEntryZeroValue(t *testing.T) {
@@ -89,7 +89,7 @@ func TestDelegationEntryFields(t *testing.T) {
 		TrustClass:     "trusted",
 		Recoverability: "recoverable",
 		Background:     true,
-		Request: core.DelegationRequest{
+		Request: policy.DelegationRequest{
 			TargetProviderID: "provider-xyz",
 		},
 		StartedAt: now,

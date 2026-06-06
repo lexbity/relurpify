@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ToolResponseOverride configures synthetic tool responses for testing failure modes
@@ -197,9 +197,9 @@ func WrapRegistryWithInterceptor(registry *capability.Registry, overrides []Tool
 }
 
 // ToolSuccessRate computes the success rate for a tool from telemetry events
-func ToolSuccessRate(events []core.Event, toolName string) (successes, failures int, rate float64) {
+func ToolSuccessRate(events []telemetry.Event, toolName string) (successes, failures int, rate float64) {
 	for _, ev := range events {
-		if ev.Type != core.EventToolResult {
+		if ev.Type != telemetry.EventToolResult {
 			continue
 		}
 		tool, _ := ev.Metadata["tool"].(string)
@@ -221,20 +221,20 @@ func ToolSuccessRate(events []core.Event, toolName string) (successes, failures 
 }
 
 // HasRecoveryFromToolFailure checks if agent recovered from any tool failure
-func HasRecoveryFromToolFailure(events []core.Event) bool {
+func HasRecoveryFromToolFailure(events []telemetry.Event) bool {
 	var hadFailure bool
 	var hadSuccessAfterFailure bool
 
 	for _, ev := range events {
 		switch ev.Type {
-		case core.EventToolResult:
+		case telemetry.EventToolResult:
 			success, _ := ev.Metadata["success"].(bool)
 			if !success {
 				hadFailure = true
 			} else if hadFailure {
 				hadSuccessAfterFailure = true
 			}
-		case core.EventToolCall:
+		case telemetry.EventToolCall:
 			// Continue checking after failures
 		}
 	}

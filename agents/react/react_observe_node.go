@@ -9,14 +9,15 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type reactObserveNode struct {
 	id    string
 	agent *ReActAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 // ID returns the node identifier for the observe step.
@@ -27,7 +28,7 @@ func (n *reactObserveNode) Type() agentgraph.NodeType { return agentgraph.NodeTy
 
 // Execute captures tool output, tracks loop iterations, and determines whether
 // the ReAct loop should continue.
-func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValue("react.execution_phase", "validating", contextdata.MemoryClassTask)
 	iterVal, _ := env.GetWorkingValue("react.iteration")
 	iter, _ := iterVal.(int)
@@ -44,10 +45,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			"summary": summary,
 			"result":  lastMap,
 		}, contextdata.MemoryClassTask)
-		result := &core.Result{
+		result := &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"diagnostic": "Conclusion: " + summary,
 				"complete":   true,
 			}),
@@ -68,10 +69,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	n.advancePhase(env, decision, lastMap)
 	if n.scheduleRecoveryProbe(env, lastMap) {
 		env.SetWorkingValue("react.done", false, contextdata.MemoryClassTask)
-		result := &core.Result{
+		result := &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"diagnostic": diagnostic.String(),
 				"complete":   false,
 			}),
@@ -123,11 +124,11 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 
 	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskID) != "" {
 		scope := n.agent.Memory.Scope(env.TaskID)
-		scope.Set("react.iteration", iter, core.MemoryClassWorking)
-		scope.Set("react.decision", decision, core.MemoryClassWorking)
-		scope.Set("react.done", completed, core.MemoryClassWorking)
+		scope.Set("react.iteration", iter, relurpctx.MemoryClassWorking)
+		scope.Set("react.decision", decision, relurpctx.MemoryClassWorking)
+		scope.Set("react.done", completed, relurpctx.MemoryClassWorking)
 		if len(lastMap) > 0 {
-			scope.Set("react.last_tool_result", lastMap, core.MemoryClassWorking)
+			scope.Set("react.last_tool_result", lastMap, relurpctx.MemoryClassWorking)
 		}
 	}
 
@@ -143,10 +144,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		}, contextdata.MemoryClassTask)
 	}
 	n.agent.debugf("%s completed=%v diagnostic=%s", n.id, completed, diagnostic.String())
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"diagnostic": diagnostic.String(),
 			"complete":   completed,
 		}),
@@ -158,7 +159,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 // applyCompletionSummary records a completion outcome in state and returns a
 // terminal Result. Use this for branches where the observe loop should stop
 // immediately after detecting a conclusive outcome.
-func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, summary string, lastMap map[string]interface{}, diagnostic *strings.Builder) *core.Result {
+func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, summary string, lastMap map[string]interface{}, diagnostic *strings.Builder) *execution.Result {
 	diagnostic.WriteString("Conclusion: " + summary + "\n")
 	env.SetWorkingValue("react.synthetic_summary", summary, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
@@ -167,10 +168,10 @@ func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, sum
 		"summary": summary,
 		"result":  lastMap,
 	}, contextdata.MemoryClassTask)
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"diagnostic": diagnostic.String(),
 			"complete":   true,
 		}),
@@ -197,7 +198,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 			return false
 		}
 	}
-	probes := n.agent.recoveryProbeTools(n.task)
+	probes := n.agent.recoveryProbeTools()
 	if len(probes) == 0 {
 		return false
 	}
@@ -262,7 +263,7 @@ func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision deci
 	}
 }
 
-func shouldEnterEditPhase(task *core.Task, observations []ToolObservation, lastTool string, lastMap map[string]interface{}) bool {
+func shouldEnterEditPhase(task *execution.Task, observations []ToolObservation, lastTool string, lastMap map[string]interface{}) bool {
 	if !taskNeedsEditing(task) {
 		return false
 	}
@@ -353,7 +354,7 @@ func hasFailureFromState(env *contextdata.Envelope) bool {
 	return hasFailure(lastMap)
 }
 
-func taskInstructionText(task *core.Task) string {
+func taskInstructionText(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
@@ -367,7 +368,7 @@ func taskInstructionText(task *core.Task) string {
 	return strings.ToLower(task.Instruction)
 }
 
-func taskNeedsEditing(task *core.Task) bool {
+func taskNeedsEditing(task *execution.Task) bool {
 	if task == nil {
 		return false
 	}
@@ -393,7 +394,7 @@ func taskNeedsEditing(task *core.Task) bool {
 	return false
 }
 
-func detectRepeatedToolLoop(env *contextdata.Envelope, task *core.Task) (bool, string) {
+func detectRepeatedToolLoop(env *contextdata.Envelope, task *execution.Task) (bool, string) {
 	observations := getToolObservations(env)
 	if len(observations) == 0 {
 		return false, ""
@@ -415,7 +416,7 @@ func detectRepeatedToolLoop(env *contextdata.Envelope, task *core.Task) (bool, s
 	return true, fmt.Sprintf("stuck repeating %s with the same inputs/results", last.Tool)
 }
 
-func stallThresholdForTask(task *core.Task) int {
+func stallThresholdForTask(task *execution.Task) int {
 	if task == nil {
 		return 3
 	}
@@ -452,7 +453,7 @@ func observationSignature(observation ToolObservation) string {
 	return fmt.Sprintf("%s|%s|%s|%t", observation.Tool, string(args), string(data), observation.Success)
 }
 
-func iterationExhaustionReason(task *core.Task, env *contextdata.Envelope) string {
+func iterationExhaustionReason(task *execution.Task, env *contextdata.Envelope) string {
 	if taskNeedsEditing(task) && !hasEditObservation(env) {
 		return "iteration budget exhausted before making any file changes"
 	}
@@ -469,7 +470,7 @@ func hasEditObservation(env *contextdata.Envelope) bool {
 	return false
 }
 
-func repeatedFailureAnalysis(task *core.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func repeatedFailureAnalysis(task *execution.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if taskNeedsEditing(task) || !hasFailure(lastMap) {
 		return "", false
 	}
@@ -488,7 +489,7 @@ func repeatedFailureAnalysis(task *core.Task, env *contextdata.Envelope, lastMap
 	return fmt.Sprintf("%s failed repeatedly: %s", last.Tool, reason), true
 }
 
-func analysisSummaryFromFailure(task *core.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func analysisSummaryFromFailure(task *execution.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if taskNeedsEditing(task) || !hasFailure(lastMap) {
 		return "", false
 	}

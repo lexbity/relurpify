@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ToolSequenceFingerprint captures the essential characteristics of tool execution
@@ -170,12 +170,12 @@ func min3(a, b, c int) int {
 }
 
 // ExtractLLMFingerprints captures LLM response fingerprints from events
-func ExtractLLMFingerprints(events []core.Event) map[string]string {
+func ExtractLLMFingerprints(events []telemetry.Event) map[string]string {
 	fingerprints := make(map[string]string)
 	callCount := 0
 
 	for _, ev := range events {
-		if ev.Type != core.EventLLMResponse {
+		if ev.Type != telemetry.EventLLMResponse {
 			continue
 		}
 		callCount++

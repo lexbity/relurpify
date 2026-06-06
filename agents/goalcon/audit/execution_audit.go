@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // AuditEntry represents a single capability invocation in the audit trail.
@@ -36,11 +36,11 @@ type AuditEntry struct {
 	// Policy & Approval
 	InsertionAction InsertionAction       `json:"insertion_action" yaml:"insertion_action"`
 	InsertionReason string                `json:"insertion_reason,omitempty" yaml:"insertion_reason,omitempty"`
-	PolicySnapshot  *core.PolicySnapshot  `json:"policy_snapshot,omitempty" yaml:"policy_snapshot,omitempty"`
-	ApprovalBinding *core.ApprovalBinding `json:"approval_binding,omitempty" yaml:"approval_binding,omitempty"`
+	PolicySnapshot  *capability.PolicySnapshot  `json:"policy_snapshot,omitempty" yaml:"policy_snapshot,omitempty"`
+	ApprovalBinding *capability.ApprovalBinding `json:"approval_binding,omitempty" yaml:"approval_binding,omitempty"`
 }
 
-// InsertionAction mirrors core.InsertionAction for local use
+// InsertionAction mirrors capability.InsertionAction for local use
 type InsertionAction string
 
 const (
@@ -75,7 +75,7 @@ func (t *CapabilityAuditTrail) SetAgentID(agentID string) {
 }
 
 // RecordInvocation records a capability invocation from a result envelope.
-func (t *CapabilityAuditTrail) RecordInvocation(stepID string, envelope *core.CapabilityResultEnvelope, decision core.InsertionDecision) {
+func (t *CapabilityAuditTrail) RecordInvocation(stepID string, envelope *capability.CapabilityResultEnvelope, decision capability.InsertionDecision) {
 	if t == nil || envelope == nil {
 		return
 	}

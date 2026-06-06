@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // AdmissionResult records whether a capability candidate was admitted.
@@ -20,9 +19,9 @@ type AdmissionResult struct {
 // registry. Callers may source these from skills or any other framework-owned
 // contribution mechanism.
 type Candidate struct {
-	Descriptor      core.CapabilityDescriptor
-	PromptHandler   core.PromptCapabilityHandler
-	ResourceHandler core.ResourceCapabilityHandler
+	Descriptor      CapabilityDescriptor
+	PromptHandler   PromptCapabilityHandler
+	ResourceHandler ResourceCapabilityHandler
 }
 
 // AdmitCandidates admits capability candidates against the final selector set
@@ -37,7 +36,7 @@ func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []agent
 		if idx >= len(results) || !results[idx].Admitted {
 			continue
 		}
-		desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
+		desc := NormalizeCapabilityDescriptor(candidate.Descriptor)
 		item := RegistrationBatchItem{Descriptor: desc}
 		switch {
 		case candidate.PromptHandler != nil:
@@ -57,7 +56,7 @@ func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []agent
 			if idx >= len(results) || !results[idx].Admitted {
 				continue
 			}
-			desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
+			desc := NormalizeCapabilityDescriptor(candidate.Descriptor)
 			if desc.ID == "" && candidate.PromptHandler == nil && candidate.ResourceHandler == nil {
 				return results[:idx], err
 			}
@@ -72,7 +71,7 @@ func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []agent
 func EvaluateCandidates(candidates []Candidate, allowed []agentspec.CapabilitySelector) []AdmissionResult {
 	results := make([]AdmissionResult, 0, len(candidates))
 	for _, candidate := range candidates {
-		desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
+		desc := NormalizeCapabilityDescriptor(candidate.Descriptor)
 		result := AdmissionResult{
 			CapabilityID:   desc.ID,
 			CapabilityName: desc.Name,
@@ -95,12 +94,12 @@ func EvaluateCandidates(candidates []Candidate, allowed []agentspec.CapabilitySe
 	return results
 }
 
-func matchesAnySelector(selectors []agentspec.CapabilitySelector, desc core.CapabilityDescriptor) bool {
+func matchesAnySelector(selectors []agentspec.CapabilitySelector, desc CapabilityDescriptor) bool {
 	if len(selectors) == 0 {
 		return true
 	}
 	for _, selector := range selectors {
-		if core.SelectorMatchesDescriptor(selector, desc) {
+		if SelectorMatchesDescriptor(selector, desc) {
 			return true
 		}
 	}

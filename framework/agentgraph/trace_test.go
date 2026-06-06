@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
@@ -81,7 +81,7 @@ func (r *traceCaptureRegistry) InvokeCapability(ctx context.Context, env *contex
 	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "ok"}}, nil
 }
 
-func (r *traceCaptureRegistry) CapturePolicySnapshot() *core.PolicySnapshot { return nil }
-func (r *traceCaptureRegistry) GetCapability(idOrName string) (core.CapabilityDescriptor, bool) {
-	return core.CapabilityDescriptor{}, false
+func (r *traceCaptureRegistry) CapturePolicySnapshot() *capability.PolicySnapshot { return nil }
+func (r *traceCaptureRegistry) GetCapability(idOrName string) (capability.CapabilityDescriptor, bool) {
+	return capability.CapabilityDescriptor{}, false
 }

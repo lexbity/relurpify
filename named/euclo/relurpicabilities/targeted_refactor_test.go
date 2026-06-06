@@ -10,9 +10,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestTargetedRefactorPreviewUsesExplicitReplacement(t *testing.T) {
@@ -80,7 +80,7 @@ func newTargetedRefactorTestEnv(t *testing.T) (agentenv.WorkspaceEnvironment, st
 	require.NoError(t, manager.IndexFile(path))
 
 	env := agentenv.WorkspaceEnvironment{
-		Config:            &core.Config{},
+		Config:            &execution.Config{},
 		Registry:          capability.NewRegistry(),
 		IndexManager:      manager,
 		CommandRunner:     nil,

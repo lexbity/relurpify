@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
@@ -15,9 +15,9 @@ func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
 		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
 	}
 	returns := contracts.ToolManifestReturns{}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
-	_, ok := blocks[0].(core.StructuredContentBlock)
+	_, ok := blocks[0].(capability.StructuredContentBlock)
 	require.True(t, ok)
 }
 
@@ -32,7 +32,7 @@ func TestChunkToolResultNonJSONFallback(t *testing.T) {
 			Mode: contracts.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -48,10 +48,10 @@ func TestChunkPerItemFromArray(t *testing.T) {
 			RefFields: []string{"path", "line"},
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 2)
 	for i, block := range blocks {
-		sb, ok := block.(core.StructuredContentBlock)
+		sb, ok := block.(capability.StructuredContentBlock)
 		require.True(t, ok, "block %d should be StructuredContentBlock", i)
 		data, ok := sb.Data.(map[string]interface{})
 		require.True(t, ok)
@@ -73,7 +73,7 @@ func TestChunkPerItemFromObjectWithMatches(t *testing.T) {
 			RefFields: []string{"path"},
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 2)
 }
 
@@ -89,7 +89,7 @@ func TestChunkPerItemWithItemPath(t *testing.T) {
 			ItemPath: "data.items[]",
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 3)
 }
 
@@ -104,10 +104,10 @@ func TestChunkPerField(t *testing.T) {
 			Mode: contracts.ChunkingModePerField,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 3)
 	for _, block := range blocks {
-		sb, ok := block.(core.StructuredContentBlock)
+		sb, ok := block.(capability.StructuredContentBlock)
 		require.True(t, ok)
 		data, ok := sb.Data.(map[string]interface{})
 		require.True(t, ok)
@@ -126,7 +126,7 @@ func TestChunkWholeReturnsSingleBlock(t *testing.T) {
 			Mode: contracts.ChunkingModeWhole,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -141,7 +141,7 @@ func TestChunkMalformedJSONFallback(t *testing.T) {
 			Mode: contracts.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -156,7 +156,7 @@ func TestChunkEmptyStdoutFallback(t *testing.T) {
 			Mode: contracts.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -172,10 +172,10 @@ func TestChunkResultPreservesErrorBlock(t *testing.T) {
 			Mode: contracts.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, core.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	hasError := false
 	for _, b := range blocks {
-		if _, ok := b.(core.ErrorContentBlock); ok {
+		if _, ok := b.(capability.ErrorContentBlock); ok {
 			hasError = true
 			break
 		}
@@ -199,7 +199,7 @@ func TestNavigatePathMissingReturnsNil(t *testing.T) {
 }
 
 func TestNewCapabilityResultEnvelopeWithBlocks(t *testing.T) {
-	desc := core.CapabilityDescriptor{
+	desc := capability.CapabilityDescriptor{
 		ID:   "test:rg",
 		Name: "cli_rg",
 	}
@@ -207,17 +207,17 @@ func TestNewCapabilityResultEnvelopeWithBlocks(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": "data"},
 	}
-	precomputed := []core.ContentBlock{
-		core.StructuredContentBlock{Data: map[string]interface{}{"chunk": 1}},
-		core.StructuredContentBlock{Data: map[string]interface{}{"chunk": 2}},
+	precomputed := []capability.ContentBlock{
+		capability.StructuredContentBlock{Data: map[string]interface{}{"chunk": 1}},
+		capability.StructuredContentBlock{Data: map[string]interface{}{"chunk": 2}},
 	}
-	envelope := core.NewCapabilityResultEnvelopeWithBlocks(desc, result, core.ContentDispositionRaw, nil, nil, precomputed)
+	envelope := capability.NewCapabilityResultEnvelopeWithBlocks(desc, result, capability.ContentDispositionRaw, nil, nil, precomputed)
 	require.NotNil(t, envelope)
 	require.Len(t, envelope.ContentBlocks, 2)
 }
 
 func TestEnvelopeWithoutBlocksDefaults(t *testing.T) {
-	desc := core.CapabilityDescriptor{
+	desc := capability.CapabilityDescriptor{
 		ID:   "test:echo",
 		Name: "cli_echo",
 	}
@@ -225,7 +225,7 @@ func TestEnvelopeWithoutBlocksDefaults(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": "hello"},
 	}
-	envelope := core.NewCapabilityResultEnvelope(desc, result, core.ContentDispositionRaw, nil, nil)
+	envelope := capability.NewCapabilityResultEnvelope(desc, result, capability.ContentDispositionRaw, nil, nil)
 	require.NotNil(t, envelope)
 	require.Len(t, envelope.ContentBlocks, 1)
 }

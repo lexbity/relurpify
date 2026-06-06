@@ -6,9 +6,9 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
 // RawIngestion represents Stage 1: Acquisition
@@ -103,8 +103,8 @@ type Scanner interface {
 // Pipeline executes the six stages for a single raw ingestion.
 type Pipeline struct {
 	raw           RawIngestion
-	policy        *contextpolicy.ContextPolicyBundle
-	evaluator     *contextpolicy.Evaluator
+	policy        *execctx.ContextPolicyBundle
+	evaluator     *execctx.Evaluator
 	store         *knowledge.ChunkStore
 	scanners      []Scanner
 	quarantineDir string

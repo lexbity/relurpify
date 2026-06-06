@@ -26,7 +26,7 @@ type AgentRuntimeSpec struct {
 	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
 	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
 	RuntimeSafety       *RuntimeSafetySpec              `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
-	SkillConfig         AgentSkillConfig                `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
+	Orchestration       AgentOrchestrationConfig                `yaml:"orchestration,omitempty" json:"orchestration,omitempty"`
 	Bash                AgentBashPermissions            `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
@@ -307,35 +307,35 @@ type AgentBrowserCredentialsSpec struct {
 	RequireHITL bool `yaml:"require_hitl,omitempty" json:"require_hitl,omitempty"`
 }
 
-// AgentSkillConfig carries skill-derived agent policy hints. These hints may
+// AgentOrchestrationConfig carries agent orchestration policy hints. These
 // narrow behavior but must never bypass registry permissions or sandbox rules.
-type AgentSkillConfig struct {
-	PhaseCapabilities        map[string][]string                  `yaml:"phase_capabilities,omitempty" json:"phase_capabilities,omitempty"`
-	PhaseCapabilitySelectors map[string][]SkillCapabilitySelector `yaml:"phase_capability_selectors,omitempty" json:"phase_capability_selectors,omitempty"`
-	Verification             AgentVerificationPolicy              `yaml:"verification,omitempty" json:"verification,omitempty"`
-	Recovery                 AgentRecoveryPolicy                  `yaml:"recovery,omitempty" json:"recovery,omitempty"`
-	Planning                 AgentPlanningPolicy                  `yaml:"planning,omitempty" json:"planning,omitempty"`
-	Review                   AgentReviewPolicy                    `yaml:"review,omitempty" json:"review,omitempty"`
-	ContextHints             AgentSkillContextHints               `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
+type AgentOrchestrationConfig struct {
+	PhaseCapabilities        map[string][]string           `yaml:"phase_capabilities,omitempty" json:"phase_capabilities,omitempty"`
+	PhaseCapabilitySelectors map[string][]CapabilitySelector `yaml:"phase_capability_selectors,omitempty" json:"phase_capability_selectors,omitempty"`
+	Verification             AgentVerificationPolicy       `yaml:"verification,omitempty" json:"verification,omitempty"`
+	Recovery                 AgentRecoveryPolicy           `yaml:"recovery,omitempty" json:"recovery,omitempty"`
+	Planning                 AgentPlanningPolicy           `yaml:"planning,omitempty" json:"planning,omitempty"`
+	Review                   AgentReviewPolicy             `yaml:"review,omitempty" json:"review,omitempty"`
+	ContextHints             AgentOrchestrationContextHints `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
 }
 
 type AgentVerificationPolicy struct {
-	SuccessTools               []string                  `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
-	SuccessCapabilitySelectors []SkillCapabilitySelector `yaml:"success_capability_selectors,omitempty" json:"success_capability_selectors,omitempty"`
-	StopOnSuccess              bool                      `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
+	SuccessTools               []string              `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
+	SuccessCapabilitySelectors []CapabilitySelector  `yaml:"success_capability_selectors,omitempty" json:"success_capability_selectors,omitempty"`
+	StopOnSuccess              bool                  `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
 }
 
 type AgentRecoveryPolicy struct {
-	FailureProbeTools               []string                  `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
-	FailureProbeCapabilitySelectors []SkillCapabilitySelector `yaml:"failure_probe_capability_selectors,omitempty" json:"failure_probe_capability_selectors,omitempty"`
+	FailureProbeTools               []string              `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
+	FailureProbeCapabilitySelectors []CapabilitySelector  `yaml:"failure_probe_capability_selectors,omitempty" json:"failure_probe_capability_selectors,omitempty"`
 }
 
 type AgentPlanningPolicy struct {
-	RequiredBeforeEdit          []SkillCapabilitySelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
-	PreferredEditCapabilities   []SkillCapabilitySelector `yaml:"preferred_edit_capabilities,omitempty" json:"preferred_edit_capabilities,omitempty"`
-	PreferredVerifyCapabilities []SkillCapabilitySelector `yaml:"preferred_verify_capabilities,omitempty" json:"preferred_verify_capabilities,omitempty"`
-	StepTemplates               []SkillStepTemplate       `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
-	RequireVerificationStep     bool                      `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
+	RequiredBeforeEdit          []CapabilitySelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
+	PreferredEditCapabilities   []CapabilitySelector `yaml:"preferred_edit_capabilities,omitempty" json:"preferred_edit_capabilities,omitempty"`
+	PreferredVerifyCapabilities []CapabilitySelector `yaml:"preferred_verify_capabilities,omitempty" json:"preferred_verify_capabilities,omitempty"`
+	StepTemplates               []SkillStepTemplate  `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
+	RequireVerificationStep     bool                 `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
 }
 
 type SkillStepTemplate struct {
@@ -355,16 +355,9 @@ type AgentReviewApprovalRules struct {
 	RejectOnUnresolvedErrors    bool `yaml:"reject_on_unresolved_errors,omitempty" json:"reject_on_unresolved_errors,omitempty"`
 }
 
-type AgentSkillContextHints struct {
+type AgentOrchestrationContextHints struct {
 	PreferredDetailLevel string   `yaml:"preferred_detail_level,omitempty" json:"preferred_detail_level,omitempty"`
 	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
-}
-
-type SkillCapabilitySelector struct {
-	Capability      string                    `yaml:"capability,omitempty" json:"capability,omitempty"`
-	RuntimeFamilies []CapabilityRuntimeFamily `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
-	Tags            []string                  `yaml:"tags,omitempty" json:"tags,omitempty"`
-	ExcludeTags     []string                  `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
 }
 
 // AgentMetadata captures auxiliary metadata for display.
@@ -493,7 +486,7 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("allowed_capabilities invalid: %w", err)
 		}
 	}
-	for phase, tools := range a.SkillConfig.PhaseCapabilities {
+	for phase, tools := range a.Orchestration.PhaseCapabilities {
 		if strings.TrimSpace(phase) == "" {
 			return fmt.Errorf("skill_manifest.phase_capabilities contains empty phase")
 		}
@@ -503,75 +496,75 @@ func (a *AgentRuntimeSpec) Validate() error {
 			}
 		}
 	}
-	for phase, selectors := range a.SkillConfig.PhaseCapabilitySelectors {
+	for phase, selectors := range a.Orchestration.PhaseCapabilitySelectors {
 		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("skill_manifest.phase_capability_selectors contains empty phase")
+			return fmt.Errorf("orchestration.phase_capability_selectors contains empty phase")
 		}
 		for _, selector := range selectors {
-			if err := ValidateSkillCapabilitySelector(selector); err != nil {
-				return fmt.Errorf("skill_manifest.phase_capability_selectors[%s] invalid: %w", phase, err)
+			if err := ValidateCapabilitySelector(selector); err != nil {
+				return fmt.Errorf("orchestration.phase_capability_selectors[%s] invalid: %w", phase, err)
 			}
 		}
 	}
-	for _, tool := range a.SkillConfig.Verification.SuccessTools {
+	for _, tool := range a.Orchestration.Verification.SuccessTools {
 		if strings.TrimSpace(tool) == "" {
-			return fmt.Errorf("skill_manifest.verification.success_tools contains empty tool")
+			return fmt.Errorf("orchestration.verification.success_tools contains empty tool")
 		}
 	}
-	for _, selector := range a.SkillConfig.Verification.SuccessCapabilitySelectors {
-		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_manifest.verification.success_capability_selectors invalid: %w", err)
+	for _, selector := range a.Orchestration.Verification.SuccessCapabilitySelectors {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("orchestration.verification.success_capability_selectors invalid: %w", err)
 		}
 	}
-	for _, tool := range a.SkillConfig.Recovery.FailureProbeTools {
+	for _, tool := range a.Orchestration.Recovery.FailureProbeTools {
 		if strings.TrimSpace(tool) == "" {
-			return fmt.Errorf("skill_manifest.recovery.failure_probe_tools contains empty tool")
+			return fmt.Errorf("orchestration.recovery.failure_probe_tools contains empty tool")
 		}
 	}
-	for _, selector := range a.SkillConfig.Recovery.FailureProbeCapabilitySelectors {
-		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_manifest.recovery.failure_probe_capability_selectors invalid: %w", err)
+	for _, selector := range a.Orchestration.Recovery.FailureProbeCapabilitySelectors {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("orchestration.recovery.failure_probe_capability_selectors invalid: %w", err)
 		}
 	}
-	for _, selector := range a.SkillConfig.Planning.RequiredBeforeEdit {
-		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_manifest.planning.required_before_edit invalid: %w", err)
+	for _, selector := range a.Orchestration.Planning.RequiredBeforeEdit {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("orchestration.planning.required_before_edit invalid: %w", err)
 		}
 	}
-	for _, selector := range a.SkillConfig.Planning.PreferredEditCapabilities {
-		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_manifest.planning.preferred_edit_capabilities invalid: %w", err)
+	for _, selector := range a.Orchestration.Planning.PreferredEditCapabilities {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("orchestration.planning.preferred_edit_capabilities invalid: %w", err)
 		}
 	}
-	for _, selector := range a.SkillConfig.Planning.PreferredVerifyCapabilities {
-		if err := ValidateSkillCapabilitySelector(selector); err != nil {
+	for _, selector := range a.Orchestration.Planning.PreferredVerifyCapabilities {
+		if err := ValidateCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("skill_manifest.planning.preferred_verify_capabilities invalid: %w", err)
 		}
 	}
-	for _, step := range a.SkillConfig.Planning.StepTemplates {
+	for _, step := range a.Orchestration.Planning.StepTemplates {
 		if strings.TrimSpace(step.Kind) == "" {
-			return fmt.Errorf("skill_manifest.planning.step_templates contains empty kind")
+			return fmt.Errorf("orchestration.planning.step_templates contains empty kind")
 		}
 		if strings.TrimSpace(step.Description) == "" {
-			return fmt.Errorf("skill_manifest.planning.step_templates[%s] contains empty description", step.Kind)
+			return fmt.Errorf("orchestration.planning.step_templates[%s] contains empty description", step.Kind)
 		}
 	}
-	for _, criterion := range a.SkillConfig.Review.Criteria {
+	for _, criterion := range a.Orchestration.Review.Criteria {
 		if strings.TrimSpace(criterion) == "" {
-			return fmt.Errorf("skill_manifest.review.criteria contains empty criterion")
+			return fmt.Errorf("orchestration.review.criteria contains empty criterion")
 		}
 	}
-	for _, tag := range a.SkillConfig.Review.FocusTags {
+	for _, tag := range a.Orchestration.Review.FocusTags {
 		if strings.TrimSpace(tag) == "" {
-			return fmt.Errorf("skill_manifest.review.focus_tags contains empty tag")
+			return fmt.Errorf("orchestration.review.focus_tags contains empty tag")
 		}
 	}
-	for severity, weight := range a.SkillConfig.Review.SeverityWeights {
+	for severity, weight := range a.Orchestration.Review.SeverityWeights {
 		if strings.TrimSpace(severity) == "" {
-			return fmt.Errorf("skill_manifest.review.severity_weights contains empty severity")
+			return fmt.Errorf("orchestration.review.severity_weights contains empty severity")
 		}
 		if weight < 0 {
-			return fmt.Errorf("skill_manifest.review.severity_weights[%s] must be >= 0", severity)
+			return fmt.Errorf("orchestration.review.severity_weights[%s] must be >= 0", severity)
 		}
 	}
 	if a.Browser != nil {
@@ -754,7 +747,7 @@ func EffectiveDelegationTargetSelectors(spec *AgentRuntimeSpec) []CapabilitySele
 	if spec == nil {
 		return nil
 	}
-	selectors := cloneCapabilitySelectors(spec.Coordination.DelegationTargetSelectors)
+	selectors := CloneCapabilitySelectors(spec.Coordination.DelegationTargetSelectors)
 	if spec.Invocation.CanInvokeSubagents {
 		for _, name := range spec.Invocation.AllowedSubagents {
 			name = strings.TrimSpace(name)
@@ -774,7 +767,7 @@ func EffectiveCoordination(spec *AgentRuntimeSpec) AgentCoordinationSpec {
 	if spec == nil {
 		return AgentCoordinationSpec{}
 	}
-	coordination := cloneAgentCoordinationSpec(spec.Coordination)
+	coordination := spec.Coordination
 	coordination.DelegationTargetSelectors = EffectiveDelegationTargetSelectors(spec)
 	if coordination.MaxDelegationDepth == 0 && spec.Invocation.MaxDepth > 0 {
 		coordination.MaxDelegationDepth = spec.Invocation.MaxDepth
@@ -1001,38 +994,6 @@ func validateBrowserBackendName(value string, field string) error {
 	return fmt.Errorf("%s %q invalid", field, value)
 }
 
-func ValidateSkillCapabilitySelector(selector SkillCapabilitySelector) error {
-	name := selector.CapabilityName()
-	if name == "" && len(selector.RuntimeFamilies) == 0 && len(selector.Tags) == 0 {
-		return fmt.Errorf("selector requires capability, runtime families, or tags")
-	}
-	if name != "" && strings.Contains(name, " ") {
-		return fmt.Errorf("selector capability %q invalid", name)
-	}
-	for _, family := range selector.RuntimeFamilies {
-		switch family {
-		case CapabilityRuntimeFamilyLocalTool, CapabilityRuntimeFamilyProvider, CapabilityRuntimeFamilyRelurpic:
-		default:
-			return fmt.Errorf("selector runtime family %s invalid", family)
-		}
-	}
-	for _, tag := range selector.Tags {
-		if strings.TrimSpace(tag) == "" {
-			return fmt.Errorf("selector contains empty tag")
-		}
-	}
-	for _, tag := range selector.ExcludeTags {
-		if strings.TrimSpace(tag) == "" {
-			return fmt.Errorf("selector contains empty exclude tag")
-		}
-	}
-	return nil
-}
-
-func (s SkillCapabilitySelector) CapabilityName() string {
-	return strings.TrimSpace(s.Capability)
-}
-
 // Validate ensures model configuration is provided.
 func (m AgentModelConfig) Validate() error {
 	if m.Name == "" {
@@ -1074,7 +1035,7 @@ func (set AgentFilePermissionSet) validate(label string) error {
 }
 
 // ContextPolicySpec defines the context policy configuration for an agent.
-// This is a simplified version for agentspec; the full version is in contextpolicy.
+// This is a simplified version for agentspec; the full version is in execution/context.
 type ContextPolicySpec struct {
 	CompilationMode       string          `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
 	DefaultTrustClass     TrustClass      `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`

@@ -139,14 +139,14 @@ type fakeTool struct {
 	name string
 }
 
-func (f *fakeTool) Name() string                           { return f.name }
-func (f *fakeTool) Description() string                    { return "fake tool for testing" }
-func (f *fakeTool) Category() string                       { return "test" }
-func (f *fakeTool) Parameters() []contracts.ToolParameter  { return nil }
+func (f *fakeTool) Name() string                          { return f.name }
+func (f *fakeTool) Description() string                   { return "fake tool for testing" }
+func (f *fakeTool) Category() string                      { return "test" }
+func (f *fakeTool) Parameters() []contracts.ToolParameter { return nil }
 func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	return &contracts.ToolResult{Success: true}, nil
 }
-func (f *fakeTool) IsAvailable(ctx context.Context) bool    { return true }
+func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
 func (f *fakeTool) Permissions() contracts.ToolPermissions {
 	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
 		Executables: []contracts.ExecutablePermission{

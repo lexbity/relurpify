@@ -11,8 +11,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // TestAllowDecisionAudit validates that allow decisions generate observable audit records
@@ -173,7 +173,7 @@ func TestHITLAudit(t *testing.T) {
 	}
 
 	// Create permission manager with HITL provider
-	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 	perms.Network = []contracts.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
@@ -370,7 +370,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 	env.PermissionManager.CheckFileAccess(ctx, otherAgentID, contracts.FileSystemRead, testPath)
 
 	// Query by agent ID
-	filter := core.AuditQuery{AgentID: agentID}
+	filter := policy.AuditQuery{AgentID: agentID}
 	records, err := env.AuditSink.Query(ctx, filter)
 	if err != nil {
 		t.Fatalf("query failed: %v", err)
@@ -383,7 +383,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 	}
 
 	// Query by result
-	filter = core.AuditQuery{Result: "granted"}
+	filter = policy.AuditQuery{Result: "granted"}
 	records, err = env.AuditSink.Query(ctx, filter)
 	if err != nil {
 		t.Fatalf("query failed: %v", err)
@@ -393,7 +393,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 	}
 
 	// Query by type
-	filter = core.AuditQuery{Type: string(contracts.PermissionTypeFilesystem)}
+	filter = policy.AuditQuery{Type: string(contracts.PermissionTypeFilesystem)}
 	records, err = env.AuditSink.Query(ctx, filter)
 	if err != nil {
 		t.Fatalf("query failed: %v", err)
@@ -436,7 +436,7 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 			},
 		},
 	}
-	perms := core.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
 	perms.Network = []contracts.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
@@ -515,7 +515,7 @@ func TestAuditCaptureHelper(t *testing.T) {
 	// Record multiple audit entries
 	env.AuditSink.Clear()
 	for i := 0; i < 3; i++ {
-		record := core.AuditRecord{
+		record := policy.AuditRecord{
 			Timestamp:   time.Now().UTC(),
 			AgentID:     agentID,
 			Action:      "test_action",

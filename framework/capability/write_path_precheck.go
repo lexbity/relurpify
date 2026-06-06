@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
@@ -13,12 +12,12 @@ import (
 // InvocationPrecheck is checked after policy evaluation and before invocation.
 // Returning a non-nil error blocks the call with that error message.
 type InvocationPrecheck interface {
-	Check(descriptor core.CapabilityDescriptor, args map[string]any) error
+	Check(descriptor CapabilityDescriptor, args map[string]any) error
 }
 
 // PostInvocationHook receives the completed invocation result.
 type PostInvocationHook interface {
-	Record(descriptor core.CapabilityDescriptor, result *contracts.ToolResult) error
+	Record(descriptor CapabilityDescriptor, result *contracts.ToolResult) error
 }
 
 // WritePathPrecheck blocks filesystem-mutating capabilities from writing to
@@ -27,7 +26,7 @@ type WritePathPrecheck struct {
 	Globs []string
 }
 
-func (p WritePathPrecheck) Check(desc core.CapabilityDescriptor, args map[string]any) error {
+func (p WritePathPrecheck) Check(desc CapabilityDescriptor, args map[string]any) error {
 	if len(p.Globs) == 0 || !hasWriteEffect(desc) {
 		return nil
 	}
@@ -43,7 +42,7 @@ func (p WritePathPrecheck) Check(desc core.CapabilityDescriptor, args map[string
 	return fmt.Errorf("write to %q blocked: mode restricts writes to documentation paths (%s)", path, strings.Join(p.Globs, ", "))
 }
 
-func hasWriteEffect(desc core.CapabilityDescriptor) bool {
+func hasWriteEffect(desc CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		if effect == agentspec.EffectClassFilesystemMutation {
 			return true

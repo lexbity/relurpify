@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
@@ -23,8 +23,8 @@ func NewSymbolTraceHandler(env agentenv.WorkspaceEnvironment) *SymbolTraceHandle
 }
 
 // Descriptor returns the capability descriptor for the symbol trace handler.
-func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.symbol_trace",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -33,7 +33,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 		Description:   "Traces call relationships for a symbol to find callers and callees",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "trace", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

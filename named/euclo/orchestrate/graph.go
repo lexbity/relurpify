@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
@@ -22,6 +21,7 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -216,12 +216,12 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		cfg.DefaultStreamMode,
 		cfg.StreamTrigger,
 	)
-	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedDefaultTask(env)
 		return intakePipeline.Execute(ctx, env)
 	})
 
-	familySelectNode := newStageNode("euclo.family_select", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	familySelectNode := newStageNode("euclo.family_select", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		family := ""
 		if v, ok := env.GetWorkingValue(euclostate.KeyFamilySelection); ok {
 			if m, ok := v.(map[string]any); ok {
@@ -233,22 +233,22 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		if family != "" {
 			euclostate.SetFamilySelected(env, family)
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.family_select",
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"family": family}),
+			Data:    execution.NewToolResultPayload(map[string]any{"family": family}),
 		}, nil
 	})
 
 	ingestionNode := NewIngestionNode("euclo.ingest")
 
-	streamNode := newStageNode("euclo.stream", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	streamNode := newStageNode("euclo.stream", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		_, hasStream := env.GetWorkingValue(euclostate.KeyStreamResult)
 		euclostate.SetStreamRequested(env, hasStream)
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.stream",
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"streamed": hasStream}),
+			Data:    execution.NewToolResultPayload(map[string]any{"streamed": hasStream}),
 		}, nil
 	})
 
@@ -256,35 +256,35 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		WithRepository(cfg.CheckpointRepository).
 		WithWriter(cfg.PersistenceWriter)
 
-	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if env != nil {
 			euclostate.SetCapabilityClassified(env, true)
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.capability_classify",
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"classified": true}),
+			Data:    execution.NewToolResultPayload(map[string]any{"classified": true}),
 		}, nil
 	})
 
-	interactionCheckNode := newStageNode("euclo.interaction_check", agentgraph.NodeTypeConditional, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	interactionCheckNode := newStageNode("euclo.interaction_check", agentgraph.NodeTypeConditional, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		needsInteraction := false
 		if cls, ok := euclostate.GetIntentClassification(env); ok && cls != nil {
 			needsInteraction = cls.Ambiguous || cls.Confidence < 0.7
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.interaction_check",
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"needs_interaction": needsInteraction}),
+			Data:    execution.NewToolResultPayload(map[string]any{"needs_interaction": needsInteraction}),
 		}, nil
 	})
 
-	interactionFrameNode := newStageNode("euclo.interaction_frame", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	interactionFrameNode := newStageNode("euclo.interaction_frame", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if env != nil {
 			seedPolicyDefaults(env)
 			euclostate.SetInteractionFrameRequested(env, true)
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.interaction_frame",
 			Success: true,
 		}, nil
@@ -293,16 +293,16 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	gate := policy.NewGateNode("euclo.policy_gate", policy.NewEvaluator()).
 		WithPermissionManager(cfg.PermissionManager).
 		WithHITLBroker(cfg.HITLBroker)
-	policyGateNode := newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	policyGateNode := newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedPolicyDefaults(env)
 		data, err := gate.Execute(ctx, env)
 		if err != nil {
-			return &core.Result{NodeID: "euclo.policy_gate", Success: false, Data: core.NewErrorResultPayload(err.Error())}, err
+			return &execution.Result{NodeID: "euclo.policy_gate", Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.policy_gate",
 			Success: true,
-			Data:    core.NewToolResultPayload(data),
+			Data:    execution.NewToolResultPayload(data),
 		}, nil
 	})
 
@@ -326,18 +326,18 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	mergeNode := NewMergeNode("euclo.merge")
 
 	telemetryNode := reporting.NewTelemetryNode("euclo.report")
-	reportNode := newStageNode("euclo.report", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+	reportNode := newStageNode("euclo.report", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if strings.EqualFold(strings.TrimSpace(euclostate.GetRouteOutcome(env)), string(reporting.RouteOutcomeDryRun)) {
 			euclostate.SetExecutionCompleted(env, true)
 		}
 		result, err := telemetryNode.Execute(ctx, env)
 		if err != nil {
-			return &core.Result{NodeID: "euclo.report", Success: false, Data: core.NewErrorResultPayload(err.Error())}, err
+			return &execution.Result{NodeID: "euclo.report", Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  "euclo.report",
 			Success: true,
-			Data:    core.NewToolResultPayload(result),
+			Data:    execution.NewToolResultPayload(result),
 		}, nil
 	})
 
@@ -375,54 +375,54 @@ func wireEdges(g *agentgraph.Graph) error {
 		{"euclo.stream", "euclo.checkpoint", nil},
 		{"euclo.checkpoint", "euclo.capability_classify", nil},
 		{"euclo.capability_classify", "euclo.interaction_check", nil},
-		{"euclo.interaction_check", "euclo.interaction_frame", func(result *core.Result, _ *contextdata.Envelope) bool {
+		{"euclo.interaction_check", "euclo.interaction_frame", func(result *execution.Result, _ *contextdata.Envelope) bool {
 			if result == nil {
 				return false
 			}
-			if got, ok := core.ResultField(result.Data, "needs_interaction"); ok {
+			if got, ok := execution.ResultField(result.Data, "needs_interaction"); ok {
 				return got == true
 			}
 			return false
 		}},
-		{"euclo.interaction_check", "euclo.policy_gate", func(result *core.Result, _ *contextdata.Envelope) bool {
+		{"euclo.interaction_check", "euclo.policy_gate", func(result *execution.Result, _ *contextdata.Envelope) bool {
 			if result == nil {
 				return true
 			}
-			if got, ok := core.ResultField(result.Data, "needs_interaction"); ok {
+			if got, ok := execution.ResultField(result.Data, "needs_interaction"); ok {
 				return got != true
 			}
 			return true
 		}},
 		{"euclo.interaction_frame", "euclo.policy_gate", nil},
 		{"euclo.policy_gate", "euclo.dispatch", nil},
-		{"euclo.dispatch", "euclo.report", func(_ *core.Result, env *contextdata.Envelope) bool {
+		{"euclo.dispatch", "euclo.report", func(_ *execution.Result, env *contextdata.Envelope) bool {
 			if strings.EqualFold(strings.TrimSpace(euclostate.GetRouteOutcome(env)), string(reporting.RouteOutcomeDryRun)) {
 				return true
 			}
 			dryRun, _ := euclostate.GetDryRunMode(env)
 			return dryRun
 		}},
-		{"euclo.dispatch", "euclo.route_fork", func(_ *core.Result, env *contextdata.Envelope) bool {
+		{"euclo.dispatch", "euclo.route_fork", func(_ *execution.Result, env *contextdata.Envelope) bool {
 			if strings.EqualFold(strings.TrimSpace(euclostate.GetRouteOutcome(env)), string(reporting.RouteOutcomeDryRun)) {
 				return false
 			}
 			dryRun, _ := euclostate.GetDryRunMode(env)
 			return !dryRun
 		}},
-		{"euclo.route_fork", "euclo.execute_thoughtrecipe", func(result *core.Result, _ *contextdata.Envelope) bool {
+		{"euclo.route_fork", "euclo.execute_thoughtrecipe", func(result *execution.Result, _ *contextdata.Envelope) bool {
 			if result == nil {
 				return false
 			}
-			if got, ok := core.ResultField(result.Data, "next"); ok {
+			if got, ok := execution.ResultField(result.Data, "next"); ok {
 				return got == "euclo.execute_thoughtrecipe"
 			}
 			return false
 		}},
-		{"euclo.route_fork", "euclo.execute_capability", func(result *core.Result, _ *contextdata.Envelope) bool {
+		{"euclo.route_fork", "euclo.execute_capability", func(result *execution.Result, _ *contextdata.Envelope) bool {
 			if result == nil {
 				return false
 			}
-			if got, ok := core.ResultField(result.Data, "next"); ok {
+			if got, ok := execution.ResultField(result.Data, "next"); ok {
 				return got == "euclo.execute_capability"
 			}
 			return false
@@ -491,7 +491,7 @@ func seedDefaultTask(env *contextdata.Envelope) {
 	if _, ok := env.GetWorkingValue(euclostate.KeyTaskRaw); ok {
 		return
 	}
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          strings.TrimSpace(env.TaskID),
 		Type:        "euclo",
 		Instruction: "",
@@ -533,15 +533,15 @@ func (permissiveHITLBroker) RequestPermission(_ context.Context, req authorizati
 type stageNode struct {
 	id       string
 	nodeType agentgraph.NodeType
-	execFn   func(context.Context, *contextdata.Envelope) (*core.Result, error)
+	execFn   func(context.Context, *contextdata.Envelope) (*execution.Result, error)
 }
 
-func newStageNode(id string, nodeType agentgraph.NodeType, execFn func(context.Context, *contextdata.Envelope) (*core.Result, error)) *stageNode {
+func newStageNode(id string, nodeType agentgraph.NodeType, execFn func(context.Context, *contextdata.Envelope) (*execution.Result, error)) *stageNode {
 	return &stageNode{id: id, nodeType: nodeType, execFn: execFn}
 }
 
 func (n *stageNode) ID() string                { return n.id }
 func (n *stageNode) Type() agentgraph.NodeType { return n.nodeType }
-func (n *stageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *stageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	return n.execFn(ctx, env)
 }

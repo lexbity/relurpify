@@ -8,12 +8,12 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type countingCapabilityHandler struct {
@@ -22,13 +22,13 @@ type countingCapabilityHandler struct {
 	id    string
 }
 
-func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-		Availability:  core.AvailabilitySpec{Available: true},
+		Availability:  capability.AvailabilitySpec{Available: true},
 	}
 }
 
@@ -60,9 +60,9 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	seedTask(env, "add a cache to the handler", "dryrun.go")
 	euclostate.SetDryRunMode(env, true)
 	runPreIngestion(t, env, dir, []string{"dryrun.go"})
-	telemetry := &recordingTelemetry{}
+	rec := &recordingTelemetry{}
 
-	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
+	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
@@ -78,9 +78,9 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	if handler.Count() != 0 {
 		t.Fatalf("expected no capability execution during dry run, got %d invocations", handler.Count())
 	}
-	assertEventOrder(t, telemetry.types(), []core.EventType{
-		core.EventType("euclo.route.dry_run"),
-		core.EventType("euclo.execution.complete"),
+	assertEventOrder(t, rec.types(), []telemetry.EventType{
+		telemetry.EventType("euclo.route.dry_run"),
+		telemetry.EventType("euclo.execution.complete"),
 	})
 }
 
@@ -109,9 +109,9 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	})
 	euclostate.SetDryRunMode(env, true)
 	runPreIngestion(t, env, dir, []string{"review.go"})
-	telemetry := &recordingTelemetry{}
+	rec := &recordingTelemetry{}
 
-	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
+	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
@@ -131,9 +131,9 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
 		t.Fatal("expected dry-run execution to be marked complete")
 	}
-	assertEventOrder(t, telemetry.types(), []core.EventType{
-		core.EventType("euclo.route.dry_run"),
-		core.EventType("euclo.execution.complete"),
+	assertEventOrder(t, rec.types(), []telemetry.EventType{
+		telemetry.EventType("euclo.route.dry_run"),
+		telemetry.EventType("euclo.execution.complete"),
 	})
 }
 

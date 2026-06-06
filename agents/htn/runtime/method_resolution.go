@@ -1,15 +1,15 @@
 package runtime
 
 import (
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // OperatorSpec describes a resolved primitive step derived from a SubtaskSpec.
 type OperatorSpec struct {
 	Name                 string
-	TaskType             core.TaskType
+	TaskType             execution.TaskType
 	Instruction          string
 	Executor             string
 	DependsOn            []string
@@ -19,7 +19,7 @@ type OperatorSpec struct {
 // MethodSpec describes the resolved method without executable functions.
 type MethodSpec struct {
 	Name                 string
-	TaskType             core.TaskType
+	TaskType             execution.TaskType
 	Priority             int
 	OperatorCount        int
 	SubtaskCount         int

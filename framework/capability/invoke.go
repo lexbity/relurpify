@@ -12,11 +12,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
 // InvokeCapability executes an invocable capability by capability ID or public name.
@@ -43,7 +41,7 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 	if err != nil {
 		return nil, err
 	}
-	invocable, ok := entry.handler.(core.InvocableCapabilityHandler)
+	invocable, ok := entry.handler.(InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
 	}
@@ -88,14 +86,14 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contex
 
 // InvokeCapabilityBackground submits a long-running capability invocation to
 // the framework job queue and returns a handle the caller can use to track the
-// job. The capability handler must implement core.BackgroundCapabilityHandler;
+// job. The capability handler must implement BackgroundCapabilityHandler;
 // if it does not, this method returns an error — callers that want synchronous
 // execution should use InvokeCapability instead.
 //
 // The handler is responsible for building the jobs.JobSpec and calling
 // env.JobSubmitter.Submit from inside InvokeBackground. The registry provides
 // only lookup, admission, and postchecks — it does not own the JobSpec shape.
-func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.BackgroundInvocationHandle, error) {
+func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*BackgroundInvocationHandle, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -115,7 +113,7 @@ func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, sta
 	if err != nil {
 		return nil, err
 	}
-	bgHandler, ok := entry.handler.(core.BackgroundCapabilityHandler)
+	bgHandler, ok := entry.handler.(BackgroundCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s does not support background invocation", entry.descriptor.ID)
 	}
@@ -203,7 +201,7 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 	if err != nil {
 		return nil, err
 	}
-	if aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler); ok {
+	if aware, ok := entry.handler.(AvailabilityAwareCapabilityHandler); ok {
 		if availability := aware.Availability(ctx, state); !availability.Available {
 			reason := strings.TrimSpace(availability.Reason)
 			if reason == "" {
@@ -245,8 +243,8 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 	agentID := r.registeredAgentID
 	manager := r.permissionManager
 	r.mu.RUnlock()
-	_, err := authorization.EnforcePolicyRequest(ctx, policyEngine, core.PolicyRequest{
-		Target:         core.PolicyTargetCapability,
+	_, err := EnforcePolicyRequest(ctx, policyEngine, PolicyRequest{
+		Target:         PolicyTargetCapability,
 		Actor:          identity.EventActor{Kind: "agent", ID: agentID},
 		CapabilityID:   desc.ID,
 		CapabilityName: desc.Name,
@@ -256,7 +254,7 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 		TrustClass:     desc.TrustClass,
 		RiskClasses:    desc.RiskClasses,
 		EffectClasses:  desc.EffectClasses,
-	}, authorization.ApprovalRequest{
+	}, ApprovalRequest{
 		AgentID: agentID,
 		Manager: manager,
 		Permission: contracts.PermissionDescriptor{
@@ -266,8 +264,8 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 			RequiresHITL: true,
 		},
 		Justification:      "capability policy approval",
-		Scope:              authorization.GrantScopeSession,
-		Risk:               authorization.RiskLevelMedium,
+		Scope:              GrantScopeSession,
+		Risk:               RiskLevelMedium,
 		MissingManagerErr:  "approval required but permission manager unavailable",
 		DenyReasonFallback: "denied by policy",
 	})
@@ -303,7 +301,7 @@ func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state *con
 	if err != nil || entry == nil {
 		return false
 	}
-	aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler)
+	aware, ok := entry.handler.(AvailabilityAwareCapabilityHandler)
 	if !ok {
 		return true
 	}
@@ -311,21 +309,21 @@ func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state *con
 }
 
 // InvocableCapabilities returns non-hidden capability descriptors with an invocable runtime handler.
-func (r *CapabilityRegistry) InvocableCapabilities() []core.CapabilityDescriptor {
+func (r *CapabilityRegistry) InvocableCapabilities() []CapabilityDescriptor {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]core.CapabilityDescriptor, 0, len(r.entries))
+	res := make([]CapabilityDescriptor, 0, len(r.entries))
 	for _, entry := range r.entries {
 		if entry == nil || entry.handler == nil {
 			continue
 		}
-		if _, ok := entry.handler.(core.InvocableCapabilityHandler); !ok {
+		if _, ok := entry.handler.(InvocableCapabilityHandler); !ok {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) == core.CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, entry.descriptor)
@@ -333,11 +331,11 @@ func (r *CapabilityRegistry) InvocableCapabilities() []core.CapabilityDescriptor
 	return res
 }
 
-func providerKindForDescriptor(desc core.CapabilityDescriptor) core.ProviderKind {
+func providerKindForDescriptor(desc CapabilityDescriptor) ProviderKind {
 	switch desc.Source.Scope {
 	case agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
-		return core.ProviderKindNodeDevice
+		return ProviderKindNodeDevice
 	default:
-		return core.ProviderKindBuiltin
+		return ProviderKindBuiltin
 	}
 }

@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // TriggerPolicyRequirements captures the requested effects declared by a thoughtrecipe trigger.
@@ -200,7 +200,7 @@ func normalizeTriggerTag(value string) string {
 }
 
 // CapabilityRequirementsFromDescriptor derives the requested effect envelope for a capability.
-func CapabilityRequirementsFromDescriptor(desc core.CapabilityDescriptor) TriggerPolicyRequirements {
+func CapabilityRequirementsFromDescriptor(desc capability.CapabilityDescriptor) TriggerPolicyRequirements {
 	req := TriggerPolicyRequirements{ReadWorkspace: true}
 	if capabilityRequiresWrite(desc) {
 		req.WriteWorkspace = true
@@ -222,7 +222,7 @@ func CapabilityRequirementsSatisfied(trigger TriggerPolicyRequirements, capabili
 	return true
 }
 
-func capabilityRequiresWrite(desc core.CapabilityDescriptor) bool {
+func capabilityRequiresWrite(desc capability.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		switch effect {
 		case agentspec.EffectClassFilesystemMutation,

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -15,8 +14,8 @@ type stubSessionHandler struct {
 	called bool
 }
 
-func (h *stubSessionHandler) Descriptor(_ context.Context, _ *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{ID: h.id}
+func (h *stubSessionHandler) Descriptor(_ context.Context, _ *contextdata.Envelope) CapabilityDescriptor {
+	return CapabilityDescriptor{ID: h.id}
 }
 
 func (h *stubSessionHandler) Invoke(_ context.Context, _ *contextdata.Envelope, _ map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {

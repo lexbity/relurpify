@@ -9,16 +9,16 @@ import (
 	"os"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // MultiplexTelemetry broadcasts events to multiple sinks.
 type MultiplexTelemetry struct {
-	Sinks []core.Telemetry
+	Sinks []telemetry.Telemetry
 }
 
 // Emit forwards the event to all registered sinks.
-func (m MultiplexTelemetry) Emit(event core.Event) {
+func (m MultiplexTelemetry) Emit(event telemetry.Event) {
 	for _, s := range m.Sinks {
 		s.Emit(event)
 	}
@@ -47,7 +47,7 @@ func NewJSONFileTelemetry(path string) (*JSONFileTelemetry, error) {
 }
 
 // Emit writes the JSON record.
-func (j *JSONFileTelemetry) Emit(event core.Event) {
+func (j *JSONFileTelemetry) Emit(event telemetry.Event) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.enc != nil {
@@ -73,7 +73,7 @@ type LoggerTelemetry struct {
 }
 
 // Emit logs the event.
-func (t LoggerTelemetry) Emit(event core.Event) {
+func (t LoggerTelemetry) Emit(event telemetry.Event) {
 	logger := t.Logger
 	if logger == nil {
 		logger = log.Default()

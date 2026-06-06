@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -20,6 +19,8 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
@@ -86,14 +87,14 @@ func registerClarificationCapability(reg *capability.Registry) error {
 
 type clarificationCapabilityHandler struct{}
 
-func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            clarificationCapabilityID,
 		Name:          "intent clarification",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Category:      "clarification",
-		Availability:  core.AvailabilitySpec{Available: true},
+		Availability:  capability.AvailabilitySpec{Available: true},
 	}
 }
 
@@ -148,7 +149,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			if frame != nil {
 				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
-					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
 			}
 		}
@@ -183,7 +184,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			if frame != nil {
 				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
-					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
 			}
 		}
@@ -221,7 +222,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			if frame != nil {
 				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
-					_ = interaction.EmitFrame(ctx, interactionFrame, env, core.TelemetryFromContext(ctx))
+					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
 			}
 		}
@@ -275,7 +276,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 
 func instructionFromEnvelope(env *contextdata.Envelope) string {
 	if v, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
-		if task, ok := v.(*core.Task); ok && task != nil {
+		if task, ok := v.(*execution.Task); ok && task != nil {
 			return strings.TrimSpace(task.Instruction)
 		}
 	}
@@ -670,7 +671,7 @@ func validateStructuredGrounding(value map[string]any) []string {
 }
 
 func emitClarificationGateResult(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, passed bool, decision, reason string) {
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil {
 		return
 	}
@@ -706,7 +707,7 @@ func emitClarificationGateResult(ctx context.Context, env *contextdata.Envelope,
 
 func emitClarificationStarted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, req *contextstream.Request) {
 	_ = env
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil || state == nil {
 		return
 	}
@@ -737,7 +738,7 @@ func emitClarificationStarted(ctx context.Context, env *contextdata.Envelope, st
 
 func emitClarificationAnswered(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, grounding map[string]any, validationErrs []string) {
 	_ = env
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil || state == nil {
 		return
 	}
@@ -771,7 +772,7 @@ func emitClarificationAnsweredAndGrounded(ctx context.Context, env *contextdata.
 
 func emitClarificationGrounded(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, grounding map[string]any) {
 	_ = env
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil || state == nil {
 		return
 	}
@@ -803,7 +804,7 @@ func emitClarificationGrounded(ctx context.Context, env *contextdata.Envelope, s
 
 func emitClarificationProjected(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, plan *intentcontext.ProjectionPlan) {
 	_ = env
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil || state == nil || plan == nil {
 		return
 	}
@@ -825,7 +826,7 @@ func emitClarificationProjected(ctx context.Context, env *contextdata.Envelope, 
 
 func emitClarificationCompleted(ctx context.Context, env *contextdata.Envelope, state *intentcontext.ClarificationState, nextThoughtRecipeID string) {
 	_ = env
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	if tel == nil || state == nil {
 		return
 	}

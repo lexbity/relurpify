@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // ToolObservation records a single tool execution result within the ReAct loop.
@@ -30,7 +32,7 @@ func mirrorReactFinalOutputReference(env *contextdata.Envelope) {
 		return
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
-		if ref, ok := rawRef.(core.ArtifactReference); ok {
+		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
 			env.SetWorkingValue("react.final_output_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
@@ -44,7 +46,7 @@ func mirrorReactCheckpointReference(env *contextdata.Envelope) {
 		return
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
-		if ref, ok := rawRef.(core.ArtifactReference); ok {
+		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
 			env.SetWorkingValue("react.checkpoint_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
@@ -181,7 +183,7 @@ func compactReactLoopState(env *contextdata.Envelope) {
 	}
 	if raw, ok := env.GetWorkingValue("react.last_tool_result_envelopes"); ok {
 		switch envelopes := raw.(type) {
-		case []*core.CapabilityResultEnvelope:
+		case []*capability.CapabilityResultEnvelope:
 			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
 		case []any:
 			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
@@ -219,12 +221,12 @@ func recordActiveToolNames(env *contextdata.Envelope, tools []contracts.Tool) {
 	env.SetWorkingValue("react.active_tools", names, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) getLastResult(env *contextdata.Envelope) *core.Result {
+func (a *ReActAgent) getLastResult(env *contextdata.Envelope) *execution.Result {
 	if env == nil {
 		return nil
 	}
 	if val, ok := env.GetWorkingValue("react.last_result"); ok {
-		if res, ok := val.(*core.Result); ok {
+		if res, ok := val.(*execution.Result); ok {
 			return res
 		}
 	}

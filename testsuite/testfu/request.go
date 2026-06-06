@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func parseRequest(task *core.Task) runRequest {
+func parseRequest(task *execution.Task) runRequest {
 	req := runRequest{
 		Action:    actionRunSuite,
 		Workspace: workspaceFromContext(task),
@@ -100,7 +100,7 @@ func parseRequest(task *core.Task) runRequest {
 	return req
 }
 
-func taskInstruction(task *core.Task) string {
+func taskInstruction(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}

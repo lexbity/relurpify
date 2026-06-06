@@ -6,29 +6,31 @@ import (
 	"fmt"
 	"strings"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // PipelineStageFactory resolves pipeline stages for a task.
 type PipelineStageFactory interface {
-	StagesForTask(task *core.Task) ([]Stage, error)
+	StagesForTask(task *execution.Task) ([]Stage, error)
 }
 
 // PipelineAgent executes a deterministic sequence of typed pipeline stages.
 type PipelineAgent struct {
 	Model             contracts.LanguageModel
-	Config            *core.Config
+	Config            *execution.Config
 	Tools             *capability.Registry
 	WorkflowStatePath string
 
 	Stages       []Stage
-	StageBuilder func(task *core.Task) ([]Stage, error)
+	StageBuilder func(task *execution.Task) ([]Stage, error)
 	StageFactory PipelineStageFactory
 
 	StreamMode      contextstream.Mode
@@ -38,12 +40,12 @@ type PipelineAgent struct {
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 }
 
-func (a *PipelineAgent) Initialize(cfg *core.Config) error {
+func (a *PipelineAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	return nil
 }
 
-func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	a.executionCatalog = nil
 	if a.Tools != nil {
 		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
@@ -103,9 +105,9 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, env *conte
 		env.SetWorkingValue("pipeline.final_output", final, contextdata.MemoryClassTask)
 	}
 	env.SetWorkingValue("pipeline.results_summary", summarizePipelineResults(results), contextdata.MemoryClassTask)
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"stage_results": results,
 			"final_output":  final,
 		}),
@@ -164,7 +166,7 @@ func (a *PipelineAgent) Capabilities() []string {
 // The returned graph is not executable; stage nodes are stubs that record
 // inspection metadata but do not invoke stage logic. Use Execute for actual
 // pipeline execution. A fully executable graph integration is planned for Phase 8.
-func (a *PipelineAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *PipelineAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	stages, err := a.stagesForTask(task)
 	if err != nil {
 		return nil, err
@@ -210,7 +212,7 @@ func (a *PipelineAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return g, nil
 }
 
-func (a *PipelineAgent) stagesForTask(task *core.Task) ([]Stage, error) {
+func (a *PipelineAgent) stagesForTask(task *execution.Task) ([]Stage, error) {
 	switch {
 	case a.StageBuilder != nil:
 		return a.StageBuilder(task)
@@ -223,7 +225,7 @@ func (a *PipelineAgent) stagesForTask(task *core.Task) ([]Stage, error) {
 	}
 }
 
-func (a *PipelineAgent) telemetry() core.Telemetry {
+func (a *PipelineAgent) telemetry() telemetry.Telemetry {
 	if a == nil || a.Config == nil {
 		return nil
 	}
@@ -257,7 +259,7 @@ func (a *PipelineAgent) toolCallingEnabled() bool {
 	return a.Config.NativeToolCalling
 }
 
-func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, env *contextdata.Envelope) (any, string, string, error) {
+func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (any, string, string, error) {
 	_ = ctx
 	_ = task
 	_ = env
@@ -273,7 +275,7 @@ func (a *PipelineAgent) persistStageResults(ctx context.Context, store any, work
 	return nil
 }
 
-func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store any, workflowID, runID string, results []StageResult) (*core.ArtifactReference, error) {
+func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store any, workflowID, runID string, results []StageResult) (*relurpctx.ArtifactReference, error) {
 	_ = ctx
 	_ = store
 	_ = workflowID
@@ -282,7 +284,7 @@ func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store any, w
 	return nil, nil
 }
 
-func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store any, workflowID, runID string, final map[string]any) (*core.ArtifactReference, error) {
+func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store any, workflowID, runID string, final map[string]any) (*relurpctx.ArtifactReference, error) {
 	_ = ctx
 	_ = store
 	_ = workflowID
@@ -330,11 +332,11 @@ func (n *pipelineStageNode) ID() string { return n.id }
 
 func (n *pipelineStageNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
-func (n *pipelineStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *pipelineStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.stage != nil && env != nil {
 		env.SetWorkingValue("pipeline.inspect_stage", n.stage.Name(), contextdata.MemoryClassTask)
 	}
-	return &core.Result{NodeID: n.id, Success: true}, nil
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 func sanitizePipelineName(name string) string {
@@ -347,21 +349,21 @@ func sanitizePipelineName(name string) string {
 	return name
 }
 
-func fallbackTaskID(task *core.Task) string {
+func fallbackTaskID(task *execution.Task) string {
 	if task != nil && strings.TrimSpace(task.ID) != "" {
 		return strings.TrimSpace(task.ID)
 	}
 	return "task"
 }
 
-func taskType(task *core.Task) core.TaskType {
+func taskType(task *execution.Task) execution.TaskType {
 	if task == nil || task.Type == "" {
-		return core.TaskTypeCodeGeneration
+		return execution.TaskTypeCodeGeneration
 	}
-	return core.TaskType(task.Type)
+	return execution.TaskType(task.Type)
 }
 
-func taskInstruction(task *core.Task) string {
+func taskInstruction(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
@@ -377,7 +379,7 @@ func (a *PipelineAgent) streamMode() contextstream.Mode {
 }
 
 // streamQuery returns the query for streaming, defaulting to task instruction.
-func (a *PipelineAgent) streamQuery(task *core.Task) string {
+func (a *PipelineAgent) streamQuery(task *execution.Task) string {
 	if a.StreamQuery != "" {
 		return a.StreamQuery
 	}
@@ -396,7 +398,7 @@ func (a *PipelineAgent) streamMaxTokens() int {
 }
 
 // streamTriggerNode creates a streaming trigger node for the pipeline agent.
-func (a *PipelineAgent) streamTriggerNode(task *core.Task) graph.Node {
+func (a *PipelineAgent) streamTriggerNode(task *execution.Task) graph.Node {
 	query := a.streamQuery(task)
 	node := graph.NewContextStreamNode("pipeline_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()

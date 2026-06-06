@@ -7,14 +7,14 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // EucloCapabilityRegistry holds registered relurpic capabilities.
 type EucloCapabilityRegistry struct {
 	mu           sync.RWMutex
 	families     map[string]CapabilityFamily
-	capabilities map[string]core.CapabilityDescriptor
+	capabilities map[string]capability.CapabilityDescriptor
 	byFamily     map[string][]string
 }
 
@@ -22,7 +22,7 @@ type EucloCapabilityRegistry struct {
 func NewRegistry() *EucloCapabilityRegistry {
 	r := &EucloCapabilityRegistry{
 		families:     make(map[string]CapabilityFamily),
-		capabilities: make(map[string]core.CapabilityDescriptor),
+		capabilities: make(map[string]capability.CapabilityDescriptor),
 		byFamily:     make(map[string][]string),
 	}
 	r.loadBuiltins()
@@ -47,7 +47,7 @@ func (r *EucloCapabilityRegistry) RegisterFamily(family CapabilityFamily) error 
 }
 
 // RegisterCapability stores a capability descriptor and binds it to a family.
-func (r *EucloCapabilityRegistry) RegisterCapability(desc core.CapabilityDescriptor, family string) error {
+func (r *EucloCapabilityRegistry) RegisterCapability(desc capability.CapabilityDescriptor, family string) error {
 	if r == nil {
 		return fmt.Errorf("registry is nil")
 	}
@@ -58,7 +58,7 @@ func (r *EucloCapabilityRegistry) RegisterCapability(desc core.CapabilityDescrip
 		return fmt.Errorf("family id required")
 	}
 
-	desc = core.NormalizeCapabilityDescriptor(desc)
+	desc = capability.NormalizeCapabilityDescriptor(desc)
 	if desc.RuntimeFamily == "" {
 		desc.RuntimeFamily = agentspec.CapabilityRuntimeFamilyRelurpic
 	}
@@ -80,9 +80,9 @@ func (r *EucloCapabilityRegistry) RegisterCapability(desc core.CapabilityDescrip
 }
 
 // Select returns a capability descriptor by ID.
-func (r *EucloCapabilityRegistry) Select(capabilityID string) (core.CapabilityDescriptor, bool) {
+func (r *EucloCapabilityRegistry) Select(capabilityID string) (capability.CapabilityDescriptor, bool) {
 	if r == nil {
-		return core.CapabilityDescriptor{}, false
+		return capability.CapabilityDescriptor{}, false
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -91,9 +91,9 @@ func (r *EucloCapabilityRegistry) Select(capabilityID string) (core.CapabilityDe
 }
 
 // FallbackForFamily returns the family's preferred fallback capability.
-func (r *EucloCapabilityRegistry) FallbackForFamily(familyID string) (core.CapabilityDescriptor, bool) {
+func (r *EucloCapabilityRegistry) FallbackForFamily(familyID string) (capability.CapabilityDescriptor, bool) {
 	if r == nil {
-		return core.CapabilityDescriptor{}, false
+		return capability.CapabilityDescriptor{}, false
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -111,7 +111,7 @@ func (r *EucloCapabilityRegistry) FallbackForFamily(familyID string) (core.Capab
 			return desc, true
 		}
 	}
-	return core.CapabilityDescriptor{}, false
+	return capability.CapabilityDescriptor{}, false
 }
 
 // MatchByKeywords scores capabilities in a family using keyword overlap.
@@ -150,7 +150,7 @@ func (r *EucloCapabilityRegistry) MatchByKeywords(instruction string, familyID s
 }
 
 // ListCapabilities returns all descriptors in stable ID order.
-func (r *EucloCapabilityRegistry) ListCapabilities() []core.CapabilityDescriptor {
+func (r *EucloCapabilityRegistry) ListCapabilities() []capability.CapabilityDescriptor {
 	if r == nil {
 		return nil
 	}
@@ -163,7 +163,7 @@ func (r *EucloCapabilityRegistry) ListCapabilities() []core.CapabilityDescriptor
 	}
 	sort.Strings(ids)
 
-	out := make([]core.CapabilityDescriptor, 0, len(ids))
+	out := make([]capability.CapabilityDescriptor, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, r.capabilities[id])
 	}
@@ -197,7 +197,7 @@ func (r *EucloCapabilityRegistry) loadBuiltins() {
 			if _, exists := r.capabilities[capID]; exists {
 				continue
 			}
-			r.capabilities[capID] = core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
+			r.capabilities[capID] = capability.NormalizeCapabilityDescriptor(capability.CapabilityDescriptor{
 				ID:            capID,
 				Kind:          agentspec.CapabilityKindTool,
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -205,7 +205,7 @@ func (r *EucloCapabilityRegistry) loadBuiltins() {
 				Description:   family.Name + " capability",
 				Category:      family.ID,
 				Tags:          []string{family.ID},
-				Availability:  core.AvailabilitySpec{Available: true},
+				Availability:  capability.AvailabilitySpec{Available: true},
 			})
 			r.byFamily[family.ID] = appendUniqueString(r.byFamily[family.ID], capID)
 		}

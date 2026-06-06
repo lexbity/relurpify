@@ -1,0 +1,69 @@
+package modelselect
+
+import (
+	"fmt"
+	"strings"
+
+	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
+	"codeburg.org/lexbit/relurpify/model"
+)
+
+// strictDecode is a Decoder that wraps cfgload.StrictDecode.
+// It is set by the model package during init.
+var strictDecode cfgmodel.Decoder
+
+// LoadProfileRegistry loads model profiles from config files and builds
+// a ProfileRegistry.
+func LoadProfileRegistry(configDir string) (*ProfileRegistry, error) {
+	loaded, err := cfgmodel.LoadProfileDir(configDir, strictDecode)
+	if err != nil {
+		return nil, fmt.Errorf("load profiles: %w", err)
+	}
+	return BuildProfileRegistry(loaded)
+}
+
+// BuildProfileRegistry converts DTO configs into domain ModelProfile objects.
+func BuildProfileRegistry(configs []*cfgmodel.ModelProfileConfig) (*ProfileRegistry, error) {
+	reg := NewProfileRegistry()
+	for _, cfg := range configs {
+		if cfg == nil {
+			continue
+		}
+		reg.Add(convertModelProfileConfig(cfg))
+	}
+	return reg, nil
+}
+
+// LoadProviderRegistry loads provider configs and builds a ProviderRegistry.
+func LoadProviderRegistry(dir string) (*ProviderRegistry, error) {
+	providers, err := cfgmodel.LoadProviderDir(dir, strictDecode)
+	if err != nil {
+		return nil, fmt.Errorf("load providers: %w", err)
+	}
+	return NewProviderRegistry(providers), nil
+}
+
+func convertModelProfileConfig(cfg *cfgmodel.ModelProfileConfig) *model.ModelProfile {
+	if cfg == nil {
+		return nil
+	}
+	profile := &model.ModelProfile{
+		Pattern:    cfg.Pattern,
+		SourcePath: cfg.SourcePath,
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.ToolCalling.Intent)) {
+	case "native":
+		profile.ToolCalling.NativeAPI = true
+	case "prompt_based":
+		profile.ToolCalling.NativeAPI = false
+	case "auto":
+		profile.ToolCalling.NativeAPI = false
+	}
+	profile.ToolCalling.DoubleEncodedArgs = cfg.ToolCalling.DoubleEncodeArgs
+	profile.ToolCalling.MaxToolsPerCall = cfg.ToolCalling.MaxConcurrentTools
+	if cfg.Context.MaxTokens > 0 {
+		profile.ContextSize = cfg.Context.MaxTokens
+	}
+	profile.Normalize()
+	return profile
+}

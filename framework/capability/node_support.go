@@ -6,21 +6,19 @@ import (
 	"sort"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type NodeSelectionCriteria struct {
 	PreferNodeID   string
-	PreferPlatform core.NodePlatform
+	PreferPlatform NodePlatform
 	RequireOnline  bool
 	MaxRiskClass   agentspec.RiskClass
 }
 
 // SetPolicyEngine wires a policy engine for capability evaluation.
-func (r *CapabilityRegistry) SetPolicyEngine(engine authorization.PolicyEngine) {
+func (r *CapabilityRegistry) SetPolicyEngine(engine PolicyEngine) {
 	if r == nil {
 		return
 	}
@@ -30,7 +28,7 @@ func (r *CapabilityRegistry) SetPolicyEngine(engine authorization.PolicyEngine) 
 }
 
 // RegisterNodeProvider registers a physical device node as a provider.
-func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider core.NodeProvider) error {
+func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider NodeProvider) error {
 	if r == nil {
 		return fmt.Errorf("registry unavailable")
 	}
@@ -39,7 +37,7 @@ func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider 
 	}
 	desc := provider.Descriptor()
 	nodeDesc := provider.NodeDescriptor()
-	desc.Kind = core.ProviderKindNodeDevice
+	desc.Kind = ProviderKindNodeDevice
 	desc.TrustBaseline = nodeDesc.TrustClass
 	if err := desc.Validate(); err != nil {
 		return err
@@ -53,7 +51,7 @@ func (r *CapabilityRegistry) RegisterNodeProvider(ctx context.Context, provider 
 	}
 	r.mu.Lock()
 	if r.nodeProviders == nil {
-		r.nodeProviders = map[string]core.NodeProvider{}
+		r.nodeProviders = map[string]NodeProvider{}
 	}
 	r.nodeProviders[desc.ID] = provider
 	r.mu.Unlock()
@@ -74,8 +72,8 @@ func (r *CapabilityRegistry) InvokeOnBestNode(ctx context.Context, capabilityNam
 }
 
 type nodeCapabilityCandidate struct {
-	descriptor core.CapabilityDescriptor
-	health     core.NodeHealth
+	descriptor CapabilityDescriptor
+	health     NodeHealth
 	score      int
 }
 

@@ -10,8 +10,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type RenameSymbolHandler struct {
@@ -23,8 +23,8 @@ func NewRenameSymbolHandler(env agentenv.WorkspaceEnvironment) *RenameSymbolHand
 	return &RenameSymbolHandler{env: env}
 }
 
-func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.rename_symbol",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -33,7 +33,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 		Description:   "Renames a symbol across the workspace using AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "rename", "ast", "write"},
-		Source:        core.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassDestructive},
 		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassFilesystemMutation},

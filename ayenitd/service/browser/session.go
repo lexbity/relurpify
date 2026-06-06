@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type browserSessionHandle struct {
@@ -20,7 +22,7 @@ type browserSessionHandle struct {
 	cfg         browserSessionConfig
 	paths       browserSessionPaths
 	factory     func(context.Context, browserSessionConfig) (*platformbrowser.Session, error)
-	telemetry   core.Telemetry
+	telemetry   telemetry.Telemetry
 	taskID      string
 	workflowID  string
 	agentID     string
@@ -83,7 +85,7 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 		env.SetWorkingValue(browserDefaultSessionKey, sessionID, contextdata.MemoryClassTask)
 	}
 	scope := browserTaskScope(env)
-	emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), scope, "browser session opened", map[string]interface{}{
+	emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), scope, "browser session opened", map[string]interface{}{
 		"browser_event":  "session_opened",
 		"browser_action": browserPermissionAction(browserActionOpen),
 		"session_id":     sessionID,
@@ -114,7 +116,7 @@ func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interf
 			}
 		}
 	}
-	emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(env), "browser session closed", map[string]interface{}{
+	emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser session closed", map[string]interface{}{
 		"browser_event":  "session_closed",
 		"browser_action": browserPermissionAction(browserActionClose),
 		"session_id":     sessionID,
@@ -398,20 +400,20 @@ func (h *browserSessionHandle) notePageState(page *platformbrowser.PageState) {
 	h.lastSeenAt = time.Now().UTC()
 }
 
-func (h *browserSessionHandle) providerSession() core.ProviderSession {
+func (h *browserSessionHandle) providerSession() capability.ProviderSession {
 	if h == nil {
-		return core.ProviderSession{}
+		return capability.ProviderSession{}
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	session := core.ProviderSession{
+	session := capability.ProviderSession{
 		ID:             h.sessionID,
 		ProviderID:     "browser",
 		CapabilityIDs:  []string{"tool:browser"},
 		WorkflowID:     h.workflowID,
 		TaskID:         h.taskID,
 		TrustClass:     agentspec.TrustClassProviderLocalUntrusted,
-		Recoverability: core.RecoverabilityInProcess,
+		Recoverability: policy.RecoverabilityInProcess,
 		CreatedAt:      h.createdAt.UTC().Format(time.RFC3339Nano),
 		LastActivityAt: h.lastSeenAt.UTC().Format(time.RFC3339Nano),
 		Health:         "active",
@@ -431,7 +433,7 @@ func (h *browserSessionHandle) providerSession() core.ProviderSession {
 	return session
 }
 
-func (h *browserSessionHandle) snapshot() core.ProviderSessionSnapshot {
+func (h *browserSessionHandle) snapshot() capability.ProviderSessionSnapshot {
 	session := h.providerSession()
 	var state any
 	h.mu.Lock()
@@ -444,7 +446,7 @@ func (h *browserSessionHandle) snapshot() core.ProviderSessionSnapshot {
 	}
 	lastErr := h.lastErr
 	h.mu.Unlock()
-	return core.ProviderSessionSnapshot{
+	return capability.ProviderSessionSnapshot{
 		Session:         session,
 		State:           state,
 		CapturedAt:      time.Now().UTC().Format(time.RFC3339Nano),
@@ -470,7 +472,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 		h.mu.Lock()
 		h.lastErr = err.Error()
 		h.mu.Unlock()
-		emitBrowserTelemetry(h.telemetry, core.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]interface{}{
+		emitBrowserTelemetry(h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]interface{}{
 			"browser_event": "session_recovery_failed",
 			"session_id":    h.sessionID,
 			"backend":       h.backendName,
@@ -489,7 +491,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	recoveries := h.recoveries
 	h.mu.Unlock()
 
-	emitBrowserTelemetry(h.telemetry, core.EventStateChange, h.agentID, h.taskID, "browser session recovered", map[string]interface{}{
+	emitBrowserTelemetry(h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovered", map[string]interface{}{
 		"browser_event": "session_recovered",
 		"session_id":    h.sessionID,
 		"backend":       h.backendName,
@@ -516,7 +518,7 @@ func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextda
 		data["page_state"] = pageState
 		session.notePageState(pageState)
 		recordBrowserObservation(env, pageState)
-		emitBrowserTelemetry(s.telemetry, core.EventStateChange, s.agentID(), browserTaskScope(env), "browser page snapshot captured", map[string]interface{}{
+		emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser page snapshot captured", map[string]interface{}{
 			"browser_event": "page_snapshot",
 			"session_id":    sessionID,
 			"url":           pageState.URL,

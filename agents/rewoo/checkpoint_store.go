@@ -10,8 +10,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 )
 
 // CheckpointKey represents a unique identifier for a checkpoint.
@@ -214,7 +214,7 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 	}
 	if _, ok := env.GetWorkingValue("rewoo.tool_results"); !ok {
 		if rawRef, ok := env.GetWorkingValue("rewoo.tool_results_ref"); ok {
-			ref, ok := rawRef.(core.ArtifactReference)
+			ref, ok := rawRef.(relurpctx.ArtifactReference)
 			if ok {
 				var results []RewooStepResult
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &results); err != nil {
@@ -226,7 +226,7 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 	}
 	if _, ok := env.GetWorkingValue("rewoo.plan"); !ok {
 		if rawRef, ok := env.GetWorkingValue("rewoo.plan_ref"); ok {
-			ref, ok := rawRef.(core.ArtifactReference)
+			ref, ok := rawRef.(relurpctx.ArtifactReference)
 			if ok {
 				var plan RewooPlan
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &plan); err != nil {
@@ -238,7 +238,7 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 	}
 	if _, ok := env.GetWorkingValue("rewoo.synthesis"); !ok {
 		if rawRef, ok := env.GetWorkingValue("rewoo.synthesis_ref"); ok {
-			ref, ok := rawRef.(core.ArtifactReference)
+			ref, ok := rawRef.(relurpctx.ArtifactReference)
 			if ok {
 				var payload struct {
 					Synthesis string `json:"synthesis"`
@@ -307,7 +307,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 	return ""
 }
 
-func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpointID, workflowID, runID string, rawPlan any) *core.ArtifactReference {
+func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpointID, workflowID, runID string, rawPlan any) *relurpctx.ArtifactReference {
 	plan, ok := rawPlan.(*RewooPlan)
 	if !ok || plan == nil {
 		return nil
@@ -338,7 +338,7 @@ func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpoi
 	return nil
 }
 
-func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, checkpointID, workflowID, runID string, results []RewooStepResult) *core.ArtifactReference {
+func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, checkpointID, workflowID, runID string, results []RewooStepResult) *relurpctx.ArtifactReference {
 	payload, err := json.Marshal(results)
 	if err != nil {
 		return nil
@@ -365,7 +365,7 @@ func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, c
 	return nil
 }
 
-func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, checkpointID, workflowID, runID, synthesis string, results []RewooStepResult) *core.ArtifactReference {
+func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, checkpointID, workflowID, runID, synthesis string, results []RewooStepResult) *relurpctx.ArtifactReference {
 	payload, err := json.Marshal(map[string]any{
 		"synthesis":    synthesis,
 		"step_results": results,
@@ -400,7 +400,7 @@ func mustJSON(v any) []byte {
 	return data
 }
 
-func (s *RewooCheckpointStore) loadWorkflowArtifactJSON(ctx context.Context, ref core.ArtifactReference, target any) error {
+func (s *RewooCheckpointStore) loadWorkflowArtifactJSON(ctx context.Context, ref relurpctx.ArtifactReference, target any) error {
 	if s == nil || s.lifecycleRepo == nil {
 		return fmt.Errorf("checkpoint_restore: lifecycle repository unavailable for artifact hydration")
 	}

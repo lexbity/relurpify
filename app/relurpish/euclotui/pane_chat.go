@@ -14,13 +14,14 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 const chatSidebarMinWidth = 60
@@ -695,7 +696,7 @@ func (p *ChatPane) runStream(ctx context.Context, run *tui.RunState, metadata ma
 	callback := func(token string) {
 		sendRunMsg(run, tui.StreamTokenMsg{RunID: run.ID, TokenType: tui.TokenText, Token: token})
 	}
-	result, err := p.runtime.ExecuteInstructionStream(ctx, run.Prompt, core.TaskTypeCodeGeneration, metadata, callback)
+	result, err := p.runtime.ExecuteInstructionStream(ctx, run.Prompt, execution.TaskTypeCodeGeneration, metadata, callback)
 	if err != nil {
 		sendRunFinal(run, tui.StreamErrorMsg{RunID: run.ID, Error: err})
 		sendRunFinal(run, tui.StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: 0})
@@ -1050,7 +1051,7 @@ func sendRunFinal(run *tui.RunState, msg tea.Msg) {
 	}
 }
 
-func summarizeResult(res *core.Result) string {
+func summarizeResult(res *execution.Result) string {
 	if res == nil {
 		return ""
 	}
@@ -1063,7 +1064,7 @@ func summarizeResult(res *core.Result) string {
 	} else {
 		b.WriteString("false")
 	}
-	if fields := core.ResultFields(res.Data); len(fields) > 0 {
+	if fields := execution.ResultFields(res.Data); len(fields) > 0 {
 		b.WriteString("\nData: ")
 		b.WriteString(fmt.Sprintf("%v", fields))
 	}
@@ -1074,11 +1075,11 @@ func summarizeResult(res *core.Result) string {
 	return b.String()
 }
 
-func extractCompactSummary(result *core.Result) string {
+func extractCompactSummary(result *execution.Result) string {
 	if result == nil {
 		return ""
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	if len(fields) == 0 {
 		return ""
 	}
@@ -1094,7 +1095,7 @@ func extractCompactSummary(result *core.Result) string {
 	return ""
 }
 
-func structuredResultFromCore(res *core.Result) *tui.StructuredResult {
+func structuredResultFromCore(res *execution.Result) *tui.StructuredResult {
 	if res == nil {
 		return nil
 	}
@@ -1114,11 +1115,11 @@ func structuredResultFromCore(res *core.Result) *tui.StructuredResult {
 	return rendered
 }
 
-func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
+func extractResultEnvelope(res *execution.Result) *capability.CapabilityResultEnvelope {
 	if res == nil {
 		return nil
 	}
-	fields := core.ResultFields(res.Data)
+	fields := execution.ResultFields(res.Data)
 	if len(fields) == 0 {
 		return nil
 	}
@@ -1129,17 +1130,17 @@ func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
 		}
 		switch typed := raw.(type) {
 		case *contracts.ToolResult:
-			if envelope, ok := core.ToolResultEnvelope(typed); ok {
+			if envelope, ok := capability.ToolResultEnvelope(typed); ok {
 				return envelope
 			}
 		case contracts.ToolResult:
 			copy := typed
-			if envelope, ok := core.ToolResultEnvelope(&copy); ok {
+			if envelope, ok := capability.ToolResultEnvelope(&copy); ok {
 				return envelope
 			}
-		case *core.CapabilityResultEnvelope:
+		case *capability.CapabilityResultEnvelope:
 			return typed
-		case core.CapabilityResultEnvelope:
+		case capability.CapabilityResultEnvelope:
 			copy := typed
 			return &copy
 		}
@@ -1147,7 +1148,7 @@ func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
 	return nil
 }
 
-func structuredEnvelopeFromCore(envelope *core.CapabilityResultEnvelope) *tui.StructuredResultEnvelope {
+func structuredEnvelopeFromCore(envelope *capability.CapabilityResultEnvelope) *tui.StructuredResultEnvelope {
 	if envelope == nil {
 		return nil
 	}
@@ -1196,23 +1197,23 @@ func structuredEnvelopeFromCore(envelope *core.CapabilityResultEnvelope) *tui.St
 	return rendered
 }
 
-func structuredBlockFromCore(block core.ContentBlock) tui.StructuredContentBlock {
+func structuredBlockFromCore(block capability.ContentBlock) tui.StructuredContentBlock {
 	switch typed := block.(type) {
-	case core.TextContentBlock:
+	case capability.TextContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "text output",
 			Body:       strings.TrimSpace(typed.Text),
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case core.StructuredContentBlock:
+	case capability.StructuredContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "structured output",
 			Body:       formatStructuredData(typed.Data),
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case core.ResourceLinkContentBlock:
+	case capability.ResourceLinkContentBlock:
 		summary := "linked resource"
 		if typed.Name != "" {
 			summary = typed.Name
@@ -1227,7 +1228,7 @@ func structuredBlockFromCore(block core.ContentBlock) tui.StructuredContentBlock
 			Body:       body,
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case core.EmbeddedResourceContentBlock:
+	case capability.EmbeddedResourceContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "embedded resource",
@@ -1254,7 +1255,7 @@ func formatStructuredData(data any) string {
 	return string(raw)
 }
 
-func provenanceMap(prov core.ContentProvenance) map[string]string {
+func provenanceMap(prov capability.ContentProvenance) map[string]string {
 	out := make(map[string]string, 4)
 	if prov.CapabilityID != "" {
 		out["capability_id"] = prov.CapabilityID

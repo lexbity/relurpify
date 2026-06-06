@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
@@ -45,11 +46,11 @@ func (n *RetrievalNode) Contract() NodeContract {
 	return NodeContract{
 		SideEffectClass: SideEffectNone,
 		Idempotency:     IdempotencyReplaySafe,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "retrieval.*", n.queryKey},
 			WriteKeys:                []string{"retrieval.*", n.resultKey},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       8192,
 			MaxInlineCollectionItems: 100,
 		},
@@ -57,9 +58,9 @@ func (n *RetrievalNode) Contract() NodeContract {
 }
 
 // Execute performs the retrieval operation.
-func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.retriever == nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
 			Error:   "retriever not configured",
@@ -84,7 +85,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	// Execute retrieval
 	result, err := n.retriever.Retrieve(ctx, query)
 	if err != nil {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: false,
 			Error:   fmt.Sprintf("retrieval failed: %v", err),
@@ -118,10 +119,10 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 	env.AddRetrievalReference(ref)
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    core.NewToolResultPayload(map[string]any{"result": result}),
+		Data:    execution.NewToolResultPayload(map[string]any{"result": result}),
 	}, nil
 }
 

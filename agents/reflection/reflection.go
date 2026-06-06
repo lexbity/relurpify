@@ -11,21 +11,22 @@ import (
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/policyresolve"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
 type ReflectionAgent struct {
 	Reviewer      contracts.LanguageModel
 	Delegate      graph.WorkflowExecutor
-	Config        *core.Config
+	Config        *execution.Config
 	maxIterations int
 }
 
 // Initialize configures the reviewer.
-func (a *ReflectionAgent) Initialize(cfg *core.Config) error {
+func (a *ReflectionAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if cfg.MaxIterations <= 0 {
 		a.maxIterations = 3
@@ -36,7 +37,7 @@ func (a *ReflectionAgent) Initialize(cfg *core.Config) error {
 }
 
 // Execute runs the review workflow.
-func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	graph, err := a.BuildGraph(task)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (a *ReflectionAgent) Capabilities() []string {
 }
 
 // BuildGraph builds the review workflow.
-func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *ReflectionAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if a.Delegate == nil {
 		return nil, fmt.Errorf("reflection agent missing delegate")
 	}
@@ -82,13 +83,13 @@ func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if err := g.AddEdge(review.ID(), decision.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(decision.ID(), run.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(decision.ID(), run.ID(), func(res *execution.Result, env *contextdata.Envelope) bool {
 		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
 		return revise == true
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(decision.ID(), done.ID(), func(res *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(decision.ID(), done.ID(), func(res *execution.Result, env *contextdata.Envelope) bool {
 		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
 		return revise != true
 	}, false); err != nil {
@@ -100,7 +101,7 @@ func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 type reflectionDelegateNode struct {
 	id    string
 	agent *ReflectionAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 // ID returns the graph identifier for the delegate execution step.
@@ -113,7 +114,7 @@ func (n *reflectionDelegateNode) Type() graph.NodeType {
 
 // Execute runs the delegate agent while isolating state mutations until the
 // child run succeeds.
-func (n *reflectionDelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reflectionDelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetExecutionPhase("executing")
 	child := env.Clone()
 	result, err := n.agent.Delegate.Execute(ctx, n.task, child)
@@ -128,7 +129,7 @@ func (n *reflectionDelegateNode) Execute(ctx context.Context, env *contextdata.E
 type reflectionReviewNode struct {
 	id    string
 	agent *ReflectionAgent
-	task  *core.Task
+	task  *execution.Task
 }
 
 // ID returns the review node identifier.
@@ -141,7 +142,7 @@ func (n *reflectionReviewNode) Type() graph.NodeType {
 
 // Execute asks the reviewer model to evaluate the last result and captures the
 // structured feedback in the shared state.
-func (n *reflectionReviewNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reflectionReviewNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	lastResult := resolveResultHandle(env, "reflection.last_result")
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
 %s
@@ -160,7 +161,7 @@ Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), com
 		return nil, err
 	}
 	contextdata.SetTyped(env, "reflection.review", review)
-	return &core.Result{NodeID: n.id, Success: true, Data: core.NewToolResultPayload(map[string]any{"review": review})}, nil
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"review": review})}, nil
 }
 
 type reflectionDecisionNode struct {
@@ -178,7 +179,7 @@ func (n *reflectionDecisionNode) Type() graph.NodeType {
 
 // Execute inspects review feedback and decides if another delegate iteration
 // should run.
-func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	review, _ := contextdata.GetTyped[reviewPayload](env, "reflection.review")
 	iter, _ := contextdata.GetTyped[int](env, "reflection.iteration")
 	iter++
@@ -188,10 +189,10 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.E
 	approve := review.Approve && assessment.Allowed
 	revise := !approve && iter < n.agent.maxIterations
 	contextdata.SetTyped(env, "reflection.revise", revise)
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"revise":                 revise,
 			"issue_score":            assessment.IssueScore,
 			"approval_threshold":     assessment.ApprovalThreshold,
@@ -231,15 +232,15 @@ func parseReview(raw string) (reviewPayload, error) {
 	return payload, nil
 }
 
-func resolveResultHandle(env *contextdata.Envelope, key string) *core.Result {
+func resolveResultHandle(env *contextdata.Envelope, key string) *execution.Result {
 	if env == nil {
 		return nil
 	}
-	if value, ok := contextdata.GetTyped[*core.Result](env, key); ok {
+	if value, ok := contextdata.GetTyped[*execution.Result](env, key); ok {
 		return value
 	}
 	if scoped := scopedResultKey(taskScope(nil, env), key); scoped != "" {
-		if value, ok := contextdata.GetTyped[*core.Result](env, scoped); ok {
+		if value, ok := contextdata.GetTyped[*execution.Result](env, scoped); ok {
 			return value
 		}
 	}
@@ -253,7 +254,7 @@ func scopedResultKey(scope, key string) string {
 	return scope + ":" + key
 }
 
-func taskScope(task *core.Task, env *contextdata.Envelope) string {
+func taskScope(task *execution.Task, env *contextdata.Envelope) string {
 	if task != nil && task.ID != "" {
 		return task.ID
 	}
@@ -271,16 +272,16 @@ func envGetString(env *contextdata.Envelope, key string) string {
 	return val
 }
 
-func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
+func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) string {
 	var fallback *agentspec.AgentRuntimeSpec
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
-	effective := frameworkskills.ResolveEffectiveSkillPolicy(task, fallback, nil)
+	effective := policyresolve.ResolveEffectiveAgentPolicy(task, fallback, nil)
 	if effective.Spec == nil {
 		return "Consider correctness, completeness, quality, security, performance."
 	}
-	return frameworkskills.RenderReviewPolicy(effective.Policy)
+	return policy.RenderReviewPolicy(effective.Policy)
 }
 
 func reflectionApprovalPasses(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) bool {
@@ -295,7 +296,7 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Enve
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
-	effective := frameworkskills.ResolveEffectiveSkillPolicy(nil, fallback, nil)
+	effective := policyresolve.ResolveEffectiveAgentPolicy(nil, fallback, nil)
 	if effective.Spec == nil {
 		return reflectionAssessment{
 			Allowed:              review.Approve,
@@ -336,7 +337,7 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Enve
 	return assessment
 }
 
-func compactResultForReview(result *core.Result) map[string]any {
+func compactResultForReview(result *execution.Result) map[string]any {
 	if result == nil {
 		return map[string]any{"present": false}
 	}
@@ -348,7 +349,7 @@ func compactResultForReview(result *core.Result) map[string]any {
 	if strings.TrimSpace(result.Error) != "" {
 		data["error"] = truncateReflectionString(result.Error)
 	}
-	if fields := core.ResultFields(result.Data); len(fields) > 0 {
+	if fields := execution.ResultFields(result.Data); len(fields) > 0 {
 		data["data"] = compactReflectionValue(fields, 0)
 	}
 	return data
@@ -433,11 +434,11 @@ func reflectionMinInt(a, b int) int {
 }
 
 func reflectionSeverityGuidance(weights map[string]float64) string {
-	return frameworkskills.RenderSeverityWeights(weights)
+	return policy.RenderSeverityWeights(weights)
 }
 
 func reflectionSeverityWeights(input map[string]float64) map[string]float64 {
-	return frameworkskills.ResolveSeverityWeights(input)
+	return policy.ResolveSeverityWeights(input)
 }
 
 func reflectionSeverityWeight(weights map[string]float64, severity string) float64 {

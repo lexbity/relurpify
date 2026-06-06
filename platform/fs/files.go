@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // Re-export FileScope types for local usage
@@ -116,7 +117,7 @@ func (t *ReadFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *ReadFileTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemRead)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemRead)}
 }
 func (t *ReadFileTool) Tags() []string {
 	return []string{contracts.TagReadOnly, "file", "inspect", "recovery"}
@@ -214,7 +215,7 @@ func (t *WriteFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *WriteFileTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
 }
 func (t *WriteFileTool) Tags() []string { return []string{contracts.TagDestructive, "file", "edit"} }
 
@@ -312,7 +313,7 @@ func (t *ListFilesTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *ListFilesTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemList)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemList)}
 }
 func (t *ListFilesTool) Tags() []string { return []string{contracts.TagReadOnly, "file", "discover"} }
 
@@ -433,7 +434,7 @@ func (t *SearchInFilesTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *SearchInFilesTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemRead, contracts.FileSystemList)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemRead, contracts.FileSystemList)}
 }
 func (t *SearchInFilesTool) Tags() []string {
 	return []string{contracts.TagReadOnly, "search", "recovery"}
@@ -505,7 +506,7 @@ func (t *CreateFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *CreateFileTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
 }
 func (t *CreateFileTool) Tags() []string { return []string{contracts.TagDestructive, "file", "edit"} }
 
@@ -579,7 +580,7 @@ func (t *DeleteFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *DeleteFileTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: contracts.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
+	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, contracts.FileSystemWrite)}
 }
 func (t *DeleteFileTool) Tags() []string { return []string{contracts.TagDestructive, "file", "edit"} }
 

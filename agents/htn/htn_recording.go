@@ -10,7 +10,7 @@ import (
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // recordingPrimitiveAgent wraps a primitive executor and persists step outcomes
@@ -43,22 +43,22 @@ func (a *recordingPrimitiveAgent) BranchExecutor() (plan.WorkflowExecutor, error
 	return branch, nil
 }
 
-func (a *recordingPrimitiveAgent) Initialize(_ *core.Config) error { return nil }
+func (a *recordingPrimitiveAgent) Initialize(_ *execution.Config) error { return nil }
 
 func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
 
-func (a *recordingPrimitiveAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) { return nil, nil }
+func (a *recordingPrimitiveAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) { return nil, nil }
 
-func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
+func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	if a == nil || a.delegate == nil {
-		return &core.Result{Success: true}, nil
+		return &execution.Result{Success: true}, nil
 	}
 	result, err := a.delegate.Execute(ctx, task, state)
 	a.persistStep(ctx, task, result, err)
 	return result, err
 }
 
-func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *core.Task, result *core.Result, execErr error) {
+func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *execution.Task, result *execution.Result, execErr error) {
 	stepID, _ := htnStepMetadata(task)
 	if stepID == "" {
 		return
@@ -88,7 +88,7 @@ func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *core.Ta
 }
 
 // htnStepMetadata extracts the step ID and trimmed description from the task context.
-func htnStepMetadata(task *core.Task) (string, string) {
+func htnStepMetadata(task *execution.Task) (string, string) {
 	if task == nil || task.Context == nil {
 		return "", ""
 	}
@@ -110,14 +110,14 @@ func htnStepMetadata(task *core.Task) (string, string) {
 }
 
 // htnResultSummary produces a human-readable summary from a step result or error.
-func htnResultSummary(result *core.Result, execErr error) string {
+func htnResultSummary(result *execution.Result, execErr error) string {
 	if execErr != nil {
 		return execErr.Error()
 	}
 	if result == nil {
 		return "step completed"
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	if text := strings.TrimSpace(fmt.Sprint(fields["text"])); text != "" && text != "<nil>" {
 		return text
 	}

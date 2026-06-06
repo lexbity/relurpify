@@ -14,9 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -44,7 +45,7 @@ type hitlRateBucket struct {
 type PermissionManager struct {
 	basePath         string
 	declared         *contracts.PermissionSet
-	audit            core.AuditLogger
+	audit            policy.AuditLogger
 	hitl             HITLProvider
 	runtime          sandbox.SandboxRuntime
 	grants           map[string]*PermissionGrant
@@ -68,7 +69,7 @@ type taskGrant struct {
 }
 
 // NewPermissionManager creates an enforcement instance.
-func NewPermissionManager(basePath string, declared *contracts.PermissionSet, audit core.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
+func NewPermissionManager(basePath string, declared *contracts.PermissionSet, audit policy.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
 	if declared == nil {
 		return nil, errors.New("permission manager requires permission set")
 	}
@@ -289,7 +290,7 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool con
 	if m == nil || tool == nil {
 		return false
 	}
-	taskCtx, ok := core.TaskContextFrom(ctx)
+	taskCtx, ok := execution.TaskContextFrom(ctx)
 	if !ok || strings.TrimSpace(taskCtx.ID) == "" {
 		return false
 	}
@@ -1026,14 +1027,14 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc contra
 	if m.audit == nil {
 		return
 	}
-	record := core.AuditRecord{
+	record := policy.AuditRecord{
 		Timestamp:   time.Now().UTC(),
 		AgentID:     agentID,
 		Action:      desc.Action,
 		Type:        string(desc.Type),
 		Permission:  redactSensitivePath(desc.Resource),
 		Result:      result,
-		Metadata:    core.RedactMetadataMap(fields),
+		Metadata:    execution.RedactMetadataMap(fields),
 		Correlation: agentID,
 	}
 	_ = m.audit.Log(ctx, record)

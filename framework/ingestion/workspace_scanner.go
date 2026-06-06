@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // SkillIngestionSource defines a path pattern for skill resource ingestion.
@@ -29,8 +29,8 @@ type SkillIngestionSource struct {
 type WorkspaceScanner struct {
 	Store         *knowledge.ChunkStore
 	Events        EventLog
-	Policy        interface{} // *contextpolicy.ContextPolicyBundle (avoid import cycle)
-	Evaluator     interface{} // *contextpolicy.Evaluator
+	Policy        interface{} // *execctx.ContextPolicyBundle (avoid import cycle)
+	Evaluator     interface{} // *execctx.Evaluator
 	Concurrency   int
 	IncludeGlobs  []string
 	ExcludeGlobs  []string
@@ -91,7 +91,7 @@ func (s *WorkspaceScanner) Scan(ctx context.Context, root string) (*ScanReport, 
 
 	// Emit bootstrap complete event
 	if s.Events != nil {
-		s.Events.Emit(string(core.EventBootstrapComplete), map[string]any{
+		s.Events.Emit(string(telemetry.EventBootstrapComplete), map[string]any{
 			"files_scanned":      report.FilesScanned,
 			"chunks_created":     report.ChunksCreated,
 			"chunks_quarantined": report.ChunksQuarantined,
@@ -160,7 +160,7 @@ func (s *WorkspaceScanner) ScanIncremental(ctx context.Context, root string, sin
 
 	// Emit bootstrap complete event
 	if s.Events != nil {
-		s.Events.Emit(string(core.EventBootstrapComplete), map[string]any{
+		s.Events.Emit(string(telemetry.EventBootstrapComplete), map[string]any{
 			"files_scanned":      report.FilesScanned,
 			"chunks_created":     report.ChunksCreated,
 			"chunks_quarantined": report.ChunksQuarantined,
@@ -248,8 +248,8 @@ func (s *WorkspaceScanner) shouldInclude(path string) bool {
 
 // processFile processes a single file.
 func (s *WorkspaceScanner) processFile(ctx context.Context, root string, file string, report *ScanReport, mu *sync.Mutex) error {
-	var policy *contextpolicy.ContextPolicyBundle
-	if typed, ok := s.Policy.(*contextpolicy.ContextPolicyBundle); ok {
+	var policy *execctx.ContextPolicyBundle
+	if typed, ok := s.Policy.(*execctx.ContextPolicyBundle); ok {
 		policy = typed
 	}
 

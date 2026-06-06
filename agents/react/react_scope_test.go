@@ -8,8 +8,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type scopeAwareReactModel struct {
@@ -106,14 +106,14 @@ func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
 		t.Fatal("expected scoped registry")
 	}
 
-	task := &core.Task{ID: "task-1", Instruction: "inspect the workspace"}
+	task := &execution.Task{ID: "task-1", Instruction: "inspect the workspace"}
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	step := &reactThinkNode{
 		id: "react_think",
 		agent: &ReActAgent{
 			Model:  &scopeAwareReactModel{nativeToolCalling: true},
 			Tools:  scoped,
-			Config: &core.Config{Model: "test-model", NativeToolCalling: true},
+			Config: &execution.Config{Model: "test-model", NativeToolCalling: true},
 		},
 		task: task,
 	}
@@ -152,7 +152,7 @@ func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
 		agent: &ReActAgent{
 			Model:  fallbackModel,
 			Tools:  scoped,
-			Config: &core.Config{Model: "test-model", NativeToolCalling: false},
+			Config: &execution.Config{Model: "test-model", NativeToolCalling: false},
 		},
 		task: task,
 	}

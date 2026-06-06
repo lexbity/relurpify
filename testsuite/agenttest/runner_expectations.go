@@ -11,9 +11,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
@@ -59,13 +59,13 @@ func evaluateSuccessRateConstraint(rate float64, constraint string) bool {
 	}
 }
 
-func toolCallsAppearInOrder(events []core.Event, expected []string) bool {
+func toolCallsAppearInOrder(events []telemetry.Event, expected []string) bool {
 	if len(expected) == 0 {
 		return true
 	}
 	next := 0
 	for _, ev := range events {
-		if ev.Type != core.EventToolCall {
+		if ev.Type != telemetry.EventToolCall {
 			continue
 		}
 		name, _ := ev.Metadata["tool"].(string)
@@ -79,10 +79,10 @@ func toolCallsAppearInOrder(events []core.Event, expected []string) bool {
 	return false
 }
 
-func countLLMCalls(events []core.Event) int {
+func countLLMCalls(events []telemetry.Event) int {
 	total := 0
 	for _, ev := range events {
-		if ev.Type == core.EventLLMResponse {
+		if ev.Type == telemetry.EventLLMResponse {
 			total++
 		}
 	}
@@ -781,7 +781,7 @@ func evaluateSecurityExpectations(spec SecuritySpec, m *cfgload.AgentManifest, w
 }
 
 // evaluateBenchmarkExpectations evaluates soft telemetry observations.
-func evaluateBenchmarkExpectations(spec BenchmarkSpec, transcript *ToolTranscriptArtifact, events []core.Event, snapshot *contextdata.Envelope, tokenUsage TokenUsageReport) []BenchmarkObservation {
+func evaluateBenchmarkExpectations(spec BenchmarkSpec, transcript *ToolTranscriptArtifact, events []telemetry.Event, snapshot *contextdata.Envelope, tokenUsage TokenUsageReport) []BenchmarkObservation {
 	var observations []BenchmarkObservation
 
 	for _, tool := range spec.ToolsExpected {

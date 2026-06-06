@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
-func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task, env *contextdata.Envelope, result *core.Result, err error) (*core.Result, error) {
+func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *execution.Task, env *contextdata.Envelope, result *execution.Result, err error) (*execution.Result, error) {
 	if err == nil && result != nil {
 		if followErr := a.completeExplicitReadOnlyRetrieval(ctx, task, env); followErr != nil {
 			a.debugf("explicit retrieval follow-up failed: %v", followErr)
@@ -28,12 +29,12 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task,
 			result.Error = ""
 		}
 		if final, ok := env.GetWorkingValue("react.final_output"); ok {
-			fields := core.ResultFields(result.Data)
+			fields := execution.ResultFields(result.Data)
 			fields["final_output"] = final
 			if summary := finalOutputSummary(final); summary != "" {
 				fields["text"] = summary
 			}
-			result.Data = core.NewToolResultPayload(fields)
+			result.Data = execution.NewToolResultPayload(fields)
 		}
 		mirrorReactFinalOutputReference(env)
 		compactReactFinalOutputState(env)
@@ -42,7 +43,7 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task,
 		compactReactLoopState(env)
 		mirrorReactCheckpointReference(env)
 		if reason := strings.TrimSpace(envGetString(env, "react.incomplete_reason")); reason != "" {
-			fields := core.ResultFields(result.Data)
+			fields := execution.ResultFields(result.Data)
 			fields["incomplete_reason"] = reason
 			// For non-editing tasks that produced observations, degrade rather than
 			// hard-fail - partial analysis output is still useful to the caller.
@@ -53,13 +54,13 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task,
 				result.Success = false
 				result.Error = reason
 			}
-			result.Data = core.NewToolResultPayload(fields)
+			result.Data = execution.NewToolResultPayload(fields)
 		}
 	}
 	return result, err
 }
 
-func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
+func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task *execution.Task, env *contextdata.Envelope) error {
 	if a == nil || a.Tools == nil || task == nil || env == nil || taskNeedsEditing(task) {
 		return nil
 	}
@@ -88,7 +89,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 		Name: "file_read",
 		Args: map[string]any{"path": path},
 	}
-	observation := summarizeToolResult(env, call, res, core.InsertionDecision{Action: core.InsertionActionSummarized})
+	observation := summarizeToolResult(env, call, res, capability.InsertionDecision{Action: capability.InsertionActionSummarized})
 	history := append(getToolObservations(env), observation)
 	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)

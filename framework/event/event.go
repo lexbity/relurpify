@@ -3,14 +3,14 @@ package event
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Log is the append-only framework event log.
 type Log interface {
-	Append(ctx context.Context, partition string, events []core.FrameworkEvent) ([]uint64, error)
-	Read(ctx context.Context, partition string, afterSeq uint64, limit int, follow bool) ([]core.FrameworkEvent, error)
-	ReadByType(ctx context.Context, partition string, typePrefix string, afterSeq uint64, limit int) ([]core.FrameworkEvent, error)
+	Append(ctx context.Context, partition string, events []telemetry.FrameworkEvent) ([]uint64, error)
+	Read(ctx context.Context, partition string, afterSeq uint64, limit int, follow bool) ([]telemetry.FrameworkEvent, error)
+	ReadByType(ctx context.Context, partition string, typePrefix string, afterSeq uint64, limit int) ([]telemetry.FrameworkEvent, error)
 	LastSeq(ctx context.Context, partition string) (uint64, error)
 	TakeSnapshot(ctx context.Context, partition string, seq uint64, data []byte) error
 	LoadSnapshot(ctx context.Context, partition string) (uint64, []byte, error)
@@ -20,7 +20,7 @@ type Log interface {
 // Materializer consumes events and maintains a derived state view.
 type Materializer interface {
 	Name() string
-	Apply(ctx context.Context, events []core.FrameworkEvent) error
+	Apply(ctx context.Context, events []telemetry.FrameworkEvent) error
 	Snapshot(ctx context.Context) ([]byte, error)
 	Restore(ctx context.Context, data []byte) error
 }
@@ -110,7 +110,7 @@ func (r *Runner) RestoreAndRunOnce(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) applyBatch(ctx context.Context, events []core.FrameworkEvent) error {
+func (r *Runner) applyBatch(ctx context.Context, events []telemetry.FrameworkEvent) error {
 	if len(events) == 0 {
 		return nil
 	}

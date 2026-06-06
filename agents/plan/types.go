@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-type Result = core.Result
+type Result = execution.Result
 
 type WorkflowExecutor interface {
-	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error)
+	Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error)
 }
 
 // Plan represents a collection of steps with dependencies.
@@ -37,11 +37,11 @@ type PlanStep struct {
 // PlanExecutionOptions configures how plan steps are executed.
 type PlanExecutionOptions struct {
 	MaxRecoveryAttempts int
-	BuildStepTask       func(parentTask *core.Task, plan *Plan, step PlanStep, state *contextdata.Envelope) *core.Task
+	BuildStepTask       func(parentTask *execution.Task, plan *Plan, step PlanStep, state *contextdata.Envelope) *execution.Task
 	CompletedStepIDs    func(state *contextdata.Envelope) []string
 	Diagnose            func(ctx context.Context, step PlanStep, err error) (string, error)
-	Recover             func(ctx context.Context, step PlanStep, stepTask *core.Task, state *contextdata.Envelope, err error) (*StepRecovery, error)
-	BeforeStep          func(step PlanStep, stepTask *core.Task, state *contextdata.Envelope)
+	Recover             func(ctx context.Context, step PlanStep, stepTask *execution.Task, state *contextdata.Envelope, err error) (*StepRecovery, error)
+	BeforeStep          func(step PlanStep, stepTask *execution.Task, state *contextdata.Envelope)
 	AfterStep           func(step PlanStep, state *contextdata.Envelope, result *Result)
 	MergeBranches       func(parent *contextdata.Envelope, branches []BranchExecutionResult) error
 }

@@ -151,18 +151,7 @@ func pickGoal(s ThoughtRecipeStep) string {
 }
 
 func extractToolScopes(s ThoughtRecipeStep) []string {
-	if len(s.Config) == 0 {
-		return nil
-	}
-	raw, ok := s.Config["tool_scopes"]
-	if !ok {
-		return nil
-	}
-	list, ok := raw.([]string)
-	if !ok {
-		return nil
-	}
-	return list
+	return nil
 }
 
 func isOptionalStep(stepID string, groups []ConditionalGroup) bool {

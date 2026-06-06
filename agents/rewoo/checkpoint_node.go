@@ -5,7 +5,7 @@ import (
 
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // CheckpointNode is a graph node that requests a checkpoint from the shared
@@ -35,7 +35,7 @@ func (n *CheckpointNode) Type() graph.NodeType {
 }
 
 // Execute requests a checkpoint and records the request metadata in the envelope.
-func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	attempt := 0
 	if attemptVal, ok := env.GetWorkingValue("rewoo.attempt"); ok {
 		if a, ok := attemptVal.(int); ok {
@@ -50,9 +50,9 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		n.Debugf("checkpoint requested at phase %s attempt %d", n.phase, attempt)
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"checkpoint_requested": true,
 			"phase":                n.phase,
 		}),

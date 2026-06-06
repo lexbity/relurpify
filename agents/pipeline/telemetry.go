@@ -3,22 +3,22 @@ package pipeline
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
-	pipelineEventStageStart       core.EventType = "pipeline_stage_start"
-	pipelineEventStageFinish      core.EventType = "pipeline_stage_finish"
-	pipelineEventStageDecodeError core.EventType = "pipeline_stage_decode_error"
-	pipelineEventStageValidError  core.EventType = "pipeline_stage_validation_error"
+	pipelineEventStageStart       telemetry.EventType = "pipeline_stage_start"
+	pipelineEventStageFinish      telemetry.EventType = "pipeline_stage_finish"
+	pipelineEventStageDecodeError telemetry.EventType = "pipeline_stage_decode_error"
+	pipelineEventStageValidError  telemetry.EventType = "pipeline_stage_validation_error"
 )
 
 // emitStageEvent sends a structured stage event when telemetry is configured.
-func emitStageEvent(telemetry core.Telemetry, eventType core.EventType, taskID, stageName, message string, metadata map[string]any) {
-	if telemetry == nil {
+func emitStageEvent(sink telemetry.Telemetry, eventType telemetry.EventType, taskID, stageName, message string, metadata map[string]any) {
+	if sink == nil {
 		return
 	}
-	telemetry.Emit(core.Event{
+	sink.Emit(telemetry.Event{
 		Type:      eventType,
 		NodeID:    stageName,
 		TaskID:    taskID,

@@ -6,24 +6,24 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type captureTelemetry struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (c *captureTelemetry) Emit(event core.Event) {
+func (c *captureTelemetry) Emit(event telemetry.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.events = append(c.events, event)
 }
 
-func (c *captureTelemetry) snapshot() []core.Event {
+func (c *captureTelemetry) snapshot() []telemetry.Event {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := make([]core.Event, len(c.events))
+	out := make([]telemetry.Event, len(c.events))
 	copy(out, c.events)
 	return out
 }
@@ -48,7 +48,7 @@ func TestEmitFrame_WritesToEnvelope(t *testing.T) {
 func TestEmitFrame_EmitsTelemetryEvent(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	sink := &captureTelemetry{}
-	ctx := core.WithTelemetry(context.Background(), sink)
+	ctx := telemetry.WithTelemetry(context.Background(), sink)
 	frame := NewCandidateSelectionFrame("task-1", "session-1", []string{"a", "b"})
 
 	if err := EmitFrame(ctx, frame, env, nil); err != nil {
@@ -59,7 +59,7 @@ func TestEmitFrame_EmitsTelemetryEvent(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
 	}
-	if events[0].Type != core.EventType("euclo.interaction.frame.emitted") {
+	if events[0].Type != telemetry.EventType("euclo.interaction.frame.emitted") {
 		t.Fatalf("expected emitted event, got %q", events[0].Type)
 	}
 	if got := events[0].Metadata["frame_id"]; got != frame.ID {

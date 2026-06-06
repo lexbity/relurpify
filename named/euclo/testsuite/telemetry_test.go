@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
@@ -20,16 +20,16 @@ func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-telemetry", "session-telemetry")
 	seedTask(env, "add a cache to the handler")
-	telemetry := &recordingTelemetry{}
+	rec := &recordingTelemetry{}
 
-	if err := graph.Execute(core.WithTelemetry(context.Background(), telemetry), env); err != nil {
+	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {
 		t.Fatalf("graph execute failed: %v", err)
 	}
 
-	assertEventOrder(t, telemetry.types(), []core.EventType{
-		core.EventType("euclo.route.selected"),
-		core.EventType("euclo.route.completed"),
-		core.EventType("euclo.execution.complete"),
+	assertEventOrder(t, rec.types(), []telemetry.EventType{
+		telemetry.EventType("euclo.route.selected"),
+		telemetry.EventType("euclo.route.completed"),
+		telemetry.EventType("euclo.execution.complete"),
 	})
 	if got, _ := euclostate.GetOutcomeCategory(env); strings.TrimSpace(got) != "success" {
 		t.Fatal("expected success outcome")

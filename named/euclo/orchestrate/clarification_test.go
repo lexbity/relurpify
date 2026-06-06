@@ -5,18 +5,18 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T) {
 	env := contextdata.NewEnvelope("task-clarify", "session-clarify")
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-clarify",
 		Type:        "euclo",
 		Instruction: "clarify the target module",

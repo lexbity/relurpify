@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // BrowserServiceSnapshot captures the workspace-level browser service state.
@@ -83,7 +85,7 @@ func (s *BrowserService) Snapshot(context.Context) (*BrowserServiceSnapshot, err
 	}, nil
 }
 
-func (s *BrowserService) ListSessions(context.Context) ([]core.ProviderSession, error) {
+func (s *BrowserService) ListSessions(context.Context) ([]capability.ProviderSession, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -93,19 +95,19 @@ func (s *BrowserService) ListSessions(context.Context) ([]core.ProviderSession, 
 		handles = append(handles, handle)
 	}
 	s.mu.Unlock()
-	out := make([]core.ProviderSession, 0, len(handles))
+	out := make([]capability.ProviderSession, 0, len(handles))
 	for _, handle := range handles {
 		out = append(out, handle.providerSession())
 	}
 	return out, nil
 }
 
-func (s *BrowserService) HealthSnapshot(context.Context) (core.ProviderHealthSnapshot, error) {
+func (s *BrowserService) HealthSnapshot(context.Context) (capability.ProviderHealthSnapshot, error) {
 	s.mu.Lock()
 	count := len(s.sessions)
 	paths := s.paths
 	s.mu.Unlock()
-	return core.ProviderHealthSnapshot{
+	return capability.ProviderHealthSnapshot{
 		Status:  "healthy",
 		Message: "browser service active",
 		Metadata: map[string]interface{}{
@@ -115,7 +117,7 @@ func (s *BrowserService) HealthSnapshot(context.Context) (core.ProviderHealthSna
 	}, nil
 }
 
-func (s *BrowserService) SnapshotProvider(ctx context.Context) (*core.ProviderSnapshot, error) {
+func (s *BrowserService) SnapshotProvider(ctx context.Context) (*capability.ProviderSnapshot, error) {
 	sessions, err := s.ListSessions(ctx)
 	if err != nil {
 		return nil, err
@@ -124,18 +126,18 @@ func (s *BrowserService) SnapshotProvider(ctx context.Context) (*core.ProviderSn
 	if err != nil {
 		return nil, err
 	}
-	return &core.ProviderSnapshot{
+	return &capability.ProviderSnapshot{
 		ProviderID:     "browser",
-		Recoverability: core.RecoverabilityInProcess,
-		Descriptor: core.ProviderDescriptor{
+		Recoverability: policy.RecoverabilityInProcess,
+		Descriptor: capability.ProviderDescriptor{
 			ID:                 "browser",
-			Kind:               core.ProviderKindAgentRuntime,
+			Kind:               capability.ProviderKindAgentRuntime,
 			ActivationScope:    defaultBrowserScope,
 			TrustBaseline:      agentspec.TrustClassProviderLocalUntrusted,
-			RecoverabilityMode: core.RecoverabilityInProcess,
+			RecoverabilityMode: policy.RecoverabilityInProcess,
 			SupportsHealth:     true,
-			Security: core.ProviderSecurityProfile{
-				Origin:                     core.ProviderOriginLocal,
+			Security: capability.ProviderSecurityProfile{
+				Origin:                     capability.ProviderOriginLocal,
 				SafeForDirectInsertion:     false,
 				RequiresFrameworkMediation: true,
 			},
@@ -151,7 +153,7 @@ func (s *BrowserService) SnapshotProvider(ctx context.Context) (*core.ProviderSn
 	}, nil
 }
 
-func (s *BrowserService) SnapshotSessions(context.Context) ([]core.ProviderSessionSnapshot, error) {
+func (s *BrowserService) SnapshotSessions(context.Context) ([]capability.ProviderSessionSnapshot, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -161,7 +163,7 @@ func (s *BrowserService) SnapshotSessions(context.Context) ([]core.ProviderSessi
 		handles = append(handles, handle)
 	}
 	s.mu.Unlock()
-	out := make([]core.ProviderSessionSnapshot, 0, len(handles))
+	out := make([]capability.ProviderSessionSnapshot, 0, len(handles))
 	for _, handle := range handles {
 		out = append(out, handle.snapshot())
 	}
@@ -256,8 +258,8 @@ func success(data map[string]interface{}) *contracts.ToolResult {
 	return &contracts.ToolResult{Success: true, Data: data}
 }
 
-func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, agentID, taskID, message string, metadata map[string]interface{}) {
-	if telemetry == nil {
+func emitBrowserTelemetry(sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]interface{}) {
+	if sink == nil {
 		return
 	}
 	if metadata == nil {
@@ -266,7 +268,7 @@ func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, ag
 	if agentID != "" {
 		metadata["agent_id"] = agentID
 	}
-	telemetry.Emit(core.Event{
+	sink.Emit(telemetry.Event{
 		Type:      eventType,
 		TaskID:    taskID,
 		Message:   message,

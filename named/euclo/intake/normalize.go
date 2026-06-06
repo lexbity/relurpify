@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ResumeState holds values from envelope for task normalization.
@@ -14,9 +14,9 @@ type ResumeState struct {
 	Family string
 }
 
-// NormalizeTaskEnvelope creates a TaskEnvelope from a core.Task and resume state.
+// NormalizeTaskEnvelope creates a TaskEnvelope from a execution.Task and resume state.
 // It extracts hints from the instruction, pulls context values, and applies resume state.
-func NormalizeTaskEnvelope(task *core.Task, resume *ResumeState) (*TaskEnvelope, error) {
+func NormalizeTaskEnvelope(task *execution.Task, resume *ResumeState) (*TaskEnvelope, error) {
 	if task == nil {
 		return nil, nil
 	}
@@ -138,7 +138,7 @@ func BuildIntentInterpretation(evidence *intentcontext.IntentEvidence, classific
 
 // NormalizeTaskEnvelopeWithRegistry creates a TaskEnvelope with registry-based flags.
 // The hasWriteTools parameter determines EditPermitted status.
-func NormalizeTaskEnvelopeWithRegistry(task *core.Task, resume *ResumeState, hasWriteTools bool) (*TaskEnvelope, error) {
+func NormalizeTaskEnvelopeWithRegistry(task *execution.Task, resume *ResumeState, hasWriteTools bool) (*TaskEnvelope, error) {
 	envelope, err := NormalizeTaskEnvelope(task, resume)
 	if err != nil {
 		return nil, err

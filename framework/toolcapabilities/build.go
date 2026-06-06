@@ -30,7 +30,7 @@ func StrictMode() BuildOption {
 //	subprocess → subprocess.NewTool
 //	go_native  → nativereg.Lookup + constructor call
 //	composite  → composite.New
-//	mcp        → skipped (handled by a separate subsystem)
+//	(backends with no local implementation are skipped)
 //
 // Tools whose manifests are not admitted (missing Go impl, strict-mode
 // violations, or unlisted backends) are excluded with a warning log.
@@ -95,9 +95,6 @@ func buildOne(workspace string, runner contracts.CommandRunner, manifest contrac
 			return nil, false
 		}
 		return composite.New(manifest, resolver), nil
-
-	case contracts.ToolBackendMCP:
-		return nil, nil // MCP tools are handled by a separate subsystem
 
 	default:
 		return nil, fmt.Errorf("unsupported backend %q", manifest.Execution.Backend)

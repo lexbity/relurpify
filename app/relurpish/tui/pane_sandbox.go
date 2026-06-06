@@ -388,7 +388,7 @@ func (p *SandboxPane) buildNetworkCategory() *sandboxNode {
 func (p *SandboxPane) buildProviderCategory() *sandboxNode {
 	cat := &sandboxNode{
 		ID:         "providers",
-		Label:      "MCP Servers",
+		Label:      "Capability Servers",
 		Kind:       sandboxNodeCategory,
 		Expandable: true,
 		Expanded:   p.expandedState("providers", true),

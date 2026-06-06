@@ -9,8 +9,8 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
@@ -24,8 +24,8 @@ func NewLayerCheckHandler(env agentenv.WorkspaceEnvironment) *LayerCheckHandler 
 }
 
 // Descriptor returns the capability descriptor for the layer check handler.
-func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
-	return core.CapabilityDescriptor{
+func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.layer_check",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -34,7 +34,7 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		Description:   "Checks import boundaries between architectural layers for violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "read-only"},
-		Source: core.CapabilitySource{
+		Source: capability.CapabilitySource{
 			Scope: agentspec.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

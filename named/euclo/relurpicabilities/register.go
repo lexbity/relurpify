@@ -6,52 +6,52 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type relurpicCapabilityBlueprint struct {
 	ID            string
 	RequiredTools []string
-	NewHandler    func(agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler
+	NewHandler    func(agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler
 }
 
 var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
-	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler { return NewTestRunHandler(env) }},
-	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler { return NewTestRunHandler(env) }},
+	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewASTQueryHandler(env)
 	}},
-	{ID: "euclo:cap.symbol_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.symbol_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewSymbolTraceHandler(env)
 	}},
-	{ID: "euclo:cap.call_graph", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.call_graph", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewCallGraphHandler(env)
 	}},
-	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewBlameTraceHandler(env)
 	}},
-	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler { return NewBisectHandler(env) }},
-	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler { return NewBisectHandler(env) }},
+	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewCodeReviewHandler(env)
 	}},
-	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewDiffSummaryHandler(env)
 	}},
-	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewLayerCheckHandler(env)
 	}},
-	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewTargetedRefactorHandler(env)
 	}},
-	{ID: "euclo:cap.rename_symbol", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.rename_symbol", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewRenameSymbolHandler(env)
 	}},
-	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewAPICompatHandler(env)
 	}},
-	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewBoundaryReportHandler(env)
 	}},
-	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) core.InvocableCapabilityHandler {
+	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewCoverageCheckHandler(env)
 	}},
 }

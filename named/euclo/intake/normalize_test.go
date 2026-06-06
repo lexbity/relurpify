@@ -3,7 +3,7 @@ package intake
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // === Phase 3 Unit Tests (exact spec requirements) ===
@@ -19,7 +19,7 @@ func TestNormalizeNilTask(t *testing.T) {
 }
 
 func TestNormalizeBasicInstruction(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-1",
 		Instruction: "Please implement user authentication",
 	}
@@ -47,7 +47,7 @@ func TestNormalizeBasicInstruction(t *testing.T) {
 }
 
 func TestNormalizeFamilyHintFromContext(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-2",
 		Instruction: "Review the code",
 		Context: map[string]any{
@@ -66,7 +66,7 @@ func TestNormalizeFamilyHintFromContext(t *testing.T) {
 }
 
 func TestNormalizeUserFilesFromContext(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-3",
 		Instruction: "Fix the bugs",
 		Context: map[string]any{
@@ -94,7 +94,7 @@ func TestNormalizeUserFilesFromContext(t *testing.T) {
 }
 
 func TestNormalizeSessionPins(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-4",
 		Instruction: "Update the tests",
 		Context: map[string]any{
@@ -119,7 +119,7 @@ func TestNormalizeSessionPins(t *testing.T) {
 }
 
 func TestNormalizeEditPermittedFromRegistry(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-5",
 		Instruction: "Refactor the code",
 	}
@@ -144,7 +144,7 @@ func TestNormalizeEditPermittedFromRegistry(t *testing.T) {
 }
 
 func TestNormalizeResumedFamilyFromEnvelope(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-6",
 		Instruction: "Continue debugging",
 	}
@@ -165,7 +165,7 @@ func TestNormalizeResumedFamilyFromEnvelope(t *testing.T) {
 
 func TestNormalizeExplicitVerification(t *testing.T) {
 	// Boolean verification
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-8",
 		Instruction: "Verify the fix",
 		Context: map[string]any{
@@ -195,7 +195,7 @@ func TestNormalizeExplicitVerification(t *testing.T) {
 }
 
 func TestNormalizeWhitespaceTrimming(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-9",
 		Instruction: "   Please    implement   user   authentication   ",
 	}
@@ -215,7 +215,7 @@ func TestNormalizeWhitespaceTrimming(t *testing.T) {
 }
 
 func TestNormalizeNegativeConstraintSeeds(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-10",
 		Instruction: "Fix this but don't change the API and don't break existing tests",
 	}

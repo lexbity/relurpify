@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type ExportOptions struct {
@@ -27,7 +28,7 @@ type ExportOptions struct {
 
 type TelemetryExport struct {
 	Path      string       `json:"path,omitempty"`
-	Events    []core.Event `json:"events,omitempty"`
+	Events    []telemetry.Event `json:"events,omitempty"`
 	Truncated bool         `json:"truncated,omitempty"`
 	Error     string       `json:"error,omitempty"`
 }
@@ -119,7 +120,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 }
 
 func writeJSONExport(path string, payload SessionExport) error {
-	data, err := json.MarshalIndent(core.RedactAny(payload), "", "  ")
+	data, err := json.MarshalIndent(execution.RedactAny(payload), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -208,7 +209,7 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
-func loadTelemetryEvents(path string, limit int) ([]core.Event, bool, error) {
+func loadTelemetryEvents(path string, limit int) ([]telemetry.Event, bool, error) {
 	if limit <= 0 {
 		limit = 200
 	}
@@ -221,11 +222,11 @@ func loadTelemetryEvents(path string, limit int) ([]core.Event, bool, error) {
 	scanner := bufio.NewScanner(f)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
-	var events []core.Event
+	var events []telemetry.Event
 	total := 0
 	for scanner.Scan() {
 		total++
-		var event core.Event
+		var event telemetry.Event
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 			continue
 		}
@@ -246,10 +247,10 @@ func sanitizeTelemetryExport(in TelemetryExport) TelemetryExport {
 	if len(in.Events) == 0 {
 		return out
 	}
-	out.Events = make([]core.Event, 0, len(in.Events))
+	out.Events = make([]telemetry.Event, 0, len(in.Events))
 	for _, event := range in.Events {
 		clone := event
-		clone.Metadata = core.RedactMetadataMap(clone.Metadata)
+		clone.Metadata = execution.RedactMetadataMap(clone.Metadata)
 		out.Events = append(out.Events, clone)
 	}
 	return out
@@ -278,7 +279,7 @@ func sanitizeMessagesForExport(messages []Message) []Message {
 }
 
 func redactExportString(value string) string {
-	redacted, ok := core.RedactAny(value).(string)
+	redacted, ok := execution.RedactAny(value).(string)
 	if !ok {
 		return value
 	}

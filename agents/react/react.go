@@ -8,13 +8,13 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // ReActAgent implements the ReAct (Reason + Act) paradigm. It iteratively
@@ -23,7 +23,7 @@ type ReActAgent struct {
 	Model           contracts.LanguageModel
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
-	Config          *core.Config
+	Config          *execution.Config
 	IndexManager    *ast.IndexManager
 	SearchEngine    *search.SearchEngine
 	StreamMode      contextstream.Mode
@@ -42,7 +42,7 @@ type ReActAgent struct {
 }
 
 // Initialize configures the agent.
-func (a *ReActAgent) Initialize(cfg *core.Config) error {
+func (a *ReActAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
@@ -62,7 +62,7 @@ func (a *ReActAgent) Capabilities() []string {
 }
 
 // Execute runs the react workflow.
-func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *ReActAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialized {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -97,7 +97,7 @@ func (a *ReActAgent) streamMode() contextstream.Mode {
 }
 
 // streamQuery returns the query for streaming, defaulting to task instruction.
-func (a *ReActAgent) streamQuery(task *core.Task) string {
+func (a *ReActAgent) streamQuery(task *execution.Task) string {
 	if a.StreamQuery != "" {
 		return a.StreamQuery
 	}
@@ -120,7 +120,7 @@ func (a *ReActAgent) outputIngestionEnabled() bool {
 }
 
 // streamTriggerNode creates a streaming trigger node for the react agent.
-func (a *ReActAgent) streamTriggerNode(task *core.Task) graph.Node {
+func (a *ReActAgent) streamTriggerNode(task *execution.Task) graph.Node {
 	query := a.streamQuery(task)
 	node := graph.NewContextStreamNode("react_stream", retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
 	node.Mode = a.streamMode()

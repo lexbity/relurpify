@@ -6,8 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestIntakePipelineNodeCoordinatorOnly(t *testing.T) {
@@ -16,7 +16,7 @@ func TestIntakePipelineNodeCoordinatorOnly(t *testing.T) {
 
 	node := NewIntakePipelineNode("intake", registry, 1024, contextstream.ModeBlocking, &MockStreamTrigger{})
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	contextdata.SetTyped(env, "task.input", &core.Task{
+	contextdata.SetTyped(env, "task.input", &execution.Task{
 		ID:          "task-1",
 		Instruction: "review named/euclo/intake/pipeline.go",
 	})
@@ -37,10 +37,10 @@ func TestIntakePipelineNodeCoordinatorOnly(t *testing.T) {
 	if got, ok := contextdata.GetTyped[*IntentClassification](env, "euclo.intent_classification"); !ok || got == nil {
 		t.Fatal("expected intent classification in envelope")
 	}
-	if got, ok := core.ResultField(result.Data, "stream_result"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "stream_result"); !ok || got == nil {
 		t.Fatal("expected structured stream result in result data")
 	}
-	if got, ok := core.ResultField(result.Data, "family_selection"); !ok || got == nil {
+	if got, ok := execution.ResultField(result.Data, "family_selection"); !ok || got == nil {
 		t.Fatal("expected family selection data")
 	} else if familySelection, ok := got.(map[string]any); !ok || familySelection == nil {
 		t.Fatal("expected family selection map")

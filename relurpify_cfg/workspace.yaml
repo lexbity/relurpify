@@ -21,30 +21,4 @@ audit:
 telemetry:
   enabled: false
 
-agents:
-  - name: euclo
-    filesystem:
-      - action: [fs:read, fs:list, fs:write, fs:create, fs:execute]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-          - "${workspace}/.git/**"
-
-  - name: rex
-    filesystem:
-      - action: [fs:read, fs:list]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-
-  - name: testfu
-    model: gemma4:e4b
-    filesystem:
-      - action: [fs:read, fs:list]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-      - action: [fs:write, fs:create]
-        path: "${workspace}/.relurpify_state/test_run/**"
-
-  - name: factory
+# agents section removed (manifest paradigm dropped in Phase 4)

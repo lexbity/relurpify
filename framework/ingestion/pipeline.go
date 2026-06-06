@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
 // AcquireFromFile creates a pipeline for ingesting a file.
-func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore, scope *sandbox.FileScopePolicy) (*Pipeline, error) {
+func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, scope *sandbox.FileScopePolicy) (*Pipeline, error) {
 	if scope != nil {
 		if err := scope.Check(contracts.FileSystemRead, path); err != nil {
 			return nil, fmt.Errorf("file scope denied: %w", err)
@@ -40,7 +40,7 @@ func AcquireFromFile(ctx context.Context, path string, principal identity.Subjec
 }
 
 // AcquireFromToolOutput creates a pipeline for ingesting tool output.
-func AcquireFromToolOutput(ctx context.Context, output []byte, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromToolOutput(ctx context.Context, output []byte, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           output,
 		SourcePrincipal:   principal,
@@ -53,7 +53,7 @@ func AcquireFromToolOutput(ctx context.Context, output []byte, principal identit
 }
 
 // AcquireFromUserInput creates a pipeline for ingesting user input.
-func AcquireFromUserInput(ctx context.Context, input string, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromUserInput(ctx context.Context, input string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           []byte(input),
 		SourcePrincipal:   principal,
@@ -66,7 +66,7 @@ func AcquireFromUserInput(ctx context.Context, input string, principal identity.
 }
 
 // AcquireFromCapabilityResult creates a pipeline for ingesting capability results.
-func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType string, principal identity.SubjectRef, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           result,
 		SourcePrincipal:   principal,
@@ -78,11 +78,11 @@ func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType
 	return newPipeline(raw, policy, store), nil
 }
 
-func newPipeline(raw RawIngestion, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore) *Pipeline {
+func newPipeline(raw RawIngestion, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) *Pipeline {
 	return &Pipeline{
 		raw:           raw,
 		policy:        policy,
-		evaluator:     contextpolicy.NewEvaluator(policy),
+		evaluator:     execctx.NewEvaluator(policy),
 		store:         store,
 		scanners:      defaultScanners(),
 		quarantineDir: "relurpify_cfg/quarantine",

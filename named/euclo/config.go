@@ -5,9 +5,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // EucloConfig configures the Euclo agent behavior.
@@ -47,7 +47,7 @@ type EucloConfig struct {
 
 	// TelemetrySink is the telemetry backend for execution events.
 	// When nil, a no-op sink is used.
-	TelemetrySink core.Telemetry
+	TelemetrySink telemetry.Telemetry
 
 	// CheckpointRepository stores materialized checkpoint artifacts.
 	CheckpointRepository agentlifecycle.Repository

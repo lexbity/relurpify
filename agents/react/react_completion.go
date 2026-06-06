@@ -5,14 +5,12 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryFromSuccess(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -25,7 +23,7 @@ func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *c
 	}
 	var successTools []string
 	if agent != nil {
-		successTools = agent.verificationSuccessTools(task)
+		successTools = agent.verificationSuccessTools()
 	}
 	for i := len(observations) - 1; i >= 0; i-- {
 		observation := observations[i]
@@ -43,7 +41,7 @@ func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *c
 	return "", false
 }
 
-func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryWithoutEdits(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if taskNeedsEditing(task) || hasFailure(lastMap) || !taskRequiresVerification(task) {
 		return "", false
 	}
@@ -53,7 +51,7 @@ func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *
 	}
 	var successTools []string
 	if agent != nil {
-		successTools = agent.verificationSuccessTools(task)
+		successTools = agent.verificationSuccessTools()
 	}
 	for i := len(observations) - 1; i >= 0; i-- {
 		observation := observations[i]
@@ -67,7 +65,7 @@ func verificationSummaryWithoutEdits(agent *ReActAgent, task *core.Task, state *
 	return "", false
 }
 
-func completionSummaryFromState(agent *ReActAgent, task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func completionSummaryFromState(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if summary, ok := verificationSummaryFromSuccess(agent, task, state, lastMap); ok {
 		return summary, true
 	}
@@ -89,7 +87,7 @@ func completionSummaryFromState(agent *ReActAgent, task *core.Task, state *conte
 	return "", false
 }
 
-func directCompletionSummary(task *core.Task, state *contextdata.Envelope) (string, bool) {
+func directCompletionSummary(task *execution.Task, state *contextdata.Envelope) (string, bool) {
 	observations := getToolObservations(state)
 	if len(observations) == 0 || task == nil {
 		return "", false
@@ -114,7 +112,7 @@ func directCompletionSummary(task *core.Task, state *contextdata.Envelope) (stri
 	return "", false
 }
 
-func repeatedReadCompletionSummary(task *core.Task, state *contextdata.Envelope) (string, bool) {
+func repeatedReadCompletionSummary(task *execution.Task, state *contextdata.Envelope) (string, bool) {
 	observations := getToolObservations(state)
 	if len(observations) < 3 {
 		return "", false
@@ -171,7 +169,7 @@ func latestReadOnlyFileSummary(observations []ToolObservation) (string, bool) {
 	return "", false
 }
 
-func editSummaryFromSuccess(task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func editSummaryFromSuccess(task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -195,7 +193,7 @@ func editSummaryFromSuccess(task *core.Task, state *contextdata.Envelope, lastMa
 	return "", false
 }
 
-func readOnlySummaryFromState(task *core.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func readOnlySummaryFromState(task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
 	if task == nil || taskNeedsEditing(task) || hasFailure(lastMap) {
 		return "", false
 	}
@@ -221,7 +219,7 @@ func readOnlySummaryFromState(task *core.Task, state *contextdata.Envelope, last
 	return "", false
 }
 
-func requestedReadOnlyToolsSatisfied(task *core.Task, state *contextdata.Envelope) bool {
+func requestedReadOnlyToolsSatisfied(task *execution.Task, state *contextdata.Envelope) bool {
 	requested := explicitlyRequestedToolNames(task)
 	if len(requested) == 0 {
 		return true
@@ -244,7 +242,7 @@ func requestedReadOnlyToolsSatisfied(task *core.Task, state *contextdata.Envelop
 	return true
 }
 
-func taskRequiresVerification(task *core.Task) bool {
+func taskRequiresVerification(task *execution.Task) bool {
 	if task == nil {
 		return false
 	}
@@ -274,7 +272,7 @@ func taskRequiresVerification(task *core.Task) bool {
 	return false
 }
 
-func taskLooksLikeReadOnlySummary(task *core.Task) bool {
+func taskLooksLikeReadOnlySummary(task *execution.Task) bool {
 	if task == nil {
 		return false
 	}
@@ -328,16 +326,8 @@ func verificationNoEditSummary(toolName, stdout, stderr string) string {
 	return fmt.Sprintf("%s verification passed", toolName)
 }
 
-func skillStopOnSuccess(task *core.Task) bool {
-	spec := agentSpecFromTask(task)
-	if spec == nil {
-		return false
-	}
-	return spec.SkillConfig.Verification.StopOnSuccess
-}
-
-func verificationStopAllowed(agent *ReActAgent, task *core.Task) bool {
-	if skillStopOnSuccess(task) {
+func verificationStopAllowed(agent *ReActAgent, task *execution.Task) bool {
+	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil && agent.Config.AgentSpec.Orchestration.Verification.StopOnSuccess {
 		return true
 	}
 	if taskRequiresVerification(task) {
@@ -346,7 +336,7 @@ func verificationStopAllowed(agent *ReActAgent, task *core.Task) bool {
 	if agent == nil {
 		return false
 	}
-	return len(agent.verificationSuccessTools(task)) == 0
+	return len(agent.verificationSuccessTools()) == 0
 }
 
 func verificationLikeTool(tool contracts.Tool) bool {
@@ -366,7 +356,7 @@ func verificationLikeTool(tool contracts.Tool) bool {
 	return false
 }
 
-func explicitlyRequestedToolNames(task *core.Task) map[string]struct{} {
+func explicitlyRequestedToolNames(task *execution.Task) map[string]struct{} {
 	out := map[string]struct{}{}
 	if task == nil {
 		return out
@@ -378,6 +368,4 @@ func explicitlyRequestedToolNames(task *core.Task) map[string]struct{} {
 	return out
 }
 
-func agentSpecFromTask(task *core.Task) *agentspec.AgentRuntimeSpec {
-	return frameworkskills.EffectiveAgentSpec(task, nil)
-}
+// agentSpecFromTask removed — strategies read from Config.AgentSpec directly.

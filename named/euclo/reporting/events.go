@@ -245,8 +245,8 @@ type EventJobCompleted struct {
 // EventRecipeSelected signals that a thoughtrecipe has been selected for execution.
 type EventRecipeSelected struct {
 	EventHeader
-	RecipeID        string                    `json:"recipe_id"`
-	Recipe          surface.RecipeProjection  `json:"recipe"`
+	RecipeID string                   `json:"recipe_id"`
+	Recipe   surface.RecipeProjection `json:"recipe"`
 }
 
 // EventBranchResolved signals that a conditional branch or route fork was resolved.

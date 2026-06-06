@@ -16,13 +16,13 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextbudget"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
 	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const defaultBrowserTimeout = 15 * time.Second
@@ -343,18 +343,18 @@ func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req contracts.Co
 }
 
 type budgetManagerAdapter struct {
-	budget *contextbudget.ArtifactBudget
+	budget *telemetry.ArtifactBudget
 }
 
 func newBudgetManager(maxTokens int) contracts.BudgetManager {
-	return budgetManagerAdapter{budget: contextbudget.NewArtifactBudget(maxTokens)}
+	return budgetManagerAdapter{budget: telemetry.NewArtifactBudget(maxTokens)}
 }
 
 func (b budgetManagerAdapter) Allocate(category string, tokens int, item contracts.BudgetItem) error {
 	if b.budget == nil {
 		return fmt.Errorf("budget unavailable")
 	}
-	var adapted contextbudget.BudgetItem
+	var adapted telemetry.BudgetItem
 	if item != nil {
 		adapted = budgetItemAdapter{item: item}
 	}
@@ -421,7 +421,7 @@ func (b budgetItemAdapter) CanCompress() bool {
 	return b.item.CanCompress()
 }
 
-func (b budgetItemAdapter) Compress() (contextbudget.BudgetItem, error) {
+func (b budgetItemAdapter) Compress() (telemetry.BudgetItem, error) {
 	if b.item == nil {
 		return nil, nil
 	}

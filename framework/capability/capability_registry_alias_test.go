@@ -4,13 +4,12 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 	reg := NewRegistry()
-	desc := core.CapabilityDescriptor{
+	desc := CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
 		Kind:          agentspec.CapabilityKindTool,
@@ -30,19 +29,19 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 	}
 
 	// Register file_list, exec_run_tests, and file_create capabilities to test default aliases
-	descList := core.CapabilityDescriptor{
+	descList := CapabilityDescriptor{
 		ID:            "cap:file_list",
 		Name:          "file_list",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	descTests := core.CapabilityDescriptor{
+	descTests := CapabilityDescriptor{
 		ID:            "cap:exec_run_tests",
 		Name:          "exec_run_tests",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	descCreate := core.CapabilityDescriptor{
+	descCreate := CapabilityDescriptor{
 		ID:            "cap:file_create",
 		Name:          "file_create",
 		Kind:          agentspec.CapabilityKindTool,
@@ -88,7 +87,7 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 
 func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
 	reg := NewRegistry()
-	desc := core.CapabilityDescriptor{
+	desc := CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
 		Kind:          agentspec.CapabilityKindTool,
@@ -145,7 +144,7 @@ func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
 	}
 
 	for _, name := range canonicals {
-		desc := core.CapabilityDescriptor{
+		desc := CapabilityDescriptor{
 			ID:            "cap:" + name,
 			Name:          name,
 			Kind:          agentspec.CapabilityKindTool,

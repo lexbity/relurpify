@@ -8,10 +8,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // StreamTrigger captures the subset of contextstream.Trigger behavior required by the intake node.
@@ -58,7 +58,7 @@ func (n *IntakePipelineNode) Contract() agentgraph.NodeContract {
 }
 
 // Execute performs the intake pipeline as a coordinator-only stage.
-func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	task, err := taskFromEnvelope(env)
 	if err != nil {
 		return nil, err
@@ -128,10 +128,10 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		env.SetWorkingValue(euclokeys.KeyStreamResult, streamResult, contextdata.MemoryClassTask)
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"winning_family":         scoredClassification.WinningFamily,
 			"confidence":             scoredClassification.Confidence,
 			"ambiguous":              scoredClassification.Ambiguous,
@@ -198,12 +198,12 @@ func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr
 	return result
 }
 
-func taskFromEnvelope(env *contextdata.Envelope) (*core.Task, error) {
+func taskFromEnvelope(env *contextdata.Envelope) (*execution.Task, error) {
 	for _, key := range []string{euclokeys.KeyTaskInputLegacy, euclokeys.KeyTaskInput, euclokeys.KeyTaskRaw} {
 		if value, ok := env.GetWorkingValue(key); ok {
-			task, ok := value.(*core.Task)
+			task, ok := value.(*execution.Task)
 			if !ok {
-				return nil, fmt.Errorf("%s is not *core.Task", key)
+				return nil, fmt.Errorf("%s is not *execution.Task", key)
 			}
 			return task, nil
 		}

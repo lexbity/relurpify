@@ -6,9 +6,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // BrowserServiceConfig wires the workspace-owned browser service.
@@ -22,7 +22,7 @@ type BrowserServiceConfig struct {
 	CommandPolicy     sandbox.CommandPolicy
 	DefaultBackend    string
 	AllowedBackends   []string
-	Telemetry         core.Telemetry
+	Telemetry         telemetry.Telemetry
 	SessionFactory    func(context.Context, browserSessionConfig) (*platformbrowser.Session, error)
 }
 

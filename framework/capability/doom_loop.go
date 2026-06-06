@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -100,7 +99,7 @@ func NewDoomLoopDetector(cfg DoomLoopConfig) *DoomLoopDetector {
 	}
 }
 
-func (d *DoomLoopDetector) Check(desc core.CapabilityDescriptor, args map[string]any) error {
+func (d *DoomLoopDetector) Check(desc CapabilityDescriptor, args map[string]any) error {
 	if d == nil {
 		return nil
 	}
@@ -136,7 +135,7 @@ func (d *DoomLoopDetector) Check(desc core.CapabilityDescriptor, args map[string
 	return nil
 }
 
-func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
+func (d *DoomLoopDetector) RecordResult(desc CapabilityDescriptor, result *contracts.ToolResult) error {
 	if d == nil {
 		return nil
 	}
@@ -183,7 +182,7 @@ func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *
 	return nil
 }
 
-func (d *DoomLoopDetector) Record(desc core.CapabilityDescriptor, result *contracts.ToolResult) error {
+func (d *DoomLoopDetector) Record(desc CapabilityDescriptor, result *contracts.ToolResult) error {
 	return d.RecordResult(desc, result)
 }
 
@@ -335,7 +334,7 @@ func extractModifiedPath(result *contracts.ToolResult) string {
 	return ""
 }
 
-func successfulCoordinationProgress(desc core.CapabilityDescriptor, result *contracts.ToolResult) bool {
+func successfulCoordinationProgress(desc CapabilityDescriptor, result *contracts.ToolResult) bool {
 	if result == nil || strings.TrimSpace(result.Error) != "" {
 		return false
 	}

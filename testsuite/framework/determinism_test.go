@@ -7,8 +7,9 @@ import (
 	"reflect"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TestRepeatedFixtureEquivalence validates that fixture creation produces
@@ -46,7 +47,7 @@ func TestRepeatedFixtureEquivalence(t *testing.T) {
 		record1 := GrantedAuditRecord().Build()
 		record2 := GrantedAuditRecord().Build()
 
-		AssertNormalizedAuditRecordsEqual(t, []core.AuditRecord{record1}, []core.AuditRecord{record2})
+		AssertNormalizedAuditRecordsEqual(t, []policy.AuditRecord{record1}, []policy.AuditRecord{record2})
 	})
 
 	t.Run("envelope fixture equivalence", func(t *testing.T) {
@@ -100,18 +101,18 @@ func TestWorkspaceIsolation(t *testing.T) {
 		env2 := NewTestEnvironment(t)
 
 		// Emit an event in env1
-		env1.TelemetrySink.Emit(core.Event{Type: core.EventNodeFinish, TaskID: "env1-task", Message: "env1 message"})
+		env1.TelemetrySink.Emit(telemetry.Event{Type: telemetry.EventNodeFinish, TaskID: "env1-task", Message: "env1 message"})
 
 		// Emit an event in env2
-		env2.TelemetrySink.Emit(core.Event{Type: core.EventNodeFinish, TaskID: "env2-task", Message: "env2 message"})
+		env2.TelemetrySink.Emit(telemetry.Event{Type: telemetry.EventNodeFinish, TaskID: "env2-task", Message: "env2 message"})
 
 		// Verify env1 only has its own event
 		events1 := env1.TelemetrySink.Events()
-		AssertNormalizedTelemetryEventsEqual(t, events1, []core.Event{{Type: core.EventNodeFinish, TaskID: "env1-task", Message: "env1 message"}})
+		AssertNormalizedTelemetryEventsEqual(t, events1, []telemetry.Event{{Type: telemetry.EventNodeFinish, TaskID: "env1-task", Message: "env1 message"}})
 
 		// Verify env2 only has its own event
 		events2 := env2.TelemetrySink.Events()
-		AssertNormalizedTelemetryEventsEqual(t, events2, []core.Event{{Type: core.EventNodeFinish, TaskID: "env2-task", Message: "env2 message"}})
+		AssertNormalizedTelemetryEventsEqual(t, events2, []telemetry.Event{{Type: telemetry.EventNodeFinish, TaskID: "env2-task", Message: "env2 message"}})
 	})
 
 	t.Run("isolated audit sinks", func(t *testing.T) {
@@ -119,24 +120,24 @@ func TestWorkspaceIsolation(t *testing.T) {
 		env2 := NewTestEnvironment(t)
 
 		// Log a record in env1
-		env1.AuditSink.Log(context.Background(), core.AuditRecord{
+		env1.AuditSink.Log(context.Background(), policy.AuditRecord{
 			AgentID: "env1-agent",
 			Action:  "env1-action",
 		})
 
 		// Log a record in env2
-		env2.AuditSink.Log(context.Background(), core.AuditRecord{
+		env2.AuditSink.Log(context.Background(), policy.AuditRecord{
 			AgentID: "env2-agent",
 			Action:  "env2-action",
 		})
 
 		// Verify env1 only has its own record
 		records1 := env1.AuditSink.Records()
-		AssertNormalizedAuditRecordsEqual(t, records1, []core.AuditRecord{{AgentID: "env1-agent", Action: "env1-action"}})
+		AssertNormalizedAuditRecordsEqual(t, records1, []policy.AuditRecord{{AgentID: "env1-agent", Action: "env1-action"}})
 
 		// Verify env2 only has its own record
 		records2 := env2.AuditSink.Records()
-		AssertNormalizedAuditRecordsEqual(t, records2, []core.AuditRecord{{AgentID: "env2-agent", Action: "env2-action"}})
+		AssertNormalizedAuditRecordsEqual(t, records2, []policy.AuditRecord{{AgentID: "env2-agent", Action: "env2-action"}})
 	})
 }
 
@@ -218,15 +219,15 @@ func TestOrderingStability(t *testing.T) {
 	})
 
 	t.Run("policy rule sorting stability", func(t *testing.T) {
-		rules1 := []core.PolicyRule{
-			{ID: "rule-3", Effect: core.PolicyEffect{Action: "allow"}},
-			{ID: "rule-1", Effect: core.PolicyEffect{Action: "deny"}},
-			{ID: "rule-2", Effect: core.PolicyEffect{Action: "allow"}},
+		rules1 := []policy.PolicyRule{
+			{ID: "rule-3", Effect: policy.PolicyEffect{Action: "allow"}},
+			{ID: "rule-1", Effect: policy.PolicyEffect{Action: "deny"}},
+			{ID: "rule-2", Effect: policy.PolicyEffect{Action: "allow"}},
 		}
-		rules2 := []core.PolicyRule{
-			{ID: "rule-2", Effect: core.PolicyEffect{Action: "allow"}},
-			{ID: "rule-3", Effect: core.PolicyEffect{Action: "allow"}},
-			{ID: "rule-1", Effect: core.PolicyEffect{Action: "deny"}},
+		rules2 := []policy.PolicyRule{
+			{ID: "rule-2", Effect: policy.PolicyEffect{Action: "allow"}},
+			{ID: "rule-3", Effect: policy.PolicyEffect{Action: "allow"}},
+			{ID: "rule-1", Effect: policy.PolicyEffect{Action: "deny"}},
 		}
 
 		normalized1 := NormalizePolicyRules(rules1)
@@ -257,13 +258,13 @@ func TestNormalizationHelpersContract(t *testing.T) {
 		if NormalizeTelemetryEvents(nil) != nil {
 			t.Error("nil events should return nil")
 		}
-		if NormalizeTelemetryEvents([]core.Event{}) != nil {
+		if NormalizeTelemetryEvents([]telemetry.Event{}) != nil {
 			t.Error("empty events should return nil")
 		}
 		if NormalizeAuditRecords(nil) != nil {
 			t.Error("nil records should return nil")
 		}
-		if NormalizeAuditRecords([]core.AuditRecord{}) != nil {
+		if NormalizeAuditRecords([]policy.AuditRecord{}) != nil {
 			t.Error("empty records should return nil")
 		}
 		if NormalizeFileSystemPermissions(nil) != nil {
@@ -281,7 +282,7 @@ func TestNormalizationHelpersContract(t *testing.T) {
 		if NormalizePolicyRules(nil) != nil {
 			t.Error("nil rules should return nil")
 		}
-		if NormalizePolicyRules([]core.PolicyRule{}) != nil {
+		if NormalizePolicyRules([]policy.PolicyRule{}) != nil {
 			t.Error("empty rules should return nil")
 		}
 		if NormalizeChunkIDs(nil) != nil {

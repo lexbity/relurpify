@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Phase 12: HTN as reusable composition primitive.
@@ -44,7 +44,7 @@ type ComposedMethod struct {
 	// Name is the composed method name.
 	Name string
 	// TaskType is the task this method handles.
-	TaskType core.TaskType
+	TaskType execution.TaskType
 	// Priority for method selection.
 	Priority int
 	// Components are the subtasks that make up this method.
@@ -74,7 +74,7 @@ type CompositionComponent struct {
 // PerformanceMetrics tracks method effectiveness over time.
 type PerformanceMetrics struct {
 	MethodName        string
-	TaskType          core.TaskType
+	TaskType          execution.TaskType
 	TotalExecutions   int
 	SuccessfulRuns    int
 	FailedRuns        int
@@ -167,7 +167,7 @@ type KnowledgeBasedMethodSelector struct {
 }
 
 // SelectBestMethod recommends the best method for a task based on history.
-func (s *KnowledgeBasedMethodSelector) SelectBestMethod(ctx context.Context, task *core.Task) (*runtime.Method, *PerformanceMetrics) {
+func (s *KnowledgeBasedMethodSelector) SelectBestMethod(ctx context.Context, task *execution.Task) (*runtime.Method, *PerformanceMetrics) {
 	if s.Library == nil {
 		return nil, nil
 	}

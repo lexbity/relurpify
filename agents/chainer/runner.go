@@ -7,8 +7,8 @@ import (
 	"text/template"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type chainRunner struct {
@@ -36,7 +36,7 @@ func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
 }
 
 // RunChain executes a chain against state using isolated prompts.
-func RunChain(ctx context.Context, model contracts.LanguageModel, task *core.Task, chain *Chain, env *contextdata.Envelope, registry interface{}) error {
+func RunChain(ctx context.Context, model contracts.LanguageModel, task *execution.Task, chain *Chain, env *contextdata.Envelope, registry interface{}) error {
 	runner := &chainRunner{
 		Model:    model,
 		Registry: registry,
@@ -44,7 +44,7 @@ func RunChain(ctx context.Context, model contracts.LanguageModel, task *core.Tas
 	return runner.Run(ctx, task, chain, env)
 }
 
-func (r *chainRunner) Run(ctx context.Context, task *core.Task, chain *Chain, env *contextdata.Envelope) error {
+func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chain, env *contextdata.Envelope) error {
 	if r == nil || r.Model == nil {
 		return fmt.Errorf("chainer: model unavailable")
 	}
@@ -127,7 +127,7 @@ func renderLinkPrompt(src, instruction string, input map[string]any) (string, er
 	return buf.String(), nil
 }
 
-func taskInstruction(task *core.Task) string {
+func taskInstruction(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
@@ -135,7 +135,7 @@ func taskInstruction(task *core.Task) string {
 }
 
 // resolveSystemPrompt returns the system prompt for a link, checking PromptID first.
-func resolveSystemPrompt(link Link, task *core.Task, env *contextdata.Envelope, registry interface{}) (string, error) {
+func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envelope, registry interface{}) (string, error) {
 	// Check for registry-based resolution first
 	if link.PromptID != "" && registry != nil {
 		// Type assert to prompt.Registry interface
@@ -157,7 +157,7 @@ func resolveSystemPrompt(link Link, task *core.Task, env *contextdata.Envelope, 
 }
 
 // buildChainerRuntimeContext creates a prompt.RuntimeContext for chainer links.
-func buildChainerRuntimeContext(task *core.Task, env *contextdata.Envelope) interface{} {
+func buildChainerRuntimeContext(task *execution.Task, env *contextdata.Envelope) interface{} {
 	// Return a map that matches the expected RuntimeContext structure
 	// Using interface{} to avoid import cycles with framework/prompt
 	return map[string]interface{}{

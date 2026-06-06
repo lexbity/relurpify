@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestCompilationAuditor_ReportAndDigest(t *testing.T) {
@@ -61,23 +61,23 @@ func TestCompilationAuditor_ReportAndDigest(t *testing.T) {
 
 func TestCompilerEmitsWarningOnPersistenceFailure(t *testing.T) {
 	compiler := NewCompiler(nil, nil, nil)
-	telemetry := &warningTelemetryCollector{}
-	compiler.SetTelemetry(telemetry)
+	collector := &warningTelemetryCollector{}
+	compiler.SetTelemetry(collector)
 
 	_, _, err := compiler.Compile(context.Background(), CompilationRequest{
 		Query:     retrieval.RetrievalQuery{Text: "warn"},
 		MaxTokens: 16,
 	})
 	require.NoError(t, err)
-	require.Len(t, telemetry.events, 1)
-	require.Equal(t, core.EventCompilerWarning, telemetry.events[0].Type)
-	require.Equal(t, "compilation persistence failed", telemetry.events[0].Message)
+	require.Len(t, collector.events, 1)
+	require.Equal(t, telemetry.EventCompilerWarning, collector.events[0].Type)
+	require.Equal(t, "compilation persistence failed", collector.events[0].Message)
 }
 
 type warningTelemetryCollector struct {
-	events []core.Event
+	events []telemetry.Event
 }
 
-func (w *warningTelemetryCollector) Emit(event core.Event) {
+func (w *warningTelemetryCollector) Emit(event telemetry.Event) {
 	w.events = append(w.events, event)
 }

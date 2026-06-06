@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const sessionCapKeyPrefix = "_session_cap:"
@@ -19,7 +18,7 @@ const sessionCapKeyPrefix = "_session_cap:"
 // availability before storing — matching the behaviour of
 // relurpicabilities.computeAvailability. Recipe-derived handlers skip this
 // check because their tool dependencies are determined at execution time.
-func RegisterSessionCapability(env *contextdata.Envelope, id string, handler core.InvocableCapabilityHandler) error {
+func RegisterSessionCapability(env *contextdata.Envelope, id string, handler InvocableCapabilityHandler) error {
 	if env == nil {
 		return fmt.Errorf("envelope required for session capability registration")
 	}
@@ -37,9 +36,9 @@ func RegisterSessionCapability(env *contextdata.Envelope, id string, handler cor
 
 // LookupSessionCapability retrieves a session-scoped capability handler from
 // the envelope. Returns false if no session-local handler is registered for id.
-func LookupSessionCapability(env *contextdata.Envelope, id string) (core.InvocableCapabilityHandler, bool) {
+func LookupSessionCapability(env *contextdata.Envelope, id string) (InvocableCapabilityHandler, bool) {
 	if env == nil || id == "" {
 		return nil, false
 	}
-	return contextdata.GetTyped[core.InvocableCapabilityHandler](env, sessionCapKeyPrefix+id)
+	return contextdata.GetTyped[InvocableCapabilityHandler](env, sessionCapKeyPrefix+id)
 }

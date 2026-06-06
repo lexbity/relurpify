@@ -16,7 +16,7 @@
 //
 //   - Builtin tools: filesystem, shell, git, language tools, and AST tools
 //     registered directly from the platform packages.
-//   - MCP client (mcp_provider.go): connects to external MCP servers declared
+//   - Provider client: connects to external capability providers declared
 //     in the workspace configuration and imports their capabilities.
 //   - Nexus node (nexus_provider.go, nexus_node.go): connects to the Nexus
 //     gateway and exposes capabilities from registered remote nodes.

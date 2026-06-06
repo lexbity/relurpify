@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -66,12 +67,12 @@ type NodeContract struct {
 	SideEffectClass      SideEffectClass                `json:"side_effect_class,omitempty" yaml:"side_effect_class,omitempty"`
 	Idempotency          IdempotencyClass               `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
-	PreferredPlacement PlacementPreference      `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass       agentspec.RiskClass      `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
-	RequiredTrustClass agentspec.TrustClass     `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
-	Recoverability     NodeRecoverability       `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
-	CheckpointPolicy   CheckpointPolicyClass    `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
-	ContextPolicy      core.StateBoundaryPolicy `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
+	PreferredPlacement PlacementPreference           `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
+	MaxRiskClass       agentspec.RiskClass           `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	RequiredTrustClass agentspec.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
+	Recoverability     NodeRecoverability            `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
+	CheckpointPolicy   CheckpointPolicyClass         `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
+	ContextPolicy      relurpctx.StateBoundaryPolicy `json:"context_policy,omitempty" yaml:"context_policy,omitempty"`
 }
 
 // ContractNode extends Node with an explicit execution contract.
@@ -101,12 +102,12 @@ func defaultNodeContract(node Node) NodeContract {
 		return NodeContract{
 			SideEffectClass: SideEffectHuman,
 			Idempotency:     IdempotencySingleShot,
-			ContextPolicy: core.StateBoundaryPolicy{
+			ContextPolicy: relurpctx.StateBoundaryPolicy{
 				ReadKeys:                 []string{"task.*", "approval.*"},
 				WriteKeys:                []string{"approval.*"},
 				AllowHistoryAccess:       true,
-				AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+				AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+				AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 				MaxStateEntryBytes:       4096,
 				MaxInlineCollectionItems: 16,
 			},
@@ -115,11 +116,11 @@ func defaultNodeContract(node Node) NodeContract {
 		return NodeContract{
 			SideEffectClass: SideEffectNone,
 			Idempotency:     IdempotencyReplaySafe,
-			ContextPolicy: core.StateBoundaryPolicy{
+			ContextPolicy: relurpctx.StateBoundaryPolicy{
 				ReadKeys:                 []string{"task.*", "plan.*", "react.*", "architect.*"},
 				WriteKeys:                []string{"plan.*", "react.*", "architect.*"},
-				AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassRoutingFlag, core.StateDataClassStructuredState},
+				AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+				AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassRoutingFlag, relurpctx.StateDataClassStructuredState},
 				MaxStateEntryBytes:       4096,
 				MaxInlineCollectionItems: 32,
 			},
@@ -128,11 +129,11 @@ func defaultNodeContract(node Node) NodeContract {
 		return NodeContract{
 			SideEffectClass: SideEffectContext,
 			Idempotency:     IdempotencyReplaySafe,
-			ContextPolicy: core.StateBoundaryPolicy{
+			ContextPolicy: relurpctx.StateBoundaryPolicy{
 				ReadKeys:                 []string{"task.*", "contextstream.*"},
 				WriteKeys:                []string{"contextstream.*"},
-				AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+				AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+				AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
 				MaxStateEntryBytes:       4096,
 				MaxInlineCollectionItems: 16,
 			},
@@ -141,11 +142,11 @@ func defaultNodeContract(node Node) NodeContract {
 		return NodeContract{
 			SideEffectClass: SideEffectExternal,
 			Idempotency:     IdempotencyUnknown,
-			ContextPolicy: core.StateBoundaryPolicy{
+			ContextPolicy: relurpctx.StateBoundaryPolicy{
 				ReadKeys:                 []string{"task.*", "react.*", "planner.*", "architect.*"},
 				WriteKeys:                []string{"react.*", "planner.*", "tool.*", "artifact.*"},
-				AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking, core.MemoryClassStreamed},
-				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassArtifactRef, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
+				AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking, relurpctx.MemoryClassStreamed},
+				AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassArtifactRef, relurpctx.StateDataClassMemoryRef, relurpctx.StateDataClassStructuredState},
 				MaxStateEntryBytes:       4096,
 				MaxInlineCollectionItems: 16,
 				PreferArtifactReferences: true,
@@ -158,7 +159,7 @@ func defaultNodeContract(node Node) NodeContract {
 
 func validateNodeContract(node Node, contract NodeContract) error {
 	for _, selector := range contract.RequiredCapabilities {
-		if err := core.ValidateCapabilitySelector(selector); err != nil {
+		if err := capability.ValidateCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("node %s has invalid capability selector: %w", node.ID(), err)
 		}
 	}
@@ -187,7 +188,7 @@ func validateNodeContract(node Node, contract NodeContract) error {
 	default:
 		return fmt.Errorf("node %s has invalid checkpoint policy %q", node.ID(), contract.CheckpointPolicy)
 	}
-	if err := core.ValidateStateBoundaryPolicy(contract.ContextPolicy); err != nil {
+	if err := relurpctx.ValidateStateBoundaryPolicy(contract.ContextPolicy); err != nil {
 		return fmt.Errorf("node %s has invalid context policy: %w", node.ID(), err)
 	}
 	if node != nil && node.Type() == NodeTypeTool && len(contract.RequiredCapabilities) == 0 {
@@ -202,11 +203,11 @@ func toolNodeContract(tool contracts.Tool) NodeContract {
 	contract := NodeContract{
 		SideEffectClass: SideEffectExternal,
 		Idempotency:     IdempotencyUnknown,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "react.*", "planner.*", "architect.*"},
 			WriteKeys:                []string{"react.*", "planner.*", "tool.*", "artifact.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking, core.MemoryClassStreamed},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassArtifactRef, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking, relurpctx.MemoryClassStreamed},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassArtifactRef, relurpctx.StateDataClassMemoryRef, relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       4096,
 			MaxInlineCollectionItems: 16,
 			PreferArtifactReferences: true,
@@ -215,7 +216,7 @@ func toolNodeContract(tool contracts.Tool) NodeContract {
 	if tool == nil {
 		return contract
 	}
-	desc := core.ToolDescriptor(context.Background(), tool)
+	desc := capability.ToolDescriptor(context.Background(), tool)
 	if desc.ID != "" || desc.Name != "" {
 		contract.RequiredCapabilities = []agentspec.CapabilitySelector{{
 			ID:   desc.ID,
@@ -229,14 +230,14 @@ func toolNodeContract(tool contracts.Tool) NodeContract {
 }
 
 // LintNodeState applies the node's declared state boundary policy to a context snapshot.
-func LintNodeState(node Node, env *contextdata.Envelope) []core.StateBoundaryViolation {
+func LintNodeState(node Node, env *contextdata.Envelope) []relurpctx.StateBoundaryViolation {
 	if node == nil || env == nil {
 		return nil
 	}
-	return core.LintStateMap(env.Snapshot(), ResolveNodeContract(node).ContextPolicy)
+	return relurpctx.LintStateMap(env.Snapshot(), ResolveNodeContract(node).ContextPolicy)
 }
 
-func classifyToolSideEffects(desc core.CapabilityDescriptor) SideEffectClass {
+func classifyToolSideEffects(desc capability.CapabilityDescriptor) SideEffectClass {
 	if len(desc.EffectClasses) == 0 {
 		return SideEffectNone
 	}
@@ -265,7 +266,7 @@ func classifyToolSideEffects(desc core.CapabilityDescriptor) SideEffectClass {
 	return SideEffectLocal
 }
 
-func classifyToolIdempotency(desc core.CapabilityDescriptor) IdempotencyClass {
+func classifyToolIdempotency(desc capability.CapabilityDescriptor) IdempotencyClass {
 	if len(desc.EffectClasses) == 0 {
 		return IdempotencyReplaySafe
 	}

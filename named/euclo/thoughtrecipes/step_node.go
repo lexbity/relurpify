@@ -24,7 +24,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -33,6 +32,8 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
@@ -65,7 +66,7 @@ func (n *ThoughtRecipeStepNode) Type() agentgraph.NodeType { return agentgraph.N
 
 // Execute builds the selected paradigm agent, runs it, and writes captures back
 // to the envelope.
-func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (retResult *core.Result, retErr error) {
+func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.Envelope) (retResult *execution.Result, retErr error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
@@ -100,14 +101,14 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 
 	result, execErr := agent.Execute(ctx, task, env)
 	if result == nil {
-		result = &core.Result{
+		result = &execution.Result{
 			NodeID:  n.id,
 			Success: execErr == nil,
-			Data:    core.NewToolResultPayload(map[string]any{}),
+			Data:    execution.NewToolResultPayload(map[string]any{}),
 		}
 	}
 	if result.Data == nil {
-		result.Data = core.NewToolResultPayload(map[string]any{})
+		result.Data = execution.NewToolResultPayload(map[string]any{})
 	}
 	if execErr != nil {
 		result.Success = false
@@ -134,7 +135,7 @@ func emitStepStarted(ctx context.Context, env *contextdata.Envelope, step Execut
 	idx, _ := contextdata.GetTyped[int](env, "euclo.execution.step_index")
 	contextdata.SetTyped(env, "euclo.execution.step_index", idx+1)
 
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitStepStarted(ctx, reporting.EventStepStarted{
 		EventHeader: reporting.EventHeader{
 			TaskID:     env.TaskID,
@@ -153,7 +154,7 @@ func emitStepCompleted(ctx context.Context, env *contextdata.Envelope, step Exec
 	total, _ := contextdata.GetTyped[int](env, "euclo.execution.step_total")
 	idx, _ := contextdata.GetTyped[int](env, "euclo.execution.step_index")
 
-	tel := reporting.NewEucloTelemetry(core.TelemetryFromContext(ctx))
+	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitStepCompleted(ctx, reporting.EventStepCompleted{
 		EventHeader: reporting.EventHeader{
 			TaskID:     env.TaskID,
@@ -170,7 +171,7 @@ func emitStepCompleted(ctx context.Context, env *contextdata.Envelope, step Exec
 	})
 }
 
-func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
@@ -187,14 +188,14 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 
 	result, execErr := agent.Execute(ctx, task, childEnv)
 	if result == nil {
-		result = &core.Result{
+		result = &execution.Result{
 			NodeID:  n.id,
 			Success: execErr == nil,
-			Data:    core.NewToolResultPayload(map[string]any{}),
+			Data:    execution.NewToolResultPayload(map[string]any{}),
 		}
 	}
 	if result.Data == nil {
-		result.Data = core.NewToolResultPayload(map[string]any{})
+		result.Data = execution.NewToolResultPayload(map[string]any{})
 	}
 	if execErr != nil {
 		result.Success = false
@@ -222,7 +223,7 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 	return result, nil
 }
 
-func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
@@ -234,7 +235,7 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 
 	if frame.Response == nil || frame.RespondedAt == nil {
 		if created {
-			if err := interaction.EmitFrame(ctx, frame, env, core.TelemetryFromContext(ctx)); err != nil {
+			if err := interaction.EmitFrame(ctx, frame, env, telemetry.TelemetryFromContext(ctx)); err != nil {
 				return nil, err
 			}
 			// envelope: intentional dynamic key — ask frames are keyed by step ID.
@@ -242,10 +243,10 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 		}
 		state.SetInteractionFrameRequested(env, true)
 		state.SetInteractionResumeNodeID(env, n.id)
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data: core.NewToolResultPayload(map[string]any{
+			Data: execution.NewToolResultPayload(map[string]any{
 				"paused":   true,
 				"frame_id": frame.ID,
 				"question": n.step.Question,
@@ -258,19 +259,19 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 	}
 
 	answer, _ := interaction.ResponseValue(frame)
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"answer":        answer,
 			"selected_slot": answer,
 			"frame_id":      frame.ID,
 		}),
 	}
 	if frame.Response != nil && len(frame.Response.ExtraData) > 0 {
-		fields := core.ResultFields(result.Data)
+		fields := execution.ResultFields(result.Data)
 		fields["response"] = frame.Response.ExtraData
-		result.Data = core.NewToolResultPayload(fields)
+		result.Data = execution.NewToolResultPayload(fields)
 	}
 	if err := n.writeCaptures(env, result); err != nil {
 		return result, err
@@ -284,7 +285,7 @@ func (n *ThoughtRecipeStepNode) executeAsk(ctx context.Context, env *contextdata
 	return result, nil
 }
 
-func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n == nil {
 		return nil, fmt.Errorf("thoughtrecipe step node is nil")
 	}
@@ -328,10 +329,10 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 		}
 	}
 
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: success,
-		Data:    core.NewToolResultPayload(data),
+		Data:    execution.NewToolResultPayload(data),
 	}
 	if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
 		result.Error = msg
@@ -349,7 +350,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	return result, nil
 }
 
-func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*core.Task, error) {
+func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*execution.Task, error) {
 	data := thoughtrecipeTemplateData(env, n.step)
 	n.writeStepMetadata(env)
 
@@ -382,20 +383,13 @@ func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*core.Task
 		}
 	}
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          n.id,
 		Type:        n.step.Paradigm,
 		Instruction: instruction,
 		Data:        make(map[string]interface{}),
 		Context:     data,
 		Metadata:    n.stepMetadata(),
-	}
-	if len(n.step.Step.Config) > 0 {
-		for key, value := range n.step.Step.Config {
-			if _, exists := task.Context[key]; !exists {
-				task.Context[key] = value
-			}
-		}
 	}
 	if len(n.step.Sources) > 0 {
 		task.Context["euclo.run.sources"] = append([]string(nil), n.step.Sources...)
@@ -534,13 +528,13 @@ func askFrameKey(stepID string) string {
 	return "euclo.execution.ask." + sanitizeComponent(stepID) + ".frame"
 }
 
-func (n *ThoughtRecipeStepNode) writeDelegationCaptures(parent, child *contextdata.Envelope, result *core.Result) error {
+func (n *ThoughtRecipeStepNode) writeDelegationCaptures(parent, child *contextdata.Envelope, result *execution.Result) error {
 	if parent == nil || child == nil || result == nil {
 		return nil
 	}
 	sourceData := child.Snapshot()
 	if len(n.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, core.ResultFields(result.Data))
+		_, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, execution.ResultFields(result.Data))
 		return err
 	}
 	return n.writeCaptures(parent, result)
@@ -575,7 +569,7 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 		WithStateMap(clarificationRuntimeState(env)).
 		WithStateMap(n.stepRuntimeState(data))
 
-	runtime.Task = &core.Task{
+	runtime.Task = &execution.Task{
 		ID:          n.id,
 		Type:        n.step.Paradigm,
 		Instruction: n.renderTemplate(n.step.Prompt, data),
@@ -832,7 +826,7 @@ func (n *ThoughtRecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) m
 	return args
 }
 
-func (n *ThoughtRecipeStepNode) buildAgent(task *core.Task) (agentgraph.WorkflowExecutor, error) {
+func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor, error) {
 	scopedEnv := n.env
 	if scopedRegistry := n.scopedRegistry(); scopedRegistry != nil {
 		scopedEnv = scopedEnv.WithRegistry(scopedRegistry)
@@ -1028,12 +1022,12 @@ func (n *ThoughtRecipeStepNode) rewooOptions() rewooagent.RewooOptions {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) writeCaptures(env *contextdata.Envelope, result *core.Result) error {
+func (n *ThoughtRecipeStepNode) writeCaptures(env *contextdata.Envelope, result *execution.Result) error {
 	if n == nil || result == nil {
 		return nil
 	}
 	if len(n.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindings(env, n.step.CaptureBindings, core.ResultFields(result.Data))
+		_, err := ApplyCaptureBindings(env, n.step.CaptureBindings, execution.ResultFields(result.Data))
 		return err
 	}
 	return nil

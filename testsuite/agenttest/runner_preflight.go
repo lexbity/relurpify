@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // preflightCaseBackend performs provider-agnostic preflight using ManagedBackend interface.
 // It calls ListModels() to find the requested model and Health() to verify backend status.
 // Soft-allows backends with empty model lists but healthy status.
 // The context should have a timeout to prevent indefinite hangs.
-func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model string, telemetry core.Telemetry, logger *log.Logger) (*BackendModelProvenance, error) {
+func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model string, telemetry telemetry.Telemetry, logger *log.Logger) (*BackendModelProvenance, error) {
 	startTime := time.Now()
 	if logger != nil {
 		logger.Printf("[preflight] starting backend preflight for model=%q at=%s", model, startTime.Format(time.RFC3339))
@@ -229,16 +229,16 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 }
 
 // emitPreflightEvent emits a telemetry event for preflight operations if telemetry is available.
-func emitPreflightEvent(telemetry core.Telemetry, eventType string, model string, metadata map[string]interface{}) {
-	if telemetry == nil {
+func emitPreflightEvent(sink telemetry.Telemetry, eventType string, model string, metadata map[string]interface{}) {
+	if sink == nil {
 		return
 	}
 	if metadata == nil {
 		metadata = make(map[string]interface{})
 	}
 	metadata["model"] = model
-	telemetry.Emit(core.Event{
-		Type:      core.EventType("preflight_" + eventType),
+	sink.Emit(telemetry.Event{
+		Type:      telemetry.EventType("preflight_" + eventType),
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("preflight %s: %s", eventType, model),
 		Metadata:  metadata,

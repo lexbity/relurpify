@@ -7,27 +7,29 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-// RiskLevel models the qualitative assessment required by the HITL flow.
-type RiskLevel string
+// RiskLevel and GrantScope are owned by governance/policy so the capability
+// domain's permission-manager port can reference the same types this package's
+// PermissionManager satisfies. Re-exported here for authorization-internal use.
+type RiskLevel = policy.RiskLevel
 
 const (
-	RiskLevelLow    RiskLevel = "low"
-	RiskLevelMedium RiskLevel = "medium"
-	RiskLevelHigh   RiskLevel = "high"
+	RiskLevelLow    = policy.RiskLevelLow
+	RiskLevelMedium = policy.RiskLevelMedium
+	RiskLevelHigh   = policy.RiskLevelHigh
 )
 
-// GrantScope defines the lifecycle of an approval.
-type GrantScope string
+type GrantScope = policy.GrantScope
 
 const (
-	GrantScopeOneTime     GrantScope = "one_time"
-	GrantScopeSession     GrantScope = "session"
-	GrantScopePersistent  GrantScope = "persistent"
-	GrantScopeConditional GrantScope = "conditional"
-	GrantScopeTask        GrantScope = "task"
+	GrantScopeOneTime     = policy.GrantScopeOneTime
+	GrantScopeSession     = policy.GrantScopeSession
+	GrantScopePersistent  = policy.GrantScopePersistent
+	GrantScopeConditional = policy.GrantScopeConditional
+	GrantScopeTask        = policy.GrantScopeTask
 )
 
 type HITLTimeoutBehavior string

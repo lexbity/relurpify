@@ -9,17 +9,18 @@ import (
 	"time"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/prompt"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 const contextFileMaxBytes = 8000
@@ -60,8 +61,8 @@ type CapabilityInfo struct {
 // RuntimeAdapter decouples the TUI from the concrete runtime implementation.
 type RuntimeAdapter interface {
 	HITLServiceIface
-	ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error)
-	ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error)
+	ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error)
+	ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
@@ -165,7 +166,7 @@ func newRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
 	return &runtimeAdapter{rt: rt}
 }
 
-func (r *runtimeAdapter) ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error) {
+func (r *runtimeAdapter) ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
@@ -248,8 +249,8 @@ func (r *runtimeAdapter) ContractSummary() *ContractSummary {
 		ManifestName:    r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestName,
 		ManifestVersion: r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestVersion,
 		Workspace:       r.rt.AgentWorkspace().EffectiveContract.Sources.Workspace,
-		AppliedSkills:   append([]string(nil), r.rt.AgentWorkspace().EffectiveContract.Sources.AppliedSkills...),
-		FailedSkills:    append([]string(nil), r.rt.AgentWorkspace().EffectiveContract.Sources.FailedSkills...),
+		AppliedSkills:   nil,
+		FailedSkills:    nil,
 		AdmissionCount:  len(r.rt.AgentWorkspace().CapabilityAdmissions),
 	}
 	if r.rt.Tools != nil {
@@ -358,7 +359,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 	return res
 }
 
-func (r *runtimeAdapter) ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error) {
+func (r *runtimeAdapter) ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
@@ -1024,7 +1025,7 @@ func inferApprovalKind(request fauthorization.PermissionRequest) string {
 	}
 }
 
-func capabilityAvailabilityLabel(spec core.AvailabilitySpec) string {
+func capabilityAvailabilityLabel(spec capability.AvailabilitySpec) string {
 	if spec.Available {
 		return "available"
 	}
@@ -1423,7 +1424,7 @@ func (r *runtimeAdapter) planNotes(workflowID string) map[string][]string {
 	return out
 }
 
-func matchesCorpusScope(scope, corpusScope string, instances []patterns.PatternInstance) bool {
+func matchesCorpusScope(scope, corpusScope string, instances []agentenv.PatternInstance) bool {
 	scope = normalizeScope(scope)
 	corpusScope = normalizeScope(corpusScope)
 	if scope == "" || corpusScope == "" {

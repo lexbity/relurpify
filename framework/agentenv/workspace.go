@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/artifactstore"
@@ -16,12 +18,10 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/cfgload/secretscan"
+	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
 	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/jobs"
@@ -30,10 +30,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/framework/services"
-	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	ftelemetry "codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Workspace is a live, initialized workspace session. It holds all open
@@ -51,15 +51,13 @@ type Workspace struct {
 
 	// Derived fields for callers that need them
 	AgentSpec            *agentspec.AgentRuntimeSpec
-	AgentDefinitions     map[string]*agentspec.AgentDefinition
 	EffectiveContract    *cfgload.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 	CapabilityAdmissions []capability.AdmissionResult
-	SkillResults         []cfgload.SkillResolution
 
 	// Observability
-	Telemetry core.Telemetry
+	Telemetry telemetry.Telemetry
 	Logger    *log.Logger
 
 	// Service management (new for dynamic lifecycle)
@@ -163,49 +161,50 @@ func (w *Workspace) stopServices() error {
 
 // AgentBootstrapOptions provides configuration for agent runtime bootstrapping.
 type AgentBootstrapOptions struct {
-	Context             context.Context
-	AgentID             string
-	AgentName           string
-	ConfigName          string
-	AgentSpec           *agentspec.AgentRuntimeSpec
-	ManifestSnapshot    *cfgload.AgentManifestSnapshot
-	SecurityBundle      *cfgsecurity.Bundle
-	ProfileResolution   llm.ProfileResolution
-	AgentDefinitions    map[string]*agentspec.AgentDefinition
-	PermissionManager   *fauthorization.PermissionManager
-	Runner              fsandbox.CommandRunner
-	SandboxBackend      string
-	Model               contracts.LanguageModel
-	Backend             llm.ManagedBackend
-	InferenceModel      string
-	Telemetry           core.Telemetry
-	SkipASTIndex        bool
-	MaxIterations       int
-	AllowedCapabilities []agentspec.CapabilitySelector
-	DebugLLM            bool
-	DebugAgent          bool
-	AgentLifecycle      agentlifecycle.Repository
-}
-
-// BootstrappedAgentRuntime contains the results of bootstrapping an agent runtime.
-type BootstrappedAgentRuntime struct {
-	Registry             *capability.Registry
-	IndexManager         *ast.IndexManager
-	SearchEngine         *search.SearchEngine
+	Context              context.Context
+	AgentID              string
+	AgentName            string
+	ConfigName           string
 	AgentSpec            *agentspec.AgentRuntimeSpec
-	AgentConfig          *core.Config
+	ManifestSnapshot     *cfgload.AgentManifestSnapshot
+	SecurityBundle       *cfgsecurity.Bundle
+	ProfileResolution    llm.ProfileResolution
+	PermissionManager    *fauthorization.PermissionManager
+	Runner               fsandbox.CommandRunner
+	SandboxBackend       string
+	Model                contracts.LanguageModel
 	Backend              llm.ManagedBackend
-	Environment          WorkspaceEnvironment
-	AgentDefinitions     map[string]*agentspec.AgentDefinition
-	SkillResults         []cfgload.SkillResolution
+	InferenceModel       string
+	Telemetry            telemetry.Telemetry
+	SkipASTIndex         bool
+	MaxIterations        int
+	AllowedCapabilities  []agentspec.CapabilitySelector
+	DebugLLM             bool
+	DebugAgent           bool
+	AgentLifecycle       agentlifecycle.Repository
 	CapabilityAdmissions []capability.AdmissionResult
 	Contract             *cfgload.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
 }
 
-// BootstrapAgentRuntime bootstraps the agent runtime including loading agent definitions,
-// resolving effective contracts, and building the capability bundle.
+// BootstrappedAgentRuntime contains the results of bootstrapping an agent runtime.
+type BootstrappedAgentRuntime struct {
+	AgentSpec            *agentspec.AgentRuntimeSpec
+	AgentConfig          *execution.Config
+	Backend              llm.ManagedBackend
+	Environment          WorkspaceEnvironment
+	Registry             *capability.Registry
+	IndexManager         *ast.IndexManager
+	SearchEngine         *search.SearchEngine
+	CapabilityAdmissions []capability.AdmissionResult
+	Contract             *cfgload.EffectiveAgentContract
+	CompiledPolicy       *fauthorization.CompiledPolicyBundle
+	PolicyEngine         fauthorization.PolicyEngine
+}
+
+// BootstrapAgentRuntime bootstraps the agent runtime including resolving the
+// effective contract and building the capability bundle.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
@@ -228,23 +227,18 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	agentDefs := opts.AgentDefinitions
-
 	manifestForResolution := opts.ManifestSnapshot.Manifest
 	if opts.AgentSpec != nil {
 		clone := *opts.ManifestSnapshot.Manifest
 		clone.Spec.Agent = opts.AgentSpec
 		manifestForResolution = &clone
 	}
-	resolveOpts := cfgload.ResolveOptions{
-		AgentOverlays: agentspec.AgentSpecOverlaysForName(opts.AgentName, agentDefs),
-	}
-	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts, nil)
+	resolveOpts := cfgload.ResolveOptions{}
+	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts)
 	if err != nil {
 		return nil, err
 	}
 	agentSpec := effectiveContract.AgentSpec
-	skillResults := append([]cfgload.SkillResolution{}, effectiveContract.SkillResults...)
 	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...))
 
 	resolvedModel := opts.InferenceModel
@@ -254,21 +248,21 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 
 	manifest := opts.ManifestSnapshot.Manifest
 	sr, err := buildSecuredRuntime(opts.Context, SecuredRuntimeInput{
-		Context:            opts.Context,
-		Workspace:          workspace,
-		SandboxBackend:     opts.SandboxBackend,
-		AgentID:            opts.AgentID,
-		AgentSpec:          agentSpec,
-		PermissionManager:  opts.PermissionManager,
-		SecurityBundle:     opts.SecurityBundle,
-		ExistingRunner:     opts.Runner,
-		Manifest:           manifest,
+		Context:           opts.Context,
+		Workspace:         workspace,
+		SandboxBackend:    opts.SandboxBackend,
+		AgentID:           opts.AgentID,
+		AgentSpec:         agentSpec,
+		PermissionManager: opts.PermissionManager,
+		SecurityBundle:    opts.SecurityBundle,
+		ExistingRunner:    opts.Runner,
+		Manifest:          manifest,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build secured runtime: %w", err)
 	}
 
-	capabilities, err := services.BuildBuiltinCapabilityBundle(workspace, sr.Runner, services.CapabilityRegistryOptions{
+	capabilities, err := BuildBuiltinCapabilityBundle(workspace, sr.Runner, CapabilityRegistryOptions{
 		Context:           opts.Context,
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
@@ -305,7 +299,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if configName == "" {
 		configName = opts.ManifestSnapshot.Manifest.Metadata.Name
 	}
-	agentCfg := &core.Config{
+	agentCfg := &execution.Config{
 		Name:              configName,
 		Model:             resolvedModel,
 		MaxIterations:     maxIterations,
@@ -358,8 +352,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentConfig:          agentCfg,
 		Backend:              opts.Backend,
 		Environment:          env,
-		AgentDefinitions:     agentDefs,
-		SkillResults:         skillResults,
 		CapabilityAdmissions: admissionResults,
 		Contract:             effectiveContract,
 		CompiledPolicy:       compiledPolicy,
@@ -392,6 +384,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 //	Build*                 — single leaf components (capabilities, prompts)
 //
 // Scope mechanism (design decision 9):
+//
 //	cfg.Scope is a WorkspaceScope field, not a positional parameter.
 //	ScopeFull = every optional layer.
 //	ScopeEmbeddedAgent = security + capabilities only.
@@ -588,7 +581,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		ManifestSnapshot:    cfg.ManifestSnapshot,
 		SecurityBundle:      cfg.SecurityBundle,
 		ProfileResolution:   profileResolution,
-		AgentDefinitions:    cfg.AgentDefinitions,
 		PermissionManager:   registration.Permissions,
 		Runner:              runner,
 		Model:               model,
@@ -615,7 +607,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	// Phase G.5: Prompt Registry
 	// BuildPromptRegistry loads .prompt files from relurpify_cfg/prompts/.
 	// Provider registration is deferred to named-agent Initialize() calls.
-	promptRegistry, err := services.BuildPromptRegistry(cfg.Workspace, tel)
+	promptRegistry, err := BuildPromptRegistry(cfg.Workspace, tel)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("build prompt registry: %w", err)
@@ -659,7 +651,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		env.KnowledgeStore = knowledgeStore
 		env.KnowledgeEvents = bkcEvents
 
-		policyBundle, err := contextpolicy.Compile(registration.Manifest, nil, contextpolicy.DefaultContextPolicy())
+		policyBundle, err := execctx.Compile(registration.Manifest, execctx.DefaultContextPolicy())
 		if err != nil {
 			logFile.Close()
 			return nil, fmt.Errorf("compile context policy: %w", err)
@@ -683,12 +675,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		logFile:              logFile,
 		eventLog:             eventLog,
 		AgentSpec:            boot.AgentSpec,
-		AgentDefinitions:     boot.AgentDefinitions,
 		EffectiveContract:    boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,
 		PolicyEngine:         boot.PolicyEngine,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
-		SkillResults:         boot.SkillResults,
 		Telemetry:            tel,
 		Logger:               logger,
 		ServiceManager:       sm,
@@ -720,15 +710,15 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 }
 
 type llmTelemetryAdapter struct {
-	inner core.Telemetry
+	inner telemetry.Telemetry
 }
 
 func (a llmTelemetryAdapter) Emit(event contracts.Event) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(core.Event{
-		Type:      core.EventType(event.Type),
+	a.inner.Emit(telemetry.Event{
+		Type:      telemetry.EventType(event.Type),
 		TaskID:    event.TaskID,
 		Message:   event.Message,
 		Timestamp: event.Timestamp,
@@ -761,7 +751,7 @@ func stringValue(v *string) string {
 // setupTelemetry opens the log file, creates a logger, and assembles the
 // telemetry sink chain (logger + optional JSON file). Returns the log file
 // (which must be closed by the caller), the logger, and the assembled telemetry.
-func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry, error) {
+func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telemetry, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
 		if cfg.StateDir != "" {
@@ -787,12 +777,12 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 	}
 	logger := log.New(logFile, "agentenv ", log.LstdFlags|log.Lmicroseconds)
 
-	var sinks []core.Telemetry
-	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
+	var sinks []telemetry.Telemetry
+	sinks = append(sinks, ftelemetry.LoggerTelemetry{Logger: logger})
 
 	if telemetryPath != "" {
 		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o755); err == nil {
-			if fileSink, err := telemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
+			if fileSink, err := ftelemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
 				sinks = append(sinks, fileSink)
 			} else {
 				logger.Printf("warning: failed to init json telemetry: %v", err)
@@ -800,7 +790,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 		}
 	}
 
-	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
+	return logFile, logger, ftelemetry.MultiplexTelemetry{Sinks: sinks}, nil
 }
 
 // openKnowledgeStore opens the knowledge store with the given graphdb engine.

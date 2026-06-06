@@ -11,26 +11,26 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/framework/summarization"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Compiler performs live context assembly with caching and event-driven invalidation.
 type Compiler struct {
 	retriever         *retrieval.Retriever
 	streamer          *knowledge.Streamer
-	policy            *contextpolicy.ContextPolicyBundle
+	policy            *execctx.ContextPolicyBundle
 	chunkStore        *knowledge.ChunkStore
 	cache             map[CacheKey]*CacheEntry
 	cacheMu           sync.RWMutex
 	invalidatedChunks map[knowledge.ChunkID]struct{}
 	invalidatedMu     sync.RWMutex
 	eventLog          EventLog
-	telemetry         core.Telemetry
+	telemetry         telemetry.Telemetry
 	newID             func() string
 	now               func() time.Time
 	started           bool
@@ -49,7 +49,7 @@ type EventLog interface {
 }
 
 // NewCompiler creates a new compiler instance.
-func NewCompiler(retriever *retrieval.Retriever, policy *contextpolicy.ContextPolicyBundle, store *knowledge.ChunkStore, streamer ...*knowledge.Streamer) *Compiler {
+func NewCompiler(retriever *retrieval.Retriever, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, streamer ...*knowledge.Streamer) *Compiler {
 	var stream *knowledge.Streamer
 	if len(streamer) > 0 {
 		stream = streamer[0]
@@ -78,7 +78,7 @@ func (c *Compiler) SetEventLog(log EventLog) {
 }
 
 // SetTelemetry wires structured compiler warnings and observability events.
-func (c *Compiler) SetTelemetry(telemetry core.Telemetry) {
+func (c *Compiler) SetTelemetry(telemetry telemetry.Telemetry) {
 	c.telemetry = telemetry
 }
 
@@ -991,8 +991,8 @@ func (c *Compiler) emitWarning(message string, metadata map[string]any) {
 	if c == nil || c.telemetry == nil {
 		return
 	}
-	c.telemetry.Emit(core.Event{
-		Type:      core.EventCompilerWarning,
+	c.telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventCompilerWarning,
 		Message:   message,
 		Timestamp: c.now(),
 		Metadata:  metadata,

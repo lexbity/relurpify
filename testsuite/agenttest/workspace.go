@@ -193,7 +193,6 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	for _, dir := range []string{
 		paths.TestSetupDir(),
 		paths.AgentsDir(),
-		paths.SkillsDir(),
 		paths.LogsDir(),
 		paths.TelemetryDir(),
 		paths.MemoryDir(),

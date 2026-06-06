@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/contextpolicy"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
@@ -14,7 +14,7 @@ import (
 type Retriever struct {
 	registry *RankerRegistry
 	store    *knowledge.ChunkStore
-	policy   *contextpolicy.ContextPolicyBundle
+	policy   *execctx.ContextPolicyBundle
 }
 
 // NewRetriever creates a new retriever.
@@ -26,7 +26,7 @@ func NewRetriever(registry *RankerRegistry, store *knowledge.ChunkStore) *Retrie
 }
 
 // WithPolicy sets the context policy for ranker admission and filtering.
-func (r *Retriever) WithPolicy(policy *contextpolicy.ContextPolicyBundle) *Retriever {
+func (r *Retriever) WithPolicy(policy *execctx.ContextPolicyBundle) *Retriever {
 	r.policy = policy
 	return r
 }

@@ -7,13 +7,15 @@ import (
 	"strings"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/persistence"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // CheckpointNode materializes envelope checkpoint requests into persisted artifacts.
@@ -25,7 +27,7 @@ type CheckpointNode struct {
 	principalResolver CheckpointPrincipalResolver
 	workflowResolver  CheckpointWorkflowResolver
 	runResolver       CheckpointRunResolver
-	telemetry         core.Telemetry
+	telemetry         telemetry.Telemetry
 	artifactKind      string
 }
 
@@ -120,7 +122,7 @@ func (n *CheckpointNode) WithRunResolver(resolver CheckpointRunResolver) *Checkp
 }
 
 // WithTelemetry wires checkpoint lifecycle telemetry.
-func (n *CheckpointNode) WithTelemetry(t core.Telemetry) *CheckpointNode {
+func (n *CheckpointNode) WithTelemetry(t telemetry.Telemetry) *CheckpointNode {
 	if n != nil {
 		n.telemetry = t
 	}
@@ -139,11 +141,11 @@ func (n *CheckpointNode) Contract() NodeContract {
 		SideEffectClass:  SideEffectContext,
 		Idempotency:      IdempotencyReplaySafe,
 		CheckpointPolicy: CheckpointPolicyPreferred,
-		ContextPolicy: core.StateBoundaryPolicy{
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "contextstream.*", "euclo.*"},
 			WriteKeys:                []string{"checkpoint.*", "contextstream.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState, core.StateDataClassArtifactRef},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState, relurpctx.StateDataClassArtifactRef},
 			MaxStateEntryBytes:       8192,
 			MaxInlineCollectionItems: 64,
 		},
@@ -151,7 +153,7 @@ func (n *CheckpointNode) Contract() NodeContract {
 }
 
 // Execute materializes a checkpoint artifact if the envelope has requested one.
-func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if env == nil {
 		return nil, fmt.Errorf("checkpoint node %q missing envelope", n.id)
 	}
@@ -160,10 +162,10 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return nil, err
 	}
 	if !ok {
-		return &core.Result{
+		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
-			Data:    core.NewToolResultPayload(map[string]any{"checkpoint_created": false}),
+			Data:    execution.NewToolResultPayload(map[string]any{"checkpoint_created": false}),
 		}, nil
 	}
 	if n.repository == nil {
@@ -195,12 +197,12 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	if n.writer != nil {
 		n.persistMirroredCheckpoint(ctx, env, snapshot)
 	}
-	if tel, ok := core.TelemetryFromContext(ctx).(core.CheckpointTelemetry); ok {
+	if tel, ok := telemetry.TelemetryFromContext(ctx).(telemetry.CheckpointTelemetry); ok {
 		tel.OnCheckpointCreated(env.TaskID, ref.ArtifactID, n.id)
 	}
 	if n.telemetry != nil {
-		n.telemetry.Emit(core.Event{
-			Type:      core.EventStateChange,
+		n.telemetry.Emit(telemetry.Event{
+			Type:      telemetry.EventStateChange,
 			NodeID:    n.id,
 			TaskID:    env.TaskID,
 			Timestamp: time.Now().UTC(),
@@ -212,10 +214,10 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		})
 	}
 
-	return &core.Result{
+	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"checkpoint_created": true,
 			"checkpoint_id":      ref.ArtifactID,
 			"workflow_id":        snapshot.WorkflowID,

@@ -10,10 +10,10 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // TestAgentCompiles verifies that New returns a non-nil *Agent without panic.
@@ -38,7 +38,7 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 // TestBuildGraphReturnsGraph verifies that BuildGraph returns a non-nil *agentgraph.Graph.
 func TestBuildGraphReturnsGraph(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
@@ -47,7 +47,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 	}
 	agent := New(env)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "test-task",
 		Type:        "analysis",
 		Instruction: "test instruction",
@@ -67,7 +67,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 // This is a minimal test since the full graph execution requires more setup.
 func TestExecuteCallsBuildGraph(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
@@ -76,7 +76,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 	}
 	agent := New(env)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "test-task",
 		Type:        "analysis",
 		Instruction: "test instruction",
@@ -96,7 +96,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 }
 
 func TestExecuteSeedsTaskEnvelope(t *testing.T) {
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-42",
 		Type:        "analysis",
 		Instruction: "inspect the graph",
@@ -107,7 +107,7 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 
 	seedTaskEnvelope(envelope, task)
 
-	if got, ok := contextdata.GetTyped[*core.Task](envelope, "task.input"); !ok || got != task {
+	if got, ok := contextdata.GetTyped[*execution.Task](envelope, "task.input"); !ok || got != task {
 		t.Fatalf("expected task.input to be seeded with task pointer, got=%v ok=%v", got, ok)
 	}
 	if got, ok := contextdata.GetTyped[string](envelope, "task.id"); !ok || got != task.ID {
@@ -129,7 +129,7 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 
 func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
@@ -142,7 +142,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 	}
 	agent.env.Registry = nil
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "task-43",
 		Type:        "analysis",
 		Instruction: "resume from classification",
@@ -172,7 +172,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 // TestInitializeStoresConfig verifies that Initialize stores config and marks initialized.
 func TestInitializeStoresConfig(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
@@ -181,7 +181,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 	}
 	agent := New(env)
 
-	config := &core.Config{}
+	config := &execution.Config{}
 
 	err := agent.Initialize(config)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 	}
 	agent := New(env)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "test-task",
 		Type:        "analysis",
 		Instruction: "test instruction",
@@ -247,7 +247,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 // Note: Resume state clearing is stubbed for Phase 1.
 func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 	env := agentenv.WorkspaceEnvironment{
-		Config: &core.Config{
+		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
@@ -256,7 +256,7 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 	}
 	agent := New(env)
 
-	task := &core.Task{
+	task := &execution.Task{
 		ID:          "test-task",
 		Type:        "analysis",
 		Instruction: "test instruction",

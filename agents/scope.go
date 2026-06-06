@@ -38,10 +38,11 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 // toolAllowed reports whether the tool's declared permissions fit within scope.
 func toolAllowed(tool contracts.Tool, scope ToolScope) bool {
 	perms := tool.Permissions()
-	if perms.Permissions == nil {
+	ps := permissionSet(perms.Permissions)
+	if ps == nil {
 		return true
 	}
-	for _, fs := range perms.Permissions.FileSystem {
+	for _, fs := range ps.FileSystem {
 		switch fs.Action {
 		case contracts.FileSystemWrite:
 			if !scope.AllowWrite {
@@ -53,11 +54,19 @@ func toolAllowed(tool contracts.Tool, scope ToolScope) bool {
 			}
 		}
 	}
-	if len(perms.Permissions.Executables) > 0 && !scope.AllowExecute {
+	if len(ps.Executables) > 0 && !scope.AllowExecute {
 		return false
 	}
-	if len(perms.Permissions.Network) > 0 && !scope.AllowNetwork {
+	if len(ps.Network) > 0 && !scope.AllowNetwork {
 		return false
 	}
 	return true
+}
+
+func permissionSet(v interface{}) *contracts.PermissionSet {
+	if v == nil {
+		return nil
+	}
+	ps, _ := v.(*contracts.PermissionSet)
+	return ps
 }

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
 // MemoryClass identifies the lifecycle and storage tier for knowledge chunks.

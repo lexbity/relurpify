@@ -5,9 +5,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // IngestionNode ingests user files and session pins into the envelope.
@@ -33,12 +33,12 @@ func (n *IngestionNode) Type() agentgraph.NodeType {
 }
 
 // Execute performs file ingestion.
-func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*core.Result, error) {
+func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	_ = ctx
-	result := &core.Result{
+	result := &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"user_files_ingested":   0,
 			"session_pins_ingested": 0,
 			"skipped":               true,
@@ -55,7 +55,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	if !ok {
 		return result, nil
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	fields["skipped"] = false
 
 	// Ingest user files

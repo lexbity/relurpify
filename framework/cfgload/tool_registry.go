@@ -125,10 +125,6 @@ func BuildRegistry(
 		case contracts.ToolBackendComposite:
 			// Composite tools are resolved at runtime via the composition
 			// runner; no tool implementation is registered here.
-		case contracts.ToolBackendMCP:
-			if !ok {
-				tool = nil
-			}
 		default:
 			return nil, fmt.Errorf("tool %q has unsupported backend %q", name, manifest.Execution.Backend)
 		}

@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,8 +17,8 @@ type internalContractNode struct {
 
 func (n internalContractNode) ID() string     { return n.id }
 func (n internalContractNode) Type() NodeType { return n.kind }
-func (n internalContractNode) Execute(context.Context, *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{NodeID: n.id, Success: true}, nil
+func (n internalContractNode) Execute(context.Context, *contextdata.Envelope) (*execution.Result, error) {
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 func TestValidateNodeContractRejectsInvalidPlacement(t *testing.T) {
@@ -36,8 +37,8 @@ func TestValidateNodeContractAllowsBoundaryValues(t *testing.T) {
 		Idempotency:      IdempotencyReplaySafe,
 		Recoverability:   NodeRecoverabilityPersisted,
 		CheckpointPolicy: CheckpointPolicyRequired,
-		ContextPolicy: core.StateBoundaryPolicy{
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassStructuredState},
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassStructuredState},
 			MaxStateEntryBytes:       0,
 			MaxInlineCollectionItems: 0,
 		},

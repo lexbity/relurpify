@@ -11,10 +11,11 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
@@ -22,7 +23,7 @@ type GoalConAgent struct {
 	Model            contracts.LanguageModel
 	Tools            *capability.Registry
 	Memory           *memory.WorkingMemoryStore
-	Config           *core.Config
+	Config           *execution.Config
 	Operators        *OperatorRegistry
 	PlanExecutor     graph.WorkflowExecutor
 	MaxDepth         int
@@ -39,7 +40,7 @@ type GoalConAgent struct {
 	initialised bool
 }
 
-func (a *GoalConAgent) Initialize(cfg *core.Config) error {
+func (a *GoalConAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
@@ -67,7 +68,7 @@ func (a *GoalConAgent) Capabilities() []string {
 	return []string{"goalcon"}
 }
 
-func (a *GoalConAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
+func (a *GoalConAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	nodes := []graph.Node{
 		&goalconNode{id: "goalcon_plan"},
@@ -98,7 +99,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 	return ""
 }
 
-func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -166,7 +167,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 	if err != nil {
 		return nil, fmt.Errorf("goalcon: execute: %w", err)
 	}
-	fields := core.ResultFields(result.Data)
+	fields := execution.ResultFields(result.Data)
 	fields["search_depth"] = planResult.Depth
 	fields["unsatisfied_count"] = len(planResult.Unsatisfied)
 
@@ -190,15 +191,15 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 				"success_rate": provenance.SuccessRate,
 				"summary":      provenance.HumanSummary,
 			}
-			a.Memory.Scope("goalcon").Set(fmt.Sprintf("goalcon.audit.%s", planID), provenanceData, core.MemoryClassWorking)
+			a.Memory.Scope("goalcon").Set(fmt.Sprintf("goalcon.audit.%s", planID), provenanceData, relurpctx.MemoryClassWorking)
 		}
 	}
 
-	result.Data = core.NewToolResultPayload(fields)
+	result.Data = execution.NewToolResultPayload(fields)
 	return result, nil
 }
 
-func (a *GoalConAgent) goal(task *core.Task) GoalCondition {
+func (a *GoalConAgent) goal(task *execution.Task) GoalCondition {
 	if a.GoalOverride != nil {
 		return *a.GoalOverride
 	}
@@ -229,23 +230,23 @@ type goalconNode struct {
 
 func (n *goalconNode) ID() string           { return n.id }
 func (n *goalconNode) Type() graph.NodeType { return graph.NodeTypeSystem }
-func (n *goalconNode) Execute(_ context.Context, _ *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{NodeID: n.id, Success: true}, nil
+func (n *goalconNode) Execute(_ context.Context, _ *contextdata.Envelope) (*execution.Result, error) {
+	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 
 type noopAgent struct{}
 
-func (n *noopAgent) Initialize(_ *core.Config) error { return nil }
+func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
 func (n *noopAgent) Capabilities() []string          { return nil }
-func (n *noopAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
+func (n *noopAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	done := graph.NewTerminalNode("noop_done")
 	_ = g.AddNode(done)
 	_ = g.SetStart(done.ID())
 	return g, nil
 }
-func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *contextdata.Envelope) (*core.Result, error) {
-	return &core.Result{Success: true, Data: core.NewToolResultPayload(map[string]any{})}, nil
+func (n *noopAgent) Execute(_ context.Context, _ *execution.Task, _ *contextdata.Envelope) (*execution.Result, error) {
+	return &execution.Result{Success: true, Data: execution.NewToolResultPayload(map[string]any{})}, nil
 }
 
 // streamMode returns the streaming mode, defaulting to blocking.
@@ -257,7 +258,7 @@ func (a *GoalConAgent) streamMode() contextstream.Mode {
 }
 
 // streamQuery returns the query for streaming, defaulting to task instruction.
-func (a *GoalConAgent) streamQuery(task *core.Task) string {
+func (a *GoalConAgent) streamQuery(task *execution.Task) string {
 	if a.StreamQuery != "" {
 		return a.StreamQuery
 	}
@@ -276,7 +277,7 @@ func (a *GoalConAgent) streamMaxTokens() int {
 }
 
 // streamTriggerNode creates a streaming trigger node for the goalcon agent.
-func (a *GoalConAgent) streamTriggerNode(task *core.Task) graph.Node {
+func (a *GoalConAgent) streamTriggerNode(task *execution.Task) graph.Node {
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil
@@ -292,7 +293,7 @@ func (a *GoalConAgent) streamTriggerNode(task *core.Task) graph.Node {
 }
 
 // executeStreamingTrigger runs the streaming trigger before goal clarification.
-func (a *GoalConAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
+func (a *GoalConAgent) executeStreamingTrigger(ctx context.Context, task *execution.Task, env *contextdata.Envelope) error {
 	node := a.streamTriggerNode(task)
 	if node == nil {
 		return nil

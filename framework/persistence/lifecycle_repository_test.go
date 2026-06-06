@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 func setupTestDB(t *testing.T) *graphdb.Engine {
@@ -176,7 +176,7 @@ func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 		WorkflowID:   "wf-1",
 		RunID:        "run-1",
 		State:        "active",
-		Request: core.DelegationRequest{
+		Request: policy.DelegationRequest{
 			TargetProviderID: "provider-1",
 		},
 	}
@@ -490,7 +490,7 @@ func TestLifecycleRepository_RoundTrip(t *testing.T) {
 		RunID:        "run-roundtrip",
 		State:        "active",
 		TrustClass:   "trusted",
-		Request: core.DelegationRequest{
+		Request: policy.DelegationRequest{
 			TargetProviderID: "provider-1",
 		},
 		Metadata: map[string]any{"del_key": "del_value"},

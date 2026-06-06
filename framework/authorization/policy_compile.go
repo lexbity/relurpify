@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	pol "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 // CompileManifestPolicyRules compiles manifest policy surfaces into normalized policy rules.
-func CompileManifestPolicyRules(m *cfgload.AgentManifest) ([]core.PolicyRule, error) {
+func CompileManifestPolicyRules(m *cfgload.AgentManifest) ([]pol.PolicyRule, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -27,11 +27,11 @@ func CompileManifestPolicyRules(m *cfgload.AgentManifest) ([]core.PolicyRule, er
 
 // CompileAgentSpecPolicyRules compiles policy surfaces from an effective agent
 // spec rather than a raw manifest.
-func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]core.PolicyRule, error) {
+func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]pol.PolicyRule, error) {
 	if spec == nil {
 		return nil, nil
 	}
-	var rules []core.PolicyRule
+	var rules []pol.PolicyRule
 
 	for toolName, policy := range spec.ToolExecutionPolicy {
 		rule, ok := compileToolExecutionPolicy(toolName, policy)
@@ -80,16 +80,16 @@ func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]core.Polic
 	return rules, nil
 }
 
-func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (core.PolicyRule, bool) {
+func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (pol.PolicyRule, bool) {
 	if strings.TrimSpace(toolName) == "" || policy.Execute == "" {
-		return core.PolicyRule{}, false
+		return pol.PolicyRule{}, false
 	}
-	return core.PolicyRule{
+	return pol.PolicyRule{
 		ID:       "tool:" + toolName,
 		Name:     "Tool policy for " + toolName,
 		Priority: policyPriorityTool,
 		Enabled:  true,
-		Conditions: core.PolicyConditions{
+		Conditions: pol.PolicyConditions{
 			Capabilities:    []string{toolName},
 			CapabilityKinds: []agentspec.CapabilityKind{agentspec.CapabilityKindTool},
 			RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyLocalTool},
@@ -98,12 +98,12 @@ func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (c
 	}, true
 }
 
-func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (core.PolicyRule, error) {
+func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (pol.PolicyRule, error) {
 	conditions, err := compileCapabilitySelector(policy.Selector)
 	if err != nil {
-		return core.PolicyRule{}, fmt.Errorf("capability_policies[%d] unsupported selector: %w", index, err)
+		return pol.PolicyRule{}, fmt.Errorf("capability_policies[%d] unsupported selector: %w", index, err)
 	}
-	return core.PolicyRule{
+	return pol.PolicyRule{
 		ID:         fmt.Sprintf("capability-policy:%d", index),
 		Name:       fmt.Sprintf("Capability policy %d", index),
 		Priority:   policyPriorityTool + index,
@@ -113,29 +113,29 @@ func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (core
 	}, nil
 }
 
-func compileProviderPolicy(providerID string, policy agentspec.ProviderPolicy) (core.PolicyRule, bool) {
+func compileProviderPolicy(providerID string, policy agentspec.ProviderPolicy) (pol.PolicyRule, bool) {
 	if strings.TrimSpace(providerID) == "" || policy.Activate == "" {
-		return core.PolicyRule{}, false
+		return pol.PolicyRule{}, false
 	}
-	return core.PolicyRule{
+	return pol.PolicyRule{
 		ID:       "provider:" + providerID + ":activate",
 		Name:     "Provider activation policy for " + providerID,
 		Priority: policyPriorityProvider,
 		Enabled:  true,
-		Conditions: core.PolicyConditions{
+		Conditions: pol.PolicyConditions{
 			Capabilities: []string{"provider:" + providerID + ":activate"},
 		},
 		Effect: permissionLevelToEffect(policy.Activate, ""),
 	}, true
 }
 
-func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.PolicyRule, error) {
-	corePolicy := core.SessionPolicy{
+func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (pol.PolicyRule, error) {
+	corePolicy := pol.SessionPolicy{
 		ID:       policy.ID,
 		Name:     policy.Name,
 		Priority: policy.Priority,
 		Enabled:  policy.Enabled,
-		Selector: core.SessionSelector{
+		Selector: pol.SessionSelector{
 			Partitions:                append([]string{}, policy.Selector.Partitions...),
 			ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
 			Scopes:                    convertSessionScopes(policy.Selector.Scopes),
@@ -156,15 +156,15 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 		ApprovalTTL: policy.ApprovalTTL,
 		Reason:      policy.Reason,
 	}
-	if err := core.ValidateSessionPolicy(corePolicy); err != nil {
-		return core.PolicyRule{}, err
+	if err := pol.ValidateSessionPolicy(corePolicy); err != nil {
+		return pol.PolicyRule{}, err
 	}
-	conditions := core.PolicyConditions{
+	conditions := pol.PolicyConditions{
 		TrustClasses:              append([]agentspec.TrustClass{}, corePolicy.Selector.TrustClasses...),
 		Partitions:                append([]string{}, corePolicy.Selector.Partitions...),
 		ChannelIDs:                append([]string{}, corePolicy.Selector.ChannelIDs...),
-		SessionScopes:             append([]core.SessionScope{}, corePolicy.Selector.Scopes...),
-		SessionOperations:         append([]core.SessionOperation{}, corePolicy.Selector.Operations...),
+		SessionScopes:             append([]pol.SessionScope{}, corePolicy.Selector.Scopes...),
+		SessionOperations:         append([]pol.SessionOperation{}, corePolicy.Selector.Operations...),
 		ExternalProviders:         append([]string{}, corePolicy.Selector.ExternalProviders...),
 		RequireOwnership:          corePolicy.Selector.RequireOwnership,
 		RequireDelegation:         corePolicy.Selector.RequireDelegation,
@@ -173,7 +173,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 		RequireRestrictedExternal: corePolicy.Selector.RequireRestrictedExternal,
 	}
 	if len(corePolicy.Selector.ActorKinds) > 0 || len(corePolicy.Selector.ActorIDs) > 0 || corePolicy.Selector.AuthenticatedOnly != nil {
-		match := core.ActorMatch{
+		match := pol.ActorMatch{
 			IDs: append([]string{}, corePolicy.Selector.ActorIDs...),
 		}
 		if len(corePolicy.Selector.ActorKinds) > 0 {
@@ -182,15 +182,15 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 		if corePolicy.Selector.AuthenticatedOnly != nil {
 			match.Authenticated = *corePolicy.Selector.AuthenticatedOnly
 		}
-		conditions.Actors = []core.ActorMatch{match}
+		conditions.Actors = []pol.ActorMatch{match}
 	}
-	return core.PolicyRule{
+	return pol.PolicyRule{
 		ID:         corePolicy.ID,
 		Name:       corePolicy.Name,
 		Priority:   policyPrioritySession + corePolicy.Priority,
 		Enabled:    corePolicy.Enabled,
 		Conditions: conditions,
-		Effect: core.PolicyEffect{
+		Effect: pol.PolicyEffect{
 			Action:      permissionLevelToAction(corePolicy.Effect),
 			Approvers:   append([]string{}, corePolicy.Approvers...),
 			ApprovalTTL: corePolicy.ApprovalTTL,
@@ -199,18 +199,18 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 	}, nil
 }
 
-func convertSessionScopes(values []agentspec.SessionScope) []core.SessionScope {
-	out := make([]core.SessionScope, 0, len(values))
+func convertSessionScopes(values []agentspec.SessionScope) []pol.SessionScope {
+	out := make([]pol.SessionScope, 0, len(values))
 	for _, value := range values {
-		out = append(out, core.SessionScope(value))
+		out = append(out, pol.SessionScope(value))
 	}
 	return out
 }
 
-func convertSessionOperations(values []agentspec.SessionOperation) []core.SessionOperation {
-	out := make([]core.SessionOperation, 0, len(values))
+func convertSessionOperations(values []agentspec.SessionOperation) []pol.SessionOperation {
+	out := make([]pol.SessionOperation, 0, len(values))
 	for _, value := range values {
-		out = append(out, core.SessionOperation(value))
+		out = append(out, pol.SessionOperation(value))
 	}
 	return out
 }
@@ -223,12 +223,12 @@ func convertExternalProvidersToStrings(values []agentspec.ExternalProvider) []st
 	return out
 }
 
-func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*core.PolicyRule, error) {
+func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*pol.PolicyRule, error) {
 	key = strings.TrimSpace(strings.ToLower(key))
 	if key == "" || key == "default_tool_policy" || level == "" {
 		return nil, nil
 	}
-	rule := &core.PolicyRule{
+	rule := &pol.PolicyRule{
 		ID:       "global:" + key,
 		Name:     "Global policy for " + key,
 		Priority: policyPriorityGlobal,
@@ -250,14 +250,14 @@ func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*cor
 	return rule, nil
 }
 
-func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.PolicyConditions, error) {
+func compileCapabilitySelector(selector agentspec.CapabilitySelector) (pol.PolicyConditions, error) {
 	legacy := selector
 	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
 		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
 		selector.CoordinationLongRunning != agentspec.EnabledStateUnset || selector.CoordinationDirectInsertion != agentspec.EnabledStateUnset {
-		return core.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
+		return pol.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}
-	conditions := core.PolicyConditions{
+	conditions := pol.PolicyConditions{
 		TrustClasses:    append([]agentspec.TrustClass{}, legacy.TrustClasses...),
 		MinRiskClasses:  append([]agentspec.RiskClass{}, legacy.RiskClasses...),
 		RuntimeFamilies: append([]agentspec.CapabilityRuntimeFamily{}, legacy.RuntimeFamilies...),
@@ -275,8 +275,8 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.Poli
 	return conditions, nil
 }
 
-func permissionLevelToEffect(level agentspec.AgentPermissionLevel, reason string) core.PolicyEffect {
-	return core.PolicyEffect{
+func permissionLevelToEffect(level agentspec.AgentPermissionLevel, reason string) pol.PolicyEffect {
+	return pol.PolicyEffect{
 		Action: permissionLevelToAction(level),
 		Reason: reason,
 	}

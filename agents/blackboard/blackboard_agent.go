@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
@@ -28,7 +29,7 @@ type BlackboardAgent struct {
 	// Memory is the memory store for the agent.
 	Memory *memory.WorkingMemoryStore
 	// Config holds runtime configuration.
-	Config *core.Config
+	Config *execution.Config
 	// Sources is the set of knowledge sources evaluated each cycle.
 	// When empty, DefaultKnowledgeSources() is used.
 	Sources []KnowledgeSource
@@ -50,7 +51,7 @@ type BlackboardAgent struct {
 
 // Initialize satisfies graph.WorkflowExecutor. It wires configuration and ensures
 // knowledge sources are populated.
-func (a *BlackboardAgent) Initialize(cfg *core.Config) error {
+func (a *BlackboardAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
@@ -70,7 +71,7 @@ func (a *BlackboardAgent) Capabilities() []string {
 // BuildGraph returns the graph-native blackboard controller loop. The
 // blackboard-specific scheduling logic lives in agent-owned nodes and state,
 // without extending framework/graph.
-func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *BlackboardAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -136,12 +137,12 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if err := g.AddEdge(load.ID(), evaluate.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(evaluate.ID(), dispatch.ID(), func(result *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(evaluate.ID(), dispatch.ID(), func(result *execution.Result, env *contextdata.Envelope) bool {
 		return envGetString(env, contextKeyControllerNext) == dispatch.ID()
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(evaluate.ID(), nextAfterDoneDecision, func(result *core.Result, env *contextdata.Envelope) bool {
+	if err := g.AddEdge(evaluate.ID(), nextAfterDoneDecision, func(result *execution.Result, env *contextdata.Envelope) bool {
 		return envGetString(env, contextKeyControllerNext) == done.ID()
 	}, false); err != nil {
 		return nil, err
@@ -172,7 +173,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 
 // Execute initialises the blackboard with the task goal and runs the controller
 // loop until the goal is satisfied or an error occurs.
-func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	a.executionCatalog = nil
 	if a.Tools != nil {
 		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
@@ -198,7 +199,7 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 	}
 	if cfg := a.Config; cfg != nil {
 		// Telemetry event emission - keep commented until envelope equivalent available
-		// emitBlackboardEvent(cfg.Telemetry, env, core.EventAgentStart, "", taskID(task), "blackboard agent start", map[string]any{
+		// emitBlackboardEvent(cfg.Telemetry, env, telemetry.EventAgentStart, "", taskID(task), "blackboard agent start", map[string]any{
 		// 	"checkpoint_path": a.CheckpointPath,
 		// 	"max_cycles":      maxCycles(a.MaxCycles),
 		// 	"source_count":    len(a.Sources),
@@ -237,7 +238,7 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 	}
 	if cfg := a.Config; cfg != nil {
 		// Telemetry event emission - agent-specific
-		// emitBlackboardEvent(cfg.Telemetry, env, core.EventAgentFinish, "", taskID(task), "blackboard agent finished", map[string]any{
+		// emitBlackboardEvent(cfg.Telemetry, env, telemetry.EventAgentFinish, "", taskID(task), "blackboard agent finished", map[string]any{
 		// 	"status":          "success",
 		// 	"termination":     controllerState.Termination,
 		// 	"cycle":           controllerState.Cycle,
@@ -253,9 +254,9 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 	// Agent-specific artifact loading
 	artifactSummaries := []string{}
 
-	return &core.Result{
+	return &execution.Result{
 		Success: true,
-		Data: core.NewToolResultPayload(map[string]any{
+		Data: execution.NewToolResultPayload(map[string]any{
 			"artifacts":       artifactSummaries,
 			"artifact_count":  0,
 			"fact_count":      0,
@@ -315,7 +316,7 @@ func mirrorBlackboardArtifactReferences(env *contextdata.Envelope) {
 	}
 	if strings.TrimSpace(envGetString(env, contextKeySummary)) != "" {
 		if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
-			if ref, ok := rawRef.(core.ArtifactReference); ok {
+			if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
 				env.SetWorkingValue(contextKeySummaryRef, ref, contextdata.MemoryClassTask)
 			}
 		}
@@ -324,25 +325,25 @@ func mirrorBlackboardArtifactReferences(env *contextdata.Envelope) {
 		}
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
-		if ref, ok := rawRef.(core.ArtifactReference); ok {
+		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
 			env.SetWorkingValue(contextKeyCheckpointRef, ref, contextdata.MemoryClassTask)
 		}
 	}
 }
 
-func blackboardUsesStructuredPersistence(cfg *core.Config) bool {
+func blackboardUsesStructuredPersistence(cfg *execution.Config) bool {
 	_ = cfg
 	return true
 }
 
-func taskID(task *core.Task) string {
+func taskID(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
 	return strings.TrimSpace(task.ID)
 }
 
-func taskInstruction(task *core.Task) string {
+func taskInstruction(task *execution.Task) string {
 	if task == nil {
 		return ""
 	}
@@ -365,7 +366,7 @@ func (a *BlackboardAgent) streamMode() contextstream.Mode {
 }
 
 // streamQuery returns the query for streaming, defaulting to task instruction.
-func (a *BlackboardAgent) streamQuery(task *core.Task) string {
+func (a *BlackboardAgent) streamQuery(task *execution.Task) string {
 	if a.StreamQuery != "" {
 		return a.StreamQuery
 	}
@@ -384,7 +385,7 @@ func (a *BlackboardAgent) streamMaxTokens() int {
 }
 
 // streamTriggerNode creates a streaming trigger node for the blackboard agent.
-func (a *BlackboardAgent) streamTriggerNode(task *core.Task) graph.Node {
+func (a *BlackboardAgent) streamTriggerNode(task *execution.Task) graph.Node {
 	query := a.streamQuery(task)
 	if strings.TrimSpace(query) == "" {
 		return nil

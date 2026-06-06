@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type memoryLog struct {
-	events    []core.FrameworkEvent
+	events    []telemetry.FrameworkEvent
 	snapshots [][]byte
 }
 
-func (m *memoryLog) Append(_ context.Context, _ string, events []core.FrameworkEvent) ([]uint64, error) {
+func (m *memoryLog) Append(_ context.Context, _ string, events []telemetry.FrameworkEvent) ([]uint64, error) {
 	for i := range events {
 		events[i].Seq = uint64(len(m.events) + 1)
 		m.events = append(m.events, events[i])
@@ -26,8 +26,8 @@ func (m *memoryLog) Append(_ context.Context, _ string, events []core.FrameworkE
 	}
 	return seqs, nil
 }
-func (m *memoryLog) Read(_ context.Context, _ string, afterSeq uint64, limit int, _ bool) ([]core.FrameworkEvent, error) {
-	var out []core.FrameworkEvent
+func (m *memoryLog) Read(_ context.Context, _ string, afterSeq uint64, limit int, _ bool) ([]telemetry.FrameworkEvent, error) {
+	var out []telemetry.FrameworkEvent
 	for _, ev := range m.events {
 		if ev.Seq > afterSeq {
 			out = append(out, ev)
@@ -38,7 +38,7 @@ func (m *memoryLog) Read(_ context.Context, _ string, afterSeq uint64, limit int
 	}
 	return out, nil
 }
-func (m *memoryLog) ReadByType(_ context.Context, _ string, _ string, _ uint64, _ int) ([]core.FrameworkEvent, error) {
+func (m *memoryLog) ReadByType(_ context.Context, _ string, _ string, _ uint64, _ int) ([]telemetry.FrameworkEvent, error) {
 	return nil, nil
 }
 func (m *memoryLog) LastSeq(_ context.Context, _ string) (uint64, error) {
@@ -54,13 +54,13 @@ func (m *memoryLog) LoadSnapshot(_ context.Context, _ string) (uint64, []byte, e
 func (m *memoryLog) Close() error { return nil }
 
 type recordingMaterializer struct {
-	applied [][]core.FrameworkEvent
+	applied [][]telemetry.FrameworkEvent
 	count   int
 }
 
 func (r *recordingMaterializer) Name() string { return "recording" }
-func (r *recordingMaterializer) Apply(_ context.Context, events []core.FrameworkEvent) error {
-	r.applied = append(r.applied, append([]core.FrameworkEvent(nil), events...))
+func (r *recordingMaterializer) Apply(_ context.Context, events []telemetry.FrameworkEvent) error {
+	r.applied = append(r.applied, append([]telemetry.FrameworkEvent(nil), events...))
 	r.count += len(events)
 	return nil
 }
@@ -71,9 +71,9 @@ func (r *recordingMaterializer) Restore(_ context.Context, _ []byte) error { ret
 
 func TestRunnerRunOnceAppliesAndSnapshots(t *testing.T) {
 	log := &memoryLog{}
-	_, err := log.Append(context.Background(), "local", []core.FrameworkEvent{
-		{Timestamp: time.Now().UTC(), Type: core.FrameworkEventSystemStarted, Partition: "local"},
-		{Timestamp: time.Now().UTC(), Type: core.FrameworkEventSystemCheckpoint, Partition: "local"},
+	_, err := log.Append(context.Background(), "local", []telemetry.FrameworkEvent{
+		{Timestamp: time.Now().UTC(), Type: telemetry.FrameworkEventSystemStarted, Partition: "local"},
+		{Timestamp: time.Now().UTC(), Type: telemetry.FrameworkEventSystemCheckpoint, Partition: "local"},
 	})
 	require.NoError(t, err)
 

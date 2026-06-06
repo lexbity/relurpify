@@ -7,9 +7,9 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/event"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // WorkspaceConfig provides configuration for workspace environment construction.
@@ -46,15 +46,13 @@ type WorkspaceConfig struct {
 	// Agent ID for permission tracking
 	AgentID string
 	// Telemetry for instrumentation
-	Telemetry core.Telemetry
+	Telemetry telemetry.Telemetry
 	// LoadedConfig contains the resolved config tree produced by cfgload.
 	LoadedConfig *cfgload.AppConfig
 	// ManifestSnapshot contains the selected agent manifest snapshot.
 	ManifestSnapshot *cfgload.AgentManifestSnapshot
 	// ProfileResolution is the pre-resolved model profile selected by the caller.
 	ProfileResolution llm.ProfileResolution
-	// AgentDefinitions are the loaded agent definition overlays selected by the caller.
-	AgentDefinitions map[string]*agentspec.AgentDefinition
 	// SecurityBundle contains the loaded security policy bundle.
 	SecurityBundle *cfgsecurity.Bundle
 	// EventLogFactory creates an event.Log implementation for the workspace.
@@ -85,7 +83,3 @@ func (cfg WorkspaceConfig) InferenceModelValue() string {
 func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }
-
-
-
-

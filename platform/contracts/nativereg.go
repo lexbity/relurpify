@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/framework/capability/ports"
+
 )
 
 // NativeToolConstructor builds a go_native tool instance for a given workspace
 // base path. The returned Tool must be fully initialized and ready to execute.
-type NativeToolConstructor func(basePath string) Tool
+type NativeToolConstructor = ports.NativeToolConstructor
 
 type nativeRegistry struct {
 	mu   sync.RWMutex

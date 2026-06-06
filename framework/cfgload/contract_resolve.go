@@ -9,39 +9,15 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-// SkillResolver resolves skills into effective agent spec contributions.
-type SkillResolver interface {
-	ResolveSkills(workspace string, baseSpec *agentspec.AgentRuntimeSpec, skillNames []string) (*agentspec.AgentRuntimeSpec, []ResolvedSkill, []SkillResolution)
-}
-
-// ResolvedSkill captures the effective runtime-facing result of resolving a
-// single skill.
-type ResolvedSkill struct {
-	Name        string
-	Manifest    *SkillManifest
-	Spec        *agentspec.AgentRuntimeSpec
-	Permissions []contracts.PermissionDescriptor
-}
-
-// SkillResolution records the outcome of attempting to resolve a skill.
-type SkillResolution struct {
-	Name     string
-	Applied  bool
-	Error    error
-	Messages []string
-}
-
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
-// from the manifest, skill set, and any later overlays.
+// from the manifest and any later overlays.
 type EffectiveAgentContract struct {
-	AgentID        string
-	Manifest       *AgentManifest
-	AgentSpec      *agentspec.AgentRuntimeSpec
-	Permissions    contracts.PermissionSet
-	Resources      ResourceSpec
-	ResolvedSkills []ResolvedSkill
-	SkillResults   []SkillResolution
-	Sources        SourceSummary
+	AgentID      string
+	Manifest     *AgentManifest
+	AgentSpec    *agentspec.AgentRuntimeSpec
+	Permissions  contracts.PermissionSet
+	Resources    ResourceSpec
+	Sources      SourceSummary
 }
 
 // SourceSummary records which inputs contributed to the effective contract so
@@ -50,9 +26,6 @@ type SourceSummary struct {
 	ManifestName     string
 	ManifestVersion  string
 	Workspace        string
-	RequestedSkills  []string
-	AppliedSkills    []string
-	FailedSkills     []string
 	GlobalDefaults   bool
 	OverlayCount     int
 	RuntimeOverrides int
@@ -60,40 +33,6 @@ type SourceSummary struct {
 
 // ResolveOptions provides optional inputs layered on top of the raw manifest.
 type ResolveOptions struct {
-	AgentOverlays []agentspec.AgentSpecOverlay
-}
-
-// ResolveAgentSpec applies the overlays to the agent spec.
-func ResolveAgentSpec(spec *agentspec.AgentRuntimeSpec, overlays ...agentspec.AgentSpecOverlay) *agentspec.AgentRuntimeSpec {
-	agentOverlay := agentspec.AgentSpecOverlayFromSpec(spec)
-	ordered := append([]agentspec.AgentSpecOverlay{agentOverlay}, overlays...)
-	return agentspec.MergeAgentSpecs(&agentspec.AgentRuntimeSpec{}, ordered...)
-}
-
-// ApplyManifestDefaultsForAgent applies rollout-era compatibility defaults for
-// manifests before global overlays and skills are resolved.
-func ApplyManifestDefaultsForAgent(agentName string, spec *agentspec.AgentRuntimeSpec, _ *ManifestDefaults) *agentspec.AgentRuntimeSpec {
-	if spec == nil {
-		return &agentspec.AgentRuntimeSpec{}
-	}
-	cloned := *spec
-	agentName = strings.TrimSpace(strings.ToLower(agentName))
-	if agentName != "coding" && agentName != "coder" {
-		return &cloned
-	}
-	switch strings.TrimSpace(strings.ToLower(cloned.Implementation)) {
-	case "":
-		cloned.Implementation = "coding"
-	case "react":
-		cloned.Implementation = "coding"
-	}
-	return &cloned
-}
-
-// ApplyManifestDefaults returns the spec unchanged (manifest defaults no longer
-// carry an agent overlay — that layer was removed in the skills redesign).
-func ApplyManifestDefaults(spec *agentspec.AgentRuntimeSpec, _ *ManifestDefaults) *agentspec.AgentRuntimeSpec {
-	return ApplyManifestDefaultsForAgent("", spec, nil)
 }
 
 // ResolveEffectivePermissions merges defaults and manifest permissions.
@@ -217,10 +156,9 @@ func MergeResourceSpecs(base ResourceSpec, overlays ...*ResourceSpec) ResourceSp
 	return merged
 }
 
-// ResolveEffectiveAgentContract merges manifest defaults, skill
-// contributions, and optional overlays into one runtime-facing contract.
-// The resolver parameter is provided by the skills package to avoid import cycles.
-func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts ResolveOptions, resolver SkillResolver) (*EffectiveAgentContract, error) {
+// ResolveEffectiveAgentContract merges manifest defaults and optional overlays
+// into one runtime-facing contract.
+func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts ResolveOptions) (*EffectiveAgentContract, error) {
 	if m == nil {
 		return nil, fmt.Errorf("agent manifest required")
 	}
@@ -237,48 +175,24 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
 
-	baseSpec := ApplyManifestDefaultsForAgent(m.Metadata.Name, m.Spec.Agent, m.Spec.Defaults)
+	baseSpec := m.Spec.Agent
 	if baseSpec == nil {
 		baseSpec = &agentspec.AgentRuntimeSpec{}
 	}
 
-	var resolvedSpec *agentspec.AgentRuntimeSpec
-	var resolvedSkills []ResolvedSkill
-	var skillResults []SkillResolution
-
-	if resolver != nil {
-		resolvedSpec, resolvedSkills, skillResults = resolver.ResolveSkills(workspace, baseSpec, m.Spec.Skills)
-	} else {
-		resolvedSpec = baseSpec
-	}
-
-	finalSpec := ResolveAgentSpec(resolvedSpec, opts.AgentOverlays...)
-
 	sources := SourceSummary{
-		ManifestName:     m.Metadata.Name,
-		ManifestVersion:  m.Metadata.Version,
-		Workspace:        workspace,
-		RequestedSkills:  append([]string{}, m.Spec.Skills...),
-		GlobalDefaults:   false,
-		OverlayCount:     len(opts.AgentOverlays),
-		RuntimeOverrides: len(opts.AgentOverlays),
-	}
-	for _, result := range skillResults {
-		if result.Applied {
-			sources.AppliedSkills = append(sources.AppliedSkills, result.Name)
-			continue
-		}
-		sources.FailedSkills = append(sources.FailedSkills, result.Name)
+		ManifestName:    m.Metadata.Name,
+		ManifestVersion: m.Metadata.Version,
+		Workspace:       workspace,
+		GlobalDefaults:  false,
 	}
 
 	return &EffectiveAgentContract{
-		AgentID:        m.Metadata.Name,
-		Manifest:       m,
-		AgentSpec:      finalSpec,
-		Permissions:    permissions,
-		Resources:      resources,
-		ResolvedSkills: append([]ResolvedSkill{}, resolvedSkills...),
-		SkillResults:   append([]SkillResolution{}, skillResults...),
-		Sources:        sources,
+		AgentID:     m.Metadata.Name,
+		Manifest:    m,
+		AgentSpec:   baseSpec,
+		Permissions: permissions,
+		Resources:   resources,
+		Sources:     sources,
 	}, nil
 }

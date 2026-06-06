@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextbudget"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/knowledge"
@@ -203,17 +203,17 @@ func TestProvenance_FullChain(t *testing.T) {
 }
 
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
-	advisor := &contextbudget.ContextBudgetAdvisor{ModelContextSize: 2048}
-	telemetry := &phase9Telemetry{}
-	model := llm.NewInstrumentedModel(phase9UsageModel{}, telemetry, false)
-	ctx := contextbudget.WithAdvisor(context.Background(), advisor)
-	ctx = contextbudget.WithSnapshotEmitter(ctx, contextbudget.NewSnapshotEmitter(advisor, telemetry, 1))
+	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 2048}
+	tel := &phase9Telemetry{}
+	model := llm.NewInstrumentedModel(phase9UsageModel{}, tel, false)
+	ctx := telemetry.WithAdvisor(context.Background(), advisor)
+	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, tel, 1))
 
 	_, err := model.Chat(ctx, []llm.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		for _, event := range telemetry.Snapshot() {
+		for _, event := range tel.Snapshot() {
 			if event.Type == contracts.EventSessionResetRequired {
 				return true
 			}
@@ -230,7 +230,7 @@ func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		count := 0
-		for _, event := range telemetry.Snapshot() {
+		for _, event := range tel.Snapshot() {
 			if event.Type == contracts.EventSessionResetRequired {
 				count++
 			}

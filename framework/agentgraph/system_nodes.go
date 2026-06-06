@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ContextReferenceKind classifies a mixed-evidence reference produced by graph
@@ -51,7 +52,7 @@ type ArtifactRecord struct {
 
 // MemoryRetriever returns bounded, compact memory retrieval results.
 type MemoryRetriever interface {
-	Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error)
+	Retrieve(ctx context.Context, query string, limit int) ([]relurpctx.MemoryRecordEnvelope, error)
 }
 
 // PublishedMemoryRetriever can return the richer graph publication shape
@@ -64,8 +65,8 @@ type PublishedMemoryRetriever interface {
 // by graph memory nodes once mixed-evidence consumers exist.
 type MemoryRetrievalPublication struct {
 	Query      string
-	Results    []core.MemoryRecordEnvelope
-	References []core.MemoryReference
+	Results    []relurpctx.MemoryRecordEnvelope
+	References []relurpctx.MemoryReference
 	Payload    map[string]any
 	Refs       []ContextReference
 }
@@ -77,12 +78,12 @@ type StateHydrator interface {
 
 // BuildMemoryRetrievalPublication derives the richer graph publication shape
 // from legacy envelope results.
-func BuildMemoryRetrievalPublication(query string, results []core.MemoryRecordEnvelope, expectedClass core.MemoryClass) *MemoryRetrievalPublication {
+func BuildMemoryRetrievalPublication(query string, results []relurpctx.MemoryRecordEnvelope, expectedClass relurpctx.MemoryClass) *MemoryRetrievalPublication {
 	if len(results) == 0 {
 		return &MemoryRetrievalPublication{
 			Query:      query,
-			Results:    []core.MemoryRecordEnvelope{},
-			References: []core.MemoryReference{},
+			Results:    []relurpctx.MemoryRecordEnvelope{},
+			References: []relurpctx.MemoryReference{},
 			Payload:    nil,
 			Refs:       nil,
 		}
@@ -96,16 +97,16 @@ func BuildMemoryRetrievalPublication(query string, results []core.MemoryRecordEn
 		}
 	}
 	if needsNormalization {
-		normalized = append([]core.MemoryRecordEnvelope(nil), results...)
+		normalized = append([]relurpctx.MemoryRecordEnvelope(nil), results...)
 		for i := range normalized {
 			if normalized[i].MemoryClass == "" {
 				normalized[i].MemoryClass = expectedClass
 			}
 		}
 	}
-	references := make([]core.MemoryReference, 0, len(results))
+	references := make([]relurpctx.MemoryReference, 0, len(results))
 	for _, record := range normalized {
-		references = append(references, core.MemoryReference{
+		references = append(references, relurpctx.MemoryReference{
 			MemoryClass: record.MemoryClass,
 			Scope:       record.Scope,
 			RecordKey:   record.Key,
@@ -121,7 +122,7 @@ func BuildMemoryRetrievalPublication(query string, results []core.MemoryRecordEn
 	}
 }
 
-func mixedEvidencePayloadFromEnvelopes(query string, results []core.MemoryRecordEnvelope) map[string]any {
+func mixedEvidencePayloadFromEnvelopes(query string, results []relurpctx.MemoryRecordEnvelope) map[string]any {
 	if len(results) == 0 {
 		return nil
 	}
@@ -185,7 +186,7 @@ func mixedEvidencePayloadFromEnvelopes(query string, results []core.MemoryRecord
 	}
 }
 
-func contextReferencesFromEnvelopes(results []core.MemoryRecordEnvelope, expectedClass core.MemoryClass) []ContextReference {
+func contextReferencesFromEnvelopes(results []relurpctx.MemoryRecordEnvelope, expectedClass relurpctx.MemoryClass) []ContextReference {
 	if len(results) == 0 {
 		return nil
 	}
@@ -215,7 +216,7 @@ type contextReferenceKey struct {
 	uri  string
 }
 
-func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) *ContextReference {
+func contextReferenceFromEnvelope(result relurpctx.MemoryRecordEnvelope, expectedClass relurpctx.MemoryClass) *ContextReference {
 	values, ok := result.Reference.(map[string]any)
 	if ok && len(values) > 0 {
 		ref := &ContextReference{
@@ -260,20 +261,20 @@ func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClas
 		ID:     key,
 		Detail: strings.TrimSpace(result.Kind),
 		Metadata: map[string]string{
-			"memory_class": string(nonEmptyMemoryClass(core.MemoryClass(result.MemoryClass), expectedClass)),
+			"memory_class": string(nonEmptyMemoryClass(relurpctx.MemoryClass(result.MemoryClass), expectedClass)),
 			"source":       strings.TrimSpace(result.Source),
 		},
 	}
 }
 
-func defaultContextReferenceKind(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) ContextReferenceKind {
+func defaultContextReferenceKind(result relurpctx.MemoryRecordEnvelope, expectedClass relurpctx.MemoryClass) ContextReferenceKind {
 	if strings.TrimSpace(result.Source) == "retrieval" {
 		return ContextReferenceKind("retrieval_evidence")
 	}
 	return ContextReferenceKind("runtime_memory")
 }
 
-func nonEmptyMemoryClass(class core.MemoryClass, fallback core.MemoryClass) core.MemoryClass {
+func nonEmptyMemoryClass(class relurpctx.MemoryClass, fallback relurpctx.MemoryClass) relurpctx.MemoryClass {
 	if strings.TrimSpace(string(class)) != "" {
 		return class
 	}
@@ -368,7 +369,7 @@ func boundedSummaryValue(value any, depth int) any {
 		return out
 	case map[string]any:
 		return boundedSummaryMap(typed, depth)
-	case core.ArtifactReference:
+	case relurpctx.ArtifactReference:
 		return map[string]any{
 			"artifact_id": typed.ArtifactID,
 			"kind":        typed.Kind,
@@ -499,12 +500,12 @@ func minInt(a, b int) int {
 	return b
 }
 
-func emitSystemNodeEvent(telemetry core.Telemetry, taskID, message string, metadata map[string]any) {
-	if telemetry == nil {
+func emitSystemNodeEvent(sink telemetry.Telemetry, taskID, message string, metadata map[string]any) {
+	if sink == nil {
 		return
 	}
-	telemetry.Emit(core.Event{
-		Type:      core.EventStateChange,
+	sink.Emit(telemetry.Event{
+		Type:      telemetry.EventStateChange,
 		TaskID:    strings.TrimSpace(taskID),
 		Message:   message,
 		Timestamp: time.Now().UTC(),

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
@@ -21,17 +21,17 @@ type ApprovalRequest struct {
 	DenyReasonFallback string
 }
 
-func EvaluatePolicyRequest(ctx context.Context, engine PolicyEngine, req core.PolicyRequest) (core.PolicyDecision, error) {
+func EvaluatePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.PolicyRequest) (policy.PolicyDecision, error) {
 	if engine == nil {
-		return core.PolicyDecisionAllow("no policy engine"), nil
+		return policy.PolicyDecisionAllow("no policy engine"), nil
 	}
 	return engine.Evaluate(ctx, req)
 }
 
-func EnforcePolicyRequest(ctx context.Context, engine PolicyEngine, req core.PolicyRequest, approval ApprovalRequest) (core.PolicyDecision, error) {
+func EnforcePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.PolicyRequest, approval ApprovalRequest) (policy.PolicyDecision, error) {
 	decision, err := EvaluatePolicyRequest(ctx, engine, req)
 	if err != nil {
-		return core.PolicyDecision{}, err
+		return policy.PolicyDecision{}, err
 	}
 	switch decision.Effect {
 	case "", "allow":

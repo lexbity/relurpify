@@ -30,7 +30,6 @@ type WorkspaceConfig struct {
 	Logging   WorkspaceLogging   `yaml:"logging"`
 	Audit     WorkspaceAudit     `yaml:"audit"`
 	Telemetry WorkspaceTelemetry `yaml:"telemetry"`
-	Agents    []AgentEntry       `yaml:"agents,omitempty"`
 
 	SourcePath   string                  `yaml:"-"`
 	Workspace    string                  `yaml:"-"`
@@ -128,9 +127,6 @@ func LoadWorkspaceConfig(path, workspace string, opts WorkspaceLoadOptions) (*Wo
 	if err := cfg.applyDefaults(opts.Strict); err != nil {
 		return nil, err
 	}
-	// Resolve ${workspace} in agent filesystem paths then inject config protection.
-	resolveAgentPaths(cfg.Agents, absWorkspace)
-	injectConfigProtection(cfg.Agents, absWorkspace)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
