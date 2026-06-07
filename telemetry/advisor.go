@@ -24,7 +24,7 @@ type ContextBudgetAdvisor struct {
 
 type advisorContextKey struct{}
 
-// WithAdvisor stores the advisor in the context via the contracts.UsageObserver
+// WithAdvisor stores the advisor in the context via the telemetry.UsageObserver
 // interface key so that platform/llm.InstrumentedModel can retrieve it without
 // importing framework packages.
 func WithAdvisor(ctx context.Context, advisor *ContextBudgetAdvisor) context.Context {
@@ -34,7 +34,7 @@ func WithAdvisor(ctx context.Context, advisor *ContextBudgetAdvisor) context.Con
 	return WithUsageObserver(ctx, advisor)
 }
 
-// AdvisorFromContext extracts the advisor from the contracts.UsageObserver context key.
+// AdvisorFromContext extracts the advisor from the telemetry.UsageObserver context key.
 func AdvisorFromContext(ctx context.Context) *ContextBudgetAdvisor {
 	if ctx == nil {
 		return nil
@@ -44,7 +44,7 @@ func AdvisorFromContext(ctx context.Context) *ContextBudgetAdvisor {
 	return advisor
 }
 
-// RecordTokenUsage implements contracts.UsageObserver.
+// RecordTokenUsage implements telemetry.UsageObserver.
 func (a *ContextBudgetAdvisor) RecordTokenUsage(usage TokenUsage) {
 	a.RecordCall(usage)
 }

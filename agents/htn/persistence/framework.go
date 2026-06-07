@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // envelopeGet retrieves a value from envelope working memory.
@@ -32,23 +32,23 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 
 // HTNRunSummary captures end-of-run execution metrics and outcomes.
 type HTNRunSummary struct {
-	SchemaVersion      int           `json:"schema_version"`
+	SchemaVersion      int                `json:"schema_version"`
 	TaskType           execution.TaskType `json:"task_type"`
-	SelectedMethod     string        `json:"selected_method"`
-	PlannedStepCount   int           `json:"planned_step_count"`
-	CompletedStepCount int           `json:"completed_step_count"`
-	TerminationStatus  string        `json:"termination_status"`
-	TotalDuration      int           `json:"total_duration_seconds"`
-	RetrievalApplied   bool          `json:"retrieval_applied"`
-	Success            bool          `json:"success"`
-	ErrorMessage       string        `json:"error_message,omitempty"`
+	SelectedMethod     string             `json:"selected_method"`
+	PlannedStepCount   int                `json:"planned_step_count"`
+	CompletedStepCount int                `json:"completed_step_count"`
+	TerminationStatus  string             `json:"termination_status"`
+	TotalDuration      int                `json:"total_duration_seconds"`
+	RetrievalApplied   bool               `json:"retrieval_applied"`
+	Success            bool               `json:"success"`
+	ErrorMessage       string             `json:"error_message,omitempty"`
 }
 
 // OperatorOutcome captures results from executing a primitive step.
 type OperatorOutcome struct {
 	OperatorName string                 `json:"operator_name"`
 	StepID       string                 `json:"step_id"`
-	TaskType     execution.TaskType          `json:"task_type"`
+	TaskType     execution.TaskType     `json:"task_type"`
 	Success      bool                   `json:"success"`
 	Duration     int                    `json:"duration_seconds"`
 	CostClass    string                 `json:"cost_class,omitempty"`

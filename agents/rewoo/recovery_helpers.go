@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // RecoveryScenario describes a failure scenario and recovery strategy.

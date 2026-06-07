@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // blockedEgressRunner records whether Run was called.
@@ -13,24 +14,24 @@ type blockedEgressRunner struct {
 	called bool
 }
 
-func (r *blockedEgressRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *blockedEgressRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	r.called = true
-	return &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}, nil
+	return &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}, nil
 }
 
-func newNetworkTool(runner contracts.CommandRunner) contracts.Tool {
-	return NewTool(contracts.ToolManifest{
-		Name:    "cli_curl",
-		Family:  "network",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+func newNetworkTool(runner ports.CommandRunner) ports.Tool {
+	return NewTool(ports.ToolManifest{
+		Name:   "cli_curl",
+		Family: "network",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:    true,
 				NetworkAccess: true,
 			},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute", "network"},
 			EffectClass: []string{"process_spawn"},
@@ -69,18 +70,18 @@ func TestNetworkToolAllowsPublicHost(t *testing.T) {
 func TestNonNetworkToolNotScreened(t *testing.T) {
 	r := &blockedEgressRunner{}
 	// rg has no network_access, so the egress screen should not trigger
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_rg",
-		Family:  "fileops",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"rg"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_rg",
+		Family: "fileops",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"rg"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:    true,
 				NetworkAccess: false,
 			},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"filesystem_read"},
@@ -95,19 +96,19 @@ func TestNonNetworkToolNotScreened(t *testing.T) {
 
 func TestNetworkToolWithAllowHostsBypassesBlock(t *testing.T) {
 	r := &blockedEgressRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_curl",
-		Family:  "network",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_curl",
+		Family: "network",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:    true,
 				NetworkAccess: true,
 				AllowHosts:    []string{"127.0.0.1"},
 			},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute", "network"},
 			EffectClass: []string{"process_spawn"},
@@ -123,19 +124,19 @@ func TestNetworkToolWithAllowHostsBypassesBlock(t *testing.T) {
 func TestNetworkToolAllowHostsOnlyExactMatches(t *testing.T) {
 	// A host not in allow_hosts should still be blocked
 	r := &blockedEgressRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_curl",
-		Family:  "network",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_curl",
+		Family: "network",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:    true,
 				NetworkAccess: true,
 				AllowHosts:    []string{"10.0.0.2"}, // different from the target
 			},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute", "network"},
 			EffectClass: []string{"process_spawn"},
@@ -152,24 +153,24 @@ func TestNetworkToolAllowHostsOnlyExactMatches(t *testing.T) {
 
 func TestIsNetworkTool(t *testing.T) {
 	// Tool with NetworkAccess = true
-	netManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Sandbox: &contracts.ToolManifestSandbox{NetworkAccess: true},
+	netManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Sandbox: &ports.ToolManifestSandbox{NetworkAccess: true},
 		},
 	}
 	require.True(t, isNetworkTool(netManifest))
 
 	// Tool with NetworkAccess = false
-	noNetManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Sandbox: &contracts.ToolManifestSandbox{NetworkAccess: false},
+	noNetManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Sandbox: &ports.ToolManifestSandbox{NetworkAccess: false},
 		},
 	}
 	require.False(t, isNetworkTool(noNetManifest))
 
 	// Tool with no sandbox at all
-	noSandboxManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{},
+	noSandboxManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{},
 	}
 	require.False(t, isNetworkTool(noSandboxManifest))
 }
@@ -187,9 +188,9 @@ func TestExtractHost(t *testing.T) {
 		{"https://8.8.8.8/", "8.8.8.8"},
 		{"https://example.com/path", "example.com"},
 		{"user:pass@host.com:8080/path", "host.com"},
-		{"-H", "-H"},                                  // extractHost does not filter flags; firstBlockedEgressHost does
-		{"--header", "--header"},                      // same
-		{"", ""},                                      // empty
+		{"-H", "-H"},             // extractHost does not filter flags; firstBlockedEgressHost does
+		{"--header", "--header"}, // same
+		{"", ""},                 // empty
 		{"localhost", "localhost"},
 		{"[::1]", "::1"},
 	}
@@ -227,16 +228,16 @@ func TestFirstBlockedEgressHost(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "allowlisted host bypasses block",
-			args: []string{"127.0.0.1"},
+			name:       "allowlisted host bypasses block",
+			args:       []string{"127.0.0.1"},
 			allowHosts: []string{"127.0.0.1"},
-			want: "",
+			want:       "",
 		},
 		{
-			name: "non-allowlisted host still blocked",
-			args: []string{"127.0.0.1"},
+			name:       "non-allowlisted host still blocked",
+			args:       []string{"127.0.0.1"},
 			allowHosts: []string{"10.0.0.1"},
-			want: "127.0.0.1",
+			want:       "127.0.0.1",
 		},
 		{
 			name: "block metadata endpoint",
@@ -258,15 +259,15 @@ func TestFirstBlockedEgressHost(t *testing.T) {
 
 func TestNetworkToolNoSandboxNoScreen(t *testing.T) {
 	r := &blockedEgressRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_curl",
-		Family:  "network",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_curl",
+		Family: "network",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
 			// No sandbox — NetworkAccess defaults to false
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}, r)

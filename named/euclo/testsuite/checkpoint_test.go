@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"

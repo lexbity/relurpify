@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // StepNode is a graph node that executes a single plan step.
@@ -16,7 +16,7 @@ type StepNode struct {
 	id                 string
 	Step               RewooStep
 	Registry           *capability.Registry
-	PermissionChecker  contracts.CapabilityChecker
+	PermissionChecker  permissions.CapabilityChecker
 	OnFailure          StepOnFailure
 	OnPermissionDenied StepOnFailure
 	Debugf             func(string, ...interface{})
@@ -78,6 +78,6 @@ func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 }
 
 // SetPermissionChecker injects the permission checker.
-func (n *StepNode) SetPermissionChecker(pc contracts.CapabilityChecker) {
+func (n *StepNode) SetPermissionChecker(pc permissions.CapabilityChecker) {
 	n.PermissionChecker = pc
 }

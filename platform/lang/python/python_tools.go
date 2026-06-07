@@ -8,7 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -31,12 +32,12 @@ func (t *PythonWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Python project root and marker files for a file or directory."
 }
 func (t *PythonWorkspaceDetectTool) Category() string { return "python" }
-func (t *PythonWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *PythonWorkspaceDetectTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -51,7 +52,7 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string
 	resolved = filepath.Clean(resolved)
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -59,13 +60,13 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string
 	}
 	projectRoot, manifestPath, markers := detectPythonProject(searchDir, t.BasePath)
 	if projectRoot == "" {
-		return &contracts.ToolResult{Success: false, Error: "no Python project markers found"}, nil
+		return &ports.ToolResult{Success: false, Error: "no Python project markers found"}, nil
 	}
 	summary := fmt.Sprintf("Python project detected at %s", projectRoot)
 	if manifestPath != "" {
 		summary += " using " + filepath.Base(manifestPath)
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":          resolved,
@@ -77,11 +78,11 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string
 	}, nil
 }
 func (t *PythonWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *PythonWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *PythonWorkspaceDetectTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t *PythonWorkspaceDetectTool) Tags() []string {
-	return []string{contracts.TagReadOnly, "lang:python", "workspace-detect", "recovery"}
+	return []string{ports.TagReadOnly, "lang:python", "workspace-detect", "recovery"}
 }
 
 type PythonProjectMetadataTool struct {
@@ -93,12 +94,12 @@ func (t *PythonProjectMetadataTool) Description() string {
 	return "Reads Python project markers and returns structured project metadata."
 }
 func (t *PythonProjectMetadataTool) Category() string { return "python" }
-func (t *PythonProjectMetadataTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *PythonProjectMetadataTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -113,7 +114,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 	resolved = filepath.Clean(resolved)
 	projectRoot, manifestPath, markers := detectPythonProject(resolved, t.BasePath)
 	if projectRoot == "" {
-		return &contracts.ToolResult{Success: false, Error: "no Python project markers found"}, nil
+		return &ports.ToolResult{Success: false, Error: "no Python project markers found"}, nil
 	}
 	files := make(map[string]string)
 	for _, marker := range markers {
@@ -134,7 +135,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 	if testTool != "" {
 		summary += " test_tool=" + testTool
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"summary":              summary,
@@ -151,16 +152,16 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 	}, nil
 }
 func (t *PythonProjectMetadataTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *PythonProjectMetadataTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *PythonProjectMetadataTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t *PythonProjectMetadataTool) Tags() []string {
-	return []string{contracts.TagReadOnly, "lang:python", "metadata", "recovery"}
+	return []string{ports.TagReadOnly, "lang:python", "metadata", "recovery"}
 }
 
 type PythonPytestTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewPythonPytestTool(basePath string) *PythonPytestTool {
@@ -172,15 +173,15 @@ func (t *PythonPytestTool) Description() string {
 	return "Runs python -m pytest and returns structured Python test results."
 }
 func (t *PythonPytestTool) Category() string { return "python" }
-func (t *PythonPytestTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *PythonPytestTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "test_path", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonPytestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
-func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *PythonPytestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
+func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -205,7 +206,7 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interfac
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizePythonPytest(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -219,19 +220,19 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interfac
 		},
 	}, nil
 }
-func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *PythonPytestTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *PythonPytestTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonPytestTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonUnittestTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewPythonUnittestTool(basePath string) *PythonUnittestTool {
@@ -243,16 +244,16 @@ func (t *PythonUnittestTool) Description() string {
 	return "Runs python -m unittest discover and returns structured Python test results."
 }
 func (t *PythonUnittestTool) Category() string { return "python" }
-func (t *PythonUnittestTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *PythonUnittestTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "start_directory", Type: "string", Required: false},
 		{Name: "pattern", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonUnittestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
-func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *PythonUnittestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
+func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -280,7 +281,7 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizePythonUnittest(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -294,19 +295,19 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 		},
 	}, nil
 }
-func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *PythonUnittestTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *PythonUnittestTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonUnittestTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonCompileCheckTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewPythonCompileCheckTool(basePath string) *PythonCompileCheckTool {
@@ -318,17 +319,17 @@ func (t *PythonCompileCheckTool) Description() string {
 	return "Runs python -m compileall and returns structured Python syntax-check results."
 }
 func (t *PythonCompileCheckTool) Category() string { return "python" }
-func (t *PythonCompileCheckTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *PythonCompileCheckTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "target", Type: "string", Required: false, Default: "."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonCompileCheckTool) SetCommandRunner(r contracts.CommandRunner) {
+func (t *PythonCompileCheckTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -354,7 +355,7 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizePythonCompileCheck(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -369,13 +370,13 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context) bool {
 	return t.runner != nil
 }
-func (t *PythonCompileCheckTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "python3"}},
+func (t *PythonCompileCheckTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonCompileCheckTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}
 }
 
 type pythonTestSummary struct {

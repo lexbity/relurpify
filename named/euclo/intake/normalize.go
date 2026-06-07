@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
 // ResumeState holds values from envelope for task normalization.

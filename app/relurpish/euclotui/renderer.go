@@ -467,5 +467,3 @@ func RenderChatProjection(th *theme.Theme, snap EucloProjectionSnapshot) string 
 	}
 	return th.Panel().Render(strings.TrimSpace(b.String()))
 }
-
-

@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 func TestButtonInitialState(t *testing.T) {

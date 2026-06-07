@@ -3,8 +3,9 @@ package tui
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 type recordingOverlay struct {

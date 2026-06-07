@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // ClassificationResponse is defined in classification_prompt.go
@@ -140,7 +140,7 @@ func (gc *GoalClarifier) requestHITLClarification(
 
 	// Submit async (non-blocking) so we can continue with fallback
 	req := authorization.PermissionRequest{
-		Permission: contracts.PermissionDescriptor{
+		Permission: permissions.PermissionDescriptor{
 			Action:   "goal_clarification",
 			Resource: fmt.Sprintf("goal:%s", session.Goal.Description),
 		},

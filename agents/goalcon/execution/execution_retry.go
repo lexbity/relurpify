@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
-	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/capability"
 )
 
 // RetryExecutor wraps StepExecutor with retry logic and backoff.

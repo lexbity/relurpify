@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -41,7 +43,7 @@ func TestFrameworkSuiteSmoke(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := env.PermissionManager.CheckFileAccess(ctx, "smoke-agent", contracts.FileSystemRead, testFile); err != nil {
+	if err := env.PermissionManager.CheckFileAccess(ctx, "smoke-agent", permissions.FileSystemRead, testFile); err != nil {
 		t.Fatalf("permission check failed: %v", err)
 	}
 
@@ -109,14 +111,14 @@ type smokeTool struct {
 func (s *smokeTool) Name() string        { return s.name }
 func (s *smokeTool) Description() string { return "smoke test tool" }
 func (s *smokeTool) Category() string    { return "test" }
-func (s *smokeTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (s *smokeTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "input", Type: "string", Description: "input parameter"},
 	}
 }
 
-func (s *smokeTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{
+func (s *smokeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"result": "smoke",
@@ -124,12 +126,12 @@ func (s *smokeTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	}, nil
 }
 
-func (s *smokeTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (s *smokeTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 
 func (s *smokeTool) Tags() []string {
-	return []string{contracts.TagReadOnly}
+	return []string{toolcapabilities.TagReadOnly}
 }
 
 func (s *smokeTool) IsAvailable(context.Context) bool { return true }

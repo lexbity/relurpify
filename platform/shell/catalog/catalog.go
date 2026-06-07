@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // ToolCatalogEntry is the canonical registry record for a shell tool.
@@ -208,7 +208,7 @@ func EntryFromCommandSpec(spec CommandToolSpec) ToolCatalogEntry {
 }
 
 // EntryFromManifest converts a tool manifest into a catalog entry.
-func EntryFromManifest(manifest contracts.ToolManifest) ToolCatalogEntry {
+func EntryFromManifest(manifest ports.ToolManifest) ToolCatalogEntry {
 	entry := ToolCatalogEntry{
 		Name:            NormalizeName(manifest.Name),
 		Family:          NormalizeName(manifest.Family),
@@ -244,13 +244,13 @@ func EntryFromManifest(manifest contracts.ToolManifest) ToolCatalogEntry {
 		}
 	}
 	entry.OutputSchema = ToolSchema{Type: "object"}
-	if manifest.Execution.Backend == contracts.ToolBackendSubprocess && manifest.Execution.Command != nil {
+	if manifest.Execution.Backend == ports.ToolBackendSubprocess && manifest.Execution.Command != nil {
 		entry.Preset.CommandTemplate = append([]string(nil), manifest.Execution.Command.Base...)
 		if len(manifest.Execution.Command.Args) > 0 {
 			entry.Preset.CommandTemplate = append(entry.Preset.CommandTemplate, manifest.Execution.Command.Args...)
 		}
 	}
-	if manifest.Execution.Backend == contracts.ToolBackendGoNative {
+	if manifest.Execution.Backend == ports.ToolBackendGoNative {
 		entry.Preset.CommandTemplate = []string{manifest.Execution.Implementation}
 	}
 	if len(entry.Preset.CommandTemplate) == 0 && manifest.Execution.Implementation != "" {

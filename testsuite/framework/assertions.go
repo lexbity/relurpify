@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -59,7 +59,7 @@ func AssertNormalizedTelemetryEventsEqual(t *testing.T, got, want []telemetry.Ev
 
 // AssertNormalizedFileSystemPermissionsEqual verifies that filesystem permissions
 // match after canonical normalization.
-func AssertNormalizedFileSystemPermissionsEqual(t *testing.T, got, want []contracts.FileSystemPermission) {
+func AssertNormalizedFileSystemPermissionsEqual(t *testing.T, got, want []permissions.FileSystemPermission) {
 	t.Helper()
 
 	normalizedGot := NormalizeFileSystemPermissions(got)
@@ -71,7 +71,7 @@ func AssertNormalizedFileSystemPermissionsEqual(t *testing.T, got, want []contra
 
 // AssertNormalizedNetworkPermissionsEqual verifies that network permissions
 // match after canonical normalization.
-func AssertNormalizedNetworkPermissionsEqual(t *testing.T, got, want []contracts.NetworkPermission) {
+func AssertNormalizedNetworkPermissionsEqual(t *testing.T, got, want []permissions.NetworkPermission) {
 	t.Helper()
 
 	normalizedGot := NormalizeNetworkPermissions(got)

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -210,7 +210,7 @@ type stubPermissionManager struct {
 	called bool
 }
 
-func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error {
+func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error {
 	s.called = true
 	return nil
 }

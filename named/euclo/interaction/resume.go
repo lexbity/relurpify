@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // ResumeFrame reconstructs the pending frame from the envelope on restart.

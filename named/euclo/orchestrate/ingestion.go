@@ -3,11 +3,11 @@ package orchestrate
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // IngestionNode ingests user files and session pins into the envelope.

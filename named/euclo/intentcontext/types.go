@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 )
 
 type EntityKind string

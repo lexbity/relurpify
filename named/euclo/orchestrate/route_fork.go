@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 

@@ -2,7 +2,7 @@ package services
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/promptprovider"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 )
 

@@ -3,9 +3,10 @@ package relurpifyenvtui
 import (
 	"context"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Surface owns the base-framework control center for the none agent.

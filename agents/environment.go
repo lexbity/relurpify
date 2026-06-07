@@ -1,14 +1,14 @@
 package agents
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // AgentEnvironment is the shared agent dependency container.
@@ -16,7 +16,7 @@ import (
 // This is a subset of WorkspaceEnvironment for use by generic agents.
 type AgentEnvironment struct {
 	Config         *execution.Config
-	Model          contracts.LanguageModel
+	Model          model.LanguageModel
 	Registry       *capability.Registry
 	Memory         *memory.WorkingMemoryStore
 	IndexManager   *ast.IndexManager

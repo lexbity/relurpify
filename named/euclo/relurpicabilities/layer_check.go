@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
@@ -40,9 +41,9 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"layer": {
 					Type:        "string",
 					Description: `Layer to check: "framework" | "agents" | "named" | "app" | "all" (default: "all")`,
@@ -53,9 +54,9 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				},
 			},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if check completed",
@@ -67,7 +68,7 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"violations": {
 					Type:        "array",
 					Description: "Import boundary violations",
-					Items:       &contracts.Schema{Type: "object"},
+					Items:       &schemacoerce.Schema{Type: "object"},
 				},
 				"layer": {
 					Type:        "string",
@@ -102,7 +103,7 @@ var layerRules = []layerRule{
 }
 
 // Invoke scans the import graph and returns any boundary violations.
-func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), nil
 	}
@@ -181,7 +182,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	}
 
 	passed := len(violations) == 0
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

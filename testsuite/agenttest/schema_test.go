@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // TestOutcomeSpecRoundTrip verifies marshal/unmarshal preserves the generic fields.
@@ -211,13 +212,13 @@ spec:
 
 // TestManifestCoversFileAction verifies permission checking for file actions
 func TestManifestCoversFileAction(t *testing.T) {
-	m := &cfgload.AgentManifest{
-		Spec: cfgload.ManifestSpec{
-			Permissions: contracts.PermissionSet{
-				FileSystem: []contracts.FileSystemPermission{
-					{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
-					{Action: contracts.FileSystemRead, Path: "/tmp/*.log"},
-					{Action: contracts.FileSystemDelete, Path: "/var/data/*"},
+	m := &config.AgentManifest{
+		Spec: config.ManifestSpec{
+			Permissions: permissions.PermissionSet{
+				FileSystem: []permissions.FileSystemPermission{
+					{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
+					{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
+					{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
 				},
 			},
 		},
@@ -226,42 +227,42 @@ func TestManifestCoversFileAction(t *testing.T) {
 	workspace := "/home/user/project"
 
 	// Test: write within workspace should be covered
-	if !ManifestCoversFileAction(m, contracts.FileSystemWrite, "file.go", workspace) {
+	if !ManifestCoversFileAction(m, permissions.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected write to file.go to be covered by ${workspace}/**")
 	}
 
 	// Test: write to absolute path within workspace
-	if !ManifestCoversFileAction(m, contracts.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
+	if !ManifestCoversFileAction(m, permissions.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
 		t.Error("Expected write to /home/user/project/src/main.go to be covered")
 	}
 
 	// Test: read from /tmp with matching pattern
-	if !ManifestCoversFileAction(m, contracts.FileSystemRead, "/tmp/app.log", workspace) {
+	if !ManifestCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.log", workspace) {
 		t.Error("Expected read of /tmp/app.log to be covered")
 	}
 
 	// Test: read from /tmp with non-matching pattern
-	if ManifestCoversFileAction(m, contracts.FileSystemRead, "/tmp/app.txt", workspace) {
+	if ManifestCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.txt", workspace) {
 		t.Error("Expected read of /tmp/app.txt to NOT be covered (wrong extension)")
 	}
 
 	// Test: action not matching (write vs read)
-	if ManifestCoversFileAction(m, contracts.FileSystemWrite, "/tmp/app.log", workspace) {
+	if ManifestCoversFileAction(m, permissions.FileSystemWrite, "/tmp/app.log", workspace) {
 		t.Error("Expected write to /tmp/app.log to NOT be covered (pattern is read-only)")
 	}
 
 	// Test: nil manifest
-	if ManifestCoversFileAction(nil, contracts.FileSystemWrite, "file.go", workspace) {
+	if ManifestCoversFileAction(nil, permissions.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected nil manifest to not cover anything")
 	}
 }
 
 // TestManifestCoversExecutable verifies binary permission checking
 func TestManifestCoversExecutable(t *testing.T) {
-	m := &cfgload.AgentManifest{
-		Spec: cfgload.ManifestSpec{
-			Permissions: contracts.PermissionSet{
-				Executables: []contracts.ExecutablePermission{
+	m := &config.AgentManifest{
+		Spec: config.ManifestSpec{
+			Permissions: permissions.PermissionSet{
+				Executables: []permissions.ExecutablePermission{
 					{Binary: "go"},
 					{Binary: "git"},
 					{Binary: "python*"},
@@ -298,10 +299,10 @@ func TestManifestCoversExecutable(t *testing.T) {
 
 // TestManifestCoversNetworkCall verifies network permission checking
 func TestManifestCoversNetworkCall(t *testing.T) {
-	m := &cfgload.AgentManifest{
-		Spec: cfgload.ManifestSpec{
-			Permissions: contracts.PermissionSet{
-				Network: []contracts.NetworkPermission{
+	m := &config.AgentManifest{
+		Spec: config.ManifestSpec{
+			Permissions: permissions.PermissionSet{
+				Network: []permissions.NetworkPermission{
 					{Host: "api.example.com", Port: 443},
 					{Host: "*.local", Port: 0}, // any port
 					{Host: "localhost", Port: 8080},

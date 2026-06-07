@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {

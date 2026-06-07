@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // TestGraphExecutionStatePropagation validates that node execution can update
@@ -258,10 +259,10 @@ func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope
 	}, nil
 }
 
-func (n *stateSetterNode) Category() string                      { return "test" }
-func (n *stateSetterNode) Description() string                   { return "sets a value in the envelope" }
-func (n *stateSetterNode) Parameters() []contracts.ToolParameter { return nil }
-func (n *stateSetterNode) RequiresExecution() bool               { return true }
+func (n *stateSetterNode) Category() string                  { return "test" }
+func (n *stateSetterNode) Description() string               { return "sets a value in the envelope" }
+func (n *stateSetterNode) Parameters() []ports.ToolParameter { return nil }
+func (n *stateSetterNode) RequiresExecution() bool           { return true }
 
 // stateReaderNode is a mock node that reads and validates a value in the envelope.
 type stateReaderNode struct {
@@ -276,12 +277,12 @@ func (n *stateReaderNode) Type() graph.NodeType { return graph.NodeTypeCondition
 func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	value, ok := env.GetWorkingValue(n.key)
 	if !ok {
-		return nil, &contracts.PermissionDeniedError{
+		return nil, &permissions.PermissionDeniedError{
 			Message: "key not found in envelope",
 		}
 	}
 	if value != n.expectValue {
-		return nil, &contracts.PermissionDeniedError{
+		return nil, &permissions.PermissionDeniedError{
 			Message: "value mismatch in envelope",
 		}
 	}
@@ -293,10 +294,10 @@ func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope
 	}, nil
 }
 
-func (n *stateReaderNode) Category() string                      { return "test" }
-func (n *stateReaderNode) Description() string                   { return "reads and validates a value in the envelope" }
-func (n *stateReaderNode) Parameters() []contracts.ToolParameter { return nil }
-func (n *stateReaderNode) RequiresExecution() bool               { return true }
+func (n *stateReaderNode) Category() string                  { return "test" }
+func (n *stateReaderNode) Description() string               { return "reads and validates a value in the envelope" }
+func (n *stateReaderNode) Parameters() []ports.ToolParameter { return nil }
+func (n *stateReaderNode) RequiresExecution() bool           { return true }
 
 // stateModifierNode is a mock node that modifies a value in the envelope.
 type stateModifierNode struct {
@@ -318,10 +319,10 @@ func (n *stateModifierNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}, nil
 }
 
-func (n *stateModifierNode) Category() string                      { return "test" }
-func (n *stateModifierNode) Description() string                   { return "modifies a value in the envelope" }
-func (n *stateModifierNode) Parameters() []contracts.ToolParameter { return nil }
-func (n *stateModifierNode) RequiresExecution() bool               { return true }
+func (n *stateModifierNode) Category() string                  { return "test" }
+func (n *stateModifierNode) Description() string               { return "modifies a value in the envelope" }
+func (n *stateModifierNode) Parameters() []ports.ToolParameter { return nil }
+func (n *stateModifierNode) RequiresExecution() bool           { return true }
 
 // stateTransferNode is a mock node that transfers state from input to output.
 type stateTransferNode struct {
@@ -337,7 +338,7 @@ func (n *stateTransferNode) Type() graph.NodeType { return graph.NodeTypeTool }
 func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	inputValue, ok := env.GetWorkingValue(n.inputKey)
 	if !ok {
-		return nil, &contracts.PermissionDeniedError{
+		return nil, &permissions.PermissionDeniedError{
 			Message: "input key not found in envelope",
 		}
 	}
@@ -351,7 +352,7 @@ func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}, nil
 }
 
-func (n *stateTransferNode) Category() string                      { return "test" }
-func (n *stateTransferNode) Description() string                   { return "transfers state from input to output" }
-func (n *stateTransferNode) Parameters() []contracts.ToolParameter { return nil }
-func (n *stateTransferNode) RequiresExecution() bool               { return true }
+func (n *stateTransferNode) Category() string                  { return "test" }
+func (n *stateTransferNode) Description() string               { return "transfers state from input to output" }
+func (n *stateTransferNode) Parameters() []ports.ToolParameter { return nil }
+func (n *stateTransferNode) RequiresExecution() bool           { return true }

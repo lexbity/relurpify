@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/git"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langgo"
@@ -65,7 +65,7 @@ var expectedNativeKeys = []string{
 }
 
 func TestAllNativeKeysRegistered(t *testing.T) {
-	got := contracts.NativeKeys()
+	got := ports.NativeKeys()
 
 	gotSet := make(map[string]struct{}, len(got))
 	for _, k := range got {
@@ -103,8 +103,8 @@ func TestAllNativeKeysRegistered(t *testing.T) {
 }
 
 func TestEachConstructorReturnsWorkingTool(t *testing.T) {
-	for _, key := range contracts.NativeKeys() {
-		ctor, ok := contracts.LookupNative(key)
+	for _, key := range ports.NativeKeys() {
+		ctor, ok := ports.LookupNative(key)
 		if !ok {
 			t.Errorf("NativeKeys() includes %q but LookupNative returns false", key)
 			continue

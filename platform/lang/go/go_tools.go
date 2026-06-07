@@ -9,7 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -27,10 +28,10 @@ func (t *GoWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Go module or workspace for a file or directory."
 }
 func (t *GoWorkspaceDetectTool) Category() string { return "go" }
-func (t *GoWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
+func (t *GoWorkspaceDetectTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -45,7 +46,7 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]int
 	resolved = filepath.Clean(resolved)
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -53,13 +54,13 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]int
 	}
 	moduleRoot, modulePath, workspacePath := detectGoProject(searchDir, t.BasePath)
 	if moduleRoot == "" {
-		return &contracts.ToolResult{Success: false, Error: "no Go module or workspace found"}, nil
+		return &ports.ToolResult{Success: false, Error: "no Go module or workspace found"}, nil
 	}
 	summary := fmt.Sprintf("Go module detected at %s", moduleRoot)
 	if workspacePath != "" {
 		summary += " workspace=" + workspacePath
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":           resolved,
@@ -71,16 +72,16 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]int
 	}, nil
 }
 func (t *GoWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *GoWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *GoWorkspaceDetectTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t *GoWorkspaceDetectTool) Tags() []string {
-	return []string{contracts.TagReadOnly, "lang:go", "workspace-detect", "recovery"}
+	return []string{ports.TagReadOnly, "lang:go", "workspace-detect", "recovery"}
 }
 
 type GoModuleMetadataTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewGoModuleMetadataTool(basePath string) *GoModuleMetadataTool {
@@ -92,13 +93,13 @@ func (t *GoModuleMetadataTool) Description() string {
 	return "Runs go list -m -json and returns structured Go module metadata."
 }
 func (t *GoModuleMetadataTool) Category() string { return "go" }
-func (t *GoModuleMetadataTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "working_directory", Type: "string", Required: false, Default: "."}}
+func (t *GoModuleMetadataTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "working_directory", Type: "string", Required: false, Default: "."}}
 }
-func (t *GoModuleMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
+func (t *GoModuleMetadataTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -122,21 +123,21 @@ func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]inte
 	for key, value := range parsed {
 		data[key] = value
 	}
-	return &contracts.ToolResult{Success: runResult.Success, Error: runResult.Error, Data: data}, nil
+	return &ports.ToolResult{Success: runResult.Success, Error: runResult.Error, Data: data}, nil
 }
-func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *GoModuleMetadataTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *GoModuleMetadataTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoModuleMetadataTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:go", "metadata", "recovery"}
+	return []string{ports.TagExecute, "lang:go", "metadata", "recovery"}
 }
 
 type GoTestTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewGoTestTool(basePath string) *GoTestTool {
@@ -148,16 +149,16 @@ func (t *GoTestTool) Description() string {
 	return "Runs go test and returns structured Go test results."
 }
 func (t *GoTestTool) Category() string { return "go" }
-func (t *GoTestTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *GoTestTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "package", Type: "string", Required: false, Default: "./..."},
 		{Name: "run", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *GoTestTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
-func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GoTestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
+func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -186,7 +187,7 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizeGoTest(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -200,19 +201,19 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 		},
 	}, nil
 }
-func (t *GoTestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *GoTestTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+func (t *GoTestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *GoTestTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoTestTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:go", "test", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:go", "test", "verification", "diagnostics"}
 }
 
 type GoBuildTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewGoBuildTool(basePath string) *GoBuildTool {
@@ -224,15 +225,15 @@ func (t *GoBuildTool) Description() string {
 	return "Runs go build and returns structured Go build results."
 }
 func (t *GoBuildTool) Category() string { return "go" }
-func (t *GoBuildTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *GoBuildTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "package", Type: "string", Required: false, Default: "./..."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *GoBuildTool) SetCommandRunner(r contracts.CommandRunner) { t.runner = r }
-func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GoBuildTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
+func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -258,7 +259,7 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizeGoBuild(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -270,14 +271,14 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 		},
 	}, nil
 }
-func (t *GoBuildTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *GoBuildTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "go"}},
+func (t *GoBuildTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *GoBuildTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoBuildTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:go", "build", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:go", "build", "verification", "diagnostics"}
 }
 
 type goTestSummary struct {
@@ -413,5 +414,3 @@ func parseGoModuleMetadata(stdout string) (string, map[string]interface{}) {
 		"is_main":     payload.Main,
 	}
 }
-
-

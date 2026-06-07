@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
 
 // TestChunkCreation validates that knowledge chunks can be created

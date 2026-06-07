@@ -32,7 +32,7 @@ func NewSnapshotEmitter(advisor *ContextBudgetAdvisor, telemetry snapshotTelemet
 }
 
 // WithSnapshotEmitter stores the emitter in the context via the
-// contracts.SnapshotObserver key so platform/llm can retrieve it without
+// telemetry.SnapshotObserver key so platform/llm can retrieve it without
 // importing framework packages.
 func WithSnapshotEmitter(ctx context.Context, emitter *SnapshotEmitter) context.Context {
 	if ctx == nil {
@@ -41,7 +41,7 @@ func WithSnapshotEmitter(ctx context.Context, emitter *SnapshotEmitter) context.
 	return WithSnapshotObserver(ctx, emitter)
 }
 
-// SnapshotEmitterFromContext extracts the emitter from the contracts.SnapshotObserver key.
+// SnapshotEmitterFromContext extracts the emitter from the telemetry.SnapshotObserver key.
 func SnapshotEmitterFromContext(ctx context.Context) *SnapshotEmitter {
 	if ctx == nil {
 		return nil

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/chainer"
-	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/capability"
 )
 
 // PolicyEvaluator determines whether a link can invoke a tool based on

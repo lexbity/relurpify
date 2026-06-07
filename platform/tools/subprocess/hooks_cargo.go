@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // applyCargoIsolation checks whether the tool invocation targets a nested Cargo
@@ -18,7 +18,7 @@ import (
 // Returns the (possibly modified) command, workdir, cleanup function, and error.
 // When no isolation is needed the returned values are unchanged and cleanup is a
 // no-op.
-func applyCargoIsolation(manifest contracts.ToolManifest, cmd []string, workdir string) ([]string, string, func(), error) {
+func applyCargoIsolation(manifest ports.ToolManifest, cmd []string, workdir string) ([]string, string, func(), error) {
 	if !isCargoTool(manifest) {
 		return cmd, workdir, func() {}, nil
 	}
@@ -75,7 +75,7 @@ func isCargoCmd(cmd []string) bool {
 }
 
 // isCargoTool returns true when the manifest describes a cargo subprocess tool.
-func isCargoTool(manifest contracts.ToolManifest) bool {
+func isCargoTool(manifest ports.ToolManifest) bool {
 	return manifest.Execution.Command != nil &&
 		len(manifest.Execution.Command.Base) > 0 &&
 		manifest.Execution.Command.Base[0] == "cargo"

@@ -13,9 +13,9 @@ import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	reflectionpkg "codeburg.org/lexbit/relurpify/agents/reflection"
 	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // BuildFromSpec constructs a workflow executor from the runtime spec and wires

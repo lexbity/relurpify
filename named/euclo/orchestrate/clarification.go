@@ -7,19 +7,19 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -98,7 +98,7 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdat
 	}
 }
 
-func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	_ = ctx
 	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
@@ -160,7 +160,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		grounding, anchors, validationErrs := buildGroundingFromState(state, args)
 		if len(validationErrs) > 0 {
 			emitClarificationAnswered(ctx, env, state, grounding, validationErrs)
-			return &contracts.CapabilityExecutionResult{
+			return &ports.CapabilityExecutionResult{
 				Success: false,
 				Error:   strings.Join(validationErrs, "; "),
 				Data:    result,
@@ -193,7 +193,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 	case clarificationActionProject:
 		plan, planErr := buildProjectionPlanFromState(state)
 		if planErr != nil {
-			return &contracts.CapabilityExecutionResult{
+			return &ports.CapabilityExecutionResult{
 				Success: false,
 				Error:   planErr.Error(),
 				Data:    result,
@@ -252,7 +252,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			emitClarificationGateResult(ctx, env, state, false, "unresolved", "missing handoff target")
 			result["next_thoughtrecipe_id"] = ""
 			result["unresolved"] = true
-			return &contracts.CapabilityExecutionResult{
+			return &ports.CapabilityExecutionResult{
 				Success: false,
 				Error:   "clarification handoff requires a next thoughtrecipe id",
 				Data:    result,
@@ -261,14 +261,14 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		emitClarificationCompleted(ctx, env, state, nextThoughtRecipeID)
 		result["next_thoughtrecipe_id"] = nextThoughtRecipeID
 	default:
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Error:   fmt.Sprintf("unsupported clarification action %q", action),
 			Data:    result,
 		}, fmt.Errorf("unsupported clarification action %q", action)
 	}
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data:    result,
 	}, nil

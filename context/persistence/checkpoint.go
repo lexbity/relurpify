@@ -1,0 +1,83 @@
+package persistence
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+)
+
+// CheckpointSnapshot describes the minimal state needed to persist and restore a checkpoint artifact.
+type CheckpointSnapshot struct {
+	CheckpointID string
+	WorkflowID   string
+	RunID        string
+	Kind         string
+	Summary      string
+	Metadata     map[string]any
+	InlineRaw    string
+}
+
+// SaveCheckpointArtifact writes a checkpoint artifact and stores its reference back into the envelope.
+func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, repo agentlifecycle.Repository, snapshot CheckpointSnapshot) (*relurpctx.ArtifactReference, error) {
+	if env == nil || repo == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(snapshot.WorkflowID) == "" || strings.TrimSpace(snapshot.RunID) == "" {
+		return nil, nil
+	}
+	if strings.TrimSpace(snapshot.Kind) == "" {
+		snapshot.Kind = "checkpoint"
+	}
+	if snapshot.Metadata == nil {
+		snapshot.Metadata = map[string]any{}
+	}
+	artifact := agentlifecycle.WorkflowArtifactRecord{
+		ArtifactID:      snapshot.CheckpointID,
+		WorkflowID:      snapshot.WorkflowID,
+		RunID:           snapshot.RunID,
+		Kind:            snapshot.Kind,
+		ContentType:     "application/json",
+		StorageKind:     agentlifecycle.ArtifactStorageInline,
+		SummaryText:     snapshot.Summary,
+		SummaryMetadata: snapshot.Metadata,
+		InlineRawText:   snapshot.InlineRaw,
+		CreatedAt:       time.Now().UTC(),
+	}
+	if err := repo.UpsertArtifact(ctx, artifact); err != nil {
+		return nil, fmt.Errorf("checkpoint: save artifact: %w", err)
+	}
+	ref := relurpctx.ArtifactReference{
+		ArtifactID: artifact.ArtifactID,
+		WorkflowID: artifact.WorkflowID,
+		RunID:      artifact.RunID,
+	}
+	return &ref, nil
+}
+
+// LoadLatestCheckpointArtifact returns the most recent checkpoint artifact for a run.
+func LoadLatestCheckpointArtifact(ctx context.Context, repo agentlifecycle.Repository, runID, kind string) (*agentlifecycle.WorkflowArtifactRecord, error) {
+	if repo == nil || strings.TrimSpace(runID) == "" {
+		return nil, nil
+	}
+	artifacts, err := repo.ListArtifactsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	var latest *agentlifecycle.WorkflowArtifactRecord
+	var latestAt time.Time
+	for i := range artifacts {
+		if kind != "" && strings.TrimSpace(artifacts[i].Kind) != strings.TrimSpace(kind) {
+			continue
+		}
+		if latest == nil || artifacts[i].CreatedAt.After(latestAt) {
+			latest = &artifacts[i]
+			latestAt = artifacts[i].CreatedAt
+		}
+	}
+	return latest, nil
+}

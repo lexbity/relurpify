@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )

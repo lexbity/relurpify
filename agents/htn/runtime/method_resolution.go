@@ -1,9 +1,9 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 // OperatorSpec describes a resolved primitive step derived from a SubtaskSpec.

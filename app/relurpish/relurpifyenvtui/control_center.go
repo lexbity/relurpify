@@ -1,8 +1,9 @@
 package relurpifyenvtui
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 )
 
 type controlCenterPane struct {

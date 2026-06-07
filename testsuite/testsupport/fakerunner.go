@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // FakeResponse defines a canned response for a command invocation.
@@ -41,7 +41,7 @@ func FakeRunner(responses ...FakeResponse) *FakeCommandRunner {
 
 // Run implements sandbox.CommandRunner. It records the request and returns
 // the first matching response.
-func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
+func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*ports.CommandResult, error) {
 	if f == nil {
 		return nil, fmt.Errorf("FakeCommandRunner is nil")
 	}
@@ -53,7 +53,7 @@ func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (
 		if resp.Err != nil {
 			return nil, resp.Err
 		}
-		return &contracts.CommandResult{
+		return &ports.CommandResult{
 			Stdout:      resp.Stdout,
 			Stderr:      resp.Stderr,
 			ExitCode:    resp.ExitCode,
@@ -61,7 +61,7 @@ func (f *FakeCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (
 			StderrBytes: int64(len(resp.Stderr)),
 		}, nil
 	}
-	return &contracts.CommandResult{}, nil
+	return &ports.CommandResult{}, nil
 }
 
 // LastCall returns the most recent recorded invocation, or nil if none.

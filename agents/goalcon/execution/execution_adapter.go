@@ -6,10 +6,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // PlanStepAgent adapts a step executor to the graph.WorkflowExecutor interface.

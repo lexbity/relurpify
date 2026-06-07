@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // DropdownSelectedMsg is emitted when a dropdown item is selected by mouse

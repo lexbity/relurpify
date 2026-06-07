@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"text/template"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type chainRunner struct {
-	Model    contracts.LanguageModel
-	Options  contracts.LLMOptions
+	Model    model.LanguageModel
+	Options  model.LLMOptions
 	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
 }
 
@@ -36,7 +36,7 @@ func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
 }
 
 // RunChain executes a chain against state using isolated prompts.
-func RunChain(ctx context.Context, model contracts.LanguageModel, task *execution.Task, chain *Chain, env *contextdata.Envelope, registry interface{}) error {
+func RunChain(ctx context.Context, model model.LanguageModel, task *execution.Task, chain *Chain, env *contextdata.Envelope, registry interface{}) error {
 	runner := &chainRunner{
 		Model:    model,
 		Registry: registry,
@@ -66,7 +66,7 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 		}
 		userPrompt := taskInstruction(task)
 		for {
-			resp, err := r.Model.Chat(ctx, []contracts.Message{
+			resp, err := r.Model.Chat(ctx, []model.Message{
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userPrompt},
 			}, &r.Options)

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 )
 
 // WorkspaceBootstrapService runs a one-shot workspace indexing/bootstrap pass.

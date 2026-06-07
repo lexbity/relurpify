@@ -103,8 +103,8 @@ func TestStepperConditionalWithSkippedBranch(t *testing.T) {
 		},
 	}
 	runtime := map[string]surface.StepRuntime{
-		"preamble":   {StepID: "preamble", Status: surface.StepDone, Index: 0, Total: 3, Paradigm: "euclo"},
-		"if.branch":  {StepID: "if.branch", Status: surface.StepDone, Index: 1, Total: 3, Paradigm: "goalcon"},
+		"preamble":    {StepID: "preamble", Status: surface.StepDone, Index: 0, Total: 3, Paradigm: "euclo"},
+		"if.branch":   {StepID: "if.branch", Status: surface.StepDone, Index: 1, Total: 3, Paradigm: "goalcon"},
 		"else.branch": {StepID: "else.branch", Status: surface.StepSkipped, Index: 2, Total: 3, Paradigm: "react"},
 	}
 	s := NewStepper(proj, runtime, surface.MacroVerify)

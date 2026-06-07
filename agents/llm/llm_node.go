@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // NodeTypeLLM represents an LLM call node type.
@@ -24,16 +24,16 @@ const NodeTypeLLM agentgraph.NodeType = "llm"
 // or conditional branches inside the same graph.
 type LLMNode struct {
 	id                 string
-	Model              contracts.LanguageModel
+	Model              model.LanguageModel
 	Prompt             string
-	Options            *contracts.LLMOptions
+	Options            *model.LLMOptions
 	CompilationTrigger agentgraph.CompilationTrigger // Optional: triggers context compilation before LLM call
 	Query              string                        // Query for context compilation (if CompilationTrigger set)
 	MaxTokens          int                           // Max tokens for compiled context
 }
 
 // NewLLMNode creates a new LLM node.
-func NewLLMNode(id string, model contracts.LanguageModel, prompt string, options *contracts.LLMOptions) *LLMNode {
+func NewLLMNode(id string, model model.LanguageModel, prompt string, options *model.LLMOptions) *LLMNode {
 	return &LLMNode{
 		id:      id,
 		Model:   model,

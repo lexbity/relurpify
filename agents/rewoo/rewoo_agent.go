@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // RewooAgent executes a ReWOO-style plan with mechanical tool execution.
 type RewooAgent struct {
-	Model        contracts.LanguageModel
+	Model        model.LanguageModel
 	Tools        *capability.Registry
 	Memory       *memory.WorkingMemoryStore
 	Config       *execution.Config

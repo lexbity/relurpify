@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -339,7 +339,7 @@ func verificationStopAllowed(agent *ReActAgent, task *execution.Task) bool {
 	return len(agent.verificationSuccessTools()) == 0
 }
 
-func verificationLikeTool(tool contracts.Tool) bool {
+func verificationLikeTool(tool ports.Tool) bool {
 	if tool == nil {
 		return false
 	}

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestPreparedRunDescriptorValidateRequiresCoreFields(t *testing.T) {
@@ -85,7 +85,7 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{
 				{Name: "model-a", Provider: "ollama", Endpoint: "http://127.0.0.1:11434"},
 				{Name: "model-b", Provider: "lmstudio", Endpoint: "http://127.0.0.1:1234"},

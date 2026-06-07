@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -14,7 +15,7 @@ type conflictingIsolatedExecutor struct {
 }
 
 func (e *conflictingIsolatedExecutor) Initialize(config *execution.Config) error { return nil }
-func (e *conflictingIsolatedExecutor) Capabilities() []string               { return nil }
+func (e *conflictingIsolatedExecutor) Capabilities() []string                    { return nil }
 func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &conflictingIsolatedExecutor{shared: e.shared}, nil
 }
@@ -44,7 +45,7 @@ func TestPlanExecutorRejectsConflictingParallelStateMergesByDefault(t *testing.T
 type historyMutatingExecutor struct{}
 
 func (e *historyMutatingExecutor) Initialize(config *execution.Config) error { return nil }
-func (e *historyMutatingExecutor) Capabilities() []string               { return nil }
+func (e *historyMutatingExecutor) Capabilities() []string                    { return nil }
 func (e *historyMutatingExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &historyMutatingExecutor{}, nil
 }

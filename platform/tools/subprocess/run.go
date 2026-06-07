@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // RunSpec is the minimal execution contract for running a subprocess command.
@@ -26,7 +26,7 @@ type RunSpec struct {
 	Stdin string
 
 	// Sandbox constraints from the tool manifest.
-	Sandbox contracts.ToolManifestSandbox
+	Sandbox ports.ToolManifestSandbox
 
 	// NetworkAccess triggers SSRF host screening against Command arguments.
 	NetworkAccess bool
@@ -63,7 +63,7 @@ type RunResult struct {
 // guards applied: SSRF egress screening, Cargo workspace isolation, sandbox
 // constraints, panic recovery, and a consistent stdout/stderr/exit_code
 // envelope.
-func Run(ctx context.Context, runner contracts.CommandRunner, spec RunSpec) (res *RunResult, rerr error) {
+func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *RunResult, rerr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("subprocess.Run panic recovered: %v", r)
@@ -104,7 +104,7 @@ func Run(ctx context.Context, runner contracts.CommandRunner, spec RunSpec) (res
 	}
 	defer cargoCleanup()
 
-	request := contracts.CommandRequest{
+	request := ports.CommandRequest{
 		Args:    cmd,
 		Workdir: workdir,
 		Input:   spec.Stdin,

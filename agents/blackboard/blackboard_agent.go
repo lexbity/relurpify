@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // BlackboardAgent implements graph.WorkflowExecutor using the Blackboard architecture.
@@ -23,7 +23,7 @@ import (
 // data-driven rather than structurally predetermined.
 type BlackboardAgent struct {
 	// Model is the language model available to knowledge sources.
-	Model contracts.LanguageModel
+	Model model.LanguageModel
 	// Tools is the capability registry available to knowledge sources.
 	Tools *capability.Registry
 	// Memory is the memory store for the agent.
@@ -43,7 +43,7 @@ type BlackboardAgent struct {
 	// SemanticContext is the pre-resolved semantic context bundle passed
 	// to the agent at construction time. It seeds the blackboard with
 	// AST symbols and BKC chunks before the first KS cycle.
-	SemanticContext agentspec.AgentSemanticContext
+	SemanticContext execctx.AgentSemanticContext
 
 	initialised      bool
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot

@@ -1,7 +1,7 @@
 package plan
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // BranchExecutorProvider allows plan execution to allocate an isolated runtime

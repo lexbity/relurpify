@@ -10,18 +10,19 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	capability "codeburg.org/lexbit/relurpify/capability"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 const chatSidebarMinWidth = 60
@@ -1129,11 +1130,11 @@ func extractResultEnvelope(res *execution.Result) *capability.CapabilityResultEn
 			continue
 		}
 		switch typed := raw.(type) {
-		case *contracts.ToolResult:
+		case *ports.ToolResult:
 			if envelope, ok := capability.ToolResultEnvelope(typed); ok {
 				return envelope
 			}
-		case contracts.ToolResult:
+		case ports.ToolResult:
 			copy := typed
 			if envelope, ok := capability.ToolResultEnvelope(&copy); ok {
 				return envelope

@@ -12,19 +12,18 @@ import (
 	"strings"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
-	platformcontracts "codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
@@ -215,14 +214,14 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 }
 
 type modelAdapter struct {
-	model platformcontracts.LanguageModel
+	model platformmodel2.LanguageModel
 }
 
 func (m *modelAdapter) Complete(ctx context.Context, req intake.CompletionRequest) (intake.CompletionResponse, error) {
 	if m == nil || m.model == nil {
 		return intake.CompletionResponse{}, fmt.Errorf("no language model configured")
 	}
-	resp, err := m.model.Generate(ctx, req.Prompt, &platformcontracts.LLMOptions{
+	resp, err := m.model.Generate(ctx, req.Prompt, &platformmodel2.LLMOptions{
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})

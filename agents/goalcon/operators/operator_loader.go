@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // OperatorConfig represents the YAML/JSON configuration for a single operator.

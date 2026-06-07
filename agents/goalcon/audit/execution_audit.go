@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // AuditEntry represents a single capability invocation in the audit trail.
@@ -34,8 +34,8 @@ type AuditEntry struct {
 	Duration      int64  `json:"duration_ms" yaml:"duration_ms"`
 
 	// Policy & Approval
-	InsertionAction InsertionAction       `json:"insertion_action" yaml:"insertion_action"`
-	InsertionReason string                `json:"insertion_reason,omitempty" yaml:"insertion_reason,omitempty"`
+	InsertionAction InsertionAction             `json:"insertion_action" yaml:"insertion_action"`
+	InsertionReason string                      `json:"insertion_reason,omitempty" yaml:"insertion_reason,omitempty"`
 	PolicySnapshot  *capability.PolicySnapshot  `json:"policy_snapshot,omitempty" yaml:"policy_snapshot,omitempty"`
 	ApprovalBinding *capability.ApprovalBinding `json:"approval_binding,omitempty" yaml:"approval_binding,omitempty"`
 }

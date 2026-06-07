@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 

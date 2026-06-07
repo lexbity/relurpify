@@ -6,22 +6,23 @@ import (
 	"fmt"
 	"time"
 
+	frameworktools "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // RunnerOptions configures how a pipeline executes stages.
 type RunnerOptions struct {
-	Model               contracts.LanguageModel
+	Model               model.LanguageModel
 	ModelName           string
-	Tools               []contracts.Tool
+	Tools               []ports.Tool
 	EnableToolCalling   bool
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	BackendCapabilities contracts.BackendCapabilities
+	BackendCapabilities model.BackendCapabilities
 	Telemetry           telemetry.Telemetry
 	CapabilityInvoker   CapabilityInvoker
 }
@@ -180,9 +181,9 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 	return result, nil
 }
 
-func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task, env *contextdata.Envelope, stage Stage, prompt string, stageTools []contracts.Tool) (*contracts.LLMResponse, bool, error) {
+func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task, env *contextdata.Envelope, stage Stage, prompt string, stageTools []ports.Tool) (*model.LLMResponse, bool, error) {
 	if len(stageTools) == 0 || !r.Options.EnableToolCalling || !stage.Contract().Metadata.AllowTools {
-		resp, err := r.Options.Model.Generate(ctx, prompt, &contracts.LLMOptions{
+		resp, err := r.Options.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model: r.Options.ModelName,
 		})
 		return resp, false, err
@@ -190,9 +191,9 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task
 
 	mode := frameworktools.ResolveCallingMode(r.Options.AgentSpec, r.callingCapabilities())
 	var (
-		resp  *contracts.LLMResponse
+		resp  *model.LLMResponse
 		err   error
-		calls []contracts.ToolCall
+		calls []model.ToolCall
 	)
 	if mode == frameworktools.CapabilityCallingNative {
 		resp, calls, err = r.nativeToolCall(ctx, prompt, stageTools)
@@ -213,26 +214,26 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task
 		return nil, false, err
 	}
 	finalPrompt := prompt + "\n\nTool results:\n" + formatToolObservations(observations) + "\n\nUse the tool results above and return ONLY the final JSON for this stage."
-	resp, err = r.Options.Model.Generate(ctx, finalPrompt, &contracts.LLMOptions{
+	resp, err = r.Options.Model.Generate(ctx, finalPrompt, &model.LLMOptions{
 		Model: r.Options.ModelName,
 	})
 	return resp, true, err
 }
 
-func (r *Runner) callingCapabilities() contracts.BackendCapabilities {
+func (r *Runner) callingCapabilities() model.BackendCapabilities {
 	caps := r.Options.BackendCapabilities
-	if pm, ok := r.Options.Model.(contracts.ProfiledModel); ok {
+	if pm, ok := r.Options.Model.(model.ProfiledModel); ok {
 		caps.NativeToolCalling = caps.NativeToolCalling && pm.UsesNativeToolCalling()
 	}
 	return caps
 }
 
-func (r *Runner) nativeToolCall(ctx context.Context, prompt string, stageTools []contracts.Tool) (*contracts.LLMResponse, []contracts.ToolCall, error) {
-	toolSpecs := contracts.LLMToolSpecsFromTools(stageTools)
-	resp, err := r.Options.Model.ChatWithTools(ctx, []contracts.Message{{
+func (r *Runner) nativeToolCall(ctx context.Context, prompt string, stageTools []ports.Tool) (*model.LLMResponse, []model.ToolCall, error) {
+	toolSpecs := ports.LLMToolSpecsFromTools(stageTools)
+	resp, err := r.Options.Model.ChatWithTools(ctx, []model.Message{{
 		Role:    "user",
 		Content: prompt,
-	}}, toolSpecs, &contracts.LLMOptions{
+	}}, toolSpecs, &model.LLMOptions{
 		Model: r.Options.ModelName,
 	})
 	if err != nil {
@@ -241,13 +242,13 @@ func (r *Runner) nativeToolCall(ctx context.Context, prompt string, stageTools [
 	return resp, collectToolCalls(resp), nil
 }
 
-func (r *Runner) nativeRetryToolCall(ctx context.Context, prompt string, stageTools []contracts.Tool, stage Stage, task *execution.Task, env *contextdata.Envelope) (*contracts.LLMResponse, []contracts.ToolCall, error) {
-	toolSpecs := contracts.LLMToolSpecsFromTools(stageTools)
+func (r *Runner) nativeRetryToolCall(ctx context.Context, prompt string, stageTools []ports.Tool, stage Stage, task *execution.Task, env *contextdata.Envelope) (*model.LLMResponse, []model.ToolCall, error) {
+	toolSpecs := ports.LLMToolSpecsFromTools(stageTools)
 	retryPrompt := prompt + "\n\nYou must call at least one allowed verification tool before returning the final JSON. Do not summarize hypothetical results. Return a tool call now, not the final report."
-	resp, err := r.Options.Model.ChatWithTools(ctx, []contracts.Message{{
+	resp, err := r.Options.Model.ChatWithTools(ctx, []model.Message{{
 		Role:    "user",
 		Content: retryPrompt,
-	}}, toolSpecs, &contracts.LLMOptions{
+	}}, toolSpecs, &model.LLMOptions{
 		Model: r.Options.ModelName,
 	})
 	if err != nil {
@@ -260,9 +261,9 @@ func (r *Runner) nativeRetryToolCall(ctx context.Context, prompt string, stageTo
 	return resp, calls, nil
 }
 
-func (r *Runner) fallbackToolCall(ctx context.Context, prompt string, stageTools []contracts.Tool, stage Stage, task *execution.Task, env *contextdata.Envelope) (*contracts.LLMResponse, []contracts.ToolCall, error) {
+func (r *Runner) fallbackToolCall(ctx context.Context, prompt string, stageTools []ports.Tool, stage Stage, task *execution.Task, env *contextdata.Envelope) (*model.LLMResponse, []model.ToolCall, error) {
 	renderedPrompt := prompt + "\n\n" + frameworktools.RenderToolsToPrompt(stageTools)
-	resp, err := r.Options.Model.Generate(ctx, renderedPrompt, &contracts.LLMOptions{
+	resp, err := r.Options.Model.Generate(ctx, renderedPrompt, &model.LLMOptions{
 		Model: r.Options.ModelName,
 	})
 	if err != nil {
@@ -271,7 +272,7 @@ func (r *Runner) fallbackToolCall(ctx context.Context, prompt string, stageTools
 	calls := collectToolCalls(resp)
 	if len(calls) == 0 && requiresToolExecution(stage, task, env, stageTools) {
 		retryPrompt := renderedPrompt + "\n\nYou must call at least one allowed verification tool before returning the final JSON. Do not summarize hypothetical results. Return a tool call now, not the final report."
-		resp, err = r.Options.Model.Generate(ctx, retryPrompt, &contracts.LLMOptions{
+		resp, err = r.Options.Model.Generate(ctx, retryPrompt, &model.LLMOptions{
 			Model: r.Options.ModelName,
 		})
 		if err != nil {
@@ -282,18 +283,18 @@ func (r *Runner) fallbackToolCall(ctx context.Context, prompt string, stageTools
 	return resp, calls, nil
 }
 
-func collectToolCalls(resp *contracts.LLMResponse) []contracts.ToolCall {
+func collectToolCalls(resp *model.LLMResponse) []model.ToolCall {
 	if resp == nil {
 		return nil
 	}
-	calls := append([]contracts.ToolCall(nil), resp.ToolCalls...)
+	calls := append([]model.ToolCall(nil), resp.ToolCalls...)
 	if len(calls) == 0 {
 		calls = frameworktools.ParseToolCallsFromText(resp.Text)
 	}
 	return calls
 }
 
-func requiresToolExecution(stage Stage, task *execution.Task, env *contextdata.Envelope, tools []contracts.Tool) bool {
+func requiresToolExecution(stage Stage, task *execution.Task, env *contextdata.Envelope, tools []ports.Tool) bool {
 	required, ok := stage.(ToolRequiredStage)
 	if !ok {
 		return false

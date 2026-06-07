@@ -1,8 +1,8 @@
 package blackboard
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type Option func(*BlackboardAgent)

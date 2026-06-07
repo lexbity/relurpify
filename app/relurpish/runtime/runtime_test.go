@@ -8,13 +8,13 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
@@ -155,25 +155,25 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	seed := &cfgload.AgentManifest{
+	seed := &config.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: cfgload.ManifestMetadata{
+		Metadata: config.ManifestMetadata{
 			Name:    "coding",
 			Version: "1.0.0",
 		},
-		Spec: cfgload.ManifestSpec{
+		Spec: config.ManifestSpec{
 			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
-			Permissions: contracts.PermissionSet{
-				FileSystem: []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "/workspace/**"}},
+			Permissions: permissions.PermissionSet{
+				FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
 			},
 		},
 	}
-	if err := cfgload.SaveAgentManifest(path, seed); err != nil {
+	if err := config.SaveAgentManifest(path, seed); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
-	updated, err := cfgload.CloneAgentManifest(seed)
+	updated, err := config.CloneAgentManifest(seed)
 	if err != nil {
 		t.Fatalf("clone manifest: %v", err)
 	}

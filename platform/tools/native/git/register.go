@@ -1,13 +1,13 @@
 package git
 
 import (
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 )
 
 func init() {
 	registerGit := func(key, command string) {
-		contracts.RegisterNative(key, func(basePath string) contracts.Tool {
+		ports.RegisterNative(key, func(basePath string) ports.Tool {
 			return &platformgit.GitCommandTool{
 				RepoPath: basePath,
 				Command:  command,

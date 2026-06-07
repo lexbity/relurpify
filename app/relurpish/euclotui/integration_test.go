@@ -61,7 +61,7 @@ var recipeHelpers = struct {
 func feedRecipe(t *testing.T, router *EucloEventRouter, proj *surface.RecipeProjection) {
 	t.Helper()
 	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeRecipeSelected,
+		Type:    reporting.EventTypeRecipeSelected,
 		Payload: map[string]any{"recipe": *proj},
 	})
 }

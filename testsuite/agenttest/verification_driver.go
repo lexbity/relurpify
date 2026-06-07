@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // PreparedRunVerificationReport records artifact-only verification results.

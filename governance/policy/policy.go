@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // ResolvedAgentPolicy carries the resolved agent policy collapsed from the
@@ -18,13 +18,13 @@ type ResolvedAgentPolicy struct {
 	Review                          ResolvedReviewPolicy
 }
 
-// EffectiveAgentPolicy bundles the spec with its resolved 
+// EffectiveAgentPolicy bundles the spec with its resolved
 type EffectiveAgentPolicy struct {
 	Spec   *agentspec.AgentRuntimeSpec
 	Policy ResolvedAgentPolicy
 }
 
-// ResolvedPlanningPolicy carries plan-step 
+// ResolvedPlanningPolicy carries plan-step
 type ResolvedPlanningPolicy struct {
 	RequiredBeforeEdit          []string
 	PreferredEditCapabilities   []string
@@ -33,7 +33,7 @@ type ResolvedPlanningPolicy struct {
 	RequireVerificationStep     bool
 }
 
-// ResolvedReviewPolicy carries review-phase 
+// ResolvedReviewPolicy carries review-phase
 type ResolvedReviewPolicy struct {
 	Criteria        []string
 	FocusTags       []string

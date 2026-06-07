@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // Position follows the LSP specification.
@@ -166,8 +167,8 @@ func (t *DefinitionTool) Description() string {
 func (t *DefinitionTool) Category() string { return "lsp" }
 
 // Parameters implements Tool.
-func (t *DefinitionTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *DefinitionTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "file", Type: "string", Description: "File path", Required: true},
 		{Name: "symbol", Type: "string", Description: "Symbol name", Required: true},
 		{Name: "line", Type: "int", Description: "Line number", Required: true},
@@ -176,7 +177,7 @@ func (t *DefinitionTool) Parameters() []contracts.ToolParameter {
 }
 
 // Execute implements Tool.
-func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -198,7 +199,7 @@ func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, err
 	}
 	res := resAny.(DefinitionResult)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"location":  res.Location,
@@ -213,10 +214,10 @@ func (t *DefinitionTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DefinitionTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *DefinitionTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *DefinitionTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *DefinitionTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // ReferencesTool implements GetReferences tool.
 type ReferencesTool struct {
@@ -228,15 +229,15 @@ func (t *ReferencesTool) Description() string {
 	return "Lists references for a symbol."
 }
 func (t *ReferencesTool) Category() string { return "lsp" }
-func (t *ReferencesTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *ReferencesTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "file", Type: "string", Description: "File path", Required: true},
 		{Name: "symbol", Type: "string", Description: "Symbol name", Required: true},
 		{Name: "line", Type: "int", Description: "Line number", Required: true},
 		{Name: "character", Type: "int", Description: "Character offset", Required: true},
 	}
 }
-func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -257,7 +258,7 @@ func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, err
 	}
 	res := resAny.([]Location)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"locations": res,
@@ -268,10 +269,10 @@ func (t *ReferencesTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *ReferencesTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *ReferencesTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *ReferencesTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *ReferencesTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // HoverTool implements GetHover.
 type HoverTool struct {
@@ -283,14 +284,14 @@ func (t *HoverTool) Description() string {
 	return "Retrieves type information for a position."
 }
 func (t *HoverTool) Category() string { return "lsp" }
-func (t *HoverTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *HoverTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "file", Type: "string", Required: true},
 		{Name: "line", Type: "int", Required: true},
 		{Name: "character", Type: "int", Required: true},
 	}
 }
-func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -310,7 +311,7 @@ func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*
 		return nil, err
 	}
 	res := resAny.(HoverResult)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"type": res.TypeInfo,
@@ -322,10 +323,10 @@ func (t *HoverTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *HoverTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *HoverTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *HoverTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *HoverTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // DiagnosticsTool implements diagnostics retrieval.
 type DiagnosticsTool struct {
@@ -337,10 +338,10 @@ func (t *DiagnosticsTool) Description() string {
 	return "Retrieves diagnostics for a file."
 }
 func (t *DiagnosticsTool) Category() string { return "lsp" }
-func (t *DiagnosticsTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "file", Type: "string", Required: true}}
+func (t *DiagnosticsTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -353,7 +354,7 @@ func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]interface
 		return nil, err
 	}
 	res := resAny.([]Diagnostic)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"diagnostics": res,
@@ -364,10 +365,10 @@ func (t *DiagnosticsTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DiagnosticsTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *DiagnosticsTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *DiagnosticsTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *DiagnosticsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // SearchSymbolsTool implements symbol lookup.
 type SearchSymbolsTool struct {
@@ -379,10 +380,10 @@ func (t *SearchSymbolsTool) Description() string {
 	return "Searches workspace symbols."
 }
 func (t *SearchSymbolsTool) Category() string { return "lsp" }
-func (t *SearchSymbolsTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "query", Type: "string", Required: true}}
+func (t *SearchSymbolsTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
-func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	query := fmt.Sprint(args["query"])
 	resAny, err := t.Proxy.cached("symbols:"+query, func() (interface{}, error) {
 		t.Proxy.mu.RLock()
@@ -401,16 +402,16 @@ func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]interfa
 		return nil, err
 	}
 	res := resAny.([]SymbolInformation)
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"symbols": res}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"symbols": res}}, nil
 }
 func (t *SearchSymbolsTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *SearchSymbolsTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *SearchSymbolsTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *SearchSymbolsTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *SearchSymbolsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // DocumentSymbolsTool returns structure of a file.
 type DocumentSymbolsTool struct {
@@ -422,10 +423,10 @@ func (t *DocumentSymbolsTool) Description() string {
 	return "Lists symbols in a document."
 }
 func (t *DocumentSymbolsTool) Category() string { return "lsp" }
-func (t *DocumentSymbolsTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "file", Type: "string", Required: true}}
+func (t *DocumentSymbolsTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -438,7 +439,7 @@ func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]inter
 		return nil, err
 	}
 	res := resAny.([]SymbolInformation)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"symbols": res,
@@ -449,10 +450,10 @@ func (t *DocumentSymbolsTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DocumentSymbolsTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *DocumentSymbolsTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *DocumentSymbolsTool) Tags() []string { return []string{contracts.TagReadOnly} }
+func (t *DocumentSymbolsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
 // FormatTool formats code through the LSP.
 type FormatTool struct {
@@ -462,13 +463,13 @@ type FormatTool struct {
 func (t *FormatTool) Name() string        { return "lsp_format" }
 func (t *FormatTool) Description() string { return "Formats code using the language server." }
 func (t *FormatTool) Category() string    { return "lsp" }
-func (t *FormatTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *FormatTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "file", Type: "string", Required: true},
 		{Name: "code", Type: "string", Required: true},
 	}
 }
-func (t *FormatTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *FormatTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -481,7 +482,7 @@ func (t *FormatTool) Execute(ctx context.Context, args map[string]interface{}) (
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"code": formatted,
@@ -492,10 +493,10 @@ func (t *FormatTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *FormatTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *FormatTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *FormatTool) Tags() []string { return []string{contracts.TagDestructive} }
+func (t *FormatTool) Tags() []string { return []string{ports.TagDestructive} }
 
 func toInt(value interface{}) int {
 	switch v := value.(type) {

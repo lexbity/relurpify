@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	frameworktools "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type scopedPipelineStage struct {
@@ -30,7 +31,7 @@ func (s scopedPipelineStage) BuildPrompt(ctx *contextdata.Envelope) (string, err
 	_ = ctx
 	return "stage prompt", nil
 }
-func (s scopedPipelineStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s scopedPipelineStage) Decode(resp *model.LLMResponse) (any, error) {
 	_ = resp
 	return map[string]any{"ok": true}, nil
 }
@@ -45,21 +46,21 @@ type scopedPipelineTool struct {
 	name string
 }
 
-func (t scopedPipelineTool) Name() string                          { return t.name }
-func (t scopedPipelineTool) Description() string                   { return t.name }
-func (t scopedPipelineTool) Category() string                      { return "test" }
-func (t scopedPipelineTool) Parameters() []contracts.ToolParameter { return nil }
-func (t scopedPipelineTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t scopedPipelineTool) Name() string                      { return t.name }
+func (t scopedPipelineTool) Description() string               { return t.name }
+func (t scopedPipelineTool) Category() string                  { return "test" }
+func (t scopedPipelineTool) Parameters() []ports.ToolParameter { return nil }
+func (t scopedPipelineTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = args
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
 }
 func (t scopedPipelineTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx
 	return true
 }
-func (t scopedPipelineTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (t scopedPipelineTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 func (t scopedPipelineTool) Tags() []string { return nil }
 

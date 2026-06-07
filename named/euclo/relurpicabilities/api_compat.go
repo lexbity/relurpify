@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type APICompatHandler struct {
@@ -38,20 +39,20 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"base_ref": {Type: "string"},
 				"head_ref": {Type: "string"},
 			},
 			Required: []string{"base_ref"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success":    {Type: "boolean"},
-				"breaking":   {Type: "array", Items: &contracts.Schema{Type: "object"}},
-				"compatible": {Type: "array", Items: &contracts.Schema{Type: "object"}},
+				"breaking":   {Type: "array", Items: &schemacoerce.Schema{Type: "object"}},
+				"compatible": {Type: "array", Items: &schemacoerce.Schema{Type: "object"}},
 				"summary":    {Type: "string"},
 				"base_ref":   {Type: "string"},
 				"head_ref":   {Type: "string"},
@@ -60,7 +61,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 	}
 }
 
-func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}
@@ -119,7 +120,7 @@ func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	breaking, compatible := compareAPISignatures(baseRecords, headRecords)
 	summary := fmt.Sprintf("%d breaking changes and %d compatible additions across %d Go files", len(breaking), len(compatible), len(paths))
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

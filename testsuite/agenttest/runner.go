@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type RunOptions struct {
@@ -222,7 +222,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if err != nil {
 		return nil, err
 	}
-	workspacePaths := cfgload.New(targetWorkspace)
+	workspacePaths := config.New(targetWorkspace)
 	runID := time.Now().UTC().Format("20060102-150405.000")
 	outDir := opts.OutputDir
 	if outDir == "" {
@@ -355,7 +355,7 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 		suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
 		suiteManifestAbs = fallbackManifestPath(suiteManifestAbs, targetWorkspace)
-		if loadedManifest, err := cfgload.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
+		if loadedManifest, err := config.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
 			manifestModel = loadedManifest.Spec.Agent.Model.Name
 		}
 	}

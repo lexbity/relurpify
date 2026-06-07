@@ -7,9 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 )
 
 // CommandHandler is a function that handles a slash command and returns the updated model.

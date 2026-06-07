@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -233,9 +233,9 @@ func TestManifestFixtureBuilder(t *testing.T) {
 		if m.APIVersion != "relurpify/v1alpha1" || m.Kind != "AgentManifest" || m.Metadata.Name != "test-agent" {
 			t.Fatalf("unexpected manifest identity: %+v", m.Metadata)
 		}
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []contracts.FileSystemPermission{
-			{Action: contracts.FileSystemRead, Path: "${workspace}/**"},
-			{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
+		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
+			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 		})
 		clone := builder.Build()
 		if clone == m {
@@ -263,13 +263,13 @@ func TestManifestFixtureBuilder(t *testing.T) {
 
 	t.Run("manifest with filesystem permission", func(t *testing.T) {
 		builder := ValidManifest().
-			WithFileSystemPermission(contracts.FileSystemRead, "${workspace}/src/**")
+			WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/src/**")
 		m := builder.Build()
 
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []contracts.FileSystemPermission{
-			{Action: contracts.FileSystemRead, Path: "${workspace}/**"},
-			{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
-			{Action: contracts.FileSystemRead, Path: "${workspace}/src/**"},
+		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
+			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
+			{Action: permissions.FileSystemRead, Path: "${workspace}/src/**"},
 		})
 	})
 
@@ -278,12 +278,12 @@ func TestManifestFixtureBuilder(t *testing.T) {
 			WithNetworkPermission("egress", "tcp", "example.com", 443)
 		m := builder.Build()
 
-		AssertNormalizedNetworkPermissionsEqual(t, m.Spec.Policy.Permissions.Network, []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}})
+		AssertNormalizedNetworkPermissionsEqual(t, m.Spec.Policy.Permissions.Network, []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}})
 	})
 
 	t.Run("manifest with HITL required", func(t *testing.T) {
 		builder := ValidManifest().
-			WithFileSystemPermission(contracts.FileSystemRead, "${workspace}/sensitive/**").
+			WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/sensitive/**").
 			WithHITLRequired()
 		m := builder.Build()
 
@@ -500,13 +500,13 @@ func TestNormalizationHelpers(t *testing.T) {
 	})
 
 	t.Run("permission and rule normalization", func(t *testing.T) {
-		fs := NormalizeFileSystemPermissions([]contracts.FileSystemPermission{{Action: contracts.FileSystemWrite, Path: "./b"}, {Action: contracts.FileSystemRead, Path: "./a"}})
-		if !reflect.DeepEqual(fs, []contracts.FileSystemPermission{{Action: contracts.FileSystemRead, Path: "a"}, {Action: contracts.FileSystemWrite, Path: "b"}}) {
+		fs := NormalizeFileSystemPermissions([]permissions.FileSystemPermission{{Action: permissions.FileSystemWrite, Path: "./b"}, {Action: permissions.FileSystemRead, Path: "./a"}})
+		if !reflect.DeepEqual(fs, []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "a"}, {Action: permissions.FileSystemWrite, Path: "b"}}) {
 			t.Fatalf("filesystem normalization mismatch: %#v", fs)
 		}
 
-		net := NormalizeNetworkPermissions([]contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "z.example", Port: 443}, {Direction: "egress", Protocol: "tcp", Host: "a.example", Port: 80}})
-		if !reflect.DeepEqual(net, []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "a.example", Port: 80}, {Direction: "egress", Protocol: "tcp", Host: "z.example", Port: 443}}) {
+		net := NormalizeNetworkPermissions([]permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "z.example", Port: 443}, {Direction: "egress", Protocol: "tcp", Host: "a.example", Port: 80}})
+		if !reflect.DeepEqual(net, []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "a.example", Port: 80}, {Direction: "egress", Protocol: "tcp", Host: "z.example", Port: 443}}) {
 			t.Fatalf("network normalization mismatch: %#v", net)
 		}
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -37,7 +37,7 @@ func TestDiagnosticFailureMessages(t *testing.T) {
 			},
 			trigger: func(t *testing.T, env *TestEnvironment) {
 				outsideFile := filepath.Join(env.WorkspacePath, "..", "outside.txt")
-				err := env.PermissionManager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, outsideFile)
+				err := env.PermissionManager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, outsideFile)
 				if err == nil {
 					t.Fatal("expected permission check to fail for file outside workspace")
 				}

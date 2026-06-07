@@ -3,9 +3,10 @@ package euclotui
 import (
 	"testing"
 
+	"github.com/charmbracelet/bubbles/spinner"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	"github.com/charmbracelet/bubbles/spinner"
 )
 
 func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {

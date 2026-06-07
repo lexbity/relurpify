@@ -8,29 +8,31 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type llmEventSink struct {
 	mu     sync.Mutex
-	events []contracts.Event
+	events []telemetry.Event
 }
 
-func (s *llmEventSink) Emit(event contracts.Event) {
+func (s *llmEventSink) Emit(event telemetry.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.events = append(s.events, event)
 }
 
-func (s *llmEventSink) Snapshot() []contracts.Event {
+func (s *llmEventSink) Snapshot() []telemetry.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]contracts.Event, len(s.events))
+	out := make([]telemetry.Event, len(s.events))
 	copy(out, s.events)
 	return out
 }
@@ -39,22 +41,22 @@ type profileAwareStubModel struct {
 	profile *ModelProfile
 }
 
-func (m *profileAwareStubModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (m *profileAwareStubModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (m *profileAwareStubModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (m *profileAwareStubModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (m *profileAwareStubModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (m *profileAwareStubModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (m *profileAwareStubModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (m *profileAwareStubModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
 func (m *profileAwareStubModel) SetProfile(profile *ModelProfile) {
@@ -95,7 +97,7 @@ func TestInstrumentedModel_ProxiesProfileAwareBehavior(t *testing.T) {
 	require.Equal(t, "llm", model.ToolRepairStrategy())
 	require.Equal(t, 2, model.MaxToolsPerCall())
 
-	_, ok := any(model).(contracts.ProfiledModel)
+	_, ok := any(model).(model.ProfiledModel)
 	require.True(t, ok)
 }
 
@@ -109,7 +111,7 @@ func TestInstrumentedModel_IngestsLLMResponse(t *testing.T) {
 	ctx := knowledge.WithOutputIngester(contextdata.WithEnvelope(context.Background(), env), ing)
 
 	model := NewInstrumentedModel(stubResponseModel{}, nil, false)
-	resp, err := model.Chat(ctx, []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 
@@ -130,7 +132,7 @@ func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
 
 	model := NewInstrumentedModel(stubResponseModel{}, nil, false)
 	start := time.Now()
-	resp, err := model.Chat(ctx, []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 	require.Less(t, time.Since(start), 50*time.Millisecond)
@@ -143,22 +145,22 @@ func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
 	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, sink, 1))
 
-	_, err := model.Chat(ctx, []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		events := sink.Snapshot()
 		for _, event := range events {
-			if event.Type == contracts.EventSessionResetRequired {
+			if event.Type == telemetry.EventSessionResetRequired {
 				return true
 			}
 		}
 		return false
 	}, time.Second, 10*time.Millisecond)
 	events := sink.Snapshot()
-	var resetEvent *contracts.Event
+	var resetEvent *telemetry.Event
 	for i := range events {
-		if events[i].Type == contracts.EventSessionResetRequired {
+		if events[i].Type == telemetry.EventSessionResetRequired {
 			resetEvent = &events[i]
 			break
 		}
@@ -171,53 +173,53 @@ func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
 
 type stubResponseModel struct{}
 
-func (stubResponseModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
+func (stubResponseModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
 }
 
-func (stubResponseModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (stubResponseModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubResponseModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
+func (stubResponseModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
 }
 
-func (stubResponseModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
+func (stubResponseModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
 }
 
 type stubUsageResponseModel struct{}
 
-func (stubUsageResponseModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{
+func (stubUsageResponseModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
-func (stubUsageResponseModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (stubUsageResponseModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubUsageResponseModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{
+func (stubUsageResponseModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
-func (stubUsageResponseModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{
+func (stubUsageResponseModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 

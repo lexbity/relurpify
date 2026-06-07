@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/llmconfig"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
 func execLookPathImpl(file string) (string, error) {
@@ -73,7 +73,7 @@ type EnvironmentReport struct {
 	Sandbox   SandboxReport
 	Inference InferenceBackendReport
 	Manifest  ManifestSummary
-	Config    cfgload.RuntimeWorkspaceConfig
+	Config    config.RuntimeWorkspaceConfig
 	Agent     string
 	Timestamp time.Time
 }
@@ -94,12 +94,12 @@ type StatusSnapshot struct {
 
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
 // and the active manifest for status/reporting surfaces.
-func ProbeEnvironment(ctx context.Context, cfg Config, secrets cfgload.Secrets, backend llm.ManagedBackend) EnvironmentReport {
+func ProbeEnvironment(ctx context.Context, cfg Config, secrets config.Secrets, backend llm.ManagedBackend) EnvironmentReport {
 	sandbox := detectSandbox(ctx, cfg)
 	inference := detectInferenceBackend(ctx, cfg, secrets, backend)
 	manifest := summarizeManifest(cfg.ManifestPath)
-	var workspaceCfg cfgload.RuntimeWorkspaceConfig
-	if wcfg, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
+	var workspaceCfg config.RuntimeWorkspaceConfig
+	if wcfg, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 		workspaceCfg = wcfg
 	}
 	return EnvironmentReport{
@@ -137,7 +137,7 @@ func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
 }
 
 // detectInferenceBackend queries the managed backend facade for health + models.
-func detectInferenceBackend(ctx context.Context, cfg Config, secrets cfgload.Secrets, backend llm.ManagedBackend) InferenceBackendReport {
+func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secrets, backend llm.ManagedBackend) InferenceBackendReport {
 	report := InferenceBackendReport{
 		Provider: cfg.InferenceProvider,
 		Endpoint: cfg.InferenceEndpoint,
@@ -190,7 +190,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets cfgload.Sec
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
-	if reg, err := llmconfig.LoadProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, selected)
 		report.SelectedProfile = filepath.Base(resolution.SourcePath)
 		if report.SelectedProfile == "." || report.SelectedProfile == "" {
@@ -342,7 +342,7 @@ func summarizeManifest(path string) ManifestSummary {
 	}
 	summary.Exists = true
 	summary.UpdatedAt = info.ModTime()
-	m, err := cfgload.LoadAgentManifest(path)
+	m, err := config.LoadAgentManifest(path)
 	if err != nil {
 		summary.Error = err.Error()
 		return summary
@@ -371,7 +371,7 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		ServerActive: r.ServerRunning(),
 	}
 	if env.Workspace != "" {
-		snapshot.ProtectedPaths = cfgload.New(env.Workspace).GovernanceRoots(
+		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots(
 			r.Config.ManifestPath,
 			r.Config.ConfigPath,
 		)

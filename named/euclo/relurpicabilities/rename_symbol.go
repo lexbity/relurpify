@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type RenameSymbolHandler struct {
@@ -37,9 +38,9 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassDestructive},
 		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassFilesystemMutation},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"from":    {Type: "string"},
 				"to":      {Type: "string"},
 				"file":    {Type: "string"},
@@ -47,20 +48,20 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 			},
 			Required: []string{"from", "to"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success":        {Type: "boolean"},
 				"preview":        {Type: "boolean"},
 				"applied":        {Type: "boolean"},
-				"files_modified": {Type: "array", Items: &contracts.Schema{Type: "object"}},
+				"files_modified": {Type: "array", Items: &schemacoerce.Schema{Type: "object"}},
 				"replacements":   {Type: "integer"},
 			},
 		},
 	}
 }
 
-func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	from, ok := stringArg(args, "from")
 	if !ok || strings.TrimSpace(from) == "" {
 		return failResult("from argument is required"), fmt.Errorf("from argument is required")
@@ -161,7 +162,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envel
 	if preview {
 		result["updated_files"] = previewFiles
 	}
-	return &contracts.CapabilityExecutionResult{Success: true, Data: result}, nil
+	return &ports.CapabilityExecutionResult{Success: true, Data: result}, nil
 }
 
 func (h *RenameSymbolHandler) normalizedFileHint(fileHint string) (string, error) {

@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // CheckpointKey represents a unique identifier for a checkpoint.

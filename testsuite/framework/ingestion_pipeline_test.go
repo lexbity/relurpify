@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TestTextIngestion validates that text content can be ingested
@@ -32,7 +32,7 @@ func TestTextIngestion(t *testing.T) {
 
 	// Ingest a simple text chunk
 	ctx := context.Background()
-	resp := &contracts.LLMResponse{
+	resp := &model.LLMResponse{
 		Text: "This is test content for ingestion.",
 	}
 
@@ -251,7 +251,7 @@ func TestChunkSourceRetention(t *testing.T) {
 
 	// Ingest with source context
 	ctx := contextdata.WithEnvelope(envCtx, envelope)
-	resp := &contracts.LLMResponse{
+	resp := &model.LLMResponse{
 		Text: "Content derived from sources.",
 	}
 
@@ -351,8 +351,8 @@ func TestRepeatIngestionConsistency(t *testing.T) {
 	// Ingest the same content twice
 	ctx := context.Background()
 	content := "Consistent test content for repeat ingestion."
-	resp1 := &contracts.LLMResponse{Text: content}
-	resp2 := &contracts.LLMResponse{Text: content}
+	resp1 := &model.LLMResponse{Text: content}
+	resp2 := &model.LLMResponse{Text: content}
 
 	chunk1, err := ingester.IngestLLMResponseFull(ctx, resp1)
 	if err != nil {
@@ -428,8 +428,8 @@ func TestIngestionWithDifferentContent(t *testing.T) {
 
 	// Ingest different content
 	ctx := context.Background()
-	resp1 := &contracts.LLMResponse{Text: "First content."}
-	resp2 := &contracts.LLMResponse{Text: "Second content."}
+	resp1 := &model.LLMResponse{Text: "First content."}
+	resp2 := &model.LLMResponse{Text: "Second content."}
 
 	chunk1, err := ingester.IngestLLMResponseFull(ctx, resp1)
 	if err != nil {

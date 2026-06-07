@@ -8,14 +8,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // RuntimeSurfaces holds runtime surface references for workflow operations.
@@ -83,7 +83,7 @@ func ApplyTaskRetrieval(task *execution.Task, payload interface{}) *execution.Ta
 // work, it only executes focused, narrowly-scoped subtasks.
 type HTNAgent struct {
 	// Model is the language model used by the primitive executor.
-	Model contracts.LanguageModel
+	Model model.LanguageModel
 	// Tools is the capability registry passed to the primitive executor.
 	Tools *capability.Registry
 	// Config holds runtime configuration.
@@ -104,7 +104,7 @@ type HTNAgent struct {
 	// SemanticContext is the pre-resolved semantic context bundle passed
 	// to the agent at construction time. It propagates to PrimitiveExec
 	// when that executor is a *react.ReActAgent.
-	SemanticContext agentspec.AgentSemanticContext
+	SemanticContext execctx.AgentSemanticContext
 }
 
 // Initialize satisfies agentgraph.WorkflowExecutor. It wires configuration and ensures the
@@ -443,7 +443,7 @@ func containsStepID(values []string, stepID string) bool {
 type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
-func (n *noopAgent) Capabilities() []string          { return nil }
+func (n *noopAgent) Capabilities() []string               { return nil }
 func (n *noopAgent) BuildGraph(_ *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("noop_done")

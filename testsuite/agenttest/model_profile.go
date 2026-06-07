@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/llmconfig"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
 type BackendModelProfileProvenance struct {
@@ -22,7 +22,7 @@ type BackendModelProfileProvenance struct {
 }
 
 func resolveCaseModelProfile(targetWorkspace string, execution resolvedCaseExecution) (*BackendModelProfileProvenance, *llm.ModelProfile, error) {
-	registry, err := llmconfig.LoadProfileRegistry(cfgload.New(targetWorkspace).ModelProfilesDir())
+	registry, err := modelselect.LoadProfileRegistry(config.New(targetWorkspace).ModelProfilesDir())
 	if err != nil {
 		return nil, nil, fmt.Errorf("load model profiles: %w", err)
 	}

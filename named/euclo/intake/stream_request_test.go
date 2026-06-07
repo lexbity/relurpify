@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestBuildStreamRequestQueryTemplate(t *testing.T) {

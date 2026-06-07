@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestRootGraphExecute(t *testing.T) {
@@ -148,8 +148,8 @@ func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) ca
 	}
 }
 
-func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
-	return &contracts.CapabilityExecutionResult{
+func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data:    map[string]any{"executed": true},
 	}, nil

@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ToolObservation records a single tool execution result within the ReAct loop.
@@ -172,7 +173,7 @@ func compactReactLoopState(env *contextdata.Envelope) {
 	}
 	if raw, ok := env.GetWorkingValue("react.tool_calls"); ok {
 		switch calls := raw.(type) {
-		case []contracts.ToolCall:
+		case []model.ToolCall:
 			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		case []any:
 			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
@@ -213,7 +214,7 @@ func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
 	return out
 }
 
-func recordActiveToolNames(env *contextdata.Envelope, tools []contracts.Tool) {
+func recordActiveToolNames(env *contextdata.Envelope, tools []ports.Tool) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name())

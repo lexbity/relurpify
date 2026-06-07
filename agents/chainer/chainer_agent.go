@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ChainerAgent executes a deterministic chain of isolated LLM links.
@@ -21,7 +21,7 @@ import (
 // the envelope, runs the LLM call, parses the response, and writes the result
 // to its OutputKey.
 type ChainerAgent struct {
-	Model           contracts.LanguageModel
+	Model           model.LanguageModel
 	Tools           *capability.Registry
 	Config          *execution.Config
 	Chain           *Chain

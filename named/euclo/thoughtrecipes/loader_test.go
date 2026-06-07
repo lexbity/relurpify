@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 

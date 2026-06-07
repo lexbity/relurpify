@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -37,7 +37,7 @@ type browserSessionHandle struct {
 	service     *BrowserService
 }
 
-func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	backendName := s.resolveBackend(args)
 	cfg := browserSessionConfig{
 		backendName:  backendName,
@@ -102,7 +102,7 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 	return result, nil
 }
 
-func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	sessionID := defaultSessionID(env, args)
 	if sessionID == "" {
 		return nil, fmt.Errorf("browser session not found")
@@ -505,7 +505,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	return nil
 }
 
-func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextdata.Envelope, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*contracts.ToolResult, error) {
+func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextdata.Envelope, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*ports.ToolResult, error) {
 	if data == nil {
 		data = make(map[string]interface{})
 	}

@@ -16,28 +16,28 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 var (
 	cfg          = runtimesvc.DefaultConfig()
 	envSnapshot  []string
-	envOverrides cfgload.EnvOverrides
-	secrets      cfgload.Secrets
+	envOverrides config.EnvOverrides
+	secrets      config.Secrets
 )
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
 func main() {
 	envSnapshot = os.Environ()
 	var ovErr error
-	envOverrides, ovErr = cfgload.LoadEnvOverrides(envSnapshot)
+	envOverrides, ovErr = config.LoadEnvOverrides(envSnapshot)
 	if ovErr != nil {
 		log.Fatalf("invalid environment: %v", ovErr)
 	}
-	secrets = cfgload.LoadSecrets(envSnapshot)
+	secrets = config.LoadSecrets(envSnapshot)
 	cfg.EnvOverrides = append([]string(nil), envSnapshot...)
 	cfg.Editor = envOverrides.Editor
-	cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
+	cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	root := newRootCmd()
@@ -152,7 +152,7 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		// Config validation is done by cfgload.Load during runtime
+		// Config validation is done by config.Load during runtime
 		// initialization. Pre-flight errors (file not found, etc.) are
 		// captured by BootstrapStartupState → BuildDoctorReport.
 		state, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets)

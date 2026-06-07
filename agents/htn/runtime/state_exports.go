@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // Public wrapper functions for persistence package integration.

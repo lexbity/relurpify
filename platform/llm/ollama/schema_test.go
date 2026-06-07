@@ -3,7 +3,7 @@ package ollama
 // Schema conformance tests for the Ollama backend.
 //
 // These tests document the known lossiness of schema conversion when
-// round-tripping from contracts.Tool → LLMToolSpec → Ollama native format.
+// round-tripping from ports.Tool → LLMToolSpec → Ollama native format.
 // They assert that features known to survive the conversion still work,
 // and document (without failing on) features that are lost.
 
@@ -11,7 +11,8 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // fullFeaturesTool declares parameters with every supported feature to verify
@@ -21,27 +22,27 @@ type fullFeaturesTool struct{}
 func (f *fullFeaturesTool) Name() string        { return "full_features" }
 func (f *fullFeaturesTool) Description() string { return "Tool with all parameter features" }
 func (f *fullFeaturesTool) Category() string    { return "test" }
-func (f *fullFeaturesTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
-		{Name: "str_param", Type: contracts.ToolParamString, Description: "A string", Required: true},
-		{Name: "int_param", Type: contracts.ToolParamInteger, Description: "An integer", Required: false, Default: int64(42)},
-		{Name: "bool_param", Type: contracts.ToolParamBoolean, Description: "A boolean", Required: false},
+func (f *fullFeaturesTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
+		{Name: "str_param", Type: ports.ToolParamString, Description: "A string", Required: true},
+		{Name: "int_param", Type: ports.ToolParamInteger, Description: "An integer", Required: false, Default: int64(42)},
+		{Name: "bool_param", Type: ports.ToolParamBoolean, Description: "A boolean", Required: false},
 	}
 }
-func (f *fullFeaturesTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: true}, nil
+func (f *fullFeaturesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true}, nil
 }
 func (f *fullFeaturesTool) IsAvailable(ctx context.Context) bool { return true }
-func (f *fullFeaturesTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "echo"}},
+func (f *fullFeaturesTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "echo"}},
 	}}
 }
 func (f *fullFeaturesTool) Tags() []string { return nil }
 
 func TestOllamaSchemaTopLevelStringPreserved(t *testing.T) {
 	tool := &fullFeaturesTool{}
-	spec := contracts.LLMToolSpecFromTool(tool)
+	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
 	props, ok := ollamaParams["properties"].(map[string]interface{})
@@ -62,7 +63,7 @@ func TestOllamaSchemaTopLevelStringPreserved(t *testing.T) {
 
 func TestOllamaSchemaIntegerPreserved(t *testing.T) {
 	tool := &fullFeaturesTool{}
-	spec := contracts.LLMToolSpecFromTool(tool)
+	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
 	props, ok := ollamaParams["properties"].(map[string]interface{})
@@ -96,7 +97,7 @@ func TestOllamaSchemaIntegerPreserved(t *testing.T) {
 
 func TestOllamaSchemaBooleanPreserved(t *testing.T) {
 	tool := &fullFeaturesTool{}
-	spec := contracts.LLMToolSpecFromTool(tool)
+	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
 	props, ok := ollamaParams["properties"].(map[string]interface{})
@@ -114,7 +115,7 @@ func TestOllamaSchemaBooleanPreserved(t *testing.T) {
 
 func TestOllamaSchemaRequiredPreserved(t *testing.T) {
 	tool := &fullFeaturesTool{}
-	spec := contracts.LLMToolSpecFromTool(tool)
+	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
 	required, ok := ollamaParams["required"].([]string)
@@ -130,5 +131,5 @@ func TestOllamaSchemaNestedObjectDocumentedLoss(t *testing.T) {
 	t.Log("KNOWN LOSS: Nested object schemas are NOT converted through the")
 	t.Log("ToolParameter system because ToolParameter.Type is a flat type.")
 	t.Log("This test documents the limitation — nested objects require")
-	t.Log("the contracts.Schema path, not the ToolParameter path.")
+	t.Log("the schemacoerce.Schema path, not the ToolParameter path.")
 }

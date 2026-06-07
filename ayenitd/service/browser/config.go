@@ -3,10 +3,10 @@ package browser
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )

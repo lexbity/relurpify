@@ -14,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Client implements LanguageModel for Ollama.
@@ -494,8 +495,8 @@ func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*LLMRespon
 	return resp, nil
 }
 
-func (c *Client) parseToolCalls(calls []ollamaToolCall) []contracts.ToolCall {
-	results := make([]contracts.ToolCall, 0, len(calls))
+func (c *Client) parseToolCalls(calls []ollamaToolCall) []model.ToolCall {
+	results := make([]model.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		name := call.Name
 		args := call.Arguments
@@ -506,7 +507,7 @@ func (c *Client) parseToolCalls(calls []ollamaToolCall) []contracts.ToolCall {
 			args = call.Function.Arguments
 		}
 		parsedArgs := c.parseArguments(args)
-		results = append(results, contracts.ToolCall{
+		results = append(results, model.ToolCall{
 			ID:   call.ID,
 			Name: name,
 			Args: parsedArgs,
@@ -545,8 +546,8 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) contracts.TokenUsageReport {
-	report := contracts.TokenUsageReport{}
+func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) telemetry.TokenUsageReport {
+	report := telemetry.TokenUsageReport{}
 	if len(raw.Usage) > 0 {
 		for k, v := range raw.Usage {
 			switch strings.ToLower(k) {
@@ -582,7 +583,7 @@ func estimatePromptTokensFromPayload(payload interface{}) int {
 	switch p := payload.(type) {
 	case map[string]interface{}:
 		if prompt, ok := p["prompt"].(string); ok && prompt != "" {
-			return contracts.EstimateTokens(prompt)
+			return telemetry.EstimateTokens(prompt)
 		}
 		return estimatePromptTokensFromMessages(p["messages"])
 	default:
@@ -596,7 +597,7 @@ func estimatePromptTokensFromMessages(value any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += contracts.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -608,7 +609,7 @@ func estimatePromptTokensFromMessages(value any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += contracts.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -617,9 +618,9 @@ func estimatePromptTokensFromMessages(value any) int {
 	}
 }
 
-func estimateUsage(promptTokens int, responseText string) contracts.TokenUsageReport {
-	completionTokens := contracts.EstimateTokens(responseText)
-	return contracts.TokenUsageReport{
+func estimateUsage(promptTokens int, responseText string) telemetry.TokenUsageReport {
+	completionTokens := telemetry.EstimateTokens(responseText)
+	return telemetry.TokenUsageReport{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		TotalTokens:      promptTokens + completionTokens,

@@ -4,11 +4,11 @@ package surface
 type StepStatus string
 
 const (
-	StepPending  StepStatus = "pending"
-	StepActive   StepStatus = "active"
-	StepDone     StepStatus = "done"
-	StepFailed   StepStatus = "failed"
-	StepSkipped  StepStatus = "skipped"
+	StepPending StepStatus = "pending"
+	StepActive  StepStatus = "active"
+	StepDone    StepStatus = "done"
+	StepFailed  StepStatus = "failed"
+	StepSkipped StepStatus = "skipped"
 )
 
 // StepRuntime captures the live execution state of a single recipe step.

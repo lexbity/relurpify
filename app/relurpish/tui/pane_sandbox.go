@@ -6,18 +6,19 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type sandboxRuntime interface {
 	SessionInfo() SessionInfo
-	LoadSandboxManifest() (*cfgload.AgentManifest, error)
-	SaveSandboxManifest(*cfgload.AgentManifest) (string, error)
+	LoadSandboxManifest() (*config.AgentManifest, error)
+	SaveSandboxManifest(*config.AgentManifest) (string, error)
 	SandboxBackend() string
 	SaveSandboxBackend(string) (string, error)
 	ReloadWorkspace(context.Context, string) error
@@ -53,7 +54,7 @@ type sandboxNode struct {
 
 	// File scope fields.
 	fileIndex int
-	filePerm  contracts.FileSystemPermission
+	filePerm  permissions.FileSystemPermission
 
 	// Command fields.
 	patternIndex int
@@ -63,7 +64,7 @@ type sandboxNode struct {
 
 	// Network fields.
 	networkIndex int
-	networkPerm  contracts.NetworkPermission
+	networkPerm  permissions.NetworkPermission
 
 	// Provider policy fields.
 	providerID  string
@@ -78,7 +79,7 @@ type sandboxNode struct {
 type SandboxPane struct {
 	runtime sandboxRuntime
 
-	manifest *cfgload.AgentManifest
+	manifest *config.AgentManifest
 	root     *sandboxNode
 	visible  []sandboxVisibleNode
 
@@ -716,8 +717,8 @@ func (p *SandboxPane) persistManifestCmd() tea.Cmd {
 	}
 }
 
-func (p *SandboxPane) buildSavedManifest() (*cfgload.AgentManifest, error) {
-	clone, err := cfgload.CloneAgentManifest(p.manifest)
+func (p *SandboxPane) buildSavedManifest() (*config.AgentManifest, error) {
+	clone, err := config.CloneAgentManifest(p.manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -743,8 +744,8 @@ func (p *SandboxPane) buildSavedManifest() (*cfgload.AgentManifest, error) {
 	return clone, nil
 }
 
-func (p *SandboxPane) applyFileCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
-	perms := make([]contracts.FileSystemPermission, 0, len(cat.Children))
+func (p *SandboxPane) applyFileCategory(clone *config.AgentManifest, cat *sandboxNode) {
+	perms := make([]permissions.FileSystemPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
 			continue
@@ -760,7 +761,7 @@ func (p *SandboxPane) applyFileCategory(clone *cfgload.AgentManifest, cat *sandb
 	clone.Spec.Permissions.FileSystem = perms
 }
 
-func (p *SandboxPane) applyCommandCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyCommandCategory(clone *config.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
@@ -787,8 +788,8 @@ func (p *SandboxPane) applyCommandCategory(clone *cfgload.AgentManifest, cat *sa
 	clone.Spec.Agent.Bash = bash
 }
 
-func (p *SandboxPane) applyNetworkCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
-	perms := make([]contracts.NetworkPermission, 0, len(cat.Children))
+func (p *SandboxPane) applyNetworkCategory(clone *config.AgentManifest, cat *sandboxNode) {
+	perms := make([]permissions.NetworkPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
 			continue
@@ -812,12 +813,12 @@ func (p *SandboxPane) applyNetworkCategory(clone *cfgload.AgentManifest, cat *sa
 	clone.Spec.Permissions.Network = perms
 }
 
-func ensureSandboxPolicy(spec *cfgload.ManifestSpec) *cfgload.ManifestPolicySpec {
+func ensureSandboxPolicy(spec *config.ManifestSpec) *config.ManifestPolicySpec {
 	if spec == nil {
 		return nil
 	}
 	if spec.Policy == nil {
-		policy := cfgload.ManifestPolicySpec{
+		policy := config.ManifestPolicySpec{
 			Permissions: spec.Permissions,
 			Resources:   spec.Resources,
 			Security:    spec.Security,
@@ -830,7 +831,7 @@ func ensureSandboxPolicy(spec *cfgload.ManifestSpec) *cfgload.ManifestPolicySpec
 	return spec.Policy
 }
 
-func (p *SandboxPane) applyProviderCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyProviderCategory(clone *config.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
@@ -848,7 +849,7 @@ func (p *SandboxPane) applyProviderCategory(clone *cfgload.AgentManifest, cat *s
 	}
 }
 
-func (p *SandboxPane) applyToolCategory(clone *cfgload.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyToolCategory(clone *config.AgentManifest, cat *sandboxNode) {
 	if clone.Spec.Agent == nil {
 		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}

@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"github.com/stretchr/testify/require"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 )
 
 func TestNewRootCmdRegistersCoreEntryPoints(t *testing.T) {

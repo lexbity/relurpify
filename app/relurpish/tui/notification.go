@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

@@ -1,7 +1,7 @@
 package execution
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -11,7 +11,7 @@ type Config struct {
 	Model             string                      `json:"model,omitempty"`
 	MaxIterations     int                         `json:"max_iterations,omitempty"`
 	NativeToolCalling bool                        `json:"native_tool_calling,omitempty"`
-	Telemetry         telemetry.Telemetry          `json:"-"`
+	Telemetry         telemetry.Telemetry         `json:"-"`
 	AgentSpec         *agentspec.AgentRuntimeSpec `json:"agent_spec,omitempty"`
 	Workspace         string                      `json:"workspace,omitempty"`
 	AgentsDir         string                      `json:"agents_dir,omitempty"`

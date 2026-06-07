@@ -5,9 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"github.com/charmbracelet/bubbles/key"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -180,8 +181,8 @@ func (p *KeybindingPane) loadPersistedBindings() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := cfgload.New(workspace).RuntimeKeybindingsFile()
-	cfg, err := cfgload.LoadRuntimeKeybindingConfig(path)
+	path := config.New(workspace).RuntimeKeybindingsFile()
+	cfg, err := config.LoadRuntimeKeybindingConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
@@ -318,13 +319,13 @@ func (p *KeybindingPane) resetAll() {
 }
 
 func (p *KeybindingPane) persistCmd() tea.Cmd {
-	cfg := cfgload.RuntimeKeybindingConfig{Bindings: make([]cfgload.RuntimeKeybindingEntry, 0, len(p.targets))}
+	cfg := config.RuntimeKeybindingConfig{Bindings: make([]config.RuntimeKeybindingEntry, 0, len(p.targets))}
 	workspace := ""
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	for _, target := range p.targets {
-		cfg.Bindings = append(cfg.Bindings, cfgload.RuntimeKeybindingEntry{
+		cfg.Bindings = append(cfg.Bindings, config.RuntimeKeybindingEntry{
 			Action:      target.Action,
 			Keys:        append([]string(nil), target.bindingKeys()...),
 			Scope:       target.Scope,
@@ -337,8 +338,8 @@ func (p *KeybindingPane) persistCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "keybindings save failed: workspace unavailable"}
 		}
-		path := cfgload.New(workspace).RuntimeKeybindingsFile()
-		backup, err := cfgload.SaveRuntimeKeybindingConfigWithBackup(path, cfg)
+		path := config.New(workspace).RuntimeKeybindingsFile()
+		backup, err := config.SaveRuntimeKeybindingConfigWithBackup(path, cfg)
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("keybindings save failed: %v", err)}
 		}

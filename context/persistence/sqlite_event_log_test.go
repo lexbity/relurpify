@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/identity"
 	"github.com/stretchr/testify/require"
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
 func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
@@ -20,9 +21,9 @@ func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
 	payload, err := json.Marshal(map[string]string{"hello": "world"})
 	require.NoError(t, err)
 
-	seqs, err := log.Append(context.Background(), "local", []telemetry.FrameworkEvent{{
+	seqs, err := log.Append(context.Background(), "local", []event.FrameworkEvent{{
 		Timestamp:      time.Now().UTC(),
-		Type:           telemetry.FrameworkEventSystemStarted,
+		Type:           event.EventSystemStarted,
 		Payload:        payload,
 		Actor:          identity.EventActor{Kind: "system", ID: "relurpify"},
 		IdempotencyKey: "start-1",
@@ -30,9 +31,9 @@ func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, seqs, 1)
 
-	seqs2, err := log.Append(context.Background(), "local", []telemetry.FrameworkEvent{{
+	seqs2, err := log.Append(context.Background(), "local", []event.FrameworkEvent{{
 		Timestamp:      time.Now().UTC(),
-		Type:           telemetry.FrameworkEventSystemStarted,
+		Type:           event.EventSystemStarted,
 		Payload:        payload,
 		Actor:          identity.EventActor{Kind: "system", ID: "relurpify"},
 		IdempotencyKey: "start-1",
@@ -43,7 +44,7 @@ func TestSQLiteEventLogAppendReadAndSnapshot(t *testing.T) {
 	events, err := log.Read(context.Background(), "local", 0, 10, false)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	require.Equal(t, telemetry.FrameworkEventSystemStarted, events[0].Type)
+	require.Equal(t, event.EventSystemStarted, events[0].Type)
 
 	require.NoError(t, log.TakeSnapshot(context.Background(), "local", events[0].Seq, []byte("snapshot")))
 	seq, data, err := log.LoadSnapshot(context.Background(), "local")
@@ -58,7 +59,7 @@ func TestSQLiteEventLogReadByTypeAndPartition(t *testing.T) {
 	defer log.Close()
 
 	appendEvent := func(partition, eventType string) {
-		_, err := log.Append(context.Background(), partition, []telemetry.FrameworkEvent{{
+		_, err := log.Append(context.Background(), partition, []event.FrameworkEvent{{
 			Timestamp: time.Now().UTC(),
 			Type:      eventType,
 			Partition: partition,
@@ -66,15 +67,15 @@ func TestSQLiteEventLogReadByTypeAndPartition(t *testing.T) {
 		}})
 		require.NoError(t, err)
 	}
-	appendEvent("local", telemetry.FrameworkEventSystemStarted)
-	appendEvent("other", telemetry.FrameworkEventMessageInbound)
-	appendEvent("local", telemetry.FrameworkEventMessageInbound)
+	appendEvent("local", event.EventSystemStarted)
+	appendEvent("other", event.EventMessageInbound)
+	appendEvent("local", event.EventMessageInbound)
 
 	events, err := log.ReadByType(context.Background(), "local", "message.", 0, 10)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.Equal(t, "local", events[0].Partition)
-	require.Equal(t, telemetry.FrameworkEventMessageInbound, events[0].Type)
+	require.Equal(t, event.EventMessageInbound, events[0].Type)
 }
 
 func TestSQLiteEventLogCompactBefore(t *testing.T) {
@@ -82,15 +83,15 @@ func TestSQLiteEventLogCompactBefore(t *testing.T) {
 	require.NoError(t, err)
 	defer log.Close()
 
-	_, err = log.Append(context.Background(), "local", []telemetry.FrameworkEvent{
+	_, err = log.Append(context.Background(), "local", []event.FrameworkEvent{
 		{
 			Timestamp: time.Now().UTC().Add(-48 * time.Hour),
-			Type:      telemetry.FrameworkEventSystemStarted,
+			Type:      event.EventSystemStarted,
 			Partition: "local",
 		},
 		{
 			Timestamp: time.Now().UTC(),
-			Type:      telemetry.FrameworkEventMessageInbound,
+			Type:      event.EventMessageInbound,
 			Partition: "local",
 		},
 	})
@@ -103,5 +104,5 @@ func TestSQLiteEventLogCompactBefore(t *testing.T) {
 	events, err := log.Read(context.Background(), "local", 0, 10, false)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	require.Equal(t, telemetry.FrameworkEventMessageInbound, events[0].Type)
+	require.Equal(t, event.EventMessageInbound, events[0].Type)
 }

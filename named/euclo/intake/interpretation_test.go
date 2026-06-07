@@ -3,9 +3,9 @@ package intake
 import (
 	"testing"
 
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 func TestBuildIntentInterpretationFromEvidence(t *testing.T) {

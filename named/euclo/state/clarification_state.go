@@ -1,7 +1,7 @@
 package state
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // GetClarificationNextThoughtRecipeID returns the next thoughtrecipe to run after

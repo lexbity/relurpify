@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -24,7 +25,7 @@ type PipelineStageFactory interface {
 
 // PipelineAgent executes a deterministic sequence of typed pipeline stages.
 type PipelineAgent struct {
-	Model             contracts.LanguageModel
+	Model             model.LanguageModel
 	Config            *execution.Config
 	Tools             *capability.Registry
 	WorkflowStatePath string
@@ -232,7 +233,7 @@ func (a *PipelineAgent) telemetry() telemetry.Telemetry {
 	return a.Config.Telemetry
 }
 
-func (a *PipelineAgent) availableTools() []contracts.Tool {
+func (a *PipelineAgent) availableTools() []ports.Tool {
 	if a == nil {
 		return nil
 	}

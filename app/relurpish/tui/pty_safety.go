@@ -7,8 +7,9 @@ import (
 	"os"
 	"runtime/debug"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	tea "github.com/charmbracelet/bubbletea"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 )
 
 // PTYSafe wraps an arbitrary function with the terminal recovery gate so that

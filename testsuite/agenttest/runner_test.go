@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type loadedOllamaServer struct {
@@ -76,7 +76,7 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(cfgload.New(workspace).ConfigRoot(), "agent.yaml")
+	manifestPath := filepath.Join(config.New(workspace).ConfigRoot(), "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -684,7 +684,7 @@ type assertionErr string
 func (e assertionErr) Error() string { return string(e) }
 
 func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
-	workflowStateRel := filepath.ToSlash(filepath.Join(cfgload.DirName, "sessions", "workflow_state.db"))
+	workflowStateRel := filepath.ToSlash(filepath.Join(config.DirName, "sessions", "workflow_state.db"))
 	before := &WorkspaceSnapshot{
 		Files: map[string]string{
 			workflowStateRel: "before",

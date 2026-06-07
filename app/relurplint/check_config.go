@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type configCheck struct{}
@@ -15,7 +15,7 @@ func init() {
 func (c configCheck) Name() string { return "config" }
 
 func (c configCheck) Run(workspace string) []Diagnostic {
-	report := cfgload.ValidateWorkspaceTree(workspace)
+	report := config.ValidateWorkspaceTree(workspace)
 	if !report.HasErrors() {
 		return nil
 	}
@@ -41,7 +41,7 @@ func (c configCheck) Run(workspace string) []Diagnostic {
 
 // isToolIssue returns true if the validation issue relates to tool
 // manifests or tool registry validation.
-func isToolIssue(issue cfgload.ValidationIssue) bool {
+func isToolIssue(issue config.ValidationIssue) bool {
 	if strings.HasSuffix(issue.File, ".tool.yaml") {
 		return true
 	}

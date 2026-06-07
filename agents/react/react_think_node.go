@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	frameworktools "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type reactThinkNode struct {
@@ -40,7 +41,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			Summary:   summary,
 			Timestamp: time.Now().UTC(),
 		}
-		env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
+		env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 		env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
 		return &execution.Result{
 			NodeID:  n.id,
@@ -50,14 +51,14 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			}),
 		}, nil
 	}
-	var resp *contracts.LLMResponse
+	var resp *model.LLMResponse
 	var err error
 	tools := n.agent.availableToolsForPhase(env, n.task)
 	recordActiveToolNames(env, tools)
 	configNativeTC := n.agent.Config != nil && n.agent.Config.NativeToolCalling
 	profileNativeTC := false
 	if !configNativeTC {
-		if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
+		if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
 			profileNativeTC = pm.UsesNativeToolCalling()
 		}
 	}
@@ -65,7 +66,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(env, tools)
-		resp, err = n.agent.Model.ChatWithTools(ctx, messages, contracts.LLMToolSpecsFromTools(tools), &contracts.LLMOptions{
+		resp, err = n.agent.Model.ChatWithTools(ctx, messages, ports.LLMToolSpecsFromTools(tools), &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
 			MaxTokens:      512,
@@ -76,7 +77,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		}
 	} else {
 		prompt := n.resolvePrompt(env, tools)
-		resp, err = n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
+		resp, err = n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
 			MaxTokens:      512,
@@ -111,16 +112,16 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	}, nil
 }
 
-func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata.Envelope, resp *contracts.LLMResponse, useToolCalling bool, tools []contracts.Tool) (decisionPayload, []contracts.ToolCall, error) {
+func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata.Envelope, resp *model.LLMResponse, useToolCalling bool, tools []ports.Tool) (decisionPayload, []model.ToolCall, error) {
 	if resp == nil {
 		return decisionPayload{}, nil, fmt.Errorf("empty llm response")
 	}
 	// Apply MaxToolsPerCall limit if model supports ProfiledModel
 	maxTools := 0
-	if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
+	if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
 		maxTools = pm.MaxToolsPerCall()
 	}
-	var toolCalls []contracts.ToolCall
+	var toolCalls []model.ToolCall
 	if len(resp.ToolCalls) > 0 {
 		toolCalls = filterToolCalls(resp.ToolCalls)
 		if maxTools > 0 && len(toolCalls) > maxTools {
@@ -154,7 +155,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	}
 	// Check repair strategy
 	repairStrategy := "heuristic-only"
-	if pm, ok := n.agent.Model.(contracts.ProfiledModel); ok {
+	if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
 		repairStrategy = pm.ToolRepairStrategy()
 	}
 	var repaired string
@@ -176,16 +177,16 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	if parsed.Tool != "" {
-		return parsed, []contracts.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
+		return parsed, []model.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
 	}
 	return parsed, nil, nil
 }
 
-func (n *reactThinkNode) repairDecision(ctx context.Context, tools []contracts.Tool, raw string, useToolCalling bool) (string, error) {
+func (n *reactThinkNode) repairDecision(ctx context.Context, tools []ports.Tool, raw string, useToolCalling bool) (string, error) {
 	schema := `Return ONLY valid JSON:
 {"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`
 	prompt := fmt.Sprintf("%s\nAllowed tools: %s\nOriginal response:\n%s", schema, strings.Join(toolNames(tools), ", "), raw)
-	resp, err := n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
+	resp, err := n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0,
 		MaxTokens:   256,
@@ -219,11 +220,11 @@ func textSuggestsPendingToolCall(text string) bool {
 	return strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `""`)
 }
 
-func filterToolCalls(calls []contracts.ToolCall) []contracts.ToolCall {
+func filterToolCalls(calls []model.ToolCall) []model.ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}
-	out := make([]contracts.ToolCall, 0, len(calls))
+	out := make([]model.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		name := strings.TrimSpace(call.Name)
 		if name == "" || strings.EqualFold(name, "none") {
@@ -405,7 +406,7 @@ func buildState(env *contextdata.Envelope, task *execution.Task) map[string]any 
 }
 
 // buildRuntimeContext assembles a prompt.RuntimeContext from the agent and task.
-func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []contracts.Tool) prompt.RuntimeContext {
+func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []ports.Tool) prompt.RuntimeContext {
 	caps := n.agent.Tools.AllCapabilities()
 	var agentSpec *agentspec.AgentRuntimeSpec
 	if n.agent != nil && n.agent.Config != nil {
@@ -436,7 +437,7 @@ func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []
 // When the registry is populated and the prompt resolves, it uses that.
 // Otherwise it falls back to a minimal inline prompt so the agent stays functional
 // before prompt files are authored.
-func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []contracts.Tool) string {
+func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []ports.Tool) string {
 	reg := n.agent.PromptRegistry
 	if reg != nil {
 		promptID := promptIDFromTask(n.task)
@@ -449,17 +450,17 @@ func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []contra
 }
 
 // resolveSystemPrompt returns the system prompt for chat-based iterations.
-func (n *reactThinkNode) resolveSystemPrompt(tools []contracts.Tool) string {
+func (n *reactThinkNode) resolveSystemPrompt(tools []ports.Tool) string {
 	return minimalReactSystemPrompt(tools, n.agent)
 }
 
 // ensureMessages seeds or extends the chat history for tool-calling iterations.
-func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contracts.Tool) []contracts.Message {
+func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []ports.Tool) []model.Message {
 	systemPrompt := n.resolveSystemPrompt(tools)
 	userPrompt := n.resolvePrompt(env, tools)
 	messages := getReactMessages(env)
 	if len(messages) == 0 {
-		messages = []contracts.Message{
+		messages = []model.Message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
 		}
@@ -467,9 +468,9 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []contr
 		if messages[0].Role == "system" {
 			messages[0].Content = systemPrompt
 		} else {
-			messages = append([]contracts.Message{{Role: "system", Content: systemPrompt}}, messages...)
+			messages = append([]model.Message{{Role: "system", Content: systemPrompt}}, messages...)
 		}
-		messages = append(messages, contracts.Message{Role: "user", Content: userPrompt})
+		messages = append(messages, model.Message{Role: "user", Content: userPrompt})
 	}
 	saveReactMessages(env, messages)
 	return messages
@@ -488,7 +489,7 @@ func promptIDFromTask(task *execution.Task) string {
 
 // minimalReactSystemPrompt is the inline fallback used when the registry has
 // no matching prompt.
-func minimalReactSystemPrompt(tools []contracts.Tool, agent *ReActAgent) string {
+func minimalReactSystemPrompt(tools []ports.Tool, agent *ReActAgent) string {
 	var lines []string
 	var hasLSP, hasAST bool
 	for _, tool := range tools {
@@ -528,7 +529,7 @@ Return ONLY structured JSON. No prose outside the JSON object.`, strings.Join(li
 }
 
 // minimalReactUserPrompt is the inline fallback prompt body.
-func minimalReactUserPrompt(task *execution.Task, tools []contracts.Tool) string {
+func minimalReactUserPrompt(task *execution.Task, tools []ports.Tool) string {
 	toolSection := frameworktools.RenderToolsToPrompt(tools)
 	instruction := ""
 	if task != nil {

@@ -6,9 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/htn/persistence"
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // envelopeGet retrieves a value from envelope working memory.

@@ -30,16 +30,16 @@ var TopLevelDomains = []string{
 
 // GoPackage represents a single Go package from `go list -json`.
 type GoPackage struct {
-	Dir        string   `json:"Dir"`
-	ImportPath string   `json:"ImportPath"`
-	Name       string   `json:"Name"`
-	Imports    []string `json:"Imports"`
-	TestImports []string `json:"TestImports"`
-	XTestImports []string `json:"XTestImports"`
-	ForTest    string   `json:"ForTest"`
-	OnlyTestGoFiles bool `json:"-"`
-	GoFiles    []string `json:"GoFiles"`
-	TestGoFiles []string `json:"TestGoFiles"`
+	Dir             string   `json:"Dir"`
+	ImportPath      string   `json:"ImportPath"`
+	Name            string   `json:"Name"`
+	Imports         []string `json:"Imports"`
+	TestImports     []string `json:"TestImports"`
+	XTestImports    []string `json:"XTestImports"`
+	ForTest         string   `json:"ForTest"`
+	OnlyTestGoFiles bool     `json:"-"`
+	GoFiles         []string `json:"GoFiles"`
+	TestGoFiles     []string `json:"TestGoFiles"`
 }
 
 // PackageDomain returns the top-level domain directory for a given import path.

@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // WorkspaceBuilder builds deterministic workspace fixtures.
@@ -116,27 +116,27 @@ func MixedLanguageWorkspace(basePath string) *WorkspaceBuilder {
 
 // ManifestBuilder builds deterministic manifest fixtures.
 type ManifestBuilder struct {
-	manifest *cfgload.AgentManifest
+	manifest *config.AgentManifest
 }
 
 // NewManifestBuilder creates a new manifest builder with defaults.
 func NewManifestBuilder() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &cfgload.AgentManifest{
+		manifest: &config.AgentManifest{
 			APIVersion: "relurpify/v1alpha1",
 			Kind:       "AgentManifest",
-			Metadata: cfgload.ManifestMetadata{
+			Metadata: config.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: cfgload.ManifestSpec{
+			Spec: config.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
-				Policy: &cfgload.ManifestPolicySpec{
-					Permissions: contracts.PermissionSet{
-						FileSystem: []contracts.FileSystemPermission{
-							{Action: contracts.FileSystemRead, Path: "${workspace}/**"},
-							{Action: contracts.FileSystemWrite, Path: "${workspace}/**"},
+				Policy: &config.ManifestPolicySpec{
+					Permissions: permissions.PermissionSet{
+						FileSystem: []permissions.FileSystemPermission{
+							{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
+							{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 						},
 					},
 				},
@@ -158,13 +158,13 @@ func (b *ManifestBuilder) WithVersion(version string) *ManifestBuilder {
 }
 
 // WithFileSystemPermission adds a filesystem permission.
-func (b *ManifestBuilder) WithFileSystemPermission(action contracts.FileSystemAction, path string) *ManifestBuilder {
+func (b *ManifestBuilder) WithFileSystemPermission(action permissions.FileSystemAction, path string) *ManifestBuilder {
 	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &cfgload.ManifestPolicySpec{}
+		b.manifest.Spec.Policy = &config.ManifestPolicySpec{}
 	}
 	b.manifest.Spec.Policy.Permissions.FileSystem = append(
 		b.manifest.Spec.Policy.Permissions.FileSystem,
-		contracts.FileSystemPermission{Action: action, Path: path},
+		permissions.FileSystemPermission{Action: action, Path: path},
 	)
 	return b
 }
@@ -172,11 +172,11 @@ func (b *ManifestBuilder) WithFileSystemPermission(action contracts.FileSystemAc
 // WithNetworkPermission adds a network permission.
 func (b *ManifestBuilder) WithNetworkPermission(direction, protocol, host string, port int) *ManifestBuilder {
 	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &cfgload.ManifestPolicySpec{}
+		b.manifest.Spec.Policy = &config.ManifestPolicySpec{}
 	}
 	b.manifest.Spec.Policy.Permissions.Network = append(
 		b.manifest.Spec.Policy.Permissions.Network,
-		contracts.NetworkPermission{Direction: direction, Protocol: protocol, Host: host, Port: port},
+		permissions.NetworkPermission{Direction: direction, Protocol: protocol, Host: host, Port: port},
 	)
 	return b
 }
@@ -193,11 +193,11 @@ func (b *ManifestBuilder) WithHITLRequired() *ManifestBuilder {
 }
 
 // Build returns the constructed manifest.
-func (b *ManifestBuilder) Build() *cfgload.AgentManifest {
+func (b *ManifestBuilder) Build() *config.AgentManifest {
 	if b == nil || b.manifest == nil {
 		return nil
 	}
-	clone, err := cfgload.CloneAgentManifest(b.manifest)
+	clone, err := config.CloneAgentManifest(b.manifest)
 	if err != nil {
 		return b.manifest
 	}
@@ -212,13 +212,13 @@ func ValidManifest() *ManifestBuilder {
 // InvalidManifestMissingAPIVersion returns a builder for an invalid manifest (missing apiVersion).
 func InvalidManifestMissingAPIVersion() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &cfgload.AgentManifest{
+		manifest: &config.AgentManifest{
 			Kind: "AgentManifest",
-			Metadata: cfgload.ManifestMetadata{
+			Metadata: config.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: cfgload.ManifestSpec{
+			Spec: config.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
 			},
@@ -229,13 +229,13 @@ func InvalidManifestMissingAPIVersion() *ManifestBuilder {
 // InvalidManifestMissingKind returns a builder for an invalid manifest (missing kind).
 func InvalidManifestMissingKind() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &cfgload.AgentManifest{
+		manifest: &config.AgentManifest{
 			APIVersion: "relurpify/v1alpha1",
-			Metadata: cfgload.ManifestMetadata{
+			Metadata: config.ManifestMetadata{
 				Name:    "test-agent",
 				Version: "1.0.0",
 			},
-			Spec: cfgload.ManifestSpec{
+			Spec: config.ManifestSpec{
 				Image:   "test-image:latest",
 				Runtime: "gvisor",
 			},
@@ -538,11 +538,11 @@ func NormalizeAuditRecords(records []policy.AuditRecord) []policy.AuditRecord {
 }
 
 // NormalizeFileSystemPermissions normalizes filesystem permissions for deterministic comparison.
-func NormalizeFileSystemPermissions(perms []contracts.FileSystemPermission) []contracts.FileSystemPermission {
+func NormalizeFileSystemPermissions(perms []permissions.FileSystemPermission) []permissions.FileSystemPermission {
 	if len(perms) == 0 {
 		return nil
 	}
-	normalized := make([]contracts.FileSystemPermission, len(perms))
+	normalized := make([]permissions.FileSystemPermission, len(perms))
 	copy(normalized, perms)
 	sort.SliceStable(normalized, func(i, j int) bool {
 		if normalized[i].Action != normalized[j].Action {
@@ -566,11 +566,11 @@ func NormalizeFileSystemPermissions(perms []contracts.FileSystemPermission) []co
 }
 
 // NormalizeNetworkPermissions normalizes network permissions for deterministic comparison.
-func NormalizeNetworkPermissions(perms []contracts.NetworkPermission) []contracts.NetworkPermission {
+func NormalizeNetworkPermissions(perms []permissions.NetworkPermission) []permissions.NetworkPermission {
 	if len(perms) == 0 {
 		return nil
 	}
-	normalized := make([]contracts.NetworkPermission, len(perms))
+	normalized := make([]permissions.NetworkPermission, len(perms))
 	copy(normalized, perms)
 	sort.SliceStable(normalized, func(i, j int) bool {
 		if normalized[i].Direction != normalized[j].Direction {

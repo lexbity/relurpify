@@ -9,7 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -22,12 +24,12 @@ func (t *RustWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Rust crate/workspace manifest for a file or directory."
 }
 func (t *RustWorkspaceDetectTool) Category() string { return "rust" }
-func (t *RustWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *RustWorkspaceDetectTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -42,7 +44,7 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]i
 	resolved = filepath.Clean(resolved)
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -50,9 +52,9 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]i
 	}
 	manifestPath, workspaceManifest := detectRustManifests(searchDir, t.BasePath)
 	if manifestPath == "" {
-		return &contracts.ToolResult{Success: false, Error: "no Cargo.toml found"}, nil
+		return &ports.ToolResult{Success: false, Error: "no Cargo.toml found"}, nil
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":               resolved,
@@ -63,16 +65,16 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]i
 	}, nil
 }
 func (t *RustWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *RustWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *RustWorkspaceDetectTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t *RustWorkspaceDetectTool) Tags() []string {
-	return []string{contracts.TagReadOnly, "lang:rust", "workspace-detect", "recovery"}
+	return []string{ports.TagReadOnly, "lang:rust", "workspace-detect", "recovery"}
 }
 
 type RustCargoTestTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewRustCargoTestTool(basePath string) *RustCargoTestTool {
@@ -84,17 +86,17 @@ func (t *RustCargoTestTool) Description() string {
 	return "Runs cargo test and returns structured Rust test results."
 }
 func (t *RustCargoTestTool) Category() string { return "rust" }
-func (t *RustCargoTestTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *RustCargoTestTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "test_name", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *RustCargoTestTool) SetCommandRunner(r contracts.CommandRunner) {
+func (t *RustCargoTestTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -130,25 +132,25 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interfa
 		"stdout":        stdout,
 		"stderr":        stderr,
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data:    data,
 	}, nil
 }
-func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *RustCargoTestTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *RustCargoTestTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoTestTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
 }
 
 type RustCargoCheckTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewRustCargoCheckTool(basePath string) *RustCargoCheckTool {
@@ -160,16 +162,16 @@ func (t *RustCargoCheckTool) Description() string {
 	return "Runs cargo check and returns structured Rust compile results."
 }
 func (t *RustCargoCheckTool) Category() string { return "rust" }
-func (t *RustCargoCheckTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *RustCargoCheckTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *RustCargoCheckTool) SetCommandRunner(r contracts.CommandRunner) {
+func (t *RustCargoCheckTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -193,7 +195,7 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interf
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizeRustCargoCheck(stdout, stderr, runResult.Success)
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data: map[string]interface{}{
@@ -206,19 +208,19 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interf
 		},
 	}, nil
 }
-func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool   { return t.runner != nil }
-func (t *RustCargoCheckTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
+func (t *RustCargoCheckTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoCheckTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:rust", "build", "verification", "diagnostics"}
+	return []string{ports.TagExecute, "lang:rust", "build", "verification", "diagnostics"}
 }
 
 type RustCargoMetadataTool struct {
 	BasePath string
-	runner   contracts.CommandRunner
+	runner   ports.CommandRunner
 }
 
 func NewRustCargoMetadataTool(basePath string) *RustCargoMetadataTool {
@@ -230,15 +232,15 @@ func (t *RustCargoMetadataTool) Description() string {
 	return "Runs cargo metadata and returns structured Rust workspace data."
 }
 func (t *RustCargoMetadataTool) Category() string { return "rust" }
-func (t *RustCargoMetadataTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *RustCargoMetadataTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *RustCargoMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
+func (t *RustCargoMetadataTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -264,7 +266,7 @@ func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]int
 	for key, value := range parsed {
 		data[key] = value
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
 		Data:    data,
@@ -273,13 +275,13 @@ func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]int
 func (t *RustCargoMetadataTool) IsAvailable(ctx context.Context) bool {
 	return t.runner != nil
 }
-func (t *RustCargoMetadataTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "cargo"}},
+func (t *RustCargoMetadataTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoMetadataTool) Tags() []string {
-	return []string{contracts.TagExecute, "lang:rust", "metadata", "recovery"}
+	return []string{ports.TagExecute, "lang:rust", "metadata", "recovery"}
 }
 
 type rustCargoSummary struct {
@@ -460,5 +462,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return contracts.NormalizeStringSlice(value)
+	return capability.NormalizeStringSlice(value)
 }

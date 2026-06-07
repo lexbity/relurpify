@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -18,13 +18,13 @@ type LanguageModel interface {
 
 // LLMOptions configures a single model invocation.
 type LLMOptions struct {
-	Model           string
-	Temperature     float64
-	MaxTokens       int
-	Stop            []string
-	TopP            float64
-	Stream          bool
-	StreamCallback  func(string)
+	Model          string
+	Temperature    float64
+	MaxTokens      int
+	Stop           []string
+	TopP           float64
+	Stream         bool
+	StreamCallback func(string)
 }
 
 // LLMResponse is the result of a model invocation.
@@ -74,25 +74,25 @@ const (
 
 // BackendCapabilities declares what a back-end supports.
 type BackendCapabilities struct {
-	NativeToolCalling  bool
-	Streaming          bool
-	Embeddings         bool
-	ModelListing       bool
-	BackendClass       BackendClass
-	UsageReporting     bool
+	NativeToolCalling    bool
+	Streaming            bool
+	Embeddings           bool
+	ModelListing         bool
+	BackendClass         BackendClass
+	UsageReporting       bool
 	ContextSizeDiscovery bool
 }
 
 // ModelProfile carries model-specific quirks and metadata for provider/backend selection.
 type ModelProfile struct {
-	Provider     string
-	Model        string
-	Pattern      string
-	ContextSize  int
-	ToolCalling  ModelToolCalling
-	Repair       ModelRepairConfig
-	Schema       ModelSchemaConfig
-	SourcePath   string
+	Provider    string
+	Model       string
+	Pattern     string
+	ContextSize int
+	ToolCalling ModelToolCalling
+	Repair      ModelRepairConfig
+	Schema      ModelSchemaConfig
+	SourcePath  string
 }
 
 // ModelToolCalling describes tool-calling capabilities.

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 

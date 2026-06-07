@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -190,7 +190,7 @@ func (s *BrowserService) fileScopePolicy() *sandbox.FileScopePolicy {
 	return s.fileScope
 }
 
-func (s *BrowserService) checkFileScope(action contracts.FileSystemAction, target string) error {
+func (s *BrowserService) checkFileScope(action permissions.FileSystemAction, target string) error {
 	scope := s.fileScopePolicy()
 	if scope == nil {
 		return nil
@@ -214,7 +214,7 @@ func (s *BrowserService) ensureSessionPaths(sessionID string) (browserSessionPat
 	paths := s.paths.session(sessionID)
 	for label, path := range paths.roots() {
 		if label == "metadata_file" || label == "log_file" {
-			if err := s.checkFileScope(contracts.FileSystemWrite, filepath.Dir(path)); err != nil {
+			if err := s.checkFileScope(permissions.FileSystemWrite, filepath.Dir(path)); err != nil {
 				return browserSessionPaths{}, fmt.Errorf("browser %s out of scope: %w", label, err)
 			}
 			continue
@@ -236,7 +236,7 @@ func (s *BrowserService) persistSessionMetadata(handle *browserSessionHandle) {
 	if strings.TrimSpace(handle.paths.metadataFile) == "" {
 		return
 	}
-	if err := s.checkFileScope(contracts.FileSystemWrite, handle.paths.metadataFile); err != nil {
+	if err := s.checkFileScope(permissions.FileSystemWrite, handle.paths.metadataFile); err != nil {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(handle.paths.metadataFile), 0o755); err != nil {

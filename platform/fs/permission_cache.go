@@ -3,11 +3,11 @@ package fs
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 type permissionCacheKey struct {
-	action contracts.FileSystemAction
+	action permissions.FileSystemAction
 	path   string
 }
 
@@ -16,7 +16,7 @@ type permissionCacheEntry struct {
 	err     error
 }
 
-type fileAccessChecker func(ctx context.Context, action contracts.FileSystemAction, path string) error
+type fileAccessChecker func(ctx context.Context, action permissions.FileSystemAction, path string) error
 
 type traversalPermissionCache struct {
 	check  fileAccessChecker
@@ -31,7 +31,7 @@ func newTraversalPermissionCache(checker FilePermissionChecker, agentID string) 
 	if checker == nil {
 		return nil
 	}
-	return newTraversalPermissionCacheWithChecker(func(ctx context.Context, action contracts.FileSystemAction, path string) error {
+	return newTraversalPermissionCacheWithChecker(func(ctx context.Context, action permissions.FileSystemAction, path string) error {
 		// Cache implementation would go here
 		return nil
 	})
@@ -48,7 +48,7 @@ func newTraversalPermissionCacheWithChecker(check fileAccessChecker) *traversalP
 	}
 }
 
-func (c *traversalPermissionCache) Check(ctx context.Context, action contracts.FileSystemAction, path string) error {
+func (c *traversalPermissionCache) Check(ctx context.Context, action permissions.FileSystemAction, path string) error {
 	if c == nil {
 		return nil
 	}

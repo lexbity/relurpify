@@ -1,6 +1,6 @@
 package rewoo
 
-import "codeburg.org/lexbit/relurpify/framework/contextstream"
+import "codeburg.org/lexbit/relurpify/context/contextstream"
 
 // StepOnFailure defines how executor failures are handled.
 type StepOnFailure string

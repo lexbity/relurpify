@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
@@ -43,9 +44,9 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
 		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"command": {
 					Type:        "string",
 					Description: "Test command to execute (e.g., 'go test ./...')",
@@ -61,9 +62,9 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 			},
 			Required: []string{"command"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if command executed successfully",
@@ -87,7 +88,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 				"failed_tests": {
 					Type:        "array",
 					Description: "List of failed test names",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "string",
 					},
 				},
@@ -97,7 +98,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 }
 
 // Invoke executes the test command and returns parsed results.
-func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	command, ok := stringArg(args, "command")
 	if !ok {
@@ -137,7 +138,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 	// Execute command
 	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success":      false,
@@ -163,7 +164,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 		passed = false
 	}
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: res.ExitCode == 0,
 		Data: map[string]interface{}{
 			"success":      res.ExitCode == 0,

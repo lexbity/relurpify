@@ -3,7 +3,7 @@ package main
 import (
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 type promptsCheck struct{}

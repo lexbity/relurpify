@@ -11,24 +11,26 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // Re-export contract types for local usage
 type (
-	LanguageModel       = contracts.LanguageModel
-	LLMOptions          = contracts.LLMOptions
-	LLMResponse         = contracts.LLMResponse
-	Message             = contracts.Message
-	LLMToolSpec         = contracts.LLMToolSpec
-	Schema              = contracts.Schema
-	BackendClass        = contracts.BackendClass
-	BackendCapabilities = contracts.BackendCapabilities
-	ModelProfile        = contracts.ModelProfile
+	LanguageModel       = model.LanguageModel
+	LLMOptions          = model.LLMOptions
+	LLMResponse         = model.LLMResponse
+	Message             = model.Message
+	LLMToolSpec         = ports.LLMToolSpec
+	Schema              = schemacoerce.Schema
+	BackendClass        = model.BackendClass
+	BackendCapabilities = model.BackendCapabilities
+	ModelProfile        = model.ModelProfile
 )
 
 const (
-	BackendClassTransport = contracts.BackendClassTransport
+	BackendClassTransport = model.BackendClassTransport
 )
 
 // Backend implements the managed backend facade for Ollama transports.

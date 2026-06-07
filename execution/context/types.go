@@ -3,31 +3,31 @@ package context
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // ContextPolicyBundle is the compiled runtime context policy.  It governs how
 // ingestion, persistence, retrieval, and the compiler treat context material.
 type ContextPolicyBundle struct {
-	Version               int                        `json:"version,omitempty"`
-	CompilationMode       CompilationMode            `json:"compilation_mode,omitempty"`
-	DefaultTrustClass     agentspec.TrustClass        `json:"default_trust_class,omitempty"`
-	Rankers               []RankerRef                `json:"rankers,omitempty"`
-	Scanners              []ScannerRef               `json:"scanners,omitempty"`
-	Summarizers           []SummarizerRef            `json:"summarizers,omitempty"`
-	Quota                 QuotaSpec                  `json:"quota,omitempty"`
-	RateLimit             RateLimitSpec              `json:"rate_limit,omitempty"`
-	TrustDemotedPolicy    TrustDemotedPolicy         `json:"trust_demoted_policy,omitempty"`
-	DegradedChunkPolicy   DegradedChunkPolicy        `json:"degraded_chunk_policy,omitempty"`
-	BudgetShortfallPolicy BudgetShortfallPolicy      `json:"budget_shortfall_policy,omitempty"`
-	SubstitutionPrefs     []SubstitutionPreference   `json:"substitution_prefs,omitempty"`
-	ContextAccessRules    []ContextAccessRule        `json:"context_access_rules,omitempty"`
-	SkillContributions    SkillContributions         `json:"skill_contributions,omitempty"`
+	Version               int                      `json:"version,omitempty"`
+	CompilationMode       CompilationMode          `json:"compilation_mode,omitempty"`
+	DefaultTrustClass     agentspec.TrustClass     `json:"default_trust_class,omitempty"`
+	Rankers               []RankerRef              `json:"rankers,omitempty"`
+	Scanners              []ScannerRef             `json:"scanners,omitempty"`
+	Summarizers           []SummarizerRef          `json:"summarizers,omitempty"`
+	Quota                 QuotaSpec                `json:"quota,omitempty"`
+	RateLimit             RateLimitSpec            `json:"rate_limit,omitempty"`
+	TrustDemotedPolicy    TrustDemotedPolicy       `json:"trust_demoted_policy,omitempty"`
+	DegradedChunkPolicy   DegradedChunkPolicy      `json:"degraded_chunk_policy,omitempty"`
+	BudgetShortfallPolicy BudgetShortfallPolicy    `json:"budget_shortfall_policy,omitempty"`
+	SubstitutionPrefs     []SubstitutionPreference `json:"substitution_prefs,omitempty"`
+	ContextAccessRules    []ContextAccessRule      `json:"context_access_rules,omitempty"`
+	SkillContributions    SkillContributions       `json:"skill_contributions,omitempty"`
 }
 
 // SkillContributions records what the skill system contributed.
 type SkillContributions struct {
-	AdmittedRankers  []string           `json:"admitted_rankers,omitempty"`
+	AdmittedRankers   []string           `json:"admitted_rankers,omitempty"`
 	ScannerSignatures []ScannerSignature `json:"scanner_signatures,omitempty"`
 	IngestionSources  []IngestionSource  `json:"ingestion_sources,omitempty"`
 }
@@ -77,10 +77,10 @@ type SummarizerRef struct {
 
 // QuotaSpec configures per-window context quotas.
 type QuotaSpec struct {
-	WindowSize        time.Duration `json:"window_size,string,omitempty"`
+	WindowSize         time.Duration `json:"window_size,string,omitempty"`
 	MaxChunksPerWindow int           `json:"max_chunks_per_window,omitempty"`
 	MaxTokensPerWindow int           `json:"max_tokens_per_window,omitempty"`
-	PrincipalPattern  string        `json:"principal_pattern,omitempty"`
+	PrincipalPattern   string        `json:"principal_pattern,omitempty"`
 }
 
 // RateLimitSpec configures per-second rate limiting.
@@ -118,8 +118,8 @@ const (
 
 // SubstitutionPreference declares a content-type substitution rule.
 type SubstitutionPreference struct {
-	SourceContentType string             `json:"source_content_type,omitempty"`
-	TargetContentType string             `json:"target_content_type,omitempty"`
+	SourceContentType string               `json:"source_content_type,omitempty"`
+	TargetContentType string               `json:"target_content_type,omitempty"`
 	Strategy          SubstitutionStrategy `json:"strategy,omitempty"`
 }
 

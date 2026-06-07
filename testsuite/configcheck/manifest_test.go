@@ -3,16 +3,18 @@ package configcheck
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 )
 
 func TestDeriveBasicSubprocess(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name: "cli_echo",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
 		},
 	}
 	risk, effect := DeriveExpectedCapability(m)
@@ -21,12 +23,12 @@ func TestDeriveBasicSubprocess(t *testing.T) {
 }
 
 func TestDeriveNetworkTool(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name: "cli_curl",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{NetworkAccess: true},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &toolcapabilities.ToolManifestSandbox{NetworkAccess: true},
 		},
 	}
 	risk, effect := DeriveExpectedCapability(m)
@@ -37,12 +39,12 @@ func TestDeriveNetworkTool(t *testing.T) {
 }
 
 func TestDeriveFileopsTool(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name:   "cli_rg",
 		Family: "fileops",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"rg"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"rg"}},
 		},
 	}
 	_, effect := DeriveExpectedCapability(m)
@@ -50,12 +52,12 @@ func TestDeriveFileopsTool(t *testing.T) {
 }
 
 func TestDeriveMkdirTool(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name:   "cli_mkdir",
 		Family: "fileops",
-		Execution: contracts.ToolManifestExecution{
-			Backend:     contracts.ToolBackendSubprocess,
-			Command:     &contracts.ToolManifestCommand{Base: []string{"mkdir"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend:     ports.ToolBackendSubprocess,
+			Command:     &toolcapabilities.ToolManifestCommand{Base: []string{"mkdir"}},
 			DefaultArgs: []string{"-p"},
 		},
 	}
@@ -64,13 +66,13 @@ func TestDeriveMkdirTool(t *testing.T) {
 }
 
 func TestCheckManifestPassesWhenDeclared(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name: "cli_rg",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"rg"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"rg"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"process_spawn"},
 		},
@@ -80,14 +82,14 @@ func TestCheckManifestPassesWhenDeclared(t *testing.T) {
 }
 
 func TestCheckManifestFailsOnMissingNetwork(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name: "cli_curl",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{NetworkAccess: true},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &toolcapabilities.ToolManifestSandbox{NetworkAccess: true},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"process_spawn"},
 		},
@@ -98,14 +100,14 @@ func TestCheckManifestFailsOnMissingNetwork(t *testing.T) {
 }
 
 func TestCheckManifestFailsOnMissingFilesystemRead(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name:   "cli_rg",
 		Family: "fileops",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"rg"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"rg"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"process_spawn"},
 		},
@@ -116,15 +118,15 @@ func TestCheckManifestFailsOnMissingFilesystemRead(t *testing.T) {
 }
 
 func TestCheckAllManifests(t *testing.T) {
-	manifests := []*contracts.ToolManifest{
+	manifests := []*toolcapabilities.ToolManifest{
 		{
 			Name:        "good_tool",
 			Description: "ok",
-			Execution: contracts.ToolManifestExecution{
-				Backend: contracts.ToolBackendSubprocess,
-				Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+			Execution: toolcapabilities.ToolManifestExecution{
+				Backend: ports.ToolBackendSubprocess,
+				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
 			},
-			Capability: contracts.ToolManifestCapability{
+			Capability: toolcapabilities.ToolManifestCapability{
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"process_spawn"},
 			},
@@ -132,12 +134,12 @@ func TestCheckAllManifests(t *testing.T) {
 		{
 			Name:        "bad_tool",
 			Description: "missing effect",
-			Execution: contracts.ToolManifestExecution{
-				Backend: contracts.ToolBackendSubprocess,
-				Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-				Sandbox: &contracts.ToolManifestSandbox{NetworkAccess: true},
+			Execution: toolcapabilities.ToolManifestExecution{
+				Backend: ports.ToolBackendSubprocess,
+				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"curl"}},
+				Sandbox: &toolcapabilities.ToolManifestSandbox{NetworkAccess: true},
 			},
-			Capability: contracts.ToolManifestCapability{
+			Capability: toolcapabilities.ToolManifestCapability{
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"process_spawn"},
 			},
@@ -150,13 +152,13 @@ func TestCheckAllManifests(t *testing.T) {
 }
 
 func TestCheckManifestSkipsGoNative(t *testing.T) {
-	m := contracts.ToolManifest{
+	m := toolcapabilities.ToolManifest{
 		Name: "go_test",
-		Execution: contracts.ToolManifestExecution{
-			Backend:        contracts.ToolBackendGoNative,
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend:        ports.ToolBackendGoNative,
 			Implementation: "go_test",
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"process_spawn"},
 		},

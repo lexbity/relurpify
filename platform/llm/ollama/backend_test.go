@@ -9,9 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 )
 
 func TestBackend_ConformanceSuite(t *testing.T) {
@@ -89,7 +91,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Generate: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
+				Model() model.LanguageModel
 			}).Model().Generate(context.Background(), "hello", nil)
 			if err != nil {
 				return "", err
@@ -98,8 +100,8 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Chat: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().Chat(context.Background(), []contracts.Message{
+				Model() model.LanguageModel
+			}).Model().Chat(context.Background(), []model.Message{
 				{Role: "system", Content: "be concise"},
 				{Role: "user", Content: "ping"},
 			}, nil)
@@ -110,14 +112,14 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		ChatWithToolsNative: func(backend any) error {
 			_, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
+				Model() model.LanguageModel
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
 			return err
 		},
 		ChatWithToolsFallback: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
+				Model() model.LanguageModel
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
 			if err != nil {
 				return "", err
 			}
@@ -203,7 +205,7 @@ func TestBackend_Capabilities(t *testing.T) {
 	require.True(t, caps.ModelListing)
 	require.True(t, caps.UsageReporting)
 	require.True(t, caps.ContextSizeDiscovery)
-	require.Equal(t, contracts.BackendClassTransport, caps.BackendClass)
+	require.Equal(t, model.BackendClassTransport, caps.BackendClass)
 }
 
 func TestBackend_ModelContextSize_ProfileOverride(t *testing.T) {
@@ -245,7 +247,7 @@ func TestBackend_Chat_RoundTrip(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	resp, err := backend.Model().Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "response", resp.Text)
 }
@@ -261,7 +263,7 @@ func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "")
-	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, nil)
+	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
 }
@@ -280,7 +282,7 @@ func TestBackend_Streaming(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
 	var got strings.Builder
-	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, &contracts.LLMOptions{
+	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, &model.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)

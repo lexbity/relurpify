@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // SkipAvailabilityProbe disables the shell-based availability check. Prepared
@@ -19,7 +21,7 @@ var SkipAvailabilityProbe bool
 type GitCommandTool struct {
 	RepoPath string
 	Command  string
-	Runner   contracts.CommandRunner
+	Runner   ports.CommandRunner
 }
 
 // PermissionSetter allows tools to receive permission configuration.
@@ -32,7 +34,7 @@ func (t *GitCommandTool) SetPermissionManager(manager interface{}, agentID strin
 
 func (t *GitCommandTool) SetAgentSpec(spec interface{}, agentID string) {}
 
-func (t *GitCommandTool) SetCommandRunner(runner contracts.CommandRunner) {
+func (t *GitCommandTool) SetCommandRunner(runner ports.CommandRunner) {
 	t.Runner = runner
 }
 
@@ -57,32 +59,32 @@ func (t *GitCommandTool) Description() string {
 
 func (t *GitCommandTool) Category() string { return "git" }
 
-func (t *GitCommandTool) Parameters() []contracts.ToolParameter {
+func (t *GitCommandTool) Parameters() []ports.ToolParameter {
 	switch t.Command {
 	case "history":
-		return []contracts.ToolParameter{
+		return []ports.ToolParameter{
 			{Name: "file", Type: "string", Required: true},
 			{Name: "limit", Type: "int", Required: false, Default: 5},
 		}
 	case "branch":
-		return []contracts.ToolParameter{{Name: "name", Type: "string", Required: true}}
+		return []ports.ToolParameter{{Name: "name", Type: "string", Required: true}}
 	case "commit":
-		return []contracts.ToolParameter{
+		return []ports.ToolParameter{
 			{Name: "message", Type: "string", Required: true},
 			{Name: "files", Type: "array", Required: false},
 		}
 	case "blame":
-		return []contracts.ToolParameter{
+		return []ports.ToolParameter{
 			{Name: "file", Type: "string", Required: true},
 			{Name: "start", Type: "int", Required: false, Default: 1},
 			{Name: "end", Type: "int", Required: false, Default: 1},
 		}
 	default:
-		return []contracts.ToolParameter{}
+		return []ports.ToolParameter{}
 	}
 }
 
-func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if !t.IsAvailable(ctx) {
 		return nil, fmt.Errorf("git repository not detected")
 	}
@@ -101,7 +103,7 @@ func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{
 		return t.runGit(ctx, []string{"checkout", "-b", name})
 	case "commit":
 		message := fmt.Sprint(args["message"])
-		files, err := contracts.NormalizeStringSlice(args["files"])
+		files, err := capability.NormalizeStringSlice(args["files"])
 		if err != nil {
 			return nil, err
 		}
@@ -150,11 +152,11 @@ func toInt(value interface{}) int {
 	}
 }
 
-func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*contracts.ToolResult, error) {
+func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*ports.ToolResult, error) {
 	if t.Runner == nil {
 		return nil, fmt.Errorf("command runner missing for git tool")
 	}
-	res, err := t.Runner.Run(ctx, contracts.CommandRequest{
+	res, err := t.Runner.Run(ctx, ports.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    append([]string{"git"}, args...),
 		Timeout: 30 * time.Second,
@@ -167,9 +169,9 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*contracts.
 		if msg == "" {
 			msg = "exit code " + strconv.Itoa(res.ExitCode)
 		}
-		return &contracts.ToolResult{Success: false, Data: map[string]interface{}{"exit_code": res.ExitCode, "stdout_ref": res.StdoutRef, "stderr_ref": res.StderrRef}, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
+		return &ports.ToolResult{Success: false, Data: map[string]interface{}{"exit_code": res.ExitCode, "stdout_ref": res.StdoutRef, "stderr_ref": res.StderrRef}, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"output":     res.Stdout,
@@ -189,7 +191,7 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
 	if t.Runner == nil {
 		return false
 	}
-	res, err := t.Runner.Run(ctx, contracts.CommandRequest{
+	res, err := t.Runner.Run(ctx, ports.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    []string{"git", "rev-parse", "--is-inside-work-tree"},
 		Timeout: 5 * time.Second,
@@ -197,15 +199,15 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
 	return err == nil && res != nil && res.ExitCode == 0
 }
 
-func (t *GitCommandTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *GitCommandTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 
 func (t *GitCommandTool) Tags() []string {
 	switch t.Command {
 	case "diff", "history", "blame":
-		return []string{contracts.TagReadOnly}
+		return []string{ports.TagReadOnly}
 	default:
-		return []string{contracts.TagExecute, contracts.TagDestructive}
+		return []string{ports.TagExecute, ports.TagDestructive}
 	}
 }

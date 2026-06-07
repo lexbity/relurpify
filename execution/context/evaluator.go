@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
@@ -121,10 +121,10 @@ func trustClassRank(tc agentspec.TrustClass) int {
 }
 
 type quotaCounter struct {
-	mu           sync.Mutex
-	chunksUsed   int
-	tokensUsed   int
-	lastReset    time.Time
+	mu         sync.Mutex
+	chunksUsed int
+	tokensUsed int
+	lastReset  time.Time
 }
 
 func (qc *quotaCounter) chunksRemaining(maxChunks int) int {

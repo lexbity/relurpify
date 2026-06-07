@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	tea "github.com/charmbracelet/bubbletea"
+
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	tea "github.com/charmbracelet/bubbletea"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type ExportOptions struct {
@@ -27,10 +28,10 @@ type ExportOptions struct {
 }
 
 type TelemetryExport struct {
-	Path      string       `json:"path,omitempty"`
+	Path      string            `json:"path,omitempty"`
 	Events    []telemetry.Event `json:"events,omitempty"`
-	Truncated bool         `json:"truncated,omitempty"`
-	Error     string       `json:"error,omitempty"`
+	Truncated bool              `json:"truncated,omitempty"`
+	Error     string            `json:"error,omitempty"`
 }
 
 type SessionExport struct {
@@ -83,7 +84,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 			root = "."
 		}
 		base := "session-" + time.Now().Format("20060102-150405")
-		outPath = filepath.Join(cfgload.New(root).ExportsDir(), base+"."+format)
+		outPath = filepath.Join(config.New(root).ExportsDir(), base+"."+format)
 	}
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return "", err

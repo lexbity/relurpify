@@ -15,7 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type TapeMode string
@@ -147,14 +148,14 @@ func (t *TapeModel) ConfigureHeader(header TapeHeader) error {
 	return nil
 }
 
-func (t *TapeModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (t *TapeModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	req := tapeRequest{Prompt: prompt, Options: options}
-	return t.roundTrip(ctx, "generate", req, func() (*contracts.LLMResponse, error) {
+	return t.roundTrip(ctx, "generate", req, func() (*model.LLMResponse, error) {
 		return t.inner.Generate(ctx, prompt, options)
 	})
 }
 
-func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
+func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	req := tapeRequest{Prompt: prompt, Options: options}
 	fp := fingerprint("generate_stream", req)
 	if t.mode == TapeReplay {
@@ -202,31 +203,31 @@ func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *
 			Kind:        "generate_stream",
 			Fingerprint: fp,
 			Request:     req,
-			Response:    &contracts.LLMResponse{Text: buf, FinishReason: "stream"},
+			Response:    &model.LLMResponse{Text: buf, FinishReason: "stream"},
 		})
 	}()
 	return out, nil
 }
 
-func (t *TapeModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (t *TapeModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	req := tapeRequest{Messages: messages, Options: options}
-	return t.roundTrip(ctx, "chat", req, func() (*contracts.LLMResponse, error) {
+	return t.roundTrip(ctx, "chat", req, func() (*model.LLMResponse, error) {
 		return t.inner.Chat(ctx, messages, options)
 	})
 }
 
-func (t *TapeModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (t *TapeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name)
 	}
 	req := tapeRequest{Messages: messages, ToolNames: names, Options: options}
-	return t.roundTrip(ctx, "chat_with_tools", req, func() (*contracts.LLMResponse, error) {
+	return t.roundTrip(ctx, "chat_with_tools", req, func() (*model.LLMResponse, error) {
 		return t.inner.ChatWithTools(ctx, messages, tools, options)
 	})
 }
 
-func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest, call func() (*contracts.LLMResponse, error)) (*contracts.LLMResponse, error) {
+func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest, call func() (*model.LLMResponse, error)) (*model.LLMResponse, error) {
 	fp := fingerprint(kind, req)
 	if t.mode == TapeReplay {
 		if err := t.validateFirstReplayRequest(kind, req); err != nil {
@@ -240,7 +241,7 @@ func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest,
 			return nil, errors.New(entry.Error)
 		}
 		if entry.Response == nil {
-			return &contracts.LLMResponse{}, nil
+			return &model.LLMResponse{}, nil
 		}
 		return entry.Response, nil
 	}

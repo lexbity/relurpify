@@ -8,8 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 )
 
-// MatchGlob is defined locally to avoid importing platform/contracts.
-
 // NewProfileRegistry creates an empty profile registry.
 func NewProfileRegistry() *ProfileRegistry {
 	return &ProfileRegistry{}
@@ -281,6 +279,12 @@ func matchGlob(pattern, value string) bool {
 		idx += pos + len(part)
 	}
 	return true
+}
+
+type ProviderRegistry struct{}
+
+func NewProviderRegistry(providers any) *ProviderRegistry {
+	return &ProviderRegistry{}
 }
 
 func isDefaultProfileFile(path string) bool {

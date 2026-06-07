@@ -6,15 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type stubManagedBackend struct {
-	model contracts.LanguageModel
+	model model.LanguageModel
 }
 
-func (s *stubManagedBackend) Model() contracts.LanguageModel {
+func (s *stubManagedBackend) Model() model.LanguageModel {
 	return s.model
 }
 
@@ -22,8 +24,8 @@ func (s *stubManagedBackend) Embedder() Embedder {
 	return nil
 }
 
-func (s *stubManagedBackend) Capabilities() contracts.BackendCapabilities {
-	return contracts.BackendCapabilities{}
+func (s *stubManagedBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{}
 }
 
 func (s *stubManagedBackend) ModelContextSize(context.Context) (int, error) {
@@ -54,7 +56,7 @@ func (s *stubManagedBackend) Reset(context.Context, string) error {
 	return nil
 }
 
-func (s *stubManagedBackend) WithSession(string) contracts.LanguageModel {
+func (s *stubManagedBackend) WithSession(string) model.LanguageModel {
 	return s.model
 }
 
@@ -66,13 +68,13 @@ func (s *stubManagedBackend) ActiveSessions(context.Context) ([]string, error) {
 	return nil, nil
 }
 
-func (s *stubManagedBackend) ChatTokenStream(context.Context, []contracts.Message, *contracts.LLMOptions) (<-chan Token, error) {
+func (s *stubManagedBackend) ChatTokenStream(context.Context, []model.Message, *model.LLMOptions) (<-chan Token, error) {
 	ch := make(chan Token)
 	close(ch)
 	return ch, nil
 }
 
-func (s *stubManagedBackend) ChatBatch(context.Context, []BatchRequest, *contracts.LLMOptions) ([]*contracts.LLMResponse, error) {
+func (s *stubManagedBackend) ChatBatch(context.Context, []BatchRequest, *model.LLMOptions) ([]*model.LLMResponse, error) {
 	return nil, nil
 }
 
@@ -102,22 +104,22 @@ func (s *stubManagedBackend) ErrorHistory() []BackendError {
 
 type stubLanguageModel struct{}
 
-func (stubLanguageModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (stubLanguageModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (stubLanguageModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (stubLanguageModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubLanguageModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (stubLanguageModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (stubLanguageModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "ok"}, nil
+func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
 func TestManagedBackendInterfaceCompleteness(t *testing.T) {
@@ -147,13 +149,13 @@ func TestOptionalInterfaceTypeAssertions(t *testing.T) {
 }
 
 func TestBackendCapabilities_Defaults(t *testing.T) {
-	var caps contracts.BackendCapabilities
+	var caps model.BackendCapabilities
 
 	require.False(t, caps.NativeToolCalling)
 	require.False(t, caps.Streaming)
 	require.False(t, caps.Embeddings)
 	require.False(t, caps.ModelListing)
-	require.Equal(t, contracts.BackendClass(""), caps.BackendClass)
+	require.Equal(t, model.BackendClass(""), caps.BackendClass)
 }
 
 func TestProviderConfig_Validate(t *testing.T) {

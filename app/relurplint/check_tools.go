@@ -3,9 +3,9 @@ package main
 import (
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/testsuite/configcheck"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type toolsCheck struct{}
@@ -17,7 +17,7 @@ func init() {
 func (c toolsCheck) Name() string { return "tools" }
 
 func (c toolsCheck) Run(workspace string) []Diagnostic {
-	report := cfgload.ValidateWorkspaceTree(workspace)
+	report := config.ValidateWorkspaceTree(workspace)
 
 	var diags []Diagnostic
 	for _, issue := range report.Issues {
@@ -42,7 +42,7 @@ func (c toolsCheck) Run(workspace string) []Diagnostic {
 
 func runSEC2Check(workspace string) []Diagnostic {
 	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools")
-	manifests, err := cfgload.LoadToolManifests(toolsDir)
+	manifests, err := config.LoadToolManifests(toolsDir)
 	if err != nil {
 		return nil
 	}
@@ -67,7 +67,7 @@ func runSEC2Check(workspace string) []Diagnostic {
 	return diags
 }
 
-func manifestSourcePath(manifests []*contracts.ToolManifest, name string) string {
+func manifestSourcePath(manifests []*toolcapabilities.ToolManifest, name string) string {
 	for _, m := range manifests {
 		if m != nil && m.Name == name && m.SourcePath != "" {
 			rel, err := filepath.Rel(filepath.Dir(m.SourcePath)+"/..", m.SourcePath)

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -33,7 +33,7 @@ func TestAllowDecisionAudit(t *testing.T) {
 
 	// Perform an allowed file access operation
 	ctx := context.Background()
-	err := env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testPath)
+	err := env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
 	if err != nil {
 		t.Fatalf("expected file access to be allowed, got error: %v", err)
 	}
@@ -53,8 +53,8 @@ func TestAllowDecisionAudit(t *testing.T) {
 	}
 
 	// Assert the evaluated tool/resource is present
-	if lastRecord.Type != string(contracts.PermissionTypeFilesystem) {
-		t.Errorf("audit record Type mismatch: got %s, want %s", lastRecord.Type, contracts.PermissionTypeFilesystem)
+	if lastRecord.Type != string(permissions.PermissionTypeFilesystem) {
+		t.Errorf("audit record Type mismatch: got %s, want %s", lastRecord.Type, permissions.PermissionTypeFilesystem)
 	}
 
 	// Assert the final action is "granted"
@@ -63,8 +63,8 @@ func TestAllowDecisionAudit(t *testing.T) {
 	}
 
 	// Assert the action field reflects the file access operation
-	if lastRecord.Action != string(contracts.FileSystemRead) {
-		t.Errorf("audit record Action mismatch: got %s, want %s", lastRecord.Action, contracts.FileSystemRead)
+	if lastRecord.Action != string(permissions.FileSystemRead) {
+		t.Errorf("audit record Action mismatch: got %s, want %s", lastRecord.Action, permissions.FileSystemRead)
 	}
 
 	// Assert correlation ID is set for request/decision tracking
@@ -94,11 +94,11 @@ func TestDenyDecisionAudit(t *testing.T) {
 
 	// Perform a denied file access operation
 	ctx := context.Background()
-	err := env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, outsidePath)
+	err := env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, outsidePath)
 	if err == nil {
 		t.Fatal("expected file access to be denied, got no error")
 	}
-	var deniedErr *contracts.PermissionDeniedError
+	var deniedErr *permissions.PermissionDeniedError
 	if !errors.As(err, &deniedErr) {
 		t.Fatalf("expected PermissionDeniedError, got %T: %v", err, err)
 	}
@@ -120,8 +120,8 @@ func TestDenyDecisionAudit(t *testing.T) {
 	}
 
 	// Assert the evaluated tool/resource is present
-	if record.Type != string(contracts.PermissionTypeFilesystem) {
-		t.Errorf("audit record Type mismatch: got %s, want %s", record.Type, contracts.PermissionTypeFilesystem)
+	if record.Type != string(permissions.PermissionTypeFilesystem) {
+		t.Errorf("audit record Type mismatch: got %s, want %s", record.Type, permissions.PermissionTypeFilesystem)
 	}
 
 	// Assert the final action is "denied" (distinguishable from allow)
@@ -130,8 +130,8 @@ func TestDenyDecisionAudit(t *testing.T) {
 	}
 
 	// Assert the action field reflects the denied operation
-	if record.Action != string(contracts.FileSystemRead) {
-		t.Errorf("audit record Action mismatch: got %s, want %s", record.Action, contracts.FileSystemRead)
+	if record.Action != string(permissions.FileSystemRead) {
+		t.Errorf("audit record Action mismatch: got %s, want %s", record.Action, permissions.FileSystemRead)
 	}
 
 	// Assert metadata includes the denial reason
@@ -160,8 +160,8 @@ func TestHITLAudit(t *testing.T) {
 		grants: []*authorization.PermissionGrant{
 			{
 				ID: "grant-1",
-				Permission: contracts.PermissionDescriptor{
-					Type:     contracts.PermissionTypeNetwork,
+				Permission: permissions.PermissionDescriptor{
+					Type:     permissions.PermissionTypeNetwork,
 					Action:   "net:egress:tcp",
 					Resource: "api.service.local:443",
 				},
@@ -173,8 +173,8 @@ func TestHITLAudit(t *testing.T) {
 	}
 
 	// Create permission manager with HITL provider
-	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
-	perms.Network = []contracts.NetworkPermission{
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
+	perms.Network = []permissions.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
 	permManager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, hitl)
@@ -210,8 +210,8 @@ func TestHITLAudit(t *testing.T) {
 	}
 
 	// Assert the type is network permission
-	if record.Type != string(contracts.PermissionTypeNetwork) {
-		t.Errorf("audit record Type mismatch: got %s, want %s", record.Type, contracts.PermissionTypeNetwork)
+	if record.Type != string(permissions.PermissionTypeNetwork) {
+		t.Errorf("audit record Type mismatch: got %s, want %s", record.Type, permissions.PermissionTypeNetwork)
 	}
 
 	// Assert the result is "granted" (HITL was approved)
@@ -248,7 +248,7 @@ func TestRequestDecisionCorrelation(t *testing.T) {
 
 	// Perform a file access operation
 	ctx := context.Background()
-	action := contracts.FileSystemRead
+	action := permissions.FileSystemRead
 	err := env.PermissionManager.CheckFileAccess(ctx, agentID, action, testPath)
 	if err != nil {
 		t.Fatalf("expected file access to be allowed, got error: %v", err)
@@ -283,8 +283,8 @@ func TestRequestDecisionCorrelation(t *testing.T) {
 	}
 
 	// Assert type matches the permission type
-	if record.Type != string(contracts.PermissionTypeFilesystem) {
-		t.Errorf("permission type not captured: got %s, want %s", record.Type, contracts.PermissionTypeFilesystem)
+	if record.Type != string(permissions.PermissionTypeFilesystem) {
+		t.Errorf("permission type not captured: got %s, want %s", record.Type, permissions.PermissionTypeFilesystem)
 	}
 }
 
@@ -304,7 +304,7 @@ func TestAuditRecordDeterminism(t *testing.T) {
 	// Perform first operation
 	env.AuditSink.Clear()
 	ctx := context.Background()
-	err := env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testPath)
+	err := env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
 	if err != nil {
 		t.Fatalf("first operation failed: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestAuditRecordDeterminism(t *testing.T) {
 
 	// Perform second operation with identical inputs
 	env.AuditSink.Clear()
-	err = env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testPath)
+	err = env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
 	if err != nil {
 		t.Fatalf("second operation failed: %v", err)
 	}
@@ -364,10 +364,10 @@ func TestAuditQueryFiltering(t *testing.T) {
 	ctx := context.Background()
 
 	// Perform operations for test-agent
-	env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testPath)
+	env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
 
 	// Perform operations for other-agent
-	env.PermissionManager.CheckFileAccess(ctx, otherAgentID, contracts.FileSystemRead, testPath)
+	env.PermissionManager.CheckFileAccess(ctx, otherAgentID, permissions.FileSystemRead, testPath)
 
 	// Query by agent ID
 	filter := policy.AuditQuery{AgentID: agentID}
@@ -393,7 +393,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 	}
 
 	// Query by type
-	filter = policy.AuditQuery{Type: string(contracts.PermissionTypeFilesystem)}
+	filter = policy.AuditQuery{Type: string(permissions.PermissionTypeFilesystem)}
 	records, err = env.AuditSink.Query(ctx, filter)
 	if err != nil {
 		t.Fatalf("query failed: %v", err)
@@ -415,7 +415,7 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 	env.AuditSink.Clear()
 	ctx := context.Background()
 	denyPath := "/etc/passwd"
-	if err := env.PermissionManager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, denyPath); err == nil {
+	if err := env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, denyPath); err == nil {
 		t.Fatal("expected direct deny path to fail")
 	}
 	denyRecords := env.AuditSink.Records()
@@ -425,8 +425,8 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 		grants: []*authorization.PermissionGrant{
 			{
 				ID: "grant-1",
-				Permission: contracts.PermissionDescriptor{
-					Type:     contracts.PermissionTypeNetwork,
+				Permission: permissions.PermissionDescriptor{
+					Type:     permissions.PermissionTypeNetwork,
 					Action:   "net:egress:tcp",
 					Resource: "api.service.local:443",
 				},
@@ -436,8 +436,8 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 			},
 		},
 	}
-	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
-	perms.Network = []contracts.NetworkPermission{
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
+	perms.Network = []permissions.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
 	permManager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, hitl)

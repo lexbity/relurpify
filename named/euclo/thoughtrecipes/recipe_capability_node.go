@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // RecipeCapabilityNode is a graph node that registers a compiled thought recipe
@@ -87,22 +87,22 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextda
 	}
 }
 
-func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.plan == nil {
-		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
+		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
 	}
 	graph, err := BuildThoughtRecipeGraph(h.plan, h.env, nil)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
+		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
 	}
 	result, err := graph.Execute(ctx, env)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execute: %w", h.capabilityID, err)
+		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execute: %w", h.capabilityID, err)
 	}
 	success := result != nil && result.Success
 	data := map[string]any{}
 	if result != nil && result.Data != nil {
 		data = execution.ResultFields(result.Data)
 	}
-	return &contracts.CapabilityExecutionResult{Success: success, Data: data}, nil
+	return &ports.CapabilityExecutionResult{Success: success, Data: data}, nil
 }

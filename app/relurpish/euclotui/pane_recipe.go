@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // TabRecipe is the tab identifier for the Recipe/Workshop pane.
@@ -240,5 +241,3 @@ func statusGlyphForPane(status surface.StepStatus) string {
 		return "○"
 	}
 }
-
-

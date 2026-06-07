@@ -1,8 +1,8 @@
 package ayenitd
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
 
 // openKnowledgeStore creates a new ChunkStore backed by the graphdb engine.

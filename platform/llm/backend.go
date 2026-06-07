@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // Re-export contract types for local usage
 type (
-	LanguageModel       = contracts.LanguageModel
-	BackendCapabilities = contracts.BackendCapabilities
-	ModelProfile        = contracts.ModelProfile
+	LanguageModel       = model.LanguageModel
+	BackendCapabilities = model.BackendCapabilities
+	ModelProfile        = model.ModelProfile
 )
 
 // Embedder produces dense vector representations of text.

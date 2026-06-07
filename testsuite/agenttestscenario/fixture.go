@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 

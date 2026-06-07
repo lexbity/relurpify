@@ -16,7 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // spillWriter replaces the old capped-buffer pattern. It records all bytes
@@ -96,7 +97,7 @@ func NewRunner(backend *Backend) (*Runner, error) {
 }
 
 // Run executes the command via `docker run`.
-func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	if r == nil || r.backend == nil {
 		return nil, errors.New("docker runner missing backend")
 	}
@@ -134,9 +135,9 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 		args = append(args, "-v", mount)
 	}
 	// Resource limits from CommandRequest (defaults applied from contracts).
-	args = append(args, "--memory", strconv.FormatInt(contracts.MemoryBytesOrDefault(req.MemoryBytes), 10))
-	args = append(args, "--pids-limit", strconv.FormatInt(contracts.PidsLimitOrDefault(req.PidsLimit), 10))
-	args = append(args, "--cpus", strconv.FormatFloat(contracts.CPUsOrDefault(req.CPUs), 'f', -1, 64))
+	args = append(args, "--memory", strconv.FormatInt(sandbox.MemoryBytesOrDefault(req.MemoryBytes), 10))
+	args = append(args, "--pids-limit", strconv.FormatInt(sandbox.PidsLimitOrDefault(req.PidsLimit), 10))
+	args = append(args, "--cpus", strconv.FormatFloat(sandbox.CPUsOrDefault(req.CPUs), 'f', -1, 64))
 	for _, env := range req.Env {
 		if env == "" {
 			continue
@@ -167,7 +168,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	start := time.Now()
 	cmd := exec.Command(dockerPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	ceiling := contracts.OutputCeilingOrDefault(req.OutputCeiling)
+	ceiling := sandbox.OutputCeilingOrDefault(req.OutputCeiling)
 	stdoutBuf := newSpillWriter(ceiling)
 	stderrBuf := newSpillWriter(ceiling)
 	cmd.Stdout = stdoutBuf
@@ -183,7 +184,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 	// remove the container by name instead of killing the client's process group.
 	var tornDown atomic.Bool
 	var oomKilled atomic.Bool
-	grace := contracts.GracePeriodOrDefault(req.GracePeriod)
+	grace := sandbox.GracePeriodOrDefault(req.GracePeriod)
 	teardownCtx, teardownCancel := context.WithTimeout(context.Background(), grace+10*time.Second)
 	defer teardownCancel()
 	go func() {
@@ -228,7 +229,7 @@ func (r *Runner) Run(ctx context.Context, req contracts.CommandRequest) (*contra
 
 	err = cmd.Wait()
 	close(ceilingDone)
-	res := contracts.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
+	res := sandbox.NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
 	if oomKilled.Load() {
 		res.OOMKilled = true
 		res.TornDown = true

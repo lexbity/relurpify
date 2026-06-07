@@ -3,20 +3,21 @@ package euclotui
 import (
 	"context"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // EucloSurface is the default Euclo interaction surface.
 type EucloSurface struct {
-	base        tui.AgentSurface
-	router      *EucloEventRouter
-	th          *theme.Theme
+	base         tui.AgentSurface
+	router       *EucloEventRouter
+	th           *theme.Theme
 	recipeLookup surface.RecipeRegistryLookup
 }
 

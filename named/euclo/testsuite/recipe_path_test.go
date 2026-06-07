@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
@@ -162,5 +162,3 @@ func (c *captureTelemetry) Events() []telemetry.Event {
 	copy(out, c.events)
 	return out
 }
-
-

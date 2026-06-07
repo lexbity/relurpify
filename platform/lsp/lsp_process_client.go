@@ -14,10 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 )
 
 // ProcessLSPConfig defines the configuration for spinning up a language server process.
@@ -46,11 +48,11 @@ func NewProcessLSPClient(cfg ProcessLSPConfig) (LSPClient, error) {
 }
 
 // NewProcessLSPClientWithPermissions launches the LSP server with an optional command policy.
-func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, policy contracts.CommandPolicy) (LSPClient, error) {
+func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, policy sandbox.CommandPolicy) (LSPClient, error) {
 	return newProcessLSPClientInternal(cfg, policy)
 }
 
-func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy contracts.CommandPolicy) (LSPClient, error) {
+func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy sandbox.CommandPolicy) (LSPClient, error) {
 	if cfg.Command == "" {
 		return nil, errors.New("command is required for LSP client")
 	}
@@ -69,7 +71,7 @@ func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy contracts.CommandP
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if policy != nil {
-		if err := policy.AllowCommand(ctx, contracts.CommandRequest{
+		if err := policy.AllowCommand(ctx, ports.CommandRequest{
 			Args: append([]string{cfg.Command}, cfg.Args...),
 		}); err != nil {
 			cancel()

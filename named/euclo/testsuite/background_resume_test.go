@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/jobs"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type backgroundContinuationNode struct{}
@@ -59,7 +59,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 	}
 
 	env.RequestCheckpoint("persist background continuation", 5, true)
-	euclostate.SetBackgroundJobState(env, string(jobs.JobStateQueued))
+	euclostate.SetBackgroundJobState(env, string(jobs.StateQueued))
 	if result, err := checkpointNode.Execute(context.Background(), env); err != nil {
 		t.Fatalf("checkpoint failed: %v", err)
 	} else if result == nil || !result.Success {

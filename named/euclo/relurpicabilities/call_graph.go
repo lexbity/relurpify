@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
@@ -39,9 +40,9 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"entry_point": {
 					Type:        "string",
 					Description: "Symbol name to use as entry point for graph traversal",
@@ -57,9 +58,9 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 			},
 			Required: []string{"entry_point"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if graph built successfully",
@@ -71,14 +72,14 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 				"nodes": {
 					Type:        "array",
 					Description: "Graph nodes",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
 				"edges": {
 					Type:        "array",
 					Description: "Graph edges",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
@@ -88,7 +89,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 }
 
 // Invoke executes the call graph traversal and returns structured nodes and edges.
-func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	entryPoint, ok := stringArg(args, "entry_point")
 	if !ok || entryPoint == "" {
@@ -151,7 +152,7 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	}
 	writeRetrievalReferences(env, "call_graph_"+entryPoint, allNodes)
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":     true,

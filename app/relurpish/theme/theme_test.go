@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 func TestDefaultPaletteValues(t *testing.T) {

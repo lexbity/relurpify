@@ -101,11 +101,11 @@ func TestEucloEventRouterMacroPhaseTransitions(t *testing.T) {
 
 	// Step failed
 	router.ApplyExecutionEvent(ExecutionEvent{
-		Type:       reporting.EventTypeStepStartedEuclo,
-		StepID:     "step.2",
-		Paradigm:   "react",
-		Index:      1,
-		Total:      2,
+		Type:     reporting.EventTypeStepStartedEuclo,
+		StepID:   "step.2",
+		Paradigm: "react",
+		Index:    1,
+		Total:    2,
 	})
 	router.ApplyExecutionEvent(ExecutionEvent{
 		Type:       reporting.EventTypeStepCompletedEuclo,
@@ -216,7 +216,7 @@ func TestEucloEventRouterComplexStepRuntime(t *testing.T) {
 		},
 	}
 	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeRecipeSelected,
+		Type:    reporting.EventTypeRecipeSelected,
 		Payload: map[string]any{"recipe": proj},
 	})
 	router.ApplyExecutionEvent(ExecutionEvent{
@@ -283,7 +283,7 @@ func TestEucloEventRouterResumeDataRoundTrip(t *testing.T) {
 		},
 	}
 	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeRecipeSelected,
+		Type:    reporting.EventTypeRecipeSelected,
 		Payload: map[string]any{"recipe": proj},
 	})
 	router.ApplyExecutionEvent(ExecutionEvent{

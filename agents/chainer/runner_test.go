@@ -3,7 +3,7 @@ package chainer
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 func TestFilterStateUsesHandoffPolicy(t *testing.T) {

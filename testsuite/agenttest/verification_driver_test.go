@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestVerifyPreparedRunWritesVerificationReport(t *testing.T) {
@@ -42,7 +42,7 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
 				Provider: "ollama",

@@ -9,11 +9,11 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
@@ -652,7 +652,7 @@ func evaluateFileContentExpectations(expectations []FileContentExpectation, work
 }
 
 // evaluateSecurityExpectations evaluates security boundary assertions.
-func evaluateSecurityExpectations(spec SecuritySpec, m *cfgload.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
+func evaluateSecurityExpectations(spec SecuritySpec, m *config.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
 	var results []AssertionResult
 	var observations []SecurityObservation
 	var failures []string
@@ -686,14 +686,14 @@ func evaluateSecurityExpectations(spec SecuritySpec, m *cfgload.AgentManifest, w
 				obs.Resource = path
 
 				// Determine action type for manifest check
-				var action contracts.FileSystemAction
+				var action permissions.FileSystemAction
 				switch entry.Tool {
 				case "file_write", "file_create":
-					action = contracts.FileSystemWrite
+					action = permissions.FileSystemWrite
 				case "file_delete":
-					action = contracts.FileSystemDelete
+					action = permissions.FileSystemDelete
 				case "file_read":
-					action = contracts.FileSystemRead
+					action = permissions.FileSystemRead
 				}
 
 				// Check if path is within manifest scope

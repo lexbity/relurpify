@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
 func TestLiveWorkspaceHandshakeBuildsWorkspaceEnvironment(t *testing.T) {
@@ -131,7 +131,7 @@ capability:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	securityBundle, err := cfgsecurity.LoadBundle(workspace, cfgload.StrictDecode)
+	securityBundle, err := cfgsecurity.LoadBundle(workspace, config.StrictDecode)
 	if err != nil {
 		t.Fatal(err)
 	}

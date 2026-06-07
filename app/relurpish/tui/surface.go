@@ -5,9 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // AgentSurface owns the interaction surface for a given agent.

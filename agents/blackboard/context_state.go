@@ -6,8 +6,8 @@ import (
 	"time"
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 )
 
 const (

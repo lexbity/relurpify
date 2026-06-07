@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 

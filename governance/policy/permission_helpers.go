@@ -4,28 +4,28 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // NewFileSystemPermissionSet builds a permission set for the provided actions scoped to base.
-func NewFileSystemPermissionSet(base string, actions ...contracts.FileSystemAction) *contracts.PermissionSet {
+func NewFileSystemPermissionSet(base string, actions ...permissions.FileSystemAction) *permissions.PermissionSet {
 	scope := computeWorkspaceScope(base)
-	perms := make([]contracts.FileSystemPermission, 0, len(actions))
+	perms := make([]permissions.FileSystemPermission, 0, len(actions))
 	for _, action := range actions {
-		perms = append(perms, contracts.FileSystemPermission{
+		perms = append(perms, permissions.FileSystemPermission{
 			Action: action,
 			Path:   scope,
 		})
 	}
-	return &contracts.PermissionSet{
+	return &permissions.PermissionSet{
 		FileSystem: perms,
 	}
 }
 
 // NewExecutionPermissionSet extends filesystem permissions with execution metadata.
-func NewExecutionPermissionSet(base string, binary string, args []string) *contracts.PermissionSet {
-	perms := NewFileSystemPermissionSet(base, contracts.FileSystemRead, contracts.FileSystemWrite, contracts.FileSystemExecute, contracts.FileSystemList)
-	perms.Executables = append(perms.Executables, contracts.ExecutablePermission{
+func NewExecutionPermissionSet(base string, binary string, args []string) *permissions.PermissionSet {
+	perms := NewFileSystemPermissionSet(base, permissions.FileSystemRead, permissions.FileSystemWrite, permissions.FileSystemExecute, permissions.FileSystemList)
+	perms.Executables = append(perms.Executables, permissions.ExecutablePermission{
 		Binary: binary,
 		Args:   normalizeArgs(args),
 	})

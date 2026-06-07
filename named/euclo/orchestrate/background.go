@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/jobs"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -176,20 +176,20 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}, nil
 }
 
-func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.JobSpec, error) {
+func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.Spec, error) {
 	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobSpec); ok {
 		switch spec := value.(type) {
-		case jobs.JobSpec:
-			if err := spec.Validate(); err != nil {
-				return jobs.JobSpec{}, err
+		case jobs.Spec:
+			if err := spec.Valid(); err != nil {
+				return jobs.Spec{}, err
 			}
 			return spec, nil
-		case *jobs.JobSpec:
+		case *jobs.Spec:
 			if spec == nil {
 				break
 			}
-			if err := spec.Validate(); err != nil {
-				return jobs.JobSpec{}, err
+			if err := spec.Valid(); err != nil {
+				return jobs.Spec{}, err
 			}
 			return *spec, nil
 		}
@@ -223,28 +223,18 @@ func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.JobSpe
 		}
 	}
 
-	spec := jobs.JobSpec{
-		Kind:     kind,
-		Payload:  payload,
-		Queue:    queue,
-		Priority: 0,
-		WorkerSelector: jobs.WorkerSelector{
-			Labels: map[string]string{"euclo.background": "true"},
-		},
-		RetryPolicy: jobs.RetryPolicy{
-			MaxAttempts: 0,
-			Backoff: jobs.BackoffPolicy{
-				Strategy:   jobs.BackoffStrategyFixed,
-				FixedDelay: time.Second,
-			},
-		},
-		CancelPolicy:  jobs.CancelPolicy{Mode: jobs.CancelModeBestEffort},
-		ResumePolicy:  jobs.ResumePolicy{Mode: jobs.ResumeModeDisabled},
-		TimeoutPolicy: jobs.TimeoutPolicy{Execution: time.Minute},
-		LeasePolicy:   jobs.LeasePolicy{Duration: time.Minute},
+	spec := jobs.Spec{
+		Kind:        kind,
+		Payload:     payload,
+		Queue:       queue,
+		Priority:    0,
+		MaxAttempts: 1,
+		Backoff:     time.Second,
+		Timeout:     time.Minute,
+		Labels:      map[string]string{"euclo.background": "true"},
 	}
-	if err := spec.Validate(); err != nil {
-		return jobs.JobSpec{}, err
+	if err := spec.Valid(); err != nil {
+		return jobs.Spec{}, err
 	}
 	return spec, nil
 }

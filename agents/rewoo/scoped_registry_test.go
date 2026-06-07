@@ -4,22 +4,22 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 type scopedRewooTool struct {
 	name string
 }
 
-func (t scopedRewooTool) Name() string                          { return t.name }
-func (t scopedRewooTool) Description() string                   { return t.name }
-func (t scopedRewooTool) Category() string                      { return "test" }
-func (t scopedRewooTool) Parameters() []contracts.ToolParameter { return nil }
-func (t scopedRewooTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t scopedRewooTool) Name() string                      { return t.name }
+func (t scopedRewooTool) Description() string               { return t.name }
+func (t scopedRewooTool) Category() string                  { return "test" }
+func (t scopedRewooTool) Parameters() []ports.ToolParameter { return nil }
+func (t scopedRewooTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"name": t.name,
@@ -31,8 +31,8 @@ func (t scopedRewooTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx
 	return true
 }
-func (t scopedRewooTool) Permissions() contracts.ToolPermissions { return contracts.ToolPermissions{} }
-func (t scopedRewooTool) Tags() []string                         { return nil }
+func (t scopedRewooTool) Permissions() ports.ToolPermissions { return ports.ToolPermissions{} }
+func (t scopedRewooTool) Tags() []string                     { return nil }
 
 func rewooToolCapabilityID(name string) string {
 	return "tool:" + name

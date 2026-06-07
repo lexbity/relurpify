@@ -7,43 +7,44 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
+	"codeburg.org/lexbit/relurpify/model"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type stubLanguageModel struct{}
 
-func (stubLanguageModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubLanguageModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (stubLanguageModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (stubLanguageModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubLanguageModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubLanguageModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (stubLanguageModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
 type noopCompiler struct{}
@@ -75,18 +76,18 @@ func (r *recordingTelemetry) types() []telemetry.EventType {
 
 type testCapabilityHandler struct {
 	descriptor capability.CapabilityDescriptor
-	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error)
+	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error)
 }
 
 func (h *testCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
 	return h.descriptor
 }
 
-func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h != nil && h.invoke != nil {
 		return h.invoke(ctx, env, args)
 	}
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]any{
 			"capability_id": h.descriptor.ID,
@@ -106,9 +107,9 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRe
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 				Availability:  capability.AvailabilitySpec{Available: true},
 			},
-			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {
-				return func(context.Context, *contextdata.Envelope, map[string]any) (*contracts.CapabilityExecutionResult, error) {
-					return &contracts.CapabilityExecutionResult{
+			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error) {
+				return func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error) {
+					return &ports.CapabilityExecutionResult{
 						Success: true,
 						Data: map[string]any{
 							"capability_id": id,
@@ -239,7 +240,7 @@ func workspaceEnv(reg *capability.CapabilityRegistry) agentenv.WorkspaceEnvironm
 	return agentenv.WorkspaceEnvironment{Registry: reg}
 }
 
-func workspaceEnvWithModel(reg *capability.CapabilityRegistry, model contracts.LanguageModel) agentenv.WorkspaceEnvironment {
+func workspaceEnvWithModel(reg *capability.CapabilityRegistry, model model.LanguageModel) agentenv.WorkspaceEnvironment {
 	return agentenv.WorkspaceEnvironment{
 		Registry: reg,
 		Model:    model,

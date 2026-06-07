@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type mockReviewModel struct {
@@ -16,17 +17,17 @@ type mockReviewModel struct {
 	reply func(prompt string) string
 }
 
-func (m *mockReviewModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *mockReviewModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	if m.reply != nil {
-		return &contracts.LLMResponse{Text: m.reply(prompt)}, nil
+		return &model.LLMResponse{Text: m.reply(prompt)}, nil
 	}
-	return &contracts.LLMResponse{Text: `{"thought":"complete","complete":true,"summary":"ok"}`}, nil
+	return &model.LLMResponse{Text: `{"thought":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
+func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -40,11 +41,11 @@ func (m *mockReviewModel) GenerateStream(ctx context.Context, prompt string, opt
 	return ch, nil
 }
 
-func (m *mockReviewModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *mockReviewModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.Generate(ctx, "", options)
 }
 
-func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.Generate(ctx, "", options)
 }
 

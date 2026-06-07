@@ -6,17 +6,17 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -286,9 +286,9 @@ func emitRecipeSelected(ctx context.Context, env *contextdata.Envelope, recipe *
 	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitRecipeSelected(ctx, reporting.EventRecipeSelected{
 		EventHeader: reporting.EventHeader{
-			TaskID:    env.TaskID,
-			SessionID: env.SessionID,
-			Seq:       0,
+			TaskID:     env.TaskID,
+			SessionID:  env.SessionID,
+			Seq:        0,
 			OccurredAt: time.Now().UTC(),
 		},
 		RecipeID: recipe.ID,

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 

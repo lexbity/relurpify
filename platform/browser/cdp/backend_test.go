@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 type fakeTransport struct {

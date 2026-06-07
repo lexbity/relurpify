@@ -7,16 +7,17 @@ import (
 	"strings"
 	"testing"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	tea "github.com/charmbracelet/bubbletea"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type sandboxPaneRuntimeFake struct {
 	workspace    string
-	manifest     *cfgload.AgentManifest
+	manifest     *config.AgentManifest
 	manifestPath string
 	configPath   string
 	backend      string
@@ -27,18 +28,18 @@ func (f *sandboxPaneRuntimeFake) SessionInfo() SessionInfo {
 	return SessionInfo{Workspace: f.workspace}
 }
 
-func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
+func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*config.AgentManifest, error) {
 	if f.manifest == nil && f.manifestPath != "" {
-		loaded, err := cfgload.LoadAgentManifest(f.manifestPath)
+		loaded, err := config.LoadAgentManifest(f.manifestPath)
 		if err != nil {
 			return nil, err
 		}
 		f.manifest = loaded
 	}
-	return cfgload.CloneAgentManifest(f.manifest)
+	return config.CloneAgentManifest(f.manifest)
 }
 
-func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
+func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
 	if f.manifestPath == "" {
 		return "", os.ErrInvalid
 	}
@@ -59,7 +60,7 @@ func (f *sandboxPaneRuntimeFake) SaveSandboxBackend(backend string) (string, err
 		return "", os.ErrInvalid
 	}
 	f.backend = strings.TrimSpace(backend)
-	backup, err := cfgload.SaveRuntimeWorkspaceConfigWithBackup(f.configPath, cfgload.RuntimeWorkspaceConfig{
+	backup, err := config.SaveRuntimeWorkspaceConfigWithBackup(f.configPath, config.RuntimeWorkspaceConfig{
 		SandboxBackend: f.backend,
 		LastUpdated:    1,
 	})
@@ -74,7 +75,7 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	f.workspace = workspace
 	f.reloads++
 	if f.manifestPath != "" {
-		loaded, err := cfgload.LoadAgentManifest(f.manifestPath)
+		loaded, err := config.LoadAgentManifest(f.manifestPath)
 		if err != nil {
 			return err
 		}
@@ -83,24 +84,24 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	return nil
 }
 
-func testSandboxManifest() *cfgload.AgentManifest {
-	return &cfgload.AgentManifest{
+func testSandboxManifest() *config.AgentManifest {
+	return &config.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: cfgload.ManifestMetadata{
+		Metadata: config.ManifestMetadata{
 			Name:        "coding",
 			Version:     "1.0.0",
 			Description: "sandbox test manifest",
 		},
-		Spec: cfgload.ManifestSpec{
+		Spec: config.ManifestSpec{
 			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
-			Permissions: contracts.PermissionSet{
-				FileSystem: []contracts.FileSystemPermission{
-					{Action: contracts.FileSystemRead, Path: "/workspace/**"},
-					{Action: contracts.FileSystemWrite, Path: "/workspace/**"},
+			Permissions: permissions.PermissionSet{
+				FileSystem: []permissions.FileSystemPermission{
+					{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+					{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
 				},
-				Network: []contracts.NetworkPermission{
+				Network: []permissions.NetworkPermission{
 					{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
 				},
 			},
@@ -137,7 +138,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	if err := cfgload.SaveAgentManifest(manifestPath, testSandboxManifest()); err != nil {
+	if err := config.SaveAgentManifest(manifestPath, testSandboxManifest()); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
 	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), 0o644); err != nil {

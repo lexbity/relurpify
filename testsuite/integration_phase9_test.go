@@ -8,32 +8,33 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type phase9Telemetry struct {
 	mu     sync.Mutex
-	events []contracts.Event
+	events []telemetry.Event
 }
 
-func (t *phase9Telemetry) Emit(event contracts.Event) {
+func (t *phase9Telemetry) Emit(event telemetry.Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.events = append(t.events, event)
 }
 
-func (t *phase9Telemetry) Snapshot() []contracts.Event {
+func (t *phase9Telemetry) Snapshot() []telemetry.Event {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	out := make([]contracts.Event, len(t.events))
+	out := make([]telemetry.Event, len(t.events))
 	copy(out, t.events)
 	return out
 }
@@ -44,7 +45,7 @@ func (phase9UsageModel) Generate(context.Context, string, *llm.LLMOptions) (*llm
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -58,7 +59,7 @@ func (phase9UsageModel) Chat(context.Context, []llm.Message, *llm.LLMOptions) (*
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -66,7 +67,7 @@ func (phase9UsageModel) ChatWithTools(context.Context, []llm.Message, []llm.LLMT
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        contracts.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -186,7 +187,7 @@ func TestProvenance_FullChain(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: contextdata.ChunkID(summaryChunk.ID), Source: "test", Rank: 1})
 	ctx := knowledge.WithOutputIngester(contextdata.WithEnvelope(context.Background(), env), ing)
-	saved, err := ing.IngestLLMResponseFull(ctx, &contracts.LLMResponse{Text: "grounded response", FinishReason: "stop"})
+	saved, err := ing.IngestLLMResponseFull(ctx, &model.LLMResponse{Text: "grounded response", FinishReason: "stop"})
 	require.NoError(t, err)
 	require.NotNil(t, saved)
 	require.Equal(t, []knowledge.ChunkID{summaryChunk.ID}, saved.DerivedFrom)
@@ -214,7 +215,7 @@ func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		for _, event := range tel.Snapshot() {
-			if event.Type == contracts.EventSessionResetRequired {
+			if event.Type == telemetry.EventSessionResetRequired {
 				return true
 			}
 		}
@@ -231,7 +232,7 @@ func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 	require.Eventually(t, func() bool {
 		count := 0
 		for _, event := range tel.Snapshot() {
-			if event.Type == contracts.EventSessionResetRequired {
+			if event.Type == telemetry.EventSessionResetRequired {
 				count++
 			}
 		}

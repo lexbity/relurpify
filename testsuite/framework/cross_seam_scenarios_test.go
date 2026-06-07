@@ -7,12 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -24,7 +27,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	// Step 1: Create permission set
-	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead, permissions.FileSystemList)
 
 	// Step 2: Create permission manager with audit sink
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -41,7 +44,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 	// Step 4: Check file permission (transition point: permission enforcement)
 	ctx := context.Background()
 	agentID := "test-agent"
-	err = manager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testFile)
+	err = manager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testFile)
 	if err != nil {
 		t.Fatalf("file access check failed: %v", err)
 	}
@@ -54,7 +57,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 
 	foundPermissionRecord := false
 	for _, record := range records {
-		if record.Type == string(contracts.PermissionTypeFilesystem) {
+		if record.Type == string(permissions.PermissionTypeFilesystem) {
 			foundPermissionRecord = true
 			if record.Result != "granted" {
 				t.Errorf("expected permission to be granted, got %s", record.Result)
@@ -114,7 +117,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	// Step 1: Create permission manager (permission seam)
-	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead, permissions.FileSystemList)
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("permission manager creation failed: %v", err)
@@ -128,7 +131,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = manager.CheckFileAccess(ctx, "full-flow-agent", contracts.FileSystemRead, testFile)
+	err = manager.CheckFileAccess(ctx, "full-flow-agent", permissions.FileSystemRead, testFile)
 	if err != nil {
 		t.Fatalf("file access check failed: %v", err)
 	}
@@ -148,7 +151,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	envelope := contextdata.NewEnvelope("full-flow-task", "full-flow-session")
 	ctx = contextdata.WithEnvelope(ctx, envelope)
 
-	llmResponse := &contracts.LLMResponse{
+	llmResponse := &model.LLMResponse{
 		Text: "Configuration loaded successfully",
 	}
 
@@ -183,7 +186,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	// Transition assertion: audit captured
 	foundFilePermission := false
 	for _, record := range records {
-		if record.Type == string(contracts.PermissionTypeFilesystem) && record.Result == "granted" {
+		if record.Type == string(permissions.PermissionTypeFilesystem) && record.Result == "granted" {
 			foundFilePermission = true
 			break
 		}
@@ -249,18 +252,18 @@ type mockFileTool struct {
 func (t *mockFileTool) Name() string        { return t.name }
 func (t *mockFileTool) Description() string { return "reads a file" }
 func (t *mockFileTool) Category() string    { return "filesystem" }
-func (t *mockFileTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *mockFileTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "path", Type: "string", Description: "file path"},
 	}
 }
 
-func (t *mockFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *mockFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"content": string(data),
@@ -268,13 +271,13 @@ func (t *mockFileTool) Execute(ctx context.Context, args map[string]interface{})
 	}, nil
 }
 
-func (t *mockFileTool) Permissions() contracts.ToolPermissions {
+func (t *mockFileTool) Permissions() ports.ToolPermissions {
 	// Return nil permissions for simplicity - the permission manager handles enforcement
-	return contracts.ToolPermissions{}
+	return ports.ToolPermissions{}
 }
 
 func (t *mockFileTool) Tags() []string {
-	return []string{contracts.TagReadOnly}
+	return []string{toolcapabilities.TagReadOnly}
 }
 
 func (t *mockFileTool) IsAvailable(context.Context) bool { return true }

@@ -7,14 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // ProfiledModel is re-exported from contracts
-type ProfiledModel = contracts.ProfiledModel
+type ProfiledModel = model.ProfiledModel
 
 // Telemetry is re-exported from contracts
-type Telemetry = contracts.Telemetry
+type Telemetry = telemetry.Telemetry
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.
 type InstrumentedModel struct {
@@ -182,8 +183,8 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 			metadata[k] = v
 		}
 	}
-	m.Telemetry.Emit(contracts.Event{
-		Type:      contracts.EventLLMPrompt,
+	m.Telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventLLMPrompt,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s prompt", kind),
@@ -195,7 +196,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if m == nil {
 		return
 	}
-	if obs := contracts.UsageObserverFromContext(ctx); obs != nil && resp != nil {
+	if obs := telemetry.UsageObserverFromContext(ctx); obs != nil && resp != nil {
 		obs.RecordTokenUsage(resp.Usage)
 		if snapshot, ok := obs.ConsumeResetNotice(); ok && m.Telemetry != nil {
 			taskID, taskMeta := taskInfo(ctx)
@@ -205,8 +206,8 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 			for k, v := range taskMeta {
 				metadata[k] = v
 			}
-			m.Telemetry.Emit(contracts.Event{
-				Type:      contracts.EventSessionResetRequired,
+			m.Telemetry.Emit(telemetry.Event{
+				Type:      telemetry.EventSessionResetRequired,
 				TaskID:    taskID,
 				Timestamp: time.Now().UTC(),
 				Message:   "session reset required",
@@ -214,10 +215,10 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 			})
 		}
 	}
-	if obs := contracts.SnapshotObserverFromContext(ctx); obs != nil {
+	if obs := telemetry.SnapshotObserverFromContext(ctx); obs != nil {
 		obs.Observe()
 	}
-	if ing := contracts.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
+	if ing := telemetry.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
 		go func() {
 			baseCtx := ctx
 			if baseCtx == nil {
@@ -250,8 +251,8 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
-	m.Telemetry.Emit(contracts.Event{
-		Type:      contracts.EventLLMResponse,
+	m.Telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventLLMResponse,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s response", kind),

@@ -6,8 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // Palette holds the eight semantic colour slots. Every value is an adaptive

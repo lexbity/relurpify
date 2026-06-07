@@ -9,13 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type browserCapability struct {
@@ -31,8 +34,8 @@ func (h *browserCapability) Description() string {
 
 func (h *browserCapability) Category() string { return "browser" }
 
-func (h *browserCapability) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (h *browserCapability) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "action", Type: "string", Required: true},
 		{Name: "session_id", Type: "string", Required: false},
 		{Name: "backend", Type: "string", Required: false, Default: defaultBrowserBackend},
@@ -51,11 +54,13 @@ func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) 
 	return true
 }
 
-func (h *browserCapability) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(".", contracts.FileSystemRead)}
+func (h *browserCapability) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(".", permissions.FileSystemRead)}
 }
 
-func (h *browserCapability) Tags() []string { return []string{contracts.TagNetwork, "browser", "web"} }
+func (h *browserCapability) Tags() []string {
+	return []string{toolcapabilities.TagNetwork, "browser", "web"}
+}
 
 func (h *browserCapability) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, _ string) {
 	h.spec = spec
@@ -96,10 +101,10 @@ func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) c
 	return capability.NormalizeCapabilityDescriptor(desc)
 }
 
-func browserInputSchema() *contracts.Schema {
-	return &contracts.Schema{
+func browserInputSchema() *schemacoerce.Schema {
+	return &schemacoerce.Schema{
 		Type: "object",
-		Properties: map[string]*contracts.Schema{
+		Properties: map[string]*schemacoerce.Schema{
 			"action":     {Type: "string"},
 			"session_id": {Type: "string"},
 			"backend":    {Type: "string", Default: defaultBrowserBackend},
@@ -113,11 +118,11 @@ func browserInputSchema() *contracts.Schema {
 	}
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	return h.Execute(ctx, env, args)
 }
 
-func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	action := canonicalBrowserAction(fmt.Sprint(args["action"]))
 	if err := h.authorizeAction(ctx, action, env, args); err != nil {
 		return nil, err
@@ -396,8 +401,8 @@ func (s *BrowserService) requireActionApproval(ctx context.Context, action strin
 	metadata := map[string]string{
 		"browser_action": browserPermissionAction(action),
 	}
-	return s.permissionManager.RequireApproval(ctx, s.agentID(), contracts.PermissionDescriptor{
-		Type:         contracts.PermissionTypeCapability,
+	return s.permissionManager.RequireApproval(ctx, s.agentID(), permissions.PermissionDescriptor{
+		Type:         permissions.PermissionTypeCapability,
 		Action:       browserPermissionAction(action),
 		Resource:     resource,
 		Metadata:     metadata,

@@ -104,5 +104,3 @@ func relPath(workspace, path string) string {
 	}
 	return rel
 }
-
-

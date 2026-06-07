@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type diffNodeKind int
@@ -251,7 +252,7 @@ func (p *DiffPane) renderHeaderLines(snap EucloProjectionSnapshot, nodeCount int
 	} else {
 		lines = append(lines, p.th.Dim().Render("checkpoint unavailable"))
 	}
-	if execMode == string(cfgload.ExecutionModeAutopilot) && nodeCount > 0 {
+	if execMode == string(config.ExecutionModeAutopilot) && nodeCount > 0 {
 		lines = append(lines, p.th.Dim().Render(fmt.Sprintf("%d review item(s) · [r]review [u]ndo", nodeCount)))
 	}
 	return lines
@@ -999,7 +1000,7 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
-	if _, err := cfgload.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
+	if _, err := config.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return os.WriteFile(abs, updated, 0o644)

@@ -4,16 +4,16 @@ package surface
 type Paradigm string
 
 const (
-	ParadigmReact       Paradigm = "react"
-	ParadigmPlanner     Paradigm = "planner"
-	ParadigmHTN         Paradigm = "htn"
-	ParadigmReflection  Paradigm = "reflection"
-	ParadigmBlackboard  Paradigm = "blackboard"
-	ParadigmChainer     Paradigm = "chainer"
-	ParadigmPipeline    Paradigm = "pipeline"
-	ParadigmRewoo       Paradigm = "rewoo"
-	ParadigmGoalcon     Paradigm = "goalcon"
-	ParadigmEuclo       Paradigm = "euclo"
+	ParadigmReact      Paradigm = "react"
+	ParadigmPlanner    Paradigm = "planner"
+	ParadigmHTN        Paradigm = "htn"
+	ParadigmReflection Paradigm = "reflection"
+	ParadigmBlackboard Paradigm = "blackboard"
+	ParadigmChainer    Paradigm = "chainer"
+	ParadigmPipeline   Paradigm = "pipeline"
+	ParadigmRewoo      Paradigm = "rewoo"
+	ParadigmGoalcon    Paradigm = "goalcon"
+	ParadigmEuclo      Paradigm = "euclo"
 )
 
 // AllParadigms returns all known paradigm values.

@@ -4,16 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 func TestCompositeToolName(t *testing.T) {
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "pipe_tool",
 		Description: "pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "cli_fd", Alias: "files"},
 			},
 		},
@@ -23,19 +24,19 @@ func TestCompositeToolName(t *testing.T) {
 }
 
 func TestCompositeToolSteps(t *testing.T) {
-	fdResult := &contracts.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "file1\nfile2"}}
-	resolver := func(name string) (contracts.Tool, bool) {
+	fdResult := &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "file1\nfile2"}}
+	resolver := func(name string) (ports.Tool, bool) {
 		if name == "cli_fd" {
 			return &fakeTool{name: "cli_fd", result: fdResult}, true
 		}
 		return nil, false
 	}
 
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "pipe_tool",
 		Description: "pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "cli_fd", Alias: "files"},
 			},
 		},
@@ -48,21 +49,21 @@ func TestCompositeToolSteps(t *testing.T) {
 }
 
 func TestCompositeToolFailsOnFirstError(t *testing.T) {
-	resolver := func(name string) (contracts.Tool, bool) {
+	resolver := func(name string) (ports.Tool, bool) {
 		if name == "ok" {
-			return &fakeTool{name: "ok", result: &contracts.ToolResult{Success: true}}, true
+			return &fakeTool{name: "ok", result: &ports.ToolResult{Success: true}}, true
 		}
 		if name == "fail" {
-			return &fakeTool{name: "fail", result: &contracts.ToolResult{Success: false, Error: "step failed"}}, true
+			return &fakeTool{name: "fail", result: &ports.ToolResult{Success: false, Error: "step failed"}}, true
 		}
 		return nil, false
 	}
 
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "pipe_tool",
 		Description: "pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "ok", Alias: "first"},
 				{Tool: "fail", Alias: "second"},
 			},
@@ -76,15 +77,15 @@ func TestCompositeToolFailsOnFirstError(t *testing.T) {
 }
 
 func TestCompositeToolMissingStepTool(t *testing.T) {
-	resolver := func(name string) (contracts.Tool, bool) {
+	resolver := func(name string) (ports.Tool, bool) {
 		return nil, false
 	}
 
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "pipe_tool",
 		Description: "pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "missing_tool"},
 			},
 		},
@@ -98,15 +99,15 @@ func TestCompositeToolMissingStepTool(t *testing.T) {
 
 func TestCompositeAliasPropagation(t *testing.T) {
 	// First step produces stdout; second step references it via ${files.stdout}
-	resolver := func(name string) (contracts.Tool, bool) {
+	resolver := func(name string) (ports.Tool, bool) {
 		if name == "cli_fd" {
-			return &fakeTool{name: "cli_fd", result: &contracts.ToolResult{
+			return &fakeTool{name: "cli_fd", result: &ports.ToolResult{
 				Success: true,
 				Data:    map[string]interface{}{"stdout": "src/main.go\nsrc/utils.go"},
 			}}, true
 		}
 		if name == "cli_rg" {
-			return &fakeTool{name: "cli_rg", result: &contracts.ToolResult{
+			return &fakeTool{name: "cli_rg", result: &ports.ToolResult{
 				Success: true,
 				Data:    map[string]interface{}{"stdout": "match1\nmatch2"},
 			}}, true
@@ -114,11 +115,11 @@ func TestCompositeAliasPropagation(t *testing.T) {
 		return nil, false
 	}
 
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "fd_pipe_rg",
 		Description: "fd | rg pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "cli_fd", Args: map[string]any{"pattern": "*.go"}, Alias: "files"},
 				{Tool: "cli_rg", Args: map[string]any{"pattern": "func", "paths": "${files.stdout}"}, Alias: "matches"},
 			},
@@ -133,11 +134,11 @@ func TestCompositeAliasPropagation(t *testing.T) {
 }
 
 func TestCompositeThreeStepPipeline(t *testing.T) {
-	step1 := &fakeTool{name: "step1", result: &contracts.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "a\nb\nc"}}}
-	step2 := &fakeTool{name: "step2", result: &contracts.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "d\ne\nf"}}}
-	step3 := &fakeTool{name: "step3", result: &contracts.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "g"}}}
+	step1 := &fakeTool{name: "step1", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "a\nb\nc"}}}
+	step2 := &fakeTool{name: "step2", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "d\ne\nf"}}}
+	step3 := &fakeTool{name: "step3", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "g"}}}
 
-	resolver := func(name string) (contracts.Tool, bool) {
+	resolver := func(name string) (ports.Tool, bool) {
 		switch name {
 		case "s1":
 			return step1, true
@@ -149,11 +150,11 @@ func TestCompositeThreeStepPipeline(t *testing.T) {
 		return nil, false
 	}
 
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "three_step",
 		Description: "three-step pipeline",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "s1", Alias: "first"},
 				{Tool: "s2", Args: map[string]any{"input": "${first.stdout}"}, Alias: "second"},
 				{Tool: "s3", Args: map[string]any{"input": "${second.stdout}"}, Alias: "third"},
@@ -170,11 +171,11 @@ func TestCompositeThreeStepPipeline(t *testing.T) {
 }
 
 func TestCompositeDuplicateAliasRejected(t *testing.T) {
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "dup",
 		Description: "duplicate alias",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "a", Alias: "output"},
 				{Tool: "b", Alias: "output"},
 			},
@@ -188,17 +189,17 @@ func TestCompositeDuplicateAliasRejected(t *testing.T) {
 }
 
 func TestCompositeUnnamedAliasesAreFine(t *testing.T) {
-	tool := New(contracts.ToolManifest{
+	tool := New(ports.ToolManifest{
 		Name:        "no_aliases",
 		Description: "no aliases",
-		Composition: &contracts.ToolManifestComposition{
-			Steps: []contracts.ToolManifestCompositionStep{
+		Composition: &ports.ToolManifestComposition{
+			Steps: []ports.ToolManifestCompositionStep{
 				{Tool: "first"},
 				{Tool: "second"},
 			},
 		},
-	}, func(name string) (contracts.Tool, bool) {
-		return &fakeTool{name: name, result: &contracts.ToolResult{Success: true}}, true
+	}, func(name string) (ports.Tool, bool) {
+		return &fakeTool{name: name, result: &ports.ToolResult{Success: true}}, true
 	})
 
 	result, err := tool.Execute(context.Background(), nil)
@@ -207,20 +208,20 @@ func TestCompositeUnnamedAliasesAreFine(t *testing.T) {
 }
 
 type fakeTool struct {
-	contracts.Tool
+	ports.Tool
 	name   string
-	result *contracts.ToolResult
+	result *ports.ToolResult
 }
 
-func (f *fakeTool) Name() string                       { return f.name }
-func (f *fakeTool) Description() string                { return "fake: " + f.name }
-func (f *fakeTool) Category() string                   { return "fake" }
-func (f *fakeTool) Parameters() []contracts.ToolParameter { return nil }
-func (f *fakeTool) Tags() []string                     { return nil }
-func (f *fakeTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (f *fakeTool) Name() string                      { return f.name }
+func (f *fakeTool) Description() string               { return "fake: " + f.name }
+func (f *fakeTool) Category() string                  { return "fake" }
+func (f *fakeTool) Parameters() []ports.ToolParameter { return nil }
+func (f *fakeTool) Tags() []string                    { return nil }
+func (f *fakeTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
-func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	return f.result, nil
 }

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 type reactWorkflowRetrievalProvider struct{}

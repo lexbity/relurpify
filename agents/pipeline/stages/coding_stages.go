@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ExploreStage identifies the most relevant files and next tools for a task.
@@ -76,7 +77,7 @@ func (s *ExploreStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
   "summary":"..."
 }`), nil
 }
-func (s *ExploreStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s *ExploreStage) Decode(resp *model.LLMResponse) (any, error) {
 	var out FileSelection
 	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
   "summary":"..."
 }`), nil
 }
-func (s *AnalyzeStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s *AnalyzeStage) Decode(resp *model.LLMResponse) (any, error) {
 	var out IssueList
 	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
 		return nil, err
@@ -226,7 +227,7 @@ func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
   "risks":["..."]
 }`), nil
 }
-func (s *PlanStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s *PlanStage) Decode(resp *model.LLMResponse) (any, error) {
 	var out FixPlan
 	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
 		return nil, err
@@ -301,7 +302,7 @@ func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
   "summary":"..."
 }`), nil
 }
-func (s *CodeStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s *CodeStage) Decode(resp *model.LLMResponse) (any, error) {
 	var out EditPlan
 	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
 		return nil, err
@@ -374,7 +375,7 @@ func (s *VerifyStage) AllowedToolNames() []string {
 	}
 }
 
-func (s *VerifyStage) RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []contracts.Tool) bool {
+func (s *VerifyStage) RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []ports.Tool) bool {
 	if task == nil || len(tools) == 0 {
 		return false
 	}
@@ -437,7 +438,7 @@ func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
   "remaining_issues":["..."]
 }`), nil
 }
-func (s *VerifyStage) Decode(resp *contracts.LLMResponse) (any, error) {
+func (s *VerifyStage) Decode(resp *model.LLMResponse) (any, error) {
 	var out VerificationReport
 	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
 		return nil, err

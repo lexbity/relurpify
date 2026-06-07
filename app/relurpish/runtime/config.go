@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // Config captures every knob shared across the relurpish CLI, TUI, and server
@@ -83,7 +83,7 @@ func (c *Config) Normalize() error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	c.Workspace = absWorkspace
-	paths := cfgload.New(c.Workspace)
+	paths := config.New(c.Workspace)
 	if c.AgentName == "" {
 		c.AgentName = "coding"
 	}
@@ -100,31 +100,31 @@ func (c *Config) Normalize() error {
 		c.AgentsDir = filepath.Join(c.Workspace, c.AgentsDir)
 	}
 	if c.MemoryPath == "" {
-		c.MemoryPath = cfgload.DefaultWorkspaceStateMemoryDir(c.Workspace)
+		c.MemoryPath = config.DefaultWorkspaceStateMemoryDir(c.Workspace)
 	}
 	if !filepath.IsAbs(c.MemoryPath) {
 		c.MemoryPath = filepath.Join(c.Workspace, c.MemoryPath)
 	}
 	if c.LogPath == "" {
-		c.LogPath = filepath.Join(cfgload.DefaultWorkspaceStateLogsDir(c.Workspace), "relurpish.log")
+		c.LogPath = filepath.Join(config.DefaultWorkspaceStateLogsDir(c.Workspace), "relurpish.log")
 	}
 	if !filepath.IsAbs(c.LogPath) {
 		c.LogPath = filepath.Join(c.Workspace, c.LogPath)
 	}
 	if c.TelemetryPath == "" {
-		c.TelemetryPath = filepath.Join(cfgload.DefaultWorkspaceStateTelemetryDir(c.Workspace), "telemetry.jsonl")
+		c.TelemetryPath = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(c.Workspace), "telemetry.jsonl")
 	}
 	if !filepath.IsAbs(c.TelemetryPath) {
 		c.TelemetryPath = filepath.Join(c.Workspace, c.TelemetryPath)
 	}
 	if c.EventsPath == "" {
-		c.EventsPath = cfgload.DefaultWorkspaceStateEventsFile(c.Workspace)
+		c.EventsPath = config.DefaultWorkspaceStateEventsFile(c.Workspace)
 	}
 	if !filepath.IsAbs(c.EventsPath) {
 		c.EventsPath = filepath.Join(c.Workspace, c.EventsPath)
 	}
 	if c.ConfigPath == "" {
-		c.ConfigPath = cfgload.DefaultWorkspaceStateConfigPath(c.Workspace)
+		c.ConfigPath = config.DefaultWorkspaceStateConfigPath(c.Workspace)
 	}
 	if !filepath.IsAbs(c.ConfigPath) {
 		c.ConfigPath = filepath.Join(c.Workspace, c.ConfigPath)

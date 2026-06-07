@@ -2,9 +2,9 @@ package runtime
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 const (

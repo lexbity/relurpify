@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // requiresRunsc skips the test when the Docker gVisor runtime is not available.

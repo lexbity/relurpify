@@ -6,18 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 func TestCargoIsolationNotAppliedToNonCargoTool(t *testing.T) {
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_echo",
 		Family: "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
 		SourcePath: t.TempDir(),
 	}, runner)
@@ -39,12 +40,12 @@ func TestCargoIsolationStandaloneCrateNotIsolated(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\nversion = \"0.1.0\"\n"), 0o644))
 
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_cargo",
 		Family: "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 		SourcePath: base,
 	}, runner)
@@ -73,12 +74,12 @@ func TestCargoIsolationNestedWorkspaceIsolated(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "src", "lib.rs"), []byte("pub fn add(a:i32,b:i32)->i32{a+b}\n"), 0o644))
 
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_cargo",
 		Family: "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 		SourcePath: base,
 	}, runner)
@@ -111,12 +112,12 @@ func TestCargoIsolationNotAppliedForNonIsolatedSubcommands(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n"), 0o644))
 
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_cargo",
 		Family: "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 		SourcePath: base,
 	}, runner)
@@ -138,12 +139,12 @@ func TestCargoIsolationSkipsWhenNoArgs(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n"), 0o644))
 
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_cargo",
 		Family: "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 		SourcePath: base,
 	}, runner)
@@ -165,12 +166,12 @@ func TestCargoIsolationAlreadyHasManifestPath(t *testing.T) {
 	existingManifest := filepath.Join(crateDir, "Cargo.toml")
 
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
+	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_cargo",
 		Family: "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 		SourcePath: base,
 	}, runner)
@@ -186,22 +187,22 @@ func TestCargoIsolationAlreadyHasManifestPath(t *testing.T) {
 }
 
 func TestCargoIsolationIsCargoTool(t *testing.T) {
-	cargoManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Command: &contracts.ToolManifestCommand{Base: []string{"cargo"}},
+	cargoManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Command: &ports.ToolManifestCommand{Base: []string{"cargo"}},
 		},
 	}
 	require.True(t, isCargoTool(cargoManifest))
 
-	nonCargoManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+	nonCargoManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
 	}
 	require.False(t, isCargoTool(nonCargoManifest))
 
-	noCommandManifest := contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{},
+	noCommandManifest := ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{},
 	}
 	require.False(t, isCargoTool(noCommandManifest))
 }

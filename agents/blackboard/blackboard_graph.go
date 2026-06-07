@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -189,8 +190,8 @@ type blackboardDispatchNode struct {
 	id         string
 	controller *Controller
 	tools      *capability.Registry
-	model      contracts.LanguageModel
-	semctx     agentspec.AgentSemanticContext
+	model      model.LanguageModel
+	semctx     execctx.AgentSemanticContext
 	telemetry  telemetry.Telemetry
 }
 

@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 

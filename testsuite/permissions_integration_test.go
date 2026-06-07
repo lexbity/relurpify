@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 func TestToolRegistryPermissionEnforcement(t *testing.T) {
@@ -49,7 +50,7 @@ func (r *recordingRuntime) Policy() sandbox.SandboxPolicy {
 
 type permissionedTool struct {
 	toolName string
-	perms    *contracts.PermissionSet
+	perms    *permissions.PermissionSet
 	manager  *authorization.PermissionManager
 	agent    string
 	path     string
@@ -60,13 +61,13 @@ type permissionedTool struct {
 func (t *permissionedTool) Name() string        { return t.toolName }
 func (t *permissionedTool) Description() string { return "integration test tool" }
 func (t *permissionedTool) Category() string    { return "integration" }
-func (t *permissionedTool) Parameters() []contracts.ToolParameter {
+func (t *permissionedTool) Parameters() []ports.ToolParameter {
 	return nil
 }
-func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if t.manager != nil {
 		if t.path != "" {
-			if err := t.manager.CheckFileAccess(ctx, t.agent, contracts.FileSystemRead, t.path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agent, permissions.FileSystemRead, t.path); err != nil {
 				return nil, err
 			}
 		}
@@ -77,11 +78,11 @@ func (t *permissionedTool) Execute(ctx context.Context, args map[string]interfac
 		}
 	}
 	t.ran = true
-	return &contracts.ToolResult{Success: true}, nil
+	return &ports.ToolResult{Success: true}, nil
 }
 func (t *permissionedTool) IsAvailable(context.Context) bool { return true }
-func (t *permissionedTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: t.perms}
+func (t *permissionedTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: t.perms}
 }
 func (t *permissionedTool) Tags() []string { return nil }
 

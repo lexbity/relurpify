@@ -12,18 +12,21 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Re-export contract types for local usage
 type (
-	LanguageModel = contracts.LanguageModel
-	LLMOptions    = contracts.LLMOptions
-	LLMResponse   = contracts.LLMResponse
-	Message       = contracts.Message
-	LLMToolSpec   = contracts.LLMToolSpec
-	Schema        = contracts.Schema
-	ModelProfile  = contracts.ModelProfile
+	LanguageModel = model.LanguageModel
+	LLMOptions    = model.LLMOptions
+	LLMResponse   = model.LLMResponse
+	Message       = model.Message
+	LLMToolSpec   = ports.LLMToolSpec
+	Schema        = schemacoerce.Schema
+	ModelProfile  = model.ModelProfile
 )
 
 // Client implements LanguageModel for OpenAI-compatible backends.
@@ -347,7 +350,7 @@ func convertMessages(messages []Message) []map[string]any {
 	return out
 }
 
-func convertMessageToolCalls(calls []contracts.ToolCall) []map[string]any {
+func convertMessageToolCalls(calls []model.ToolCall) []map[string]any {
 	out := make([]map[string]any, 0, len(calls))
 	for _, call := range calls {
 		fn := map[string]any{"name": call.Name}
@@ -419,14 +422,14 @@ func schemaToJSONSchema(schema *Schema) map[string]any {
 	return out
 }
 
-func parseToolCalls(message *chatMessage) []contracts.ToolCall {
+func parseToolCalls(message *chatMessage) []model.ToolCall {
 	if message == nil {
 		return nil
 	}
 	calls := message.ToolCalls
-	out := make([]contracts.ToolCall, 0, len(calls))
+	out := make([]model.ToolCall, 0, len(calls))
 	for _, call := range calls {
-		out = append(out, contracts.ToolCall{
+		out = append(out, model.ToolCall{
 			ID:   call.ID,
 			Name: call.Function.Name,
 			Args: parseArgs(call.Function.Arguments),
@@ -477,8 +480,8 @@ func firstFinishReason(chunk chatCompletionChunk) string {
 	return chunk.Choices[0].FinishReason
 }
 
-func normalizeUsage(usage map[string]any, promptTokens int, responseText string) contracts.TokenUsageReport {
-	report := contracts.TokenUsageReport{}
+func normalizeUsage(usage map[string]any, promptTokens int, responseText string) telemetry.TokenUsageReport {
+	report := telemetry.TokenUsageReport{}
 	for k, v := range usage {
 		switch strings.ToLower(k) {
 		case "prompt_tokens":
@@ -503,7 +506,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		return 0
 	}
 	if prompt, ok := payload["prompt"].(string); ok && prompt != "" {
-		return contracts.EstimateTokens(prompt)
+		return telemetry.EstimateTokens(prompt)
 	}
 	messages := payload["messages"]
 	switch msgs := messages.(type) {
@@ -511,7 +514,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += contracts.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -523,7 +526,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += contracts.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -532,10 +535,10 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 	}
 }
 
-func estimateUsage(promptTokens int, responseText string) contracts.TokenUsageReport {
-	completionTokens := contracts.EstimateTokens(responseText)
+func estimateUsage(promptTokens int, responseText string) telemetry.TokenUsageReport {
+	completionTokens := telemetry.EstimateTokens(responseText)
 	totalTokens := promptTokens + completionTokens
-	return contracts.TokenUsageReport{
+	return telemetry.TokenUsageReport{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
@@ -661,7 +664,7 @@ func (b *toolCallBuilder) Merge(delta chatToolCallDelta) {
 	}
 }
 
-func buildToolCalls(builders map[int]*toolCallBuilder) []contracts.ToolCall {
+func buildToolCalls(builders map[int]*toolCallBuilder) []model.ToolCall {
 	if len(builders) == 0 {
 		return nil
 	}
@@ -670,10 +673,10 @@ func buildToolCalls(builders map[int]*toolCallBuilder) []contracts.ToolCall {
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
-	out := make([]contracts.ToolCall, 0, len(keys))
+	out := make([]model.ToolCall, 0, len(keys))
 	for _, k := range keys {
 		builder := builders[k]
-		out = append(out, contracts.ToolCall{
+		out = append(out, model.ToolCall{
 			ID:   builder.ID,
 			Name: builder.Name,
 			Args: parseArgs(builder.Args.String()),

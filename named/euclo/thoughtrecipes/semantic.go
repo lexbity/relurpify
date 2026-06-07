@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // CapabilityRegistryLookup is the minimal capability lookup contract required
@@ -19,7 +19,7 @@ type CapabilityRegistryLookup interface {
 // ToolRegistryLookup exposes the callable tool surface for semantic validation.
 type ToolRegistryLookup interface {
 	GetCapability(idOrName string) (capability.CapabilityDescriptor, bool)
-	ModelCallableTools() []contracts.Tool
+	ModelCallableTools() []ports.Tool
 }
 
 // SemanticWarning captures a non-fatal semantic diagnostic.

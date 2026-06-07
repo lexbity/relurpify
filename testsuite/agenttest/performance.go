@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 

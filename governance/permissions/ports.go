@@ -2,6 +2,8 @@ package permissions
 
 import (
 	"context"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // PermissionType enumerates the supported permission families.
@@ -93,11 +95,11 @@ type PermissionSet struct {
 
 // PermissionDescriptor identifies a specific permission for policy decisions.
 type PermissionDescriptor struct {
-	Type        PermissionType       `json:"type"`
-	Action      string               `json:"action"`
-	Resource    string               `json:"resource"`
-	Metadata    map[string]string    `json:"metadata,omitempty"`
-	RequiresHITL bool               `json:"requires_hitl,omitempty"`
+	Type         PermissionType    `json:"type"`
+	Action       string            `json:"action"`
+	Resource     string            `json:"resource"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	RequiresHITL bool              `json:"requires_hitl,omitempty"`
 }
 
 // PermissionDeniedError records a denied permission with context.
@@ -110,7 +112,7 @@ func (e *PermissionDeniedError) Error() string { return e.Message }
 
 // FilePermissionChecker checks filesystem access.
 type FilePermissionChecker interface {
-	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix interface{}) error
+	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error
 }
 
 // NetworkPermissionChecker checks network access.

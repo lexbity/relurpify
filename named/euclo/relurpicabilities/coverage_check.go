@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -41,9 +42,9 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
 		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"package": {
 					Type:        "string",
 					Description: "Go package path to check (default: ./...)",
@@ -54,9 +55,9 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 				},
 			},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if coverage run completed",
@@ -68,7 +69,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 				"packages": {
 					Type:        "array",
 					Description: "Per-package coverage results",
-					Items:       &contracts.Schema{Type: "object"},
+					Items:       &schemacoerce.Schema{Type: "object"},
 				},
 				"coverage": {
 					Type:        "object",
@@ -100,7 +101,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 }
 
 // Invoke runs go test -cover and returns per-package coverage results.
-func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}
@@ -143,7 +144,7 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Enve
 
 	passed := res.ExitCode == 0 && (threshold == 0 || totalCoverage >= threshold)
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,

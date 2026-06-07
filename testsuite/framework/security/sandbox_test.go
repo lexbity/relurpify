@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // TestSandboxPolicyVisibility validates that sandbox policy state can be

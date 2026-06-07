@@ -54,10 +54,10 @@ func TestCheckConsumers_mainPackage(t *testing.T) {
 func TestCheckConsumers_testOnlyPackage(t *testing.T) {
 	pkgs := []GoPackage{
 		{
-			ImportPath:   "codeburg.org/lexbit/relurpify/testhelper",
-			Name:         "testhelper",
-			GoFiles:      []string{},
-			TestGoFiles:  []string{"helper_test.go"},
+			ImportPath:      "codeburg.org/lexbit/relurpify/testhelper",
+			Name:            "testhelper",
+			GoFiles:         []string{},
+			TestGoFiles:     []string{"helper_test.go"},
 			OnlyTestGoFiles: true,
 		},
 	}

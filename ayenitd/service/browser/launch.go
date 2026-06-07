@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
 	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -299,16 +299,16 @@ func allowBrowserCommand(ctx context.Context, cfg browserSessionConfig, binary s
 	if policy == nil {
 		return nil
 	}
-	return policy.AllowCommand(ctx, contracts.CommandRequest{
+	return policy.AllowCommand(ctx, ports.CommandRequest{
 		Args: append([]string{binary}, args...),
 	})
 }
 
-func browserLaunchPolicy(cfg browserSessionConfig) contracts.CommandPolicy {
+func browserLaunchPolicy(cfg browserSessionConfig) sandbox.CommandPolicy {
 	return browserCommandPolicyFromConfig(cfg)
 }
 
-func browserCommandPolicyFromConfig(cfg browserSessionConfig) contracts.CommandPolicy {
+func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPolicy {
 	if cfg.service != nil && cfg.service.commandPolicy != nil {
 		return commandPolicyAdapter{policy: cfg.service.commandPolicy}
 	}
@@ -329,7 +329,7 @@ type commandPolicyAdapter struct {
 	policy sandbox.CommandPolicy
 }
 
-func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req contracts.CommandRequest) error {
+func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req ports.CommandRequest) error {
 	if a.policy == nil {
 		return nil
 	}
@@ -346,11 +346,11 @@ type budgetManagerAdapter struct {
 	budget *telemetry.ArtifactBudget
 }
 
-func newBudgetManager(maxTokens int) contracts.BudgetManager {
+func newBudgetManager(maxTokens int) telemetry.BudgetManager {
 	return budgetManagerAdapter{budget: telemetry.NewArtifactBudget(maxTokens)}
 }
 
-func (b budgetManagerAdapter) Allocate(category string, tokens int, item contracts.BudgetItem) error {
+func (b budgetManagerAdapter) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
 	if b.budget == nil {
 		return fmt.Errorf("budget unavailable")
 	}
@@ -390,7 +390,7 @@ func (b budgetManagerAdapter) CanAddTokens(tokens int) bool {
 }
 
 type budgetItemAdapter struct {
-	item contracts.BudgetItem
+	item telemetry.BudgetItem
 }
 
 func (b budgetItemAdapter) GetID() string {

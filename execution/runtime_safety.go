@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 type RuntimeSafetySpec struct {

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *execution.Task, env *contextdata.Envelope, result *execution.Result, err error) (*execution.Result, error) {
@@ -84,7 +84,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 	if err != nil {
 		return err
 	}
-	call := contracts.ToolCall{
+	call := model.ToolCall{
 		ID:   NewUUID(),
 		Name: "file_read",
 		Args: map[string]any{"path": path},

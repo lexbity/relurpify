@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type BoundaryReportHandler struct {
@@ -36,26 +37,26 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"layer": {Type: "string"},
 			},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success":           {Type: "boolean"},
 				"report":            {Type: "string"},
 				"summary":           {Type: "string"},
-				"violations":        {Type: "array", Items: &contracts.Schema{Type: "object"}},
+				"violations":        {Type: "array", Items: &schemacoerce.Schema{Type: "object"}},
 				"dependency_counts": {Type: "object"},
 			},
 		},
 	}
 }
 
-func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
 	}
@@ -113,7 +114,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Env
 	report := buildBoundaryReportMarkdown(layer, checked, dependencyCounts, violations)
 	summary := fmt.Sprintf("%d import edges checked, %d violations found", checked, len(violations))
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":           true,

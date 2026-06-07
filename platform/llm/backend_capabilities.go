@@ -1,13 +1,13 @@
 package llm
 
-import "codeburg.org/lexbit/relurpify/platform/contracts"
+import "codeburg.org/lexbit/relurpify/model"
 
 // BackendClass is re-exported from platform/contracts.
-type BackendClass = contracts.BackendClass
+type BackendClass = model.BackendClass
 
 const (
-	BackendClassTransport = contracts.BackendClassTransport
-	BackendClassNative    = contracts.BackendClassNative
+	BackendClassTransport = model.BackendClassTransport
+	BackendClassNative    = model.BackendClassNative
 )
 
 // Note: BackendCapabilities is declared in backend.go to avoid duplication

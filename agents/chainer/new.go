@@ -1,9 +1,9 @@
 package chainer
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type Option func(*ChainerAgent)

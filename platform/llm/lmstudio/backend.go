@@ -5,18 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
 // Re-export contract types for local usage
 type (
-	LanguageModel       = contracts.LanguageModel
-	BackendCapabilities = contracts.BackendCapabilities
+	LanguageModel       = model.LanguageModel
+	BackendCapabilities = model.BackendCapabilities
 )
 
 const (
-	BackendClassTransport = contracts.BackendClassTransport
+	BackendClassTransport = model.BackendClassTransport
 )
 
 // Backend implements the managed backend facade for LM Studio.

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestSnapshotAndDiffWorkspace(t *testing.T) {
@@ -57,7 +57,7 @@ func TestFilterChangedFilesIgnoresGeneratedArtifacts(t *testing.T) {
 func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing.T) {
 	shared := t.TempDir()
 
-	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", cfgload.DirName)
+	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
 	agentTemplate := filepath.Join(shared, "templates", "agents", "coding-go.yaml")
 	for _, dir := range []string{profileRoot, filepath.Dir(agentTemplate)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -78,10 +78,10 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("workspace"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(target, cfgload.DirName), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(target, config.DirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, cfgload.DirName, "manifest.yaml"), []byte("model: live\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, config.DirName, "manifest.yaml"), []byte("model: live\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,9 +91,9 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 		derived,
 		shared,
 		"default",
-		filepath.ToSlash(filepath.Join(cfgload.DirName, "agents", "coding-go.yaml")),
+		filepath.ToSlash(filepath.Join(config.DirName, "agents", "coding-go.yaml")),
 		nil,
-		[]SetupFileSpec{{Path: filepath.ToSlash(filepath.Join(cfgload.DirName, "manifest.yaml")), Content: "model: override\n"}},
+		[]SetupFileSpec{{Path: filepath.ToSlash(filepath.Join(config.DirName, "manifest.yaml")), Content: "model: override\n"}},
 	)
 	if err != nil {
 		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
@@ -102,7 +102,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if _, err := os.Stat(filepath.Join(derived, "README.md")); err != nil {
 		t.Fatalf("expected copied workspace file: %v", err)
 	}
-	configPath := filepath.Join(derived, cfgload.DirName, "manifest.yaml")
+	configPath := filepath.Join(derived, config.DirName, "manifest.yaml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read derived config: %v", err)
@@ -110,7 +110,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if string(configData) != "model: override\n" {
 		t.Fatalf("derived config = %q", string(configData))
 	}
-	agentPath := filepath.Join(derived, cfgload.DirName, "agents", "coding-go.yaml")
+	agentPath := filepath.Join(derived, config.DirName, "agents", "coding-go.yaml")
 	agentData, err := os.ReadFile(agentPath)
 	if err != nil {
 		t.Fatalf("read derived agent: %v", err)
@@ -126,7 +126,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 func TestMaterializeDerivedWorkspace(t *testing.T) {
 	shared := t.TempDir()
 
-	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", cfgload.DirName)
+	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
 	if err := os.MkdirAll(profileRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestMaterializeDerivedWorkspace(t *testing.T) {
 	}
 
 	target := t.TempDir()
-	manifestPath := filepath.Join(target, cfgload.DirName, "agent.yaml")
+	manifestPath := filepath.Join(target, config.DirName, "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ spec:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cfgload.LoadAgentManifest(manifestPath); err != nil {
+	if _, err := config.LoadAgentManifest(manifestPath); err != nil {
 		t.Fatalf("LoadAgentManifest: %v", err)
 	}
 
@@ -172,13 +172,13 @@ spec:
 		derived,
 		shared,
 		"default",
-		filepath.ToSlash(filepath.Join(cfgload.DirName, "agent.yaml")),
+		filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 		nil,
 		nil,
 	); err != nil {
 		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(derived, cfgload.DirName, "skills", "system", "skill.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(derived, config.DirName, "skills", "system", "skill.yaml")); err != nil {
 		t.Fatalf("expected referenced skill to be copied into derived workspace: %v", err)
 	}
 }

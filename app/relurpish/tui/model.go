@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // RootModel is the top-level Bubble Tea model. It owns the layout and routes

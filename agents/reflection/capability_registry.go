@@ -1,6 +1,6 @@
 package reflection
 
-import "codeburg.org/lexbit/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/capability"
 
 func (a *ReflectionAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil || a.Delegate == nil {

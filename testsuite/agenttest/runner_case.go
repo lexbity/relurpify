@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestModel, endpoint, recordingMode, tapePath, workspace, artifactsDir, errMsg, failureKind string, attempts int) CaseReport {

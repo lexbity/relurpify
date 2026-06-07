@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -39,9 +40,9 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"query": {
 					Type:        "string",
 					Description: "Symbol name or pattern to search for",
@@ -49,14 +50,14 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 				"types": {
 					Type:        "array",
 					Description: "Filter by node types (e.g., function, class, struct)",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "string",
 					},
 				},
 				"languages": {
 					Type:        "array",
 					Description: "Filter by programming languages",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "string",
 					},
 				},
@@ -67,9 +68,9 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 			},
 			Required: []string{"query"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if query executed successfully",
@@ -77,7 +78,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 				"matches": {
 					Type:        "array",
 					Description: "Matching AST nodes",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
@@ -91,7 +92,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 }
 
 // Invoke executes the AST query and returns matching nodes.
-func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	query, ok := stringArg(args, "query")
 	if !ok || query == "" {
@@ -141,7 +142,7 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope,
 	// Write retrieval reference to envelope
 	writeRetrievalReferences(env, query, nodes)
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":     true,

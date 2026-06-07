@@ -3,15 +3,15 @@ package runtime
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 type sandboxCommandRunnerAdapter struct {
 	runner sandbox.CommandRunner
 }
 
-func (a sandboxCommandRunnerAdapter) Run(ctx context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (a sandboxCommandRunnerAdapter) Run(ctx context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	if a.runner == nil {
 		return nil, nil
 	}

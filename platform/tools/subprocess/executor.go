@@ -6,13 +6,14 @@ import (
 	"log"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // NewTool builds a subprocess-backed tool implementation from a manifest.
 // The returned tool constructs every argument as a discrete token via
 // ExpandCommand and never shells out through string interpolation.
-func NewTool(manifest contracts.ToolManifest, runner contracts.CommandRunner) contracts.Tool {
+func NewTool(manifest ports.ToolManifest, runner ports.CommandRunner) ports.Tool {
 	return &subprocessTool{
 		manifest: manifest,
 		runner:   runner,
@@ -20,28 +21,28 @@ func NewTool(manifest contracts.ToolManifest, runner contracts.CommandRunner) co
 }
 
 type subprocessTool struct {
-	manifest contracts.ToolManifest
-	runner   contracts.CommandRunner
+	manifest ports.ToolManifest
+	runner   ports.CommandRunner
 }
 
 func (t *subprocessTool) Name() string        { return t.manifest.Name }
 func (t *subprocessTool) Description() string { return t.manifest.Description }
 func (t *subprocessTool) Category() string    { return t.manifest.Family }
-func (t *subprocessTool) Parameters() []contracts.ToolParameter {
-	return append([]contracts.ToolParameter(nil), t.manifest.Parameters...)
+func (t *subprocessTool) Parameters() []ports.ToolParameter {
+	return append([]ports.ToolParameter(nil), t.manifest.Parameters...)
 }
 func (t *subprocessTool) IsAvailable(context.Context) bool { return t.runner != nil }
-func (t *subprocessTool) Permissions() contracts.ToolPermissions {
-	perms := &contracts.PermissionSet{}
+func (t *subprocessTool) Permissions() ports.ToolPermissions {
+	perms := &permissions.PermissionSet{}
 	if cmd := t.manifest.Execution.Command; cmd != nil && len(cmd.Base) > 0 {
 		hitl := hasDestructiveRisk(t.manifest.Capability.RiskClass)
-		perms.Executables = []contracts.ExecutablePermission{{
+		perms.Executables = []permissions.ExecutablePermission{{
 			Binary:       cmd.Base[0],
 			Args:         append([]string(nil), t.manifest.Execution.DefaultArgs...),
 			HITLRequired: hitl,
 		}}
 	}
-	return contracts.ToolPermissions{Permissions: perms}
+	return ports.ToolPermissions{Permissions: perms}
 }
 func (t *subprocessTool) Tags() []string {
 	return append([]string(nil), t.manifest.Capability.RiskClass...)
@@ -52,11 +53,11 @@ func (t *subprocessTool) Tags() []string {
 // platform variants, and placeholder substitution), then delegates to the
 // shared Run function which applies all guards (egress, cargo isolation,
 // sandbox constraints) and returns a structured envelope.
-func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (res *contracts.ToolResult, err error) {
+func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (res *ports.ToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("subprocess tool %q panic recovered: %v", t.manifest.Name, r)
-			res = &contracts.ToolResult{Success: false, Error: "tool panicked — see server logs"}
+			res = &ports.ToolResult{Success: false, Error: "tool panicked — see server logs"}
 			err = nil
 		}
 	}()
@@ -67,7 +68,7 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 
 	cmd, e := ExpandCommand(t.manifest, args)
 	if e != nil {
-		return &contracts.ToolResult{Success: false, Error: e.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: e.Error()}, nil
 	}
 
 	execSpec := t.manifest.Execution
@@ -100,14 +101,14 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 	}
 
 	if !result.Success {
-		return &contracts.ToolResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data:    data,
 			Error:   result.Error,
 		}, nil
 	}
 
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data:    data,
 	}, nil
@@ -115,7 +116,7 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 
 func hasDestructiveRisk(classes []string) bool {
 	for _, c := range classes {
-		if strings.TrimSpace(strings.ToLower(c)) == contracts.TagDestructive {
+		if strings.TrimSpace(strings.ToLower(c)) == ports.TagDestructive {
 			return true
 		}
 	}
@@ -126,9 +127,9 @@ func stringArg(args map[string]interface{}, name string) string {
 	if args == nil {
 		return ""
 	}
-	want := contracts.NormalizeToolName(name)
+	want := ports.NormalizeToolName(name)
 	for key, value := range args {
-		if contracts.NormalizeToolName(key) == want && value != nil {
+		if ports.NormalizeToolName(key) == want && value != nil {
 			return strings.TrimSpace(fmt.Sprint(value))
 		}
 	}

@@ -5,14 +5,14 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -32,11 +32,11 @@ func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Env
 	}
 }
 
-func (h *countingCapabilityHandler) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *countingCapabilityHandler) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	h.mu.Lock()
 	h.count++
 	h.mu.Unlock()
-	return &contracts.CapabilityExecutionResult{Success: true, Data: map[string]any{"ok": true}}, nil
+	return &ports.CapabilityExecutionResult{Success: true, Data: map[string]any{"ok": true}}, nil
 }
 
 func (h *countingCapabilityHandler) Count() int {

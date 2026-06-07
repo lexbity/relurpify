@@ -5,12 +5,13 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 const (
@@ -69,7 +70,7 @@ func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *execution.
 	env.SetWorkingValue("react.phase", phase, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *execution.Task) []contracts.Tool {
+func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *execution.Task) []ports.Tool {
 	catalog := a.executionCapabilityCatalog()
 	if catalog == nil && a.Tools == nil {
 		return nil
@@ -80,7 +81,7 @@ func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *exe
 			phase = current
 		}
 	}
-	var filtered []contracts.Tool
+	var filtered []ports.Tool
 	tools := executionCallableTools(a.Tools, catalog)
 	for _, tool := range tools {
 		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(env, task, tool.Name()) {
@@ -132,7 +133,7 @@ func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (capability.
 	return a.Tools.GetCapability(idOrName)
 }
 
-func executionCallableTools(registry *capability.Registry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []contracts.Tool {
+func executionCallableTools(registry *capability.Registry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []ports.Tool {
 	if catalog != nil {
 		return catalog.ModelCallableTools()
 	}
@@ -142,7 +143,7 @@ func executionCallableTools(registry *capability.Registry, catalog *capability.E
 	return registry.ModelCallableTools()
 }
 
-func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *execution.Task, phase string, tool contracts.Tool) bool {
+func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *execution.Task, phase string, tool ports.Tool) bool {
 	if tool == nil {
 		return false
 	}
@@ -227,7 +228,7 @@ func (a *ReActAgent) verificationSuccessTools() []string {
 	return append([]string{}, resolved.VerificationSuccessCapabilities...)
 }
 
-func toolAllowedForPhase(tool contracts.Tool, phase string, task *execution.Task) bool {
+func toolAllowedForPhase(tool ports.Tool, phase string, task *execution.Task) bool {
 	if tool == nil {
 		return false
 	}
@@ -246,26 +247,26 @@ func toolAllowedForPhase(tool contracts.Tool, phase string, task *execution.Task
 	}
 	switch phase {
 	case contextmgrPhaseEdit:
-		if hasTag(contracts.TagDestructive) {
+		if hasTag(toolcapabilities.TagDestructive) {
 			return true
 		}
-		if hasTag(contracts.TagExecute) {
+		if hasTag(toolcapabilities.TagExecute) {
 			return isLanguageExecutionTool(name, task)
 		}
-		if hasTag(contracts.TagReadOnly) {
+		if hasTag(toolcapabilities.TagReadOnly) {
 			return strings.HasPrefix(name, "file_") || strings.HasPrefix(name, "ast_") || strings.HasPrefix(name, "lsp_") || strings.Contains(name, "grep")
 		}
 		return name == "exec_run_code"
 	case contextmgrPhaseVerify:
-		if hasTag(contracts.TagExecute) {
+		if hasTag(toolcapabilities.TagExecute) {
 			return true
 		}
 		return strings.Contains(name, "rustfmt") || strings.Contains(name, "format") || strings.HasPrefix(name, "file_read")
 	default:
-		if hasTag(contracts.TagReadOnly) {
+		if hasTag(toolcapabilities.TagReadOnly) {
 			return true
 		}
-		if hasTag(contracts.TagExecute) {
+		if hasTag(toolcapabilities.TagExecute) {
 			return strings.EqualFold(taskMode(task), "debug") && isLanguageExecutionTool(name, task)
 		}
 		return strings.HasPrefix(name, "ast_") || strings.HasPrefix(name, "lsp_") || strings.Contains(name, "grep")

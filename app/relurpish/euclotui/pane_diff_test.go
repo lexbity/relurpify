@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {

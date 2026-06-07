@@ -10,12 +10,13 @@ import (
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // CodeReviewHandler implements the code review capability via an LLM sub-agent.
@@ -45,18 +46,18 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"focus": {
 					Type:        "string",
 					Description: `Review focus: "correctness" | "security" | "style" | "architecture" | "all" (default: "all")`,
 				},
 			},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if review completed",
@@ -64,7 +65,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"findings": {
 					Type:        "array",
 					Description: "Review findings",
-					Items:       &contracts.Schema{Type: "object"},
+					Items:       &schemacoerce.Schema{Type: "object"},
 				},
 				"summary": {
 					Type:        "string",
@@ -84,14 +85,14 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke reviews code from the envelope's user files or retrieval context.
-func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	focus, _ := stringArg(args, "focus")
 	if focus == "" {
 		focus = "all"
 	}
 
 	if !hasReviewContext(env) {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -105,7 +106,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 
 	contextText, fileCount := buildReviewContext(env)
 	if fileCount == 0 && strings.TrimSpace(contextText) == "" {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -134,7 +135,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 		}
 	}
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

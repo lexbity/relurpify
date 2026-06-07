@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"strings"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 var rewooErrReplanRequired = errors.New("rewoo: replan required")
 
 type rewooExecutor struct {
 	Registry           *capability.Registry
-	PermissionChecker  contracts.CapabilityChecker
+	PermissionChecker  permissions.CapabilityChecker
 	OnFailure          StepOnFailure
 	MaxSteps           int
 	OnPermissionDenied StepOnFailure // How to handle denied permissions (default: abort)

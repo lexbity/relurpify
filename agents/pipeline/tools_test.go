@@ -6,17 +6,19 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // mockInvoker implements CapabilityInvoker for testing.
 type mockInvoker struct {
-	results map[string]*contracts.ToolResult
+	results map[string]*ports.ToolResult
 	err     map[string]error
 }
 
-func (m *mockInvoker) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*contracts.ToolResult, error) {
+func (m *mockInvoker) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if m.err != nil {
 		if e, ok := m.err[idOrName]; ok && e != nil {
 			return nil, e
@@ -27,14 +29,14 @@ func (m *mockInvoker) InvokeCapability(ctx context.Context, env *contextdata.Env
 			return r, nil
 		}
 	}
-	return &contracts.ToolResult{Success: true}, nil
+	return &ports.ToolResult{Success: true}, nil
 }
 
 func TestPipelineToolWithoutInvokerReturnsHardError(t *testing.T) {
-	calls := []contracts.ToolCall{
+	calls := []model.ToolCall{
 		{Name: "test_tool", Args: map[string]any{"input": "hello"}},
 	}
-	tools := []contracts.Tool{
+	tools := []ports.Tool{
 		&fakeTool{name: "test_tool"},
 	}
 
@@ -51,14 +53,14 @@ func TestPipelineToolWithoutInvokerReturnsHardError(t *testing.T) {
 }
 
 func TestPipelineToolWithInvokerSucceeds(t *testing.T) {
-	calls := []contracts.ToolCall{
+	calls := []model.ToolCall{
 		{Name: "test_tool", Args: map[string]any{"input": "world"}},
 	}
-	tools := []contracts.Tool{
+	tools := []ports.Tool{
 		&fakeTool{name: "test_tool"},
 	}
 	invoker := &mockInvoker{
-		results: map[string]*contracts.ToolResult{
+		results: map[string]*ports.ToolResult{
 			"test_tool": {Success: true, Data: map[string]any{"output": "ok"}},
 		},
 	}
@@ -79,10 +81,10 @@ func TestPipelineToolWithInvokerSucceeds(t *testing.T) {
 }
 
 func TestPipelineToolWithInvokerError(t *testing.T) {
-	calls := []contracts.ToolCall{
+	calls := []model.ToolCall{
 		{Name: "fail_tool", Args: map[string]any{}},
 	}
-	tools := []contracts.Tool{
+	tools := []ports.Tool{
 		&fakeTool{name: "fail_tool"},
 	}
 	invoker := &mockInvoker{
@@ -104,10 +106,10 @@ func TestPipelineToolWithInvokerError(t *testing.T) {
 }
 
 func TestPipelineToolUnknownNameReturnsError(t *testing.T) {
-	calls := []contracts.ToolCall{
+	calls := []model.ToolCall{
 		{Name: "unknown_tool", Args: map[string]any{}},
 	}
-	tools := []contracts.Tool{
+	tools := []ports.Tool{
 		&fakeTool{name: "allowed_tool"},
 	}
 	invoker := &mockInvoker{}
@@ -125,7 +127,7 @@ func TestPipelineToolUnknownNameReturnsError(t *testing.T) {
 }
 
 func TestPipelineToolEmptyCalls(t *testing.T) {
-	observations, err := executeToolCalls(context.Background(), nil, nil, []contracts.Tool{}, nil)
+	observations, err := executeToolCalls(context.Background(), nil, nil, []ports.Tool{}, nil)
 	if err != nil {
 		t.Fatalf("expected no error for empty calls, got: %v", err)
 	}
@@ -134,22 +136,22 @@ func TestPipelineToolEmptyCalls(t *testing.T) {
 	}
 }
 
-// fakeTool implements contracts.Tool for testing.
+// fakeTool implements ports.Tool for testing.
 type fakeTool struct {
 	name string
 }
 
-func (f *fakeTool) Name() string                          { return f.name }
-func (f *fakeTool) Description() string                   { return "fake tool for testing" }
-func (f *fakeTool) Category() string                      { return "test" }
-func (f *fakeTool) Parameters() []contracts.ToolParameter { return nil }
-func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: true}, nil
+func (f *fakeTool) Name() string                      { return f.name }
+func (f *fakeTool) Description() string               { return "fake tool for testing" }
+func (f *fakeTool) Category() string                  { return "test" }
+func (f *fakeTool) Parameters() []ports.ToolParameter { return nil }
+func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true}, nil
 }
 func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
-func (f *fakeTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{
+func (f *fakeTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}}

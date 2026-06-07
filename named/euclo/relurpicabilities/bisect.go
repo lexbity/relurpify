@@ -7,12 +7,14 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // BisectHandler implements the git bisect capability.
@@ -43,9 +45,9 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"good_ref": {
 					Type:        "string",
 					Description: "Git ref known to be good (e.g., commit hash, tag)",
@@ -65,9 +67,9 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 			},
 			Required: []string{"good_ref", "bad_ref", "test_command"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if bisect completed successfully",
@@ -90,7 +92,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 }
 
 // Invoke executes git bisect to find the culprit commit.
-func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	goodRef, ok := stringArg(args, "good_ref")
 	if !ok || goodRef == "" {
@@ -123,7 +125,7 @@ func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, a
 	return h.runDeterministicBisect(ctx, goodRef, badRef, testCommand, maxSteps)
 }
 
-func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*contracts.CapabilityExecutionResult, error) {
+func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.CapabilityExecutionResult, error) {
 	workdir := workspacePath(h.env)
 	if err := h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "start"}); err != nil {
 		return failResult(fmt.Sprintf("failed to start bisect: %v", err)), nil
@@ -172,7 +174,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 
 	_ = h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "reset"})
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,
@@ -183,7 +185,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 	}, nil
 }
 
-func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*contracts.CapabilityExecutionResult, error) {
+func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.CapabilityExecutionResult, error) {
 	// The model-guided path uses the same command primitives as the
 	// deterministic fallback, but lets the model decide which action to take
 	// next. If the model path fails to produce a valid plan, the caller falls
@@ -288,7 +290,7 @@ func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, 
 
 done:
 	_ = h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "reset"})
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,
@@ -341,7 +343,7 @@ Current state:
 Return JSON only:
 {"thought":"...","tool":"run_test|mark_good|mark_bad|check_result|reset|complete","arguments":{},"complete":bool,"summary":"..."}`,
 		state.GoodRef, state.BadRef, state.TestCommand, state.StepsTaken, state.MaxSteps, state.LastTestPassed, state.CulpritCommit, state.Found)
-	resp, err := h.env.Model.Generate(ctx, prompt, &contracts.LLMOptions{
+	resp, err := h.env.Model.Generate(ctx, prompt, &model.LLMOptions{
 		Model:       configuredModelName(h.env.Config),
 		Temperature: 0,
 		MaxTokens:   256,

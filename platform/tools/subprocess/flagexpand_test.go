@@ -3,15 +3,16 @@ package subprocess
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 func TestExpandCommandBaseOnly(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
 			},
 		},
@@ -21,10 +22,10 @@ func TestExpandCommandBaseOnly(t *testing.T) {
 }
 
 func TestExpandCommandBaseWithArgs(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"echo"},
 				Args: []string{"hello", "world"},
 			},
@@ -35,10 +36,10 @@ func TestExpandCommandBaseWithArgs(t *testing.T) {
 }
 
 func TestExpandCommandWithPlaceholders(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"echo"},
 				Args: []string{"${message}"},
 			},
@@ -51,10 +52,10 @@ func TestExpandCommandWithPlaceholders(t *testing.T) {
 }
 
 func TestExpandCommandWithDefaultArgs(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend:     contracts.ToolBackendSubprocess,
-			Command:     &contracts.ToolManifestCommand{Base: []string{"echo"}},
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend:     ports.ToolBackendSubprocess,
+			Command:     &ports.ToolManifestCommand{Base: []string{"echo"}},
 			DefaultArgs: []string{"-n"},
 		},
 	}, nil)
@@ -63,11 +64,11 @@ func TestExpandCommandWithDefaultArgs(t *testing.T) {
 }
 
 func TestExpandCommandWithRawArgs(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
-			Sandbox: &contracts.ToolManifestSandbox{AllowFlags: true},
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]interface{}{
 		"args": []interface{}{"hello", "world"},
@@ -77,10 +78,10 @@ func TestExpandCommandWithRawArgs(t *testing.T) {
 }
 
 func TestExpandCommandRawArgsFlagGuard(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			// allow_flags defaults to false
 		},
 	}, map[string]interface{}{
@@ -91,11 +92,11 @@ func TestExpandCommandRawArgsFlagGuard(t *testing.T) {
 }
 
 func TestExpandCommandRawArgsFlagAllowed(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
-			Sandbox: &contracts.ToolManifestSandbox{AllowFlags: true},
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]interface{}{
 		"args": []interface{}{"--verbose"},
@@ -105,10 +106,10 @@ func TestExpandCommandRawArgsFlagAllowed(t *testing.T) {
 }
 
 func TestExpandCommandMissingPlaceholder(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"echo"},
 				Args: []string{"${missing}"},
 			},
@@ -121,15 +122,15 @@ func TestExpandCommandMissingPlaceholder(t *testing.T) {
 // --- Typed flag tests ---
 
 func TestTypedFlagEqualsStyle(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"output": {
 						Param: "output_path",
-						Style: contracts.FlagStyleEquals,
+						Style: ports.FlagStyleEquals,
 					},
 				},
 			},
@@ -142,12 +143,12 @@ func TestTypedFlagEqualsStyle(t *testing.T) {
 }
 
 func TestTypedFlagEqualsStyleDefaults(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"output": {
 						Param: "output_path",
 						// Style empty — defaults to equals
@@ -163,15 +164,15 @@ func TestTypedFlagEqualsStyleDefaults(t *testing.T) {
 }
 
 func TestTypedFlagSeparateStyle(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"output": {
 						Param: "output_path",
-						Style: contracts.FlagStyleSeparate,
+						Style: ports.FlagStyleSeparate,
 					},
 				},
 			},
@@ -184,15 +185,15 @@ func TestTypedFlagSeparateStyle(t *testing.T) {
 }
 
 func TestTypedFlagRepeatEquals(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"glob": {
 						Param:  "patterns",
-						Style:  contracts.FlagStyleEquals,
+						Style:  ports.FlagStyleEquals,
 						Repeat: true,
 					},
 				},
@@ -206,15 +207,15 @@ func TestTypedFlagRepeatEquals(t *testing.T) {
 }
 
 func TestTypedFlagRepeatSeparate(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"glob": {
 						Param:  "patterns",
-						Style:  contracts.FlagStyleSeparate,
+						Style:  ports.FlagStyleSeparate,
 						Repeat: true,
 					},
 				},
@@ -229,15 +230,15 @@ func TestTypedFlagRepeatSeparate(t *testing.T) {
 
 func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
 	// Value containing =, space-like chars must stay a single token
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"pattern": {
 						Param: "pat",
-						Style: contracts.FlagStyleSeparate,
+						Style: ports.FlagStyleSeparate,
 					},
 				},
 			},
@@ -255,12 +256,12 @@ func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
 // --- Boolean flag tests ---
 
 func TestBooleanFlagTrue(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"colordiff"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"color": {
 						WhenTrue:  []string{"--color=always"},
 						WhenFalse: []string{"--color=never"},
@@ -276,12 +277,12 @@ func TestBooleanFlagTrue(t *testing.T) {
 }
 
 func TestBooleanFlagFalse(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"colordiff"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"color": {
 						WhenTrue:  []string{"--color=always"},
 						WhenFalse: []string{"--color=never"},
@@ -297,12 +298,12 @@ func TestBooleanFlagFalse(t *testing.T) {
 }
 
 func TestBooleanFlagNotProvided(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"colordiff"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"color": {
 						WhenTrue:  []string{"--color=always"},
 						WhenFalse: []string{"--color=never"},
@@ -316,12 +317,12 @@ func TestBooleanFlagNotProvided(t *testing.T) {
 }
 
 func TestBooleanFlagOnlyWhenTrue(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"tool"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"verbose": {
 						WhenTrue: []string{"--verbose"},
 					},
@@ -336,12 +337,12 @@ func TestBooleanFlagOnlyWhenTrue(t *testing.T) {
 }
 
 func TestBooleanFlagOnlyWhenTrueFalse(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"tool"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"verbose": {
 						WhenTrue: []string{"--verbose"},
 					},
@@ -358,15 +359,15 @@ func TestBooleanFlagOnlyWhenTrueFalse(t *testing.T) {
 // --- Combined tests ---
 
 func TestTypedAndBooleanFlagsCombined(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"output": {
 						Param: "output_path",
-						Style: contracts.FlagStyleEquals,
+						Style: ports.FlagStyleEquals,
 					},
 					"hidden": {
 						WhenTrue: []string{"--hidden"},
@@ -384,25 +385,25 @@ func TestTypedAndBooleanFlagsCombined(t *testing.T) {
 }
 
 func TestExpandCommandAllComponents(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Parameters: []contracts.ToolParameter{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Parameters: []ports.ToolParameter{
 			{Name: "pattern", Type: "string", Required: true},
 		},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
 				Args: []string{"${pattern}"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"glob": {
 						Param:  "globs",
-						Style:  contracts.FlagStyleSeparate,
+						Style:  ports.FlagStyleSeparate,
 						Repeat: true,
 					},
 				},
 			},
 			DefaultArgs: []string{"--no-ignore"},
-			Sandbox:     &contracts.ToolManifestSandbox{AllowFlags: true},
+			Sandbox:     &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]interface{}{
 		"pattern": "func",
@@ -417,10 +418,10 @@ func TestExpandCommandAllComponents(t *testing.T) {
 // --- Error cases ---
 
 func TestMissingRequiredParamViaPlaceholder(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"echo"},
 				Args: []string{"${required_param}"},
 			},
@@ -431,10 +432,10 @@ func TestMissingRequiredParamViaPlaceholder(t *testing.T) {
 }
 
 func TestPartialPlaceholderTokenRejected(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"echo"},
 				Args: []string{"prefix_${x}_suffix"},
 			},
@@ -445,11 +446,11 @@ func TestPartialPlaceholderTokenRejected(t *testing.T) {
 }
 
 func TestNoCommandBase(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
+	_, err := ExpandCommand(ports.ToolManifest{
 		Name: "empty",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{},
 		},
 	}, nil)
 	require.Error(t, err)
@@ -457,9 +458,9 @@ func TestNoCommandBase(t *testing.T) {
 }
 
 func TestNoCommandSpec(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
 		},
 	}, nil)
 	require.Error(t, err)
@@ -485,10 +486,10 @@ func TestAdversarialValuesStaySingleTokens(t *testing.T) {
 
 	for _, val := range adversarial {
 		t.Run(val, func(t *testing.T) {
-			cmd, err := ExpandCommand(contracts.ToolManifest{
-				Execution: contracts.ToolManifestExecution{
-					Backend: contracts.ToolBackendSubprocess,
-					Command: &contracts.ToolManifestCommand{
+			cmd, err := ExpandCommand(ports.ToolManifest{
+				Execution: ports.ToolManifestExecution{
+					Backend: ports.ToolBackendSubprocess,
+					Command: &ports.ToolManifestCommand{
 						Base: []string{"tool"},
 						Args: []string{"${x}"},
 					},
@@ -504,15 +505,15 @@ func TestAdversarialValuesStaySingleTokens(t *testing.T) {
 }
 
 func TestParamNotProvidedTypedFlagSkipped(t *testing.T) {
-	cmd, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	cmd, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"output": {
 						Param: "output_path",
-						Style: contracts.FlagStyleEquals,
+						Style: ports.FlagStyleEquals,
 					},
 				},
 			},
@@ -523,12 +524,12 @@ func TestParamNotProvidedTypedFlagSkipped(t *testing.T) {
 }
 
 func TestBoolFlagNonBoolValueError(t *testing.T) {
-	_, err := ExpandCommand(contracts.ToolManifest{
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+	_, err := ExpandCommand(ports.ToolManifest{
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{
 				Base: []string{"tool"},
-				Flags: map[string]contracts.ToolManifestFlag{
+				Flags: map[string]ports.ToolManifestFlag{
 					"verbose": {
 						WhenTrue: []string{"--verbose"},
 					},

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // PreflightIssue describes a problem found during plan validation.
@@ -26,7 +26,7 @@ func PreflightCheck(
 	ctx context.Context,
 	registry *capability.Registry,
 	plan *RewooPlan,
-	pc contracts.CapabilityChecker,
+	pc permissions.CapabilityChecker,
 ) []PreflightIssue {
 	var issues []PreflightIssue
 
@@ -122,7 +122,7 @@ func IsValidPlan(
 	ctx context.Context,
 	registry *capability.Registry,
 	plan *RewooPlan,
-	pc contracts.CapabilityChecker,
+	pc permissions.CapabilityChecker,
 ) bool {
 	issues := PreflightCheck(ctx, registry, plan, pc)
 	for _, issue := range issues {

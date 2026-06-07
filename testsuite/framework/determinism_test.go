@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -183,15 +183,15 @@ func TestOrderingStability(t *testing.T) {
 	})
 
 	t.Run("filesystem permission sorting stability", func(t *testing.T) {
-		perms1 := []contracts.FileSystemPermission{
-			{Action: contracts.FileSystemWrite, Path: "/a"},
-			{Action: contracts.FileSystemRead, Path: "/b"},
-			{Action: contracts.FileSystemList, Path: "/c"},
+		perms1 := []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemWrite, Path: "/a"},
+			{Action: permissions.FileSystemRead, Path: "/b"},
+			{Action: permissions.FileSystemList, Path: "/c"},
 		}
-		perms2 := []contracts.FileSystemPermission{
-			{Action: contracts.FileSystemList, Path: "/c"},
-			{Action: contracts.FileSystemWrite, Path: "/a"},
-			{Action: contracts.FileSystemRead, Path: "/b"},
+		perms2 := []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemList, Path: "/c"},
+			{Action: permissions.FileSystemWrite, Path: "/a"},
+			{Action: permissions.FileSystemRead, Path: "/b"},
 		}
 
 		normalized1 := NormalizeFileSystemPermissions(perms1)
@@ -201,12 +201,12 @@ func TestOrderingStability(t *testing.T) {
 	})
 
 	t.Run("network permission sorting stability", func(t *testing.T) {
-		perms1 := []contracts.NetworkPermission{
+		perms1 := []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 			{Direction: "ingress", Protocol: "udp", Host: "test.com", Port: 80},
 			{Direction: "egress", Protocol: "tcp", Host: "api.com", Port: 8080},
 		}
-		perms2 := []contracts.NetworkPermission{
+		perms2 := []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "api.com", Port: 8080},
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 			{Direction: "ingress", Protocol: "udp", Host: "test.com", Port: 80},
@@ -270,13 +270,13 @@ func TestNormalizationHelpersContract(t *testing.T) {
 		if NormalizeFileSystemPermissions(nil) != nil {
 			t.Error("nil permissions should return nil")
 		}
-		if NormalizeFileSystemPermissions([]contracts.FileSystemPermission{}) != nil {
+		if NormalizeFileSystemPermissions([]permissions.FileSystemPermission{}) != nil {
 			t.Error("empty permissions should return nil")
 		}
 		if NormalizeNetworkPermissions(nil) != nil {
 			t.Error("nil permissions should return nil")
 		}
-		if NormalizeNetworkPermissions([]contracts.NetworkPermission{}) != nil {
+		if NormalizeNetworkPermissions([]permissions.NetworkPermission{}) != nil {
 			t.Error("empty permissions should return nil")
 		}
 		if NormalizePolicyRules(nil) != nil {

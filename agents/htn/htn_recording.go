@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // recordingPrimitiveAgent wraps a primitive executor and persists step outcomes
@@ -47,7 +47,9 @@ func (a *recordingPrimitiveAgent) Initialize(_ *execution.Config) error { return
 
 func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
 
-func (a *recordingPrimitiveAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) { return nil, nil }
+func (a *recordingPrimitiveAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
+	return nil, nil
+}
 
 func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
 	if a == nil || a.delegate == nil {

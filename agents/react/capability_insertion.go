@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 func resolveInsertionDecision(agent *ReActAgent, task *execution.Task, envelope *capability.CapabilityResultEnvelope) capability.InsertionDecision {
@@ -16,7 +16,7 @@ func resolveInsertionDecision(agent *ReActAgent, task *execution.Task, envelope 
 	return capability.EffectiveInsertionDecision(agent.Config.AgentSpec, envelope)
 }
 
-func renderInsertionFilteredSummary(agent *ReActAgent, task *execution.Task, toolName string, payload *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) (string, bool) {
+func renderInsertionFilteredSummary(agent *ReActAgent, task *execution.Task, toolName string, payload *ports.ToolResult, envelope *capability.CapabilityResultEnvelope) (string, bool) {
 	if payload == nil {
 		return "", false
 	}

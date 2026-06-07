@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -254,8 +254,8 @@ func browserTransportForBackend(backend string) string {
 	}
 }
 
-func success(data map[string]interface{}) *contracts.ToolResult {
-	return &contracts.ToolResult{Success: true, Data: data}
+func success(data map[string]interface{}) *ports.ToolResult {
+	return &ports.ToolResult{Success: true, Data: data}
 }
 
 func emitBrowserTelemetry(sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]interface{}) {

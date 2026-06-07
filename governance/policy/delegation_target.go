@@ -1,6 +1,6 @@
 package policy
 
-import agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+import agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 
 // DelegationTarget is the policy-relevant view of a delegation target.
 // capability.CapabilityDescriptor satisfies this interface.

@@ -5,21 +5,21 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/jobs"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type recordingSubmitter struct {
 	mu   sync.Mutex
-	spec jobs.JobSpec
+	spec jobs.Spec
 	job  *jobs.Job
 }
 
-func (r *recordingSubmitter) Submit(_ context.Context, spec jobs.JobSpec) (*jobs.Job, error) {
+func (r *recordingSubmitter) Submit(_ context.Context, spec jobs.Spec) (*jobs.Job, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.spec = spec
@@ -29,7 +29,7 @@ func (r *recordingSubmitter) Submit(_ context.Context, spec jobs.JobSpec) (*jobs
 	job := &jobs.Job{
 		ID:    "job-1",
 		Spec:  spec,
-		State: jobs.JobStateQueued,
+		State: jobs.StateQueued,
 	}
 	r.job = job
 	return job, nil

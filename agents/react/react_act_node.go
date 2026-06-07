@@ -6,14 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -56,10 +57,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	env.SetWorkingValue("react.execution_phase", "executing", contextdata.MemoryClassTask)
 	activeTools := activeToolSet(env)
 	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
-		if calls, ok := pending.([]contracts.ToolCall); ok && len(calls) > 0 {
+		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
 			calls = filterToolCalls(calls)
 			if len(calls) == 0 {
-				env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
+				env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 			} else {
 				results := make(map[string]interface{})
 				envelopes := make(map[string]*capability.CapabilityResultEnvelope)
@@ -71,7 +72,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						callID = NewUUID()
 					}
 					if !n.capabilityAllowed(call.Name, activeTools) || !n.agent.Tools.HasCapability(call.Name) {
-						errResult := &contracts.ToolResult{
+						errResult := &ports.ToolResult{
 							Success: false,
 							Error:   fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", call.Name),
 						}
@@ -83,7 +84,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						continue
 					}
 					if !n.agent.Tools.CapabilityAvailable(ctx, env, call.Name) {
-						errResult := &contracts.ToolResult{
+						errResult := &ports.ToolResult{
 							Success: false,
 							Error:   fmt.Sprintf("tool %q is unavailable right now.", call.Name),
 						}
@@ -99,7 +100,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 					if err != nil {
 						// Convert hard tool errors (e.g. schema validation, permission denial)
 						// into soft ToolResult failures so the LLM can observe and recover.
-						res = &contracts.ToolResult{Success: false, Error: err.Error()}
+						res = &ports.ToolResult{Success: false, Error: err.Error()}
 						err = nil
 					}
 					if res != nil {
@@ -126,7 +127,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				}
 				env.SetWorkingValue("react.last_tool_result", results, contextdata.MemoryClassTask)
 				env.SetWorkingValue("react.last_tool_result_envelopes", envelopes, contextdata.MemoryClassTask)
-				env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
+				env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 				result := &execution.Result{
 					NodeID:  n.id,
 					Success: overallSuccess,
@@ -143,7 +144,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 			}
 		}
 		if n.agent.Config != nil && !n.agent.Config.NativeToolCalling {
-			env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{}, contextdata.MemoryClassTask)
+			env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 		}
 	}
 	val, ok := env.GetWorkingValue("react.decision")
@@ -184,7 +185,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	if err != nil {
 		return nil, err
 	}
-	call := contracts.ToolCall{
+	call := model.ToolCall{
 		ID:   NewUUID(),
 		Name: decision.Tool,
 		Args: decision.Arguments,
@@ -209,7 +210,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	return result, nil
 }
 
-func (n *reactActNode) latchVerificationSuccess(env *contextdata.Envelope, toolName string, res *contracts.ToolResult) {
+func (n *reactActNode) latchVerificationSuccess(env *contextdata.Envelope, toolName string, res *ports.ToolResult) {
 	if env == nil || n == nil || n.agent == nil || n.task == nil || res == nil || !res.Success {
 		return
 	}
@@ -236,7 +237,7 @@ func (n *reactActNode) capabilityAllowed(name string, active map[string]struct{}
 	return true
 }
 
-func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.Envelope, tool contracts.Tool, call contracts.ToolCall, res *contracts.ToolResult) *capability.CapabilityResultEnvelope {
+func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.Envelope, tool ports.Tool, call model.ToolCall, res *ports.ToolResult) *capability.CapabilityResultEnvelope {
 	var desc capability.CapabilityDescriptor
 	if res != nil && res.Metadata != nil {
 		if raw, ok := res.Metadata["capability_descriptor"]; ok {
@@ -319,7 +320,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	return envelope
 }
 
-func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) {
+func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.ToolCall, res *ports.ToolResult, envelope *capability.CapabilityResultEnvelope) {
 	appendToolMessage(n.agent, n.task, env, call, res, envelope)
 	decision := resolveInsertionDecision(n.agent, n.task, envelope)
 	observation := summarizeToolResult(env, call, res, decision)
@@ -350,7 +351,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contrac
 	// 	summaryEnvelope := capability.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)
 	// 	item := &core.ToolResultContextItem{
 	// 		ToolName:     call.Name,
-	// 		Result:       &contracts.ToolResult{Success: res.Success, Data: map[string]interface{}{"summary": observation.Summary}, Error: res.Error},
+	// 		Result:       &ports.ToolResult{Success: res.Success, Data: map[string]interface{}{"summary": observation.Summary}, Error: res.Error},
 	// 		Envelope:     summaryEnvelope,
 	// 		LastAccessed: time.Now().UTC(),
 	// 		Relevance:    0.9,
@@ -374,7 +375,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call contrac
 	// }
 }
 
-func (n *reactActNode) refreshIndexesAfterMutation(call contracts.ToolCall, res *contracts.ToolResult) {
+func (n *reactActNode) refreshIndexesAfterMutation(call model.ToolCall, res *ports.ToolResult) {
 	if n == nil || n.agent == nil || res == nil || !res.Success {
 		return
 	}
@@ -394,7 +395,7 @@ func (n *reactActNode) refreshIndexesAfterMutation(call contracts.ToolCall, res 
 	}
 }
 
-func mutationPaths(call contracts.ToolCall, res *contracts.ToolResult) []string {
+func mutationPaths(call model.ToolCall, res *ports.ToolResult) []string {
 	name := strings.TrimSpace(call.Name)
 	switch name {
 	case "file_write", "file_create":
@@ -409,7 +410,7 @@ func mutationPaths(call contracts.ToolCall, res *contracts.ToolResult) []string 
 	return nil
 }
 
-func resultPathOrArg(call contracts.ToolCall, res *contracts.ToolResult) string {
+func resultPathOrArg(call model.ToolCall, res *ports.ToolResult) string {
 	if res != nil && res.Data != nil {
 		if path := strings.TrimSpace(fmt.Sprint(res.Data["path"])); path != "" && path != "<nil>" {
 			return path

@@ -1,6 +1,6 @@
 package rewoo
 
-import "codeburg.org/lexbit/relurpify/framework/agentenv"
+import "codeburg.org/lexbit/relurpify/execution/agentenv"
 
 type Option func(*RewooAgent)
 

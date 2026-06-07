@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 type stubCapabilityHandler struct {
@@ -37,11 +37,11 @@ func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	_ = ctx
 	_ = env
 	h.args = args
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"answer": "ok",
@@ -284,7 +284,7 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 	}
 }
 
-func runtimeToolNames(tools []contracts.Tool) []string {
+func runtimeToolNames(tools []ports.Tool) []string {
 	if len(tools) == 0 {
 		return nil
 	}

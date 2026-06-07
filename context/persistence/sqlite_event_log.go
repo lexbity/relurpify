@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/framework/event"
 	_ "github.com/mattn/go-sqlite3"
+
+	"codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
 const eventLogIdempotencyTTL = 24 * time.Hour
@@ -82,7 +82,7 @@ func (l *SQLiteEventLog) init() error {
 	return nil
 }
 
-func (l *SQLiteEventLog) Append(ctx context.Context, partition string, events []telemetry.FrameworkEvent) ([]uint64, error) {
+func (l *SQLiteEventLog) Append(ctx context.Context, partition string, events []event.FrameworkEvent) ([]uint64, error) {
 	if l == nil || l.db == nil {
 		return nil, errors.New("event log unavailable")
 	}
@@ -158,7 +158,7 @@ func (l *SQLiteEventLog) Append(ctx context.Context, partition string, events []
 	return seqs, nil
 }
 
-func (l *SQLiteEventLog) Read(ctx context.Context, partition string, afterSeq uint64, limit int, follow bool) ([]telemetry.FrameworkEvent, error) {
+func (l *SQLiteEventLog) Read(ctx context.Context, partition string, afterSeq uint64, limit int, follow bool) ([]event.FrameworkEvent, error) {
 	if l == nil || l.db == nil {
 		return nil, errors.New("event log unavailable")
 	}
@@ -181,7 +181,7 @@ func (l *SQLiteEventLog) Read(ctx context.Context, partition string, afterSeq ui
 	}
 }
 
-func (l *SQLiteEventLog) ReadByType(ctx context.Context, partition string, typePrefix string, afterSeq uint64, limit int) ([]telemetry.FrameworkEvent, error) {
+func (l *SQLiteEventLog) ReadByType(ctx context.Context, partition string, typePrefix string, afterSeq uint64, limit int) ([]event.FrameworkEvent, error) {
 	if partition == "" {
 		partition = "local"
 	}
@@ -266,16 +266,16 @@ func (l *SQLiteEventLog) pruneIdemCache(ctx context.Context) {
 	_, _ = l.db.ExecContext(ctx, `DELETE FROM idem_cache WHERE expires <= ?`, time.Now().UTC().Format(time.RFC3339Nano))
 }
 
-func (l *SQLiteEventLog) readQuery(ctx context.Context, query string, args ...any) ([]telemetry.FrameworkEvent, error) {
+func (l *SQLiteEventLog) readQuery(ctx context.Context, query string, args ...any) ([]event.FrameworkEvent, error) {
 	rows, err := l.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []telemetry.FrameworkEvent
+	var out []event.FrameworkEvent
 	for rows.Next() {
 		var (
-			ev          telemetry.FrameworkEvent
+			ev          event.FrameworkEvent
 			ts          string
 			causedByRaw string
 			actorRaw    string

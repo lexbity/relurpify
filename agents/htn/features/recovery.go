@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 

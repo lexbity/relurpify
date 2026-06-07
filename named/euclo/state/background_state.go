@@ -1,7 +1,7 @@
 package state
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // GetBackgroundJobID returns the ID of the most recently submitted background job.

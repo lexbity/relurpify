@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // Phase 10: Persistence automation and knowledge integration.

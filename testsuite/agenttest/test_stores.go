@@ -1,7 +1,7 @@
 package agenttest
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 type testStoreBundle struct {

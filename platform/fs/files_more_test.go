@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // ============== Helper Functions Tests ==============
@@ -165,7 +168,7 @@ func TestReadFileTool_Metadata(t *testing.T) {
 	params := tool.Parameters()
 	require.Len(t, params, 1)
 	assert.Equal(t, "path", params[0].Name)
-	assert.Equal(t, contracts.ToolParamString, params[0].Type)
+	assert.Equal(t, ports.ToolParamString, params[0].Type)
 	assert.True(t, params[0].Required)
 
 	assert.True(t, tool.IsAvailable(context.Background()))
@@ -174,7 +177,7 @@ func TestReadFileTool_Metadata(t *testing.T) {
 	assert.NotNil(t, perms)
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagReadOnly)
+	assert.Contains(t, tags, ports.TagReadOnly)
 	assert.Contains(t, tags, "file")
 }
 
@@ -193,7 +196,7 @@ func TestWriteFileTool_Metadata(t *testing.T) {
 	assert.True(t, tool.IsAvailable(context.Background()))
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagDestructive)
+	assert.Contains(t, tags, ports.TagDestructive)
 }
 
 func TestListFilesTool_Metadata(t *testing.T) {
@@ -213,7 +216,7 @@ func TestListFilesTool_Metadata(t *testing.T) {
 	assert.True(t, tool.IsAvailable(context.Background()))
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagReadOnly)
+	assert.Contains(t, tags, ports.TagReadOnly)
 }
 
 func TestSearchInFilesTool_Metadata(t *testing.T) {
@@ -232,7 +235,7 @@ func TestSearchInFilesTool_Metadata(t *testing.T) {
 	assert.True(t, tool.IsAvailable(context.Background()))
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagReadOnly)
+	assert.Contains(t, tags, ports.TagReadOnly)
 	assert.Contains(t, tags, "search")
 }
 
@@ -253,7 +256,7 @@ func TestCreateFileTool_Metadata(t *testing.T) {
 	assert.True(t, tool.IsAvailable(context.Background()))
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagDestructive)
+	assert.Contains(t, tags, ports.TagDestructive)
 }
 
 func TestDeleteFileTool_Metadata(t *testing.T) {
@@ -271,7 +274,7 @@ func TestDeleteFileTool_Metadata(t *testing.T) {
 	assert.True(t, tool.IsAvailable(context.Background()))
 
 	tags := tool.Tags()
-	assert.Contains(t, tags, contracts.TagDestructive)
+	assert.Contains(t, tags, ports.TagDestructive)
 }
 
 // ============== SetPermissionManager Tests ==============
@@ -372,7 +375,7 @@ func TestDeleteFileTool_SetSandboxScope(t *testing.T) {
 
 func TestWriteFileTool_SetAgentSpec(t *testing.T) {
 	tool := &WriteFileTool{}
-	spec := &contracts.AgentRuntimeSpec{Implementation: "test"}
+	spec := &agentspec.AgentRuntimeSpec{Implementation: "test"}
 	tool.SetAgentSpec(spec, "agent-123")
 	assert.NotNil(t, tool.spec)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -380,7 +383,7 @@ func TestWriteFileTool_SetAgentSpec(t *testing.T) {
 
 func TestCreateFileTool_SetAgentSpec(t *testing.T) {
 	tool := &CreateFileTool{}
-	spec := &contracts.AgentRuntimeSpec{Implementation: "test"}
+	spec := &agentspec.AgentRuntimeSpec{Implementation: "test"}
 	tool.SetAgentSpec(spec, "agent-123")
 	assert.NotNil(t, tool.spec)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -388,7 +391,7 @@ func TestCreateFileTool_SetAgentSpec(t *testing.T) {
 
 func TestDeleteFileTool_SetAgentSpec(t *testing.T) {
 	tool := &DeleteFileTool{}
-	spec := &contracts.AgentRuntimeSpec{Implementation: "test"}
+	spec := &agentspec.AgentRuntimeSpec{Implementation: "test"}
 	tool.SetAgentSpec(spec, "agent-123")
 	assert.NotNil(t, tool.spec)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -734,7 +737,7 @@ func TestCreateFileTool_NilSandboxScope(t *testing.T) {
 	tool := &CreateFileTool{BasePath: dir, scope: nil}
 
 	// Should not panic when scope is nil
-	err := tool.enforceSandboxScope(contracts.FileSystemWrite, filepath.Join(dir, "test.txt"))
+	err := tool.enforceSandboxScope(permissions.FileSystemWrite, filepath.Join(dir, "test.txt"))
 	assert.NoError(t, err)
 }
 
@@ -743,7 +746,7 @@ func TestDeleteFileTool_NilSandboxScope(t *testing.T) {
 	tool := &DeleteFileTool{BasePath: dir, scope: nil}
 
 	// Should not panic when scope is nil
-	err := tool.enforceSandboxScope(contracts.FileSystemDelete, filepath.Join(dir, "test.txt"))
+	err := tool.enforceSandboxScope(permissions.FileSystemDelete, filepath.Join(dir, "test.txt"))
 	assert.NoError(t, err)
 }
 
@@ -769,8 +772,8 @@ func TestCreateFileTool_NilSpec(t *testing.T) {
 
 func TestEnforceFileMatrix_DocumentationOnly(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			DocumentationOnly: true,
 		},
 	}
@@ -782,10 +785,10 @@ func TestEnforceFileMatrix_DocumentationOnly(t *testing.T) {
 
 func TestEnforceFileMatrix_DenyPattern(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			DenyPatterns: []string{"*.secret"},
-			Default:      contracts.AgentPermissionAllow,
+			Default:      permissions.AgentPermissionAllow,
 		},
 	}
 
@@ -796,10 +799,10 @@ func TestEnforceFileMatrix_DenyPattern(t *testing.T) {
 
 func TestEnforceFileMatrix_AllowPattern(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       contracts.AgentPermissionDeny,
+			Default:       permissions.AgentPermissionDeny,
 		},
 	}
 
@@ -809,9 +812,9 @@ func TestEnforceFileMatrix_AllowPattern(t *testing.T) {
 
 func TestEnforceFileMatrix_DefaultDeny(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
-			Default: contracts.AgentPermissionDeny,
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
+			Default: permissions.AgentPermissionDeny,
 		},
 	}
 
@@ -837,7 +840,7 @@ func TestWriteFileTool_NilEnforceSandboxScope(t *testing.T) {
 	var tool *WriteFileTool
 
 	// Should not panic when tool is nil
-	err := tool.enforceSandboxScope(contracts.FileSystemWrite, "/tmp/test.txt")
+	err := tool.enforceSandboxScope(permissions.FileSystemWrite, "/tmp/test.txt")
 	assert.NoError(t, err)
 }
 
@@ -845,7 +848,7 @@ func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
 	var tool *CreateFileTool
 
 	// Should not panic when tool is nil
-	err := tool.enforceSandboxScope(contracts.FileSystemWrite, "/tmp/test.txt")
+	err := tool.enforceSandboxScope(permissions.FileSystemWrite, "/tmp/test.txt")
 	assert.NoError(t, err)
 }
 
@@ -853,7 +856,7 @@ func TestDeleteFileTool_NilEnforceSandboxScope(t *testing.T) {
 	var tool *DeleteFileTool
 
 	// Should not panic when tool is nil
-	err := tool.enforceSandboxScope(contracts.FileSystemDelete, "/tmp/test.txt")
+	err := tool.enforceSandboxScope(permissions.FileSystemDelete, "/tmp/test.txt")
 	assert.NoError(t, err)
 }
 
@@ -961,10 +964,10 @@ func TestSearchInFilesTool_WithNilManager(t *testing.T) {
 
 func TestEnforceFileMatrix_RequireApproval_NoManager(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         contracts.AgentPermissionAllow,
+			Default:         permissions.AgentPermissionAllow,
 		},
 	}
 
@@ -977,10 +980,10 @@ func TestEnforceFileMatrix_RequireApproval_NoManager(t *testing.T) {
 
 func TestEnforceFileMatrix_EmptyBasePath(t *testing.T) {
 	// When basePath is empty, the path is used directly as relative
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       contracts.AgentPermissionDeny,
+			Default:       permissions.AgentPermissionDeny,
 		},
 	}
 
@@ -997,8 +1000,8 @@ func TestEnforceFileMatrix_EmptyBasePath(t *testing.T) {
 
 func TestEnforceFileMatrix_AllowMdForDocumentationOnly(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			DocumentationOnly: true,
 		},
 	}
@@ -1015,10 +1018,10 @@ func TestEnforceFileMatrix_AllowMdForDocumentationOnly(t *testing.T) {
 
 func TestEnforceFileMatrix_EditAction(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Edit: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Edit: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       contracts.AgentPermissionDeny,
+			Default:       permissions.AgentPermissionDeny,
 		},
 	}
 
@@ -1279,7 +1282,7 @@ func TestNewTraversalPermissionCacheWithChecker_NilChecker(t *testing.T) {
 func TestTraversalPermissionCache_CheckWithNilCache(t *testing.T) {
 	// Call Check on nil cache should return nil
 	var cache *traversalPermissionCache
-	err := cache.Check(context.Background(), contracts.FileSystemRead, "/tmp/test.txt")
+	err := cache.Check(context.Background(), permissions.FileSystemRead, "/tmp/test.txt")
 	assert.NoError(t, err)
 }
 
@@ -1303,11 +1306,11 @@ func TestWriteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 	tool := &WriteFileTool{
 		BasePath: dir,
 		Backup:   false,
-		spec: &contracts.AgentRuntimeSpec{
-			Files: contracts.AgentFileMatrix{
-				Write: contracts.AgentFilePermissionSet{
+		spec: &agentspec.AgentRuntimeSpec{
+			Files: agentspec.AgentFileMatrix{
+				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      contracts.AgentPermissionAllow,
+					Default:      permissions.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1327,11 +1330,11 @@ func TestCreateFileTool_FileMatrixDeniesWrite(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{
 		BasePath: dir,
-		spec: &contracts.AgentRuntimeSpec{
-			Files: contracts.AgentFileMatrix{
-				Write: contracts.AgentFilePermissionSet{
+		spec: &agentspec.AgentRuntimeSpec{
+			Files: agentspec.AgentFileMatrix{
+				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      contracts.AgentPermissionAllow,
+					Default:      permissions.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1354,11 +1357,11 @@ func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 
 	tool := &DeleteFileTool{
 		BasePath: dir,
-		spec: &contracts.AgentRuntimeSpec{
-			Files: contracts.AgentFileMatrix{
-				Write: contracts.AgentFilePermissionSet{
+		spec: &agentspec.AgentRuntimeSpec{
+			Files: agentspec.AgentFileMatrix{
+				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      contracts.AgentPermissionAllow,
+					Default:      permissions.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1494,10 +1497,10 @@ func TestDeleteFileTool_DeleteDirectory(t *testing.T) {
 
 func TestEnforceFileMatrix_AskPermissionNoManager(t *testing.T) {
 	dir := t.TempDir()
-	matrix := contracts.AgentFileMatrix{
-		Write: contracts.AgentFilePermissionSet{
+	matrix := agentspec.AgentFileMatrix{
+		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         contracts.AgentPermissionAllow,
+			Default:         permissions.AgentPermissionAllow,
 		},
 	}
 

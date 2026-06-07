@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/framework/toolcapabilities"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // VerifyStepResult captures the outcome of one verification step.
@@ -23,14 +23,14 @@ type VerifyStepResult struct {
 	Summary   string
 }
 
-func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]contracts.Tool {
-	manifestDir := cfgload.DefaultToolManifestDir(workspace)
-	manifests, err := cfgload.LoadToolManifests(manifestDir)
+func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[string]ports.Tool {
+	manifestDir := config.DefaultToolManifestDir(workspace)
+	manifests, err := config.LoadToolManifests(manifestDir)
 	if err != nil {
 		return nil
 	}
 	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests)
-	index := make(map[string]contracts.Tool, len(tools))
+	index := make(map[string]ports.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool
 	}
@@ -91,7 +91,7 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 
 	var msg string
 	if runResult != nil {
-		toolResult := &contracts.ToolResult{
+		toolResult := &ports.ToolResult{
 			Success: runResult.Success,
 			Error:   runResult.Error,
 			Data: map[string]interface{}{
@@ -123,7 +123,7 @@ func normalizeVerifyArgs(args map[string]any) map[string]interface{} {
 	return out
 }
 
-func extractVerifyMessage(result *contracts.ToolResult, err error) string {
+func extractVerifyMessage(result *ports.ToolResult, err error) string {
 	var parts []string
 	if err != nil {
 		parts = append(parts, err.Error())

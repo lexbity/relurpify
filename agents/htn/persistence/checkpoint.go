@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	frameworkpersistence "codeburg.org/lexbit/relurpify/framework/persistence"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
 // saveHTNCheckpoint persists the current HTN execution state as a workflow artifact.

@@ -5,11 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 var declaredRelurpicIDs = []string{
@@ -37,15 +38,15 @@ type availabilityTool struct {
 func (t availabilityTool) Name() string        { return t.name }
 func (t availabilityTool) Description() string { return t.name }
 func (t availabilityTool) Category() string    { return "test" }
-func (t availabilityTool) Parameters() []contracts.ToolParameter {
+func (t availabilityTool) Parameters() []ports.ToolParameter {
 	return nil
 }
-func (t availabilityTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: true}, nil
+func (t availabilityTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true}, nil
 }
 func (t availabilityTool) IsAvailable(ctx context.Context) bool { return t.available }
-func (t availabilityTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t availabilityTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t availabilityTool) Tags() []string { return []string{"test"} }
 

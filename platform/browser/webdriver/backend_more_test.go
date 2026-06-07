@@ -15,9 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 func TestCapabilitiesAndHelpers(t *testing.T) {
@@ -300,7 +302,7 @@ func TestCheckConditionFalseBranches(t *testing.T) {
 }
 
 func TestLaunchChromeDriverPolicyAndTimeoutBranches(t *testing.T) {
-	deny := contracts.CommandPolicyFunc(func(context.Context, contracts.CommandRequest) error {
+	deny := sandbox.CommandPolicyFunc(func(context.Context, ports.CommandRequest) error {
 		return errors.New("denied")
 	})
 	_, err := launchChromeDriver(context.Background(), Config{

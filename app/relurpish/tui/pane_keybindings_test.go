@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type keybindingPaneRuntimeFake struct {
@@ -31,9 +32,9 @@ func TestKeybindingConflictEngine(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir keybinding dir: %v", err)
 	}
-	initial := cfgload.RuntimeKeybindingConfig{Bindings: make([]cfgload.RuntimeKeybindingEntry, 0)}
+	initial := config.RuntimeKeybindingConfig{Bindings: make([]config.RuntimeKeybindingEntry, 0)}
 	for _, target := range buildKeybindingTargets() {
-		initial.Bindings = append(initial.Bindings, cfgload.RuntimeKeybindingEntry{
+		initial.Bindings = append(initial.Bindings, config.RuntimeKeybindingEntry{
 			Action:      target.Action,
 			Keys:        append([]string(nil), target.DefaultKeys...),
 			Scope:       target.Scope,
@@ -42,7 +43,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 			DefaultKeys: append([]string(nil), target.DefaultKeys...),
 		})
 	}
-	if err := cfgload.SaveYAML(path, initial); err != nil {
+	if err := config.SaveYAML(path, initial); err != nil {
 		t.Fatalf("seed keybindings: %v", err)
 	}
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // publishTaskState records the active task in envelope working memory under htn.* namespace.

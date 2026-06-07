@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"codeburg.org/lexbit/relurpify/agents/promptprovider"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"

@@ -11,18 +11,19 @@ import (
 	"time"
 
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	relurpctx "codeburg.org/lexbit/relurpify/context"
-	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -52,7 +53,7 @@ func TaskPayload(task *execution.Task, key string) []byte {
 // tackle unfamiliar tasks and serves as reference implementation for creating
 // new multi-step agents.
 type PlannerAgent struct {
-	Model           contracts.LanguageModel
+	Model           model.LanguageModel
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
 	Config          *execution.Config
@@ -372,7 +373,7 @@ func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope
 Return valid JSON Plan struct with fields goal, steps (array of {id, description, tool, params, expected, verification, files}), dependencies (map of step id -> [step id]), files.
 Use string step ids (UUID-safe).
 `, extraPrompt, n.task.Instruction)
-	resp, err := n.agent.Model.Generate(ctx, prompt, &contracts.LLMOptions{
+	resp, err := n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
 		MaxTokens:   800,
@@ -929,7 +930,7 @@ func plannerStepDescription(kind, toolName string) string {
 	}
 }
 
-func plannerToolArgs(tool contracts.Tool, task *execution.Task, plan pl.Plan) (map[string]interface{}, bool) {
+func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[string]interface{}, bool) {
 	args := map[string]interface{}{}
 	required := map[string]bool{}
 	for _, param := range tool.Parameters() {

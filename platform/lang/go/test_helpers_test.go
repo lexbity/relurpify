@@ -3,8 +3,8 @@ package golang
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 type stubCommandRunner struct {
@@ -14,12 +14,12 @@ type stubCommandRunner struct {
 	err     error
 }
 
-func (s *stubCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
+func (s *stubCommandRunner) Run(_ context.Context, req sandbox.CommandRequest) (*ports.CommandResult, error) {
 	s.lastReq = req
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &contracts.CommandResult{
+	return &ports.CommandResult{
 		Stdout:      s.stdout,
 		Stderr:      s.stderr,
 		StdoutBytes: int64(len(s.stdout)),

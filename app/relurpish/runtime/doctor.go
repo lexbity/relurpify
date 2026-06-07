@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/llmconfig"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/framework/templates"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
+	"codeburg.org/lexbit/relurpify/userconfig/templates"
 )
 
 // DependencyStatus captures one local dependency check.
@@ -75,8 +75,8 @@ func (r DoctorReport) Ready() bool {
 
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
-func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets) DoctorReport {
-	paths := cfgload.New(cfg.Workspace)
+func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) DoctorReport {
+	paths := config.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
 		ConfigRoot: paths.ConfigRoot(),
@@ -87,7 +87,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 	}
 	if _, err := os.Stat(cfg.ConfigPath); err == nil {
 		report.ConfigExists = true
-		if loaded, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err != nil {
+		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err != nil {
 			report.ConfigError = err.Error()
 		} else if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
 			cfg.SandboxBackend = loaded.SandboxBackend
@@ -101,7 +101,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
-		if snapshot, err := cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
+		if snapshot, err := config.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
 			report.ManifestError = err.Error()
 		} else {
 			report.ManifestFingerprint = hex.EncodeToString(snapshot.Fingerprint[:])
@@ -112,7 +112,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 			}
 		}
 	}
-	report.ProtectedPaths = cfgload.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, cfgload.DefaultWorkspaceConfigPath(cfg.Workspace))
+	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, config.DefaultWorkspaceConfigPath(cfg.Workspace))
 
 	resolver := templates.NewResolver(cfg.SharedRoot)
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
@@ -154,7 +154,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets cfgload.Secrets)
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
-	if reg, err := llmconfig.LoadProfileRegistry(cfgload.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
 		if resolution.SourcePath != "" {
 			report.ModelProfilesExists = true
@@ -244,7 +244,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("workspace path required")
 	}
-	paths := cfgload.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	}
 	workspaceConfigPath := cfg.ConfigPath
 	if workspaceConfigPath == "" {
-		workspaceConfigPath = cfgload.DefaultWorkspaceStateConfigPath(cfg.Workspace)
+		workspaceConfigPath = config.DefaultWorkspaceStateConfigPath(cfg.Workspace)
 	}
 	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
 		return err
@@ -294,7 +294,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err := copyTemplateFile(ingestionTemplate, filepath.Join(securityDir, "workspaceingestion.policy.yaml"), cfg.Workspace, overwrite); err != nil {
 		return err
 	}
-	stateDir := cfgload.DefaultWorkspaceStateDir(cfg.Workspace)
+	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
 		paths.AgentsDir(),
 		stateDir,
@@ -374,7 +374,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func summarizeManifestPolicy(m *cfgload.AgentManifest) string {
+func summarizeManifestPolicy(m *config.AgentManifest) string {
 	if m == nil {
 		return ""
 	}

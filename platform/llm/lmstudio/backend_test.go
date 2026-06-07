@@ -10,10 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBackend_ConformanceSuite(t *testing.T) {
@@ -93,7 +95,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Generate: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
+				Model() model.LanguageModel
 			}).Model().Generate(context.Background(), "hello", nil)
 			if err != nil {
 				return "", err
@@ -102,8 +104,8 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Chat: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().Chat(context.Background(), []contracts.Message{
+				Model() model.LanguageModel
+			}).Model().Chat(context.Background(), []model.Message{
 				{Role: "system", Content: "be concise"},
 				{Role: "user", Content: "ping"},
 			}, nil)
@@ -114,14 +116,14 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		ChatWithToolsNative: func(backend any) error {
 			_, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
+				Model() model.LanguageModel
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
 			return err
 		},
 		ChatWithToolsFallback: func(backend any) (string, error) {
 			resp, err := backend.(interface {
-				Model() contracts.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
+				Model() model.LanguageModel
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
 			if err != nil {
 				return "", err
 			}
@@ -211,7 +213,7 @@ func TestLMStudioBackend_Chat(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	resp, err := backend.Model().Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "response", resp.Text)
 }
@@ -232,7 +234,7 @@ func TestLMStudioBackend_Streaming(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	var got strings.Builder
-	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil, &contracts.LLMOptions{
+	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, &model.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
@@ -270,7 +272,7 @@ func TestLMStudioBackend_ChatWithTools_Native(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
-	resp, err := backend.Model().ChatWithTools(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, []contracts.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.ToolCalls, 1)
 	require.Equal(t, "echo", resp.ToolCalls[0].Name)
@@ -288,7 +290,7 @@ func TestLMStudioBackend_BearerAuth(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "secret")
-	_, err := backend.Model().Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
 
@@ -304,7 +306,7 @@ func TestLMStudioBackend_NoAuth(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	_, err := backend.Model().Chat(context.Background(), []contracts.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 }
 

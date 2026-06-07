@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 var _ sandbox.CommandRunner = (*FakeCommandRunner)(nil)

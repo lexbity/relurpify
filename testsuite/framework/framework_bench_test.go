@@ -8,13 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -31,7 +34,7 @@ func BenchmarkPolicyEvaluation(b *testing.B) {
 	}
 
 	// Create permission manager
-	perms := policy.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(workspace, permissions.FileSystemRead, permissions.FileSystemList)
 	auditSink := &recordingAuditSink{}
 	manager, err := authorization.NewPermissionManager(workspace, perms, auditSink, nil)
 	if err != nil {
@@ -45,7 +48,7 @@ func BenchmarkPolicyEvaluation(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := manager.CheckFileAccess(ctx, agentID, contracts.FileSystemRead, testFile)
+		err := manager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testFile)
 		if err != nil {
 			b.Fatalf("permission check failed: %v", err)
 		}
@@ -111,7 +114,7 @@ func TestFunc` + string(rune('A'+i)) + `() string {
 	ctx := contextdata.WithEnvelope(context.Background(), envelope)
 
 	// Create a simple LLM response for benchmarking
-	llmResponse := &contracts.LLMResponse{
+	llmResponse := &model.LLMResponse{
 		Text: "benchmark test content",
 	}
 
@@ -171,7 +174,7 @@ func BenchmarkAuditLogging(b *testing.B) {
 	ctx := context.Background()
 	record := policy.AuditRecord{
 		AgentID:    "bench-agent",
-		Type:       string(contracts.PermissionTypeFilesystem),
+		Type:       string(permissions.PermissionTypeFilesystem),
 		Action:     "file:read",
 		Permission: "/bench/path",
 		Result:     "granted",
@@ -196,14 +199,14 @@ type benchTool struct {
 func (b *benchTool) Name() string        { return b.name }
 func (b *benchTool) Description() string { return "benchmark tool" }
 func (b *benchTool) Category() string    { return "test" }
-func (b *benchTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (b *benchTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "input", Type: "string", Description: "input parameter"},
 	}
 }
 
-func (b *benchTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{
+func (b *benchTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"result": "bench",
@@ -211,12 +214,12 @@ func (b *benchTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	}, nil
 }
 
-func (b *benchTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (b *benchTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 
 func (b *benchTool) Tags() []string {
-	return []string{contracts.TagReadOnly}
+	return []string{toolcapabilities.TagReadOnly}
 }
 
 func (b *benchTool) IsAvailable(context.Context) bool { return true }

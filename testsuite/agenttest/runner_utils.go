@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string {
@@ -36,7 +36,7 @@ func fallbackManifestPath(manifestPath, workspace string) string {
 	if workspace == "" {
 		return manifestPath
 	}
-	paths := cfgload.New(workspace)
+	paths := config.New(workspace)
 	candidates := []string{
 		filepath.Join(paths.ConfigRoot(), "agent.yaml"),
 	}

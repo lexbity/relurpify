@@ -4,21 +4,23 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-// recordingRunner implements contracts.CommandRunner by recording the request
+// recordingRunner implements ports.CommandRunner by recording the request
 // and returning canned output.
 type recordingRunner struct {
-	requests []contracts.CommandRequest
+	requests []ports.CommandRequest
 	stdout   string
 	stderr   string
 }
 
-func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *recordingRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	r.requests = append(r.requests, req)
-	return &contracts.CommandResult{
+	return &ports.CommandResult{
 		Stdout:      r.stdout,
 		Stderr:      r.stderr,
 		StdoutBytes: int64(len(r.stdout)),
@@ -28,12 +30,12 @@ func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (
 
 func TestSubprocessToolBasicExecute(t *testing.T) {
 	runner := &recordingRunner{stdout: "out", stderr: "err"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
 	}, runner)
 
@@ -44,12 +46,12 @@ func TestSubprocessToolBasicExecute(t *testing.T) {
 
 func TestSubprocessToolExecuteReturnsStdoutStderrExitCode(t *testing.T) {
 	runner := &recordingRunner{stdout: "{}", stderr: ""}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
 	}, runner)
 
@@ -67,12 +69,12 @@ func TestSubprocessToolExecuteReturnsStdoutStderrExitCode(t *testing.T) {
 
 func TestSubprocessToolExecuteWithStdin(t *testing.T) {
 	runner := &recordingRunner{stdout: "transformed"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_sed",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"sed"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_sed",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"sed"}},
 		},
 	}, runner)
 
@@ -86,12 +88,12 @@ func TestSubprocessToolExecuteWithStdin(t *testing.T) {
 }
 
 func TestSubprocessToolNonZeroExitCode(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 		},
 	}, &exitCodeRunner{exitCode: 1, stderr: "parse error"})
 
@@ -104,12 +106,12 @@ func TestSubprocessToolNonZeroExitCode(t *testing.T) {
 func TestSubprocessToolErrorMapping(t *testing.T) {
 	runner := &recordingRunner{stderr: "raw error"}
 	runner.requests = nil
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
 		Errors: map[string]string{
 			"1": "jq: parse error — check your filter syntax",
@@ -125,12 +127,12 @@ func TestSubprocessToolErrorMapping(t *testing.T) {
 
 func TestSubprocessToolExitsWithCodeErrorWhenNoStderr(t *testing.T) {
 	runner := &exitCodeRunner{exitCode: 2}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 		},
 	}, runner)
 
@@ -141,12 +143,12 @@ func TestSubprocessToolExitsWithCodeErrorWhenNoStderr(t *testing.T) {
 }
 
 func TestSubprocessToolWithoutRunnerReportsUnavailable(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "missing",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "missing",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 		},
 	}, nil)
 
@@ -158,13 +160,13 @@ func TestSubprocessToolWithoutRunnerReportsUnavailable(t *testing.T) {
 
 func TestSubprocessToolSandboxTimeouts(t *testing.T) {
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_go",
-		Family:  "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"go"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_go",
+		Family: "build",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"go"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				TimeoutSeconds: 30,
 				MemoryMB:       512,
 			},
@@ -182,12 +184,12 @@ func TestSubprocessToolSandboxTimeouts(t *testing.T) {
 
 func TestFlagInjectionBlockedByDefault(t *testing.T) {
 	runner := &recordingRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"somebinary"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
 			// no sandbox — allow_flags defaults to false
 		},
 	}, runner)
@@ -203,12 +205,12 @@ func TestFlagInjectionBlockedByDefault(t *testing.T) {
 
 func TestSingleDashArgBlockedByDefault(t *testing.T) {
 	runner := &recordingRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"somebinary"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
 		},
 	}, runner)
 
@@ -222,13 +224,13 @@ func TestSingleDashArgBlockedByDefault(t *testing.T) {
 
 func TestFlagInjectionAllowedWhenOptedIn(t *testing.T) {
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"somebinary"}},
-			Sandbox: &contracts.ToolManifestSandbox{AllowFlags: true},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
+			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, runner)
 
@@ -243,12 +245,12 @@ func TestFlagInjectionAllowedWhenOptedIn(t *testing.T) {
 
 func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cp"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"cp"}},
 		},
 	}, runner)
 
@@ -263,13 +265,13 @@ func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
 
 func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
 	runner := &recordingRunner{stdout: "ok"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"grep"}},
-			Sandbox: &contracts.ToolManifestSandbox{AllowFlags: true},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"grep"}},
+			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, runner)
 
@@ -286,21 +288,21 @@ func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
 
 func TestParityCLIJQ(t *testing.T) {
 	runner := &recordingRunner{stdout: "{\"key\": \"value\"}"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Intent:  []string{"extract", "structured-data"},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Intent: []string{"extract", "structured-data"},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
 			},
 			AllowStdin:      true,
 			SupportsWorkdir: true,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"filesystem_read"},
@@ -319,21 +321,21 @@ func TestParityCLIJQ(t *testing.T) {
 
 func TestParityCLIRG(t *testing.T) {
 	runner := &recordingRunner{stdout: "src/main.go:1:1: func main"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_rg",
-		Family:  "fileops",
-		Intent:  []string{"search"},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"rg"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_rg",
+		Family: "fileops",
+		Intent: []string{"search"},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"rg"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
 			},
 			AllowStdin:      true,
 			SupportsWorkdir: true,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"filesystem_read"},
@@ -350,21 +352,21 @@ func TestParityCLIRG(t *testing.T) {
 
 func TestParityCLISed(t *testing.T) {
 	runner := &recordingRunner{stdout: "hello world"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_sed",
-		Family:  "text",
-		Intent:  []string{"transform", "edit"},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"sed"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_sed",
+		Family: "text",
+		Intent: []string{"transform", "edit"},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"sed"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
 			},
 			AllowStdin:      true,
 			SupportsWorkdir: true,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"filesystem_read"},
@@ -382,21 +384,21 @@ func TestParityCLISed(t *testing.T) {
 
 func TestParityCLICurl(t *testing.T) {
 	runner := &recordingRunner{stdout: "response body"}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_curl",
-		Family:  "network",
-		Intent:  []string{"fetch", "http"},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"curl"}},
-			Sandbox: &contracts.ToolManifestSandbox{
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_curl",
+		Family: "network",
+		Intent: []string{"fetch", "http"},
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
 			},
 			AllowStdin:      true,
 			SupportsWorkdir: true,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute", "network"},
 			EffectClass: []string{"process_spawn"},
@@ -413,22 +415,22 @@ func TestParityCLICurl(t *testing.T) {
 
 func TestParityCLIMkdir(t *testing.T) {
 	runner := &recordingRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_mkdir",
-		Family:  "fileops",
-		Intent:  []string{"create"},
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"mkdir"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_mkdir",
+		Family: "fileops",
+		Intent: []string{"create"},
+		Execution: ports.ToolManifestExecution{
+			Backend:     ports.ToolBackendSubprocess,
+			Command:     &ports.ToolManifestCommand{Base: []string{"mkdir"}},
 			DefaultArgs: []string{"-p"},
-			Sandbox: &contracts.ToolManifestSandbox{
+			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
 			},
 			AllowStdin:      true,
 			SupportsWorkdir: true,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",
 			RiskClass:   []string{"execute"},
 			EffectClass: []string{"filesystem_read"},
@@ -448,12 +450,12 @@ func TestParityCLIMkdir(t *testing.T) {
 
 func TestSubprocessToolPermissionsNotEmptyWithCommand(t *testing.T) {
 	runner := &recordingRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
 	}, runner)
 
@@ -464,14 +466,14 @@ func TestSubprocessToolPermissionsNotEmptyWithCommand(t *testing.T) {
 }
 
 func TestSubprocessToolTagsFromCapability(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			RiskClass: []string{"execute"},
 		},
 	}, nil)
@@ -480,12 +482,12 @@ func TestSubprocessToolTagsFromCapability(t *testing.T) {
 }
 
 func TestSubprocessToolNilRunner(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "nil_runner",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "nil_runner",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 		},
 	}, nil)
 
@@ -497,12 +499,12 @@ func TestSubprocessToolNilRunner(t *testing.T) {
 // --- Permissions tests ---
 
 func TestPermissionsDerivesBinaryFromCommandBase(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_jq",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"jq"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_jq",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
 		},
 	}, nil)
 
@@ -513,11 +515,11 @@ func TestPermissionsDerivesBinaryFromCommandBase(t *testing.T) {
 }
 
 func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "empty",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
+	tool := NewTool(ports.ToolManifest{
+		Name:   "empty",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
 		},
 	}, nil)
 
@@ -527,12 +529,12 @@ func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
 }
 
 func TestPermissionsIncludesDefaultArgs(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_mkdir",
-		Family:  "fileops",
-		Execution: contracts.ToolManifestExecution{
-			Backend:     contracts.ToolBackendSubprocess,
-			Command:     &contracts.ToolManifestCommand{Base: []string{"mkdir"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_mkdir",
+		Family: "fileops",
+		Execution: ports.ToolManifestExecution{
+			Backend:     ports.ToolBackendSubprocess,
+			Command:     &ports.ToolManifestCommand{Base: []string{"mkdir"}},
 			DefaultArgs: []string{"-p"},
 		},
 	}, nil)
@@ -543,14 +545,14 @@ func TestPermissionsIncludesDefaultArgs(t *testing.T) {
 }
 
 func TestPermissionsHITLFalseByDefault(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_echo",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_echo",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			RiskClass: []string{"execute"},
 		},
 	}, nil)
@@ -559,14 +561,14 @@ func TestPermissionsHITLFalseByDefault(t *testing.T) {
 }
 
 func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_gdb",
-		Family:  "build",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"gdb"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_gdb",
+		Family: "build",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"gdb"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			RiskClass: []string{"execute", "destructive"},
 		},
 	}, nil)
@@ -577,12 +579,12 @@ func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
 // --- Panic recovery tests ---
 
 func TestPanicInRunnerReturnsStructuredResult(t *testing.T) {
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "cli_tool",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"tool"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "cli_tool",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 		},
 	}, &panickingRunner{})
 
@@ -596,12 +598,12 @@ func TestPanicInExpandCommandDoesNotPanic(t *testing.T) {
 	// This constructs an invalid manifest that would panic during processing
 	// The manifest itself is valid, but we exercise the deferred recovery path
 	runner := &recordingRunner{}
-	tool := NewTool(contracts.ToolManifest{
-		Name:    "panic_test",
-		Family:  "text",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+	tool := NewTool(ports.ToolManifest{
+		Name:   "panic_test",
+		Family: "text",
+		Execution: ports.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
 	}, runner)
 
@@ -614,7 +616,7 @@ func TestPanicInExpandCommandDoesNotPanic(t *testing.T) {
 // panickingRunner panics on Run to verify defer/recover in executor.
 type panickingRunner struct{}
 
-func (r *panickingRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *panickingRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	panic("unexpected runtime error in command runner")
 }
 
@@ -624,18 +626,17 @@ type exitCodeRunner struct {
 	stderr   string
 }
 
-func (r *exitCodeRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
-	return &contracts.CommandResult{
+func (r *exitCodeRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
+	return &ports.CommandResult{
 		ExitCode: r.exitCode,
 		Stderr:   r.stderr,
 	}, nil
 }
 
-
-func ps(v interface{}) *contracts.PermissionSet {
+func ps(v interface{}) *permissions.PermissionSet {
 	if v == nil {
 		return nil
 	}
-	p, _ := v.(*contracts.PermissionSet)
+	p, _ := v.(*permissions.PermissionSet)
 	return p
 }

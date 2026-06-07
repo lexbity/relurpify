@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // SessionOperation identifies the action being authorized against a session.

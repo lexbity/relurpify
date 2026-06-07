@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -17,7 +17,7 @@ import (
 type ToolResponseOverride struct {
 	Tool        string                 `yaml:"tool"`
 	MatchArgs   map[string]interface{} `yaml:"match_args,omitempty"`
-	Response    *contracts.ToolResult  `yaml:"response,omitempty"`
+	Response    *ports.ToolResult      `yaml:"response,omitempty"`
 	Error       string                 `yaml:"error,omitempty"`
 	FailureRate float64                `yaml:"failure_rate,omitempty"`
 	LatencyMs   int                    `yaml:"latency_ms,omitempty"`
@@ -26,14 +26,14 @@ type ToolResponseOverride struct {
 
 // InjectionInterceptor wraps tool execution with override logic
 type InjectionInterceptor struct {
-	base        contracts.Tool
+	base        ports.Tool
 	overrides   []ToolResponseOverride
 	callHistory map[string]int
 	mu          sync.Mutex
 }
 
 // NewInjectionInterceptor creates an interceptor for a tool with override rules
-func NewInjectionInterceptor(base contracts.Tool, overrides []ToolResponseOverride) *InjectionInterceptor {
+func NewInjectionInterceptor(base ports.Tool, overrides []ToolResponseOverride) *InjectionInterceptor {
 	return &InjectionInterceptor{
 		base:        base,
 		overrides:   filterOverridesForTool(overrides, base.Name()),
@@ -57,7 +57,7 @@ func (i *InjectionInterceptor) Category() string {
 }
 
 // Parameters returns the wrapped tool's parameters
-func (i *InjectionInterceptor) Parameters() []contracts.ToolParameter {
+func (i *InjectionInterceptor) Parameters() []ports.ToolParameter {
 	return i.base.Parameters()
 }
 
@@ -67,7 +67,7 @@ func (i *InjectionInterceptor) Tags() []string {
 }
 
 // Permissions returns the wrapped tool's permissions
-func (i *InjectionInterceptor) Permissions() contracts.ToolPermissions {
+func (i *InjectionInterceptor) Permissions() ports.ToolPermissions {
 	return i.base.Permissions()
 }
 
@@ -77,7 +77,7 @@ func (i *InjectionInterceptor) IsAvailable(ctx context.Context) bool {
 }
 
 // Execute wraps the tool execution with injection logic
-func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -140,8 +140,8 @@ func (i *InjectionInterceptor) matchesOverride(override ToolResponseOverride, ar
 }
 
 // createErrorResult creates a ToolResult representing an error
-func (i *InjectionInterceptor) createErrorResult(override ToolResponseOverride, msg string) *contracts.ToolResult {
-	return &contracts.ToolResult{
+func (i *InjectionInterceptor) createErrorResult(override ToolResponseOverride, msg string) *ports.ToolResult {
+	return &ports.ToolResult{
 		Success: false,
 		Error:   msg,
 		Data: map[string]interface{}{

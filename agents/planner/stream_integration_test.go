@@ -7,12 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type plannerStreamCompilerStub struct {
@@ -35,25 +37,25 @@ type plannerModelStub struct {
 	response string
 }
 
-func (m *plannerModelStub) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *plannerModelStub) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	m.mu.Lock()
 	m.prompts = append(m.prompts, prompt)
 	m.mu.Unlock()
-	return &contracts.LLMResponse{Text: m.response}, nil
+	return &model.LLMResponse{Text: m.response}, nil
 }
 
-func (m *plannerModelStub) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
+func (m *plannerModelStub) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (m *plannerModelStub) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: m.response}, nil
+func (m *plannerModelStub) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: m.response}, nil
 }
 
-func (m *plannerModelStub) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: m.response}, nil
+func (m *plannerModelStub) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: m.response}, nil
 }
 
 func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // LoadStateFromEnvelope reconstructs the canonical HTN state snapshot from

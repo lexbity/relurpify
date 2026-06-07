@@ -7,8 +7,6 @@ import (
 	"sync"
 )
 
-
-
 // ArtifactTokenUsage captures the token accounting snapshot for artifact budgeting.
 type ArtifactTokenUsage struct {
 	SystemTokens         int
@@ -62,8 +60,6 @@ type CategoryStats struct {
 	Percentage float64
 	ItemCount  int
 }
-
-
 
 // BudgetPolicies control artifact-budget compression behaviour.
 type BudgetPolicies struct {

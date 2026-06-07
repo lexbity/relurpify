@@ -13,30 +13,30 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/event"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/llmconfig"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	ftelemetry "codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/event"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
@@ -48,14 +48,14 @@ type Runtime struct {
 	Tools           *capability.Registry
 	Memory          *memory.WorkingMemoryStore
 	Agent           agentgraph.WorkflowExecutor
-	Model           contracts.LanguageModel
+	Model           model.LanguageModel
 	IndexManager    *ast.IndexManager
 	GraphDB         *graphdb.Engine
 	SearchEngine    *search.SearchEngine
 	AgentLifecycle  agentlifecycle.Repository
 	Delegations     *fauthorization.DelegationManager
-	WorkspaceConfig cfgload.RuntimeWorkspaceConfig
-	secrets         cfgload.Secrets
+	WorkspaceConfig config.RuntimeWorkspaceConfig
+	secrets         config.Secrets
 
 	hitlCancel func()
 
@@ -81,16 +81,16 @@ func (r *Runtime) ProviderSecrets() llm.ProviderSecrets {
 }
 
 // Secrets returns the env-only runtime secret set.
-func (r *Runtime) Secrets() cfgload.Secrets {
+func (r *Runtime) Secrets() config.Secrets {
 	if r == nil {
-		return cfgload.Secrets{}
+		return config.Secrets{}
 	}
 	return r.secrets
 }
 
 // New builds a fruntime for the TUI and status surfaces.
-func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, error) {
-	envOverrides, err := cfgload.LoadEnvOverrides(cfg.EnvOverrides)
+func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, error) {
+	envOverrides, err := config.LoadEnvOverrides(cfg.EnvOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("load env overrides: %w", err)
 	}
@@ -119,9 +119,9 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 		cfg.Editor = envOverrides.Editor
 	}
 	if cfg.SharedRoot == "" {
-		cfg.SharedRoot = cfgload.ResolveSharedRoot(envOverrides.XDGDataHome)
+		cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)
 	}
-	loadedConfig, _, err := cfgload.Load(cfgload.LoadOptions{
+	loadedConfig, _, err := config.Load(config.LoadOptions{
 		WorkspaceRoot: cfg.Workspace,
 		EnvOverrides:  cfg.EnvOverrides,
 	})
@@ -132,10 +132,10 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	// Load workspace YAML to get AllowedCapabilities and Nexus config before
 	// calling ayenitd.Open — Open will handle model/agent-name overrides
 	// internally, but AllowedCapabilities is a runtime-level concern.
-	var workspaceCfg cfgload.RuntimeWorkspaceConfig
+	var workspaceCfg config.RuntimeWorkspaceConfig
 	var allowedCapabilities []agentspec.CapabilitySelector
 	if cfg.ConfigPath != "" {
-		if loaded, err := cfgload.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
+		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
 			if workspaceCfg.Provider != "" && cfg.InferenceProvider == "" {
 				cfg.InferenceProvider = workspaceCfg.Provider
@@ -156,12 +156,12 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 
 	// Delegate all workspace initialization to framework/agentenv.OpenWorkspace().
 	// app/relurpish does not build its own workspace environment.
-	manifestSnapshot, err := cfgload.LoadAgentManifestSnapshot(cfg.ManifestPath)
+	manifestSnapshot, err := config.LoadAgentManifestSnapshot(cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
 	}
 	securityBundle := loadedConfig.Security
-	profileRegistry, err := llmconfig.ProfileRegistryFromConfigs(loadedConfig.Model.Profiles)
+	profileRegistry, err := modelselect.BuildProfileRegistry(loadedConfig.Model.Profiles)
 	if err != nil {
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
@@ -214,19 +214,19 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 	// Extend telemetry with an event log sink. The event log is now created
 	// by framework/agentenv via EventLogFactory, so we just need to wire it into
 	// the telemetry chain.
-	var eventTelemetry ftelemetry.EventTelemetry
+	var eventTelemetry telemetry.EventTelemetry
 	if cfg.EventsPath != "" && registration != nil {
 		// The event log is now owned by Workspace and will be closed by Workspace.Close()
 		// We need to get it from the Workspace's Environment
 		if env.EventLog != nil {
-			eventTelemetry = ftelemetry.EventTelemetry{
+			eventTelemetry = telemetry.EventTelemetry{
 				Log:       env.EventLog,
 				Partition: "local",
 				Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 			}
 			// Re-wire the permission event logger with full event log support.
 			if registration.Permissions != nil {
-				registration.Permissions.SetEventLogger(func(ctx context.Context, desc contracts.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+				registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 					payload := map[string]interface{}{
 						"permission_type": desc.Type,
 						"action":          desc.Action,
@@ -236,9 +236,9 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 						"metadata":        fields,
 					}
 					if data, err := json.Marshal(payload); err == nil {
-						_, _ = env.EventLog.Append(ctx, "local", []telemetry.FrameworkEvent{{
+						_, _ = env.EventLog.Append(ctx, "local", []event.FrameworkEvent{{
 							Timestamp: time.Now().UTC(),
-							Type:      telemetry.FrameworkEventPolicyEvaluated,
+							Type:      event.EventPolicyEvaluated,
 							Payload:   data,
 							Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 							Partition: "local",
@@ -256,10 +256,10 @@ func New(ctx context.Context, cfg Config, secrets cfgload.Secrets) (*Runtime, er
 
 	// Assemble the final telemetry (base + event log if available).
 	if eventTelemetry.Log != nil {
-		if mt, ok := baseTelemetry.(ftelemetry.MultiplexTelemetry); ok {
+		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
 			mt.Sinks = append(mt.Sinks, eventTelemetry)
 		} else {
-			baseTelemetry = ftelemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{baseTelemetry, eventTelemetry}}
+			baseTelemetry = telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{baseTelemetry, eventTelemetry}}
 		}
 	}
 
@@ -415,7 +415,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgload.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -463,7 +463,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *cfgloa
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
-	paths := cfgload.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	workspaceEnv := agents.ToWorkspace(env)
 	builder := agents.NewAgentBuilder().WithEnvironment(&workspaceEnv)
 	switch cfg.AgentLabel() {
@@ -482,8 +482,8 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment) agentgraph.Workfl
 	}
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*cfgload.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, error) {
-	effectiveContract, err := cfgload.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, cfgload.ResolveOptions{})
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, error) {
+	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, config.ResolveOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
@@ -494,7 +494,7 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*cfgload.Effect
 	return effectiveContract, compiledPolicy, nil
 }
 
-func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths cfgload.Paths) agentgraph.WorkflowExecutor {
+func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths config.Paths) agentgraph.WorkflowExecutor {
 	_ = paths
 	return agent
 }
@@ -737,7 +737,7 @@ func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 	return r.Workspace.Registration.HITL.PendingRequests()
 }
 
-func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *cfgload.AgentManifestSnapshot) {
+func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *config.AgentManifestSnapshot) {
 	if eventLog == nil || snapshot == nil {
 		return
 	}
@@ -747,9 +747,9 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 		"warnings":      append([]string(nil), snapshot.Warnings...),
 	}
 	if data, err := json.Marshal(payload); err == nil {
-		_, _ = eventLog.Append(ctx, "local", []telemetry.FrameworkEvent{{
+		_, _ = eventLog.Append(ctx, "local", []event.FrameworkEvent{{
 			Timestamp: time.Now().UTC(),
-			Type:      telemetry.FrameworkEventManifestReloaded,
+			Type:      event.EventManifestReloaded,
 			Payload:   data,
 			Actor:     identity.EventActor{Kind: "agent", ID: agentID, Label: label},
 			Partition: "local",

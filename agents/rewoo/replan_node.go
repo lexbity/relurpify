@@ -3,9 +3,9 @@ package rewoo
 import (
 	"context"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // ReplanNode is a conditional node that decides whether to replan or proceed to synthesis.

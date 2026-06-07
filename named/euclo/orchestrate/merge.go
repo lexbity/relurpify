@@ -3,10 +3,10 @@ package orchestrate
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 // MergeNode merges results from parallel execution paths.

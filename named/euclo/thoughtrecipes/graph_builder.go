@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.

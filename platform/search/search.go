@@ -8,7 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // GrepTool implements plain text search.
@@ -19,8 +20,8 @@ type GrepTool struct {
 func (t *GrepTool) Name() string        { return "search_grep" }
 func (t *GrepTool) Description() string { return "Searches files using substring matching." }
 func (t *GrepTool) Category() string    { return "search" }
-func (t *GrepTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *GrepTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "pattern", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
@@ -29,7 +30,7 @@ func (t *GrepTool) ParamKeys() []string {
 	return SearchGrepParamKeys()
 }
 
-func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	params, err := ParseSearchGrepParams(args)
 	if err != nil {
 		return nil, err
@@ -78,14 +79,16 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*c
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
 func (t *GrepTool) IsAvailable(ctx context.Context) bool { return true }
 
-func (t *GrepTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *GrepTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *GrepTool) Tags() []string { return []string{contracts.TagReadOnly, "search", "recovery"} }
+func (t *GrepTool) Tags() []string {
+	return []string{ports.TagReadOnly, "search", "recovery"}
+}
 
 // SimilarityTool finds similar snippets using a naive approach.
 type SimilarityTool struct {
@@ -95,8 +98,8 @@ type SimilarityTool struct {
 func (t *SimilarityTool) Name() string        { return "search_find_similar" }
 func (t *SimilarityTool) Description() string { return "Finds structurally similar code snippets." }
 func (t *SimilarityTool) Category() string    { return "search" }
-func (t *SimilarityTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *SimilarityTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "snippet", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
@@ -105,7 +108,7 @@ func (t *SimilarityTool) ParamKeys() []string {
 	return SearchFindSimilarParamKeys()
 }
 
-func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	params, err := ParseSearchFindSimilarParams(args)
 	if err != nil {
 		return nil, err
@@ -147,14 +150,14 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, err
 	}
 	sort.Slice(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
 func (t *SimilarityTool) IsAvailable(ctx context.Context) bool { return true }
 
-func (t *SimilarityTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *SimilarityTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *SimilarityTool) Tags() []string { return []string{contracts.TagReadOnly, "search"} }
+func (t *SimilarityTool) Tags() []string { return []string{ports.TagReadOnly, "search"} }
 
 // SemanticSearchTool uses a vector-like heuristic (currently substring).
 type SemanticSearchTool struct {
@@ -166,14 +169,14 @@ func (t *SemanticSearchTool) Description() string {
 	return "Performs semantic search using heuristic embeddings."
 }
 func (t *SemanticSearchTool) Category() string { return "search" }
-func (t *SemanticSearchTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{{Name: "query", Type: "string", Required: true}}
+func (t *SemanticSearchTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
 func (t *SemanticSearchTool) ParamKeys() []string {
 	return SearchSemanticParamKeys()
 }
 
-func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	params, err := ParseSearchSemanticParams(args)
 	if err != nil {
 		return nil, err
@@ -217,16 +220,16 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interf
 		right, _ := hits[j]["score"].(float64)
 		return left > right
 	})
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
 }
 func (t *SemanticSearchTool) IsAvailable(ctx context.Context) bool {
 	return true
 }
 
-func (t *SemanticSearchTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
+func (t *SemanticSearchTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
-func (t *SemanticSearchTool) Tags() []string { return []string{contracts.TagReadOnly, "search"} }
+func (t *SemanticSearchTool) Tags() []string { return []string{ports.TagReadOnly, "search"} }
 
 func sanitizeSnippet(snippet string) string {
 	return strings.ToLower(strings.ReplaceAll(snippet, " ", ""))

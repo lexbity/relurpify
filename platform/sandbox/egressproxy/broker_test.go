@@ -133,7 +133,7 @@ func TestBrokerRejectsBadRequest(t *testing.T) {
 
 func TestIsDeniedIP(t *testing.T) {
 	tests := []struct {
-		ip    string
+		ip     string
 		denied bool
 	}{
 		{"127.0.0.1", true},

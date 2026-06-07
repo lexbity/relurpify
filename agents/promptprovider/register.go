@@ -1,6 +1,6 @@
 package promptprovider
 
-import "codeburg.org/lexbit/relurpify/framework/prompt"
+import "codeburg.org/lexbit/relurpify/execution/prompt"
 
 // RegisterAll registers all built-in prompt providers with r. Calling it more
 // than once is safe — duplicate registrations are silently skipped.

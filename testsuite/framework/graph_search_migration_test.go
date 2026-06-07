@@ -9,14 +9,15 @@ import (
 	"sync"
 	"testing"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -32,7 +33,7 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 		t.Fatalf("write note: %v", err)
 	}
 
-	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead, permissions.FileSystemList)
 	manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("permission manager: %v", err)
@@ -210,17 +211,17 @@ type migrationWorkspaceTool struct {
 	agent       string
 }
 
-func (t *migrationWorkspaceTool) Name() string                          { return t.name }
-func (t *migrationWorkspaceTool) Description() string                   { return t.description }
-func (t *migrationWorkspaceTool) Category() string                      { return t.category }
-func (t *migrationWorkspaceTool) Parameters() []contracts.ToolParameter { return nil }
+func (t *migrationWorkspaceTool) Name() string                      { return t.name }
+func (t *migrationWorkspaceTool) Description() string               { return t.description }
+func (t *migrationWorkspaceTool) Category() string                  { return t.category }
+func (t *migrationWorkspaceTool) Parameters() []ports.ToolParameter { return nil }
 func (t *migrationWorkspaceTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agent = agentID
 }
-func (t *migrationWorkspaceTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *migrationWorkspaceTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agent, contracts.FileSystemRead, t.path); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agent, permissions.FileSystemRead, t.path); err != nil {
 			return nil, err
 		}
 	}
@@ -228,7 +229,7 @@ func (t *migrationWorkspaceTool) Execute(ctx context.Context, args map[string]in
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"status":  "ok",
@@ -237,8 +238,8 @@ func (t *migrationWorkspaceTool) Execute(ctx context.Context, args map[string]in
 	}, nil
 }
 func (t *migrationWorkspaceTool) IsAvailable(context.Context) bool { return true }
-func (t *migrationWorkspaceTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.basePath, contracts.FileSystemRead)}
+func (t *migrationWorkspaceTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.basePath, permissions.FileSystemRead)}
 }
 func (t *migrationWorkspaceTool) Tags() []string { return nil }
 

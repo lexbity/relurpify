@@ -11,7 +11,7 @@ Architecture Principles:
     that bridge framework and platform. Framework can re-export or wrap these
     types, but should not force platform to import framework types.
 
- 3. Tool Interface: Tools in platform implement contracts.Tool. Execute and
+ 3. Tool Interface: Tools in platform implement ports.Tool. Execute and
     IsAvailable take only stdlib context.Context and explicit args — no
     contracts.Context state parameter. Framework-level envelope state
     (contextdata.Envelope) is handled in framework/, not platform/.

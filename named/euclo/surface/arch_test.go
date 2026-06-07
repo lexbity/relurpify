@@ -17,8 +17,8 @@ var bannedPrefixes = []string{
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction",
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate",
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext",
-	"codeburg.org/lexbit/relurpify/framework/graphdb",
-	"codeburg.org/lexbit/relurpify/framework/retrieval",
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb",
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval",
 	"codeburg.org/lexbit/relurpify/app/",
 }
 

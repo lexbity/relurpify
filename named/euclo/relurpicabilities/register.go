@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type relurpicCapabilityBlueprint struct {
@@ -16,7 +16,9 @@ type relurpicCapabilityBlueprint struct {
 }
 
 var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
-	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler { return NewTestRunHandler(env) }},
+	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
+		return NewTestRunHandler(env)
+	}},
 	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewASTQueryHandler(env)
 	}},
@@ -29,7 +31,9 @@ var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
 	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewBlameTraceHandler(env)
 	}},
-	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler { return NewBisectHandler(env) }},
+	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
+		return NewBisectHandler(env)
+	}},
 	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.WorkspaceEnvironment) capability.InvocableCapabilityHandler {
 		return NewCodeReviewHandler(env)
 	}},

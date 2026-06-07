@@ -15,14 +15,14 @@ type Allowlist struct {
 
 // AllowlistFile is the YAML structure for the allowlist.
 type AllowlistFile struct {
-	Version int                    `yaml:"version"`
-	Cycles  []string               `yaml:"cycle_violations"`
-	Layers  []string               `yaml:"layer_violations"`
-	Buckets []string               `yaml:"bucket_violations"`
-	Consumers []string             `yaml:"consumer_violations"`
-	Globs  []string                `yaml:"glob_violations"`
-	Stubs  []string                `yaml:"stub_violations"`
-	InternalConsumers []string     `yaml:"internal_consumer_violations"`
+	Version           int      `yaml:"version"`
+	Cycles            []string `yaml:"cycle_violations"`
+	Layers            []string `yaml:"layer_violations"`
+	Buckets           []string `yaml:"bucket_violations"`
+	Consumers         []string `yaml:"consumer_violations"`
+	Globs             []string `yaml:"glob_violations"`
+	Stubs             []string `yaml:"stub_violations"`
+	InternalConsumers []string `yaml:"internal_consumer_violations"`
 }
 
 // LoadAllowlist reads the allowlist from a YAML file.

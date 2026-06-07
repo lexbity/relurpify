@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	cfgmodel "codeburg.org/lexbit/relurpify/framework/cfgload/model"
 	"codeburg.org/lexbit/relurpify/model"
+	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
-// strictDecode is a Decoder that wraps cfgload.StrictDecode.
+// strictDecode is a Decoder that wraps config.StrictDecode.
 // It is set by the model package during init.
 var strictDecode cfgmodel.Decoder
 

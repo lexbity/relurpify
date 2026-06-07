@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 )
 
 // OperatorMetrics tracks execution statistics for a single operator.

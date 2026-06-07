@@ -9,18 +9,19 @@ import (
 	"time"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	"codeburg.org/lexbit/relurpify/platform/llm"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 const contextFileMaxBytes = 8000
@@ -78,15 +79,15 @@ type RuntimeAdapter interface {
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
 	// LoadSandboxManifest returns a mutable clone of the current workspace manifest.
-	LoadSandboxManifest() (*cfgload.AgentManifest, error)
+	LoadSandboxManifest() (*config.AgentManifest, error)
 	// SaveSandboxManifest persists a sandbox manifest clone with backup.
-	SaveSandboxManifest(m *cfgload.AgentManifest) (string, error)
+	SaveSandboxManifest(m *config.AgentManifest) (string, error)
 	// SandboxBackend returns the active sandbox backend name.
 	SandboxBackend() string
 	// SaveSandboxBackend persists the active sandbox backend in workspace config.
 	SaveSandboxBackend(backend string) (string, error)
 	// ExecutionMode returns the current workspace execution posture.
-	ExecutionMode() cfgload.ExecutionMode
+	ExecutionMode() config.ExecutionMode
 	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
 	// ListCapabilities returns all registered capabilities with runtime-family metadata.
@@ -119,7 +120,7 @@ type RuntimeAdapter interface {
 	// InvokeCapability invokes a registered capability by name through the
 	// capability registry, applying the same policy, HITL, audit, and sandbox
 	// enforcement that applies to agent tool calls.
-	InvokeCapability(ctx context.Context, name string, args map[string]any) (*contracts.ToolResult, error)
+	InvokeCapability(ctx context.Context, name string, args map[string]any) (*ports.ToolResult, error)
 	// Diagnostics returns a snapshot of runtime resource and agent state for
 	// display in the session live subtab.
 	Diagnostics() DiagnosticsInfo
@@ -317,7 +318,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		abs = filepath.Clean(abs)
 
 		if perm != nil {
-			if err := perm.CheckFileAccess(ctx, r.rt.AgentWorkspace().Registration.ID, contracts.FileSystemRead, abs); err != nil {
+			if err := perm.CheckFileAccess(ctx, r.rt.AgentWorkspace().Registration.ID, permissions.FileSystemRead, abs); err != nil {
 				res.Denied[path] = err.Error()
 				continue
 			}
@@ -422,10 +423,10 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace not set")
 	}
-	path := cfgload.New(workspace).RuntimeProvidersFile()
-	profile, err := cfgload.LoadRuntimeProviderConfig(path)
+	path := config.New(workspace).RuntimeProvidersFile()
+	profile, err := config.LoadRuntimeProviderConfig(path)
 	if err != nil {
-		profile = cfgload.RuntimeProviderConfig{}
+		profile = config.RuntimeProviderConfig{}
 	}
 	if profile.Provider == "" {
 		profile.Provider = strings.TrimSpace(r.rt.Config.InferenceProvider)
@@ -440,7 +441,7 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 		profile.Timeout = "30s"
 	}
 	profile.LastUpdated = time.Now().Unix()
-	if _, err := cfgload.SaveRuntimeProviderConfigWithBackup(path, profile); err != nil {
+	if _, err := config.SaveRuntimeProviderConfigWithBackup(path, profile); err != nil {
 		return err
 	}
 	r.rt.Config.InferenceProvider = profile.Provider
@@ -464,7 +465,7 @@ func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
 	return fmt.Errorf("workflow cancellation not available during migration")
 }
 
-func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args map[string]any) (*contracts.ToolResult, error) {
+func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args map[string]any) (*ports.ToolResult, error) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil, fmt.Errorf("capability registry unavailable")
 	}
@@ -846,7 +847,7 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 		return fmt.Errorf("manifest path not set")
 	}
 	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := cfgload.CloneAgentManifest(current)
+	clone, err := config.CloneAgentManifest(current)
 	if err != nil {
 		return err
 	}
@@ -869,12 +870,12 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	return nil
 }
 
-func (r *runtimeAdapter) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
+func (r *runtimeAdapter) LoadSandboxManifest() (*config.AgentManifest, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := cfgload.CloneAgentManifest(current)
+	clone, err := config.CloneAgentManifest(current)
 	if err != nil {
 		return nil, err
 	}
@@ -884,10 +885,10 @@ func (r *runtimeAdapter) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
 	if r.rt.Config.ManifestPath == "" {
 		return nil, fmt.Errorf("manifest unavailable")
 	}
-	return cfgload.LoadAgentManifest(r.rt.Config.ManifestPath)
+	return config.LoadAgentManifest(r.rt.Config.ManifestPath)
 }
 
-func (r *runtimeAdapter) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
+func (r *runtimeAdapter) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
 	if r == nil || r.rt == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
@@ -911,13 +912,13 @@ func (r *runtimeAdapter) SandboxBackend() string {
 	return strings.TrimSpace(r.rt.Config.SandboxBackend)
 }
 
-func (r *runtimeAdapter) ExecutionMode() cfgload.ExecutionMode {
+func (r *runtimeAdapter) ExecutionMode() config.ExecutionMode {
 	if r == nil || r.rt == nil {
-		return cfgload.ExecutionModeStaged
+		return config.ExecutionModeStaged
 	}
-	mode := cfgload.NormalizeExecutionMode(r.rt.WorkspaceConfig.ExecutionMode)
-	if mode == cfgload.ExecutionModeStaged && strings.TrimSpace(r.rt.WorkspaceConfig.ExecutionMode) == "" {
-		return cfgload.ExecutionModeStaged
+	mode := config.NormalizeExecutionMode(r.rt.WorkspaceConfig.ExecutionMode)
+	if mode == config.ExecutionModeStaged && strings.TrimSpace(r.rt.WorkspaceConfig.ExecutionMode) == "" {
+		return config.ExecutionModeStaged
 	}
 	return mode
 }
@@ -938,13 +939,13 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("config path not set")
 	}
-	return cfgload.SaveRuntimeWorkspaceConfigWithBackup(path, cfgload.RuntimeWorkspaceConfig{
+	return config.SaveRuntimeWorkspaceConfigWithBackup(path, config.RuntimeWorkspaceConfig{
 		Model:               r.rt.Config.InferenceModel,
 		Provider:            r.rt.Config.InferenceProvider,
 		SandboxBackend:      backend,
 		ExecutionMode:       string(r.ExecutionMode()),
 		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
-		AllowedCapabilities: append([]cfgload.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
+		AllowedCapabilities: append([]config.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
 		Nexus:               r.rt.WorkspaceConfig.Nexus,
 		NodeRegistration:    r.rt.WorkspaceConfig.NodeRegistration,
 		LastUpdated:         time.Now().Unix(),
@@ -1157,7 +1158,7 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
 	}
 	if r.rt.Config.Workspace != "" {
-		d.ProtectedPaths = cfgload.New(r.rt.Config.Workspace).GovernanceRoots(
+		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots(
 			r.rt.Config.ManifestPath,
 			r.rt.Config.ConfigPath,
 		)
@@ -1170,7 +1171,7 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	return d
 }
 
-func manifestPolicySummary(m *cfgload.AgentManifest) string {
+func manifestPolicySummary(m *config.AgentManifest) string {
 	if m == nil {
 		return ""
 	}
@@ -1400,7 +1401,7 @@ func splitNonEmptyLines(raw string) []string {
 	return out
 }
 
-func combineToolOutput(result *contracts.ToolResult) []byte {
+func combineToolOutput(result *ports.ToolResult) []byte {
 	if result == nil {
 		return nil
 	}

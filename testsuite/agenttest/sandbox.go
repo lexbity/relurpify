@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 )
 
 // ErrNoSandboxBackend is returned by NewWorkspaceSandboxRunner when the
@@ -28,7 +27,7 @@ func NewWorkspaceSandboxRunner(ctx context.Context, workspaceRoot, backend strin
 		return nil, fmt.Errorf("%w: select sandbox runtime: %w", ErrNoSandboxBackend, err)
 	}
 	policy := fauthorization.BuildSandboxPolicy(nil, nil)
-	runner, err := sandbox.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &contracts.CommandRunnerConfig{
+	runner, err := sandbox.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &sandbox.CommandRunnerConfig{
 		Workspace: workspaceRoot,
 	})
 	if err != nil {

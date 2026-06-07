@@ -1,3 +1,4 @@
-// Package model defines the canonical LLM domain ports — the interfaces and
-// value types that LLM adapters implement and the runtime consumes.
+// Package model answers: the model abstraction.
+//
+// LanguageModel, ModelProfile, Message, and LLMResponse ports.
 package model

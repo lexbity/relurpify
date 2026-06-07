@@ -5,22 +5,23 @@ import (
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/agents"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	cfgsecurity "codeburg.org/lexbit/relurpify/framework/cfgload/security"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
+	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
 // StartupState captures the first-screen startup decision for the TUI shell.
@@ -37,12 +38,12 @@ type AgentBootstrapOptions struct {
 	AgentName           string
 	ConfigName          string
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	ManifestSnapshot    *cfgload.AgentManifestSnapshot
+	ManifestSnapshot    *config.AgentManifestSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
-	ProfileResolution   llm.ProfileResolution
+	ProfileResolution   modelselect.ProfileResolution
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
-	Model               contracts.LanguageModel
+	Model               model.LanguageModel
 	Backend             llm.ManagedBackend
 	InferenceModel      string
 	Telemetry           telemetry.Telemetry
@@ -64,7 +65,7 @@ type BootstrappedAgentRuntime struct {
 	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
 	CapabilityAdmissions []capability.AdmissionResult
-	Contract             *cfgload.EffectiveAgentContract
+	Contract             *config.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 }
 
@@ -132,7 +133,7 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 		ctx = context.Background()
 	}
 	if current == nil {
-		return New(ctx, ConfigForWorkspace(Config{}, workspace), cfgload.Secrets{})
+		return New(ctx, ConfigForWorkspace(Config{}, workspace), config.Secrets{})
 	}
 	cfg := ConfigForWorkspace(current.Config, workspace)
 	newRT, err := New(ctx, cfg, current.secrets)
@@ -151,18 +152,18 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg := current
 	cfg.Workspace = workspace
-	paths := cfgload.New(workspace)
+	paths := config.New(workspace)
 	agentName := cfg.AgentName
 	if agentName == "" {
 		agentName = "coding"
 	}
 	cfg.ManifestPath = filepath.Join(paths.AgentsDir(), agentName+".yaml")
 	cfg.AgentsDir = paths.AgentsDir()
-	cfg.MemoryPath = cfgload.DefaultWorkspaceStateMemoryDir(workspace)
-	cfg.LogPath = filepath.Join(cfgload.DefaultWorkspaceStateLogsDir(workspace), "relurpish.log")
-	cfg.TelemetryPath = filepath.Join(cfgload.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
-	cfg.EventsPath = cfgload.DefaultWorkspaceStateEventsFile(workspace)
-	cfg.ConfigPath = cfgload.DefaultWorkspaceStateConfigPath(workspace)
+	cfg.MemoryPath = config.DefaultWorkspaceStateMemoryDir(workspace)
+	cfg.LogPath = filepath.Join(config.DefaultWorkspaceStateLogsDir(workspace), "relurpish.log")
+	cfg.TelemetryPath = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
+	cfg.EventsPath = config.DefaultWorkspaceStateEventsFile(workspace)
+	cfg.ConfigPath = config.DefaultWorkspaceStateConfigPath(workspace)
 	return cfg
 }
 
@@ -172,7 +173,7 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 // place before the runtime is created. The returned report reflects the final
 // post-bootstrap state used to decide whether the shell should start locked in
 // Doctor mode or auto-promote to Euclo chat.
-func BootstrapStartupState(ctx context.Context, cfg Config, secrets cfgload.Secrets) (StartupState, error) {
+func BootstrapStartupState(ctx context.Context, cfg Config, secrets config.Secrets) (StartupState, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

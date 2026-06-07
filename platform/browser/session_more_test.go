@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type testBackend struct {
@@ -130,14 +132,14 @@ func newTestSession(t *testing.T, backend Backend, opts ...func(*SessionConfig))
 	return session
 }
 
-// testBudget implements contracts.BudgetManager for testing
+// testBudget implements telemetry.BudgetManager for testing
 type testBudget struct {
 	maxTokens  int
 	remaining  int
 	categories map[string]float64
 }
 
-func newTestBudget(maxTokens int, categories map[string]float64) contracts.BudgetManager {
+func newTestBudget(maxTokens int, categories map[string]float64) telemetry.BudgetManager {
 	return &testBudget{
 		maxTokens:  maxTokens,
 		remaining:  maxTokens,
@@ -145,7 +147,7 @@ func newTestBudget(maxTokens int, categories map[string]float64) contracts.Budge
 	}
 }
 
-func (t *testBudget) Allocate(category string, tokens int, item contracts.BudgetItem) error {
+func (t *testBudget) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
 	if tokens > t.remaining {
 		return errors.New("budget exhausted")
 	}
@@ -431,8 +433,8 @@ func TestSessionExtractionBudgetHelpers(t *testing.T) {
 }
 
 func TestSessionNavigationHelpers(t *testing.T) {
-	perms := &contracts.PermissionSet{
-		Network: []contracts.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443}},
+	perms := &permissions.PermissionSet{
+		Network: []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443}},
 	}
 	manager, err := authorization.NewPermissionManager("", perms, nil, nil)
 	require.NoError(t, err)

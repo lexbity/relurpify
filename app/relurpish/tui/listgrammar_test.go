@@ -3,8 +3,9 @@ package tui
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 type testListEditor struct {

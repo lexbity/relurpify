@@ -7,22 +7,23 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-// stubRunner implements contracts.CommandRunner with canned output.
+// stubRunner implements ports.CommandRunner with canned output.
 type stubRunner struct {
 	stdout   string
 	stderr   string
 	exitCode int
-	requests []contracts.CommandRequest
+	requests []ports.CommandRequest
 }
 
-func (r *stubRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *stubRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	r.requests = append(r.requests, req)
-	return &contracts.CommandResult{
+	return &ports.CommandResult{
 		Stdout:      r.stdout,
 		Stderr:      r.stderr,
 		ExitCode:    r.exitCode,
@@ -38,15 +39,15 @@ func RunToolTest(t *testing.T, workspace string, tc *ToolTestCase) {
 	t.Logf("tooltest: %s (tool=%s)", tc.Path, tc.Tool)
 
 	// Load the tool manifest.
-	manifestDir := cfgload.DefaultToolManifestDir(workspace)
-	manifests, err := cfgload.LoadToolManifests(manifestDir)
+	manifestDir := config.DefaultToolManifestDir(workspace)
+	manifests, err := config.LoadToolManifests(manifestDir)
 	if err != nil {
 		t.Fatalf("load manifests: %v", err)
 	}
 
-	var manifest *contracts.ToolManifest
+	var manifest *toolcapabilities.ToolManifest
 	for _, m := range manifests {
-		if contracts.NormalizeToolName(m.Name) == contracts.NormalizeToolName(tc.Tool) {
+		if toolcapabilities.NormalizeToolName(m.Name) == toolcapabilities.NormalizeToolName(tc.Tool) {
 			manifest = m
 			break
 		}
@@ -70,7 +71,7 @@ func RunToolTest(t *testing.T, workspace string, tc *ToolTestCase) {
 	assertResult(t, result, err, tc.Expect, runner)
 }
 
-func assertResult(t *testing.T, result *contracts.ToolResult, err error, expect ToolTestExpect, runner *stubRunner) {
+func assertResult(t *testing.T, result *ports.ToolResult, err error, expect ToolTestExpect, runner *stubRunner) {
 	t.Helper()
 
 	// Check Go error.

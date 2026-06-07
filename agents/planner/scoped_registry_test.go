@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -15,13 +15,13 @@ type scopedPlannerTool struct {
 	name string
 }
 
-func (t scopedPlannerTool) Name() string                          { return t.name }
-func (t scopedPlannerTool) Description() string                   { return t.name }
-func (t scopedPlannerTool) Category() string                      { return "test" }
-func (t scopedPlannerTool) Parameters() []contracts.ToolParameter { return nil }
-func (t scopedPlannerTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t scopedPlannerTool) Name() string                      { return t.name }
+func (t scopedPlannerTool) Description() string               { return t.name }
+func (t scopedPlannerTool) Category() string                  { return "test" }
+func (t scopedPlannerTool) Parameters() []ports.ToolParameter { return nil }
+func (t scopedPlannerTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"name": t.name,
@@ -33,8 +33,8 @@ func (t scopedPlannerTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx
 	return true
 }
-func (t scopedPlannerTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (t scopedPlannerTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 func (t scopedPlannerTool) Tags() []string { return nil }
 

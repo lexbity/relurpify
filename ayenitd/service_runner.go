@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // RegisterWorkspaceServices registers workspace-owned services with the shared

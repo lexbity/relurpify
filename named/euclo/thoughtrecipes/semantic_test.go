@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/prompt/prompttest"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type semanticTestTool struct {
@@ -18,16 +18,16 @@ type semanticTestTool struct {
 	available bool
 }
 
-func (t semanticTestTool) Name() string                          { return t.name }
-func (t semanticTestTool) Description() string                   { return t.name }
-func (t semanticTestTool) Category() string                      { return "test" }
-func (t semanticTestTool) Parameters() []contracts.ToolParameter { return nil }
-func (t semanticTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: true}, nil
+func (t semanticTestTool) Name() string                      { return t.name }
+func (t semanticTestTool) Description() string               { return t.name }
+func (t semanticTestTool) Category() string                  { return "test" }
+func (t semanticTestTool) Parameters() []ports.ToolParameter { return nil }
+func (t semanticTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true}, nil
 }
-func (t semanticTestTool) IsAvailable(ctx context.Context) bool   { return t.available }
-func (t semanticTestTool) Permissions() contracts.ToolPermissions { return contracts.ToolPermissions{} }
-func (t semanticTestTool) Tags() []string                         { return nil }
+func (t semanticTestTool) IsAvailable(ctx context.Context) bool { return t.available }
+func (t semanticTestTool) Permissions() ports.ToolPermissions   { return ports.ToolPermissions{} }
+func (t semanticTestTool) Tags() []string                       { return nil }
 
 func TestSymbolTableResolvesValidDocument(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe code_review

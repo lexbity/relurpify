@@ -7,14 +7,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type phase12RecordingRunner struct {
@@ -23,11 +24,11 @@ type phase12RecordingRunner struct {
 	err    error
 }
 
-func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (*contracts.CommandResult, error) {
+func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (*ports.CommandResult, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
-	return &contracts.CommandResult{
+	return &ports.CommandResult{
 		Stdout:      r.stdout,
 		Stderr:      r.stderr,
 		StdoutBytes: int64(len(r.stdout)),

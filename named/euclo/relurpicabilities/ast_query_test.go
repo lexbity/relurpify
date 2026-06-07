@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
@@ -641,7 +641,7 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -682,7 +682,7 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -712,7 +712,7 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 		Stderr: "",
 		Err:    errors.New("command denied by policy"),
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -753,7 +753,7 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -819,7 +819,7 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -862,7 +862,7 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -903,7 +903,7 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 		Stderr: "",
 		Err:    nil,
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
@@ -1027,7 +1027,7 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 		Stderr: "",
 		Err:    errors.New("command denied by policy"),
 	})
-	
+
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 

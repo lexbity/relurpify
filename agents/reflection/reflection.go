@@ -8,18 +8,18 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
 type ReflectionAgent struct {
-	Reviewer      contracts.LanguageModel
+	Reviewer      model.LanguageModel
 	Delegate      graph.WorkflowExecutor
 	Config        *execution.Config
 	maxIterations int
@@ -148,7 +148,7 @@ func (n *reflectionReviewNode) Execute(ctx context.Context, env *contextdata.Env
 %s
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
 Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), compactResultForReview(lastResult))
-	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &contracts.LLMOptions{
+	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &model.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
 		MaxTokens:   600,

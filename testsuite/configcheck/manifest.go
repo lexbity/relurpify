@@ -5,7 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 )
 
 // DeriveExpectedCapability computes the expected risk_class and effect_class
@@ -13,8 +14,8 @@ import (
 //
 // This catches under-declared manifests: a tool that runs curl with
 // network_access: true must declare risk_class=[execute, network].
-func DeriveExpectedCapability(manifest contracts.ToolManifest) (expectedRisk []string, expectedEffect []string) {
-	if manifest.Execution.Backend != contracts.ToolBackendSubprocess {
+func DeriveExpectedCapability(manifest toolcapabilities.ToolManifest) (expectedRisk []string, expectedEffect []string) {
+	if manifest.Execution.Backend != ports.ToolBackendSubprocess {
 		return nil, nil
 	}
 
@@ -34,7 +35,7 @@ func DeriveExpectedCapability(manifest contracts.ToolManifest) (expectedRisk []s
 	}
 
 	// Certain tools may also have filesystem effects based on family.
-	family := contracts.NormalizeToolName(manifest.Family)
+	family := toolcapabilities.NormalizeToolName(manifest.Family)
 	switch family {
 	case "fileops", "text", "system", "shell":
 		if sandbox == nil || !sandbox.NetworkAccess {
@@ -69,7 +70,7 @@ func DeriveExpectedCapability(manifest contracts.ToolManifest) (expectedRisk []s
 
 // CheckManifest compares a manifest's declared capability with the derived
 // expectation. Returns a list of issues (empty = no issues).
-func CheckManifest(manifest contracts.ToolManifest) []string {
+func CheckManifest(manifest toolcapabilities.ToolManifest) []string {
 	var issues []string
 
 	expectedRisk, expectedEffect := DeriveExpectedCapability(manifest)
@@ -98,7 +99,7 @@ func CheckManifest(manifest contracts.ToolManifest) []string {
 }
 
 // CheckAllManifests runs CheckManifest for every tool manifest.
-func CheckAllManifests(manifests []*contracts.ToolManifest) map[string][]string {
+func CheckAllManifests(manifests []*toolcapabilities.ToolManifest) map[string][]string {
 	results := make(map[string][]string)
 	for _, m := range manifests {
 		if m == nil {

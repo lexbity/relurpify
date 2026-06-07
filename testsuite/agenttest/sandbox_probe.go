@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // RequireSandbox returns a verified sandbox CommandRunner for the given

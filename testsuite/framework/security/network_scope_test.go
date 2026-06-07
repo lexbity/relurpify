@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // TestNetworkPolicyVisibility validates that network policy state can be

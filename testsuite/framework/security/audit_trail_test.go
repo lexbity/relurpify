@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // TestSandboxPolicyAuditIntegration validates that sandbox policy state

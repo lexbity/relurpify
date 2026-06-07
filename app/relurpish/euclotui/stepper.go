@@ -11,9 +11,10 @@ import (
 )
 
 // Stepper renders a two-tier progress view:
-//   Tier 1 — Macro lifecycle rail (idle → intake → route → execute → verify → done)
-//   Tier 2 — Dynamic recipe-step graph (one node per real step, paradigm-labelled,
-//             with live runtime status and parallel group topology).
+//
+//	Tier 1 — Macro lifecycle rail (idle → intake → route → execute → verify → done)
+//	Tier 2 — Dynamic recipe-step graph (one node per real step, paradigm-labelled,
+//	          with live runtime status and parallel group topology).
 type Stepper struct {
 	recipe      *surface.RecipeProjection
 	stepRuntime map[string]surface.StepRuntime

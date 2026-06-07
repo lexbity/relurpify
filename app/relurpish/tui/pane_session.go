@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // SessionSection selects which view is active in the session pane.

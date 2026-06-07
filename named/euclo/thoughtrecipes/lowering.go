@@ -193,7 +193,7 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 		CaptureBindings: captures,
 		Prompt:          question,
 		PromptID:        promptID,
-		Step:           surface.ThoughtRecipeStep{ID: stepID, Type: "ask"},
+		Step:            surface.ThoughtRecipeStep{ID: stepID, Type: "ask"},
 	}
 	step.Step.Parent.Paradigm = "euclo"
 	step.Step.Prompt = question

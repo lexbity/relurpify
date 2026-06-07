@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -29,11 +29,11 @@ func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	h.mu.Lock()
 	h.invocations++
 	h.mu.Unlock()
-	return &contracts.CapabilityExecutionResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+	return &ports.CapabilityExecutionResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
 }
 
 func (h *dryRunCountingHandler) count() int {

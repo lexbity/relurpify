@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TestBinaryIshContentHandling validates that content that looks text-like
@@ -431,7 +431,7 @@ func TestLLMResponseWithEmptyText(t *testing.T) {
 	ctx := context.Background()
 
 	// Ingest empty LLM response
-	resp := &contracts.LLMResponse{Text: ""}
+	resp := &model.LLMResponse{Text: ""}
 	chunk, err := ingester.IngestLLMResponseFull(ctx, resp)
 	if err != nil {
 		t.Fatalf("empty LLM response ingestion should not fail: %v", err)
@@ -443,7 +443,7 @@ func TestLLMResponseWithEmptyText(t *testing.T) {
 	}
 
 	// Ingest valid LLM response to verify empty handling doesn't suppress subsequent ingestion
-	validResp := &contracts.LLMResponse{Text: "valid response"}
+	validResp := &model.LLMResponse{Text: "valid response"}
 	chunk2, err := ingester.IngestLLMResponseFull(ctx, validResp)
 	if err != nil {
 		t.Fatalf("valid LLM response ingestion should succeed after empty response: %v", err)

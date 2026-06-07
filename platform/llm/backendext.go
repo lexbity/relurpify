@@ -4,16 +4,18 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Re-export contract types for local usage
 type (
-	LLMOptions       = contracts.LLMOptions
-	LLMResponse      = contracts.LLMResponse
-	TokenUsageReport = contracts.TokenUsageReport
-	Message          = contracts.Message
-	LLMToolSpec      = contracts.LLMToolSpec
+	LLMOptions       = model.LLMOptions
+	LLMResponse      = model.LLMResponse
+	TokenUsageReport = telemetry.TokenUsageReport
+	Message          = model.Message
+	LLMToolSpec      = ports.LLMToolSpec
 )
 
 // SessionAwareBackend is implemented by backends that can bind and evict

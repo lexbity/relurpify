@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type browserPaths struct {
@@ -31,7 +31,7 @@ type browserSessionPaths struct {
 }
 
 func newBrowserPaths(workspaceRoot string) browserPaths {
-	base := filepath.Join(cfgload.New(workspaceRoot).ConfigRoot(), "browser")
+	base := filepath.Join(config.New(workspaceRoot).ConfigRoot(), "browser")
 	return browserPaths{
 		serviceRoot:   base,
 		launchRoot:    filepath.Join(base, "launch"),
@@ -87,7 +87,7 @@ func (s *BrowserService) ensureBrowserPathRoot(label, path string) error {
 	if path == "" {
 		return fmt.Errorf("browser %s missing", label)
 	}
-	if err := s.checkFileScope(contracts.FileSystemWrite, path); err != nil {
+	if err := s.checkFileScope(permissions.FileSystemWrite, path); err != nil {
 		return fmt.Errorf("browser %s out of scope: %w", label, err)
 	}
 	return nil

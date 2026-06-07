@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 const reactMessagesKey = "react.messages"
@@ -136,32 +137,32 @@ type Interaction struct {
 }
 
 // getReactMessages reads a copy of the stored chat transcript.
-func getReactMessages(state *contextdata.Envelope) []contracts.Message {
+func getReactMessages(state *contextdata.Envelope) []model.Message {
 	raw, ok := state.GetWorkingValue(reactMessagesKey)
 	if !ok {
 		return nil
 	}
-	messages, ok := raw.([]contracts.Message)
+	messages, ok := raw.([]model.Message)
 	if !ok || len(messages) == 0 {
 		return nil
 	}
-	copyMessages := make([]contracts.Message, len(messages))
+	copyMessages := make([]model.Message, len(messages))
 	copy(copyMessages, messages)
 	return copyMessages
 }
 
 // saveReactMessages overwrites the stored transcript with a defensive copy.
-func saveReactMessages(state *contextdata.Envelope, messages []contracts.Message) {
+func saveReactMessages(state *contextdata.Envelope, messages []model.Message) {
 	if len(messages) == 0 {
-		state.SetWorkingValue(reactMessagesKey, []contracts.Message{}, contextdata.MemoryClassTask)
+		state.SetWorkingValue(reactMessagesKey, []model.Message{}, contextdata.MemoryClassTask)
 		return
 	}
-	copyMessages := make([]contracts.Message, len(messages))
+	copyMessages := make([]model.Message, len(messages))
 	copy(copyMessages, messages)
 	state.SetWorkingValue(reactMessagesKey, copyMessages, contextdata.MemoryClassTask)
 }
 
-func appendAssistantMessage(state *contextdata.Envelope, resp *contracts.LLMResponse) {
+func appendAssistantMessage(state *contextdata.Envelope, resp *model.LLMResponse) {
 	if state == nil || resp == nil {
 		return
 	}
@@ -169,17 +170,17 @@ func appendAssistantMessage(state *contextdata.Envelope, resp *contracts.LLMResp
 	if len(messages) == 0 {
 		return
 	}
-	messages = append(messages, contracts.Message{
+	messages = append(messages, model.Message{
 		Role:      "assistant",
 		Content:   resp.Text,
-		ToolCalls: append([]contracts.ToolCall{}, resp.ToolCalls...),
+		ToolCalls: append([]model.ToolCall{}, resp.ToolCalls...),
 	})
 	saveReactMessages(state, messages)
 }
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, envelope *capability.CapabilityResultEnvelope) {
+func appendToolMessage(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, call model.ToolCall, res *ports.ToolResult, envelope *capability.CapabilityResultEnvelope) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
@@ -188,7 +189,7 @@ func appendToolMessage(agent *ReActAgent, task *execution.Task, state *contextda
 	if !ok {
 		return
 	}
-	messages = append(messages, contracts.Message{
+	messages = append(messages, model.Message{
 		Role:       "tool",
 		Name:       call.Name,
 		Content:    fmt.Sprintf("success=%t %s", res.Success, content),
@@ -226,7 +227,7 @@ func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	}
 }
 
-func summarizeToolResult(state *contextdata.Envelope, call contracts.ToolCall, res *contracts.ToolResult, decision capability.InsertionDecision) ToolObservation {
+func summarizeToolResult(state *contextdata.Envelope, call model.ToolCall, res *ports.ToolResult, decision capability.InsertionDecision) ToolObservation {
 	phase := ""
 	if state != nil {
 		phase = getWorkingValueAsString(state, "react.phase")
@@ -264,7 +265,7 @@ func clipSizeForDecision(decision capability.InsertionDecision) int {
 	}
 }
 
-func compactToolData(call contracts.ToolCall, res *contracts.ToolResult, decision capability.InsertionDecision) (string, map[string]interface{}) {
+func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capability.InsertionDecision) (string, map[string]interface{}) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}
@@ -350,7 +351,7 @@ func trimToBudget(value string, max int) string {
 // truncateForPrompt is removed in Phase 7. Use trimToBudget for caller-side budget
 // limits, or let the InsertionDecision gate what the model sees.
 
-func toolNames(tools []contracts.Tool) []string {
+func toolNames(tools []ports.Tool) []string {
 	out := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		out = append(out, tool.Name())
@@ -359,7 +360,7 @@ func toolNames(tools []contracts.Tool) []string {
 	return out
 }
 
-func summarizeToolPayload(result *contracts.ToolResult) string {
+func summarizeToolPayload(result *ports.ToolResult) string {
 	if result == nil {
 		return ""
 	}

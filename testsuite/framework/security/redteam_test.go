@@ -13,18 +13,20 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // ---------- SEC-3: workspace confinement ----------
 
 func TestContainerWorkdirRejectsSiblingPrefix(t *testing.T) {
 	workspace := t.TempDir()
-	policy := contracts.NewFileScopePolicy(workspace, nil)
+	policy := permissions.NewFileScopePolicy(workspace, nil)
 
 	tests := []struct {
 		name    string
@@ -38,7 +40,7 @@ func TestContainerWorkdirRejectsSiblingPrefix(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := policy.Check(contracts.FileSystemRead, tc.target)
+			err := policy.Check(permissions.FileSystemRead, tc.target)
 			if tc.wantErr && err == nil {
 				t.Error("expected rejection, got nil")
 			}
@@ -59,10 +61,10 @@ func TestSymlinkedParentWriteEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	policy := contracts.NewFileScopePolicy(workspace, nil)
+	policy := permissions.NewFileScopePolicy(workspace, nil)
 	escapePath := filepath.Join(linkPath, "newfile.txt")
 
-	err := policy.Check(contracts.FileSystemWrite, escapePath)
+	err := policy.Check(permissions.FileSystemWrite, escapePath)
 	if err == nil {
 		t.Fatal("write through symlinked parent to outside workspace must be rejected")
 	}
@@ -70,7 +72,7 @@ func TestSymlinkedParentWriteEscape(t *testing.T) {
 		t.Fatalf("expected 'outside workspace' error, got: %v", err)
 	}
 
-	err = policy.Check(contracts.FileSystemRead, escapePath)
+	err = policy.Check(permissions.FileSystemRead, escapePath)
 	if err == nil {
 		t.Fatal("read through symlinked parent to outside workspace must be rejected")
 	}
@@ -79,9 +81,9 @@ func TestSymlinkedParentWriteEscape(t *testing.T) {
 // ---------- SEC-7: unknown args rejected ----------
 
 func TestUnknownArgsRejectedByValidateToolArguments(t *testing.T) {
-	manifest := contracts.ToolManifest{
+	manifest := toolcapabilities.ToolManifest{
 		Name: "test_tool",
-		Parameters: []contracts.ToolParameter{
+		Parameters: []ports.ToolParameter{
 			{Name: "allowed", Type: "string", Required: false},
 		},
 	}
@@ -89,7 +91,7 @@ func TestUnknownArgsRejectedByValidateToolArguments(t *testing.T) {
 		"allowed": "ok",
 		"unknown": "should be rejected",
 	}
-	err := contracts.ValidateToolArguments(manifest, args)
+	err := toolcapabilities.ValidateToolArguments(manifest, args)
 	if err == nil {
 		t.Fatal("expected unknown argument to be rejected, got nil")
 	}
@@ -104,7 +106,7 @@ func TestExitCodeSurfaced(t *testing.T) {
 	// The exit code is now surfaced via CommandResult.ExitCode and propagated
 	// to ToolResult.Data["exit_code"]. This test uses the contracts-level
 	// helpers to verify the field exists and round-trips correctly.
-	if _, ok := interface{}(contracts.CommandResult{}).(struct{ ExitCode int }); ok {
+	if _, ok := interface{}(ports.CommandResult{}).(struct{ ExitCode int }); ok {
 		// Compile-time check passes — ExitCode field exists.
 	}
 }
@@ -140,13 +142,13 @@ func TestEgressDeniesPrivateIPs(t *testing.T) {
 		"192.168.1.1", "169.254.169.254", "::1",
 	}
 	for _, ip := range privateIPs {
-		if !contracts.IsPrivateOrLoopbackHost(ip) {
+		if !sandbox.IsPrivateOrLoopbackHost(ip) {
 			t.Errorf("IsPrivateOrLoopbackHost(%q) = false, want true", ip)
 		}
 	}
 	publicIPs := []string{"8.8.8.8", "1.1.1.1", "93.184.216.34"}
 	for _, ip := range publicIPs {
-		if contracts.IsPrivateOrLoopbackHost(ip) {
+		if sandbox.IsPrivateOrLoopbackHost(ip) {
 			t.Errorf("IsPrivateOrLoopbackHost(%q) = true, want false", ip)
 		}
 	}
@@ -156,7 +158,7 @@ func TestEgressDeniesPrivateIPs(t *testing.T) {
 
 func TestPathTraversalRejectedByFileScope(t *testing.T) {
 	workspace := t.TempDir()
-	policy := contracts.NewFileScopePolicy(workspace, nil)
+	policy := permissions.NewFileScopePolicy(workspace, nil)
 
 	traversalPaths := []string{
 		filepath.Join(workspace, "..", "etc", "passwd"),
@@ -165,7 +167,7 @@ func TestPathTraversalRejectedByFileScope(t *testing.T) {
 		filepath.Join(workspace, "..", "..", "usr", "bin"),
 	}
 	for _, p := range traversalPaths {
-		err := policy.Check(contracts.FileSystemRead, p)
+		err := policy.Check(permissions.FileSystemRead, p)
 		if err == nil {
 			t.Errorf("path traversal %q must be rejected", p)
 		}
@@ -173,7 +175,7 @@ func TestPathTraversalRejectedByFileScope(t *testing.T) {
 
 	// Legitimate path must be allowed.
 	legit := filepath.Join(workspace, "subdir", "file.txt")
-	if err := policy.Check(contracts.FileSystemWrite, legit); err != nil {
+	if err := policy.Check(permissions.FileSystemWrite, legit); err != nil {
 		t.Errorf("legitimate path inside workspace should be allowed: %v", err)
 	}
 }
@@ -184,15 +186,15 @@ func TestShellInjectionArgsAreInert(t *testing.T) {
 	// Subprocess tools construct args as discrete tokens — no sh -c
 	// interpolation. Verify that shell metacharacters in args survive
 	// as literal tokens by testing via GenerateSubprocessTool.
-	def := &contracts.ToolManifest{
+	def := &toolcapabilities.ToolManifest{
 		Name: "test_tool",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{
 				Base: []string{"echo"},
 			},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}
@@ -221,27 +223,27 @@ func TestShellInjectionArgsAreInert(t *testing.T) {
 // ---------- Duplicate tool names rejected at registration ----------
 
 func TestDuplicateToolNamesRejected(t *testing.T) {
-	def1 := &contracts.ToolManifest{
+	def1 := &toolcapabilities.ToolManifest{
 		Name: "duplicate_tool",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"echo"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}
-	def2 := &contracts.ToolManifest{
+	def2 := &toolcapabilities.ToolManifest{
 		Name: "duplicate_tool",
-		Execution: contracts.ToolManifestExecution{
-			Backend: contracts.ToolBackendSubprocess,
-			Command: &contracts.ToolManifestCommand{Base: []string{"cat"}},
+		Execution: toolcapabilities.ToolManifestExecution{
+			Backend: ports.ToolBackendSubprocess,
+			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"cat"}},
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}
-	_, err := cfgload.BuildRegistry([]*contracts.ToolManifest{def1, def2}, nil, nil)
+	_, err := config.BuildRegistry([]*toolcapabilities.ToolManifest{def1, def2}, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for duplicate tool name, got nil")
 	}
@@ -254,22 +256,22 @@ func TestDuplicateToolNamesRejected(t *testing.T) {
 
 func TestResourceLimitDefaultsEnforced(t *testing.T) {
 	// Verify the default helpers return the expected values from Phase 3.
-	if mem := contracts.MemoryBytesOrDefault(0); mem != 512*1024*1024 {
+	if mem := sandbox.MemoryBytesOrDefault(0); mem != 512*1024*1024 {
 		t.Fatalf("MemoryBytesOrDefault(0) = %d, want 512 MiB", mem)
 	}
-	if mem := contracts.MemoryBytesOrDefault(256 * 1024 * 1024); mem != 256*1024*1024 {
+	if mem := sandbox.MemoryBytesOrDefault(256 * 1024 * 1024); mem != 256*1024*1024 {
 		t.Fatalf("MemoryBytesOrDefault(256 MiB) = %d, want 256 MiB", mem)
 	}
-	if pids := contracts.PidsLimitOrDefault(0); pids != 256 {
+	if pids := sandbox.PidsLimitOrDefault(0); pids != 256 {
 		t.Fatalf("PidsLimitOrDefault(0) = %d, want 256", pids)
 	}
-	if cpus := contracts.CPUsOrDefault(0); cpus != 1.0 {
+	if cpus := sandbox.CPUsOrDefault(0); cpus != 1.0 {
 		t.Fatalf("CPUsOrDefault(0) = %f, want 1.0", cpus)
 	}
-	if grace := contracts.GracePeriodOrDefault(0); grace != 3*time.Second {
+	if grace := sandbox.GracePeriodOrDefault(0); grace != 3*time.Second {
 		t.Fatalf("GracePeriodOrDefault(0) = %v, want 3s", grace)
 	}
-	if ceil := contracts.OutputCeilingOrDefault(0); ceil != 32*1024*1024 {
+	if ceil := sandbox.OutputCeilingOrDefault(0); ceil != 32*1024*1024 {
 		t.Fatalf("OutputCeilingOrDefault(0) = %d, want 32 MiB", ceil)
 	}
 }
@@ -279,8 +281,8 @@ func TestResourceLimitDefaultsEnforced(t *testing.T) {
 func TestValidateAndCoerceIntegerString(t *testing.T) {
 	// The old dual-validator path rejected integer-as-string before coercion
 	// could run. ValidateAndCoerce must coerce first then validate.
-	param := contracts.ToolParameter{Name: "count", Type: "integer"}
-	coerced, err := contracts.CoerceParameterValue(param, "42")
+	param := ports.ToolParameter{Name: "count", Type: "integer"}
+	coerced, err := toolcapabilities.CoerceParameterValue(param, "42")
 	if err != nil {
 		t.Fatalf("CoerceParameterValue('42' -> integer) = %v", err)
 	}
@@ -294,11 +296,11 @@ func TestValidateAndCoerceIntegerString(t *testing.T) {
 func TestOutputCeilingDefault(t *testing.T) {
 	// Phase 6 removed MaxOutputBytes and introduced OutputCeiling.
 	// Verify the field exists and the default is 32 MiB.
-	req := contracts.CommandRequest{Args: []string{"echo"}}
+	req := ports.CommandRequest{Args: []string{"echo"}}
 	if req.OutputCeiling != 0 {
 		t.Fatalf("zero-value OutputCeiling should be 0, got %d", req.OutputCeiling)
 	}
-	if contracts.OutputCeilingOrDefault(req.OutputCeiling) != 32*1024*1024 {
+	if sandbox.OutputCeilingOrDefault(req.OutputCeiling) != 32*1024*1024 {
 		t.Fatalf("OutputCeiling default should be 32 MiB")
 	}
 }
@@ -322,7 +324,7 @@ func TestRunnerUsesContainerHandleNotPgidKill(t *testing.T) {
 
 func TestCommandResultShapeIsComplete(t *testing.T) {
 	// Verify CommandResult carries all fields needed by the audit spec.
-	r := contracts.CommandResult{}
+	r := ports.CommandResult{}
 	_ = r.Stdout
 	_ = r.Stderr
 	_ = r.ExitCode
@@ -344,7 +346,7 @@ func TestManifestEffectClassHonoured(t *testing.T) {
 	// cannot declare filesystem_read. This validates the structural fix:
 	// the ToolManifestSandbox.AllowFlags is still the field, and deployments
 	// that check effect_class for policy decisions are not bypassed.
-	sb := contracts.ToolManifestSandbox{AllowFlags: true}
+	sb := toolcapabilities.ToolManifestSandbox{AllowFlags: true}
 	if !sb.AllowFlags {
 		t.Fatal("AllowFlags field must exist")
 	}

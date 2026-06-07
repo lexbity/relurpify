@@ -3,12 +3,12 @@ package runtime
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-func convertRuntimeCapabilitySelectors(values []cfgload.RuntimeCapabilitySelector) []agentspec.CapabilitySelector {
+func convertRuntimeCapabilitySelectors(values []config.RuntimeCapabilitySelector) []agentspec.CapabilitySelector {
 	if len(values) == 0 {
 		return nil
 	}
@@ -35,13 +35,13 @@ func convertRuntimeCapabilitySelectors(values []cfgload.RuntimeCapabilitySelecto
 	return out
 }
 
-func convertCoreCapabilitySelectors(values []agentspec.CapabilitySelector) []cfgload.RuntimeCapabilitySelector {
+func convertCoreCapabilitySelectors(values []agentspec.CapabilitySelector) []config.RuntimeCapabilitySelector {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]cfgload.RuntimeCapabilitySelector, 0, len(values))
+	out := make([]config.RuntimeCapabilitySelector, 0, len(values))
 	for _, value := range values {
-		out = append(out, cfgload.RuntimeCapabilitySelector{
+		out = append(out, config.RuntimeCapabilitySelector{
 			ID:                          value.ID,
 			Name:                        value.Name,
 			Kind:                        string(value.Kind),

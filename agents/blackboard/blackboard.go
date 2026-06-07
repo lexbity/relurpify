@@ -6,7 +6,7 @@ import (
 	"time"
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
 )
 
 const BlackboardStateSchemaVersion = 1
@@ -661,7 +661,7 @@ func sanitizeKey(key string) string {
 // SeedBlackboardFromSemanticContext seeds the blackboard with facts from
 // pre-resolved semantic context (AST symbols and BKC chunks). This is
 // exported so Euclo executors can use it directly.
-func SeedBlackboardFromSemanticContext(bb *Blackboard, semctx agentspec.AgentSemanticContext) {
+func SeedBlackboardFromSemanticContext(bb *Blackboard, semctx execctx.AgentSemanticContext) {
 	if bb == nil {
 		return
 	}

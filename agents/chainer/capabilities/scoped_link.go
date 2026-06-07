@@ -2,7 +2,7 @@ package capabilities
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/chainer"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
 )
 
 // ScopedLink wraps a chainer.Link and provides tool scoping capability.

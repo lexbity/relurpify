@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // HelpOverlay renders a centered help box over the current view.

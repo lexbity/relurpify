@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type stubModel struct {
@@ -32,7 +32,7 @@ func (s stubModel) Chat(context.Context, []Message, *LLMOptions) (*LLMResponse, 
 	return &LLMResponse{Text: "chat", FinishReason: "stop"}, nil
 }
 func (s stubModel) ChatWithTools(context.Context, []Message, []LLMToolSpec, *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []contracts.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
+	return &LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []model.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
 }
 
 func TestTapeModelRecordThenReplay(t *testing.T) {

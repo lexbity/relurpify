@@ -5,8 +5,8 @@ import (
 	"strings"
 	"text/template"
 
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 

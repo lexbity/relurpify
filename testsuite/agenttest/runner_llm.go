@@ -3,14 +3,14 @@ package agenttest
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // buildCaseBackend constructs a language model backend using the provider-agnostic factory.
 // It creates a ManagedBackend via llm.New(), applies the profile if provided, sets debug logging,
 // and returns the underlying LanguageModel.
-func buildCaseBackend(execution resolvedCaseExecution, profile *llm.ModelProfile, debug bool) (contracts.LanguageModel, error) {
+func buildCaseBackend(execution resolvedCaseExecution, profile *llm.ModelProfile, debug bool) (model.LanguageModel, error) {
 	cfg := llm.ProviderConfig{
 		Provider: execution.Provider,
 		Endpoint: execution.Endpoint,

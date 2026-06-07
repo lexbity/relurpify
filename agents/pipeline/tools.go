@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // CapabilityInvoker routes tool calls through the registered capability path
 // with policy evaluation, safety checks, and provenance recording.
 type CapabilityInvoker interface {
-	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*contracts.ToolResult, error)
+	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error)
 }
 
 type toolObservation struct {
@@ -24,7 +25,7 @@ type toolObservation struct {
 	Data    map[string]any `json:"data,omitempty"`
 }
 
-func resolveStageTools(ctx context.Context, env *contextdata.Envelope, stage Stage, available []contracts.Tool) []contracts.Tool {
+func resolveStageTools(ctx context.Context, env *contextdata.Envelope, stage Stage, available []ports.Tool) []ports.Tool {
 	if stage == nil || len(available) == 0 {
 		return nil
 	}
@@ -43,7 +44,7 @@ func resolveStageTools(ctx context.Context, env *contextdata.Envelope, stage Sta
 	if len(allowed) == 0 {
 		return nil
 	}
-	tools := make([]contracts.Tool, 0, len(allowed))
+	tools := make([]ports.Tool, 0, len(allowed))
 	for _, tool := range available {
 		if tool == nil {
 			continue
@@ -55,11 +56,11 @@ func resolveStageTools(ctx context.Context, env *contextdata.Envelope, stage Sta
 	return tools
 }
 
-func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []contracts.ToolCall, tools []contracts.Tool, invoker CapabilityInvoker) ([]toolObservation, error) {
+func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []model.ToolCall, tools []ports.Tool, invoker CapabilityInvoker) ([]toolObservation, error) {
 	if len(calls) == 0 || len(tools) == 0 {
 		return nil, nil
 	}
-	index := make(map[string]contracts.Tool, len(tools))
+	index := make(map[string]ports.Tool, len(tools))
 	for _, tool := range tools {
 		if tool == nil {
 			continue
@@ -72,7 +73,7 @@ func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []co
 			return observations, fmt.Errorf("pipeline tool %s not allowed for stage", call.Name)
 		}
 		var (
-			result *contracts.ToolResult
+			result *ports.ToolResult
 			err    error
 		)
 		if invoker == nil {

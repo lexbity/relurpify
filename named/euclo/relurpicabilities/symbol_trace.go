@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
@@ -39,9 +40,9 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"symbol": {
 					Type:        "string",
 					Description: "Symbol name to trace",
@@ -49,9 +50,9 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 			},
 			Required: []string{"symbol"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if trace executed successfully",
@@ -67,14 +68,14 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"callees": {
 					Type:        "array",
 					Description: "Functions called by this symbol",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
 				"callers": {
 					Type:        "array",
 					Description: "Functions that call this symbol",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
@@ -84,7 +85,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke executes the symbol trace and returns call graph information.
-func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
@@ -129,7 +130,7 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	// Convert to trace entries
 	entries := traceEntries(callees, callers)
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

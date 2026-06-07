@@ -1,12 +1,12 @@
 package paradigminput
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type ParadigmInput struct {
@@ -25,19 +25,19 @@ type ParadigmInput struct {
 }
 
 func (in *ParadigmInput) BuildRuntimeContext(consumerID string, state map[string]any, env *contextdata.Envelope, caps []capability.CapabilityDescriptor) prompt.RuntimeContext {
-	var tools []contracts.Tool
+	var tools []ports.Tool
 	if in.Tools != nil {
 		tools = in.Tools.CallableTools()
 	}
 	return prompt.RuntimeContext{
-		Variables:          extractVariables(in.Task),
-		State:              state,
-		Envelope:           env,
-		Paradigm:           "react",
-		ConsumerID:         consumerID,
-		Task:               in.Task,
-		Tools:              tools,
-		Capabilities:       caps,
+		Variables:    extractVariables(in.Task),
+		State:        state,
+		Envelope:     env,
+		Paradigm:     "react",
+		ConsumerID:   consumerID,
+		Task:         in.Task,
+		Tools:        tools,
+		Capabilities: caps,
 	}
 }
 

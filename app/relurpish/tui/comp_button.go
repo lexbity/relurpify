@@ -3,8 +3,9 @@ package tui
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // ButtonClickedMsg is emitted when a Button is activated.

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // TriggerPolicyRequirements captures the requested effects declared by a thoughtrecipe trigger.

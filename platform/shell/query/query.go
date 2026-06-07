@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
 	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 )
@@ -73,8 +74,8 @@ type InstantiationResult struct {
 	OriginalQuery   InstantiationQuery
 	NormalizedQuery string
 	Match           DiscoveryMatch
-	Preset          contracts.CommandPreset
-	Request         contracts.CommandRequest
+	Preset          toolcapabilities.CommandPreset
+	Request         ports.CommandRequest
 	StructuredArgs  map[string]any
 }
 
@@ -405,7 +406,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		})
 		return nil, fmt.Errorf("tool %q is deprecated", entry.Name)
 	}
-	if err := contracts.ValidateToolArguments(toManifest(entry), q.Arguments); err != nil {
+	if err := toolcapabilities.ValidateToolArguments(toManifest(entry), q.Arguments); err != nil {
 		e.emitTelemetry("tool_result", "shell instantiation query validation failed", map[string]any{
 			"query_type": "instantiation",
 			"status":     "failed",
@@ -414,7 +415,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		})
 		return nil, err
 	}
-	resolution, request, err := contracts.BuildToolExecutionPlan(toManifest(entry), q.Arguments)
+	resolution, request, err := toolcapabilities.BuildToolExecutionPlan(toManifest(entry), q.Arguments)
 	if err != nil {
 		e.emitTelemetry("tool_result", "shell instantiation query validation failed", map[string]any{
 			"query_type": "instantiation",
@@ -428,7 +429,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		Entry:            entry,
 		Score:            1,
 		Reasons:          []string{"resolved"},
-		ParameterSummary: contracts.ToolParameterSummary(toManifest(entry)),
+		ParameterSummary: toolcapabilities.ToolParameterSummary(toManifest(entry)),
 		Examples:         append([]catalog.ToolExample(nil), entry.Examples...),
 	}
 	e.emitTelemetry("tool_result", "shell instantiation query completed", map[string]any{
@@ -441,16 +442,16 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 		OriginalQuery:   q,
 		NormalizedQuery: renderInstantiationQuery(q),
 		Match:           result,
-		Preset: contracts.CommandPreset{
+		Preset: toolcapabilities.CommandPreset{
 			Name:        entry.Name,
-			Command:     contracts.ToolCommand(toManifest(entry)),
+			Command:     toolcapabilities.ToolCommand(toManifest(entry)),
 			DefaultArgs: append([]string(nil), entry.Preset.DefaultArgs...),
 			Description: entry.Description,
 			Category:    entry.Family,
 			Tags:        append([]string(nil), entry.Tags...),
 			Timeout:     60 * time.Second,
 			AllowStdin:  entry.Preset.AllowStdin,
-			WorkdirMode: contracts.ToolWorkdirMode(toManifest(entry)),
+			WorkdirMode: toolcapabilities.ToolWorkdirMode(toManifest(entry)),
 		},
 		Request:        request,
 		StructuredArgs: resolution.StructuredArgs,
@@ -545,7 +546,7 @@ func scoreEntry(entry catalog.ToolCatalogEntry, q DiscoveryQuery) DiscoveryMatch
 		Entry:            entry,
 		Score:            score,
 		Reasons:          uniqueStrings(reasons),
-		ParameterSummary: contracts.ToolParameterSummary(toManifest(entry)),
+		ParameterSummary: toolcapabilities.ToolParameterSummary(toManifest(entry)),
 		Examples:         append([]catalog.ToolExample(nil), entry.Examples...),
 	}
 }
@@ -654,36 +655,36 @@ func renderInstantiationQuery(q InstantiationQuery) string {
 	return strings.Join(filterEmpty(parts), " ")
 }
 
-func toManifest(entry catalog.ToolCatalogEntry) contracts.ToolManifest {
-	manifest := contracts.ToolManifest{
+func toManifest(entry catalog.ToolCatalogEntry) toolcapabilities.ToolManifest {
+	manifest := toolcapabilities.ToolManifest{
 		Name:        entry.Name,
 		Family:      entry.Family,
 		Intent:      append([]string(nil), entry.Intent...),
 		Description: entry.Description,
-		Parameters:  make([]contracts.ToolParameter, 0, len(entry.ParameterSchema.Properties)),
-		Execution: contracts.ToolManifestExecution{
+		Parameters:  make([]ports.ToolParameter, 0, len(entry.ParameterSchema.Properties)),
+		Execution: toolcapabilities.ToolManifestExecution{
 			DefaultArgs:     append([]string(nil), entry.Preset.DefaultArgs...),
 			AllowStdin:      entry.Preset.AllowStdin,
 			SupportsWorkdir: entry.Preset.SupportsWorkdir,
 		},
-		Capability: contracts.ToolManifestCapability{
+		Capability: toolcapabilities.ToolManifestCapability{
 			RiskClass: append([]string(nil), entry.Tags...),
 		},
 	}
 	if len(entry.Preset.CommandTemplate) > 0 {
-		manifest.Execution.Backend = contracts.ToolBackendSubprocess
-		manifest.Execution.Command = &contracts.ToolManifestCommand{
+		manifest.Execution.Backend = ports.ToolBackendSubprocess
+		manifest.Execution.Command = &toolcapabilities.ToolManifestCommand{
 			Base: append([]string(nil), entry.Preset.CommandTemplate...),
 		}
 		manifest.Execution.Implementation = entry.Preset.CommandTemplate[0]
 	} else {
-		manifest.Execution.Backend = contracts.ToolBackendGoNative
+		manifest.Execution.Backend = ports.ToolBackendGoNative
 		manifest.Execution.Implementation = entry.Name
 	}
 	for name, field := range entry.ParameterSchema.Properties {
-		param := contracts.ToolParameter{
+		param := ports.ToolParameter{
 			Name:        name,
-			Type:        contracts.ToolParameterType(field.Type),
+			Type:        ports.ToolParameterType(field.Type),
 			Description: field.Description,
 			Default:     field.Default,
 		}
@@ -700,7 +701,7 @@ func toManifest(entry catalog.ToolCatalogEntry) contracts.ToolManifest {
 		manifest.Capability.RiskClass = []string{"read-only"}
 	}
 	if len(entry.Preset.CommandTemplate) == 0 {
-		manifest.Execution.Backend = contracts.ToolBackendGoNative
+		manifest.Execution.Backend = ports.ToolBackendGoNative
 	}
 	manifest.SourcePath = ""
 	manifest.CanonicalName = entry.Name

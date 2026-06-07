@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // ProbeResult represents the outcome of a single platform runtime check.
@@ -80,7 +80,7 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 }
 
 func checkSQLiteWritable(workspace string) (bool, string) {
-	paths := cfgload.New(workspace)
+	paths := config.New(workspace)
 	sessionsDir := paths.SessionsDir()
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		return false, fmt.Sprintf("cannot create sessions dir: %s", err)

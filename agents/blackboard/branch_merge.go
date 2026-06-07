@@ -3,7 +3,7 @@ package blackboard
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 type ExecutionMode string

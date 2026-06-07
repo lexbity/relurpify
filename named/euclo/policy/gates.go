@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -26,7 +26,7 @@ const (
 // PermissionManager captures the subset of authorization.PermissionManager
 // behavior required by GateNode.
 type PermissionManager interface {
-	RequireApproval(ctx context.Context, agentID string, desc contracts.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error
+	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error
 }
 
 // HITLBroker captures the subset of authorization.HITLBroker behavior required
@@ -177,8 +177,8 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 
 	if n.hitlBroker != nil {
 		req := authorization.PermissionRequest{
-			Permission: contracts.PermissionDescriptor{
-				Type:         contracts.PermissionTypeHITL,
+			Permission: permissions.PermissionDescriptor{
+				Type:         permissions.PermissionTypeHITL,
 				Action:       "euclo.policy.gate",
 				Resource:     n.resourceID(env),
 				RequiresHITL: true,
@@ -210,8 +210,8 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 	}
 
 	if n.permissionManager != nil {
-		desc := contracts.PermissionDescriptor{
-			Type:         contracts.PermissionTypeHITL,
+		desc := permissions.PermissionDescriptor{
+			Type:         permissions.PermissionTypeHITL,
 			Action:       "euclo.policy.gate",
 			Resource:     n.resourceID(env),
 			RequiresHITL: true,

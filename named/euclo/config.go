@@ -3,10 +3,10 @@ package euclo
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -19,7 +19,7 @@ type EucloConfig struct {
 	BuiltinFamilies bool
 
 	// CapabilityClassifierModel overrides the model used for tier-2 classification.
-	CapabilityClassifierModel contracts.LanguageModel
+	CapabilityClassifierModel model.LanguageModel
 
 	// MaxStreamTokens is the token budget passed to context stream requests.
 	MaxStreamTokens int

@@ -3,7 +3,7 @@ package pipeline
 import (
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TransitionKind indicates what the runtime should do after a stage finishes.
@@ -45,7 +45,7 @@ type StageResult struct {
 	ContractName    string
 	ContractVersion string
 	Prompt          string
-	Response        *contracts.LLMResponse
+	Response        *model.LLMResponse
 	DecodedOutput   any
 	DecodedJSON     string
 	ValidationOK    bool

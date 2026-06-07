@@ -1,6 +1,6 @@
 package python
 
-import "codeburg.org/lexbit/relurpify/platform/contracts"
+import "codeburg.org/lexbit/relurpify/capability"
 
 func atoiSafe(value string) int {
 	var total int
@@ -35,5 +35,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return contracts.NormalizeStringSlice(value)
+	return capability.NormalizeStringSlice(value)
 }

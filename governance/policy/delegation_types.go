@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 )
 
 type RecoverabilityMode string
@@ -39,23 +39,23 @@ const (
 // DelegationRequest is the framework-owned contract for handing work from one
 // coordinated capability/agent target to another.
 type DelegationRequest struct {
-	ID                 string            `json:"id"`
-	WorkflowID         string            `json:"workflow_id,omitempty"`
-	TaskID             string            `json:"task_id,omitempty"`
-	CallerAgentID      string            `json:"caller_agent_id,omitempty"`
-	CallerCapabilityID string            `json:"caller_capability_id,omitempty"`
-	TargetCapabilityID string            `json:"target_capability_id"`
-	TargetProviderID   string            `json:"target_provider_id,omitempty"`
-	TargetSessionID    string            `json:"target_session_id,omitempty"`
-	TaskType           string            `json:"task_type"`
-	Instruction        string            `json:"instruction"`
-	ResourceRefs       []string          `json:"resource_refs,omitempty"`
-	ExpectedResult     *contracts.Schema `json:"expected_result,omitempty"`
-	Depth              int               `json:"depth,omitempty"`
-	PolicySnapshotID   string            `json:"policy_snapshot_id,omitempty"`
-	ApprovalRequired   bool              `json:"approval_required,omitempty"`
-	Metadata           map[string]any    `json:"metadata,omitempty"`
-	CreatedAt          time.Time         `json:"created_at,omitempty"`
+	ID                 string               `json:"id"`
+	WorkflowID         string               `json:"workflow_id,omitempty"`
+	TaskID             string               `json:"task_id,omitempty"`
+	CallerAgentID      string               `json:"caller_agent_id,omitempty"`
+	CallerCapabilityID string               `json:"caller_capability_id,omitempty"`
+	TargetCapabilityID string               `json:"target_capability_id"`
+	TargetProviderID   string               `json:"target_provider_id,omitempty"`
+	TargetSessionID    string               `json:"target_session_id,omitempty"`
+	TaskType           string               `json:"task_type"`
+	Instruction        string               `json:"instruction"`
+	ResourceRefs       []string             `json:"resource_refs,omitempty"`
+	ExpectedResult     *schemacoerce.Schema `json:"expected_result,omitempty"`
+	Depth              int                  `json:"depth,omitempty"`
+	PolicySnapshotID   string               `json:"policy_snapshot_id,omitempty"`
+	ApprovalRequired   bool                 `json:"approval_required,omitempty"`
+	Metadata           map[string]any       `json:"metadata,omitempty"`
+	CreatedAt          time.Time            `json:"created_at,omitempty"`
 }
 
 func (r DelegationRequest) Validate() error {

@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -224,8 +224,8 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 		return
 	}
 
-	// Convert execution.Result to contracts.ToolResult for the envelope
-	toolResultEnv := &contracts.ToolResult{
+	// Convert execution.Result to ports.ToolResult for the envelope
+	toolResultEnv := &ports.ToolResult{
 		Success: toolResult.Success,
 		Data:    execution.ResultFields(toolResult.Data),
 		Error:   "",

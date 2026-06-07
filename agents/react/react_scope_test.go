@@ -6,29 +6,30 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type scopeAwareReactModel struct {
 	nativeToolCalling bool
 	generatePrompts   []string
-	chatMessages      [][]contracts.Message
-	chatToolSpecs     [][]contracts.LLMToolSpec
+	chatMessages      [][]model.Message
+	chatToolSpecs     [][]ports.LLMToolSpec
 }
 
-func (m *scopeAwareReactModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *scopeAwareReactModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
 	m.generatePrompts = append(m.generatePrompts, prompt)
-	return &contracts.LLMResponse{
+	return &model.LLMResponse{
 		Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`,
 	}, nil
 }
 
-func (m *scopeAwareReactModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
+func (m *scopeAwareReactModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	_ = ctx
 	_ = prompt
 	_ = options
@@ -37,20 +38,20 @@ func (m *scopeAwareReactModel) GenerateStream(ctx context.Context, prompt string
 	return ch, nil
 }
 
-func (m *scopeAwareReactModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *scopeAwareReactModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
-	return &contracts.LLMResponse{
+	return &model.LLMResponse{
 		Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`,
 	}, nil
 }
 
-func (m *scopeAwareReactModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *scopeAwareReactModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
-	m.chatMessages = append(m.chatMessages, append([]contracts.Message(nil), messages...))
-	m.chatToolSpecs = append(m.chatToolSpecs, append([]contracts.LLMToolSpec(nil), tools...))
-	return &contracts.LLMResponse{
+	m.chatMessages = append(m.chatMessages, append([]model.Message(nil), messages...))
+	m.chatToolSpecs = append(m.chatToolSpecs, append([]ports.LLMToolSpec(nil), tools...))
+	return &model.LLMResponse{
 		Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`,
 	}, nil
 }
@@ -71,21 +72,21 @@ type scopeAwareReactTool struct {
 	name string
 }
 
-func (t scopeAwareReactTool) Name() string                          { return t.name }
-func (t scopeAwareReactTool) Description() string                   { return t.name }
-func (t scopeAwareReactTool) Category() string                      { return "test" }
-func (t scopeAwareReactTool) Parameters() []contracts.ToolParameter { return nil }
-func (t scopeAwareReactTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t scopeAwareReactTool) Name() string                      { return t.name }
+func (t scopeAwareReactTool) Description() string               { return t.name }
+func (t scopeAwareReactTool) Category() string                  { return "test" }
+func (t scopeAwareReactTool) Parameters() []ports.ToolParameter { return nil }
+func (t scopeAwareReactTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = args
-	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
 }
 func (t scopeAwareReactTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx
 	return true
 }
-func (t scopeAwareReactTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (t scopeAwareReactTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 func (t scopeAwareReactTool) Tags() []string { return nil }
 

@@ -17,8 +17,9 @@ import (
 	"syscall"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/browser"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultStartupTimeout = 10 * time.Second
@@ -32,7 +33,7 @@ type Config struct {
 	StartupTimeout time.Duration
 	DriverArgs     []string
 	BrowserArgs    []string
-	Policy         contracts.CommandPolicy
+	Policy         sandbox.CommandPolicy
 }
 
 type Backend struct {
@@ -566,7 +567,7 @@ func launchChromeDriver(ctx context.Context, cfg Config) (*launchedDriver, error
 	args := []string{"--port=" + strconv.Itoa(port)}
 	args = append(args, cfg.DriverArgs...)
 	if cfg.Policy != nil {
-		if err := cfg.Policy.AllowCommand(ctx, contracts.CommandRequest{
+		if err := cfg.Policy.AllowCommand(ctx, ports.CommandRequest{
 			Args: append([]string{driverPath}, args...),
 		}); err != nil {
 			return nil, err

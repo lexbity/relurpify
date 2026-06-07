@@ -3,8 +3,9 @@ package tui
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // nilSurface implements AgentSurface with Theme() returning nil.

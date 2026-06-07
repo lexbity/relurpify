@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 const (
@@ -124,7 +124,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		return nil, fmt.Errorf("manifest path required")
 	}
 	manifestPath = cleanAbsolutePath(manifestPath)
-	loadedManifest, err := cfgload.LoadAgentManifest(manifestPath)
+	loadedManifest, err := config.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +163,8 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		RunRoot:               artifacts.RunRoot,
 		DerivedWorkspaceRoot:  artifacts.SetupWorkspaceDir,
 		ManifestPath:          manifestPath,
-		ConfigPath:            filepath.Join(artifacts.SetupWorkspaceDir, cfgload.DirName, "config.yaml"),
-		AgentsDir:             filepath.Join(artifacts.SetupWorkspaceDir, cfgload.DirName, "agents"),
+		ConfigPath:            filepath.Join(artifacts.SetupWorkspaceDir, config.DirName, "config.yaml"),
+		AgentsDir:             filepath.Join(artifacts.SetupWorkspaceDir, config.DirName, "agents"),
 		LogsDir:               artifacts.ExecutionLogsDir,
 		TelemetryDir:          artifacts.ExecutionTelemetryDir,
 		SetupDir:              artifacts.SetupDir,

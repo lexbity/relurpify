@@ -9,13 +9,14 @@ import (
 	"time"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // DiffSummaryHandler implements the diff summary capability.
@@ -46,9 +47,9 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"base_ref": {
 					Type:        "string",
 					Description: "Base git ref (default: HEAD~1)",
@@ -63,9 +64,9 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				},
 			},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if diff completed",
@@ -77,7 +78,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"changed_files": {
 					Type:        "array",
 					Description: "List of changed files",
-					Items:       &contracts.Schema{Type: "string"},
+					Items:       &schemacoerce.Schema{Type: "string"},
 				},
 				"additions": {
 					Type:        "integer",
@@ -90,7 +91,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 				"risk_areas": {
 					Type:        "array",
 					Description: "Identified risk areas",
-					Items:       &contracts.Schema{Type: "object"},
+					Items:       &schemacoerce.Schema{Type: "object"},
 				},
 			},
 		},
@@ -98,7 +99,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke runs git diff and returns a structured summary.
-func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), nil
 	}
@@ -138,7 +139,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	}
 	statRes, err := h.env.CommandRunner.Run(ctx, statReq)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -166,7 +167,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	}
 	nameRes, err := h.env.CommandRunner.Run(ctx, nameReq)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -193,7 +194,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 		}
 	}
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":       true,

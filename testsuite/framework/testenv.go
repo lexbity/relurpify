@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -149,7 +149,7 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 		t.Fatalf("failed to create manifest root: %v", err)
 	}
 
-	perms := policy.NewFileSystemPermissionSet(workspace, contracts.FileSystemRead, contracts.FileSystemWrite, contracts.FileSystemList)
+	perms := policy.NewFileSystemPermissionSet(workspace, permissions.FileSystemRead, permissions.FileSystemWrite, permissions.FileSystemList)
 
 	auditSink := &recordingAuditSink{}
 

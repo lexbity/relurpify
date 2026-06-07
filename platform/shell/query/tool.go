@@ -3,7 +3,8 @@ package query
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
 	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 )
@@ -14,14 +15,14 @@ const (
 )
 
 // Tools returns the query tools backed by a catalog.
-func Tools(cat *catalog.ToolCatalog) []contracts.Tool {
+func Tools(cat *catalog.ToolCatalog) []ports.Tool {
 	return ToolsWithTelemetry(cat, nil)
 }
 
 // ToolsWithTelemetry returns query tools that can emit lightweight telemetry.
-func ToolsWithTelemetry(cat *catalog.ToolCatalog, telemetry shelltelemetry.Sink) []contracts.Tool {
+func ToolsWithTelemetry(cat *catalog.ToolCatalog, telemetry shelltelemetry.Sink) []ports.Tool {
 	engine := NewEngineWithTelemetry(cat, telemetry)
-	return []contracts.Tool{
+	return []ports.Tool{
 		&discoveryTool{engine: engine},
 		&instantiationTool{engine: engine},
 	}
@@ -36,8 +37,8 @@ func (t *discoveryTool) Description() string {
 	return "Searches the shell catalog using bounded discovery queries."
 }
 func (t *discoveryTool) Category() string { return "shell-query" }
-func (t *discoveryTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *discoveryTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "tool_name", Type: "string", Description: "Canonical tool name to prioritize.", Required: false},
 		{Name: "aliases", Type: "array", Description: "Tool aliases to match.", Required: false},
 		{Name: "family", Type: "string", Description: "Family name to narrow the search.", Required: false},
@@ -51,19 +52,19 @@ func (t *discoveryTool) Parameters() []contracts.ToolParameter {
 	}
 }
 
-func (t *discoveryTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *discoveryTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if t == nil || t.engine == nil {
-		return &contracts.ToolResult{Success: false, Error: "query engine missing"}, nil
+		return &ports.ToolResult{Success: false, Error: "query engine missing"}, nil
 	}
 	q, err := ParseDiscoveryQuery(args)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	result, err := t.engine.Search(q)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"normalized_query": result.NormalizedQuery,
@@ -80,8 +81,8 @@ func (t *discoveryTool) Execute(ctx context.Context, args map[string]interface{}
 func (t *discoveryTool) IsAvailable(context.Context) bool {
 	return t != nil && t.engine != nil
 }
-func (t *discoveryTool) Permissions() contracts.ToolPermissions { return contracts.ToolPermissions{} }
-func (t *discoveryTool) Tags() []string                         { return []string{contracts.TagReadOnly, "search"} }
+func (t *discoveryTool) Permissions() ports.ToolPermissions { return ports.ToolPermissions{} }
+func (t *discoveryTool) Tags() []string                     { return []string{toolcapabilities.TagReadOnly, "search"} }
 
 type instantiationTool struct {
 	engine *Engine
@@ -92,8 +93,8 @@ func (t *instantiationTool) Description() string {
 	return "Resolves a shell catalog entry and materializes a validated request."
 }
 func (t *instantiationTool) Category() string { return "shell-query" }
-func (t *instantiationTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *instantiationTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "tool_name", Type: "string", Description: "Canonical tool name to resolve.", Required: false},
 		{Name: "aliases", Type: "array", Description: "Tool aliases to resolve.", Required: false},
 		{Name: "family", Type: "string", Description: "Family name to resolve if unambiguous.", Required: false},
@@ -103,19 +104,19 @@ func (t *instantiationTool) Parameters() []contracts.ToolParameter {
 	}
 }
 
-func (t *instantiationTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *instantiationTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if t == nil || t.engine == nil {
-		return &contracts.ToolResult{Success: false, Error: "query engine missing"}, nil
+		return &ports.ToolResult{Success: false, Error: "query engine missing"}, nil
 	}
 	q, err := ParseInstantiationQuery(args)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	result, err := t.engine.Instantiate(q)
 	if err != nil {
-		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
+		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"normalized_query": result.NormalizedQuery,
@@ -134,10 +135,10 @@ func (t *instantiationTool) Execute(ctx context.Context, args map[string]interfa
 func (t *instantiationTool) IsAvailable(context.Context) bool {
 	return t != nil && t.engine != nil
 }
-func (t *instantiationTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (t *instantiationTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
-func (t *instantiationTool) Tags() []string { return []string{contracts.TagReadOnly, "search"} }
+func (t *instantiationTool) Tags() []string { return []string{toolcapabilities.TagReadOnly, "search"} }
 
 func discoveryMatchesToData(matches []DiscoveryMatch) []map[string]interface{} {
 	if len(matches) == 0 {
@@ -168,7 +169,7 @@ func discoveryMatchToData(match DiscoveryMatch) map[string]interface{} {
 	}
 }
 
-func presetToData(p contracts.CommandPreset) map[string]interface{} {
+func presetToData(p toolcapabilities.CommandPreset) map[string]interface{} {
 	return map[string]interface{}{
 		"name":         p.Name,
 		"command":      p.Command,
@@ -182,7 +183,7 @@ func presetToData(p contracts.CommandPreset) map[string]interface{} {
 	}
 }
 
-func requestToData(req contracts.CommandRequest) map[string]interface{} {
+func requestToData(req ports.CommandRequest) map[string]interface{} {
 	return map[string]interface{}{
 		"workdir": req.Workdir,
 		"args":    append([]string(nil), req.Args...),

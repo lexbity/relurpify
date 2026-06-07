@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // ExpandCommand builds the full argv for a subprocess tool from its manifest
@@ -24,7 +25,7 @@ import (
 //  3. command.args (placeholder tokens)
 //  4. default_args
 //  5. raw args["args"] (flagged only if sandbox.allow_flags)
-func ExpandCommand(manifest contracts.ToolManifest, args map[string]interface{}) ([]string, error) {
+func ExpandCommand(manifest ports.ToolManifest, args map[string]interface{}) ([]string, error) {
 	execSpec := manifest.Execution
 	commandSpec := execSpec.Command
 
@@ -74,7 +75,7 @@ func ExpandCommand(manifest contracts.ToolManifest, args map[string]interface{})
 	// 5. Raw args with flag-injection guard
 	allowFlags := execSpec.Sandbox != nil && execSpec.Sandbox.AllowFlags
 	if raw, ok := args["args"]; ok {
-		extra, err := contracts.NormalizeStringSlice(raw)
+		extra, err := capability.NormalizeStringSlice(raw)
 		if err != nil {
 			return nil, fmt.Errorf("args: %w", err)
 		}
@@ -98,7 +99,7 @@ func ExpandCommand(manifest contracts.ToolManifest, args map[string]interface{})
 // expandFlags emits argv tokens for every declared flag in deterministic
 // key order. Boolean flags are emitted when the matching parameter is true;
 // typed flags bind to the declared Param and are formatted per Style/Repeat.
-func expandFlags(flags map[string]contracts.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandFlags(flags map[string]ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
 	if len(flags) == 0 {
 		return nil, nil
 	}
@@ -139,7 +140,7 @@ func expandFlags(flags map[string]contracts.ToolManifestFlag, args map[string]in
 	return result, nil
 }
 
-func expandBooleanFlag(key string, flag contracts.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandBooleanFlag(key string, flag ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
 	val, exists := lookupArg(args, key)
 	if !exists || val == nil {
 		return nil, nil // not provided — skip
@@ -154,7 +155,7 @@ func expandBooleanFlag(key string, flag contracts.ToolManifestFlag, args map[str
 	return copyStrings(flag.WhenFalse), nil
 }
 
-func expandTypedFlag(key string, flag contracts.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandTypedFlag(key string, flag ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
 	val, exists := lookupArg(args, flag.Param)
 	if !exists || val == nil {
 		return nil, nil // not provided — skip
@@ -163,11 +164,11 @@ func expandTypedFlag(key string, flag contracts.ToolManifestFlag, args map[strin
 	flagName := "--" + key
 	style := flag.Style
 	if style == "" {
-		style = contracts.FlagStyleEquals
+		style = ports.FlagStyleEquals
 	}
 
 	switch style {
-	case contracts.FlagStyleEquals:
+	case ports.FlagStyleEquals:
 		if flag.Repeat {
 			values, err := toStringSlice(val)
 			if err != nil {
@@ -181,7 +182,7 @@ func expandTypedFlag(key string, flag contracts.ToolManifestFlag, args map[strin
 		}
 		return []string{flagName + "=" + fmt.Sprint(val)}, nil
 
-	case contracts.FlagStyleSeparate:
+	case ports.FlagStyleSeparate:
 		if flag.Repeat {
 			values, err := toStringSlice(val)
 			if err != nil {
@@ -222,7 +223,7 @@ func expandToken(token string, args map[string]interface{}) ([]string, error) {
 			}
 			return out, nil
 		default:
-			values, err := contracts.NormalizeStringSlice(value)
+			values, err := capability.NormalizeStringSlice(value)
 			if err == nil && len(values) > 1 {
 				return values, nil
 			}
@@ -250,9 +251,9 @@ func lookupArg(args map[string]interface{}, name string) (interface{}, bool) {
 	if len(args) == 0 {
 		return nil, false
 	}
-	want := contracts.NormalizeToolName(name)
+	want := ports.NormalizeToolName(name)
 	for key, value := range args {
-		if contracts.NormalizeToolName(key) == want {
+		if ports.NormalizeToolName(key) == want {
 			return value, true
 		}
 	}
@@ -270,7 +271,7 @@ func toStringSlice(val interface{}) ([]string, error) {
 		}
 		return out, nil
 	default:
-		s, err := contracts.NormalizeStringSlice(val)
+		s, err := capability.NormalizeStringSlice(val)
 		if err != nil {
 			return nil, fmt.Errorf("expected array, got %T", val)
 		}

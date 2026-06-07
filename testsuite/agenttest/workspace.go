@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/framework/templates"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/templates"
 )
 
 type WorkspaceSnapshot struct {
@@ -167,11 +167,11 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	if err := os.MkdirAll(derivedWorkspace, 0o755); err != nil {
 		return err
 	}
-	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{cfgload.DirName + "/**"}, exclude...)); err != nil {
+	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{config.DirName + "/**"}, exclude...)); err != nil {
 		return err
 	}
 
-	paths := cfgload.New(derivedWorkspace)
+	paths := config.New(derivedWorkspace)
 	resolver := templates.NewResolver(sharedRoot)
 	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
 	if err != nil {
@@ -208,7 +208,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 
 func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derivedWorkspace, manifestRef string) error {
 	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
-	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, cfgload.DirName+"/") {
+	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, config.DirName+"/") {
 		return nil
 	}
 	dst := filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
@@ -217,7 +217,7 @@ func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derived
 	candidate := filepath.Join(targetWorkspace, filepath.FromSlash(manifestRef))
 	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 		src = candidate
-	} else if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(cfgload.DirName, "agents"))+"/") {
+	} else if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(config.DirName, "agents"))+"/") {
 		name := strings.TrimSuffix(filepath.Base(manifestRef), filepath.Ext(manifestRef))
 		src, _ = resolver.ResolveStarterAgent(name)
 	}
@@ -319,7 +319,7 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 	if !filepath.IsAbs(manifestPath) {
 		manifestPath = filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
 	}
-	loadedManifest, err := cfgload.LoadAgentManifest(manifestPath)
+	loadedManifest, err := config.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil
 	}
@@ -329,11 +329,11 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 		if name == "" {
 			continue
 		}
-		dst := filepath.Join(derivedWorkspace, cfgload.DirName, "skills", name)
+		dst := filepath.Join(derivedWorkspace, config.DirName, "skills", name)
 		if _, err := os.Stat(filepath.Join(dst, "skill.yaml")); err == nil {
 			continue
 		}
-		src := filepath.Join(targetWorkspace, cfgload.DirName, "skills", name)
+		src := filepath.Join(targetWorkspace, config.DirName, "skills", name)
 		if _, err := os.Stat(filepath.Join(src, "skill.yaml")); err != nil {
 			continue
 		}

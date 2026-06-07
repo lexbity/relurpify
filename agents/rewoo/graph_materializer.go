@@ -3,9 +3,9 @@ package rewoo
 import (
 	"fmt"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // ParallelGroup represents a set of steps that can execute concurrently.
@@ -114,7 +114,7 @@ func MaterializePlanGraph(
 	g *graph.Graph,
 	plan *RewooPlan,
 	registry *capability.Registry,
-	permissionChecker contracts.CapabilityChecker,
+	permissionChecker permissions.CapabilityChecker,
 	options RewooOptions,
 	debugf func(string, ...interface{}),
 ) error {

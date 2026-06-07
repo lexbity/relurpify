@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -24,14 +24,14 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		}
 
 		// Grant read permission for the workspace
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead, contracts.FileSystemList)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead, permissions.FileSystemList)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
 		}
 
 		// Check file access - should be allowed
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err != nil {
 			t.Errorf("expected file read to be allowed, got error: %v", err)
 		}
@@ -50,7 +50,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission for the workspace
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -59,7 +59,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
 
 		// Check file access - should be allowed
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemWrite, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemWrite, testFile)
 		if err != nil {
 			t.Errorf("expected file write to be allowed, got error: %v", err)
 		}
@@ -69,14 +69,14 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant list permission for the workspace
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemList)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemList)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
 		}
 
 		// Check file access - should be allowed
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemList, env.WorkspacePath)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemList, env.WorkspacePath)
 		if err != nil {
 			t.Errorf("expected file list to be allowed, got error: %v", err)
 		}
@@ -92,14 +92,14 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		}
 
 		// Grant write permission only (not read)
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
 		}
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err == nil {
 			t.Error("expected file read to be denied, got success")
 		}
@@ -118,7 +118,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant only read permission
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -127,7 +127,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemWrite, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemWrite, testFile)
 		if err == nil {
 			t.Error("expected file write to be denied, got success")
 		}
@@ -137,7 +137,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant read permission for the workspace
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -147,7 +147,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		outsidePath := "/etc/passwd"
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, outsidePath)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, outsidePath)
 		if err == nil {
 			t.Error("expected path outside workspace to be denied, got success")
 		}
@@ -166,7 +166,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant read permission for the workspace
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -176,7 +176,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 		traversalPath := filepath.Join(env.WorkspacePath, "..", "etc", "passwd")
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, traversalPath)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, traversalPath)
 		if err == nil {
 			t.Error("expected path traversal to be denied, got success")
 		}
@@ -191,7 +191,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 
 		// Grant network permission
 		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
-		perms.Network = []contracts.NetworkPermission{
+		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -219,7 +219,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant filesystem permission but no network permissions
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -246,7 +246,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 
 		// Grant permission for example.com only
 		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
-		perms.Network = []contracts.NetworkPermission{
+		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -266,7 +266,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 
 		// Grant permission for port 443 only
 		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
-		perms.Network = []contracts.NetworkPermission{
+		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -286,7 +286,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 
 		// Grant permission for tcp only
 		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
-		perms.Network = []contracts.NetworkPermission{
+		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -315,7 +315,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Grant read permission with HITL required
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		for i := range perms.FileSystem {
 			perms.FileSystem[i].HITLRequired = true
 		}
@@ -325,7 +325,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Check file access - should be denied (no HITL provider)
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err == nil {
 			t.Error("expected HITL-required file access to be denied without provider, got success")
 		}
@@ -345,7 +345,7 @@ func TestHITLRequiredPath(t *testing.T) {
 
 		// Grant network permission with HITL required
 		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath)
-		perms.Network = []contracts.NetworkPermission{
+		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "api.example.com", Port: 443, HITLRequired: true},
 		}
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
@@ -382,9 +382,9 @@ func TestHITLRequiredPath(t *testing.T) {
 		hitl := &stubHITL{
 			grants: []*authorization.PermissionGrant{{
 				ID: "grant-1",
-				Permission: contracts.PermissionDescriptor{
-					Type:     contracts.PermissionTypeFilesystem,
-					Action:   string(contracts.FileSystemRead),
+				Permission: permissions.PermissionDescriptor{
+					Type:     permissions.PermissionTypeFilesystem,
+					Action:   string(permissions.FileSystemRead),
 					Resource: testFile,
 				},
 				Scope: authorization.GrantScopeSession,
@@ -392,7 +392,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Grant read permission with HITL required
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		for i := range perms.FileSystem {
 			perms.FileSystem[i].HITLRequired = true
 		}
@@ -402,7 +402,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Check file access - should be allowed with HITL approval
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err != nil {
 			t.Errorf("expected HITL-required file access to be allowed with approval, got error: %v", err)
 		}
@@ -421,7 +421,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission only (not read)
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -430,7 +430,7 @@ func TestAuditOnDeny(t *testing.T) {
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err == nil {
 			t.Error("expected file access to be denied")
 		}
@@ -457,7 +457,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant filesystem permission but no network permissions
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -488,7 +488,7 @@ func TestAuditOnDeny(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Grant write permission only (not read)
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -497,7 +497,7 @@ func TestAuditOnDeny(t *testing.T) {
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
 
 		// Check file access - should be denied
-		err = manager.CheckFileAccess(context.Background(), "test-agent", contracts.FileSystemRead, testFile)
+		err = manager.CheckFileAccess(context.Background(), "test-agent", permissions.FileSystemRead, testFile)
 		if err == nil {
 			t.Error("expected file access to be denied")
 		}

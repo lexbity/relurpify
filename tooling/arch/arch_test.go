@@ -10,8 +10,7 @@ func TestPackageDomain(t *testing.T) {
 		want       string
 	}{
 		{"codeburg.org/lexbit/relurpify", ""},
-		{"codeburg.org/lexbit/relurpify/framework/capability", "framework"},
-		{"codeburg.org/lexbit/relurpify/platform/contracts", "platform"},
+		{"codeburg.org/lexbit/relurpify/capability", "capability"},
 		{"codeburg.org/lexbit/relurpify/app/relurpish", "app"},
 		{"codeburg.org/lexbit/relurpify/governance/identity", "governance"},
 		{"codeburg.org/lexbit/relurpify/context/persistence", "context"},
@@ -37,8 +36,7 @@ func TestTrimModulePrefix(t *testing.T) {
 		want string
 	}{
 		{"codeburg.org/lexbit/relurpify", ""},
-		{"codeburg.org/lexbit/relurpify/framework/capability", "framework/capability"},
-		{"codeburg.org/lexbit/relurpify/platform/contracts", "platform/contracts"},
+		{"codeburg.org/lexbit/relurpify/capability", "capability"},
 	}
 	for _, tt := range tests {
 		got := TrimModulePrefix(tt.path)
@@ -55,7 +53,7 @@ func TestIsStandardLib(t *testing.T) {
 	}{
 		{"fmt", true},
 		{"os", true},
-		{"codeburg.org/lexbit/relurpify/framework/capability", false},
+		{"codeburg.org/lexbit/relurpify/capability", false},
 		{"github.com/stretchr/testify/assert", true},
 	}
 	for _, tt := range tests {

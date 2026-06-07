@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -102,7 +103,7 @@ type flakyExecutor struct {
 }
 
 func (f *flakyExecutor) Initialize(config *execution.Config) error { return nil }
-func (f *flakyExecutor) Capabilities() []string               { return nil }
+func (f *flakyExecutor) Capabilities() []string                    { return nil }
 func (f *flakyExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	f.attempts++
 	if f.attempts == 1 {
@@ -196,7 +197,7 @@ type isolatedExecutorShared struct {
 }
 
 func (e *isolatedExecutor) Initialize(config *execution.Config) error { return nil }
-func (e *isolatedExecutor) Capabilities() []string               { return nil }
+func (e *isolatedExecutor) Capabilities() []string                    { return nil }
 
 func (e *isolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &isolatedExecutor{shared: e.shared}, nil

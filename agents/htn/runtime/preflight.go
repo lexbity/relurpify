@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/capability"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 // planPreflight checks plan step required capabilities against the registry.

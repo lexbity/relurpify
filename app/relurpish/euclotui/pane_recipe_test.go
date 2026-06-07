@@ -125,7 +125,7 @@ func TestRecipePaneWithConditionalGroup(t *testing.T) {
 		},
 	}
 	router.ApplyExecutionEvent(ExecutionEvent{
-		Type: reporting.EventTypeRecipeSelected,
+		Type:    reporting.EventTypeRecipeSelected,
 		Payload: map[string]any{"recipe": proj},
 	})
 

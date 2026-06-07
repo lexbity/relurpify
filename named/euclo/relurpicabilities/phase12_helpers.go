@@ -14,12 +14,12 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 type frameworkPolicyContext struct {
@@ -68,10 +68,10 @@ func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agent
 
 func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env agentenv.WorkspaceEnvironment, path string) error {
 	if c != nil && c.permissionManager != nil {
-		return c.permissionManager.CheckFileAccess(ctx, c.agentID, contracts.FileSystemWrite, path)
+		return c.permissionManager.CheckFileAccess(ctx, c.agentID, permissions.FileSystemWrite, path)
 	}
 	if scope := c.fileScopePolicy(env); scope != nil {
-		return scope.Check(contracts.FileSystemWrite, path)
+		return scope.Check(permissions.FileSystemWrite, path)
 	}
 	return fmt.Errorf("write denied: no file scope configured")
 }
@@ -104,7 +104,7 @@ func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.WorkspaceEnvi
 	}
 	resolved = filepath.Clean(resolved)
 	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(contracts.FileSystemRead, resolved); err != nil {
+		if err := scope.Check(permissions.FileSystemRead, resolved); err != nil {
 			return "", err
 		}
 	}
@@ -129,7 +129,7 @@ func (c *frameworkPolicyContext) writeWorkspaceFile(env agentenv.WorkspaceEnviro
 		return "", err
 	}
 	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(contracts.FileSystemWrite, resolved); err != nil {
+		if err := scope.Check(permissions.FileSystemWrite, resolved); err != nil {
 			return "", err
 		}
 	}

@@ -3,8 +3,9 @@ package tui
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // CommandPalette renders context-aware slash command suggestions above the

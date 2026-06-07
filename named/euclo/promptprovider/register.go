@@ -3,7 +3,7 @@ package promptprovider
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 // RegisterAll registers Euclo's state-view prompt providers with the registry.

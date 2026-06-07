@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 type reactContextFilesProvider struct{}

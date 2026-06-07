@@ -7,20 +7,20 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
 type GoalConAgent struct {
-	Model            contracts.LanguageModel
+	Model            model.LanguageModel
 	Tools            *capability.Registry
 	Memory           *memory.WorkingMemoryStore
 	Config           *execution.Config
@@ -237,7 +237,7 @@ func (n *goalconNode) Execute(_ context.Context, _ *contextdata.Envelope) (*exec
 type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
-func (n *noopAgent) Capabilities() []string          { return nil }
+func (n *noopAgent) Capabilities() []string               { return nil }
 func (n *noopAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	done := graph.NewTerminalNode("noop_done")

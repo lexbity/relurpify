@@ -3,8 +3,9 @@ package tui
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/bubbles/textinput"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

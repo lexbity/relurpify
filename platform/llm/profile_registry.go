@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
 )
 
 // ProfileRegistry loads ModelProfile files from a directory and matches them
@@ -196,7 +196,7 @@ func matchPattern(pattern, value string) bool {
 	if !strings.ContainsAny(pattern, "*?[") {
 		return strings.EqualFold(pattern, value)
 	}
-	return contracts.MatchGlob(pattern, value)
+	return capability.MatchGlob(pattern, value)
 }
 
 func specificityScore(pattern string) int {

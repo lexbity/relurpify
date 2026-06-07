@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 func TestResumeFrame_FindsPendingFrame(t *testing.T) {

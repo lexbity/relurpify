@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/capability"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 

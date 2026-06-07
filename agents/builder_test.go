@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
@@ -68,8 +68,8 @@ func TestAgentBuilder_RequiresEnvironment(t *testing.T) {
 
 type mockModel struct{}
 
-func (m *mockModel) Complete(ctx context.Context, prompt string, opts *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "mock response"}, nil
+func (m *mockModel) Complete(ctx context.Context, prompt string, opts *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "mock response"}, nil
 }
 
 type mockMemory struct{}

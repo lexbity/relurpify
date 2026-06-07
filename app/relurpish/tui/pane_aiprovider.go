@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type aiProviderRuntime interface {
@@ -32,7 +33,7 @@ const (
 type AIProviderPane struct {
 	runtime aiProviderRuntime
 
-	profile cfgload.RuntimeProviderConfig
+	profile config.RuntimeProviderConfig
 	models  []llm.ModelInfo
 	status  string
 
@@ -165,8 +166,8 @@ func (p *AIProviderPane) loadProfile() {
 	if p.runtime != nil {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
-	path := cfgload.New(workspace).RuntimeProvidersFile()
-	loaded, err := cfgload.LoadRuntimeProviderConfig(path)
+	path := config.New(workspace).RuntimeProvidersFile()
+	loaded, err := config.LoadRuntimeProviderConfig(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			p.profile = defaultProviderProfile()
@@ -288,9 +289,9 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 		if workspace == "" {
 			return chatSystemMsg{Text: "provider save failed: workspace unavailable"}
 		}
-		path := cfgload.New(workspace).RuntimeProvidersFile()
+		path := config.New(workspace).RuntimeProvidersFile()
 		profile.LastUpdated = time.Now().Unix()
-		backup, err := cfgload.SaveRuntimeProviderConfigWithBackup(path, profile)
+		backup, err := config.SaveRuntimeProviderConfigWithBackup(path, profile)
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("provider save failed: %v", err)}
 		}
@@ -389,8 +390,8 @@ func (p *AIProviderPane) renderConfigPanel() string {
 	return sectionPanel(p.th, "Configurator", max(20, p.width/2), strings.Join(fields, "\n"))
 }
 
-func defaultProviderProfile() cfgload.RuntimeProviderConfig {
-	return cfgload.RuntimeProviderConfig{
+func defaultProviderProfile() config.RuntimeProviderConfig {
+	return config.RuntimeProviderConfig{
 		Provider:          "ollama",
 		Endpoint:          "http://localhost:11434",
 		Model:             "",

@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/ast"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 )
 
 func TestWorkspaceBootstrapServiceEmitsBootstrapComplete(t *testing.T) {

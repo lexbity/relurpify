@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // CollectPerformancePhases extracts Euclo phase names from the working snapshot.

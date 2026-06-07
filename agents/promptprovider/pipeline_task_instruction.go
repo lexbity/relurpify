@@ -3,7 +3,7 @@ package promptprovider
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 type pipelineTaskInstructionProvider struct{}

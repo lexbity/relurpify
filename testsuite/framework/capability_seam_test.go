@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -37,7 +38,7 @@ func TestCapabilityDiscovery(t *testing.T) {
 			name:        "test-tool",
 			description: "test tool for discovery",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -72,7 +73,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			name:        "registered-tool",
 			description: "tool for registration test",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -92,7 +93,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			name:        "duplicate-tool",
 			description: "tool for duplicate test",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -108,7 +109,7 @@ func TestCapabilityRegistration(t *testing.T) {
 
 	t.Run("permission set is preserved", func(t *testing.T) {
 		registry := capability.NewRegistry()
-		perms := policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead, permissions.FileSystemWrite)
 		tool := &testTool{
 			name:        "permission-tool",
 			description: "tool for permission test",
@@ -128,7 +129,7 @@ func TestCapabilityRegistration(t *testing.T) {
 
 		toolPerms := cap.Permissions()
 		ps := toolPerms.Permissions
-		var normalized []contracts.FileSystemPermission
+		var normalized []permissions.FileSystemPermission
 		if ps != nil {
 			normalized = NormalizeFileSystemPermissions(ps.FileSystem)
 		}
@@ -154,7 +155,7 @@ func TestInvocationGating(t *testing.T) {
 			name:        "ungated-tool",
 			description: "tool without permission manager",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet("/test", contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
 		if err := registry.Register(tool); err != nil {
@@ -175,7 +176,7 @@ func TestInvocationGating(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -189,7 +190,7 @@ func TestInvocationGating(t *testing.T) {
 			name:        "permissioned-tool",
 			description: "tool with permission checks",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,
@@ -217,7 +218,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager with no permissions
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemWrite)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemWrite)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -230,7 +231,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			name:        "denied-tool",
 			description: "tool that should be denied",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,
@@ -263,7 +264,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 		registry := capability.NewRegistry()
 
 		// Create a permission manager with read permission
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, perms, env.AuditSink, nil)
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
@@ -276,7 +277,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			name:        "allowed-tool",
 			description: "tool that should be allowed",
 			category:    "test",
-			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+			permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead),
 			manager:     manager,
 			agent:       "test-agent",
 			basePath:    env.WorkspacePath,
@@ -309,21 +310,21 @@ type testTool struct {
 	name        string
 	description string
 	category    string
-	permissions *contracts.PermissionSet
+	permissions *permissions.PermissionSet
 	executed    bool
 }
 
-func (t *testTool) Name() string                          { return t.name }
-func (t *testTool) Description() string                   { return t.description }
-func (t *testTool) Category() string                      { return t.category }
-func (t *testTool) Parameters() []contracts.ToolParameter { return nil }
-func (t *testTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *testTool) Name() string                      { return t.name }
+func (t *testTool) Description() string               { return t.description }
+func (t *testTool) Category() string                  { return t.category }
+func (t *testTool) Parameters() []ports.ToolParameter { return nil }
+func (t *testTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	t.executed = true
-	return &contracts.ToolResult{Success: true}, nil
+	return &ports.ToolResult{Success: true}, nil
 }
 func (t *testTool) IsAvailable(context.Context) bool { return true }
-func (t *testTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: t.permissions}
+func (t *testTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: t.permissions}
 }
 func (t *testTool) Tags() []string { return nil }
 
@@ -332,30 +333,30 @@ type permissionedTestTool struct {
 	name        string
 	description string
 	category    string
-	permissions *contracts.PermissionSet
+	permissions *permissions.PermissionSet
 	manager     *authorization.PermissionManager
 	agent       string
 	basePath    string
 	executed    bool
 }
 
-func (t *permissionedTestTool) Name() string                          { return t.name }
-func (t *permissionedTestTool) Description() string                   { return t.description }
-func (t *permissionedTestTool) Category() string                      { return t.category }
-func (t *permissionedTestTool) Parameters() []contracts.ToolParameter { return nil }
-func (t *permissionedTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *permissionedTestTool) Name() string                      { return t.name }
+func (t *permissionedTestTool) Description() string               { return t.description }
+func (t *permissionedTestTool) Category() string                  { return t.category }
+func (t *permissionedTestTool) Parameters() []ports.ToolParameter { return nil }
+func (t *permissionedTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Check permissions before execution
 	if t.manager != nil {
 		testPath := t.basePath + "/test.txt"
-		if err := t.manager.CheckFileAccess(ctx, t.agent, contracts.FileSystemRead, testPath); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agent, permissions.FileSystemRead, testPath); err != nil {
 			return nil, err
 		}
 	}
 	t.executed = true
-	return &contracts.ToolResult{Success: true}, nil
+	return &ports.ToolResult{Success: true}, nil
 }
 func (t *permissionedTestTool) IsAvailable(context.Context) bool { return true }
-func (t *permissionedTestTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: t.permissions}
+func (t *permissionedTestTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: t.permissions}
 }
 func (t *permissionedTestTool) Tags() []string { return nil }

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 // StatePayload retrieves workflow retrieval payload from state.

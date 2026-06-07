@@ -10,16 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	frameworkingestion "codeburg.org/lexbit/relurpify/framework/ingestion"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/named/euclo/intake"
-	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 )
 
 // IngestionNode runs the framework ingestion pipeline for Euclo tasks.

@@ -9,18 +9,19 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // ToolResolver resolves a tool name to its runtime implementation.
-type ToolResolver func(name string) (contracts.Tool, bool)
+type ToolResolver func(name string) (ports.Tool, bool)
 
 // New builds a composite tool from a manifest. The resolver is called at
 // execution time to locate each step's tool implementation.
 //
 // Returns a tool that returns a validation error on Execute if the manifest
 // has duplicate aliases or a cyclic dependency (detected at load time).
-func New(manifest contracts.ToolManifest, resolver ToolResolver) contracts.Tool {
+func New(manifest ports.ToolManifest, resolver ToolResolver) ports.Tool {
 	if err := validateComposition(manifest.Composition); err != nil {
 		return &invalidTool{err: err}
 	}
@@ -32,7 +33,7 @@ func New(manifest contracts.ToolManifest, resolver ToolResolver) contracts.Tool 
 
 // validateComposition checks for duplicate aliases and other structural
 // issues in the composition steps. Returns nil when valid.
-func validateComposition(comp *contracts.ToolManifestComposition) error {
+func validateComposition(comp *ports.ToolManifestComposition) error {
 	if comp == nil || len(comp.Steps) == 0 {
 		return nil
 	}
@@ -41,7 +42,7 @@ func validateComposition(comp *contracts.ToolManifestComposition) error {
 		if step.Alias == "" {
 			continue
 		}
-		norm := contracts.NormalizeToolName(step.Alias)
+		norm := ports.NormalizeToolName(step.Alias)
 		if norm == "" {
 			continue
 		}
@@ -58,19 +59,19 @@ type invalidTool struct {
 	err error
 }
 
-func (t *invalidTool) Name() string                             { return "" }
-func (t *invalidTool) Description() string                      { return t.err.Error() }
-func (t *invalidTool) Category() string                         { return "composite" }
-func (t *invalidTool) Parameters() []contracts.ToolParameter    { return nil }
-func (t *invalidTool) Tags() []string                           { return nil }
-func (t *invalidTool) Permissions() contracts.ToolPermissions   { return contracts.ToolPermissions{} }
-func (t *invalidTool) IsAvailable(ctx context.Context) bool     { return false }
-func (t *invalidTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: false, Error: t.err.Error()}, nil
+func (t *invalidTool) Name() string                         { return "" }
+func (t *invalidTool) Description() string                  { return t.err.Error() }
+func (t *invalidTool) Category() string                     { return "composite" }
+func (t *invalidTool) Parameters() []ports.ToolParameter    { return nil }
+func (t *invalidTool) Tags() []string                       { return nil }
+func (t *invalidTool) Permissions() ports.ToolPermissions   { return ports.ToolPermissions{} }
+func (t *invalidTool) IsAvailable(ctx context.Context) bool { return false }
+func (t *invalidTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: false, Error: t.err.Error()}, nil
 }
 
 type compositeTool struct {
-	manifest contracts.ToolManifest
+	manifest ports.ToolManifest
 	resolve  ToolResolver
 }
 
@@ -89,34 +90,36 @@ func (t *compositeTool) Category() string {
 	}
 	return "composite"
 }
-func (t *compositeTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
-		{Name: "args", Type: contracts.ToolParamObject, Description: "Arguments forwarded to sub-steps", Required: false},
+func (t *compositeTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
+		{Name: "args", Type: ports.ToolParamObject, Description: "Arguments forwarded to sub-steps", Required: false},
 	}
 }
 func (t *compositeTool) IsAvailable(ctx context.Context) bool { return t.resolve != nil }
-func (t *compositeTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{
-		Executables: []contracts.ExecutablePermission{{Binary: "composite"}},
+func (t *compositeTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
+		Executables: []permissions.ExecutablePermission{{Binary: "composite"}},
 	}}
 }
-func (t *compositeTool) Tags() []string { return append([]string(nil), t.manifest.Capability.RiskClass...) }
+func (t *compositeTool) Tags() []string {
+	return append([]string(nil), t.manifest.Capability.RiskClass...)
+}
 
-func (t *compositeTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *compositeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	if t.resolve == nil {
-		return &contracts.ToolResult{Success: false, Error: "composite tool resolver unavailable"}, nil
+		return &ports.ToolResult{Success: false, Error: "composite tool resolver unavailable"}, nil
 	}
 
 	composition := t.manifest.Composition
 	if composition == nil || len(composition.Steps) == 0 {
-		return &contracts.ToolResult{Success: false, Error: "composite tool has no steps"}, nil
+		return &ports.ToolResult{Success: false, Error: "composite tool has no steps"}, nil
 	}
 
 	var outputs []stepOutput
 	for i, step := range composition.Steps {
 		tool, ok := t.resolve(step.Tool)
 		if !ok {
-			return &contracts.ToolResult{
+			return &ports.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("composite step %d: tool %q not found", i, step.Tool),
 			}, nil
@@ -147,7 +150,7 @@ func (t *compositeTool) Execute(ctx context.Context, args map[string]interface{}
 		}
 		merged[key] = out.data
 	}
-	return &contracts.ToolResult{Success: true, Data: merged}, nil
+	return &ports.ToolResult{Success: true, Data: merged}, nil
 }
 
 func resolveArgs(stepArgs, compositeArgs map[string]any, outputs []stepOutput) map[string]any {

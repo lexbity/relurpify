@@ -9,15 +9,15 @@ import (
 // for frontend rendering. It carries recipe metadata, the step graph (with group
 // topology), HITL gates, and route selection info.
 type RecipeProjection struct {
-	RecipeID      string          `json:"recipe_id"`
-	Name          string          `json:"name"`
-	RouteKind     string          `json:"route_kind"`
-	SelectedRoute string          `json:"selected_route,omitempty"`
-	FamilyID      string          `json:"family_id,omitempty"`
-	Steps         []ProjectedStep `json:"steps"`
+	RecipeID      string           `json:"recipe_id"`
+	Name          string           `json:"name"`
+	RouteKind     string           `json:"route_kind"`
+	SelectedRoute string           `json:"selected_route,omitempty"`
+	FamilyID      string           `json:"family_id,omitempty"`
+	Steps         []ProjectedStep  `json:"steps"`
 	Groups        []ProjectedGroup `json:"groups,omitempty"`
-	HITLGates     []string        `json:"hitl_gates,omitempty"`
-	GeneratedAt   time.Time       `json:"generated_at"`
+	HITLGates     []string         `json:"hitl_gates,omitempty"`
+	GeneratedAt   time.Time        `json:"generated_at"`
 }
 
 // ProjectedStep is a single step in the recipe projection with runtime context.

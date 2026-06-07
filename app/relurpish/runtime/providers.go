@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/memory"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -157,8 +157,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 		}, fauthorization.ApprovalRequest{
 			AgentID: r.AgentWorkspace().Registration.ID,
 			Manager: r.AgentWorkspace().Registration.Permissions,
-			Permission: contracts.PermissionDescriptor{
-				Type:         contracts.PermissionTypeCapability,
+			Permission: permissions.PermissionDescriptor{
+				Type:         permissions.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 				Resource:     desc.ID,
 				Metadata:     metadata,
@@ -203,8 +203,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		return r.AgentWorkspace().Registration.Permissions.RequireApproval(ctx, r.AgentWorkspace().Registration.ID, contracts.PermissionDescriptor{
-			Type:         contracts.PermissionTypeCapability,
+		return r.AgentWorkspace().Registration.Permissions.RequireApproval(ctx, r.AgentWorkspace().Registration.ID, permissions.PermissionDescriptor{
+			Type:         permissions.PermissionTypeCapability,
 			Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 			Resource:     desc.ID,
 			Metadata:     metadata,

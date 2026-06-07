@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // TestFileScopePolicy validates that filesystem scope policy correctly
@@ -74,7 +75,7 @@ func TestFileScopeValidation(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		testFile := filepath.Join(workspace, "test.txt")
-		err := policy.Check(contracts.FileSystemRead, testFile)
+		err := policy.Check(permissions.FileSystemRead, testFile)
 
 		if err != nil {
 			t.Errorf("workspace file should be within scope: %v", err)
@@ -91,7 +92,7 @@ func TestFileScopeValidation(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		testFile := filepath.Join(nestedDir, "test.txt")
-		err := policy.Check(contracts.FileSystemRead, testFile)
+		err := policy.Check(permissions.FileSystemRead, testFile)
 
 		if err != nil {
 			t.Errorf("nested workspace file should be within scope: %v", err)
@@ -103,7 +104,7 @@ func TestFileScopeValidation(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		outsidePath := "/etc/passwd"
-		err := policy.Check(contracts.FileSystemRead, outsidePath)
+		err := policy.Check(permissions.FileSystemRead, outsidePath)
 
 		if err == nil {
 			t.Error("path outside workspace should be rejected")
@@ -119,7 +120,7 @@ func TestFileScopeValidation(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		traversalPath := filepath.Join(workspace, "..", "etc", "passwd")
-		err := policy.Check(contracts.FileSystemRead, traversalPath)
+		err := policy.Check(permissions.FileSystemRead, traversalPath)
 
 		if err == nil {
 			t.Error("path traversal should be rejected")
@@ -134,7 +135,7 @@ func TestFileScopeValidation(t *testing.T) {
 		outsideFile := filepath.Join(workspace, "outside_link")
 		_ = os.Symlink("/etc/passwd", outsideFile)
 
-		err := policy.Check(contracts.FileSystemRead, outsideFile)
+		err := policy.Check(permissions.FileSystemRead, outsideFile)
 
 		if err == nil {
 			t.Error("symlink to outside workspace should be rejected")
@@ -146,7 +147,7 @@ func TestFileScopeValidation(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		absOutsidePath := "/tmp/test.txt"
-		err := policy.Check(contracts.FileSystemRead, absOutsidePath)
+		err := policy.Check(permissions.FileSystemRead, absOutsidePath)
 
 		if err == nil {
 			t.Error("absolute path outside workspace should be rejected")
@@ -169,7 +170,7 @@ func TestProtectedPaths(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, protectedPaths)
 
 		testFile := filepath.Join(protectedDir, "test.txt")
-		err := policy.Check(contracts.FileSystemRead, testFile)
+		err := policy.Check(permissions.FileSystemRead, testFile)
 
 		if err == nil {
 			t.Error("protected path should be rejected")
@@ -192,7 +193,7 @@ func TestProtectedPaths(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, protectedPaths)
 
 		testFile := filepath.Join(workspace, "test.txt")
-		err := policy.Check(contracts.FileSystemRead, testFile)
+		err := policy.Check(permissions.FileSystemRead, testFile)
 
 		if err != nil {
 			t.Errorf("non-protected path should be allowed: %v", err)
@@ -216,7 +217,7 @@ func TestProtectedPaths(t *testing.T) {
 		protectedPaths := []string{protectedDir}
 		policy := sandbox.NewFileScopePolicy(workspace, protectedPaths)
 
-		err := policy.Check(contracts.FileSystemRead, localPasswd)
+		err := policy.Check(permissions.FileSystemRead, localPasswd)
 
 		if err != nil {
 			t.Errorf("workspace file outside protected path should be allowed: %v", err)
@@ -240,7 +241,7 @@ func TestProtectedPaths(t *testing.T) {
 
 		for _, path := range protectedPaths {
 			testFile := filepath.Join(path, "test.txt")
-			err := policy.Check(contracts.FileSystemRead, testFile)
+			err := policy.Check(permissions.FileSystemRead, testFile)
 			if err == nil {
 				t.Errorf("protected path %s should be rejected", path)
 			}
@@ -256,7 +257,7 @@ func TestProtectedPaths(t *testing.T) {
 		policy := sandbox.NewFileScopePolicy(workspace, nil)
 
 		testFile := filepath.Join(workspace, "test.txt")
-		err := policy.Check(contracts.FileSystemRead, testFile)
+		err := policy.Check(permissions.FileSystemRead, testFile)
 
 		if err != nil {
 			t.Errorf("workspace file should be allowed with no protected paths: %v", err)

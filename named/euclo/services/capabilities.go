@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 

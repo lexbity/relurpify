@@ -11,16 +11,18 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	tea "github.com/charmbracelet/bubbletea"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -35,10 +37,10 @@ var goldenDir = func() string {
 
 type mockOllamaBackend struct{}
 
-func (b *mockOllamaBackend) Model() contracts.LanguageModel { return nil }
-func (b *mockOllamaBackend) Embedder() llm.Embedder         { return nil }
-func (b *mockOllamaBackend) Capabilities() contracts.BackendCapabilities {
-	return contracts.BackendCapabilities{}
+func (b *mockOllamaBackend) Model() model.LanguageModel { return nil }
+func (b *mockOllamaBackend) Embedder() llm.Embedder     { return nil }
+func (b *mockOllamaBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{}
 }
 func (b *mockOllamaBackend) ModelContextSize(ctx context.Context) (int, error) { return 2048, nil }
 func (b *mockOllamaBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
@@ -53,7 +55,7 @@ func (b *mockOllamaBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, er
 func (b *mockOllamaBackend) Warm(ctx context.Context) error                   { return nil }
 func (b *mockOllamaBackend) Close() error                                     { return nil }
 func (b *mockOllamaBackend) SetDebugLogging(enabled bool)                     {}
-func (b *mockOllamaBackend) SetProfile(profile *contracts.ModelProfile)       {}
+func (b *mockOllamaBackend) SetProfile(profile *model.ModelProfile)           {}
 func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
 
 func init() {
@@ -117,7 +119,7 @@ func normalizeGoldenText(s string) string {
 
 type sandboxFixtureRuntime struct {
 	workspace string
-	manifest  *cfgload.AgentManifest
+	manifest  *config.AgentManifest
 	backend   string
 }
 
@@ -125,11 +127,11 @@ func (r *sandboxFixtureRuntime) SessionInfo() tui.SessionInfo {
 	return tui.SessionInfo{Workspace: r.workspace}
 }
 
-func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*cfgload.AgentManifest, error) {
-	return cfgload.CloneAgentManifest(r.manifest)
+func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*config.AgentManifest, error) {
+	return config.CloneAgentManifest(r.manifest)
 }
 
-func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *cfgload.AgentManifest) (string, error) {
+func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
 	r.manifest = m
 	return filepath.Join(r.workspace, "relurpify_cfg", "agent.yaml.bak"), nil
 }
@@ -167,22 +169,22 @@ func (f *sessionInfoFixture) ReloadWorkspace(context.Context, string) error {
 	return nil
 }
 
-func testManifest() *cfgload.AgentManifest {
-	return &cfgload.AgentManifest{
+func testManifest() *config.AgentManifest {
+	return &config.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: cfgload.ManifestMetadata{
+		Metadata: config.ManifestMetadata{
 			Name:        "coding",
 			Version:     "1.0.0",
 			Description: "sandbox test manifest",
 		},
-		Spec: cfgload.ManifestSpec{
+		Spec: config.ManifestSpec{
 			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
-			Permissions: contracts.PermissionSet{
-				FileSystem: []contracts.FileSystemPermission{
-					{Action: contracts.FileSystemRead, Path: "/workspace/**"},
-					{Action: contracts.FileSystemWrite, Path: "/workspace/**"},
+			Permissions: permissions.PermissionSet{
+				FileSystem: []permissions.FileSystemPermission{
+					{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+					{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
 				},
 			},
 			Agent: &agentspec.AgentRuntimeSpec{
@@ -255,7 +257,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), 0o755); err != nil {
 		t.Fatalf("mkdir sandbox config: %v", err)
 	}
-	if err := cfgload.SaveAgentManifest(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
+	if err := config.SaveAgentManifest(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
 		t.Fatalf("seed sandbox manifest: %v", err)
 	}
 	sandboxPane := tui.NewSandboxPane(&sandboxFixtureRuntime{

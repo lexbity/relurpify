@@ -6,14 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
-	perms := &contracts.PermissionSet{
-		Network: []contracts.NetworkPermission{
+	perms := &permissions.PermissionSet{
+		Network: []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
 		},
 	}
@@ -36,8 +38,8 @@ func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
 }
 
 func TestSessionNavigateAllowsDeclaredDomain(t *testing.T) {
-	perms := &contracts.PermissionSet{
-		Network: []contracts.NetworkPermission{
+	perms := &permissions.PermissionSet{
+		Network: []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
 		},
 	}
@@ -118,12 +120,12 @@ func (e *errorBackend) WaitFor(context.Context, WaitCondition, time.Duration) er
 func (e *errorBackend) CurrentURL(context.Context) (string, error)                  { return "", e.err }
 func (e *errorBackend) Close() error                                                { return e.err }
 
-// stubBudget implements contracts.BudgetManager for testing
+// stubBudget implements telemetry.BudgetManager for testing
 type stubBudget struct {
 	remaining int
 }
 
-func (s *stubBudget) Allocate(category string, tokens int, item contracts.BudgetItem) error {
+func (s *stubBudget) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
 	if tokens > s.remaining {
 		return errors.New("budget exhausted")
 	}

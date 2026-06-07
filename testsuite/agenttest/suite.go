@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 type Suite struct {

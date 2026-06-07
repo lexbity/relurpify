@@ -3,7 +3,7 @@ package capabilities
 import (
 	"testing"
 
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
 )
 
 // TestNewProvenanceTracker tests the constructor

@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 func TestChromeDriverBiDiBackendLocalhostFlow(t *testing.T) {

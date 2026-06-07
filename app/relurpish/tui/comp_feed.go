@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // Feed wraps a viewport and owns the message list plus render logic.

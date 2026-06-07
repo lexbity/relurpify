@@ -3,7 +3,7 @@ package promptprovider
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 func TestRegisterAllIsIdempotent(t *testing.T) {

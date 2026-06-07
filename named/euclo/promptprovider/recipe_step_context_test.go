@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
@@ -204,12 +204,12 @@ func TestThoughtRecipeStepContextProviderGolden(t *testing.T) {
 		{AnchorID: "anchor-9", ChunkID: "chunk-9", Term: "Envelope", Definition: "type anchor", Class: "clarified_entity", Active: true},
 	}
 	evidence := &intentcontext.IntentEvidence{
-		ActionType:    "review",
-		Target:        "named/euclo/promptprovider",
-		Scope:         "single_file",
-		RiskLevel:     "low",
-		ExpectedVerb:  "review",
-		ReasonCodes:   []string{"action:review"},
+		ActionType:   "review",
+		Target:       "named/euclo/promptprovider",
+		Scope:        "single_file",
+		RiskLevel:    "low",
+		ExpectedVerb: "review",
+		ReasonCodes:  []string{"action:review"},
 	}
 	interpretation := &intentcontext.IntentInterpretation{
 		ActionType:     "review",

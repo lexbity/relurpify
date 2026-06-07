@@ -568,23 +568,21 @@ func (p DiffProjection) clone() DiffProjection {
 
 // EucloProjectionSnapshot is the immutable view of all Euclo surfaces.
 type EucloProjectionSnapshot struct {
-	Chat         ChatProjection
-	Diff         DiffProjection
-	Recipe      *surface.RecipeProjection        `json:"recipe,omitempty"`
-	StepRuntime map[string]surface.StepRuntime    `json:"step_runtime,omitempty"`
-	Macro       surface.MacroPhase                `json:"macro"`
+	Chat        ChatProjection
+	Diff        DiffProjection
+	Recipe      *surface.RecipeProjection      `json:"recipe,omitempty"`
+	StepRuntime map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
+	Macro       surface.MacroPhase             `json:"macro"`
 }
 
 // RecipeResumeData holds the minimal durable state needed to restore the recipe
 // view on session resume. Only the recipe ID, per-step statuses, and macro phase
 // are persisted — never the full recipe structure (DEC-6).
 type RecipeResumeData struct {
-	RecipeID    string                       `json:"recipe_id"`
+	RecipeID    string                         `json:"recipe_id"`
 	StepRuntime map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
-	Macro       surface.MacroPhase            `json:"macro"`
+	Macro       surface.MacroPhase             `json:"macro"`
 }
-
-
 
 func cloneScores(in map[string]float64) map[string]float64 {
 	if len(in) == 0 {

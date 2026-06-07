@@ -6,7 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // checkEgress returns an error if the command args reference a blocked
@@ -25,7 +26,7 @@ func checkEgress(allowHosts []string, cmd []string) error {
 
 // isNetworkTool reports whether a manifest declares network access and must
 // therefore have its target hosts screened against the SSRF denylist.
-func isNetworkTool(manifest contracts.ToolManifest) bool {
+func isNetworkTool(manifest ports.ToolManifest) bool {
 	return manifest.Execution.Sandbox != nil && manifest.Execution.Sandbox.NetworkAccess
 }
 
@@ -35,7 +36,7 @@ func isNetworkTool(manifest contracts.ToolManifest) bool {
 //
 // allowHosts is an optional allowlist: hosts that match any entry here are
 // never blocked even if they would otherwise be denied by the mandatory
-// denylist (contracts.IsPrivateOrLoopbackHost).
+// denylist (sandbox.IsPrivateOrLoopbackHost).
 func firstBlockedEgressHost(args []string, allowHosts []string) string {
 	allowSet := make(map[string]struct{}, len(allowHosts))
 	for _, h := range allowHosts {
@@ -57,7 +58,7 @@ func firstBlockedEgressHost(args []string, allowHosts []string) string {
 		if _, allowed := allowSet[strings.ToLower(host)]; allowed {
 			continue
 		}
-		if contracts.IsPrivateOrLoopbackHost(host) {
+		if sandbox.IsPrivateOrLoopbackHost(host) {
 			return host
 		}
 	}
@@ -93,5 +94,3 @@ func extractHost(arg string) string {
 	candidate = strings.TrimSuffix(candidate, "]")
 	return candidate
 }
-
-

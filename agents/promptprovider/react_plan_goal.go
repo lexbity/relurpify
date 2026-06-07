@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	pl "codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/prompt"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
 type reactPlanGoalProvider struct{}

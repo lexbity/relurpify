@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type reactObserveNode struct {
@@ -95,7 +95,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	repeated, repeatReason := detectRepeatedToolLoop(env, n.task)
 	completed := decision.Complete
 	if res, ok := env.GetWorkingValue("react.tool_calls"); ok {
-		if calls, ok := res.([]contracts.ToolCall); ok && len(calls) > 0 {
+		if calls, ok := res.([]model.ToolCall); ok && len(calls) > 0 {
 			completed = false
 		}
 	}
@@ -194,7 +194,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 		return false
 	}
 	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
-		if calls, ok := pending.([]contracts.ToolCall); ok && len(calls) > 0 {
+		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
 			return false
 		}
 	}
@@ -216,7 +216,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 		if args == nil {
 			continue
 		}
-		env.SetWorkingValue("react.tool_calls", []contracts.ToolCall{{Name: probe, Args: args}}, contextdata.MemoryClassTask)
+		env.SetWorkingValue("react.tool_calls", []model.ToolCall{{Name: probe, Args: args}}, contextdata.MemoryClassTask)
 		recordRecoveryProbeUsage(env, signature, probe)
 		return true
 	}

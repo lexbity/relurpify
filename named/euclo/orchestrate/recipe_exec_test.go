@@ -6,22 +6,23 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/compiler"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
+	"codeburg.org/lexbit/relurpify/model"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	execution "codeburg.org/lexbit/relurpify/execution"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 type noopCompiler struct{}
@@ -293,39 +294,39 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 
 type stubThoughtRecipeModel struct{}
 
-func (stubThoughtRecipeModel) Generate(context.Context, string, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubThoughtRecipeModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (stubThoughtRecipeModel) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (stubThoughtRecipeModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (stubThoughtRecipeModel) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: "{}"}, nil
+func (stubThoughtRecipeModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "{}"}, nil
 }
 
-func (stubThoughtRecipeModel) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+func (stubThoughtRecipeModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
 type recordingThoughtRecipeModel struct {
 	nativeToolCalling bool
 	generatePrompts   []string
-	chatMessages      [][]contracts.Message
-	chatToolSpecs     [][]contracts.LLMToolSpec
+	chatMessages      [][]model.Message
+	chatToolSpecs     [][]ports.LLMToolSpec
 }
 
-func (m *recordingThoughtRecipeModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *recordingThoughtRecipeModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
 	m.generatePrompts = append(m.generatePrompts, prompt)
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (m *recordingThoughtRecipeModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
+func (m *recordingThoughtRecipeModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	_ = ctx
 	_ = prompt
 	_ = options
@@ -334,19 +335,19 @@ func (m *recordingThoughtRecipeModel) GenerateStream(ctx context.Context, prompt
 	return ch, nil
 }
 
-func (m *recordingThoughtRecipeModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *recordingThoughtRecipeModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = messages
 	_ = options
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (m *recordingThoughtRecipeModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (m *recordingThoughtRecipeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
-	m.chatMessages = append(m.chatMessages, append([]contracts.Message(nil), messages...))
-	m.chatToolSpecs = append(m.chatToolSpecs, append([]contracts.LLMToolSpec(nil), tools...))
-	return &contracts.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
+	m.chatMessages = append(m.chatMessages, append([]model.Message(nil), messages...))
+	m.chatToolSpecs = append(m.chatToolSpecs, append([]ports.LLMToolSpec(nil), tools...))
+	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
 func (m *recordingThoughtRecipeModel) ToolRepairStrategy() string {
@@ -365,16 +366,16 @@ type recordingThoughtRecipeTool struct {
 	name string
 }
 
-func (t recordingThoughtRecipeTool) Name() string                          { return t.name }
-func (t recordingThoughtRecipeTool) Description() string                   { return t.name }
-func (t recordingThoughtRecipeTool) Category() string                      { return "test" }
-func (t recordingThoughtRecipeTool) Parameters() []contracts.ToolParameter { return nil }
-func (t recordingThoughtRecipeTool) Execute(context.Context, map[string]interface{}) (*contracts.ToolResult, error) {
-	return &contracts.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
+func (t recordingThoughtRecipeTool) Name() string                      { return t.name }
+func (t recordingThoughtRecipeTool) Description() string               { return t.name }
+func (t recordingThoughtRecipeTool) Category() string                  { return "test" }
+func (t recordingThoughtRecipeTool) Parameters() []ports.ToolParameter { return nil }
+func (t recordingThoughtRecipeTool) Execute(context.Context, map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
 }
 func (t recordingThoughtRecipeTool) IsAvailable(context.Context) bool { return true }
-func (t recordingThoughtRecipeTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{}
+func (t recordingThoughtRecipeTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{}
 }
 func (t recordingThoughtRecipeTool) Tags() []string { return nil }
 
@@ -393,7 +394,7 @@ func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.En
 	}
 }
 
-func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	_ = ctx
 	_ = env
 	h.called = true
@@ -401,7 +402,7 @@ func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	for key, value := range args {
 		h.args[key] = value
 	}
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]any{
 			"name": "code_review",
@@ -463,7 +464,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	return model, taskEnv, plan
 }
 
-func toolSpecNames(specs []contracts.LLMToolSpec) []string {
+func toolSpecNames(specs []ports.LLMToolSpec) []string {
 	if len(specs) == 0 {
 		return nil
 	}

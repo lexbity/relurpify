@@ -7,9 +7,9 @@ import (
 	"time"
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
 type blackboardScopedMemoryRetriever struct {

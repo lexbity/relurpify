@@ -4,15 +4,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/cfgload"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // ManifestCoversFileAction returns true if the manifest explicitly permits
 // the given action on the given path. Path may be absolute or relative to workspace.
 func ManifestCoversFileAction(
-	m *cfgload.AgentManifest,
-	action contracts.FileSystemAction,
+	m *config.AgentManifest,
+	action permissions.FileSystemAction,
 	path, workspace string,
 ) bool {
 	if m == nil {
@@ -46,7 +46,7 @@ func ManifestCoversFileAction(
 }
 
 // ManifestCoversExecutable returns true if the manifest declares the given binary.
-func ManifestCoversExecutable(m *cfgload.AgentManifest, binary string) bool {
+func ManifestCoversExecutable(m *config.AgentManifest, binary string) bool {
 	if m == nil {
 		return false
 	}
@@ -69,7 +69,7 @@ func ManifestCoversExecutable(m *cfgload.AgentManifest, binary string) bool {
 }
 
 // ManifestCoversNetworkCall returns true if the manifest declares the given host:port.
-func ManifestCoversNetworkCall(m *cfgload.AgentManifest, host string, port int) bool {
+func ManifestCoversNetworkCall(m *config.AgentManifest, host string, port int) bool {
 	if m == nil {
 		return false
 	}

@@ -3,8 +3,9 @@ package tui
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
 // splitWidths divides a total width across weighted columns.

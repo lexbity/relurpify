@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentspec"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
-	capability "codeburg.org/lexbit/relurpify/framework/capability"
+	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -40,9 +41,9 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
 		EffectClasses: []agentspec.EffectClass{},
-		InputSchema: &contracts.Schema{
+		InputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"file": {
 					Type:        "string",
 					Description: "File path to blame",
@@ -50,7 +51,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"lines": {
 					Type:        "array",
 					Description: "Line range [start, end] to blame (optional)",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "integer",
 					},
 				},
@@ -61,9 +62,9 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 			},
 			Required: []string{"file"},
 		},
-		OutputSchema: &contracts.Schema{
+		OutputSchema: &schemacoerce.Schema{
 			Type: "object",
-			Properties: map[string]*contracts.Schema{
+			Properties: map[string]*schemacoerce.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if blame executed successfully",
@@ -75,7 +76,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 				"entries": {
 					Type:        "array",
 					Description: "Blame entries per line",
-					Items: &contracts.Schema{
+					Items: &schemacoerce.Schema{
 						Type: "object",
 					},
 				},
@@ -85,7 +86,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke executes git blame and returns parsed blame entries.
-func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*contracts.CapabilityExecutionResult, error) {
+func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
 	// Extract arguments
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {
@@ -151,7 +152,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Execute command
 	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -161,7 +162,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 		}, nil
 	}
 	if res.ExitCode != 0 {
-		return &contracts.CapabilityExecutionResult{
+		return &ports.CapabilityExecutionResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -174,7 +175,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Parse porcelain blame output
 	entries := parsePorcelainBlame(res.Stdout)
 
-	return &contracts.CapabilityExecutionResult{
+	return &ports.CapabilityExecutionResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

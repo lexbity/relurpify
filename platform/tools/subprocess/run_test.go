@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
-// fakeRunner implements contracts.CommandRunner with canned output for testing.
+// fakeRunner implements ports.CommandRunner with canned output for testing.
 type fakeRunner struct {
-	result *contracts.CommandResult
+	result *ports.CommandResult
 	panic  bool
 }
 
-func (r *fakeRunner) Run(_ context.Context, req contracts.CommandRequest) (*contracts.CommandResult, error) {
+func (r *fakeRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
 	if r.panic {
 		panic("simulated runner panic")
 	}
@@ -23,7 +24,7 @@ func (r *fakeRunner) Run(_ context.Context, req contracts.CommandRequest) (*cont
 }
 
 func TestRunBasicOutput(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "hello", Stderr: "", ExitCode: 0, StdoutBytes: 5}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "hello", Stderr: "", ExitCode: 0, StdoutBytes: 5}}
 	spec := RunSpec{
 		Command: []string{"echo", "hello"},
 	}
@@ -36,7 +37,7 @@ func TestRunBasicOutput(t *testing.T) {
 }
 
 func TestRunNonZeroExitCode(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stderr: "error msg", ExitCode: 1}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stderr: "error msg", ExitCode: 1}}
 	spec := RunSpec{Command: []string{"tool"}}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
@@ -45,7 +46,7 @@ func TestRunNonZeroExitCode(t *testing.T) {
 }
 
 func TestRunExitCodeFallbackWhenNoStderr(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{ExitCode: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{ExitCode: 2}}
 	spec := RunSpec{Command: []string{"tool"}}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
@@ -54,10 +55,10 @@ func TestRunExitCodeFallbackWhenNoStderr(t *testing.T) {
 }
 
 func TestRunErrorMapping(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stderr: "raw", ExitCode: 1}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stderr: "raw", ExitCode: 1}}
 	spec := RunSpec{
-		Command:   []string{"jq"},
-		ErrorMap:  map[string]string{"1": "jq: parse error"},
+		Command:  []string{"jq"},
+		ErrorMap: map[string]string{"1": "jq: parse error"},
 	}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
@@ -83,7 +84,7 @@ func TestRunSandboxTimeouts(t *testing.T) {
 	recorded := &recordingRunner{stdout: "ok"}
 	spec := RunSpec{
 		Command: []string{"tool"},
-		Sandbox: contracts.ToolManifestSandbox{
+		Sandbox: ports.ToolManifestSandbox{
 			TimeoutSeconds: 30,
 			MemoryMB:       512,
 		},
@@ -96,7 +97,7 @@ func TestRunSandboxTimeouts(t *testing.T) {
 }
 
 func TestRunEgressGuardBlocksPrivateHost(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:       []string{"curl", "http://169.254.169.254/latest/meta-data/"},
 		NetworkAccess: true,
@@ -108,7 +109,7 @@ func TestRunEgressGuardBlocksPrivateHost(t *testing.T) {
 }
 
 func TestRunEgressGuardAllowsPublicHost(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:       []string{"curl", "https://8.8.8.8/"},
 		NetworkAccess: true,
@@ -119,7 +120,7 @@ func TestRunEgressGuardAllowsPublicHost(t *testing.T) {
 }
 
 func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:       []string{"curl", "http://127.0.0.1:8080/health"},
 		NetworkAccess: true,
@@ -131,7 +132,7 @@ func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
 }
 
 func TestRunEgressGuardSkippedWhenNoNetworkAccess(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:       []string{"curl", "http://127.0.0.1:8080/health"},
 		NetworkAccess: false,
@@ -142,7 +143,7 @@ func TestRunEgressGuardSkippedWhenNoNetworkAccess(t *testing.T) {
 }
 
 func TestRunCargoIsolationNotAppliedToNonCargo(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:             []string{"echo", "hello"},
 		ApplyCargoIsolation: false,
@@ -153,7 +154,7 @@ func TestRunCargoIsolationNotAppliedToNonCargo(t *testing.T) {
 }
 
 func TestRunEnvelopeIncludesRefs(t *testing.T) {
-	runner := &fakeRunner{result: &contracts.CommandResult{
+	runner := &fakeRunner{result: &ports.CommandResult{
 		Stdout:      "data",
 		StdoutBytes: 4,
 		StdoutRef:   "store://stdout/abc",

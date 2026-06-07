@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
 type runnerService struct {

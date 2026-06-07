@@ -6,12 +6,14 @@ import (
 	"os"
 	"sync"
 
-	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/search"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -47,18 +49,18 @@ type integrationFileTool struct {
 func (t *integrationFileTool) Name() string        { return t.name }
 func (t *integrationFileTool) Description() string { return "reads a workspace note" }
 func (t *integrationFileTool) Category() string    { return "filesystem" }
-func (t *integrationFileTool) Parameters() []contracts.ToolParameter {
-	return []contracts.ToolParameter{
+func (t *integrationFileTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
 		{Name: "path", Type: "string", Description: "file to read"},
 	}
 }
 
-func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
+func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
-	return &contracts.ToolResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"status":  "ok",
@@ -69,9 +71,9 @@ func (t *integrationFileTool) Execute(ctx context.Context, args map[string]inter
 
 func (t *integrationFileTool) IsAvailable(context.Context) bool { return true }
 
-func (t *integrationFileTool) Permissions() contracts.ToolPermissions {
-	return contracts.ToolPermissions{
-		Permissions: policy.NewFileSystemPermissionSet(t.base, contracts.FileSystemRead),
+func (t *integrationFileTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{
+		Permissions: policy.NewFileSystemPermissionSet(t.base, permissions.FileSystemRead),
 	}
 }
 func (t *integrationFileTool) Tags() []string { return nil }
@@ -88,25 +90,25 @@ type scriptedLLM struct {
 	text string
 }
 
-func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
-	return &contracts.LLMResponse{Text: s.text}, nil
+func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: s.text}, nil
 }
 
-func (s *scriptedLLM) GenerateStream(context.Context, string, *contracts.LLMOptions) (<-chan string, error) {
+func (s *scriptedLLM) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	return nil, fmt.Errorf("streaming not supported")
 }
 
-func (s *scriptedLLM) Chat(context.Context, []contracts.Message, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (s *scriptedLLM) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
 	return nil, fmt.Errorf("chat not supported")
 }
 
-func (s *scriptedLLM) ChatWithTools(context.Context, []contracts.Message, []contracts.LLMToolSpec, *contracts.LLMOptions) (*contracts.LLMResponse, error) {
+func (s *scriptedLLM) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return nil, fmt.Errorf("chat tools not supported")
 }
 
 type llmPlanNode struct {
 	name   string
-	model  contracts.LanguageModel
+	model  model.LanguageModel
 	prompt string
 }
 
@@ -134,7 +136,7 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) 
 
 type toolExecNode struct {
 	name string
-	tool contracts.Tool
+	tool ports.Tool
 	args map[string]interface{}
 }
 

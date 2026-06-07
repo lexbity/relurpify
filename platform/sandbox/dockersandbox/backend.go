@@ -11,7 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // Config controls the Docker sandbox backend.
@@ -27,10 +28,10 @@ type Backend struct {
 	mu       sync.Mutex
 	config   Config
 	verified bool
-	policy   contracts.SandboxPolicy
+	policy   sandbox.SandboxPolicy
 }
 
-var _ contracts.Backend = (*Backend)(nil)
+var _ sandbox.Backend = (*Backend)(nil)
 
 // NewBackend constructs a Docker sandbox backend.
 func NewBackend(cfg Config) *Backend {
@@ -52,8 +53,8 @@ func (b *Backend) Name() string {
 }
 
 // Capabilities reports the security features this backend can enforce.
-func (b *Backend) Capabilities() contracts.Capabilities {
-	return contracts.Capabilities{
+func (b *Backend) Capabilities() sandbox.Capabilities {
+	return sandbox.Capabilities{
 		NetworkIsolation:  true,
 		ReadOnlyRoot:      true,
 		ProtectedPaths:    true,
@@ -98,7 +99,7 @@ func (b *Backend) Verify(ctx context.Context) error {
 }
 
 // ValidatePolicy rejects policy fields this backend cannot safely enforce.
-func (b *Backend) ValidatePolicy(policy contracts.SandboxPolicy) error {
+func (b *Backend) ValidatePolicy(policy sandbox.SandboxPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
@@ -123,7 +124,7 @@ func (b *Backend) ValidatePolicy(policy contracts.SandboxPolicy) error {
 }
 
 // ApplyPolicy validates and stores the active policy.
-func (b *Backend) ApplyPolicy(_ context.Context, policy contracts.SandboxPolicy) error {
+func (b *Backend) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
 	if err := b.ValidatePolicy(policy); err != nil {
 		return err
 	}
@@ -134,9 +135,9 @@ func (b *Backend) ApplyPolicy(_ context.Context, policy contracts.SandboxPolicy)
 }
 
 // Policy returns the active policy snapshot.
-func (b *Backend) Policy() contracts.SandboxPolicy {
+func (b *Backend) Policy() sandbox.SandboxPolicy {
 	if b == nil {
-		return contracts.SandboxPolicy{}
+		return sandbox.SandboxPolicy{}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -145,11 +146,11 @@ func (b *Backend) Policy() contracts.SandboxPolicy {
 
 // RunConfig exposes the container runtime settings expected by callers that
 // still request a sandbox runtime configuration.
-func (b *Backend) RunConfig() contracts.SandboxConfig {
+func (b *Backend) RunConfig() sandbox.SandboxConfig {
 	if b == nil {
-		return contracts.SandboxConfig{}
+		return sandbox.SandboxConfig{}
 	}
-	return contracts.SandboxConfig{
+	return sandbox.SandboxConfig{
 		ContainerRuntime: b.config.DockerPath,
 		NetworkIsolation: true,
 		ReadOnlyRoot:     true,
@@ -158,7 +159,7 @@ func (b *Backend) RunConfig() contracts.SandboxConfig {
 
 // NewCommandRunner builds the Docker-specific command runner used by the
 // framework when this backend is selected.
-func (b *Backend) NewCommandRunner(config *contracts.CommandRunnerConfig) (contracts.CommandRunner, error) {
+func (b *Backend) NewCommandRunner(config *sandbox.CommandRunnerConfig) (ports.CommandRunner, error) {
 	clone := &Backend{
 		config:   b.config,
 		verified: b.verified,
@@ -195,9 +196,9 @@ func (b *Backend) validateProtectedPath(path string) error {
 	return nil
 }
 
-func clonePolicy(policy contracts.SandboxPolicy) contracts.SandboxPolicy {
-	out := contracts.SandboxPolicy{
-		NetworkRules:    append([]contracts.NetworkRule(nil), policy.NetworkRules...),
+func clonePolicy(policy sandbox.SandboxPolicy) sandbox.SandboxPolicy {
+	out := sandbox.SandboxPolicy{
+		NetworkRules:    append([]sandbox.NetworkRule(nil), policy.NetworkRules...),
 		ReadOnlyRoot:    policy.ReadOnlyRoot,
 		ProtectedPaths:  append([]string(nil), policy.ProtectedPaths...),
 		NoNewPrivileges: policy.NoNewPrivileges,

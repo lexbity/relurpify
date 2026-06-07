@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/knowledge"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -31,7 +31,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 
 	// Step 1: Create a manifest with policy (manifest seam)
 	m := ValidManifest().
-		WithFileSystemPermission(contracts.FileSystemRead, env.WorkspacePath+"/**").
+		WithFileSystemPermission(permissions.FileSystemRead, env.WorkspacePath+"/**").
 		Build()
 
 	if err := m.Validate(); err != nil {
@@ -53,7 +53,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		name:        "e2e-tool",
 		description: "end-to-end test tool",
 		category:    "test",
-		permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, contracts.FileSystemRead),
+		permissions: policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead),
 		manager:     manager,
 		agent:       "test-agent",
 		basePath:    env.WorkspacePath,

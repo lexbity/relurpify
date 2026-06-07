@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/contracts"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // Stage describes one typed unit of pipeline work.
@@ -15,7 +16,7 @@ type Stage interface {
 	Name() string
 	Contract() ContractDescriptor
 	BuildPrompt(ctx *contextdata.Envelope) (string, error)
-	Decode(resp *contracts.LLMResponse) (any, error)
+	Decode(resp *model.LLMResponse) (any, error)
 	Validate(output any) error
 	Apply(ctx *contextdata.Envelope, output any) error
 }
@@ -28,7 +29,7 @@ type ToolScopedStage interface {
 // ToolRequiredStage marks stages that require at least one allowed tool to run
 // before the stage output is accepted.
 type ToolRequiredStage interface {
-	RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []contracts.Tool) bool
+	RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []ports.Tool) bool
 }
 
 // ValidateStage checks stage identity and its declared contract metadata.
@@ -47,7 +48,7 @@ func ValidateStage(stage Stage) error {
 }
 
 // DecodeStageOutput annotates stage decode failures with stage/contract context.
-func DecodeStageOutput(stage Stage, resp *contracts.LLMResponse) (any, error) {
+func DecodeStageOutput(stage Stage, resp *model.LLMResponse) (any, error) {
 	if err := ValidateStage(stage); err != nil {
 		return nil, err
 	}

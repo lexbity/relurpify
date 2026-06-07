@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // MergeHTNBranches merges isolated HTN branch results into the parent envelope.

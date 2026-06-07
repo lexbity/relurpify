@@ -6,14 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
-	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/contextstream"
-	"codeburg.org/lexbit/relurpify/framework/persistence"
+	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
@@ -21,7 +22,6 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -464,14 +464,14 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 			CapabilityID: clarificationCapabilityID,
 			Prompt:       "Clarify the user's request.",
 			Goal:         "Clarify the user's request.",
-		Step: surface.ThoughtRecipeStep{
-			ID:      clarificationThoughtRecipeID + ".step0",
-			Type:    "run",
-			Prompt:  "Clarify the user's request.",
-			Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-			Config:  map[string]any{},
-			Context: surface.ThoughtRecipeStepContext{},
-		},
+			Step: surface.ThoughtRecipeStep{
+				ID:      clarificationThoughtRecipeID + ".step0",
+				Type:    "run",
+				Prompt:  "Clarify the user's request.",
+				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
+				Config:  map[string]any{},
+				Context: surface.ThoughtRecipeStepContext{},
+			},
 		}},
 	}
 	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")
