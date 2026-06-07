@@ -29,6 +29,10 @@ relurpify/
 testsuite/agenttest_fixtures/**/target/
 testsuite/agenttest_fixtures/**/__pycache__/
 testsuite/agenttest_fixtures/**/*.pyc
+# Transient artifacts
+*~
+/toolgen
+
 #temp
 /docs/website/
 .aider*
