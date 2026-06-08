@@ -8,8 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/jobs"
-	"codeburg.org/lexbit/relurpify/platform/tools/composite"
-	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 // BuildOption controls Build behaviour.
@@ -18,6 +16,7 @@ type BuildOption func(*buildConfig)
 type buildConfig struct {
 	strict    bool
 	submitter jobs.Submitter
+	backends  map[string]ports.ToolBackendBuilder
 }
 
 // StrictMode makes Build hard-fail when a go_native manifest references an
@@ -29,6 +28,18 @@ func StrictMode() BuildOption {
 // WithSubmitter sets a job submitter for offloaded tool execution.
 func WithSubmitter(s jobs.Submitter) BuildOption {
 	return func(c *buildConfig) { c.submitter = s }
+}
+
+// WithBackendBuilder registers a builder for the given backend key
+// (e.g. "subprocess", "composite"). The composition root uses this to
+// inject platform tool backends without capability importing platform.
+func WithBackendBuilder(backend string, b ports.ToolBackendBuilder) BuildOption {
+	return func(c *buildConfig) {
+		if c.backends == nil {
+			c.backends = make(map[string]ports.ToolBackendBuilder)
+		}
+		c.backends[backend] = b
+	}
 }
 
 // Build constructs the full set of local tool implementations from their
@@ -59,7 +70,7 @@ func Build(workspace string, runner ports.CommandRunner, manifests []*ToolManife
 			continue
 		}
 
-		tool, err := buildOne(workspace, runner, *m, cfg.strict)
+		tool, err := buildOne(workspace, runner, *m, cfg)
 		if err != nil {
 			log.Printf("tool build: skipping %q: %v", name, err)
 			continue
@@ -86,22 +97,16 @@ func Build(workspace string, runner ports.CommandRunner, manifests []*ToolManife
 }
 
 // buildOne constructs a single tool from its manifest.
-func buildOne(workspace string, runner ports.CommandRunner, manifest ports.ToolManifest, strict bool) (ports.Tool, error) {
+func buildOne(workspace string, runner ports.CommandRunner, manifest ports.ToolManifest, cfg buildConfig) (ports.Tool, error) {
 	switch manifest.Execution.Backend {
-	case ports.ToolBackendSubprocess:
-		return subprocess.NewTool(manifest, runner), nil
+	case ports.ToolBackendSubprocess, ports.ToolBackendComposite:
+		if b, ok := cfg.backends[string(manifest.Execution.Backend)]; ok {
+			return b.BuildTool(manifest, runner)
+		}
+		return nil, fmt.Errorf("backend %q: no builder registered (wire WithBackendBuilder in composition root)", manifest.Execution.Backend)
 
 	case ports.ToolBackendGoNative:
-		return buildGoNative(workspace, manifest, strict)
-
-	case ports.ToolBackendComposite:
-		resolver := func(name string) (ports.Tool, bool) {
-			// The resolver is intentionally empty at build time — the
-			// framework injects a full tool resolver at registration time.
-			// Composite tools built here serve as descriptors only.
-			return nil, false
-		}
-		return composite.New(manifest, resolver), nil
+		return buildGoNative(workspace, manifest, cfg.strict)
 
 	default:
 		return nil, fmt.Errorf("unsupported backend %q", manifest.Execution.Backend)

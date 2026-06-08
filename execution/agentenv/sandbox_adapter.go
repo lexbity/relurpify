@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
 // sandboxRuntimeAdapter adapts sandbox.SandboxRuntime to the governance
@@ -20,19 +21,19 @@ func (a *sandboxRuntimeAdapter) Verify(ctx context.Context) error {
 	return a.inner.Verify(ctx)
 }
 
-func (a *sandboxRuntimeAdapter) ValidatePolicy(p fauthorization.SandboxPolicy) error {
+func (a *sandboxRuntimeAdapter) ValidatePolicy(p governanceports.SandboxPolicy) error {
 	return a.inner.ValidatePolicy(toSandboxPolicy(p))
 }
 
-func (a *sandboxRuntimeAdapter) ApplyPolicy(ctx context.Context, p fauthorization.SandboxPolicy) error {
+func (a *sandboxRuntimeAdapter) ApplyPolicy(ctx context.Context, p governanceports.SandboxPolicy) error {
 	return a.inner.ApplyPolicy(ctx, toSandboxPolicy(p))
 }
 
-func (a *sandboxRuntimeAdapter) Policy() fauthorization.SandboxPolicy {
+func (a *sandboxRuntimeAdapter) Policy() governanceports.SandboxPolicy {
 	return fromSandboxPolicy(a.inner.Policy())
 }
 
-func (a *sandboxRuntimeAdapter) RunConfig() fauthorization.SandboxConfig {
+func (a *sandboxRuntimeAdapter) RunConfig() governanceports.SandboxConfig {
 	return toFaSandboxConfig(a.inner.RunConfig())
 }
 
@@ -40,7 +41,7 @@ func (a *sandboxRuntimeAdapter) Name() string {
 	return a.inner.Name()
 }
 
-func toSandboxPolicy(p fauthorization.SandboxPolicy) sandbox.SandboxPolicy {
+func toSandboxPolicy(p governanceports.SandboxPolicy) sandbox.SandboxPolicy {
 	out := sandbox.SandboxPolicy{
 		ReadOnlyRoot:    p.ReadOnlyRoot,
 		ProtectedPaths:  append([]string(nil), p.ProtectedPaths...),
@@ -61,8 +62,8 @@ func toSandboxPolicy(p fauthorization.SandboxPolicy) sandbox.SandboxPolicy {
 	return out
 }
 
-func fromSandboxPolicy(p sandbox.SandboxPolicy) fauthorization.SandboxPolicy {
-	out := fauthorization.SandboxPolicy{
+func fromSandboxPolicy(p sandbox.SandboxPolicy) governanceports.SandboxPolicy {
+	out := governanceports.SandboxPolicy{
 		ReadOnlyRoot:    p.ReadOnlyRoot,
 		ProtectedPaths:  append([]string(nil), p.ProtectedPaths...),
 		NoNewPrivileges: p.NoNewPrivileges,
@@ -71,7 +72,7 @@ func fromSandboxPolicy(p sandbox.SandboxPolicy) fauthorization.SandboxPolicy {
 		DeniedEnvKeys:   append([]string(nil), p.DeniedEnvKeys...),
 	}
 	for _, r := range p.NetworkRules {
-		out.NetworkRules = append(out.NetworkRules, fauthorization.NetworkRule{
+		out.NetworkRules = append(out.NetworkRules, governanceports.SandboxNetworkRule{
 			Direction:   r.Direction,
 			Protocol:    r.Protocol,
 			Host:        r.Host,
@@ -85,7 +86,7 @@ func fromSandboxPolicy(p sandbox.SandboxPolicy) fauthorization.SandboxPolicy {
 // newSandboxBackendFactory returns a SandboxBackendFactory that creates
 // sandbox runtimes using the capability/sandbox package.
 func newSandboxBackendFactory() fauthorization.SandboxBackendFactory {
-	return func(ctx context.Context, backend string, cfg fauthorization.SandboxConfig, image, workspace string) (fauthorization.SandboxRuntime, error) {
+	return func(ctx context.Context, backend string, cfg governanceports.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error) {
 		b := strings.ToLower(strings.TrimSpace(backend))
 		if b == "" {
 			b = "gvisor"
@@ -116,7 +117,7 @@ func newSandboxBackendFactory() fauthorization.SandboxBackendFactory {
 // sandbox.SandboxRuntime so existing callers that pass registration.Runtime
 // to sandbox.NewCommandRunner continue to work.
 type reverseSandboxRuntimeAdapter struct {
-	inner fauthorization.SandboxRuntime
+	inner governanceports.SandboxRuntime
 }
 
 func (a *reverseSandboxRuntimeAdapter) Verify(ctx context.Context) error {
@@ -156,8 +157,8 @@ func (a *reverseSandboxRuntimeAdapter) Name() string {
 }
 
 // toFaSandboxConfig converts a sandbox.SandboxConfig to authorization.SandboxConfig.
-func toFaSandboxConfig(cfg sandbox.SandboxConfig) fauthorization.SandboxConfig {
-	return fauthorization.SandboxConfig{
+func toFaSandboxConfig(cfg sandbox.SandboxConfig) governanceports.SandboxConfig {
+	return governanceports.SandboxConfig{
 		RunscPath:        cfg.RunscPath,
 		ContainerRuntime: cfg.ContainerRuntime,
 		Platform:         cfg.Platform,

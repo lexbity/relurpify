@@ -168,3 +168,10 @@ type ToolRegistry interface {
 
 // NativeToolConstructor creates a Tool from a base workspace path.
 type NativeToolConstructor func(basePath string) Tool
+
+// ToolBackendBuilder constructs a Tool from a manifest and command runner.
+// Each backend (subprocess, composite) provides its own builder.
+// The composition root wires these into toolcapabilities.Build.
+type ToolBackendBuilder interface {
+	BuildTool(manifest ToolManifest, runner CommandRunner) (Tool, error)
+}

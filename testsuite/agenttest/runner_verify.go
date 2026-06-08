@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -29,7 +30,10 @@ func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[st
 	if err != nil {
 		return nil
 	}
-	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests)
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests,
+		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+	)
 	index := make(map[string]ports.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool

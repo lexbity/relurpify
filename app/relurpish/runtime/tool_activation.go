@@ -1,7 +1,4 @@
-// Package toolcapabilities activation — blank imports to fire init()
-// registration of native tool constructors into contracts.NativeRegistry.
-
-package toolcapabilities
+package runtime
 
 import (
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"

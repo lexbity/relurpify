@@ -18,6 +18,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/tools/composite"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -104,7 +106,11 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 	// Build all manifest-declared tools (subprocess + go_native) through the
 	// governance package. This replaces the legacy platformShellCommandLineToolsFn
 	// and the separate git/lang/search constructor blocks.
-	manifestTools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests, toolcapabilities.StrictMode())
+	manifestTools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests,
+		toolcapabilities.StrictMode(),
+		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+	)
 
 	// Inject CommandRunner into tools that need it (git, lang, sqlite tools
 	// that use the shared subprocess.Run internally).
@@ -212,7 +218,11 @@ func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (
 	if err != nil {
 		return nil, fmt.Errorf("load tool manifests: %w", err)
 	}
-	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests, toolcapabilities.StrictMode())
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests,
+		toolcapabilities.StrictMode(),
+		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+	)
 
 	// Inject CommandRunner into tools that need it.
 	for _, tool := range tools {

@@ -17,6 +17,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -56,46 +57,7 @@ type Tool interface {
 	Tags() []string
 }
 
-// SandboxConfig exposes runtime knobs for a sandbox backend.
-type SandboxConfig struct {
-	RunscPath        string
-	ContainerRuntime string
-	Platform         string
-	NetworkIsolation bool
-	ReadOnlyRoot     bool
-	SeccompProfile   string
-}
-
-// SandboxPolicy captures the backend-neutral security intent for a sandbox runtime.
-type SandboxPolicy struct {
-	NetworkRules    []NetworkRule
-	ReadOnlyRoot    bool
-	ProtectedPaths  []string
-	NoNewPrivileges bool
-	SeccompProfile  string
-	AllowedEnvKeys  []string
-	DeniedEnvKeys   []string
-}
-
-// NetworkRule defines network access rules for sandbox policies.
-type NetworkRule struct {
-	Direction   string
-	Protocol    string
-	Host        string
-	Port        int
-	Description string
-}
-
-// SandboxRuntime describes a sandbox runtime with policy methods.
-type SandboxRuntime interface {
-	Verify(ctx context.Context) error
-	ValidatePolicy(policy SandboxPolicy) error
-	ApplyPolicy(ctx context.Context, policy SandboxPolicy) error
-	Policy() SandboxPolicy
-	RunConfig() SandboxConfig
-	Name() string
-}
-
+// governanceports.SandboxConfig exposes runtime knobs for a sandbox backend.
 // isPrivateOrLoopbackHost checks if the host is a private/loopback address.
 func isPrivateOrLoopbackHost(host string) bool {
 	ip := net.ParseIP(host)
@@ -145,11 +107,11 @@ type PermissionManager struct {
 	declared         *permissions.PermissionSet
 	audit            policy.AuditLogger
 	hitl             HITLProvider
-	runtime          SandboxRuntime
+	runtime          governanceports.SandboxRuntime
 	grants           map[string]*PermissionGrant
 	mu               sync.RWMutex
 	grantClock       func() time.Time
-	netPolicy        []NetworkRule
+	netPolicy        []governanceports.SandboxNetworkRule
 	defaultPolicy    string // governs undeclared tool permissions; default is Ask
 	eventLogger      func(context.Context, permissions.PermissionDescriptor, string, string, map[string]interface{})
 	runtimePolicyErr error
@@ -205,7 +167,7 @@ func (m *PermissionManager) SetFilesystemGuardRoots(protectedRoots, excludedRoot
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
-func (m *PermissionManager) AttachRuntime(runtime SandboxRuntime) {
+func (m *PermissionManager) AttachRuntime(runtime governanceports.SandboxRuntime) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtime = runtime
@@ -577,7 +539,7 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rule := NetworkRule{
+	rule := governanceports.SandboxNetworkRule{
 		Direction: direction,
 		Protocol:  protocol,
 		Host:      host,
@@ -597,9 +559,9 @@ func (m *PermissionManager) applyRuntimePolicyLocked() {
 
 // Policy returns the merged sandbox policy currently known to the
 // permission manager. Callers get a copy and can inspect it without racing.
-func (m *PermissionManager) Policy() SandboxPolicy {
+func (m *PermissionManager) Policy() governanceports.SandboxPolicy {
 	if m == nil {
-		return SandboxPolicy{}
+		return governanceports.SandboxPolicy{}
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -616,15 +578,15 @@ func (m *PermissionManager) RuntimePolicyError() error {
 	return m.runtimePolicyErr
 }
 
-func (m *PermissionManager) currentSandboxPolicyLocked() SandboxPolicy {
+func (m *PermissionManager) currentSandboxPolicyLocked() governanceports.SandboxPolicy {
 	if m == nil {
-		return SandboxPolicy{}
+		return governanceports.SandboxPolicy{}
 	}
-	policy := SandboxPolicy{}
+	policy := governanceports.SandboxPolicy{}
 	if m.runtime != nil {
 		policy = m.runtime.Policy()
 	}
-	policy.NetworkRules = append([]NetworkRule(nil), m.netPolicy...)
+	policy.NetworkRules = append([]governanceports.SandboxNetworkRule(nil), m.netPolicy...)
 	return policy
 }
 

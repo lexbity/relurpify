@@ -11,14 +11,15 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
-// SandboxBackendFactory creates a SandboxRuntime for the given backend.
-type SandboxBackendFactory func(ctx context.Context, backend string, cfg SandboxConfig, image, workspace string) (SandboxRuntime, error)
+// SandboxBackendFactory creates a governanceports.SandboxRuntime for the given backend.
+type SandboxBackendFactory func(ctx context.Context, backend string, cfg governanceports.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error)
 
 // RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
@@ -28,7 +29,7 @@ type RuntimeConfig struct {
 	ConfigPath       string
 	Image            string
 	Backend          string
-	SandboxCfg       SandboxConfig
+	SandboxCfg       governanceports.SandboxConfig
 	BackendFactory   SandboxBackendFactory
 	AuditLimit       int
 	BaseFS           string
@@ -41,7 +42,7 @@ type AgentRegistration struct {
 	ID               string
 	Manifest         *config.AgentManifest
 	ManifestSnapshot *config.AgentManifestSnapshot
-	Runtime          SandboxRuntime
+	Runtime          governanceports.SandboxRuntime
 	Permissions      *PermissionManager
 	Policy           PolicyEngine
 	Audit            policy.AuditLogger
@@ -148,7 +149,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 }
 
 // selectSandboxRuntime returns a sandbox runtime using the provided factory.
-func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg SandboxConfig, image, workspace string, factory SandboxBackendFactory) (SandboxRuntime, error) {
+func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg governanceports.SandboxConfig, image, workspace string, factory SandboxBackendFactory) (governanceports.SandboxRuntime, error) {
 	if factory != nil {
 		return factory(ctx, backend, sandboxCfg, image, workspace)
 	}
@@ -157,8 +158,8 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg Sandbo
 
 // buildSandboxPolicy constructs a sandbox policy from an agent manifest and
 // protected paths.
-func buildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) SandboxPolicy {
-	policy := SandboxPolicy{
+func buildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) governanceports.SandboxPolicy {
+	policy := governanceports.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
 	if agentManifest == nil {
@@ -171,13 +172,13 @@ func buildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []st
 }
 
 // buildNetworkPolicy converts network permissions into sandbox-friendly rules.
-func buildNetworkPolicy(perms []permissions.NetworkPermission) []NetworkRule {
-	var rules []NetworkRule
+func buildNetworkPolicy(perms []permissions.NetworkPermission) []governanceports.SandboxNetworkRule {
+	var rules []governanceports.SandboxNetworkRule
 	for _, perm := range perms {
 		if perm.Direction != "egress" {
 			continue
 		}
-		rules = append(rules, NetworkRule{
+		rules = append(rules, governanceports.SandboxNetworkRule{
 			Direction: perm.Direction,
 			Protocol:  perm.Protocol,
 			Host:      perm.Host,

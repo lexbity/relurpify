@@ -11,6 +11,34 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
+var testBackendBuilders = []BuildOption{
+	WithBackendBuilder("subprocess", &nopBackendBuilder{}),
+	WithBackendBuilder("composite", &nopBackendBuilder{}),
+}
+
+type nopBuiltTool struct {
+	name        string
+	description string
+	category    string
+}
+
+func (t *nopBuiltTool) Name() string                           { return t.name }
+func (t *nopBuiltTool) Description() string                     { return t.description }
+func (t *nopBuiltTool) Category() string                        { return t.category }
+func (t *nopBuiltTool) Parameters() []ports.ToolParameter       { return nil }
+func (t *nopBuiltTool) Execute(_ context.Context, _ map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true}, nil
+}
+func (t *nopBuiltTool) IsAvailable(_ context.Context) bool     { return true }
+func (t *nopBuiltTool) Permissions() ports.ToolPermissions     { return ports.ToolPermissions{} }
+func (t *nopBuiltTool) Tags() []string                          { return nil }
+
+type nopBackendBuilder struct{}
+
+func (nopBackendBuilder) BuildTool(manifest ports.ToolManifest, runner ports.CommandRunner) (ports.Tool, error) {
+	return &nopBuiltTool{name: manifest.Name, description: manifest.Description, category: manifest.Family}, nil
+}
+
 type toolWithKeys struct {
 	ports.Tool
 	keys []string
@@ -122,7 +150,7 @@ func TestBuildSubprocessTool(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 	require.Equal(t, "cli_echo", tools[0].Name())
 }
@@ -142,7 +170,7 @@ func TestBuildSubprocessToolMissingDescription(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Empty(t, tools, "tool with empty description must be excluded")
 }
 
@@ -166,7 +194,7 @@ func TestBuildCompositeTool(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 	require.Equal(t, "pipe_tool", tools[0].Name())
 	require.Equal(t, "shell", tools[0].Category(), "composite tool category comes from manifest family")
@@ -189,7 +217,7 @@ func TestBuildNonStrictModeGoNativeMissingImplSkipped(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Empty(t, tools, "non-strict mode must skip tools with unregistered implementations")
 }
 
@@ -237,13 +265,13 @@ func TestBuildGoNativeToolFromRegistry(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 	require.Equal(t, "test_greeter", tools[0].Name())
 }
 
 func TestBuildExcludesNilManifests(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{nil})
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{nil}, testBackendBuilders...)
 	require.Empty(t, tools)
 }
 
@@ -262,7 +290,7 @@ func TestBuildExcludesEmptyName(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Empty(t, tools)
 }
 
@@ -355,7 +383,7 @@ func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
 				EffectClass: []string{"process_spawn"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 
 	trustProv, ok := tools[0].(interface{ TrustClass() agentspec.TrustClass })
@@ -385,7 +413,7 @@ func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {
 			},
 			Capability: ports.ToolManifestCapability{},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 	// Empty capability means no wrapper — original tool returned
 	_, ok := tools[0].(interface{ TrustClass() agentspec.TrustClass })
@@ -409,7 +437,7 @@ func TestUnlistedManifestExcluded(t *testing.T) {
 				EffectClass: []string{"filesystem_read"},
 			},
 		},
-	})
+	}, testBackendBuilders...)
 	require.Len(t, tools, 1)
 	require.Equal(t, "allowed", tools[0].Name())
 	// A tool not in the manifest list won't be built
