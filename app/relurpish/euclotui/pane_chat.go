@@ -9,20 +9,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	capability "codeburg.org/lexbit/relurpify/capability"
-	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 const chatSidebarMinWidth = 60
@@ -1116,7 +1115,7 @@ func structuredResultFromCore(res *execution.Result) *tui.StructuredResult {
 	return rendered
 }
 
-func extractResultEnvelope(res *execution.Result) *capability.CapabilityResultEnvelope {
+func extractResultEnvelope(res *execution.Result) *capresult.CapabilityResultEnvelope {
 	if res == nil {
 		return nil
 	}
@@ -1131,17 +1130,17 @@ func extractResultEnvelope(res *execution.Result) *capability.CapabilityResultEn
 		}
 		switch typed := raw.(type) {
 		case *ports.ToolResult:
-			if envelope, ok := capability.ToolResultEnvelope(typed); ok {
+			if envelope, ok := capresult.ToolResultEnvelope(typed); ok {
 				return envelope
 			}
 		case ports.ToolResult:
 			copy := typed
-			if envelope, ok := capability.ToolResultEnvelope(&copy); ok {
+			if envelope, ok := capresult.ToolResultEnvelope(&copy); ok {
 				return envelope
 			}
-		case *capability.CapabilityResultEnvelope:
+		case *capresult.CapabilityResultEnvelope:
 			return typed
-		case capability.CapabilityResultEnvelope:
+		case capresult.CapabilityResultEnvelope:
 			copy := typed
 			return &copy
 		}
@@ -1149,7 +1148,7 @@ func extractResultEnvelope(res *execution.Result) *capability.CapabilityResultEn
 	return nil
 }
 
-func structuredEnvelopeFromCore(envelope *capability.CapabilityResultEnvelope) *tui.StructuredResultEnvelope {
+func structuredEnvelopeFromCore(envelope *capresult.CapabilityResultEnvelope) *tui.StructuredResultEnvelope {
 	if envelope == nil {
 		return nil
 	}
@@ -1198,23 +1197,23 @@ func structuredEnvelopeFromCore(envelope *capability.CapabilityResultEnvelope) *
 	return rendered
 }
 
-func structuredBlockFromCore(block capability.ContentBlock) tui.StructuredContentBlock {
+func structuredBlockFromCore(block capresult.ContentBlock) tui.StructuredContentBlock {
 	switch typed := block.(type) {
-	case capability.TextContentBlock:
+	case capresult.TextContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "text output",
 			Body:       strings.TrimSpace(typed.Text),
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case capability.StructuredContentBlock:
+	case capresult.StructuredContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "structured output",
 			Body:       formatStructuredData(typed.Data),
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case capability.ResourceLinkContentBlock:
+	case capresult.ResourceLinkContentBlock:
 		summary := "linked resource"
 		if typed.Name != "" {
 			summary = typed.Name
@@ -1229,7 +1228,7 @@ func structuredBlockFromCore(block capability.ContentBlock) tui.StructuredConten
 			Body:       body,
 			Provenance: provenanceMap(typed.Provenance),
 		}
-	case capability.EmbeddedResourceContentBlock:
+	case capresult.EmbeddedResourceContentBlock:
 		return tui.StructuredContentBlock{
 			Type:       typed.ContentType(),
 			Summary:    "embedded resource",
@@ -1256,7 +1255,7 @@ func formatStructuredData(data any) string {
 	return string(raw)
 }
 
-func provenanceMap(prov capability.ContentProvenance) map[string]string {
+func provenanceMap(prov capresult.ContentProvenance) map[string]string {
 	out := make(map[string]string, 4)
 	if prov.CapabilityID != "" {
 		out["capability_id"] = prov.CapabilityID

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -20,8 +20,9 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -1028,7 +1029,7 @@ func inferApprovalKind(request fauthorization.PermissionRequest) string {
 	}
 }
 
-func capabilityAvailabilityLabel(spec capability.AvailabilitySpec) string {
+func capabilityAvailabilityLabel(spec descriptor.AvailabilitySpec) string {
 	if spec.Available {
 		return "available"
 	}

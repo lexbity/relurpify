@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
 const backgroundDelegationProviderID = "delegation-runtime"
@@ -23,7 +23,7 @@ type backgroundDelegationProvider struct {
 }
 
 type backgroundDelegationSession struct {
-	snapshot capability.ProviderSessionSnapshot
+	snapshot provider.ProviderSessionSnapshot
 	cancel   context.CancelFunc
 	results  chan fauthorization.BackgroundDelegationOutcome
 }
@@ -34,15 +34,15 @@ func newBackgroundDelegationProvider() *backgroundDelegationProvider {
 	}
 }
 
-func (p *backgroundDelegationProvider) Descriptor() capability.ProviderDescriptor {
-	return capability.ProviderDescriptor{
+func (p *backgroundDelegationProvider) Descriptor() provider.ProviderDescriptor {
+	return provider.ProviderDescriptor{
 		ID:                 backgroundDelegationProviderID,
 		Kind:               agentspec.ProviderKindAgentRuntime,
 		ActivationScope:    "runtime",
 		TrustBaseline:      agentspec.TrustClassBuiltinTrusted,
 		RecoverabilityMode: policy.RecoverabilityInProcess,
 		SupportsHealth:     true,
-		Security: capability.ProviderSecurityProfile{
+		Security: provider.ProviderSecurityProfile{
 			Origin:                     agentspec.ProviderOriginLocal,
 			RequiresFrameworkMediation: true,
 		},
@@ -88,10 +88,10 @@ func (p *backgroundDelegationProvider) CloseSession(_ context.Context, sessionID
 	return nil
 }
 
-func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (capability.ProviderHealthSnapshot, error) {
+func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (provider.ProviderHealthSnapshot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return capability.ProviderHealthSnapshot{
+	return provider.ProviderHealthSnapshot{
 		Status: "ok",
 		Metadata: map[string]interface{}{
 			"active_sessions": len(p.sessions),
@@ -99,20 +99,20 @@ func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (capabili
 	}, nil
 }
 
-func (p *backgroundDelegationProvider) ListSessions(context.Context) ([]capability.ProviderSession, error) {
+func (p *backgroundDelegationProvider) ListSessions(context.Context) ([]provider.ProviderSession, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make([]capability.ProviderSession, 0, len(p.sessions))
+	out := make([]provider.ProviderSession, 0, len(p.sessions))
 	for _, session := range p.sessions {
 		out = append(out, session.snapshot.Session)
 	}
 	return out, nil
 }
 
-func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]capability.ProviderSessionSnapshot, error) {
+func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]provider.ProviderSessionSnapshot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make([]capability.ProviderSessionSnapshot, 0, len(p.sessions))
+	out := make([]provider.ProviderSessionSnapshot, 0, len(p.sessions))
 	for _, session := range p.sessions {
 		out = append(out, cloneProviderSessionSnapshot(session.snapshot))
 	}
@@ -137,8 +137,8 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	sessionID := fmt.Sprintf("%s:%s", p.Descriptor().ID, request.ID)
 	results := make(chan fauthorization.BackgroundDelegationOutcome, 1)
 	session := &backgroundDelegationSession{
-		snapshot: capability.ProviderSessionSnapshot{
-			Session: capability.ProviderSession{
+		snapshot: provider.ProviderSessionSnapshot{
+			Session: provider.ProviderSession{
 				ID:             sessionID,
 				ProviderID:     p.Descriptor().ID,
 				WorkflowID:     request.WorkflowID,
@@ -231,7 +231,7 @@ func (p *backgroundDelegationProvider) removeSessionLater(sessionID string) {
 	})
 }
 
-func cloneProviderSessionSnapshot(snapshot capability.ProviderSessionSnapshot) capability.ProviderSessionSnapshot {
+func cloneProviderSessionSnapshot(snapshot provider.ProviderSessionSnapshot) provider.ProviderSessionSnapshot {
 	out := snapshot
 	if snapshot.Session.CapabilityIDs != nil {
 		out.Session.CapabilityIDs = append([]string(nil), snapshot.Session.CapabilityIDs...)
@@ -254,5 +254,5 @@ func cloneProviderSessionSnapshot(snapshot capability.ProviderSessionSnapshot) c
 var _ RuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ DescribedRuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ SessionManagedProvider = (*backgroundDelegationProvider)(nil)
-var _ capability.ProviderSessionSnapshotter = (*backgroundDelegationProvider)(nil)
+var _ provider.ProviderSessionSnapshotter = (*backgroundDelegationProvider)(nil)
 var _ fauthorization.DelegationBackgroundRunner = (*backgroundDelegationProvider)(nil)

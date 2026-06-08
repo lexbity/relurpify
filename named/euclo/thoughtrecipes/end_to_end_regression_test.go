@@ -86,7 +86,7 @@ ask user:
 		t.Fatalf("step count = %d, want 2", got)
 	}
 
-	runNode := NewThoughtRecipeStepNode("review_flow.run", agentenv.WorkspaceEnvironment{PromptRegistry: promptRegistry}, plan.Steps[0])
+	runNode := NewThoughtRecipeStepNode("review_flow.run", agentenv.AgentContext{PromptRegistry: promptRegistry}, plan.Steps[0])
 	runEnv := contextdata.NewEnvelope("task-review-flow", "")
 	runTask, err := runNode.buildTask(runEnv)
 	if err != nil {
@@ -99,7 +99,7 @@ ask user:
 		t.Fatalf("run prompt_id = %#v, want named.euclo.code.explore", got)
 	}
 
-	askNode := NewThoughtRecipeStepNode("review_flow.ask", agentenv.WorkspaceEnvironment{PromptRegistry: promptRegistry}, plan.Steps[1])
+	askNode := NewThoughtRecipeStepNode("review_flow.ask", agentenv.AgentContext{PromptRegistry: promptRegistry}, plan.Steps[1])
 	askTask, err := askNode.buildTask(contextdata.NewEnvelope("task-review-flow", ""))
 	if err != nil {
 		t.Fatalf("buildTask(ask): %v", err)

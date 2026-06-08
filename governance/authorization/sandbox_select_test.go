@@ -13,11 +13,17 @@ type fakeSandboxRuntime struct {
 	name string
 }
 
-func (f *fakeSandboxRuntime) Verify(_ context.Context) error { return nil }
+func (f *fakeSandboxRuntime) Verify(_ context.Context) error                       { return nil }
 func (f *fakeSandboxRuntime) ValidatePolicy(_ governanceports.SandboxPolicy) error { return nil }
-func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, _ governanceports.SandboxPolicy) error { return nil }
-func (f *fakeSandboxRuntime) Policy() governanceports.SandboxPolicy { return governanceports.SandboxPolicy{} }
-func (f *fakeSandboxRuntime) RunConfig() governanceports.SandboxConfig { return governanceports.SandboxConfig{} }
+func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, _ governanceports.SandboxPolicy) error {
+	return nil
+}
+func (f *fakeSandboxRuntime) Policy() governanceports.SandboxPolicy {
+	return governanceports.SandboxPolicy{}
+}
+func (f *fakeSandboxRuntime) RunConfig() governanceports.SandboxConfig {
+	return governanceports.SandboxConfig{}
+}
 func (f *fakeSandboxRuntime) Name() string { return f.name }
 
 func TestSandboxBackendFactory_ReturnsRuntime(t *testing.T) {

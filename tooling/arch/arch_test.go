@@ -16,7 +16,7 @@ func TestPackageDomain(t *testing.T) {
 		{"codeburg.org/lexbit/relurpify/context/persistence", "context"},
 		{"codeburg.org/lexbit/relurpify/named/euclo", "named"},
 		{"codeburg.org/lexbit/relurpify/testsuite", "testsuite"},
-		{"codeburg.org/lexbit/relurpify/agents/react", "agents"},
+		{"codeburg.org/lexbit/relurpify/agentsreact", "agents"},
 		{"codeburg.org/lexbit/relurpify/ayenitd", "ayenitd"},
 		{"codeburg.org/lexbit/relurpify/tooling/arch", "tooling"},
 		{"some/other/module/foo", ""},

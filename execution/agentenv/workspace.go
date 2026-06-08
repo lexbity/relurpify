@@ -9,19 +9,19 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/context/persistence/artifactstore"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/compiler"
@@ -43,7 +43,7 @@ import (
 // resources. Close() must be called when the session ends. Restart() may
 // be used to cleanly stop and re-start services without rebuilding stores.
 type Workspace struct {
-	Environment       WorkspaceEnvironment
+	Environment       AgentContext
 	Registration      *fauthorization.AgentRegistration
 	Backend           llm.ManagedBackend
 	ProfileResolution modelselect.ProfileResolution
@@ -57,7 +57,7 @@ type Workspace struct {
 	EffectiveContract    *config.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
-	CapabilityAdmissions []capability.AdmissionResult
+	CapabilityAdmissions []regpkg.AdmissionResult
 
 	// Observability
 	Telemetry telemetry.Telemetry
@@ -185,7 +185,7 @@ type AgentBootstrapOptions struct {
 	DebugLLM             bool
 	DebugAgent           bool
 	AgentLifecycle       agentlifecycle.Repository
-	CapabilityAdmissions []capability.AdmissionResult
+	CapabilityAdmissions []regpkg.AdmissionResult
 	Contract             *config.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
@@ -196,11 +196,11 @@ type BootstrappedAgentRuntime struct {
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
 	Backend              llm.ManagedBackend
-	Environment          WorkspaceEnvironment
-	Registry             *capability.CapabilityRegistry
+	Environment          AgentContext
+	Registry             *regpkg.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
-	CapabilityAdmissions []capability.AdmissionResult
+	CapabilityAdmissions []regpkg.AdmissionResult
 	Contract             *config.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 	PolicyEngine         fauthorization.PolicyEngine
@@ -313,7 +313,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Telemetry:         opts.Telemetry,
 	}
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
-	admissionResults, err := capability.AdmitCandidates(
+	admissionResults, err := regpkg.AdmitCandidates(
 		registry,
 		nil,
 		agentspec.EffectiveAllowedCapabilitySelectors(agentSpec),
@@ -325,7 +325,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	// Create working memory store
 	wm := memory.NewWorkingMemoryStore()
 
-	env := WorkspaceEnvironment{
+	env := AgentContext{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
 		CommandRunner:                 sr.Runner,
@@ -370,7 +370,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 // all call OpenWorkspace.
 //
 // There is exactly one composition root. There is no second function that
-// builds a WorkspaceEnvironment. BuildWorkspaceEnvironment was deleted in
+// builds a AgentContext. BuildAgentContext was deleted in
 // Phase 6; its callers were migrated to OpenWorkspace.
 //
 // Feature assembly is governed by cfg.Scope. Security and capability

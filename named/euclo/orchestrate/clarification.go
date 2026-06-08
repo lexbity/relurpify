@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
@@ -75,7 +77,7 @@ func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	return false
 }
 
-func registerClarificationCapability(reg *capability.CapabilityRegistry) error {
+func registerClarificationCapability(reg *registry.CapabilityRegistry) error {
 	if reg == nil {
 		return nil
 	}
@@ -87,14 +89,14 @@ func registerClarificationCapability(reg *capability.CapabilityRegistry) error {
 
 type clarificationCapabilityHandler struct{}
 
-func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            clarificationCapabilityID,
 		Name:          "intent clarification",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 		Category:      "clarification",
-		Availability:  capability.AvailabilitySpec{Available: true},
+		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }
 

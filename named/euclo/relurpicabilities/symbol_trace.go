@@ -4,28 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
 type SymbolTraceHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 }
 
 // NewSymbolTraceHandler creates a new symbol trace handler.
-func NewSymbolTraceHandler(env agentenv.WorkspaceEnvironment) *SymbolTraceHandler {
+func NewSymbolTraceHandler(env agentenv.AgentContext) *SymbolTraceHandler {
 	return &SymbolTraceHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the symbol trace handler.
-func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.symbol_trace",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -34,7 +35,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) ca
 		Description:   "Traces call relationships for a symbol to find callers and callees",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "trace", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

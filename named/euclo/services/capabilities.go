@@ -30,7 +30,7 @@ var eucloCapabilities = []string{
 // defaultCapabilityRegistrar implements CapabilityRegistrar using Euclo's relurpic capabilities.
 type defaultCapabilityRegistrar struct{}
 
-func (r *defaultCapabilityRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) error {
+func (r *defaultCapabilityRegistrar) RegisterAll(env agentenv.AgentContext) error {
 	if env.Registry == nil {
 		return fmt.Errorf("capability registry is nil")
 	}

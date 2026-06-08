@@ -1,6 +1,6 @@
 package golang
 
-import "codeburg.org/lexbit/relurpify/capability"
+import registry "codeburg.org/lexbit/relurpify/capability/registry"
 
 func firstNonEmptyLine(text string) string {
 	start := 0
@@ -24,5 +24,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return capability.NormalizeStringSlice(value)
+	return registry.NormalizeStringSlice(value)
 }

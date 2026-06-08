@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
@@ -85,7 +85,7 @@ func (s *BrowserService) Snapshot(context.Context) (*BrowserServiceSnapshot, err
 	}, nil
 }
 
-func (s *BrowserService) ListSessions(context.Context) ([]capability.ProviderSession, error) {
+func (s *BrowserService) ListSessions(context.Context) ([]provider.ProviderSession, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -95,19 +95,19 @@ func (s *BrowserService) ListSessions(context.Context) ([]capability.ProviderSes
 		handles = append(handles, handle)
 	}
 	s.mu.Unlock()
-	out := make([]capability.ProviderSession, 0, len(handles))
+	out := make([]provider.ProviderSession, 0, len(handles))
 	for _, handle := range handles {
 		out = append(out, handle.providerSession())
 	}
 	return out, nil
 }
 
-func (s *BrowserService) HealthSnapshot(context.Context) (capability.ProviderHealthSnapshot, error) {
+func (s *BrowserService) HealthSnapshot(context.Context) (provider.ProviderHealthSnapshot, error) {
 	s.mu.Lock()
 	count := len(s.sessions)
 	paths := s.paths
 	s.mu.Unlock()
-	return capability.ProviderHealthSnapshot{
+	return provider.ProviderHealthSnapshot{
 		Status:  "healthy",
 		Message: "browser service active",
 		Metadata: map[string]interface{}{
@@ -117,7 +117,7 @@ func (s *BrowserService) HealthSnapshot(context.Context) (capability.ProviderHea
 	}, nil
 }
 
-func (s *BrowserService) SnapshotProvider(ctx context.Context) (*capability.ProviderSnapshot, error) {
+func (s *BrowserService) SnapshotProvider(ctx context.Context) (*provider.ProviderSnapshot, error) {
 	sessions, err := s.ListSessions(ctx)
 	if err != nil {
 		return nil, err
@@ -126,17 +126,17 @@ func (s *BrowserService) SnapshotProvider(ctx context.Context) (*capability.Prov
 	if err != nil {
 		return nil, err
 	}
-	return &capability.ProviderSnapshot{
+	return &provider.ProviderSnapshot{
 		ProviderID:     "browser",
 		Recoverability: policy.RecoverabilityInProcess,
-		Descriptor: capability.ProviderDescriptor{
+		Descriptor: provider.ProviderDescriptor{
 			ID:                 "browser",
 			Kind:               agentspec.ProviderKindAgentRuntime,
 			ActivationScope:    defaultBrowserScope,
 			TrustBaseline:      agentspec.TrustClassProviderLocalUntrusted,
 			RecoverabilityMode: policy.RecoverabilityInProcess,
 			SupportsHealth:     true,
-			Security: capability.ProviderSecurityProfile{
+			Security: provider.ProviderSecurityProfile{
 				Origin:                     agentspec.ProviderOriginLocal,
 				SafeForDirectInsertion:     false,
 				RequiresFrameworkMediation: true,
@@ -153,7 +153,7 @@ func (s *BrowserService) SnapshotProvider(ctx context.Context) (*capability.Prov
 	}, nil
 }
 
-func (s *BrowserService) SnapshotSessions(context.Context) ([]capability.ProviderSessionSnapshot, error) {
+func (s *BrowserService) SnapshotSessions(context.Context) ([]provider.ProviderSessionSnapshot, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -163,7 +163,7 @@ func (s *BrowserService) SnapshotSessions(context.Context) ([]capability.Provide
 		handles = append(handles, handle)
 	}
 	s.mu.Unlock()
-	out := make([]capability.ProviderSessionSnapshot, 0, len(handles))
+	out := make([]provider.ProviderSessionSnapshot, 0, len(handles))
 	for _, handle := range handles {
 		out = append(out, handle.snapshot())
 	}

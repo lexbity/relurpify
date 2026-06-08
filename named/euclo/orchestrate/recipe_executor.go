@@ -23,7 +23,7 @@ import (
 // ThoughtRecipeExecutorNode executes a resolved thought thoughtrecipe through the thoughtrecipe compiler.
 type ThoughtRecipeExecutorNode struct {
 	id                string
-	env               agentenv.WorkspaceEnvironment
+	env               agentenv.AgentContext
 	registry          *thoughtrecipepkg.ThoughtRecipeRegistry
 	ingestionPipeline *frameworkingestion.Pipeline
 }
@@ -44,8 +44,8 @@ func (n *ThoughtRecipeExecutorNode) WithThoughtRecipeRegistry(reg *thoughtrecipe
 	return n
 }
 
-// WithWorkspaceEnvironment seeds the workspace environment used for subgraph execution.
-func (n *ThoughtRecipeExecutorNode) WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) *ThoughtRecipeExecutorNode {
+// WithAgentContext seeds the workspace environment used for subgraph execution.
+func (n *ThoughtRecipeExecutorNode) WithAgentContext(env agentenv.AgentContext) *ThoughtRecipeExecutorNode {
 	if n != nil {
 		n.env = env
 	}

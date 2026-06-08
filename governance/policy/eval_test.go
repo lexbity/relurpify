@@ -9,35 +9,35 @@ import (
 
 // fakeDescriptor implements governanceports.DescriptorView for testing.
 type fakeDescriptor struct {
-	id          string
-	name        string
-	kind        string
-	runtimeFam  string
-	trustClass  string
+	id         string
+	name       string
+	kind       string
+	runtimeFam string
+	trustClass string
 }
 
-func (f *fakeDescriptor) CapabilityID() string                   { return f.id }
-func (f *fakeDescriptor) CapabilityName() string                 { return f.name }
-func (f *fakeDescriptor) CapabilityKind() string                 { return f.kind }
-func (f *fakeDescriptor) RuntimeFamily() string                  { return f.runtimeFam }
-func (f *fakeDescriptor) Description() string                    { return "" }
-func (f *fakeDescriptor) Version() string                        { return "" }
-func (f *fakeDescriptor) Category() string                       { return "" }
-func (f *fakeDescriptor) Tags() []string                         { return nil }
-func (f *fakeDescriptor) TrustClass() string                     { return f.trustClass }
-func (f *fakeDescriptor) RiskClasses() []taxonomy.RiskClass        { return nil }
-func (f *fakeDescriptor) EffectClasses() []taxonomy.EffectClass    { return nil }
-func (f *fakeDescriptor) SourceProviderID() string               { return "" }
-func (f *fakeDescriptor) SourceScope() string                    { return "" }
-func (f *fakeDescriptor) SourceSessionID() string                { return "" }
-func (f *fakeDescriptor) CoordinationRole() string               { return "" }
-func (f *fakeDescriptor) CoordinationTarget() bool               { return false }
-func (f *fakeDescriptor) CoordinationTaskTypes() []string        { return nil }
-func (f *fakeDescriptor) CoordinationExecutionModes() []string   { return nil }
-func (f *fakeDescriptor) CoordinationLongRunning() int32          { return 0 }
+func (f *fakeDescriptor) CapabilityID() string                      { return f.id }
+func (f *fakeDescriptor) CapabilityName() string                    { return f.name }
+func (f *fakeDescriptor) CapabilityKind() string                    { return f.kind }
+func (f *fakeDescriptor) RuntimeFamily() string                     { return f.runtimeFam }
+func (f *fakeDescriptor) Description() string                       { return "" }
+func (f *fakeDescriptor) Version() string                           { return "" }
+func (f *fakeDescriptor) Category() string                          { return "" }
+func (f *fakeDescriptor) Tags() []string                            { return nil }
+func (f *fakeDescriptor) TrustClass() string                        { return f.trustClass }
+func (f *fakeDescriptor) RiskClasses() []taxonomy.RiskClass         { return nil }
+func (f *fakeDescriptor) EffectClasses() []taxonomy.EffectClass     { return nil }
+func (f *fakeDescriptor) SourceProviderID() string                  { return "" }
+func (f *fakeDescriptor) SourceScope() string                       { return "" }
+func (f *fakeDescriptor) SourceSessionID() string                   { return "" }
+func (f *fakeDescriptor) CoordinationRole() string                  { return "" }
+func (f *fakeDescriptor) CoordinationTarget() bool                  { return false }
+func (f *fakeDescriptor) CoordinationTaskTypes() []string           { return nil }
+func (f *fakeDescriptor) CoordinationExecutionModes() []string      { return nil }
+func (f *fakeDescriptor) CoordinationLongRunning() int32            { return 0 }
 func (f *fakeDescriptor) CoordinationDirectInsertionAllowed() int32 { return 0 }
-func (f *fakeDescriptor) CoordinationMaxDepth() int              { return 0 }
-func (f *fakeDescriptor) CoordinationMaxRuntimeSeconds() int     { return 0 }
+func (f *fakeDescriptor) CoordinationMaxDepth() int                 { return 0 }
+func (f *fakeDescriptor) CoordinationMaxRuntimeSeconds() int        { return 0 }
 
 func TestDescriptorView_InterfaceSatisfied(t *testing.T) {
 	var _ governanceports.DescriptorView = (*fakeDescriptor)(nil)

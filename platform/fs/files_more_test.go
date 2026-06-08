@@ -13,9 +13,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
+
+type testFilePermissionChecker struct{}
+
+func (testFilePermissionChecker) CheckFilePermission(context.Context, string, string, string, string, any) error {
+	return nil
+}
 
 // ============== Helper Functions Tests ==============
 
@@ -145,8 +150,8 @@ func TestSandboxProtectedPath(t *testing.T) {
 	}{
 		{"nil error", nil, false},
 		{"random error", errors.New("random error"), false},
-		{"wrapped protected path error", &FileScopeError{Reason: ErrFileScopeProtectedPath.Error()}, true},
-		{"other scope error", &FileScopeError{Reason: "other reason"}, false},
+		{"wrapped protected path error", &permissions.FileScopeError{Reason: ErrFileScopeProtectedPath.Error()}, true},
+		{"other scope error", &permissions.FileScopeError{Reason: "other reason"}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -281,7 +286,7 @@ func TestDeleteFileTool_Metadata(t *testing.T) {
 
 func TestReadFileTool_SetPermissionManager(t *testing.T) {
 	tool := &ReadFileTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -289,7 +294,7 @@ func TestReadFileTool_SetPermissionManager(t *testing.T) {
 
 func TestWriteFileTool_SetPermissionManager(t *testing.T) {
 	tool := &WriteFileTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -297,7 +302,7 @@ func TestWriteFileTool_SetPermissionManager(t *testing.T) {
 
 func TestListFilesTool_SetPermissionManager(t *testing.T) {
 	tool := &ListFilesTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -305,7 +310,7 @@ func TestListFilesTool_SetPermissionManager(t *testing.T) {
 
 func TestSearchInFilesTool_SetPermissionManager(t *testing.T) {
 	tool := &SearchInFilesTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -313,7 +318,7 @@ func TestSearchInFilesTool_SetPermissionManager(t *testing.T) {
 
 func TestCreateFileTool_SetPermissionManager(t *testing.T) {
 	tool := &CreateFileTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -321,7 +326,7 @@ func TestCreateFileTool_SetPermissionManager(t *testing.T) {
 
 func TestDeleteFileTool_SetPermissionManager(t *testing.T) {
 	tool := &DeleteFileTool{}
-	manager := &authorization.PermissionManager{}
+	manager := testFilePermissionChecker{}
 	tool.SetPermissionManager(manager, "agent-123")
 	assert.NotNil(t, tool.manager)
 	assert.Equal(t, "agent-123", tool.agentID)
@@ -788,7 +793,7 @@ func TestEnforceFileMatrix_DenyPattern(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			DenyPatterns: []string{"*.secret"},
-			Default:      permissions.AgentPermissionAllow,
+			Default:      agentspec.AgentPermissionAllow,
 		},
 	}
 
@@ -802,7 +807,7 @@ func TestEnforceFileMatrix_AllowPattern(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       permissions.AgentPermissionDeny,
+			Default:       agentspec.AgentPermissionDeny,
 		},
 	}
 
@@ -814,7 +819,7 @@ func TestEnforceFileMatrix_DefaultDeny(t *testing.T) {
 	dir := t.TempDir()
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
-			Default: permissions.AgentPermissionDeny,
+			Default: agentspec.AgentPermissionDeny,
 		},
 	}
 
@@ -967,7 +972,7 @@ func TestEnforceFileMatrix_RequireApproval_NoManager(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         permissions.AgentPermissionAllow,
+			Default:         agentspec.AgentPermissionAllow,
 		},
 	}
 
@@ -983,7 +988,7 @@ func TestEnforceFileMatrix_EmptyBasePath(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       permissions.AgentPermissionDeny,
+			Default:       agentspec.AgentPermissionDeny,
 		},
 	}
 
@@ -1021,7 +1026,7 @@ func TestEnforceFileMatrix_EditAction(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Edit: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{"*.go"},
-			Default:       permissions.AgentPermissionDeny,
+			Default:       agentspec.AgentPermissionDeny,
 		},
 	}
 
@@ -1310,7 +1315,7 @@ func TestWriteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      permissions.AgentPermissionAllow,
+					Default:      agentspec.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1334,7 +1339,7 @@ func TestCreateFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      permissions.AgentPermissionAllow,
+					Default:      agentspec.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1361,7 +1366,7 @@ func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{"*.secret"},
-					Default:      permissions.AgentPermissionAllow,
+					Default:      agentspec.AgentPermissionAllow,
 				},
 			},
 		},
@@ -1500,7 +1505,7 @@ func TestEnforceFileMatrix_AskPermissionNoManager(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         permissions.AgentPermissionAllow,
+			Default:         agentspec.AgentPermissionAllow,
 		},
 	}
 

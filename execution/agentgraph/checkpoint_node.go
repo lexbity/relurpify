@@ -354,5 +354,3 @@ func checkpointRequester(env *contextdata.Envelope) string {
 	}
 	return strings.TrimSpace(env.CheckpointRequest.RequestedBy)
 }
-
-

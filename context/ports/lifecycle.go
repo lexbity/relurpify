@@ -73,18 +73,18 @@ type WorkflowEventRecord struct {
 
 // WorkflowArtifactRecord is the context-owned view of a workflow artifact.
 type WorkflowArtifactRecord struct {
-	ArtifactID    string
-	WorkflowID    string
-	RunID         string
-	AgentID       string
-	StorageRef    string
-	StorageKind   string
-	ContentType   string
-	Summary       string
-	SizeBytes     int64
-	CreatedAt     time.Time
-	TTL           *time.Duration
-	Metadata      map[string]any
+	ArtifactID  string
+	WorkflowID  string
+	RunID       string
+	AgentID     string
+	StorageRef  string
+	StorageKind string
+	ContentType string
+	Summary     string
+	SizeBytes   int64
+	CreatedAt   time.Time
+	TTL         *time.Duration
+	Metadata    map[string]any
 }
 
 // LineageBindingRecord is the context-owned view of a lineage binding.

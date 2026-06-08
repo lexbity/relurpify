@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -109,9 +109,9 @@ func RegistryHasTool(agent graph.WorkflowExecutor, toolName string) bool {
 }
 
 // extractCapabilityRegistry gets the capability registry from an agent
-func extractCapabilityRegistry(agent graph.WorkflowExecutor) *capability.CapabilityRegistry {
+func extractCapabilityRegistry(agent graph.WorkflowExecutor) *registry.CapabilityRegistry {
 	type capabilityRegistryProvider interface {
-		CapabilityRegistry() *capability.CapabilityRegistry
+		CapabilityRegistry() *registry.CapabilityRegistry
 	}
 	if provider, ok := agent.(capabilityRegistryProvider); ok {
 		return provider.CapabilityRegistry()

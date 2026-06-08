@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -23,7 +23,7 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 
 	funcs := reg.AgentRegistrationFuncs()
 
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.AgentContext{}
 	if err := funcs.RegisterCapabilities(env); err != nil {
 		t.Fatalf("RegisterCapabilities returned error: %v", err)
 	}
@@ -53,15 +53,15 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 
 func TestDefaultCapabilityRegistrarNilRegistry(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	if err := reg.RegisterAll(agentenv.WorkspaceEnvironment{}); err == nil {
+	if err := reg.RegisterAll(agentenv.AgentContext{}); err == nil {
 		t.Fatal("expected nil registry to fail")
 	}
 }
 
 func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	env := agentenv.WorkspaceEnvironment{
-		Registry: capability.NewRegistry(),
+	env := agentenv.AgentContext{
+		Registry: regpkg.NewRegistry(),
 	}
 
 	if err := reg.RegisterAll(env); err != nil {
@@ -76,7 +76,7 @@ func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
 func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 	var reg defaultPromptRegistrar
 	registry := &countingPromptRegistry{seen: make(map[string]bool)}
-	env := agentenv.WorkspaceEnvironment{PromptRegistry: registry}
+	env := agentenv.AgentContext{PromptRegistry: registry}
 
 	if err := reg.RegisterAll(env); err != nil {
 		t.Fatalf("first RegisterAll returned error: %v", err)
@@ -115,7 +115,7 @@ type stubCapabilityRegistrar struct {
 	called bool
 }
 
-func (s *stubCapabilityRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) error {
+func (s *stubCapabilityRegistrar) RegisterAll(env agentenv.AgentContext) error {
 	s.called = true
 	return nil
 }
@@ -124,7 +124,7 @@ type stubPromptRegistrar struct {
 	called bool
 }
 
-func (s *stubPromptRegistrar) RegisterAll(env agentenv.WorkspaceEnvironment) error {
+func (s *stubPromptRegistrar) RegisterAll(env agentenv.AgentContext) error {
 	s.called = true
 	return nil
 }

@@ -5,6 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
+	"codeburg.org/lexbit/relurpify/capability/registry"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 )
@@ -33,8 +37,8 @@ func (t *availabilityToggleTool) Permissions() ports.ToolPermissions {
 func (t *availabilityToggleTool) Tags() []string { return nil }
 
 func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
-	reg := NewRegistry()
-	desc := CapabilityDescriptor{
+	reg := registry.NewRegistry()
+	desc := descriptor.CapabilityDescriptor{
 		ID:            "cap:callable",
 		Name:          "callable",
 		Kind:          agentspec.CapabilityKindTool,
@@ -57,8 +61,8 @@ func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
-	reg := NewRegistry()
-	desc := CapabilityDescriptor{
+	reg := registry.NewRegistry()
+	desc := descriptor.CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "hidden",
 		Kind:          agentspec.CapabilityKindTool,
@@ -89,7 +93,7 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_Empty(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 	snapshots := reg.AllCapabilitySnapshots()
 	if len(snapshots) != 0 {
 		t.Fatalf("expected empty snapshots, got %d", len(snapshots))
@@ -97,14 +101,14 @@ func TestAllCapabilitySnapshots_Empty(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
-	reg := NewRegistry()
-	visible := CapabilityDescriptor{
+	reg := registry.NewRegistry()
+	visible := descriptor.CapabilityDescriptor{
 		ID:            "cap:visible",
 		Name:          "visible",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
-	hidden := CapabilityDescriptor{
+	hidden := descriptor.CapabilityDescriptor{
 		ID:            "cap:hidden",
 		Name:          "delegate-hidden",
 		Kind:          agentspec.CapabilityKindTool,
@@ -135,14 +139,14 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 }
 
 func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 	const total = 32
 	errCh := make(chan error, total*2)
 	done := make(chan struct{})
 
 	for i := 0; i < total; i++ {
 		go func(i int) {
-			desc := CapabilityDescriptor{
+			desc := descriptor.CapabilityDescriptor{
 				ID:            "cap:concurrent:" + string(rune('a'+i)),
 				Name:          "concurrent",
 				Kind:          agentspec.CapabilityKindTool,
@@ -173,7 +177,7 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 }
 
 func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
 	if err := reg.RegisterLegacyTool(tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
@@ -194,7 +198,7 @@ func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
 }
 
 func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
 	if err := reg.RegisterLegacyTool(tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
@@ -211,7 +215,7 @@ func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
 }
 
 func TestWithAllowlist_PreservesFilteringAndReflectsAvailabilityChanges(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 	visible := &availabilityToggleTool{name: "scope_read", available: true}
 	hidden := &availabilityToggleTool{name: "scope_write", available: true}
 	if err := reg.RegisterLegacyTool(visible); err != nil {

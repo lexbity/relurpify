@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
@@ -17,7 +18,7 @@ import (
 func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 	caps := newCapabilityRegistry(t)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 	)
 
@@ -77,7 +78,7 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	broker := authorization.NewHITLBroker(5 * time.Second)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithHITLBroker(broker),
 	)
@@ -103,7 +104,7 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 					RequestID:  pending[0].ID,
 					Approved:   true,
 					ApprovedBy: "testsuite",
-					Scope:      authorization.GrantScopeOneTime,
+					Scope:      govpolicy.GrantScopeOneTime,
 				})
 				return
 			}

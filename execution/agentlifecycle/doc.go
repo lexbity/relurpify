@@ -8,11 +8,11 @@
 // - Workflow, run, and delegation records belong to agentlifecycle
 // - Runtime event logging belongs to agentlifecycle
 // - Lineage bindings used by bridges belong to agentlifecycle
-// - Compiler state (compilation records, cache, replay metadata) belongs to framework/compiler
+// - Compiler state (compilation records, cache, replay metadata) belongs to execution/compiler
 // - Knowledge/retrieval internals belong to their respective packages
 //
-// The package depends on framework/persistence for the adapter interface
-// and framework/graphdb only through the adapter, not directly in domain logic.
+// The package depends on context/persistence for the adapter interface and on
+// knowledge storage only through adapters, not directly in domain logic.
 //
 // This is NOT a general-purpose workflow database. It is specifically for
 // agent runtime lifecycle state related to agentgraph and runtime orchestration.

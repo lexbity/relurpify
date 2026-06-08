@@ -21,30 +21,30 @@ type PolicyRule struct {
 }
 
 type PolicyConditions struct {
-	Actors                    []ActorMatch                        `yaml:"actors,omitempty"`
-	Capabilities              []string                            `yaml:"capabilities,omitempty"`
-	ExportNames               []string                            `yaml:"export_names,omitempty"`
-	SourceDomains             []string                            `yaml:"source_domains,omitempty"`
-	ContextClasses            []string                            `yaml:"context_classes,omitempty"`
-	SensitivityClasses        []string                            `yaml:"sensitivity_classes,omitempty"`
-	RouteModes                []string                            `yaml:"route_modes,omitempty"`
-	ProviderKinds             []string            `yaml:"provider_kinds,omitempty"`
-	ExternalProviders         []string                            `yaml:"external_providers,omitempty"`
-	MinRiskClasses            []taxonomy.RiskClass               `yaml:"min_risk_classes,omitempty"`
-	TrustClasses              []string              `yaml:"trust_classes,omitempty"`
-	CapabilityKinds           []string          `yaml:"capability_kinds,omitempty"`
-	RuntimeFamilies           []string `yaml:"runtime_families,omitempty"`
-	EffectClasses             []taxonomy.EffectClass             `yaml:"effect_classes,omitempty"`
-	Partitions                []string                            `yaml:"partitions,omitempty"`
-	ChannelIDs                []string                            `yaml:"channel_ids,omitempty"`
-	SessionScopes             []SessionScope                      `yaml:"session_scopes,omitempty"`
-	SessionOperations         []SessionOperation                  `yaml:"session_operations,omitempty"`
-	RequireOwnership          *bool                               `yaml:"require_ownership,omitempty"`
-	RequireDelegation         *bool                               `yaml:"require_delegation,omitempty"`
-	RequireExternalBinding    *bool                               `yaml:"require_external_binding,omitempty"`
-	RequireResolvedExternal   *bool                               `yaml:"require_resolved_external,omitempty"`
-	RequireRestrictedExternal *bool                               `yaml:"require_restricted_external,omitempty"`
-	TimeWindow                *TimeWindow                         `yaml:"time_window,omitempty"`
+	Actors                    []ActorMatch           `yaml:"actors,omitempty"`
+	Capabilities              []string               `yaml:"capabilities,omitempty"`
+	ExportNames               []string               `yaml:"export_names,omitempty"`
+	SourceDomains             []string               `yaml:"source_domains,omitempty"`
+	ContextClasses            []string               `yaml:"context_classes,omitempty"`
+	SensitivityClasses        []string               `yaml:"sensitivity_classes,omitempty"`
+	RouteModes                []string               `yaml:"route_modes,omitempty"`
+	ProviderKinds             []string               `yaml:"provider_kinds,omitempty"`
+	ExternalProviders         []string               `yaml:"external_providers,omitempty"`
+	MinRiskClasses            []taxonomy.RiskClass   `yaml:"min_risk_classes,omitempty"`
+	TrustClasses              []string               `yaml:"trust_classes,omitempty"`
+	CapabilityKinds           []string               `yaml:"capability_kinds,omitempty"`
+	RuntimeFamilies           []string               `yaml:"runtime_families,omitempty"`
+	EffectClasses             []taxonomy.EffectClass `yaml:"effect_classes,omitempty"`
+	Partitions                []string               `yaml:"partitions,omitempty"`
+	ChannelIDs                []string               `yaml:"channel_ids,omitempty"`
+	SessionScopes             []SessionScope         `yaml:"session_scopes,omitempty"`
+	SessionOperations         []SessionOperation     `yaml:"session_operations,omitempty"`
+	RequireOwnership          *bool                  `yaml:"require_ownership,omitempty"`
+	RequireDelegation         *bool                  `yaml:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool                  `yaml:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool                  `yaml:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool                  `yaml:"require_restricted_external,omitempty"`
+	TimeWindow                *TimeWindow            `yaml:"time_window,omitempty"`
 }
 
 type ActorMatch struct {

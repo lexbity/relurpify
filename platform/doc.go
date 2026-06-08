@@ -1,29 +1,30 @@
 /*
-Package platform provides infrastructure tools and services for the agent framework.
+Package platform provides infrastructure tools and services for Relurpify.
 
 Architecture Principles:
 
- 1. Dependency Direction: Platform is the foundation layer. The framework MAY import
-    platform, but platform MUST NOT import framework. This ensures the platform
-    remains a stable foundation that framework builds upon.
+ 1. Dependency Direction: Platform is the foundation layer. Higher-level domains
+    may import platform, but platform must not import those domains. This keeps
+    platform independent from agent, execution, named-agent, and app code.
 
- 2. Contracts Package: The platform/contracts package defines interfaces and types
-    that bridge framework and platform. Framework can re-export or wrap these
-    types, but should not force platform to import framework types.
+ 2. Consumer Ports: Shared boundaries are owned by the consuming domain. Platform
+    packages implement small interfaces declared by capability, governance,
+    execution, or app packages instead of importing those domains directly.
 
  3. Tool Interface: Tools in platform implement ports.Tool. Execute and
     IsAvailable take only stdlib context.Context and explicit args — no
-    contracts.Context state parameter. Framework-level envelope state
-    (contextdata.Envelope) is handled in framework/, not platform/.
+    execution envelope state parameter. Envelope state is handled by context and
+    capability packages, not platform.
 
- 4. Test Files: Test files in platform may import framework for test utilities,
-    but production code must adhere to strict layer boundaries.
+ 4. Test Files: Test files may use higher-level test utilities when needed, but
+    production code must adhere to strict layer boundaries.
 
 Layering Rule:
-  - platform/ MUST NOT import framework/
-  - framework/ MAY import platform/
-  - Use platform/contracts for shared types
+  - platform/ must not import app/, named/, cognitionzoo/, execution/, context/,
+    governance/, or capability/ packages in production code
+  - higher-level domains may import platform packages only through approved
+    composition points
   - Define local interfaces in the consuming package
-  - Use dependency injection to receive framework callbacks
+  - Use dependency injection to receive higher-level callbacks
 */
 package platform

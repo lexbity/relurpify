@@ -25,7 +25,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 		},
 	})
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 	)

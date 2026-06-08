@@ -4,29 +4,30 @@ import (
 	"context"
 	"fmt"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // BlameTraceHandler implements the git blame capability.
 type BlameTraceHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewBlameTraceHandler creates a new blame trace handler.
-func NewBlameTraceHandler(env agentenv.WorkspaceEnvironment) *BlameTraceHandler {
+func NewBlameTraceHandler(env agentenv.AgentContext) *BlameTraceHandler {
 	return &BlameTraceHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the blame trace handler.
-func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.blame_trace",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +36,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) cap
 		Description:   "Parses git blame output to determine commit and author information for code lines",
 		Category:      "git",
 		Tags:          []string{"git", "blame", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

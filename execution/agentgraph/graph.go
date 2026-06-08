@@ -11,7 +11,10 @@ import (
 	"sync"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
+
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -589,8 +592,8 @@ func (n *ToolNode) nextTraceContext() ftelemetry.TraceContext {
 // capability-routed execution without importing the concrete registry package.
 type CapabilityInvoker interface {
 	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
-	CapturePolicySnapshot() *capability.PolicySnapshot
-	GetCapability(idOrName string) (capability.CapabilityDescriptor, bool)
+	CapturePolicySnapshot() *capresult.PolicySnapshot
+	GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool)
 }
 
 // NewToolNode constructs a tool node with a required capability invoker.
@@ -775,7 +778,7 @@ func resultFromToolExecution(nodeID string, res *ports.ToolResult) *execution.Re
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]interface{}) *capability.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]interface{}) *capresult.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}
@@ -786,27 +789,27 @@ func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *
 		return nil
 	}
 
-	desc, ok := res.Metadata["capability_descriptor"].(capability.CapabilityDescriptor)
+	desc, ok := res.Metadata["capability_descriptor"].(descriptor.CapabilityDescriptor)
 	if !ok || desc.ID == "" {
 		desc, ok = registry.GetCapability(tool.Name())
 		if !ok || desc.ID == "" {
-			desc = capability.ToolDescriptor(context.Background(), tool)
+			desc = descriptor.ToolDescriptor(context.Background(), tool)
 		}
 	}
 
-	var approval *capability.ApprovalBinding
+	var approval *capresult.ApprovalBinding
 	if raw := res.Metadata["approval_binding"]; raw != nil {
-		if typed, ok := raw.(*capability.ApprovalBinding); ok {
+		if typed, ok := raw.(*capresult.ApprovalBinding); ok {
 			approval = typed
 		}
 	}
 	if approval == nil {
-		approval = capability.ApprovalBindingFromCapability(desc, env.Snapshot(), args)
+		approval = capresult.ApprovalBindingFromCapability(desc, env.Snapshot(), args)
 	}
 
-	envelope := capability.NewCapabilityResultEnvelope(desc, res, capability.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)
-	if decision, ok := res.Metadata["insertion_decision"].(capability.InsertionDecision); ok {
-		envelope = capability.ApplyInsertionDecision(envelope, decision)
+	envelope := capresult.NewCapabilityResultEnvelope(desc, res, capresult.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)
+	if decision, ok := res.Metadata["insertion_decision"].(capresult.InsertionDecision); ok {
+		envelope = capresult.ApplyInsertionDecision(envelope, decision)
 	}
 	res.Metadata["insertion_decision"] = envelope.Insertion
 	res.Metadata["capability_envelope_created"] = true

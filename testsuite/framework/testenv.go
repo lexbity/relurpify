@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
@@ -27,7 +27,7 @@ type TestEnvironment struct {
 	PermissionManager *authorization.PermissionManager
 
 	// Registry manages tool capability registration and dispatch.
-	Registry *capability.CapabilityRegistry
+	Registry *regpkg.CapabilityRegistry
 
 	// TelemetrySink captures telemetry events for assertion.
 	TelemetrySink *recordingTelemetrySink
@@ -159,7 +159,7 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 		t.Fatalf("failed to create permission manager: %v", err)
 	}
 
-	registry := capability.NewRegistry()
+	registry := regpkg.NewRegistry()
 
 	telemetrySink := &recordingTelemetrySink{}
 

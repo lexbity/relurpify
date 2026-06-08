@@ -3,8 +3,8 @@ package browser
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -17,7 +17,7 @@ type BrowserServiceConfig struct {
 	WorkspaceRoot     string
 	FileScope         *permissions.FileScopePolicy
 	Registration      *fauthorization.AgentRegistration
-	Registry          *capability.CapabilityRegistry
+	Registry          *registry.CapabilityRegistry
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *agentspec.AgentRuntimeSpec
 	CommandPolicy     sandbox.CommandPolicy

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
@@ -35,7 +35,7 @@ type RuntimeProvider interface {
 // policy can gate activation before initialization.
 type DescribedRuntimeProvider interface {
 	RuntimeProvider
-	Descriptor() capability.ProviderDescriptor
+	Descriptor() provider.ProviderDescriptor
 }
 
 // SessionManagedProvider supports forced shutdown of individual live provider sessions.
@@ -45,16 +45,16 @@ type SessionManagedProvider interface {
 }
 
 type runtimeProviderHealthReporter interface {
-	HealthSnapshot(ctx context.Context) (capability.ProviderHealthSnapshot, error)
+	HealthSnapshot(ctx context.Context) (provider.ProviderHealthSnapshot, error)
 }
 
 type runtimeProviderSessionLister interface {
-	ListSessions(ctx context.Context) ([]capability.ProviderSession, error)
+	ListSessions(ctx context.Context) ([]provider.ProviderSession, error)
 }
 
 type runtimeProviderRecord struct {
 	provider RuntimeProvider
-	desc     capability.ProviderDescriptor
+	desc     provider.ProviderDescriptor
 }
 
 // RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
@@ -74,24 +74,24 @@ func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	return nil
 }
 
-func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []capability.ProviderConfig {
+func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []provider.ProviderConfig {
 	if spec == nil || len(spec.Providers) == 0 {
 		return nil
 	}
-	out := make([]capability.ProviderConfig, len(spec.Providers))
-	for i, provider := range spec.Providers {
-		out[i] = capability.ProviderConfig{
-			ID:              provider.ID,
-			Kind:            agentspec.ProviderKind(provider.Kind),
-			Enabled:         provider.Enabled,
-			Target:          provider.Target,
-			ActivationScope: provider.ActivationScope,
-			TrustBaseline:   agentspec.TrustClass(provider.TrustBaseline),
-			Recoverability:  policy.RecoverabilityMode(provider.Recoverability),
+	out := make([]provider.ProviderConfig, len(spec.Providers))
+	for i, providerSpec := range spec.Providers {
+		out[i] = provider.ProviderConfig{
+			ID:              providerSpec.ID,
+			Kind:            agentspec.ProviderKind(providerSpec.Kind),
+			Enabled:         providerSpec.Enabled,
+			Target:          providerSpec.Target,
+			ActivationScope: providerSpec.ActivationScope,
+			TrustBaseline:   agentspec.TrustClass(providerSpec.TrustBaseline),
+			Recoverability:  policy.RecoverabilityMode(providerSpec.Recoverability),
 		}
-		if len(provider.Config) > 0 {
-			out[i].Config = make(map[string]any, len(provider.Config))
-			for key, value := range provider.Config {
+		if len(providerSpec.Config) > 0 {
+			out[i].Config = make(map[string]any, len(providerSpec.Config))
+			for key, value := range providerSpec.Config {
 				out[i].Config[key] = value
 			}
 		}
@@ -134,7 +134,7 @@ func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider
 	return nil
 }
 
-func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capability.ProviderDescriptor) error {
+func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider.ProviderDescriptor) error {
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
@@ -280,7 +280,7 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 	return nil
 }
 
-func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]capability.ProviderSnapshot, []capability.ProviderSessionSnapshot, error) {
+func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]provider.ProviderSnapshot, []provider.ProviderSessionSnapshot, error) {
 	return nil, nil, nil
 }
 
@@ -315,11 +315,11 @@ func (r *Runtime) removeProviderRecord(providerID string) (runtimeProviderRecord
 	return runtimeProviderRecord{}, false
 }
 
-func providerDescriptor(provider RuntimeProvider) capability.ProviderDescriptor {
-	if described, ok := provider.(DescribedRuntimeProvider); ok {
+func providerDescriptor(runtimeProvider RuntimeProvider) provider.ProviderDescriptor {
+	if described, ok := runtimeProvider.(DescribedRuntimeProvider); ok {
 		return described.Descriptor()
 	}
-	return capability.ProviderDescriptor{}
+	return provider.ProviderDescriptor{}
 }
 
 func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]interface{}) {

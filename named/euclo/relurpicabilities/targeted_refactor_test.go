@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -65,7 +65,7 @@ func TestTargetedRefactorWritesReplacementAndRefreshesIndex(t *testing.T) {
 	require.NotContains(t, string(content), "return \"old\"")
 }
 
-func newTargetedRefactorTestEnv(t *testing.T) (agentenv.WorkspaceEnvironment, string) {
+func newTargetedRefactorTestEnv(t *testing.T) (agentenv.AgentContext, string) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
@@ -80,9 +80,9 @@ func newTargetedRefactorTestEnv(t *testing.T) (agentenv.WorkspaceEnvironment, st
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir})
 	require.NoError(t, manager.IndexFile(path))
 
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config:            &execution.Config{},
-		Registry:          capability.NewRegistry(),
+		Registry:          registry.NewRegistry(),
 		IndexManager:      manager,
 		CommandRunner:     nil,
 		PermissionManager: nil,

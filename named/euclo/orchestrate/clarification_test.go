@@ -42,7 +42,7 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 	}
 
 	handler := &clarificationCapabilityHandler{}
-	result, err := handler.Invoke(context.Background(), env, map[string]any{
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{
 		clarificationActionKey: clarificationActionRequest,
 		"max_tokens":           128,
 	})
@@ -112,7 +112,7 @@ func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T)
 	}
 
 	handler := &clarificationCapabilityHandler{}
-	result, err := handler.Invoke(context.Background(), env, map[string]any{
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{
 		clarificationActionKey: clarificationActionHandoff,
 		"family_id":            "review",
 	})
@@ -159,7 +159,7 @@ func TestClarificationCapability_HandoffWithoutTargetRemainsUnresolved(t *testin
 	}
 
 	handler := &clarificationCapabilityHandler{}
-	result, err := handler.Invoke(context.Background(), env, map[string]any{
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{
 		clarificationActionKey: clarificationActionHandoff,
 	})
 	if err == nil {

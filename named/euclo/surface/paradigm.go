@@ -1,5 +1,7 @@
 package surface
 
+import "codeburg.org/lexbit/relurpify/agents/paradigm"
+
 // Paradigm identifies an agent or recipe paradigm.
 type Paradigm string
 
@@ -49,14 +51,8 @@ func AgentParadigms() []Paradigm {
 
 // IsSupported reports whether p is a supported agent-dispatchable paradigm.
 func IsSupported(p Paradigm) bool {
-	switch p {
-	case ParadigmReact, ParadigmPlanner, ParadigmHTN,
-		ParadigmReflection, ParadigmBlackboard, ParadigmChainer,
-		ParadigmPipeline, ParadigmRewoo, ParadigmGoalcon:
-		return true
-	default:
-		return false
-	}
+	_, ok := paradigm.Lookup(string(p))
+	return ok
 }
 
 // ParadigmMeta holds human-readable metadata about a paradigm.

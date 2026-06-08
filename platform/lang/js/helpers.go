@@ -1,6 +1,6 @@
 package js
 
-import "codeburg.org/lexbit/relurpify/capability"
+import registry "codeburg.org/lexbit/relurpify/capability/registry"
 
 func atoiSafe(value string) int {
 	var total int
@@ -35,7 +35,7 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return capability.NormalizeStringSlice(value)
+	return registry.NormalizeStringSlice(value)
 }
 
 func containsString(values []string, target string) bool {

@@ -152,13 +152,13 @@ func (m *mockIndexStore) GetStats() (*ast.IndexStats, error) {
 }
 
 func TestASTQueryHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewASTQueryHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.ast_query" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.ast_query")
@@ -200,7 +200,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewASTQueryHandler(wsEnv)
@@ -211,7 +211,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 		"query": "TestFunction",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestASTQueryHandlerEmptyQueryErrors(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewASTQueryHandler(wsEnv)
@@ -244,7 +244,7 @@ func TestASTQueryHandlerEmptyQueryErrors(t *testing.T) {
 		"query": "",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewASTQueryHandler(wsEnv)
@@ -293,7 +293,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 		"limit": 20,
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewASTQueryHandler(wsEnv)
@@ -340,7 +340,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 		"query": "TestFunction",
 	}
 
-	_, err := handler.Invoke(ctx, envelope, args)
+	_, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -351,13 +351,13 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 }
 
 func TestSymbolTraceHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewSymbolTraceHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.symbol_trace" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.symbol_trace")
@@ -397,7 +397,7 @@ func TestSymbolTraceHandlerCallees(t *testing.T) {
 	}
 	store.SaveNodes([]*ast.Node{rootNode, calleeNode})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewSymbolTraceHandler(wsEnv)
@@ -408,7 +408,7 @@ func TestSymbolTraceHandlerCallees(t *testing.T) {
 		"symbol": "MainFunction",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewSymbolTraceHandler(wsEnv)
@@ -436,7 +436,7 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 		"symbol": "NonExistentFunction",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -455,13 +455,13 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 }
 
 func TestCallGraphHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewCallGraphHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.call_graph" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.call_graph")
@@ -512,7 +512,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewCallGraphHandler(wsEnv)
@@ -523,7 +523,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 		"entry_point": "MainFunction",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestCallGraphHandlerEntryPointNotFound(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewCallGraphHandler(wsEnv)
@@ -556,7 +556,7 @@ func TestCallGraphHandlerEntryPointNotFound(t *testing.T) {
 		"entry_point": "NonExistentFunction",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewCallGraphHandler(wsEnv)
@@ -603,7 +603,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 		"entry_point": "MainFunction",
 	}
 
-	_, err := handler.Invoke(ctx, envelope, args)
+	_, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -614,13 +614,13 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 }
 
 func TestBlameTraceHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewBlameTraceHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.blame_trace" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.blame_trace")
@@ -645,7 +645,7 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -658,7 +658,7 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 		"file": "test.go",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -686,7 +686,7 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -700,7 +700,7 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 		"lines": []interface{}{10, 20},
 	}
 
-	_, err := handler.Invoke(ctx, envelope, args)
+	_, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -716,7 +716,7 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -729,7 +729,7 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 		"file": "test.go",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -771,7 +771,7 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -785,20 +785,20 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 		"symbol": "TestFunction",
 	}
 
-	_, err := handler.Invoke(ctx, envelope, args)
+	_, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
 }
 
 func TestBisectHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewBisectHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.bisect" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.bisect")
@@ -823,7 +823,7 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -838,7 +838,7 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 		"test_command": "go test ./...",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -866,7 +866,7 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -882,7 +882,7 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 		"max_steps":    5,
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -907,7 +907,7 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -923,7 +923,7 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 		"max_steps":    10,
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -938,13 +938,13 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 }
 
 func TestCodeReviewHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewCodeReviewHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.code_review" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.code_review")
@@ -964,7 +964,7 @@ func TestCodeReviewHandlerDescriptor(t *testing.T) {
 }
 
 func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewCodeReviewHandler(wsEnv)
 
 	ctx := context.Background()
@@ -973,7 +973,7 @@ func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
 		"focus": "all",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -1000,13 +1000,13 @@ func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
 }
 
 func TestDiffSummaryHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewDiffSummaryHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.diff_summary" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.diff_summary")
@@ -1031,7 +1031,7 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		IndexManager:  indexManager,
 		CommandPolicy: allowCommandPolicy(),
@@ -1045,7 +1045,7 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 		"head_ref": "HEAD",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -1064,13 +1064,13 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 }
 
 func TestLayerCheckHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewLayerCheckHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.layer_check" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.layer_check")
@@ -1089,7 +1089,7 @@ func TestLayerCheckHandlerCleanWorkspace(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewLayerCheckHandler(wsEnv)
@@ -1100,7 +1100,7 @@ func TestLayerCheckHandlerCleanWorkspace(t *testing.T) {
 		"layer": "all",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -1130,7 +1130,7 @@ func TestLayerCheckHandlerLayerFilter(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		IndexManager: indexManager,
 	}
 	handler := NewLayerCheckHandler(wsEnv)
@@ -1141,7 +1141,7 @@ func TestLayerCheckHandlerLayerFilter(t *testing.T) {
 		"layer": "framework",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}

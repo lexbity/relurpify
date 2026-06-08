@@ -3,10 +3,9 @@ package agentenv
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
@@ -18,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
@@ -31,23 +31,11 @@ type CompatibilitySurfaceExtractor interface {
 	ExtractSurface(context.Context, CompatibilitySurfaceRequest) (CompatibilitySurface, bool, error)
 }
 
-// WorkspaceEnvironment is the canonical runtime environment shared by all agents
+// AgentContext is the canonical runtime environment shared by all agents
 // in a workspace session. It is produced by ayenitd.Open() and passed directly
 // to agent constructors. It is shallow-copyable; agents may narrow scope
 // (e.g. replace Registry for a child execution) without rebuilding.
-//
-// Layering note: WorkspaceEnvironment is assembled exclusively by the
-// composition root (ayenitd.Open()) and must not be constructed by platform code.
-// Platform packages may receive WorkspaceEnvironment as a dependency but must
-// not import framework/agentenv to construct it.
-//
-// Ownership note: WorkspaceEnvironment is a composition root only. It does not
-// define storage models or business logic. Storage concerns are delegated to:
-// - framework/compiler for compilation state
-// - framework/agentlifecycle for runtime lifecycle state
-// - framework/persistence for persistence adapters
-// - framework/graphdb for durable backend implementation
-type WorkspaceEnvironment struct {
+type AgentContext struct {
 	// Identity + model
 	Config        *execution.Config
 	Model         model.LanguageModel
@@ -64,7 +52,7 @@ type WorkspaceEnvironment struct {
 	// Capability + permission
 	// Registry is the single implementation of the capability registry interface.
 	// Kept as concrete type for direct access to registration methods.
-	Registry *capability.CapabilityRegistry
+	Registry *registry.CapabilityRegistry
 	// PermissionManager is the single implementation of the permission manager interface.
 	// Kept as concrete type for direct access to permission enforcement methods.
 	PermissionManager *fauthorization.PermissionManager
@@ -136,13 +124,13 @@ type WorkspaceEnvironment struct {
 
 // WithRegistry returns a shallow copy with Registry replaced.
 // Agents use this to scope capability access for child executions.
-func (e WorkspaceEnvironment) WithRegistry(r *capability.CapabilityRegistry) WorkspaceEnvironment {
+func (e AgentContext) WithRegistry(r *registry.CapabilityRegistry) AgentContext {
 	e.Registry = r
 	return e
 }
 
 // WithMemory returns a shallow copy with WorkingMemory replaced.
-func (e WorkspaceEnvironment) WithMemory(m *memory.WorkingMemoryStore) WorkspaceEnvironment {
+func (e AgentContext) WithMemory(m *memory.WorkingMemoryStore) AgentContext {
 	e.WorkingMemory = m
 	return e
 }
@@ -150,26 +138,26 @@ func (e WorkspaceEnvironment) WithMemory(m *memory.WorkingMemoryStore) Workspace
 // WithCommandRunner returns a shallow copy with CommandRunner replaced.
 // Use this in tests to inject a recording or no-op runner without building a
 // full sandbox runtime.
-func (e WorkspaceEnvironment) WithCommandRunner(r sandbox.CommandRunner) WorkspaceEnvironment {
+func (e AgentContext) WithCommandRunner(r sandbox.CommandRunner) AgentContext {
 	e.CommandRunner = r
 	return e
 }
 
 // WithFileScope returns a shallow copy with FileScope replaced.
-func (e WorkspaceEnvironment) WithFileScope(scope *permissions.FileScopePolicy) WorkspaceEnvironment {
+func (e AgentContext) WithFileScope(scope *permissions.FileScopePolicy) AgentContext {
 	e.FileScope = scope
 	return e
 }
 
 // WithJobSubmitter returns a shallow copy with JobSubmitter replaced.
-func (e WorkspaceEnvironment) WithJobSubmitter(s jobs.Submitter) WorkspaceEnvironment {
+func (e AgentContext) WithJobSubmitter(s jobs.Submitter) AgentContext {
 	e.JobSubmitter = s
 	return e
 }
 
 // WithService adds a service to the ServiceManager via manager.Register().
 // This is useful for registering dynamic services at runtime.
-func (e WorkspaceEnvironment) WithService(id string, s Service) WorkspaceEnvironment {
+func (e AgentContext) WithService(id string, s Service) AgentContext {
 	if e.ServiceManager == nil {
 		return e
 	}
@@ -181,7 +169,7 @@ func (e WorkspaceEnvironment) WithService(id string, s Service) WorkspaceEnviron
 }
 
 // WithPromptRegistry returns a shallow copy with PromptRegistry replaced.
-func (e WorkspaceEnvironment) WithPromptRegistry(r prompt.Registry) WorkspaceEnvironment {
+func (e AgentContext) WithPromptRegistry(r prompt.Registry) AgentContext {
 	e.PromptRegistry = r
 	return e
 }

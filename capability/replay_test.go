@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/registry"
+
 	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
@@ -34,7 +36,7 @@ func TestToolRecorderWritesJSONL(t *testing.T) {
 			"test_tool": {Success: true, Data: map[string]any{"output": "ok"}},
 		},
 	}
-	rec := NewToolRecorder(inner, &buf)
+	rec := registry.NewToolRecorder(inner, &buf)
 
 	_, err := rec.InvokeCapability(context.Background(), nil, "test_tool", map[string]any{"input": "hello"})
 	if err != nil {
@@ -54,12 +56,12 @@ func TestToolRecorderWritesJSONL(t *testing.T) {
 }
 
 func TestToolPlayerReplaysInOrder(t *testing.T) {
-	records := []ToolCallRecord{
+	records := []registry.ToolCallRecord{
 		{Name: "first", Args: nil, Result: &ports.ToolResult{Success: true, Data: map[string]any{"val": 1}}},
 		{Name: "second", Args: nil, Result: &ports.ToolResult{Success: true, Data: map[string]any{"val": 2}}},
 		{Name: "third", Args: nil, Result: &ports.ToolResult{Success: false, Error: "fail"}},
 	}
-	player := NewToolPlayer(records)
+	player := registry.NewToolPlayer(records)
 
 	for i, rec := range records {
 		result, err := player.InvokeCapability(context.Background(), nil, rec.Name, nil)
@@ -73,7 +75,7 @@ func TestToolPlayerReplaysInOrder(t *testing.T) {
 }
 
 func TestToolPlayerWrongNameReturnsError(t *testing.T) {
-	player := NewToolPlayer([]ToolCallRecord{
+	player := registry.NewToolPlayer([]registry.ToolCallRecord{
 		{Name: "foo", Result: &ports.ToolResult{Success: true}},
 	})
 
@@ -81,9 +83,9 @@ func TestToolPlayerWrongNameReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for wrong tool name")
 	}
-	var unexpected *ErrUnexpectedToolCall
+	var unexpected *registry.ErrUnexpectedToolCall
 	if !errors.As(err, &unexpected) {
-		t.Fatalf("expected ErrUnexpectedToolCall, got: %T(%v)", err, err)
+		t.Fatalf("expected registry.ErrUnexpectedToolCall, got: %T(%v)", err, err)
 	}
 	if unexpected.Expected != "foo" || unexpected.Got != "bar" {
 		t.Fatalf("expected foo/bar, got %s/%s", unexpected.Expected, unexpected.Got)
@@ -91,7 +93,7 @@ func TestToolPlayerWrongNameReturnsError(t *testing.T) {
 }
 
 func TestToolPlayerExhaustedReturnsError(t *testing.T) {
-	player := NewToolPlayer([]ToolCallRecord{
+	player := registry.NewToolPlayer([]registry.ToolCallRecord{
 		{Name: "only", Result: &ports.ToolResult{Success: true}},
 	})
 
@@ -101,8 +103,8 @@ func TestToolPlayerExhaustedReturnsError(t *testing.T) {
 	}
 
 	_, err = player.InvokeCapability(context.Background(), nil, "only", nil)
-	if err != ErrReplayExhausted {
-		t.Fatalf("expected ErrReplayExhausted, got: %v", err)
+	if err != registry.ErrReplayExhausted {
+		t.Fatalf("expected registry.ErrReplayExhausted, got: %v", err)
 	}
 }
 
@@ -115,14 +117,14 @@ func TestToolRecorderPlayerRoundTrip(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	rec := NewToolRecorder(inner, &buf)
+	rec := registry.NewToolRecorder(inner, &buf)
 
 	_, _ = rec.InvokeCapability(context.Background(), nil, "tool_a", map[string]any{"x": 1})
 	_, _ = rec.InvokeCapability(context.Background(), nil, "tool_b", map[string]any{"y": 2})
 
-	player, err := NewToolPlayerFromReader(strings.NewReader(buf.String()))
+	player, err := registry.NewToolPlayerFromReader(strings.NewReader(buf.String()))
 	if err != nil {
-		t.Fatalf("NewToolPlayerFromReader: %v", err)
+		t.Fatalf("registry.NewToolPlayerFromReader: %v", err)
 	}
 
 	// Replay first call
@@ -147,7 +149,7 @@ func TestToolRecorderPlayerRoundTrip(t *testing.T) {
 func TestToolRecorderRecordsErrors(t *testing.T) {
 	inner := &mockInvoker2{err: innerError("something went wrong")}
 	var buf bytes.Buffer
-	rec := NewToolRecorder(inner, &buf)
+	rec := registry.NewToolRecorder(inner, &buf)
 
 	_, err := rec.InvokeCapability(context.Background(), nil, "failing", nil)
 	if err == nil {

@@ -17,8 +17,6 @@ const (
 	CapabilityKindSubscription CapabilityKind = "subscription"
 )
 
-
-
 type CapabilityRuntimeFamily string
 
 const (
@@ -28,9 +26,9 @@ const (
 )
 
 type CapabilitySource struct {
-	ProviderID string          `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
+	ProviderID string                   `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
 	Scope      taxonomy.CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
-	SessionID  string          `json:"session_id,omitempty" yaml:"session_id,omitempty"`
+	SessionID  string                   `json:"session_id,omitempty" yaml:"session_id,omitempty"`
 }
 
 type CoordinationTargetMetadata struct {
@@ -72,9 +70,6 @@ const (
 	TrustClassRemoteDeclared         TrustClass = "remote-declared-untrusted"
 	TrustClassRemoteApproved         TrustClass = "remote-approved"
 )
-
-
-
 
 type CoordinationRole string
 

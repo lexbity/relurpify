@@ -5,9 +5,11 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
@@ -22,17 +24,17 @@ type countingCapabilityHandler struct {
 	id    string
 }
 
-func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *countingCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-		Availability:  capability.AvailabilitySpec{Available: true},
+		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }
 
-func (h *countingCapabilityHandler) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.ToolResult, error) {
+func (h *countingCapabilityHandler) Invoke(context.Context, ports.State, map[string]interface{}) (*ports.ToolResult, error) {
 	h.mu.Lock()
 	h.count++
 	h.mu.Unlock()
@@ -52,7 +54,7 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 	)
 
@@ -89,14 +91,14 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	writeWorkspaceFile(t, dir, "review.go", "package demo\n")
 
 	thoughtrecipeID := "euclo.thoughtrecipe.review"
-	caps := capability.NewRegistry()
+	caps := registry.NewRegistry()
 	thoughtrecipes := newThoughtRecipeRegistry(t, &surface.ThoughtRecipe{
 		ID:       thoughtrecipeID,
 		Name:     "review",
 		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 	)
@@ -137,9 +139,9 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	})
 }
 
-func capabilityRegistryWithHandler(t *testing.T, handler *countingCapabilityHandler) *capability.CapabilityRegistry {
+func capabilityRegistryWithHandler(t *testing.T, handler *countingCapabilityHandler) *registry.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterInvocableCapability(handler); err != nil {
 		t.Fatalf("register handler: %v", err)
 	}

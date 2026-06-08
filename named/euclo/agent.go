@@ -31,7 +31,7 @@ import (
 type Agent struct {
 	resumeMu sync.Mutex
 
-	env         agentenv.WorkspaceEnvironment
+	env         agentenv.AgentContext
 	config      EucloConfig
 	initialized bool
 
@@ -43,7 +43,7 @@ type Agent struct {
 }
 
 // New creates a new Euclo agent with the given workspace environment and options.
-func New(env agentenv.WorkspaceEnvironment, opts ...Option) *Agent {
+func New(env agentenv.AgentContext, opts ...Option) *Agent {
 	a := &Agent{
 		env:    env,
 		config: DefaultConfig(),
@@ -164,7 +164,7 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
 	rootGraph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(a.env),
+		orchestrate.WithAgentContext(a.env),
 		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
 		orchestrate.WithCapabilityRegistry(a.env.Registry),
 		orchestrate.WithThoughtRecipeRegistry(a.thoughtrecipeRegistry),
@@ -193,7 +193,7 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	return graph, nil
 }
 
-func workspaceRootPath(env agentenv.WorkspaceEnvironment) string {
+func workspaceRootPath(env agentenv.AgentContext) string {
 	if env.IndexManager == nil {
 		return ""
 	}

@@ -18,7 +18,7 @@ import (
 type NotifHITLApproveMsg struct {
 	ID     string
 	Scope  policy.GrantScope // OneTime, Session, or Persistent (always)
-	Action string                    // raw HITL action, e.g. "tool:cli_mkdir"
+	Action string            // raw HITL action, e.g. "tool:cli_mkdir"
 }
 type NotifHITLDenyMsg struct{ ID string }
 type NotifDismissMsg struct{ ID string }

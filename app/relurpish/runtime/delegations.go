@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
+
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
@@ -25,7 +27,7 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request policy.Delegati
 	if r == nil || r.Delegations == nil || r.Tools == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
-	opts.Registry = capability.NewDelegationRegistry(r.Tools)
+	opts.Registry = registry.NewDelegationRegistry(r.Tools)
 	opts.AgentSpec = r.AgentWorkspace().AgentSpec
 	opts.State = firstDelegationContext(opts.State)
 	if shouldUseBackgroundDelegation(request) {
@@ -152,10 +154,10 @@ func (r *Runtime) emitDelegationTelemetry(snapshot policy.DelegationSnapshot) {
 	}
 	if snapshot.Result != nil {
 		metadata["result_success"] = snapshot.Result.Success
-		if ins, ok := snapshot.Result.Insertion.(capability.InsertionDecision); ok {
+		if ins, ok := snapshot.Result.Insertion.(capresult.InsertionDecision); ok {
 			metadata["insertion_action"] = ins.Action
 		}
-		if prov, ok := snapshot.Result.Provenance.(capability.ContentProvenance); ok {
+		if prov, ok := snapshot.Result.Provenance.(capresult.ContentProvenance); ok {
 			metadata["result_trust_class"] = prov.TrustClass
 		}
 	}
@@ -190,7 +192,7 @@ func (r *Runtime) logDelegationAudit(snapshot policy.DelegationSnapshot) {
 	}
 	if snapshot.Result != nil {
 		metadata["result_success"] = snapshot.Result.Success
-		if ins, ok := snapshot.Result.Insertion.(capability.InsertionDecision); ok {
+		if ins, ok := snapshot.Result.Insertion.(capresult.InsertionDecision); ok {
 			metadata["insertion_action"] = ins.Action
 		}
 	}

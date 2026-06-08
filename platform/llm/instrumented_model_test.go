@@ -82,21 +82,21 @@ func (m *profileAwareStubModel) UsesNativeToolCalling() bool {
 
 func TestInstrumentedModel_ProxiesProfileAwareBehavior(t *testing.T) {
 	inner := &profileAwareStubModel{}
-	model := NewInstrumentedModel(inner, nil, false)
+	instrumented := NewInstrumentedModel(inner, nil, false)
 
 	profile := &ModelProfile{}
 	profile.ToolCalling.NativeAPI = true
 	profile.ToolCalling.MaxToolsPerCall = 2
 	profile.Repair.Strategy = "llm"
 
-	model.SetProfile(profile)
+	instrumented.SetProfile(profile)
 
 	require.NotNil(t, inner.profile)
-	require.True(t, model.UsesNativeToolCalling())
-	require.Equal(t, "llm", model.ToolRepairStrategy())
-	require.Equal(t, 2, model.MaxToolsPerCall())
+	require.True(t, instrumented.UsesNativeToolCalling())
+	require.Equal(t, "llm", instrumented.ToolRepairStrategy())
+	require.Equal(t, 2, instrumented.MaxToolsPerCall())
 
-	_, ok := any(model).(model.ProfiledModel)
+	_, ok := any(instrumented).(model.ProfiledModel)
 	require.True(t, ok)
 }
 
@@ -109,8 +109,8 @@ func TestInstrumentedModel_IngestsLLMResponse(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	ctx := knowledge.WithOutputIngester(contextdata.WithEnvelope(context.Background(), env), ing)
 
-	model := NewInstrumentedModel(stubResponseModel{}, nil, false)
-	resp, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
+	instrumented := NewInstrumentedModel(stubResponseModel{}, nil, false)
+	resp, err := instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 
@@ -129,9 +129,9 @@ func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	ctx := knowledge.WithOutputIngester(contextdata.WithEnvelope(context.Background(), env), ing)
 
-	model := NewInstrumentedModel(stubResponseModel{}, nil, false)
+	instrumented := NewInstrumentedModel(stubResponseModel{}, nil, false)
 	start := time.Now()
-	resp, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "hello", resp.Text)
 	require.Less(t, time.Since(start), 50*time.Millisecond)
@@ -140,11 +140,11 @@ func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
 func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
 	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 1024}
 	sink := &llmEventSink{}
-	model := NewInstrumentedModel(stubUsageResponseModel{}, sink, false)
+	instrumented := NewInstrumentedModel(stubUsageResponseModel{}, sink, false)
 	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, sink, 1))
 
-	_, err := model.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {

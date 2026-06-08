@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -25,19 +27,19 @@ type stubCapabilityHandler struct {
 	args map[string]interface{}
 }
 
-func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
 	_ = ctx
 	_ = env
-	return capability.CapabilityDescriptor{
+	return descriptor.CapabilityDescriptor{
 		ID:            h.id,
 		Name:          h.id,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
-		Availability:  capability.AvailabilitySpec{Available: true},
+		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }
 
-func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *stubCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.args = args
@@ -53,7 +55,7 @@ func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Env
 }
 
 func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
-	reg := capability.NewRegistry()
+	reg := regpkg.NewRegistry()
 	handler := &stubCapabilityHandler{id: "euclo:cap.ast_query"}
 	if err := reg.RegisterInvocableCapability(handler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
@@ -76,7 +78,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("step1.execute", agentenv.WorkspaceEnvironment{Registry: reg}, step)
+	node := NewThoughtRecipeStepNode("step1.execute", agentenv.AgentContext{Registry: reg}, step)
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -136,7 +138,7 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 			Prompt: "Which module should be updated?",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{}, step)
 
 	rctx := node.buildRuntimeContext(env)
 	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
@@ -183,7 +185,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 			Prompt:   "inline fallback should not be used",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{PromptRegistry: registry}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{PromptRegistry: registry}, step)
 
 	task, err := node.buildTask(env)
 	if err != nil {
@@ -207,7 +209,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 }
 
 func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testing.T) {
-	reg := capability.NewRegistry()
+	reg := regpkg.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_read", available: true}); err != nil {
 		t.Fatalf("register file_read: %v", err)
 	}
@@ -215,7 +217,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		t.Fatalf("register file_write: %v", err)
 	}
 
-	env := agentenv.WorkspaceEnvironment{Registry: reg}
+	env := agentenv.AgentContext{Registry: reg}
 	baseEnv := contextdata.NewEnvelope("task-scope", "session-scope")
 	scopedStep := ExecutionStep{
 		ID:                 "scope.step",
@@ -242,10 +244,10 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 	if got, want := runtimeToolNames(scopedRegistry.ModelCallableTools()), []string{"file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("scoped registry tools = %#v, want %#v", got, want)
 	}
-	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv, "file_write", map[string]any{}); err != nil {
+	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv.State(), "file_write", map[string]any{}); err != nil {
 		t.Fatalf("expected scoped file_write invocation to succeed: %v", err)
 	}
-	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv, "file_read", map[string]any{}); err == nil {
+	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv.State(), "file_read", map[string]any{}); err == nil {
 		t.Fatal("expected scoped registry to reject file_read")
 	}
 
@@ -277,7 +279,7 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 			PromptID: "euclo.intent.clarify.question.v1",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.WorkspaceEnvironment{}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{}, step)
 
 	if _, err := node.buildTask(env); err == nil {
 		t.Fatal("expected buildTask to fail without a prompt registry")
@@ -299,7 +301,7 @@ func runtimeToolNames(tools []ports.Tool) []string {
 	return names
 }
 
-func runtimeCapabilityNames(caps []capability.CapabilityDescriptor) []string {
+func runtimeCapabilityNames(caps []descriptor.CapabilityDescriptor) []string {
 	if len(caps) == 0 {
 		return nil
 	}
@@ -339,7 +341,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("extract.step", agentenv.WorkspaceEnvironment{}, step)
+	node := NewThoughtRecipeStepNode("extract.step", agentenv.AgentContext{}, step)
 	task, err := node.buildTask(env)
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
@@ -398,7 +400,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 			Type: "delegate",
 		},
 	}
-	node := NewThoughtRecipeStepNode("delegate.step.execute", agentenv.WorkspaceEnvironment{}, step)
+	node := NewThoughtRecipeStepNode("delegate.step.execute", agentenv.AgentContext{}, step)
 
 	child := node.buildDelegationEnvelope(parent)
 	if child == nil {
@@ -475,7 +477,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 			Prompt: "Choose a mode.",
 		},
 	}
-	node := NewThoughtRecipeStepNode("ask.step.execute", agentenv.WorkspaceEnvironment{}, step)
+	node := NewThoughtRecipeStepNode("ask.step.execute", agentenv.AgentContext{}, step)
 
 	first, err := node.Execute(context.Background(), env)
 	if err != nil {

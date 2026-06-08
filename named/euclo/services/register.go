@@ -38,11 +38,11 @@ func (r *Registration) AgentRegistrationFuncs() agentenv.AgentRegistrationFuncs 
 	}
 }
 
-func (r *Registration) registerCapabilities(env agentenv.WorkspaceEnvironment) error {
+func (r *Registration) registerCapabilities(env agentenv.AgentContext) error {
 	return r.capabilityRegistrar.RegisterAll(env)
 }
 
-func (r *Registration) registerPromptProviders(env agentenv.WorkspaceEnvironment) error {
+func (r *Registration) registerPromptProviders(env agentenv.AgentContext) error {
 	return r.promptRegistrar.RegisterAll(env)
 }
 
@@ -76,12 +76,12 @@ func WithThoughtRecipeLoader(rl ThoughtRecipeLoader) Option {
 
 // CapabilityRegistrar abstracts capability registration.
 type CapabilityRegistrar interface {
-	RegisterAll(env agentenv.WorkspaceEnvironment) error
+	RegisterAll(env agentenv.AgentContext) error
 }
 
 // PromptRegistrar abstracts prompt provider registration.
 type PromptRegistrar interface {
-	RegisterAll(env agentenv.WorkspaceEnvironment) error
+	RegisterAll(env agentenv.AgentContext) error
 }
 
 // ThoughtRecipeLoader abstracts thoughtrecipe loading.

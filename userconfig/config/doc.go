@@ -1,11 +1,9 @@
 /*
-	cfgload - configuration
+Package config centralizes project configuration loading and validation.
 
-# Centralizies all project configuration and loading of contfiguration
+This is the only package that:
 
-This only package that:
-
-- Reads all schema in relurpify_cfg/**
+- Reads configuration schema in relurpify_cfg/**
 - Reads env / CLI override inputs at the boundary
 - Parses schema declarations
 - Validates cross-file config references

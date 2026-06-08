@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
@@ -22,7 +21,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),
@@ -46,7 +45,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 		t.Fatalf("first execute failed: %v", err)
 	}
 
-	artifact, err := persistence.LoadLatestCheckpointArtifact(context.Background(), repo, "session-resume-checkpoint", "checkpoint")
+	artifact, err := loadLatestCheckpointArtifact(context.Background(), repo, "session-resume-checkpoint")
 	if err != nil {
 		t.Fatalf("load latest checkpoint: %v", err)
 	}
@@ -59,7 +58,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	var snapshot struct {
 		WorkingData map[string]json.RawMessage `json:"working_data"`
 	}
-	if err := json.Unmarshal([]byte(artifact.InlineRawText), &snapshot); err != nil {
+	if err := json.Unmarshal([]byte(checkpointInlineRaw(t, artifact)), &snapshot); err != nil {
 		t.Fatalf("unmarshal checkpoint payload: %v", err)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.intent_classification"]; ok {
@@ -97,7 +96,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 		orchestrate.WithCheckpointRepository(repo),
@@ -122,7 +121,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		t.Fatalf("first execute failed: %v", err)
 	}
 
-	artifact, err := persistence.LoadLatestCheckpointArtifact(context.Background(), repo, "session-resume-thoughtrecipe", "checkpoint")
+	artifact, err := loadLatestCheckpointArtifact(context.Background(), repo, "session-resume-thoughtrecipe")
 	if err != nil {
 		t.Fatalf("load latest checkpoint: %v", err)
 	}
@@ -135,7 +134,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	var snapshot struct {
 		WorkingData map[string]json.RawMessage `json:"working_data"`
 	}
-	if err := json.Unmarshal([]byte(artifact.InlineRawText), &snapshot); err != nil {
+	if err := json.Unmarshal([]byte(checkpointInlineRaw(t, artifact)), &snapshot); err != nil {
 		t.Fatalf("unmarshal checkpoint payload: %v", err)
 	}
 	if raw, ok := snapshot.WorkingData["euclo.intent_classification"]; ok {

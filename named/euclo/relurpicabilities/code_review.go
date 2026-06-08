@@ -8,31 +8,32 @@ import (
 	"strings"
 	"time"
 
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // CodeReviewHandler implements the code review capability via an LLM sub-agent.
 type CodeReviewHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 }
 
 // NewCodeReviewHandler creates a new code review handler.
-func NewCodeReviewHandler(env agentenv.WorkspaceEnvironment) *CodeReviewHandler {
+func NewCodeReviewHandler(env agentenv.AgentContext) *CodeReviewHandler {
 	return &CodeReviewHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the code review handler.
-func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -41,7 +42,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) cap
 		Description:   "Reviews code for correctness, security, style, and architecture issues",
 		Category:      "review_synthesis",
 		Tags:          []string{"review", "llm", "relurpic"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 )
 
 // ExpandCommand builds the full argv for a subprocess tool from its manifest
@@ -75,7 +75,7 @@ func ExpandCommand(manifest ports.ToolManifest, args map[string]interface{}) ([]
 	// 5. Raw args with flag-injection guard
 	allowFlags := execSpec.Sandbox != nil && execSpec.Sandbox.AllowFlags
 	if raw, ok := args["args"]; ok {
-		extra, err := capability.NormalizeStringSlice(raw)
+		extra, err := registry.NormalizeStringSlice(raw)
 		if err != nil {
 			return nil, fmt.Errorf("args: %w", err)
 		}
@@ -223,7 +223,7 @@ func expandToken(token string, args map[string]interface{}) ([]string, error) {
 			}
 			return out, nil
 		default:
-			values, err := capability.NormalizeStringSlice(value)
+			values, err := registry.NormalizeStringSlice(value)
 			if err == nil && len(values) > 1 {
 				return values, nil
 			}
@@ -271,7 +271,7 @@ func toStringSlice(val interface{}) ([]string, error) {
 		}
 		return out, nil
 	default:
-		s, err := capability.NormalizeStringSlice(val)
+		s, err := registry.NormalizeStringSlice(val)
 		if err != nil {
 			return nil, fmt.Errorf("expected array, got %T", val)
 		}

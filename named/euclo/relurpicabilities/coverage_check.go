@@ -5,29 +5,30 @@ import (
 	"fmt"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
 type CoverageCheckHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewCoverageCheckHandler creates a new coverage check handler.
-func NewCoverageCheckHandler(env agentenv.WorkspaceEnvironment) *CoverageCheckHandler {
+func NewCoverageCheckHandler(env agentenv.AgentContext) *CoverageCheckHandler {
 	return &CoverageCheckHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the coverage check handler.
-func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.coverage_check",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -36,7 +37,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 		Description:   "Runs test coverage analysis and reports per-package coverage percentages",
 		Category:      "verification",
 		Tags:          []string{"testing", "coverage", "shell", "tool"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

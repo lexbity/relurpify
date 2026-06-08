@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 

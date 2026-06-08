@@ -22,16 +22,16 @@ type nopBuiltTool struct {
 	category    string
 }
 
-func (t *nopBuiltTool) Name() string                           { return t.name }
-func (t *nopBuiltTool) Description() string                     { return t.description }
-func (t *nopBuiltTool) Category() string                        { return t.category }
-func (t *nopBuiltTool) Parameters() []ports.ToolParameter       { return nil }
+func (t *nopBuiltTool) Name() string                      { return t.name }
+func (t *nopBuiltTool) Description() string               { return t.description }
+func (t *nopBuiltTool) Category() string                  { return t.category }
+func (t *nopBuiltTool) Parameters() []ports.ToolParameter { return nil }
 func (t *nopBuiltTool) Execute(_ context.Context, _ map[string]interface{}) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
-func (t *nopBuiltTool) IsAvailable(_ context.Context) bool     { return true }
-func (t *nopBuiltTool) Permissions() ports.ToolPermissions     { return ports.ToolPermissions{} }
-func (t *nopBuiltTool) Tags() []string                          { return nil }
+func (t *nopBuiltTool) IsAvailable(_ context.Context) bool { return true }
+func (t *nopBuiltTool) Permissions() ports.ToolPermissions { return ports.ToolPermissions{} }
+func (t *nopBuiltTool) Tags() []string                     { return nil }
 
 type nopBackendBuilder struct{}
 

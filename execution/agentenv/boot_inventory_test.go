@@ -39,7 +39,7 @@ func TestBootRootInventory(t *testing.T) {
 
 	knownBundleCallers := []string{
 		"framework/agentenv/workspace.go",   // BootstrapAgentRuntime — kept
-		"framework/agentenv/composition.go", // BuildWorkspaceEnvironment — TO BE DELETED in Phase 12
+		"framework/agentenv/composition.go", // BuildAgentContext — TO BE DELETED in Phase 12
 	}
 
 	for _, line := range grepLines(out) {
@@ -88,12 +88,12 @@ func TestBootRootInventory(t *testing.T) {
 		t.Errorf("legacy agentenv.Open symbol still present (must be removed in Phase 5):\n  %s", line)
 	}
 
-	// --- BuildWorkspaceEnvironment callers ------------------------------------
-	bweCmd := exec.Command("grep", "-rn", `BuildWorkspaceEnvironment(`, "--include=*.go", ".")
+	// --- BuildAgentContext callers ------------------------------------
+	bweCmd := exec.Command("grep", "-rn", `BuildAgentContext(`, "--include=*.go", ".")
 	bweCmd.Dir = root
 	bweOut, bweErr := bweCmd.Output()
 	if bweErr != nil {
-		t.Fatalf("grep BuildWorkspaceEnvironment failed: %v", bweErr)
+		t.Fatalf("grep BuildAgentContext failed: %v", bweErr)
 	}
 
 	knownBWECallers := []string{
@@ -105,7 +105,7 @@ func TestBootRootInventory(t *testing.T) {
 
 	for _, line := range grepLines(bweOut) {
 		if !matchedByAny(line, knownBWECallers) {
-			t.Errorf("unexpected BuildWorkspaceEnvironment caller (must be migrated in Phase 6):\n  %s", line)
+			t.Errorf("unexpected BuildAgentContext caller (must be migrated in Phase 6):\n  %s", line)
 		}
 	}
 }
@@ -212,12 +212,12 @@ func TestNoSecondBootRoot(t *testing.T) {
 }
 
 // TestNoLegacyBootSymbols asserts that the legacy symbols agentenv.Open and
-// BuildWorkspaceEnvironment no longer exist in production code. The rename
+// BuildAgentContext no longer exist in production code. The rename
 // (Phase 5) and fork deletion (Phase 6) are locked.
 func TestNoLegacyBootSymbols(t *testing.T) {
 	root := findModuleRoot(t)
 
-	for _, symbol := range []string{`agentenv\.Open(`, `BuildWorkspaceEnvironment(`} {
+	for _, symbol := range []string{`agentenv\.Open(`, `BuildAgentContext(`} {
 		cmd := exec.Command("grep", "-rn", symbol, "--include=*.go", ".")
 		cmd.Dir = root
 		out, err := cmd.Output()

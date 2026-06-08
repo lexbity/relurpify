@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -494,7 +494,7 @@ type mockStreamingCompiler struct {
 	telemetry telemetry.Telemetry
 }
 
-func (m *mockStreamingCompiler) Compile(ctx context.Context, req compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+func (m *mockStreamingCompiler) Compile(ctx context.Context, req contextports.CompilationRequest) (*contextports.CompilationResult, error) {
 	// Emit telemetry event
 	if m.telemetry != nil {
 		m.telemetry.Emit(telemetry.Event{
@@ -504,26 +504,23 @@ func (m *mockStreamingCompiler) Compile(ctx context.Context, req compiler.Compil
 			Message:   "streaming request processed",
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]any{
-				"request_id":  req.Query.Text,
+				"request_id":  req.BaseContext,
 				"chunk_count": len(m.chunks),
 			},
 		})
 	}
 
 	// Create a compilation result with the chunks
-	result := &compiler.CompilationResult{
-		Chunks: make([]knowledge.KnowledgeChunk, len(m.chunks)),
+	result := &contextports.CompilationResult{
+		StreamedRefs: make([]string, len(m.chunks)),
 	}
 	for i, chunkID := range m.chunks {
-		result.Chunks[i] = knowledge.KnowledgeChunk{
-			ID: chunkID,
-		}
+		result.StreamedRefs[i] = string(chunkID)
 	}
 
-	record := &compiler.CompilationRecord{
-		RequestID: req.Query.Text,
-		Timestamp: time.Now().UTC(),
+	result.Record = contextports.CompilationRecord{
+		ID: req.BaseContext,
 	}
 
-	return result, record, nil
+	return result, nil
 }

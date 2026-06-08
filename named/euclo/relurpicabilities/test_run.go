@@ -6,30 +6,31 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
 // It executes test commands and parses output to determine pass/fail status.
 type TestRunHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewTestRunHandler creates a new test run handler.
-func NewTestRunHandler(env agentenv.WorkspaceEnvironment) *TestRunHandler {
+func NewTestRunHandler(env agentenv.AgentContext) *TestRunHandler {
 	return &TestRunHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the test run handler.
-func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.test_run",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -38,7 +39,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) capabi
 		Description:   "Runs test suites and parses results to determine pass/fail status",
 		Category:      "testing",
 		Tags:          []string{"testing", "shell", "tool"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

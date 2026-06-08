@@ -8,32 +8,33 @@ import (
 	"strings"
 	"time"
 
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // DiffSummaryHandler implements the diff summary capability.
 type DiffSummaryHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewDiffSummaryHandler creates a new diff summary handler.
-func NewDiffSummaryHandler(env agentenv.WorkspaceEnvironment) *DiffSummaryHandler {
+func NewDiffSummaryHandler(env agentenv.AgentContext) *DiffSummaryHandler {
 	return &DiffSummaryHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the diff summary handler.
-func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.diff_summary",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -42,7 +43,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) ca
 		Description:   "Summarizes git diff output and identifies risk areas",
 		Category:      "review_synthesis",
 		Tags:          []string{"git", "diff", "review", "relurpic"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

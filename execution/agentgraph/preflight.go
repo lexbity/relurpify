@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type CapabilityCatalog interface {
-	InspectableCapabilities() []capability.CapabilityDescriptor
+	InspectableCapabilities() []descriptor.CapabilityDescriptor
 }
 
 type PreflightIssue struct {
@@ -27,7 +28,7 @@ type PlacementDecision struct {
 	RequiredSelector       agentspec.CapabilitySelector    `json:"required_selector,omitempty" yaml:"required_selector,omitempty"`
 	Preference             PlacementPreference             `json:"preference,omitempty" yaml:"preference,omitempty"`
 	SelectedCapabilityID   string                          `json:"selected_capability_id,omitempty" yaml:"selected_capability_id,omitempty"`
-	SelectedCapability     capability.CapabilityDescriptor `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
+	SelectedCapability     descriptor.CapabilityDescriptor `json:"selected_capability,omitempty" yaml:"selected_capability,omitempty"`
 	CandidateCapabilityIDs []string                        `json:"candidate_capability_ids,omitempty" yaml:"candidate_capability_ids,omitempty"`
 	Reason                 string                          `json:"reason,omitempty" yaml:"reason,omitempty"`
 }
@@ -88,7 +89,7 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	g.mu.RUnlock()
 
 	report := &PreflightReport{GeneratedAt: time.Now().UTC()}
-	var descriptors []capability.CapabilityDescriptor
+	var descriptors []descriptor.CapabilityDescriptor
 	if catalog != nil {
 		descriptors = append(descriptors, catalog.InspectableCapabilities()...)
 	}
@@ -123,7 +124,7 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	return report, err
 }
 
-func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySelector, contract NodeContract, descriptors []capability.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
+func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySelector, contract NodeContract, descriptors []descriptor.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {
 	decision := PlacementDecision{
 		NodeID:           nodeID,
 		RequiredSelector: selector,
@@ -159,18 +160,18 @@ func preflightPlacementDecision(nodeID string, selector agentspec.CapabilitySele
 	return decision, nil
 }
 
-func matchingDescriptors(selector agentspec.CapabilitySelector, descriptors []capability.CapabilityDescriptor) []capability.CapabilityDescriptor {
-	out := make([]capability.CapabilityDescriptor, 0, len(descriptors))
+func matchingDescriptors(selector agentspec.CapabilitySelector, descriptors []descriptor.CapabilityDescriptor) []descriptor.CapabilityDescriptor {
+	out := make([]descriptor.CapabilityDescriptor, 0, len(descriptors))
 	for _, desc := range descriptors {
-		if capability.SelectorMatchesDescriptor(selector, desc) {
+		if registry.SelectorMatchesDescriptor(selector, desc) {
 			out = append(out, desc)
 		}
 	}
 	return out
 }
 
-func filterDescriptorsForContract(contract NodeContract, descriptors []capability.CapabilityDescriptor) []capability.CapabilityDescriptor {
-	out := make([]capability.CapabilityDescriptor, 0, len(descriptors))
+func filterDescriptorsForContract(contract NodeContract, descriptors []descriptor.CapabilityDescriptor) []descriptor.CapabilityDescriptor {
+	out := make([]descriptor.CapabilityDescriptor, 0, len(descriptors))
 	for _, desc := range descriptors {
 		if contract.RequiredTrustClass != "" && trustRank(desc.TrustClass) < trustRank(contract.RequiredTrustClass) {
 			continue
@@ -183,7 +184,7 @@ func filterDescriptorsForContract(contract NodeContract, descriptors []capabilit
 	return out
 }
 
-func placementScore(preference PlacementPreference, desc capability.CapabilityDescriptor) int {
+func placementScore(preference PlacementPreference, desc descriptor.CapabilityDescriptor) int {
 	score := trustRank(desc.TrustClass) * 100
 	score -= maxRiskRank(desc.RiskClasses) * 10
 	switch preference {
@@ -203,7 +204,7 @@ func placementScore(preference PlacementPreference, desc capability.CapabilityDe
 	return score
 }
 
-func placementReason(preference PlacementPreference, desc capability.CapabilityDescriptor) string {
+func placementReason(preference PlacementPreference, desc descriptor.CapabilityDescriptor) string {
 	switch preference {
 	case PlacementPreferenceLocal:
 		if desc.Source.ProviderID == "" {

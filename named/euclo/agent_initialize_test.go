@@ -3,8 +3,8 @@ package euclo
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
@@ -27,14 +27,14 @@ var testRelurpicCapabilities = []string{
 }
 
 func TestAgentInitializeDoesNotPanic(t *testing.T) {
-	// Create a minimal WorkspaceEnvironment
-	env := agentenv.WorkspaceEnvironment{
+	// Create a minimal AgentContext
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 
 	// Create agent with the environment
@@ -65,7 +65,7 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 
 func TestAgentInitializeWithNilRegistry(t *testing.T) {
 	// Test with nil registry - should error gracefully
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Registry: nil,
 	}
 

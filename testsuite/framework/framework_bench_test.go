@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -59,7 +59,7 @@ func BenchmarkPolicyEvaluation(b *testing.B) {
 // and retrieval from the capability registry.
 func BenchmarkCapabilityDispatch(b *testing.B) {
 	// Create a registry for benchmarking
-	registry := capability.NewRegistry()
+	registry := regpkg.NewRegistry()
 
 	// Register a tool for benchmarking
 	tool := &benchTool{name: "bench-tool"}

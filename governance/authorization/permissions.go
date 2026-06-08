@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
 const permissionMatchAll = "**"
@@ -1099,7 +1099,7 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc permis
 		Type:        string(desc.Type),
 		Permission:  redactSensitivePath(desc.Resource),
 		Result:      result,
-		Metadata:    capability.RedactMetadataMap(fields),
+		Metadata:    runtime.RedactMetadataMap(fields),
 		Correlation: agentID,
 	}
 	_ = m.audit.Log(ctx, record)

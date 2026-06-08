@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -121,7 +121,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 }
 
 func writeJSONExport(path string, payload SessionExport) error {
-	data, err := json.MarshalIndent(capability.RedactAny(payload), "", "  ")
+	data, err := json.MarshalIndent(runtime.RedactAny(payload), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func sanitizeTelemetryExport(in TelemetryExport) TelemetryExport {
 	out.Events = make([]telemetry.Event, 0, len(in.Events))
 	for _, event := range in.Events {
 		clone := event
-		clone.Metadata = capability.RedactMetadataMap(clone.Metadata)
+		clone.Metadata = runtime.RedactMetadataMap(clone.Metadata)
 		out.Events = append(out.Events, clone)
 	}
 	return out
@@ -280,7 +280,7 @@ func sanitizeMessagesForExport(messages []Message) []Message {
 }
 
 func redactExportString(value string) string {
-	redacted, ok := capability.RedactAny(value).(string)
+	redacted, ok := runtime.RedactAny(value).(string)
 	if !ok {
 		return value
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
@@ -31,8 +31,8 @@ type RootGraph struct {
 
 // RootGraphConfig configures dependency wiring for the root graph.
 type RootGraphConfig struct {
-	Env                   agentenv.WorkspaceEnvironment
-	CapabilityRegistry    *capability.CapabilityRegistry
+	Env                   agentenv.AgentContext
+	CapabilityRegistry    *registry.CapabilityRegistry
 	ThoughtRecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	FamilyRegistry        *families.KeywordFamilyRegistry
 	Workspace             string
@@ -48,15 +48,15 @@ type RootGraphConfig struct {
 // RootGraphOption mutates RootGraphConfig.
 type RootGraphOption func(*RootGraphConfig)
 
-// WithWorkspaceEnvironment wires the workspace environment.
-func WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) RootGraphOption {
+// WithAgentContext wires the workspace environment.
+func WithAgentContext(env agentenv.AgentContext) RootGraphOption {
 	return func(opts *RootGraphConfig) {
 		opts.Env = env
 	}
 }
 
 // WithCapabilityRegistry wires the capability registry.
-func WithCapabilityRegistry(reg *capability.CapabilityRegistry) RootGraphOption {
+func WithCapabilityRegistry(reg *registry.CapabilityRegistry) RootGraphOption {
 	return func(opts *RootGraphConfig) {
 		opts.CapabilityRegistry = reg
 	}
@@ -203,7 +203,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	ensureClarificationThoughtRecipe(thoughtrecipeReg)
 	thoughtrecipeCapReg := cfg.Env.Registry
 	if thoughtrecipeCapReg == nil {
-		thoughtrecipeCapReg = capability.NewRegistry()
+		thoughtrecipeCapReg = registry.NewRegistry()
 		cfg.Env.Registry = thoughtrecipeCapReg
 	}
 	if err := registerClarificationCapability(thoughtrecipeCapReg); err != nil {
@@ -314,7 +314,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
 	thoughtrecipeExec := NewThoughtRecipeExecutorNode("euclo.execute_thoughtrecipe").
-		WithWorkspaceEnvironment(cfg.Env).
+		WithAgentContext(cfg.Env).
 		WithIngestionPipeline(nil)
 	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 

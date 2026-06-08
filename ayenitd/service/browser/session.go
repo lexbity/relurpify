@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/provider"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -400,13 +401,13 @@ func (h *browserSessionHandle) notePageState(page *platformbrowser.PageState) {
 	h.lastSeenAt = time.Now().UTC()
 }
 
-func (h *browserSessionHandle) providerSession() capability.ProviderSession {
+func (h *browserSessionHandle) providerSession() provider.ProviderSession {
 	if h == nil {
-		return capability.ProviderSession{}
+		return provider.ProviderSession{}
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	session := capability.ProviderSession{
+	session := provider.ProviderSession{
 		ID:             h.sessionID,
 		ProviderID:     "browser",
 		CapabilityIDs:  []string{"tool:browser"},
@@ -433,7 +434,7 @@ func (h *browserSessionHandle) providerSession() capability.ProviderSession {
 	return session
 }
 
-func (h *browserSessionHandle) snapshot() capability.ProviderSessionSnapshot {
+func (h *browserSessionHandle) snapshot() provider.ProviderSessionSnapshot {
 	session := h.providerSession()
 	var state any
 	h.mu.Lock()
@@ -446,7 +447,7 @@ func (h *browserSessionHandle) snapshot() capability.ProviderSessionSnapshot {
 	}
 	lastErr := h.lastErr
 	h.mu.Unlock()
-	return capability.ProviderSessionSnapshot{
+	return provider.ProviderSessionSnapshot{
 		Session:         session,
 		State:           state,
 		CapturedAt:      time.Now().UTC().Format(time.RFC3339Nano),

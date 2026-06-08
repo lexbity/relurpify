@@ -10,14 +10,14 @@ package agentenv
 type AgentRegistrationFuncs struct {
 	// RegisterCapabilities is called after the capability bundle is built.
 	// Agents register their capability handlers (e.g., relurpic capabilities for euclo).
-	RegisterCapabilities func(WorkspaceEnvironment) error
+	RegisterCapabilities func(AgentContext) error
 
 	// RegisterPromptProviders is called after the prompt registry is built.
 	// Agents register their prompt providers (e.g., paradigm and euclo providers for euclo).
-	RegisterPromptProviders func(WorkspaceEnvironment) error
+	RegisterPromptProviders func(AgentContext) error
 
 	// LoadThoughtRecipes is called during initialization.
 	// Agents load and return their thoughtrecipe registries.
-	// TODO: Move thoughtrecipe registry into WorkspaceEnvironment in future iteration.
+	// TODO: Move thoughtrecipe registry into AgentContext in future iteration.
 	LoadThoughtRecipes func() (interface{}, error)
 }

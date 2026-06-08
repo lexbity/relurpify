@@ -4,9 +4,9 @@ import "testing"
 
 // fakeState implements State for testing.
 type fakeState struct {
-	data    map[string]any
-	taskID  string
-	sessID  string
+	data   map[string]any
+	taskID string
+	sessID string
 }
 
 func (s *fakeState) GetWorkingValue(key string) (any, bool) {

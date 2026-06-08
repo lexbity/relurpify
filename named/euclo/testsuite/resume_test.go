@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
@@ -18,9 +18,9 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 
 	const capabilityID = "euclo:cap.resume_route"
 
-	missingCaps := capability.NewRegistry()
+	missingCaps := registry.NewRegistry()
 	missingGraph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(missingCaps)),
+		orchestrate.WithAgentContext(workspaceEnv(missingCaps)),
 		orchestrate.WithCapabilityRegistry(missingCaps),
 	)
 
@@ -57,7 +57,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	handler := &countingCapabilityHandler{id: capabilityID}
 	resolvedCaps := capabilityRegistryWithHandler(t, handler)
 	resolvedGraph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(resolvedCaps)),
+		orchestrate.WithAgentContext(workspaceEnv(resolvedCaps)),
 		orchestrate.WithCapabilityRegistry(resolvedCaps),
 	)
 

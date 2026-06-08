@@ -4,29 +4,30 @@ import (
 	"context"
 	"fmt"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
 type CallGraphHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 }
 
 // NewCallGraphHandler creates a new call graph handler.
-func NewCallGraphHandler(env agentenv.WorkspaceEnvironment) *CallGraphHandler {
+func NewCallGraphHandler(env agentenv.AgentContext) *CallGraphHandler {
 	return &CallGraphHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the call graph handler.
-func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.call_graph",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +36,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) capa
 		Description:   "Traverses call relationships to build a structured graph of nodes and edges",
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "graph", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

@@ -22,7 +22,6 @@ Scope mechanism (design decision 9):
 	WorkspaceScope is a field on WorkspaceConfig, not a positional parameter.
 	ScopeFull builds all optional layers. ScopeEmbeddedAgent builds only security
 	and capabilities (no LLM backend, no knowledge, no services, no telemetry sink).
-	A zero-valued scope is promoted to ScopeFull by OpenWorkspace for backward
-	compatibility.
+	A zero-valued scope is promoted to ScopeFull by OpenWorkspace.
 */
 package agentenv

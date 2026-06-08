@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // SideEffectClass describes the replay sensitivity of a node's execution.
@@ -69,7 +71,7 @@ type NodeContract struct {
 	Idempotency          IdempotencyClass               `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
 	PreferredPlacement PlacementPreference           `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass       taxonomy.RiskClass           `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	MaxRiskClass       taxonomy.RiskClass            `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
 	RequiredTrustClass agentspec.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
 	Recoverability     NodeRecoverability            `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
 	CheckpointPolicy   CheckpointPolicyClass         `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
@@ -160,7 +162,7 @@ func defaultNodeContract(node Node) NodeContract {
 
 func validateNodeContract(node Node, contract NodeContract) error {
 	for _, selector := range contract.RequiredCapabilities {
-		if err := capability.ValidateCapabilitySelector(selector); err != nil {
+		if err := registry.ValidateCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("node %s has invalid capability selector: %w", node.ID(), err)
 		}
 	}
@@ -217,7 +219,7 @@ func toolNodeContract(tool ports.Tool) NodeContract {
 	if tool == nil {
 		return contract
 	}
-	desc := capability.ToolDescriptor(context.Background(), tool)
+	desc := descriptor.ToolDescriptor(context.Background(), tool)
 	if desc.ID != "" || desc.Name != "" {
 		contract.RequiredCapabilities = []agentspec.CapabilitySelector{{
 			ID:   desc.ID,
@@ -238,7 +240,7 @@ func LintNodeState(node Node, env *contextdata.Envelope) []relurpctx.StateBounda
 	return relurpctx.LintStateMap(env.Snapshot(), ResolveNodeContract(node).ContextPolicy)
 }
 
-func classifyToolSideEffects(desc capability.CapabilityDescriptor) SideEffectClass {
+func classifyToolSideEffects(desc descriptor.CapabilityDescriptor) SideEffectClass {
 	if len(desc.EffectClasses) == 0 {
 		return SideEffectNone
 	}
@@ -267,7 +269,7 @@ func classifyToolSideEffects(desc capability.CapabilityDescriptor) SideEffectCla
 	return SideEffectLocal
 }
 
-func classifyToolIdempotency(desc capability.CapabilityDescriptor) IdempotencyClass {
+func classifyToolIdempotency(desc descriptor.CapabilityDescriptor) IdempotencyClass {
 	if len(desc.EffectClasses) == 0 {
 		return IdempotencyReplaySafe
 	}

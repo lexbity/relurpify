@@ -1,4 +1,4 @@
-// Package thoughtrecipes implements Euclo's DSL AST, lowering, runtime thoughtrecipe model,
+// Package thoughtrecipe implements Euclo's DSL AST, lowering, runtime thoughtrecipe model,
 // and execution graph helpers.
 //
 // The package consumes Euclo thoughtrecipe sources from relurpify_cfg/euclo and lowers

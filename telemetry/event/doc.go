@@ -3,7 +3,6 @@
 //
 // The event log is the single bus through which graph node transitions, tool
 // call outcomes, LLM interactions, and HITL approvals are published. Consumers
-// — the telemetry package for local audit, and the Nexus gateway materializer
-// for distributed observability — subscribe to this log independently, keeping
-// the core agent runtime decoupled from specific recording concerns.
+// subscribe to this log independently, keeping agent execution decoupled from
+// specific recording concerns.
 package event

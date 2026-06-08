@@ -21,14 +21,14 @@ func TestGetRegistrationFuncs(t *testing.T) {
 
 func TestRegisterCapabilities(t *testing.T) {
 	// Test that registerEucloCapabilities can be called
-	// Note: This requires a full WorkspaceEnvironment setup, so we just verify
+	// Note: This requires a full AgentContext setup, so we just verify
 	// the function exists and has the correct signature
 	regFuncs := GetRegistrationFuncs()
 	if regFuncs.RegisterCapabilities == nil {
 		t.Fatal("RegisterCapabilities should not be nil")
 	}
 
-	// We can't easily test this without a full WorkspaceEnvironment,
+	// We can't easily test this without a full AgentContext,
 	// but we can verify the function is callable
 	// This is more of an integration test scenario
 }
@@ -39,7 +39,7 @@ func TestRegisterPromptProviders(t *testing.T) {
 		t.Fatal("RegisterPromptProviders should not be nil")
 	}
 
-	// Similar to RegisterCapabilities, this requires a full WorkspaceEnvironment
+	// Similar to RegisterCapabilities, this requires a full AgentContext
 	// with a PromptRegistry to test properly
 }
 

@@ -1,8 +1,8 @@
 // Package surface provides UX-agnostic types shared between Euclo and its
 // frontends (TUI, LLM prompt providers). It is a leaf package: it imports
 // only the Go standard library and must never import thoughtrecipes, reporting,
-// interaction, orchestrate, intentcontext, framework/graphdb,
-// framework/retrieval, or any app/ package (enforced by arch_test.go).
+// interaction, orchestrate, intentcontext, context/knowledge, or any app/
+// package.
 //
 // Canonical types
 //

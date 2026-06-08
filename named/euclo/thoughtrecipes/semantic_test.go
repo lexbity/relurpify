@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -80,7 +80,7 @@ run reviewer:
   goal "Inspect the code."
 `)
 
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
@@ -117,7 +117,7 @@ input workspace: "**/*"
 agent reviewer uses react
 `)
 
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
@@ -140,7 +140,7 @@ input workspace: "**/*"
 agent reviewer uses react
 `)
 
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
 		t.Fatalf("register hidden_tool: %v", err)
 	}

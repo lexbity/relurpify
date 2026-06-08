@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
@@ -19,7 +19,7 @@ import (
 // selected route for downstream nodes.
 type Dispatcher struct {
 	id                    string
-	capabilityRegistry    *capability.CapabilityRegistry
+	capabilityRegistry    *registry.CapabilityRegistry
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	workspace             string
 }
@@ -30,7 +30,7 @@ func NewDispatcher(id string) *Dispatcher {
 }
 
 // WithCapabilityRegistry wires the capability registry used for route selection.
-func (d *Dispatcher) WithCapabilityRegistry(reg *capability.CapabilityRegistry) *Dispatcher {
+func (d *Dispatcher) WithCapabilityRegistry(reg *registry.CapabilityRegistry) *Dispatcher {
 	if d != nil && reg != nil {
 		d.capabilityRegistry = reg
 	}

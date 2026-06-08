@@ -3,16 +3,18 @@ package capability
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 func TestCapabilityDescriptorView_CompileTimeAssertion(t *testing.T) {
-	var _ governanceports.DescriptorView = (*descriptorViewAdapter)(nil)
+	var _ governanceports.DescriptorView = descriptor.CapabilityDescriptorView(descriptor.CapabilityDescriptor{})
 }
 
 func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {
-	desc := CapabilityDescriptor{
+	desc := descriptor.CapabilityDescriptor{
 		ID:            "test-id",
 		Name:          "test-capability",
 		Kind:          "tool",
@@ -24,14 +26,14 @@ func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {
 		TrustClass:    "builtin-trusted",
 		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
 		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},
-		Source: CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			ProviderID: "prov-1",
 			Scope:      "builtin",
 			SessionID:  "sess-1",
 		},
 	}
 
-	v := CapabilityDescriptorView(desc)
+	v := descriptor.CapabilityDescriptorView(desc)
 
 	if v.CapabilityID() != "test-id" {
 		t.Errorf("CapabilityID() = %q, want %q", v.CapabilityID(), "test-id")
@@ -66,11 +68,11 @@ func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {
 }
 
 func TestDescriptorView_Coordination(t *testing.T) {
-	desc := CapabilityDescriptor{
+	desc := descriptor.CapabilityDescriptor{
 		ID:   "coord-cap",
 		Name: "coordinator",
 		Kind: "tool",
-		Coordination: &CoordinationTargetMetadata{
+		Coordination: &descriptor.CoordinationTargetMetadata{
 			Role:        "planner",
 			Target:      true,
 			TaskTypes:   []string{"plan"},
@@ -78,7 +80,7 @@ func TestDescriptorView_Coordination(t *testing.T) {
 			LongRunning: 1,
 		},
 	}
-	v := CapabilityDescriptorView(desc)
+	v := descriptor.CapabilityDescriptorView(desc)
 	if !v.CoordinationTarget() {
 		t.Error("expected CoordinationTarget() == true")
 	}

@@ -7,26 +7,27 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type APICompatHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
-func NewAPICompatHandler(env agentenv.WorkspaceEnvironment) *APICompatHandler {
+func NewAPICompatHandler(env agentenv.AgentContext) *APICompatHandler {
 	return &APICompatHandler{env: env}
 }
 
-func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.api_compat",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +36,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) capa
 		Description:   "Compares exported signatures between git refs and flags breaking changes",
 		Category:      "migration_compat",
 		Tags:          []string{"migration", "compatibility", "git", "api"},
-		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
+		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
 		EffectClasses: []taxonomy.EffectClass{},

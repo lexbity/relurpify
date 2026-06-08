@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
@@ -19,7 +19,7 @@ import (
 // TestAgentCompiles verifies that New returns a non-nil *Agent without panic.
 func TestAgentCompiles(t *testing.T) {
 	// Create a minimal workspace environment
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.AgentContext{}
 	agent := New(env)
 
 	if agent == nil {
@@ -37,13 +37,13 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 
 // TestBuildGraphReturnsGraph verifies that BuildGraph returns a non-nil *agentgraph.Graph.
 func TestBuildGraphReturnsGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -66,13 +66,13 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 // TestExecuteCallsBuildGraph verifies that Execute calls BuildGraph and graph.Execute.
 // This is a minimal test since the full graph execution requires more setup.
 func TestExecuteCallsBuildGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -128,13 +128,13 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 }
 
 func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 	if err := agent.Initialize(nil); err != nil {
@@ -171,13 +171,13 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 
 // TestInitializeStoresConfig verifies that Initialize stores config and marks initialized.
 func TestInitializeStoresConfig(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -204,8 +204,8 @@ func TestInitializeStoresConfig(t *testing.T) {
 func TestExecuteStashesResumeClassification(t *testing.T) {
 	t.Skip("Phase 1: Resume state handling is stubbed; will be fully implemented in Phase 14")
 
-	env := agentenv.WorkspaceEnvironment{
-		Registry: capability.NewRegistry(),
+	env := agentenv.AgentContext{
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -246,13 +246,13 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 // TestExecuteClearsResumeStateAfterGraph verifies resume state is cleared after Execute.
 // Note: Resume state clearing is stubbed for Phase 1.
 func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	agent := New(env)
 
@@ -287,7 +287,7 @@ func graphStartNodeID(graph *agentgraph.Graph) string {
 
 // TestCapabilitiesReturnsExpectedIDs verifies Capabilities() returns expected capability IDs.
 func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.AgentContext{}
 	agent := New(env)
 
 	caps := agent.Capabilities()
@@ -328,7 +328,7 @@ func TestDefaultConfig(t *testing.T) {
 
 // TestWithConfigOption verifies WithConfig option sets the config.
 func TestWithConfigOption(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{}
+	env := agentenv.AgentContext{}
 	customConfig := EucloConfig{
 		BuiltinFamilies:        false,
 		WorkspaceIngestionMode: "full",

@@ -5,8 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -15,7 +16,7 @@ import (
 )
 
 // Dispatch resolves a route request and records route telemetry.
-func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
+func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
 	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
@@ -65,7 +66,7 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 	return result, nil
 }
 
-func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
+func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
 	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
@@ -141,7 +142,7 @@ func routeResultFromSelection(report *DryRunReport, selected CandidateRouteInfo,
 	return result
 }
 
-func rankCandidates(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func rankCandidates(req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
 	candidates := make([]CandidateRouteInfo, 0)
 	for _, cand := range rankCapabilityCandidates(req, caps) {
 		candidates = append(candidates, CandidateRouteInfo{
@@ -174,7 +175,7 @@ func rankCandidates(req RouteRequest, caps *capability.CapabilityRegistry, thoug
 	return candidates
 }
 
-func rankCapabilityCandidates(req RouteRequest, caps *capability.CapabilityRegistry) []rankedRoute {
+func rankCapabilityCandidates(req RouteRequest, caps *registry.CapabilityRegistry) []rankedRoute {
 	if caps == nil {
 		return nil
 	}
@@ -343,14 +344,14 @@ func candidateByIDKind(candidates []CandidateRouteInfo, kind, id string) (Candid
 	return CandidateRouteInfo{}, false
 }
 
-func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
+func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
 	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes)
 	selected, ok := selectDeterministicCandidate(req, report.Candidates)
 	return report, selected, false, ok
 }
 
-func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
 	clarificationCandidate := clarificationRouteCandidate(env, req)
 	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
 		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
@@ -368,7 +369,7 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, c
 	return dedupeAndSortRouteCandidates(candidates)
 }
 
-func explicitRouteCandidate(req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
+func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
 	switch {
 	case strings.TrimSpace(req.ThoughtRecipeID) != "":
 		id := strings.TrimSpace(req.ThoughtRecipeID)
@@ -478,7 +479,7 @@ func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest
 	return candidates
 }
 
-func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry) []CandidateRouteInfo {
+func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry) []CandidateRouteInfo {
 	if caps == nil {
 		return nil
 	}
@@ -875,7 +876,7 @@ func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, toke
 	return score, reasons
 }
 
-func scoreCapabilityCandidate(desc capability.CapabilityDescriptor, tokens []string) (int, []string) {
+func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, tokens []string) (int, []string) {
 	score := 0
 	reasons := make([]string, 0, 4)
 	if exactTokenMatch(tokens, desc.ID, desc.Name) {
@@ -905,7 +906,7 @@ func scoreCapabilityCandidate(desc capability.CapabilityDescriptor, tokens []str
 	return score, reasons
 }
 
-func capabilityRiskTokens(desc capability.CapabilityDescriptor) []string {
+func capabilityRiskTokens(desc descriptor.CapabilityDescriptor) []string {
 	if len(desc.RiskClasses) == 0 {
 		return nil
 	}
@@ -916,16 +917,16 @@ func capabilityRiskTokens(desc capability.CapabilityDescriptor) []string {
 	return out
 }
 
-func capabilitySnapshotByID(caps *capability.CapabilityRegistry, id string) (capability.CapabilitySnapshot, bool) {
+func capabilitySnapshotByID(caps *registry.CapabilityRegistry, id string) (registry.CapabilitySnapshot, bool) {
 	if caps == nil {
-		return capability.CapabilitySnapshot{}, false
+		return registry.CapabilitySnapshot{}, false
 	}
 	for _, snapshot := range caps.AllCapabilitySnapshots() {
 		if strings.TrimSpace(snapshot.Descriptor.ID) == strings.TrimSpace(id) {
 			return snapshot, true
 		}
 	}
-	return capability.CapabilitySnapshot{}, false
+	return registry.CapabilitySnapshot{}, false
 }
 
 func tokenMatchesAny(tokens []string, values ...string) (string, bool) {
@@ -977,7 +978,7 @@ func exactTokenMatch(tokens []string, values ...string) bool {
 	return false
 }
 
-func routeAvailabilityFromSnapshot(snapshot capability.CapabilitySnapshot) (RouteAvailability, string) {
+func routeAvailabilityFromSnapshot(snapshot registry.CapabilitySnapshot) (RouteAvailability, string) {
 	if snapshot.Exposure == agentspec.CapabilityExposureHidden {
 		return RouteUnavailablePolicyDenied, "policy denied"
 	}
@@ -995,7 +996,7 @@ func routeAvailabilityFromSnapshot(snapshot capability.CapabilitySnapshot) (Rout
 	}
 }
 
-func familyMatchBonus(desc capability.CapabilityDescriptor, family string) bool {
+func familyMatchBonus(desc descriptor.CapabilityDescriptor, family string) bool {
 	family = strings.ToLower(strings.TrimSpace(family))
 	if family == "" {
 		return false
@@ -1020,7 +1021,7 @@ func familyMatchBonus(desc capability.CapabilityDescriptor, family string) bool 
 	}
 }
 
-func routeMatchesFamily(desc capability.CapabilityDescriptor, family, instruction string) bool {
+func routeMatchesFamily(desc descriptor.CapabilityDescriptor, family, instruction string) bool {
 	family = strings.ToLower(strings.TrimSpace(family))
 	if family == "" {
 		return instructionMatchesRouteFamily(desc, instruction)
@@ -1032,7 +1033,7 @@ func routeMatchesFamily(desc capability.CapabilityDescriptor, family, instructio
 	return strings.Contains(strings.ToLower(desc.ID), family) || strings.Contains(strings.ToLower(desc.Name), family) || strings.Contains(strings.ToLower(desc.Category), family) || strings.Contains(instruction, family)
 }
 
-func instructionMatchesRouteFamily(desc capability.CapabilityDescriptor, instruction string) bool {
+func instructionMatchesRouteFamily(desc descriptor.CapabilityDescriptor, instruction string) bool {
 	instruction = strings.ToLower(strings.TrimSpace(instruction))
 	if instruction == "" {
 		return false
@@ -1091,7 +1092,7 @@ func instructionLooksMutating(instruction string) bool {
 	return false
 }
 
-func capabilityPriorityScore(desc capability.CapabilityDescriptor) int {
+func capabilityPriorityScore(desc descriptor.CapabilityDescriptor) int {
 	if desc.Annotations == nil {
 		return 0
 	}
@@ -1108,7 +1109,7 @@ func capabilityPriorityScore(desc capability.CapabilityDescriptor) int {
 	return 0
 }
 
-func compatibilityScore(desc capability.CapabilityDescriptor, inputs map[string]any) int {
+func compatibilityScore(desc descriptor.CapabilityDescriptor, inputs map[string]any) int {
 	if desc.InputSchema == nil || len(desc.InputSchema.Required) == 0 {
 		return 0
 	}
@@ -1124,7 +1125,7 @@ func compatibilityScore(desc capability.CapabilityDescriptor, inputs map[string]
 	return score
 }
 
-func riskPenalty(desc capability.CapabilityDescriptor) int {
+func riskPenalty(desc descriptor.CapabilityDescriptor) int {
 	return len(desc.RiskClasses)
 }
 

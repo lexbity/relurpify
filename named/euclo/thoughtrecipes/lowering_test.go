@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
@@ -449,7 +449,7 @@ run writer:
   goal "Inspect again."
 `)
 
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}

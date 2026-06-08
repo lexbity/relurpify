@@ -25,7 +25,7 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 	)
@@ -73,7 +73,7 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 	// Wire a telemetry spy to capture emitted events.
 	telemetrySpy := &captureTelemetry{}
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnvWithModel(caps, stubLanguageModel{})),
+		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
 	)

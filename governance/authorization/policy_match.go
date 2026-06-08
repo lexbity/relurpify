@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 func evaluateCompiledRules(rules []policy.PolicyRule, req policy.PolicyRequest) *policy.PolicyDecision {

@@ -6,26 +6,27 @@ import (
 	"sort"
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type RenameSymbolHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
-func NewRenameSymbolHandler(env agentenv.WorkspaceEnvironment) *RenameSymbolHandler {
+func NewRenameSymbolHandler(env agentenv.AgentContext) *RenameSymbolHandler {
 	return &RenameSymbolHandler{env: env}
 }
 
-func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.rename_symbol",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -34,7 +35,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) c
 		Description:   "Renames a symbol across the workspace using AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "rename", "ast", "write"},
-		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
+		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassDestructive},
 		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},

@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
+
+	"codeburg.org/lexbit/relurpify/capability/handler"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -145,12 +147,12 @@ type WorkflowProjectionService struct {
 }
 
 // Project projects a workflow resource based on the provided URI.
-func (s *WorkflowProjectionService) Project(ctx context.Context, uri WorkflowResourceURI) (*capability.ResourceReadResult, error) {
+func (s *WorkflowProjectionService) Project(ctx context.Context, uri WorkflowResourceURI) (*handler.ResourceReadResult, error) {
 	if s.Store == nil {
 		return nil, nil
 	}
-	return &capability.ResourceReadResult{
-		Contents: []capability.ContentBlock{},
+	return &handler.ResourceReadResult{
+		Contents: []capresult.ContentBlock{},
 		Metadata: map[string]any{
 			"uri": uri.String(),
 		},

@@ -16,12 +16,12 @@ type CompilationRequest struct {
 
 // CompilationResult is the context-owned view of a compilation result.
 type CompilationResult struct {
-	Context          string
-	ShortfallTokens  int
-	StreamedRefs     []string
+	Context            string
+	ShortfallTokens    int
+	StreamedRefs       []string
 	SkippedStaleChunks []string
-	Substitutions    []SummarySubstitution
-	Record           CompilationRecord
+	Substitutions      []SummarySubstitution
+	Record             CompilationRecord
 }
 
 // CompilationRecord captures metadata about a compilation.
@@ -35,9 +35,9 @@ type CompilationRecord struct {
 
 // SummarySubstitution records a text replacement made during compilation.
 type SummarySubstitution struct {
-	Original  string
-	Replaced  string
-	ChunkID   string
+	Original string
+	Replaced string
+	ChunkID  string
 }
 
 // CompilerTrigger is the context-owned interface for triggering

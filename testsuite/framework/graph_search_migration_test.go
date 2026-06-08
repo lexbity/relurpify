@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
@@ -39,7 +39,7 @@ func TestGraphCapabilityExecutionMigration(t *testing.T) {
 		t.Fatalf("permission manager: %v", err)
 	}
 
-	registry := capability.NewRegistry()
+	registry := regpkg.NewRegistry()
 	registry.UsePermissionManager("migration-agent", manager)
 
 	tool := &migrationWorkspaceTool{
@@ -264,7 +264,7 @@ func (n *migrationPlannerNode) Execute(ctx context.Context, state *contextdata.E
 
 type migrationCapabilityNode struct {
 	id       string
-	registry *capability.CapabilityRegistry
+	registry *regpkg.CapabilityRegistry
 	toolName string
 }
 

@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.CapabilityRegistry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *registry.CapabilityRegistry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil

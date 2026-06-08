@@ -3,7 +3,6 @@ package contextstream
 import (
 	"context"
 	"testing"
-
 )
 
 func TestRequestBackgroundCompletesJob(t *testing.T) {

@@ -61,12 +61,12 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 			}
 		},
 	}
-	handler := NewCodeReviewHandler(agentenv.WorkspaceEnvironment{Model: model})
+	handler := NewCodeReviewHandler(agentenv.AgentContext{Model: model})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "todo: remove stub")
 
-	result, err := handler.Invoke(context.Background(), env, map[string]interface{}{"focus": "style"})
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]interface{}{"focus": "style"})
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -93,14 +93,14 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 }
 
 func TestCodeReviewHandlerModelErrorFallsBack(t *testing.T) {
-	handler := NewCodeReviewHandler(agentenv.WorkspaceEnvironment{
+	handler := NewCodeReviewHandler(agentenv.AgentContext{
 		Model: &mockReviewModel{err: errors.New("model unavailable")},
 	})
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "TODO: refactor this stub")
 
-	result, err := handler.Invoke(context.Background(), env, map[string]interface{}{"focus": "all"})
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]interface{}{"focus": "all"})
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}

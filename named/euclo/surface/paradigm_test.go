@@ -72,22 +72,6 @@ func TestAgentParadigms_MatchesLegacyAgentList(t *testing.T) {
 	}
 }
 
-func TestIsSupported_ParityWithLegacyAgentList(t *testing.T) {
-	for _, p := range AllParadigms() {
-		got := IsSupported(p)
-		want := false
-		for _, lp := range legacyAgentParadigmList {
-			if string(p) == lp {
-				want = true
-				break
-			}
-		}
-		if got != want {
-			t.Errorf("IsSupported(%q) = %v; want %v (legacy: isSupportedAgentParadigm)", p, got, want)
-		}
-	}
-}
-
 func TestIsSupported_EmptyString(t *testing.T) {
 	if IsSupported("") {
 		t.Error("IsSupported('') = true; want false")

@@ -5,28 +5,29 @@ import (
 	"fmt"
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
 type LayerCheckHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 }
 
 // NewLayerCheckHandler creates a new layer check handler.
-func NewLayerCheckHandler(env agentenv.WorkspaceEnvironment) *LayerCheckHandler {
+func NewLayerCheckHandler(env agentenv.AgentContext) *LayerCheckHandler {
 	return &LayerCheckHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the layer check handler.
-func (h *LayerCheckHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *LayerCheckHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.layer_check",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +36,7 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env ports.State) cap
 		Description:   "Checks import boundaries between architectural layers for violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

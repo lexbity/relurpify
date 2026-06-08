@@ -14,7 +14,7 @@ import (
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
-func TestLiveWorkspaceHandshakeBuildsWorkspaceEnvironment(t *testing.T) {
+func TestLiveWorkspaceHandshakeBuildsAgentContext(t *testing.T) {
 	workspace := t.TempDir()
 	relurpifyCfg := filepath.Join(workspace, "relurpify_cfg")
 	if err := os.MkdirAll(filepath.Join(relurpifyCfg, "agents"), 0o755); err != nil {

@@ -3,7 +3,7 @@ package agenttestscenario
 import (
 	"testing"
 
-	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
+	chaintelemetry "codeburg.org/lexbit/relurpify/agentschainer/telemetry"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -11,7 +11,7 @@ import (
 
 type Fixture struct {
 	T         testing.TB
-	Env       agentenv.WorkspaceEnvironment
+	Env       agentenv.AgentContext
 	Model     *ScenarioStubModel
 	Exec      *NoopExecutor
 	Telemetry *TelemetryRecorder
@@ -41,7 +41,7 @@ func (t *TelemetryRecorder) Emit(event telemetry.Event) {
 func NewFixture(t testing.TB, turns ...ScenarioModelTurn) *Fixture {
 	t.Helper()
 
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{Name: "test", Model: "stub", MaxIterations: 1},
 	}
 	model := &ScenarioStubModel{}
@@ -49,7 +49,7 @@ func NewFixture(t testing.TB, turns ...ScenarioModelTurn) *Fixture {
 	return newFixture(t, env, model, telemetry)
 }
 
-func newFixture(t testing.TB, env agentenv.WorkspaceEnvironment, model *ScenarioStubModel, telemetry *TelemetryRecorder) *Fixture {
+func newFixture(t testing.TB, env agentenv.AgentContext, model *ScenarioStubModel, telemetry *TelemetryRecorder) *Fixture {
 	t.Helper()
 
 	if env.Config == nil {

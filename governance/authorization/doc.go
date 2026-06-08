@@ -14,7 +14,7 @@
 //
 // # Policy engine
 //
-// PolicyEngine compiles declarative PolicyRules (defined in framework/core)
+// PolicyEngine compiles declarative policy.Rule values
 // into a fast match structure. policy_compile.go builds the compiled form;
 // policy_match.go evaluates incoming capability requests against it.
 //

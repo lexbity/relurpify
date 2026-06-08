@@ -7,8 +7,8 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
@@ -17,10 +17,10 @@ import (
 
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
 type mockCapabilityRegistryProvider struct {
-	registry *capability.CapabilityRegistry
+	registry *registry.CapabilityRegistry
 }
 
-func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *capability.CapabilityRegistry {
+func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *registry.CapabilityRegistry {
 	return m.registry
 }
 
@@ -47,7 +47,7 @@ func (m *mockCapabilityRegistryProvider) BuildGraph(task *execution.Task) (*grap
 var _ graph.WorkflowExecutor = (*mockCapabilityRegistryProvider)(nil)
 
 func TestExtractCapabilityRegistry(t *testing.T) {
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	reg.Register(&mockTool{name: "tool1"})
 	reg.Register(&mockTool{name: "tool2"})
 	reg.Register(&mockTool{name: "tool3"})
@@ -159,7 +159,7 @@ func TestComputeCoverage_EmptyRegistry(t *testing.T) {
 }
 
 func TestRegistryHasTool(t *testing.T) {
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	reg.Register(&mockTool{name: "existing_tool"})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
@@ -215,7 +215,7 @@ func TestValidateToolsRequired(t *testing.T) {
 }
 
 func TestBuildCoverageFromEvents(t *testing.T) {
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	reg.Register(&mockTool{name: "go_test"})
 	reg.Register(&mockTool{name: "file_read"})
 	reg.Register(&mockTool{name: "file_write"})

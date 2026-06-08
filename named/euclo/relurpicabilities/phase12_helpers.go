@@ -52,7 +52,7 @@ func (c *frameworkPolicyContext) SetSandboxScope(scope *permissions.FileScopePol
 	c.sandboxScope = scope
 }
 
-func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agentenv.WorkspaceEnvironment, req sandbox.CommandRequest, source string) error {
+func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agentenv.AgentContext, req sandbox.CommandRequest, source string) error {
 	if c != nil && c.permissionManager != nil {
 		bashCfg := &authorization.BashConfig{}
 		if c.agentSpec != nil {
@@ -72,7 +72,7 @@ func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agent
 	return fmt.Errorf("command denied: no framework command policy configured")
 }
 
-func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env agentenv.WorkspaceEnvironment, path string) error {
+func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env agentenv.AgentContext, path string) error {
 	if c != nil && c.permissionManager != nil {
 		return c.permissionManager.CheckFileAccess(ctx, c.agentID, permissions.FileSystemWrite, path)
 	}
@@ -82,7 +82,7 @@ func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env age
 	return fmt.Errorf("write denied: no file scope configured")
 }
 
-func workspaceRoot(env agentenv.WorkspaceEnvironment) string {
+func workspaceRoot(env agentenv.AgentContext) string {
 	if env.IndexManager != nil {
 		if root := strings.TrimSpace(env.IndexManager.WorkspacePath()); root != "" {
 			return root
@@ -91,14 +91,14 @@ func workspaceRoot(env agentenv.WorkspaceEnvironment) string {
 	return "."
 }
 
-func (c *frameworkPolicyContext) fileScopePolicy(env agentenv.WorkspaceEnvironment) *permissions.FileScopePolicy {
+func (c *frameworkPolicyContext) fileScopePolicy(env agentenv.AgentContext) *permissions.FileScopePolicy {
 	if c != nil && c.sandboxScope != nil {
 		return c.sandboxScope
 	}
 	return env.FileScope
 }
 
-func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.WorkspaceEnvironment, candidate string) (string, error) {
+func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.AgentContext, candidate string) (string, error) {
 	candidate = strings.TrimSpace(candidate)
 	if candidate == "" {
 		return "", fmt.Errorf("path is required")
@@ -117,7 +117,7 @@ func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.WorkspaceEnvi
 	return resolved, nil
 }
 
-func (c *frameworkPolicyContext) readWorkspaceFile(env agentenv.WorkspaceEnvironment, candidate string) ([]byte, string, error) {
+func (c *frameworkPolicyContext) readWorkspaceFile(env agentenv.AgentContext, candidate string) ([]byte, string, error) {
 	resolved, err := c.resolveWorkspacePath(env, candidate)
 	if err != nil {
 		return nil, "", err
@@ -129,7 +129,7 @@ func (c *frameworkPolicyContext) readWorkspaceFile(env agentenv.WorkspaceEnviron
 	return content, resolved, nil
 }
 
-func (c *frameworkPolicyContext) writeWorkspaceFile(env agentenv.WorkspaceEnvironment, candidate string, content []byte, perm os.FileMode) (string, error) {
+func (c *frameworkPolicyContext) writeWorkspaceFile(env agentenv.AgentContext, candidate string, content []byte, perm os.FileMode) (string, error) {
 	resolved, err := c.resolveWorkspacePath(env, candidate)
 	if err != nil {
 		return "", err
@@ -462,7 +462,7 @@ func coveragePackagesToInterfaces(packages []coveragePackageRecord) []interface{
 	return out
 }
 
-func nodeSourcePath(env agentenv.WorkspaceEnvironment, node *frameworkast.Node) string {
+func nodeSourcePath(env agentenv.AgentContext, node *frameworkast.Node) string {
 	if node == nil {
 		return ""
 	}

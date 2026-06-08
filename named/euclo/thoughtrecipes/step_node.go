@@ -10,16 +10,17 @@ import (
 	"text/template"
 	"time"
 
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	blackboardagent "codeburg.org/lexbit/relurpify/agents/blackboard"
 	chaineragent "codeburg.org/lexbit/relurpify/agents/chainer"
 	goalconagent "codeburg.org/lexbit/relurpify/agents/goalcon"
 	htnagent "codeburg.org/lexbit/relurpify/agents/htn"
+	paradigm "codeburg.org/lexbit/relurpify/agents/paradigm"
 	pipelineagent "codeburg.org/lexbit/relurpify/agents/pipeline"
 	planneragent "codeburg.org/lexbit/relurpify/agents/planner"
 	reactagent "codeburg.org/lexbit/relurpify/agents/react"
 	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
 	rewooagent "codeburg.org/lexbit/relurpify/agents/rewoo"
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -45,12 +46,12 @@ const (
 // /agents constructor for the step's paradigm.
 type ThoughtRecipeStepNode struct {
 	id   string
-	env  agentenv.WorkspaceEnvironment
+	env  agentenv.AgentContext
 	step ExecutionStep
 }
 
 // NewThoughtRecipeStepNode creates a new agent-backed thoughtrecipe step node.
-func NewThoughtRecipeStepNode(id string, env agentenv.WorkspaceEnvironment, step ExecutionStep) *ThoughtRecipeStepNode {
+func NewThoughtRecipeStepNode(id string, env agentenv.AgentContext, step ExecutionStep) *ThoughtRecipeStepNode {
 	return &ThoughtRecipeStepNode{
 		id:   id,
 		env:  env,
@@ -839,7 +840,7 @@ func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.Wor
 		return planneragent.New(&scopedEnv), nil
 	case "htn":
 		primitive := reactagent.New(&scopedEnv, n.streamOptions()...)
-		return htnagent.New(&scopedEnv, htnagent.NewMethodLibrary(), append([]htnagent.Option{
+		return htnagent.New(&scopedEnv, htnagent.NewMethodLibrary(), append([]paradigm.Option{
 			htnagent.WithPrimitiveExec(primitive),
 		}, n.streamOptionsHTN()...)...), nil
 	case "reflection":
@@ -866,7 +867,7 @@ func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.Wor
 	}
 }
 
-func (n *ThoughtRecipeStepNode) scopedRegistry() *capability.CapabilityRegistry {
+func (n *ThoughtRecipeStepNode) scopedRegistry() *registry.CapabilityRegistry {
 	if n == nil || n.env.Registry == nil {
 		return nil
 	}
@@ -910,8 +911,8 @@ func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
 	return allowed
 }
 
-func (n *ThoughtRecipeStepNode) streamOptions() []reactagent.Option {
-	opts := make([]reactagent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptions() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, reactagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -926,8 +927,8 @@ func (n *ThoughtRecipeStepNode) streamOptions() []reactagent.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsHTN() []htnagent.Option {
-	opts := make([]htnagent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsHTN() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, htnagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -942,8 +943,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsHTN() []htnagent.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []blackboardagent.Option {
-	opts := make([]blackboardagent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, blackboardagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -958,8 +959,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []blackboardagent.Opti
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsChainer() []chaineragent.Option {
-	opts := make([]chaineragent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsChainer() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, chaineragent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -974,8 +975,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsChainer() []chaineragent.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
-	opts := make([]pipelineagent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, pipelineagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -990,8 +991,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
-	opts := make([]goalconagent.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsGoalCon() []paradigm.Option {
+	opts := make([]paradigm.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, goalconagent.WithContextStreamMode(contextstream.Mode(mode)))

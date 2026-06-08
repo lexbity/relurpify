@@ -3,13 +3,17 @@ package capability
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
+	"codeburg.org/lexbit/relurpify/capability/registry"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
 func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
-	reg := NewRegistry()
-	desc := CapabilityDescriptor{
+	reg := registry.NewRegistry()
+	desc := descriptor.CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
 		Kind:          agentspec.CapabilityKindTool,
@@ -29,19 +33,19 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 	}
 
 	// Register file_list, exec_run_tests, and file_create capabilities to test default aliases
-	descList := CapabilityDescriptor{
+	descList := descriptor.CapabilityDescriptor{
 		ID:            "cap:file_list",
 		Name:          "file_list",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	descTests := CapabilityDescriptor{
+	descTests := descriptor.CapabilityDescriptor{
 		ID:            "cap:exec_run_tests",
 		Name:          "exec_run_tests",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	descCreate := CapabilityDescriptor{
+	descCreate := descriptor.CapabilityDescriptor{
 		ID:            "cap:file_create",
 		Name:          "file_create",
 		Kind:          agentspec.CapabilityKindTool,
@@ -86,8 +90,8 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 }
 
 func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
-	reg := NewRegistry()
-	desc := CapabilityDescriptor{
+	reg := registry.NewRegistry()
+	desc := descriptor.CapabilityDescriptor{
 		ID:            "cap:file_write",
 		Name:          "file_write",
 		Kind:          agentspec.CapabilityKindTool,
@@ -122,7 +126,7 @@ func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
 }
 
 func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
-	reg := NewRegistry()
+	reg := registry.NewRegistry()
 
 	// Register some canonical capabilities
 	canonicals := []string{
@@ -144,7 +148,7 @@ func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
 	}
 
 	for _, name := range canonicals {
-		desc := CapabilityDescriptor{
+		desc := descriptor.CapabilityDescriptor{
 			ID:            "cap:" + name,
 			Name:          name,
 			Kind:          agentspec.CapabilityKindTool,

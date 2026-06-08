@@ -6,31 +6,32 @@ import (
 	"fmt"
 	"strings"
 
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
 // BisectHandler implements the git bisect capability.
 type BisectHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewBisectHandler creates a new bisect handler.
-func NewBisectHandler(env agentenv.WorkspaceEnvironment) *BisectHandler {
+func NewBisectHandler(env agentenv.AgentContext) *BisectHandler {
 	return &BisectHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the bisect handler.
-func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.bisect",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -39,7 +40,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) capabil
 		Description:   "Performs git bisect to find the commit that introduced a bug",
 		Category:      "git",
 		Tags:          []string{"git", "bisect", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
@@ -429,7 +430,7 @@ func parseBisectCulprit(output string) (string, bool) {
 	return "", false
 }
 
-func workspacePath(env agentenv.WorkspaceEnvironment) string {
+func workspacePath(env agentenv.AgentContext) string {
 	if env.IndexManager != nil {
 		if path := strings.TrimSpace(env.IndexManager.WorkspacePath()); path != "" {
 			return path

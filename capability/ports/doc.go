@@ -3,7 +3,7 @@
 // that capability declares for the context envelope.
 //
 // capability/ports is the single home for tool abstraction types used across
-// the framework. No other domain defines its own tool interface.
+// Relurpify. No other domain defines its own tool interface.
 //
 // Consumer-defined port in this package:
 //

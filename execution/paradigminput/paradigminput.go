@@ -1,9 +1,10 @@
 package paradigminput
 
 import (
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
@@ -21,11 +22,11 @@ type ParadigmInput struct {
 	ToolExecutionPolicy map[string]agentspec.ToolPolicy
 	ProviderPolicies    map[string]agentspec.ProviderPolicy
 	Task                *execution.Task
-	Tools               *capability.CapabilityRegistry
+	Tools               *registry.CapabilityRegistry
 	Mode                string
 }
 
-func (in *ParadigmInput) BuildRuntimeContext(consumerID string, state map[string]any, env *contextdata.Envelope, caps []capability.CapabilityDescriptor) prompt.RuntimeContext {
+func (in *ParadigmInput) BuildRuntimeContext(consumerID string, state map[string]any, env *contextdata.Envelope, caps []descriptor.CapabilityDescriptor) prompt.RuntimeContext {
 	var tools []ports.Tool
 	if in.Tools != nil {
 		tools = in.Tools.CallableTools()

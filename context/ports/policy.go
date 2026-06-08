@@ -3,10 +3,10 @@ package ports
 // PolicyBundle is the context-owned view of a context policy bundle.
 // Execution/context provides the implementation that wraps this type.
 type PolicyBundle struct {
-	DefaultTrustClass  string
-	MaxTokensPerWindow int
-	MaxTokensPerChunk  int
-	LowWatermarkTokens int
+	DefaultTrustClass   string
+	MaxTokensPerWindow  int
+	MaxTokensPerChunk   int
+	LowWatermarkTokens  int
 	DegradedChunkPolicy string
 }
 

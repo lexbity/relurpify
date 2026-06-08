@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -114,8 +115,8 @@ func TestExitCodeSurfaced(t *testing.T) {
 // ---------- REL-2: doom loop blocks identical calls ----------
 
 func TestDoomLoopBlocksIdenticalCalls(t *testing.T) {
-	dl := capability.NewDoomLoopDetector(capability.DefaultDoomLoopConfig())
-	desc := capability.CapabilityDescriptor{
+	dl := registry.NewDoomLoopDetector(registry.DefaultDoomLoopConfig())
+	desc := descriptor.CapabilityDescriptor{
 		ID:   "test_tool",
 		Name: "test_tool",
 	}

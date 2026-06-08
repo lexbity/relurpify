@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -170,16 +170,16 @@ func filterOverridesForTool(overrides []ToolResponseOverride, toolName string) [
 }
 
 // WrapRegistryWithInterceptor wraps all tools in the registry with injection support
-func WrapRegistryWithInterceptor(registry *capability.CapabilityRegistry, overrides []ToolResponseOverride) *capability.CapabilityRegistry {
-	if registry == nil || len(overrides) == 0 {
-		return registry
+func WrapRegistryWithInterceptor(reg *registry.CapabilityRegistry, overrides []ToolResponseOverride) *registry.CapabilityRegistry {
+	if reg == nil || len(overrides) == 0 {
+		return reg
 	}
 
 	// Get all callable tools
-	tools := registry.CallableTools()
+	tools := reg.CallableTools()
 
 	// Create a new registry and register wrapped tools
-	wrappedRegistry := capability.NewRegistry()
+	wrappedRegistry := registry.NewRegistry()
 
 	for _, tool := range tools {
 		toolOverrides := filterOverridesForTool(overrides, tool.Name())

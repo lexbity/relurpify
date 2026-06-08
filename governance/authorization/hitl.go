@@ -35,13 +35,13 @@ type PermissionRequest struct {
 
 // PermissionDecision encapsulates an approval or rejection.
 type PermissionDecision struct {
-	RequestID  string              `json:"request_id"`
-	Approved   bool                `json:"approved"`
-	ApprovedBy string              `json:"approved_by"`
-	Scope      policy.GrantScope   `json:"scope"`
-	ExpiresAt  time.Time           `json:"expires_at"`
-	Reason     string              `json:"reason,omitempty"`
-	Conditions map[string]string   `json:"conditions,omitempty"`
+	RequestID  string            `json:"request_id"`
+	Approved   bool              `json:"approved"`
+	ApprovedBy string            `json:"approved_by"`
+	Scope      policy.GrantScope `json:"scope"`
+	ExpiresAt  time.Time         `json:"expires_at"`
+	Reason     string            `json:"reason,omitempty"`
+	Conditions map[string]string `json:"conditions,omitempty"`
 }
 
 // HITLBroker coordinates blocking and async approvals.

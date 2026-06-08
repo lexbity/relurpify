@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -82,7 +83,7 @@ func TestAllowDecisionAudit(t *testing.T) {
 // with clear denial reasons and distinguishable from allow decisions.
 func TestDenyDecisionAudit(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
 
 	agentID := "test-agent"
 
@@ -165,7 +166,7 @@ func TestHITLAudit(t *testing.T) {
 					Action:   "net:egress:tcp",
 					Resource: "api.service.local:443",
 				},
-				Scope:      authorization.GrantScopeSession,
+				Scope:      govpolicy.GrantScopeSession,
 				ExpiresAt:  time.Now().Add(time.Hour),
 				ApprovedBy: "test-user",
 			},
@@ -407,7 +408,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 // decisions are clearly distinguishable in the audit surface.
 func TestDenyAndHITLDistinguishability(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
 
 	agentID := "test-agent"
 
@@ -430,7 +431,7 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 					Action:   "net:egress:tcp",
 					Resource: "api.service.local:443",
 				},
-				Scope:      authorization.GrantScopeSession,
+				Scope:      govpolicy.GrantScopeSession,
 				ExpiresAt:  time.Now().Add(time.Hour),
 				ApprovedBy: "test-user",
 			},
@@ -560,7 +561,7 @@ func (s *stubHITLProvider) RequestPermission(ctx context.Context, req authorizat
 	if len(s.grants) == 0 {
 		return &authorization.PermissionGrant{
 			Permission: req.Permission,
-			Scope:      authorization.GrantScopeSession,
+			Scope:      govpolicy.GrantScopeSession,
 		}, nil
 	}
 	grant := s.grants[0]

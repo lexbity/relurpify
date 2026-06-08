@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
@@ -462,5 +462,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return capability.NormalizeStringSlice(value)
+	return registry.NormalizeStringSlice(value)
 }

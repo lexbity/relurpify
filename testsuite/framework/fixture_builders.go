@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )

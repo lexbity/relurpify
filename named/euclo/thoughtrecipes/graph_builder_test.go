@@ -63,7 +63,7 @@ func TestBuildThoughtRecipeGraphWiresLinearParallelAndConditionalSections(t *tes
 		}},
 	}
 
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.WorkspaceEnvironment{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}
@@ -120,7 +120,7 @@ route:
 	if err != nil {
 		t.Fatalf("LowerDocument failed: %v", err)
 	}
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.WorkspaceEnvironment{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}
@@ -180,7 +180,7 @@ pipeline:
 	if err != nil {
 		t.Fatalf("LowerDocument failed: %v", err)
 	}
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.WorkspaceEnvironment{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}

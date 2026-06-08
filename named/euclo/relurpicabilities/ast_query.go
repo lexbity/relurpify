@@ -4,29 +4,30 @@ import (
 	"context"
 	"fmt"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
 type ASTQueryHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 }
 
 // NewASTQueryHandler creates a new AST query handler.
-func NewASTQueryHandler(env agentenv.WorkspaceEnvironment) *ASTQueryHandler {
+func NewASTQueryHandler(env agentenv.AgentContext) *ASTQueryHandler {
 	return &ASTQueryHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the AST query handler.
-func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -35,7 +36,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) capab
 		Description:   "Queries the AST index to find symbols, functions, classes, and other code structure elements",
 		Category:      "code_analysis",
 		Tags:          []string{"ast", "query", "read-only"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

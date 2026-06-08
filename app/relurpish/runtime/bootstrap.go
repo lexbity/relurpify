@@ -4,9 +4,8 @@ import (
 	"context"
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/agents"
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -56,15 +55,15 @@ type AgentBootstrapOptions struct {
 }
 
 type BootstrappedAgentRuntime struct {
-	Registry             *capability.CapabilityRegistry
+	Registry             *registry.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
 	Memory               *memory.WorkingMemoryStore
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
 	Backend              llm.ManagedBackend
-	Environment          agents.AgentEnvironment
-	CapabilityAdmissions []capability.AdmissionResult
+	Environment          agentenv.AgentContext
+	CapabilityAdmissions []registry.AdmissionResult
 	Contract             *config.EffectiveAgentContract
 	CompiledPolicy       *fauthorization.CompiledPolicyBundle
 }
@@ -102,15 +101,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	_ = llm.ApplyProfile(boot.Backend, opts.ProfileResolution.Profile)
 	_ = llm.ApplyProfile(boot.Environment.Model, opts.ProfileResolution.Profile)
 
-	env := agents.AgentEnvironment{
-		Config:       boot.Environment.Config,
-		Model:        boot.Environment.Model,
-		Registry:     boot.Environment.Registry,
-		IndexManager: boot.Environment.IndexManager,
-		SearchEngine: boot.Environment.SearchEngine,
-		Memory:       boot.Environment.WorkingMemory,
-	}
-
 	return &BootstrappedAgentRuntime{
 		Registry:             boot.Registry,
 		IndexManager:         boot.IndexManager,
@@ -119,7 +109,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentSpec:            boot.AgentSpec,
 		AgentConfig:          boot.AgentConfig,
 		Backend:              boot.Backend,
-		Environment:          env,
+		Environment:          boot.Environment,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		Contract:             boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,

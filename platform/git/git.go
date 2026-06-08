@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
@@ -103,7 +103,7 @@ func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{
 		return t.runGit(ctx, []string{"checkout", "-b", name})
 	case "commit":
 		message := fmt.Sprint(args["message"])
-		files, err := capability.NormalizeStringSlice(args["files"])
+		files, err := registry.NormalizeStringSlice(args["files"])
 		if err != nil {
 			return nil, err
 		}

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"syscall"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -293,9 +293,9 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]interface{}
 			relPath = filepath.Base(path)
 		}
 		relPath = filepath.ToSlash(relPath)
-		match := capability.MatchGlob(pattern, relPath)
+		match := registry.MatchGlob(pattern, relPath)
 		if !match {
-			match = capability.MatchGlob(pattern, filepath.Base(path))
+			match = registry.MatchGlob(pattern, filepath.Base(path))
 		}
 		if match {
 			files = append(files, path)

@@ -3,8 +3,8 @@ package prompt
 import (
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -24,7 +24,7 @@ type RuntimeContext struct {
 	// Extended: available to providers that need more than the envelope.
 	Task         *execution.Task
 	Tools        []ports.Tool
-	Capabilities []capability.CapabilityDescriptor
+	Capabilities []descriptor.CapabilityDescriptor
 	AgentSpec    *agentspec.AgentRuntimeSpec
 }
 

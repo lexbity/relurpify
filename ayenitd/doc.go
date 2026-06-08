@@ -1,13 +1,6 @@
 // Package ayenitd provides service lifecycle management for Relurpify.
-// It is analogous to systemd/init: it starts services in dependency order, holds them alive,
-// and shuts them down cleanly on exit.
 //
-// COMPLETED ARCHITECTURAL TRANSITION:
-// - Composition logic has been moved to framework/agentenv (Open, BootstrapAgentRuntime)
-// - Framework services are now in framework/services/ and framework/agentenv/
-// - Duplicate files (capability_bundle.go, prompt_registry.go, agentenv_interfaces.go, scheduler.go) have been deleted
-// - Type alias shims have been removed
-// - ayenitd is now a pure service runner with no composition logic
-//
-// Entry points should now use framework/agentenv.OpenWorkspace for workspace initialization.
+// It starts long-lived services in dependency order, keeps them alive for the
+// owning process, and shuts them down cleanly on exit. Workspace composition
+// lives in execution/agentenv; ayenitd owns service startup and teardown only.
 package ayenitd

@@ -1,4 +1,4 @@
-// Package contextdata defines the shared execution envelope contract for the framework.
+// Package contextdata defines the shared execution envelope contract.
 //
 // The context-streaming paradigm uses three tiers:
 //

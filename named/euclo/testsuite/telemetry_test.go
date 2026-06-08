@@ -14,7 +14,7 @@ import (
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 	)
 

@@ -7,17 +7,19 @@ import (
 	"sync"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/model"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
@@ -49,8 +51,8 @@ func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []model
 
 type noopCompiler struct{}
 
-func (noopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
-	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
+func (noopCompiler) Compile(_ context.Context, _ contextports.CompilationRequest) (*contextports.CompilationResult, error) {
+	return &contextports.CompilationResult{}, nil
 }
 
 type recordingTelemetry struct {
@@ -75,17 +77,17 @@ func (r *recordingTelemetry) types() []telemetry.EventType {
 }
 
 type testCapabilityHandler struct {
-	descriptor capability.CapabilityDescriptor
+	descriptor descriptor.CapabilityDescriptor
 	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error)
 }
 
-func (h *testCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *testCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
 	return h.descriptor
 }
 
-func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *testCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h != nil && h.invoke != nil {
-		return h.invoke(ctx, env, args)
+		return h.invoke(ctx, contextdata.EnvelopeFromState(st), args)
 	}
 	return &ports.ToolResult{
 		Success: true,
@@ -95,17 +97,17 @@ func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Env
 	}, nil
 }
 
-func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRegistry {
+func newCapabilityRegistry(t *testing.T, ids ...string) *registry.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	for _, id := range ids {
 		if err := reg.RegisterInvocableCapability(&testCapabilityHandler{
-			descriptor: capability.CapabilityDescriptor{
+			descriptor: descriptor.CapabilityDescriptor{
 				ID:            id,
 				Name:          id,
 				Kind:          agentspec.CapabilityKindTool,
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-				Availability:  capability.AvailabilitySpec{Available: true},
+				Availability:  descriptor.AvailabilitySpec{Available: true},
 			},
 			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error) {
 				return func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error) {
@@ -236,12 +238,12 @@ func assertEventOrder(t *testing.T, got []telemetry.EventType, want []telemetry.
 	}
 }
 
-func workspaceEnv(reg *capability.CapabilityRegistry) agentenv.WorkspaceEnvironment {
-	return agentenv.WorkspaceEnvironment{Registry: reg}
+func workspaceEnv(reg *registry.CapabilityRegistry) agentenv.AgentContext {
+	return agentenv.AgentContext{Registry: reg}
 }
 
-func workspaceEnvWithModel(reg *capability.CapabilityRegistry, model model.LanguageModel) agentenv.WorkspaceEnvironment {
-	return agentenv.WorkspaceEnvironment{
+func workspaceEnvWithModel(reg *registry.CapabilityRegistry, model model.LanguageModel) agentenv.AgentContext {
+	return agentenv.AgentContext{
 		Registry: reg,
 		Model:    model,
 		Config:   &execution.Config{Name: "testsuite", Model: "stub"},
@@ -265,9 +267,47 @@ func newPersistenceWriter(t *testing.T) *persistence.Writer {
 	t.Cleanup(func() {
 		_ = engine.Close()
 	})
-	return persistence.NewWriter(&knowledge.ChunkStore{Graph: engine}, nil, nil)
+	return persistence.NewWriter(&knowledge.ChunkStore{Graph: engine}, nil, nil, nil)
 }
 
 func ctxWithTrigger(ctx context.Context) context.Context {
 	return contextstream.WithTrigger(ctx, contextstream.NewTrigger(noopCompiler{}))
+}
+
+func loadLatestCheckpointArtifact(ctx context.Context, repo *checkpointArtifactRepo, runID string) (*contextports.WorkflowArtifactRecord, error) {
+	return persistence.LoadLatestCheckpointArtifact(ctx, func(runID string) ([]contextports.WorkflowArtifactRecord, error) {
+		artifacts, err := repo.ListArtifactsByRun(ctx, runID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]contextports.WorkflowArtifactRecord, 0, len(artifacts))
+		for _, artifact := range artifacts {
+			out = append(out, contextports.WorkflowArtifactRecord{
+				ArtifactID:  artifact.ArtifactID,
+				WorkflowID:  artifact.WorkflowID,
+				RunID:       artifact.RunID,
+				ContentType: artifact.ContentType,
+				StorageKind: string(artifact.StorageKind),
+				Summary:     artifact.SummaryText,
+				SizeBytes:   artifact.RawSizeBytes,
+				CreatedAt:   artifact.CreatedAt,
+				Metadata: map[string]any{
+					"inline_raw": artifact.InlineRawText,
+				},
+			})
+		}
+		return out, nil
+	}, runID)
+}
+
+func checkpointInlineRaw(t *testing.T, artifact *contextports.WorkflowArtifactRecord) string {
+	t.Helper()
+	if artifact == nil {
+		t.Fatal("checkpoint artifact is nil")
+	}
+	raw, _ := artifact.Metadata["inline_raw"].(string)
+	if raw == "" {
+		t.Fatal("checkpoint artifact missing inline_raw metadata")
+	}
+	return raw
 }

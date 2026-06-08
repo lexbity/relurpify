@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -13,12 +14,12 @@ import (
 // CapabilityRegistryLookup is the minimal capability lookup contract required
 // by semantic validation.
 type CapabilityRegistryLookup interface {
-	Select(capabilityID string) (capability.CapabilityDescriptor, bool)
+	Select(capabilityID string) (descriptor.CapabilityDescriptor, bool)
 }
 
 // ToolRegistryLookup exposes the callable tool surface for semantic validation.
 type ToolRegistryLookup interface {
-	GetCapability(idOrName string) (capability.CapabilityDescriptor, bool)
+	GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool)
 	ModelCallableTools() []ports.Tool
 }
 
@@ -778,9 +779,9 @@ func (s *SymbolTable) validateCapabilityPolicy() error {
 	return nil
 }
 
-func (s *SymbolTable) lookupCapability(inv *CapabilityInvocation) (capability.CapabilityDescriptor, bool) {
+func (s *SymbolTable) lookupCapability(inv *CapabilityInvocation) (descriptor.CapabilityDescriptor, bool) {
 	if s == nil || s.capability == nil || inv == nil {
-		return capability.CapabilityDescriptor{}, false
+		return descriptor.CapabilityDescriptor{}, false
 	}
 	capID := NormalizeCapabilityReference(inv.Capability.Value)
 	if capID != "" {
@@ -791,7 +792,7 @@ func (s *SymbolTable) lookupCapability(inv *CapabilityInvocation) (capability.Ca
 	if desc, ok := s.capability.Select(strings.TrimSpace(inv.Capability.Value)); ok {
 		return desc, true
 	}
-	return capability.CapabilityDescriptor{}, false
+	return descriptor.CapabilityDescriptor{}, false
 }
 
 func hasAskUserDecl(doc *ThoughtRecipeDocument) bool {

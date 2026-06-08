@@ -25,11 +25,11 @@ type DescriptorView interface {
 	SourceSessionID() string
 
 	// Coordination metadata
-	CoordinationRole() string          // e.g. "planner", "executor"
+	CoordinationRole() string // e.g. "planner", "executor"
 	CoordinationTarget() bool
 	CoordinationTaskTypes() []string
 	CoordinationExecutionModes() []string // e.g. "sync", "session-backed"
-	CoordinationLongRunning() int32        // 0=unset, 1=enabled, 2=disabled
+	CoordinationLongRunning() int32       // 0=unset, 1=enabled, 2=disabled
 	CoordinationDirectInsertionAllowed() int32
 	CoordinationMaxDepth() int
 	CoordinationMaxRuntimeSeconds() int
@@ -49,19 +49,19 @@ type SpecView interface {
 }
 
 type CapabilitySelectorView struct {
-	ID               string
-	Name             string
-	Kind             string
-	RuntimeFamilies  []string
-	Tags             []string
-	ExcludeTags      []string
-	SourceScopes     []string
-	TrustClasses     []string
-	RiskClasses      []string
-	EffectClasses    []string
-	CoordinationTaskTypes   []string
-	CoordinationRoles       []string
-	CoordinationExecModes   []string
+	ID                          string
+	Name                        string
+	Kind                        string
+	RuntimeFamilies             []string
+	Tags                        []string
+	ExcludeTags                 []string
+	SourceScopes                []string
+	TrustClasses                []string
+	RiskClasses                 []string
+	EffectClasses               []string
+	CoordinationTaskTypes       []string
+	CoordinationRoles           []string
+	CoordinationExecModes       []string
 	CoordinationLongRunning     int32
 	CoordinationDirectInsertion int32
 }
@@ -88,15 +88,15 @@ type SessionPolicyView struct {
 }
 
 type SessionSelectorView struct {
-	Partitions       []string
-	ChannelIDs       []string
-	Scopes           []string
-	TrustClasses     []string
-	Operations       []string
-	ActorKinds       []string
-	ActorIDs         []string
-	ExternalProvider []string
-	AuthOnly         *bool
+	Partitions                []string
+	ChannelIDs                []string
+	Scopes                    []string
+	TrustClasses              []string
+	Operations                []string
+	ActorKinds                []string
+	ActorIDs                  []string
+	ExternalProvider          []string
+	AuthOnly                  *bool
 	RequireOwnership          *bool
 	RequireDelegation         *bool
 	RequireExternalBinding    *bool

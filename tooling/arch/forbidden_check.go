@@ -12,6 +12,7 @@ import (
 // it, so it cannot silently return. Add a prefix here only when a package has
 // been deliberately deleted and its types rehomed into owning domains.
 var ForbiddenImportPrefixes = []string{
+	"capability/types",
 	"framework/core",
 }
 

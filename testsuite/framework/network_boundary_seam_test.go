@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -21,7 +22,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager with network permission
-		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
+		perms := govpolicy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -71,7 +72,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
 		}
-		manager.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+		manager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
 
 		// Check network access to non-allow-listed host
 		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "denied.com", 443)
@@ -115,7 +116,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 					Action:   "net:egress",
 					Resource: "api.service.local:443",
 				},
-				Scope: authorization.GrantScopeSession,
+				Scope: govpolicy.GrantScopeSession,
 			}},
 		}
 
@@ -149,7 +150,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 			if req.Permission.Resource != "api.service.local:443" {
 				t.Errorf("expected HITL request resource api.service.local:443, got %s", req.Permission.Resource)
 			}
-			if req.Scope != authorization.GrantScopeSession {
+			if req.Scope != govpolicy.GrantScopeSession {
 				t.Errorf("expected HITL request scope session, got %s", req.Scope)
 			}
 		}
@@ -180,7 +181,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 					Action:   "net:egress",
 					Resource: "api.service.local:443",
 				},
-				Scope: authorization.GrantScopeSession,
+				Scope: govpolicy.GrantScopeSession,
 			}},
 		}
 
@@ -246,7 +247,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		}
 
 		// Create capability registry
-		registry := capability.NewRegistry()
+		registry := regpkg.NewRegistry()
 		registry.UsePermissionManager("test-agent", manager)
 
 		// Register a tool that requires network permission
@@ -296,7 +297,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 		}
 
 		// Create capability registry
-		registry := capability.NewRegistry()
+		registry := regpkg.NewRegistry()
 		registry.UsePermissionManager("test-agent", manager)
 
 		// Register a tool that requires network permission

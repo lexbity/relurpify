@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -99,7 +100,7 @@ func TestGateNodeAskWithBroker(t *testing.T) {
 					RequestID:  event.Request.ID,
 					Approved:   true,
 					ApprovedBy: "tester",
-					Scope:      authorization.GrantScopeOneTime,
+					Scope:      govpolicy.GrantScopeOneTime,
 				})
 				return
 			}
@@ -210,7 +211,7 @@ type stubPermissionManager struct {
 	called bool
 }
 
-func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error {
+func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error {
 	s.called = true
 	return nil
 }

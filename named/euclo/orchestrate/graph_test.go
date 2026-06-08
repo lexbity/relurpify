@@ -4,9 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -127,9 +129,9 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 	}
 }
 
-func testGraphCapabilityRegistry(t *testing.T) *capability.CapabilityRegistry {
+func testGraphCapabilityRegistry(t *testing.T) *registry.CapabilityRegistry {
 	t.Helper()
-	reg := capability.NewRegistry()
+	reg := registry.NewRegistry()
 	if err := reg.RegisterInvocableCapability(testGraphCapability{}); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
@@ -138,17 +140,17 @@ func testGraphCapabilityRegistry(t *testing.T) *capability.CapabilityRegistry {
 
 type testGraphCapability struct{}
 
-func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (testGraphCapability) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Name:          "ast_query",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
-		Availability:  capability.AvailabilitySpec{Available: true},
+		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }
 
-func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.ToolResult, error) {
+func (testGraphCapability) Invoke(context.Context, ports.State, map[string]interface{}) (*ports.ToolResult, error) {
 	return &ports.ToolResult{
 		Success: true,
 		Data:    map[string]any{"executed": true},

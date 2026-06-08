@@ -27,7 +27,7 @@ func TestAgentRegistrationFuncsWithFunctions(t *testing.T) {
 	// Test that AgentRegistrationFuncs can be created with actual functions
 	called := false
 	regFuncs := AgentRegistrationFuncs{
-		RegisterCapabilities: func(env WorkspaceEnvironment) error {
+		RegisterCapabilities: func(env AgentContext) error {
 			called = true
 			return nil
 		},
@@ -40,7 +40,7 @@ func TestAgentRegistrationFuncsWithFunctions(t *testing.T) {
 	}
 
 	// Call the function
-	env := WorkspaceEnvironment{}
+	env := AgentContext{}
 	err := regFuncs.RegisterCapabilities(env)
 	if err != nil {
 		t.Errorf("RegisterCapabilities returned error: %v", err)

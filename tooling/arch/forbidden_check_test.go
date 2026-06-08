@@ -17,18 +17,26 @@ func TestCheckForbiddenImports(t *testing.T) {
 			TestImports: []string{ModulePath + "/framework/core"}, // forbidden (test)
 		},
 		{
+			ImportPath: ModulePath + "/agents/react",
+			Imports:    []string{ModulePath + "/capability/types"}, // forbidden deleted bucket
+		},
+		{
 			ImportPath: ModulePath + "/framework/coreutil", // NOT a match (segment boundary)
+			Imports:    []string{"fmt"},
+		},
+		{
+			ImportPath: ModulePath + "/capability/typesafe", // NOT a match (segment boundary)
 			Imports:    []string{"fmt"},
 		},
 	}
 
 	got := CheckForbiddenImports(pkgs, Allowlist{})
-	if len(got) != 2 {
-		t.Fatalf("want 2 violations, got %d: %v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("want 3 violations, got %d: %v", len(got), got)
 	}
 	// the legitimate package and the look-alike must not be flagged
 	for _, v := range got {
-		if contains(v, "framework/authorization") || contains(v, "coreutil") {
+		if contains(v, "framework/authorization") || contains(v, "coreutil") || contains(v, "typesafe") {
 			t.Errorf("unexpected violation: %s", v)
 		}
 	}

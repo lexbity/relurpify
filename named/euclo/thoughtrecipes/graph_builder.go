@@ -20,7 +20,7 @@ import (
 //
 // The graph preserves the linear thoughtrecipe steps and also materializes parallel and
 // conditional groups using the primitives available in framework/agentgraph.
-func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.WorkspaceEnvironment, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
+func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
 	_ = ingestionPipeline // retained for future plumbing; step nodes currently own ingestion.
 
 	if plan == nil {
@@ -107,7 +107,7 @@ type stepArtifacts struct {
 	fallback string
 }
 
-func buildLinearSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, steps []ExecutionStep) (graphSection, error) {
+func buildLinearSection(graph *agentgraph.Graph, env agentenv.AgentContext, steps []ExecutionStep) (graphSection, error) {
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
 		artifact, err := addExecutionStep(graph, env, step)
@@ -133,7 +133,7 @@ func buildLinearSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironme
 	}, nil
 }
 
-func buildParallelSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, group CompiledParallelGroup) (graphSection, error) {
+func buildParallelSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledParallelGroup) (graphSection, error) {
 	groupID := scopedGroupNodeID(group.Group.ID, "parallel")
 	if err := graph.AddNode(newThoughtRecipeStageNode(groupID, agentgraph.NodeTypeSystem, "parallel", map[string]any{
 		"group_id": group.Group.ID,
@@ -175,7 +175,7 @@ func buildParallelSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnviron
 	}, nil
 }
 
-func buildConditionalSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, group CompiledConditionalGroup) (graphSection, error) {
+func buildConditionalSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledConditionalGroup) (graphSection, error) {
 	condID := scopedGroupNodeID(group.Group.ID, "conditional")
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
@@ -218,7 +218,7 @@ func buildConditionalSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvi
 	}, nil
 }
 
-func buildRouteSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, group CompiledRouteGroup) (graphSection, error) {
+func buildRouteSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledRouteGroup) (graphSection, error) {
 	routeID := scopedGroupNodeID(group.Group.ID, "route")
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
@@ -281,7 +281,7 @@ func buildRouteSection(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironmen
 	}, nil
 }
 
-func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, steps []ExecutionStep, continuation string) (string, error) {
+func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.AgentContext, steps []ExecutionStep, continuation string) (string, error) {
 	if len(steps) == 0 {
 		if strings.TrimSpace(continuation) != "" {
 			return continuation, nil
@@ -310,7 +310,7 @@ func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvir
 	return artifacts[0].entry, nil
 }
 
-func buildBranchSequence(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, steps []CompiledStep, continuation string) (string, error) {
+func buildBranchSequence(graph *agentgraph.Graph, env agentenv.AgentContext, steps []CompiledStep, continuation string) (string, error) {
 	if len(steps) == 0 {
 		if strings.TrimSpace(continuation) != "" {
 			return continuation, nil
@@ -401,7 +401,7 @@ func inheritExecutionStepScope(step, parent ExecutionStep) ExecutionStep {
 	return step
 }
 
-func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, step ExecutionStep) (stepArtifacts, error) {
+func addExecutionStep(graph *agentgraph.Graph, env agentenv.AgentContext, step ExecutionStep) (stepArtifacts, error) {
 	if strings.EqualFold(strings.TrimSpace(step.Type), "pipeline") {
 		return addPipelineStep(graph, env, step)
 	}
@@ -508,7 +508,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment
 	}, nil
 }
 
-func addPipelineStep(graph *agentgraph.Graph, env agentenv.WorkspaceEnvironment, step ExecutionStep) (stepArtifacts, error) {
+func addPipelineStep(graph *agentgraph.Graph, env agentenv.AgentContext, step ExecutionStep) (stepArtifacts, error) {
 	entry := step.ID + ".pipeline"
 	joinID := step.ID + ".join"
 	if err := graph.AddNode(newThoughtRecipeStageNode(entry, agentgraph.NodeTypeSystem, "pipeline", map[string]any{

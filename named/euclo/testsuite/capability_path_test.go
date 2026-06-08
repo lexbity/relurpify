@@ -17,7 +17,7 @@ func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 	)
 

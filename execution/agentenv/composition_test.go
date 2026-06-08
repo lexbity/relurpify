@@ -17,9 +17,9 @@ import (
 )
 
 // openEnvForTest calls OpenWorkspace with ScopeEmbeddedAgent and extracts the
-// environment. It replaces the deleted BuildWorkspaceEnvironment for tests
+// environment. It replaces the deleted BuildAgentContext for tests
 // that exercise the embedded-agent bootstrap path.
-func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*WorkspaceEnvironment, error) {
+func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*AgentContext, error) {
 	cfg.SecurityBundle = securityBundle
 	cfg.Scope = ScopeEmbeddedAgent
 	ws, err := OpenWorkspace(ctx, cfg, llm.ProviderSecrets{}, regFuncs)
@@ -285,7 +285,7 @@ func TestOpenEnvForTestWithRegistrationFuncs(t *testing.T) {
 	}
 
 	regFuncs := AgentRegistrationFuncs{
-		RegisterCapabilities: func(env WorkspaceEnvironment) error {
+		RegisterCapabilities: func(env AgentContext) error {
 			called = true
 			return nil
 		},
@@ -334,7 +334,7 @@ func TestOpenEnvForTestRegistrationError(t *testing.T) {
 	}
 
 	regFuncs := AgentRegistrationFuncs{
-		RegisterCapabilities: func(env WorkspaceEnvironment) error {
+		RegisterCapabilities: func(env AgentContext) error {
 			return fmt.Errorf("registration failed")
 		},
 		RegisterPromptProviders: nil,

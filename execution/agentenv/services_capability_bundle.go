@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -18,14 +18,14 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
-	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 var (
-	newCapabilityRegistryFn   = capability.NewRegistry
+	newCapabilityRegistryFn   = regpkg.NewRegistry
 	newASTSQLiteStoreFn       = ast.NewSQLiteStore
 	newGraphDBFn              = graphdb.Open
 	startIndexingFn           = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
@@ -45,7 +45,7 @@ var (
 // CapabilityBundle groups the runtime-scoped capability registry and the
 // shared indexing/search services built alongside it.
 type CapabilityBundle struct {
-	Registry     *capability.CapabilityRegistry
+	Registry     *regpkg.CapabilityRegistry
 	IndexManager *ast.IndexManager
 	SearchEngine *search.SearchEngine
 }
@@ -88,7 +88,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 		return nil, err
 	}
 	toolManifests := platformCfg.ToolManifests
-	registry.UseToolAdmission(capability.NewToolAdmissionPolicy(toolManifests))
+	registry.UseToolAdmission(regpkg.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
 			cleanupCapabilityBundleFn(store, manager)
@@ -209,7 +209,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 //
 // This function exists to keep the app layer from importing platform/shell
 // directly (layer violation).
-func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*capability.CapabilityRegistry, error) {
+func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*regpkg.CapabilityRegistry, error) {
 	capReg := newCapabilityRegistryFn()
 
 	// Load manifests and build tools through the governance package.

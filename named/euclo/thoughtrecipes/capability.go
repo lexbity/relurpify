@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
@@ -200,7 +201,7 @@ func normalizeTriggerTag(value string) string {
 }
 
 // CapabilityRequirementsFromDescriptor derives the requested effect envelope for a capability.
-func CapabilityRequirementsFromDescriptor(desc capability.CapabilityDescriptor) TriggerPolicyRequirements {
+func CapabilityRequirementsFromDescriptor(desc descriptor.CapabilityDescriptor) TriggerPolicyRequirements {
 	req := TriggerPolicyRequirements{ReadWorkspace: true}
 	if capabilityRequiresWrite(desc) {
 		req.WriteWorkspace = true
@@ -222,7 +223,7 @@ func CapabilityRequirementsSatisfied(trigger TriggerPolicyRequirements, capabili
 	return true
 }
 
-func capabilityRequiresWrite(desc capability.CapabilityDescriptor) bool {
+func capabilityRequiresWrite(desc descriptor.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		switch effect {
 		case taxonomy.EffectClassFilesystemMutation,

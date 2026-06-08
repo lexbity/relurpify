@@ -7,15 +7,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"github.com/stretchr/testify/require"
 )
 
 type phase12RecordingRunner struct {
@@ -36,7 +37,7 @@ func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandReq
 	}, nil
 }
 
-func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.WorkspaceEnvironment, map[string]string) {
+func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.AgentContext, map[string]string) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
@@ -53,9 +54,9 @@ func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.Works
 		paths[relPath] = absPath
 	}
 
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config:        &execution.Config{},
-		Registry:      capability.NewRegistry(),
+		Registry:      registry.NewRegistry(),
 		IndexManager:  manager,
 		CommandPolicy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
 		FileScope:     sandbox.NewFileScopePolicy(tmpDir, nil),
@@ -66,13 +67,13 @@ func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.Works
 func TestPhase12Descriptors(t *testing.T) {
 	tests := []struct {
 		name string
-		desc capability.CapabilityDescriptor
+		desc descriptor.CapabilityDescriptor
 	}{
-		{"targeted_refactor", NewTargetedRefactorHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
-		{"rename_symbol", NewRenameSymbolHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
-		{"api_compat", NewAPICompatHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
-		{"boundary_report", NewBoundaryReportHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
-		{"coverage_check", NewCoverageCheckHandler(agentenv.WorkspaceEnvironment{}).Descriptor(context.Background(), nil)},
+		{"targeted_refactor", NewTargetedRefactorHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
+		{"rename_symbol", NewRenameSymbolHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
+		{"api_compat", NewAPICompatHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
+		{"boundary_report", NewBoundaryReportHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
+		{"coverage_check", NewCoverageCheckHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
 	}
 
 	for _, tc := range tests {
@@ -84,7 +85,7 @@ func TestPhase12Descriptors(t *testing.T) {
 }
 
 func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
@@ -96,7 +97,7 @@ func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 				}},
 			},
 		},
-		Registry: capability.NewRegistry(),
+		Registry: registry.NewRegistry(),
 	}
 	require.NoError(t, RegisterAll(env, env.Config.AgentSpec.Capabilities.Relurpic))
 	for _, id := range []string{
@@ -182,7 +183,7 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 }
 
 func TestCoverageCheckParsesOutput(t *testing.T) {
-	handler := NewCoverageCheckHandler(agentenv.WorkspaceEnvironment{
+	handler := NewCoverageCheckHandler(agentenv.AgentContext{
 		CommandRunner: &phase12RecordingRunner{
 			stdout: "ok   github.com/example/foo  0.013s  coverage: 82.5% of statements\nok   github.com/example/bar  0.011s  coverage: 61.0% of statements\n",
 		},

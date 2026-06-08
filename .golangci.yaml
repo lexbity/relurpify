@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  # v2 behavior: path relative to config file rather than working directory
+  relative-path-mode: cfg
+
+linters:
+  # v2 Overhaul: Instead of 'disable-all: true', we explicitly declare our default base set.
+  # Options can be: standard, all, none, or fast. 'none' gives us total control.
+  default: none
+
+  enable:
+    # --- Core Correctness & Safety ---
+    - govet         # Standard Go suspicious-construct checks
+    - ineffassign   # Detects ineffectual assignments
+    - staticcheck   # Critical suite of logic, safety, and performance checks (The "Clippy" core)
+    - unused        # Finds unused constants, variables, functions, and types
+    - errcheck      # Ensures errors are not silently ignored
+    - errorlint     # Enforces modern error wrapping (%w) and checking
+    - gosec         # Scans for security vulnerabilities (SQLi, weak crypto, etc.)
+    - errchkjson    # Checks JSON encoding/decoding error handling and unsupported types
+    - unconvert     # Finds unnecessary type conversions
+    - wastedassign  # Finds assigned values that are never used
+
+    # --- Concurrency & Memory Invariants ---
+    - copyloopvar   # Standard v2 check for loop pointer variable bugs
+    - bodyclose     # Ensures HTTP response bodies are explicitly closed
+    - sqlclosecheck # Ensures SQL rows/statements are closed
+    - rowserrcheck  # Ensures SQL rows errors are checked after iteration
+    - contextcheck  # Verifies context inheritance is not broken across sub-calls
+    - durationcheck # Catches nonsensical duration arithmetic
+
+    # --- Style & Idiom ---
+    - revive        # Strict style convention enforcer (camelCase, ID naming, etc.)
+    - goconst       # Finds repeated strings that should be constants
+    - nilerr        # Catches returning nil when an error occurred
+    - nilnil        # Catches returning nil value with nil error
+    - nilnesserr    # Catches err checks that return a different nil error
+    - nolintlint    # Enforces valid, specific nolint directives
+    - testifylint   # Catches common testify assertion mistakes
+    - usetesting    # Uses modern testing helpers where available
+    - makezero      # Finds suspicious make([]T, n) followed by append patterns
+
+  exclusions:
+    # 'strict' matches files starting with standard "^// Code generated .* DO NOT EDIT.$"
+    generated: strict
+    warn-unused: true
+
+# In v2, code formatting tools are extracted out of the general execution line
+# and placed into their own pipeline for performance and auto-fixing integration.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'  # Forces modern Go 1.18+ 'any' keyword syntax
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

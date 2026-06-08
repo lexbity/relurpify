@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
@@ -23,12 +23,12 @@ type suiteRunner interface {
 
 type Agent struct {
 	Config    *execution.Config
-	Tools     *capability.CapabilityRegistry
+	Tools     *registry.CapabilityRegistry
 	Workspace string
 	Runner    suiteRunner
 }
 
-func New(env agentenv.WorkspaceEnvironment, opts ...Option) *Agent {
+func New(env agentenv.AgentContext, opts ...Option) *Agent {
 	agent := &Agent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -39,7 +39,7 @@ func New(env agentenv.WorkspaceEnvironment, opts ...Option) *Agent {
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.WorkspaceEnvironment) error {
+func (a *Agent) InitializeEnvironment(env agentenv.AgentContext) error {
 	a.Config = env.Config
 	if a.Tools == nil {
 		a.Tools = env.Registry
@@ -194,7 +194,7 @@ func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]
 	return results, allPassed, nil
 }
 
-func (a *Agent) CapabilityRegistry() *capability.CapabilityRegistry {
+func (a *Agent) CapabilityRegistry() *registry.CapabilityRegistry {
 	if a == nil {
 		return nil
 	}

@@ -29,7 +29,4 @@
 //     applies streamed refs back onto the envelope.
 //   - RetrievalNode: retrieves context from the knowledge store and records
 //     retrieval references in the envelope.
-//
-// External node types (defined in other packages):
-//   - LLMNode (agents/llm): calls the language model and routes its response.
 package agentgraph

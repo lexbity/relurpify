@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -46,7 +46,7 @@ const (
 type BrowserService struct {
 	mu sync.Mutex
 
-	registry          *capability.CapabilityRegistry
+	registry          *registry.CapabilityRegistry
 	permissionManager *fauthorization.PermissionManager
 	fileScope         *permissions.FileScopePolicy
 	telemetry         telemetry.Telemetry

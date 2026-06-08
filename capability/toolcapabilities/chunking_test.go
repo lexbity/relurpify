@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
@@ -16,9 +16,9 @@ func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
 		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
 	}
 	returns := ports.ToolManifestReturns{}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 1)
-	_, ok := blocks[0].(capability.StructuredContentBlock)
+	_, ok := blocks[0].(capresult.StructuredContentBlock)
 	require.True(t, ok)
 }
 
@@ -33,7 +33,7 @@ func TestChunkToolResultNonJSONFallback(t *testing.T) {
 			Mode: ports.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -49,10 +49,10 @@ func TestChunkPerItemFromArray(t *testing.T) {
 			RefFields: []string{"path", "line"},
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 2)
 	for i, block := range blocks {
-		sb, ok := block.(capability.StructuredContentBlock)
+		sb, ok := block.(capresult.StructuredContentBlock)
 		require.True(t, ok, "block %d should be StructuredContentBlock", i)
 		data, ok := sb.Data.(map[string]interface{})
 		require.True(t, ok)
@@ -74,7 +74,7 @@ func TestChunkPerItemFromObjectWithMatches(t *testing.T) {
 			RefFields: []string{"path"},
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 2)
 }
 
@@ -90,7 +90,7 @@ func TestChunkPerItemWithItemPath(t *testing.T) {
 			ItemPath: "data.items[]",
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 3)
 }
 
@@ -105,10 +105,10 @@ func TestChunkPerField(t *testing.T) {
 			Mode: ports.ChunkingModePerField,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 3)
 	for _, block := range blocks {
-		sb, ok := block.(capability.StructuredContentBlock)
+		sb, ok := block.(capresult.StructuredContentBlock)
 		require.True(t, ok)
 		data, ok := sb.Data.(map[string]interface{})
 		require.True(t, ok)
@@ -127,7 +127,7 @@ func TestChunkWholeReturnsSingleBlock(t *testing.T) {
 			Mode: ports.ChunkingModeWhole,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -142,7 +142,7 @@ func TestChunkMalformedJSONFallback(t *testing.T) {
 			Mode: ports.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -157,7 +157,7 @@ func TestChunkEmptyStdoutFallback(t *testing.T) {
 			Mode: ports.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	require.Len(t, blocks, 1)
 }
 
@@ -173,10 +173,10 @@ func TestChunkResultPreservesErrorBlock(t *testing.T) {
 			Mode: ports.ChunkingModePerItem,
 		},
 	}
-	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
+	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
 	hasError := false
 	for _, b := range blocks {
-		if _, ok := b.(capability.ErrorContentBlock); ok {
+		if _, ok := b.(capresult.ErrorContentBlock); ok {
 			hasError = true
 			break
 		}
@@ -200,7 +200,7 @@ func TestNavigatePathMissingReturnsNil(t *testing.T) {
 }
 
 func TestNewCapabilityResultEnvelopeWithBlocks(t *testing.T) {
-	desc := capability.CapabilityDescriptor{
+	desc := descriptor.CapabilityDescriptor{
 		ID:   "test:rg",
 		Name: "cli_rg",
 	}
@@ -208,17 +208,17 @@ func TestNewCapabilityResultEnvelopeWithBlocks(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": "data"},
 	}
-	precomputed := []capability.ContentBlock{
-		capability.StructuredContentBlock{Data: map[string]interface{}{"chunk": 1}},
-		capability.StructuredContentBlock{Data: map[string]interface{}{"chunk": 2}},
+	precomputed := []capresult.ContentBlock{
+		capresult.StructuredContentBlock{Data: map[string]interface{}{"chunk": 1}},
+		capresult.StructuredContentBlock{Data: map[string]interface{}{"chunk": 2}},
 	}
-	envelope := capability.NewCapabilityResultEnvelopeWithBlocks(desc, result, capability.ContentDispositionRaw, nil, nil, precomputed)
+	envelope := capresult.NewCapabilityResultEnvelopeWithBlocks(desc, result, capresult.ContentDispositionRaw, nil, nil, precomputed)
 	require.NotNil(t, envelope)
 	require.Len(t, envelope.ContentBlocks, 2)
 }
 
 func TestEnvelopeWithoutBlocksDefaults(t *testing.T) {
-	desc := capability.CapabilityDescriptor{
+	desc := descriptor.CapabilityDescriptor{
 		ID:   "test:echo",
 		Name: "cli_echo",
 	}
@@ -226,7 +226,7 @@ func TestEnvelopeWithoutBlocksDefaults(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": "hello"},
 	}
-	envelope := capability.NewCapabilityResultEnvelope(desc, result, capability.ContentDispositionRaw, nil, nil)
+	envelope := capresult.NewCapabilityResultEnvelope(desc, result, capresult.ContentDispositionRaw, nil, nil)
 	require.NotNil(t, envelope)
 	require.Len(t, envelope.ContentBlocks, 1)
 }

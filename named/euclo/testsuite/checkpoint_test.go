@@ -136,7 +136,7 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
 	graph := orchestrate.NewRootGraph(
-		orchestrate.WithWorkspaceEnvironment(workspaceEnv(caps)),
+		orchestrate.WithAgentContext(workspaceEnv(caps)),
 		orchestrate.WithCapabilityRegistry(caps),
 		orchestrate.WithCheckpointRepository(repo),
 		orchestrate.WithPersistenceWriter(writer),

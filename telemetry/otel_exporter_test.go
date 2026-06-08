@@ -56,8 +56,8 @@ func TestToolSpanExporterSkipsNonToolEvents(t *testing.T) {
 	mem := &InMemoryExporter{}
 	exporter := NewToolSpanExporter(nil, WithSpanExporter(mem))
 
-	exporter.Emit(Event{Type: telemetry.EventGraphStart})
-	exporter.Emit(Event{Type: telemetry.EventLLMPrompt})
+	exporter.Emit(Event{Type: EventGraphStart})
+	exporter.Emit(Event{Type: EventLLMPrompt})
 	exporter.Emit(Event{Type: EventStateChange})
 
 	require.Empty(t, mem.Spans, "non-tool events must not generate spans")
@@ -193,10 +193,10 @@ func TestToolSpanExporterForwardsToNextSink(t *testing.T) {
 	exporter := NewToolSpanExporter(next, WithSpanExporter(mem))
 
 	exporter.Emit(Event{
-		Type: telemetry.EventGraphStart,
+		Type: EventGraphStart,
 	})
 
 	require.Len(t, mem.Spans, 0, "non-tool events don't create spans")
 	require.Len(t, next.events, 1, "all events are forwarded to next sink")
-	require.Equal(t, telemetry.EventGraphStart, next.events[0].Type)
+	require.Equal(t, EventGraphStart, next.events[0].Type)
 }

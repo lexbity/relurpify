@@ -295,7 +295,7 @@ func TestValidateV2FlagBadStyleFails(t *testing.T) {
 	require.Contains(t, err.Error(), `flag "out": style "invalid_style" must be "equals" or "separate"`)
 }
 
-func TestValidateV2ChunkingAndTelemetryPasses(t *testing.T) {
+func TestValidateV2ChunkingPasses(t *testing.T) {
 	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
 		Name:        "cli_rg",
 		Family:      "fileops",
@@ -313,10 +313,6 @@ func TestValidateV2ChunkingAndTelemetryPasses(t *testing.T) {
 				ItemPath:  "matches[]",
 				RefFields: []string{"path", "line"},
 			},
-		},
-		Telemetry: &toolcapabilities.ToolManifestTelemetry{
-			SpanName:        "tool.cli_rg",
-			ExtraAttributes: []string{"pattern"},
 		},
 		Capability: ports.ToolManifestCapability{
 			TrustClass:  "builtin_trusted",

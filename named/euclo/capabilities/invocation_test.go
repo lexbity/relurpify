@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -13,7 +12,7 @@ type mockRegistry struct {
 	args map[string]interface{}
 }
 
-func (m *mockRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error) {
+func (m *mockRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*ports.ToolResult, error) {
 	m.args = args
 	return &ports.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
 }

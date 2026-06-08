@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"github.com/stretchr/testify/require"
 )
 
 func TestToolNodeSetsTraceContext(t *testing.T) {
@@ -83,7 +84,7 @@ func (r *traceCaptureRegistry) InvokeCapability(ctx context.Context, env *contex
 	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "ok"}}, nil
 }
 
-func (r *traceCaptureRegistry) CapturePolicySnapshot() *capability.PolicySnapshot { return nil }
-func (r *traceCaptureRegistry) GetCapability(idOrName string) (capability.CapabilityDescriptor, bool) {
-	return capability.CapabilityDescriptor{}, false
+func (r *traceCaptureRegistry) CapturePolicySnapshot() *capresult.PolicySnapshot { return nil }
+func (r *traceCaptureRegistry) GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool) {
+	return descriptor.CapabilityDescriptor{}, false
 }

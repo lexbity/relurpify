@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	platformlsp "codeburg.org/lexbit/relurpify/platform/lsp"
 )
 
@@ -50,7 +50,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 
 // AttachASTSymbolProvider inspects the registry for the LSP document symbols
 // tool and wires it into the AST indexer when present.
-func AttachASTSymbolProvider(manager *IndexManager, registry *capability.CapabilityRegistry) {
+func AttachASTSymbolProvider(manager *IndexManager, registry *registry.CapabilityRegistry) {
 	if manager == nil || registry == nil {
 		return
 	}

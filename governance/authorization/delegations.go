@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
@@ -527,8 +527,6 @@ func buildDelegationInvocationArgs(ctx context.Context, request policy.Delegatio
 	return args, nil
 }
 
-
-
 func (m *DelegationManager) awaitBackgroundDelegation(id string, request policy.DelegationRequest, target governanceports.DescriptorView, handle *BackgroundDelegationHandle, snapshot *policy.PolicySnapshot, opts DelegationExecutionOptions) {
 	if m == nil || handle == nil || handle.Results == nil {
 		return
@@ -842,7 +840,7 @@ func marshalDelegationArtifact(snapshot policy.DelegationSnapshot) string {
 		"state":   snapshot.State,
 		"result":  snapshot.Result,
 	}
-	data, err := json.Marshal(capability.RedactAny(payload))
+	data, err := json.Marshal(runtime.RedactAny(payload))
 	if err != nil {
 		return "{}"
 	}

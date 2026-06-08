@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/jobs"
@@ -66,7 +65,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 		t.Fatalf("expected checkpoint success, got %#v", result)
 	}
 
-	artifact, err := persistence.LoadLatestCheckpointArtifact(context.Background(), repo, "session-background", "checkpoint")
+	artifact, err := loadLatestCheckpointArtifact(context.Background(), repo, "session-background")
 	if err != nil {
 		t.Fatalf("load latest checkpoint: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 	var snapshot struct {
 		WorkingData map[string]json.RawMessage `json:"working_data"`
 	}
-	if err := json.Unmarshal([]byte(artifact.InlineRawText), &snapshot); err != nil {
+	if err := json.Unmarshal([]byte(checkpointInlineRaw(t, artifact)), &snapshot); err != nil {
 		t.Fatalf("unmarshal checkpoint payload: %v", err)
 	}
 

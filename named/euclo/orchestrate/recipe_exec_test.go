@@ -6,16 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/model"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -27,8 +29,8 @@ import (
 
 type noopCompiler struct{}
 
-func (noopCompiler) Compile(_ context.Context, _ compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
-	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
+func (noopCompiler) Compile(_ context.Context, _ contextports.CompilationRequest) (*contextports.CompilationResult, error) {
+	return &contextports.CompilationResult{}, nil
 }
 
 func ctxWithTrigger(ctx context.Context) context.Context {
@@ -72,9 +74,9 @@ func TestThoughtRecipeExecutionNodeExecute(t *testing.T) {
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
+	node.WithAgentContext(agentenv.AgentContext{
 		Model:         stubThoughtRecipeModel{},
-		Registry:      capability.NewRegistry(),
+		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
 		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
@@ -113,9 +115,9 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
+	node.WithAgentContext(agentenv.AgentContext{
 		Model:         stubThoughtRecipeModel{},
-		Registry:      capability.NewRegistry(),
+		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
 		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
@@ -170,9 +172,9 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
+	node.WithAgentContext(agentenv.AgentContext{
 		Model:         stubThoughtRecipeModel{},
-		Registry:      capability.NewRegistry(),
+		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
 		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-test",
@@ -251,9 +253,9 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
-	node.WithWorkspaceEnvironment(agentenv.WorkspaceEnvironment{
+	node.WithAgentContext(agentenv.AgentContext{
 		Model:         stubThoughtRecipeModel{},
-		Registry:      capability.NewRegistry(),
+		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
 		Config: &execution.Config{
 			Name:  "thoughtrecipe-exec-handoff-test",
@@ -384,17 +386,17 @@ type recordingCapabilityHandler struct {
 	args   map[string]any
 }
 
-func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *recordingCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Name:          "code_review",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
-		Availability:  capability.AvailabilitySpec{Available: true},
+		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }
 
-func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.called = true
@@ -411,7 +413,7 @@ func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	}, nil
 }
 
-func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *capability.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.ThoughtRecipeRegistry, *thoughtrecipepkg.ExecutionPlan) {
+func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.ThoughtRecipeRegistry, *thoughtrecipepkg.ExecutionPlan) {
 	t.Helper()
 	doc, err := thoughtrecipepkg.ParseSource("scope_demo.euclo", source)
 	if err != nil {
@@ -438,11 +440,11 @@ func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *capabi
 	return registry, plan
 }
 
-func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, toolReg *capability.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup, nativeToolCalling bool) (*recordingThoughtRecipeModel, *contextdata.Envelope, *thoughtrecipepkg.ExecutionPlan) {
+func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup, nativeToolCalling bool) (*recordingThoughtRecipeModel, *contextdata.Envelope, *thoughtrecipepkg.ExecutionPlan) {
 	t.Helper()
 	recipeRegistry, plan := compileThoughtRecipeFromSource(t, source, toolReg, capReg)
 	model := &recordingThoughtRecipeModel{nativeToolCalling: nativeToolCalling}
-	env := agentenv.WorkspaceEnvironment{
+	env := agentenv.AgentContext{
 		Model:    model,
 		Registry: runtimeReg,
 		Config:   &execution.Config{Model: "test-model", NativeToolCalling: nativeToolCalling},
@@ -455,7 +457,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	})
 
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec").
-		WithWorkspaceEnvironment(env).
+		WithAgentContext(env).
 		WithThoughtRecipeRegistry(recipeRegistry)
 
 	if _, err := node.Execute(context.Background(), taskEnv); err != nil {
@@ -500,7 +502,7 @@ func containsAllStrings(haystack string, want ...string) bool {
 }
 
 func TestThoughtRecipeExecutorNodeUsesScopedToolsFromSource(t *testing.T) {
-	toolReg := capability.NewRegistry()
+	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -535,7 +537,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeAppliesRunLocalOverlay(t *testing.T) {
-	toolReg := capability.NewRegistry()
+	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -571,7 +573,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeSupportsFallbackPromptModeWithScopedTools(t *testing.T) {
-	toolReg := capability.NewRegistry()
+	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -600,7 +602,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeKeepsUnscopedRecipesAtFullToolSurface(t *testing.T) {
-	toolReg := capability.NewRegistry()
+	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -630,7 +632,7 @@ run reviewer:
 
 func TestThoughtRecipeExecutorNodeStillInvokesDirectCapabilities(t *testing.T) {
 	capHandler := &recordingCapabilityHandler{}
-	capReg := capability.NewRegistry()
+	capReg := regpkg.NewRegistry()
 	if err := capReg.RegisterInvocableCapability(capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}
@@ -662,7 +664,7 @@ run reviewer:
 }
 
 func TestThoughtRecipeExecutorNodeCombinesScopedToolsAndNestedCapabilityInvocation(t *testing.T) {
-	toolReg := capability.NewRegistry()
+	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
@@ -691,7 +693,7 @@ run reviewer:
 	}
 
 	capHandler := &recordingCapabilityHandler{}
-	runtimeReg := capability.NewRegistry()
+	runtimeReg := regpkg.NewRegistry()
 	if err := runtimeReg.RegisterInvocableCapability(capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}

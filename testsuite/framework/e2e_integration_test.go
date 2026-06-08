@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
@@ -45,7 +45,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 3: Create capability registry with permission manager (capability seam)
-	registry := capability.NewRegistry()
+	registry := regpkg.NewRegistry()
 	registry.UsePermissionManager("test-agent", manager)
 
 	// Register a test tool that requires permission

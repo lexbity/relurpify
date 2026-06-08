@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/capability"
+	agents "codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -47,7 +47,7 @@ import (
 type Runtime struct {
 	Config          Config
 	Workspace       *agentenv.Workspace
-	Tools           *capability.CapabilityRegistry
+	Tools           *registry.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Agent           agentgraph.WorkflowExecutor
 	Model           model.LanguageModel
@@ -274,14 +274,6 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
-	agentEnv := agents.AgentEnvironment{
-		Config:       env.Config,
-		Model:        env.Model,
-		Registry:     env.Registry,
-		IndexManager: env.IndexManager,
-		SearchEngine: env.SearchEngine,
-		Memory:       env.WorkingMemory,
-	}
 
 	// Use WorkflowStore interface directly
 	rt := &Runtime{
@@ -316,7 +308,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
-	agent := instantiateAgent(cfg, agentEnv)
+	agent := instantiateAgent(cfg, env)
 	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
@@ -448,12 +440,12 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		AgentSpec:         effectiveContract.AgentSpec,
 		Telemetry:         r.Workspace.Telemetry,
 	}
-	agent := instantiateAgent(cfg, agents.AgentEnvironment{
+	agent := instantiateAgent(cfg, agentenv.AgentContext{
 		Model:        r.Model,
 		Registry:     r.Tools,
 		IndexManager: r.IndexManager,
 		SearchEngine: r.SearchEngine,
-		Memory:       r.Memory,
+		WorkingMemory: r.Memory,
 		Config:       agentCfg,
 	})
 	if agent == nil {
@@ -472,10 +464,9 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, env agents.AgentEnvironment) agentgraph.WorkflowExecutor {
+func instantiateAgent(cfg Config, env agentenv.AgentContext) agentgraph.WorkflowExecutor {
 	paths := config.New(cfg.Workspace)
-	workspaceEnv := agents.ToWorkspace(env)
-	builder := agents.NewAgentBuilder().WithEnvironment(&workspaceEnv)
+	builder := agents.NewAgentBuilder().WithEnvironment(&env)
 	switch cfg.AgentLabel() {
 	case "planner":
 		agent, _ := builder.Build("planner")

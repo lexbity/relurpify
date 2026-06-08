@@ -12,13 +12,13 @@ import (
 )
 
 func TestTestRunHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{}
+	wsEnv := agentenv.AgentContext{}
 	handler := NewTestRunHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	desc := handler.Descriptor(ctx, envelope)
+	desc := handler.Descriptor(ctx, envelope.State())
 
 	if desc.ID != "euclo:cap.test_run" {
 		t.Errorf("descriptor ID = %q, want %q", desc.ID, "euclo:cap.test_run")
@@ -38,7 +38,7 @@ func TestTestRunHandlerPassingTest(t *testing.T) {
 		Stdout: "PASS: TestFoo\nPASS: TestBar\nok\tcodeburg.org/lexbit/relurpify\t0.002s",
 	})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		CommandPolicy: allowCommandPolicy(),
 	}
@@ -50,7 +50,7 @@ func TestTestRunHandlerPassingTest(t *testing.T) {
 		"command": "go test ./...",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 		Stderr: "FAIL\tcodeburg.org/lexbit/relurpify\t0.002s",
 	})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		CommandPolicy: allowCommandPolicy(),
 	}
@@ -86,7 +86,7 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 		"command": "go test ./...",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 }
 
 func TestTestRunHandlerNilRunner(t *testing.T) {
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: nil,
 		CommandPolicy: allowCommandPolicy(),
 	}
@@ -125,7 +125,7 @@ func TestTestRunHandlerNilRunner(t *testing.T) {
 		"command": "go test ./...",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestTestRunHandlerCommandDenied(t *testing.T) {
 		Err: errors.New("command denied by policy"),
 	})
 
-	wsEnv := agentenv.WorkspaceEnvironment{
+	wsEnv := agentenv.AgentContext{
 		CommandRunner: mockRunner,
 		CommandPolicy: allowCommandPolicy(),
 	}
@@ -160,7 +160,7 @@ func TestTestRunHandlerCommandDenied(t *testing.T) {
 		"command": "go test ./...",
 	}
 
-	result, err := handler.Invoke(ctx, envelope, args)
+	result, err := handler.Invoke(ctx, envelope.State(), args)
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}

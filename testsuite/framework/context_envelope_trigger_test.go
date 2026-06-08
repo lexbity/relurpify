@@ -8,7 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 // TestEnvelopeInitialization validates that a fresh envelope starts in a known state.
@@ -453,7 +453,7 @@ type mockCompiler struct {
 	compileCalled bool
 }
 
-func (m *mockCompiler) Compile(ctx context.Context, req compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+func (m *mockCompiler) Compile(ctx context.Context, req contextports.CompilationRequest) (*contextports.CompilationResult, error) {
 	m.compileCalled = true
-	return &compiler.CompilationResult{}, &compiler.CompilationRecord{}, nil
+	return &contextports.CompilationResult{}, nil
 }

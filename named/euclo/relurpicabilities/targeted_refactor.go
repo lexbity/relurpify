@@ -6,31 +6,32 @@ import (
 	"fmt"
 	"strings"
 
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TargetedRefactorHandler implements the targeted refactor capability.
 type TargetedRefactorHandler struct {
-	env agentenv.WorkspaceEnvironment
+	env agentenv.AgentContext
 	frameworkPolicyContext
 }
 
 // NewTargetedRefactorHandler creates a new targeted refactor handler.
-func NewTargetedRefactorHandler(env agentenv.WorkspaceEnvironment) *TargetedRefactorHandler {
+func NewTargetedRefactorHandler(env agentenv.AgentContext) *TargetedRefactorHandler {
 	return &TargetedRefactorHandler{env: env}
 }
 
 // Descriptor returns the capability descriptor for the targeted refactor handler.
-func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
-	return capability.CapabilityDescriptor{
+func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
 		ID:            "euclo:cap.targeted_refactor",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
@@ -39,7 +40,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.Stat
 		Description:   "Applies a focused refactoring to a specific symbol or code block via AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "ast", "write"},
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,

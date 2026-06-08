@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
@@ -76,15 +76,15 @@ func (h *browserCapability) SetPermissionManager(manager *fauthorization.Permiss
 	}
 }
 
-func (h *browserCapability) Descriptor(context.Context, ports.State) capability.CapabilityDescriptor {
-	desc := capability.CapabilityDescriptor{
+func (h *browserCapability) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
+	desc := descriptor.CapabilityDescriptor{
 		ID:          "tool:browser",
 		Kind:        agentspec.CapabilityKindTool,
 		Name:        "browser",
 		Version:     "v1",
 		Description: "Controls a browser session via a single action-dispatch tool.",
 		Category:    "browser",
-		Source: capability.CapabilitySource{
+		Source: descriptor.CapabilitySource{
 			ProviderID: "browser",
 			Scope:      taxonomy.CapabilityScopeProvider,
 		},
@@ -92,14 +92,14 @@ func (h *browserCapability) Descriptor(context.Context, ports.State) capability.
 		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassNetwork, taxonomy.RiskClassSessioned, taxonomy.RiskClassExfiltration},
 		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassContextInsertion, taxonomy.EffectClassSessionCreation},
 		InputSchema:   browserInputSchema(),
-		Availability: capability.AvailabilitySpec{
+		Availability: descriptor.AvailabilitySpec{
 			Available: true,
 		},
 		Annotations: map[string]any{
 			"provider_id": "browser",
 		},
 	}
-	return capability.NormalizeCapabilityDescriptor(desc)
+	return descriptor.NormalizeCapabilityDescriptor(desc)
 }
 
 func browserInputSchema() *schemacoerce.Schema {
