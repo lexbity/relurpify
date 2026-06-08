@@ -45,8 +45,8 @@ func MergeHTNBranches(parent *contextdata.Envelope, branches []plan.BranchExecut
 	parent.WorkingData = merged.WorkingData
 	parent.References = merged.References
 	completed := orderedCompletedSteps(parent, completedSet)
-	parent.SetWorkingValue(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
-	parent.SetWorkingValue(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
+	parent.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
+	parent.SetWorkingValueWithClass(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
 	execution := loadExecutionState(parent)
 	execution.CompletedSteps = append([]string(nil), completed...)
 	publishExecutionState(parent, execution)

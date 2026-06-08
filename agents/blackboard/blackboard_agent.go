@@ -190,12 +190,12 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 		env = contextdata.NewEnvelope("blackboard", "session")
 	}
 	if task != nil {
-		env.SetWorkingValue("task.id", task.ID, contextdata.MemoryClassTask)
-		env.SetWorkingValue("task.type", string(task.Type), contextdata.MemoryClassTask)
-		env.SetWorkingValue("task.instruction", task.Instruction, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("task.type", string(task.Type), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("task.instruction", task.Instruction, contextdata.MemoryClassTask)
 	}
 	if a.Memory != nil {
-		env.SetWorkingValue(contextKeyWorkingMemoryStore, a.Memory, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyWorkingMemoryStore, a.Memory, contextdata.MemoryClassTask)
 	}
 	if cfg := a.Config; cfg != nil {
 		// Telemetry event emission - keep commented until envelope equivalent available
@@ -294,7 +294,7 @@ func compactBlackboardPostExecutionState(env *contextdata.Envelope) {
 	if !ok {
 		return
 	}
-	env.SetWorkingValue(contextKeyAuditTrail, compactBlackboardAudit(entries), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyAuditTrail, compactBlackboardAudit(entries), contextdata.MemoryClassTask)
 }
 
 func compactBlackboardAudit(entries []map[string]any) map[string]any {
@@ -317,16 +317,16 @@ func mirrorBlackboardArtifactReferences(env *contextdata.Envelope) {
 	if strings.TrimSpace(envGetString(env, contextKeySummary)) != "" {
 		if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
 			if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-				env.SetWorkingValue(contextKeySummaryRef, ref, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(contextKeySummaryRef, ref, contextdata.MemoryClassTask)
 			}
 		}
 		if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
-			env.SetWorkingValue(contextKeySummaryArtifactSummary, summary, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(contextKeySummaryArtifactSummary, summary, contextdata.MemoryClassTask)
 		}
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
 		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValue(contextKeyCheckpointRef, ref, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(contextKeyCheckpointRef, ref, contextdata.MemoryClassTask)
 		}
 	}
 }

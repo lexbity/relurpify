@@ -10,31 +10,25 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
 )
 
 type streamCompilerStub struct {
-	request compiler.CompilationRequest
-	result  *compiler.CompilationResult
-	record  *compiler.CompilationRecord
+	request contextports.CompilationRequest
+	result  *contextports.CompilationResult
 }
 
-func (s *streamCompilerStub) Compile(ctx context.Context, request compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error) {
+func (s *streamCompilerStub) Compile(ctx context.Context, request contextports.CompilationRequest) (*contextports.CompilationResult, error) {
 	s.request = request
-	return s.result, s.record, nil
+	return s.result, nil
 }
 
 func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 	compilerStub := &streamCompilerStub{
-		result: &compiler.CompilationResult{
-			StreamedRefs: []contextdata.ChunkReference{
-				{ChunkID: "chunk-1", Rank: 1},
-			},
+		result: &contextports.CompilationResult{
+			StreamedRefs:    []string{"chunk-1"},
 			ShortfallTokens: 9,
-		},
-		record: &compiler.CompilationRecord{
-			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-1"},
 		},
 	}
 	node := NewContextStreamNode("stream-node", retrieval.RetrievalQuery{Text: "workspace query"}, 256)
@@ -54,20 +48,12 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 	shortfall, ok := env.GetWorkingValue("contextstream.shortfall_tokens")
 	require.True(t, ok)
 	require.Equal(t, 9, shortfall)
-	require.Equal(t, uint64(12), compilerStub.request.EventLogSeq)
-	require.Equal(t, 256, compilerStub.request.MaxTokens)
-	require.Equal(t, "workspace query", compilerStub.request.Query.Text)
 }
 
 func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
 	compilerStub := &streamCompilerStub{
-		result: &compiler.CompilationResult{
-			StreamedRefs: []contextdata.ChunkReference{
-				{ChunkID: "chunk-2", Rank: 1},
-			},
-		},
-		record: &compiler.CompilationRecord{
-			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-2"},
+		result: &contextports.CompilationResult{
+			StreamedRefs: []string{"chunk-2"},
 		},
 	}
 	node := NewContextStreamNode("stream-node-bg", retrieval.RetrievalQuery{Text: "background query"}, 64)

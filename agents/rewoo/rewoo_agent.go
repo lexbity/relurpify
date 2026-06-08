@@ -137,7 +137,7 @@ func (n *rewooPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	if err != nil {
 		return nil, err
 	}
-	env.SetWorkingValue("rewoo.plan", plan, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.plan", plan, contextdata.MemoryClassTask)
 	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_steps": len(plan.Steps)})}, nil
 }
 
@@ -162,7 +162,7 @@ func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelop
 	opts := n.agent.Options
 	results, err := ExecutePlan(ctx, n.agent.Tools, plan, env, opts)
 	if len(results) > 0 {
-		env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.tool_results", results, contextdata.MemoryClassTask)
 	}
 	if err != nil {
 		return &execution.Result{

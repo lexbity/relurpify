@@ -212,7 +212,7 @@ func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step plan.Pla
 
 	// Store execution result in context
 	executionKey := fmt.Sprintf("goalcon.step_result.%s", step.ID)
-	ctx.SetWorkingValue(executionKey, map[string]any{
+	ctx.SetWorkingValueWithClass(executionKey, map[string]any{
 		"tool":     step.Tool,
 		"params":   step.Params,
 		"executed": true,

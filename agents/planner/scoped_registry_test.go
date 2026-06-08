@@ -55,7 +55,7 @@ func TestPlannerExecuteNodeUsesScopedRegistryDirectly(t *testing.T) {
 	agent := &PlannerAgent{Tools: scoped, Config: &execution.Config{}}
 	node := &plannerExecuteNode{id: "planner_execute", agent: agent}
 	env := contextdata.NewEnvelope("planner-task", "session")
-	env.SetWorkingValue("planner.plan", pl.Plan{
+	env.SetWorkingValueWithClass("planner.plan", pl.Plan{
 		ID:   "planner-plan",
 		Goal: "inspect",
 		Steps: []pl.PlanStep{{

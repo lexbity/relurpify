@@ -116,16 +116,16 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		"mixed_intent":   intent.MixedIntent,
 	}
 
-	env.SetWorkingValue(euclokeys.KeyTaskEnvelope, taskEnvelope, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclokeys.KeyIntentEvidence, intentEvidence, contextdata.MemoryClassTask)
-	env.SetWorkingValue(intentcontext.IntentEvidenceKey, intentEvidence, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclokeys.KeyIntentInterpretation, interpretation, contextdata.MemoryClassTask)
-	env.SetWorkingValue(intentcontext.IntentInterpretationKey, interpretation, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclokeys.KeyIntentClassification, intent, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclokeys.KeyFamilySelection, scoredClassification.WinningFamily, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclokeys.KeyNegativeConstraints, taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyTaskEnvelope, taskEnvelope, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyIntentEvidence, intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(intentcontext.IntentEvidenceKey, intentEvidence, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyIntentInterpretation, interpretation, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(intentcontext.IntentInterpretationKey, interpretation, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyIntentClassification, intent, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyFamilySelection, scoredClassification.WinningFamily, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyNegativeConstraints, taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
 	if streamResult != nil {
-		env.SetWorkingValue(euclokeys.KeyStreamResult, streamResult, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(euclokeys.KeyStreamResult, streamResult, contextdata.MemoryClassTask)
 	}
 
 	return &execution.Result{
@@ -228,9 +228,9 @@ func serializeStreamResult(result *contextstream.Result) string {
 	}
 	if result.Compilation != nil {
 		b.WriteString("chunks:")
-		b.WriteString(fmt.Sprintf("%d", len(result.Compilation.Chunks)))
+		b.WriteString(fmt.Sprintf("%d", len(result.Compilation.StreamedRefs)))
 		b.WriteString(" tokens:")
-		b.WriteString(fmt.Sprintf("%d", result.Compilation.TotalTokens))
+		b.WriteString(fmt.Sprintf("%d", result.Compilation.Record.FinalTokens))
 	}
 	return strings.TrimSpace(b.String())
 }

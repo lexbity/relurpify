@@ -164,7 +164,7 @@ func TestHybridSearchFeedsSharedContextMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", result.File, err)
 		}
-		shared.SetWorkingValue(result.File, string(data), contextdata.MemoryClassTask)
+		shared.SetWorkingValueWithClass(result.File, string(data), contextdata.MemoryClassTask)
 		seen[result.File] = struct{}{}
 	}
 	if len(seen) < 2 {
@@ -282,10 +282,10 @@ func (n *migrationCapabilityNode) Execute(ctx context.Context, state *contextdat
 	if result != nil {
 		fields := result.Data
 		if status, ok := fields["status"].(string); ok {
-			state.SetWorkingValue(n.toolName+".status", status, contextdata.MemoryClassTask)
+			state.SetWorkingValueWithClass(n.toolName+".status", status, contextdata.MemoryClassTask)
 		}
 		if content, ok := fields["content"].(string); ok {
-			state.SetWorkingValue(n.toolName+".content", content, contextdata.MemoryClassTask)
+			state.SetWorkingValueWithClass(n.toolName+".content", content, contextdata.MemoryClassTask)
 		}
 	}
 	state.AddInteraction(map[string]any{"actor": "tool:" + n.toolName, "result": result.Data})

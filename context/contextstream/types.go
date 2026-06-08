@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 // Mode determines whether a streaming request blocks or runs in the background.
@@ -32,14 +32,14 @@ type Request struct {
 type TrimMetadata struct {
 	BudgetTokens    int
 	ShortfallTokens int
-	Substitutions   []compiler.SummarySubstitution
+	Substitutions   []contextports.SummarySubstitution
 }
 
 // Result is the orchestrator-facing outcome of a context streaming request.
 type Result struct {
 	Request     Request
-	Compilation *compiler.CompilationResult
-	Record      *compiler.CompilationRecord
+	Compilation *contextports.CompilationResult
+	Record      *contextports.CompilationRecord
 	Trim        TrimMetadata
 	StartedAt   time.Time
 	CompletedAt time.Time
@@ -49,5 +49,5 @@ type Result struct {
 
 // CompilerInvoker is the narrow compiler contract used by the streaming layer.
 type CompilerInvoker interface {
-	Compile(ctx context.Context, request compiler.CompilationRequest) (*compiler.CompilationResult, *compiler.CompilationRecord, error)
+	Compile(ctx context.Context, request contextports.CompilationRequest) (*contextports.CompilationResult, error)
 }

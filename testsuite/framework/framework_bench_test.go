@@ -138,7 +138,7 @@ func BenchmarkContextStreaming(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := "bench-key"
 		value := "bench-value"
-		envelope.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+		envelope.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 		_, ok := envelope.GetWorkingValue(key)
 		if !ok {
 			b.Fatal("working value not found")

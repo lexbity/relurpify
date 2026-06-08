@@ -75,7 +75,7 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 			}
 			parsed, parseErr := parseLinkResponse(link, resp.Text)
 			if parseErr == nil {
-				env.SetWorkingValue(link.OutputKey, parsed, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(link.OutputKey, parsed, contextdata.MemoryClassTask)
 				env.AddInteraction(map[string]interface{}{
 					"role":    "assistant",
 					"content": resp.Text,

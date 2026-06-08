@@ -87,12 +87,12 @@ func seedWorkflowRetrievalStateForCase(state *contextdata.Envelope, task *execut
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprint(task.Context["mode"])))
 	switch mode {
 	case "architect":
-		state.SetWorkingValue("planner.workflow_retrieval", payload, contextdata.MemoryClassTask)
+		state.SetWorkingValueWithClass("planner.workflow_retrieval", payload, contextdata.MemoryClassTask)
 	default:
-		state.SetWorkingValue("pipeline.workflow_retrieval", payload, contextdata.MemoryClassTask)
+		state.SetWorkingValueWithClass("pipeline.workflow_retrieval", payload, contextdata.MemoryClassTask)
 	}
 	if seededPlan != nil {
-		state.SetWorkingValue("pipeline.plan", seededPlan, contextdata.MemoryClassTask)
+		state.SetWorkingValueWithClass("pipeline.plan", seededPlan, contextdata.MemoryClassTask)
 	}
 }
 

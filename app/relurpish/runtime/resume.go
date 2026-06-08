@@ -52,7 +52,7 @@ func (r *Runtime) ResumeSession(ctx context.Context, workflowID string) (*Resume
 	}
 
 	env := contextdata.NewEnvelope(task.ID, "")
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
 
 	pendingFrame, _ := interaction.ResumeFrame(env)
 	restoredMode := ""

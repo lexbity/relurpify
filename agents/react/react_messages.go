@@ -35,7 +35,7 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 	if state == nil {
 		return
 	}
-	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 }
 
 // envelopeGetString retrieves a value and converts it to string.
@@ -155,12 +155,12 @@ func getReactMessages(state *contextdata.Envelope) []model.Message {
 // saveReactMessages overwrites the stored transcript with a defensive copy.
 func saveReactMessages(state *contextdata.Envelope, messages []model.Message) {
 	if len(messages) == 0 {
-		state.SetWorkingValue(reactMessagesKey, []model.Message{}, contextdata.MemoryClassTask)
+		state.SetWorkingValueWithClass(reactMessagesKey, []model.Message{}, contextdata.MemoryClassTask)
 		return
 	}
 	copyMessages := make([]model.Message, len(messages))
 	copy(copyMessages, messages)
-	state.SetWorkingValue(reactMessagesKey, copyMessages, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(reactMessagesKey, copyMessages, contextdata.MemoryClassTask)
 }
 
 func appendAssistantMessage(state *contextdata.Envelope, resp *model.LLMResponse) {

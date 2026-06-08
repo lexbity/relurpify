@@ -199,7 +199,7 @@ func recordBrowserObservation(env *contextdata.Envelope, pageState *platformbrow
 	if env == nil || pageState == nil {
 		return
 	}
-	env.SetWorkingValue(browserLastPageStateKey, pageState, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(browserLastPageStateKey, pageState, contextdata.MemoryClassTask)
 	var snapshots []*platformbrowser.PageState
 	if existing, ok := env.GetWorkingValue(browserPageStateListKey); ok {
 		if typed, ok := existing.([]*platformbrowser.PageState); ok {
@@ -207,7 +207,7 @@ func recordBrowserObservation(env *contextdata.Envelope, pageState *platformbrow
 		}
 	}
 	snapshots = append(snapshots, pageState)
-	env.SetWorkingValue(browserPageStateListKey, snapshots, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(browserPageStateListKey, snapshots, contextdata.MemoryClassTask)
 	env.AddInteraction(map[string]interface{}{
 		"role": "observation",
 		"text": formatBrowserObservation(pageState),

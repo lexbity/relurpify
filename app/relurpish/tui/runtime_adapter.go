@@ -472,7 +472,7 @@ func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args
 		return nil, fmt.Errorf("capability registry unavailable")
 	}
 	env := contextdata.NewEnvelope("", "")
-	return r.rt.Tools.InvokeCapability(ctx, env, name, args)
+	return r.rt.Tools.InvokeCapability(ctx, env.State(), name, args)
 }
 
 func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail, error) {

@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
@@ -25,7 +24,7 @@ func NewRenameSymbolHandler(env agentenv.WorkspaceEnvironment) *RenameSymbolHand
 	return &RenameSymbolHandler{env: env}
 }
 
-func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.rename_symbol",
 		Kind:          agentspec.CapabilityKindTool,
@@ -62,7 +61,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 	}
 }
 
-func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	from, ok := stringArg(args, "from")
 	if !ok || strings.TrimSpace(from) == "" {
 		return failResult("from argument is required"), fmt.Errorf("from argument is required")

@@ -38,7 +38,7 @@ func (s *WorkingMemoryStore) HydrateIntoEnvelope(ctx context.Context, env *conte
 		class := contextdata.MemoryClass(result.Entry.Class)
 
 		// Write to envelope working memory
-		env.SetWorkingValue(key, value, class)
+		env.SetWorkingValueWithClass(key, value, class)
 	}
 
 	return nil
@@ -80,7 +80,7 @@ func (s *WorkingMemoryStore) HydrateIntoEnvelopeWithMapping(ctx context.Context,
 		value := result.Entry.Value
 		class := contextdata.MemoryClass(result.Entry.Class)
 
-		env.SetWorkingValue(key, value, class)
+		env.SetWorkingValueWithClass(key, value, class)
 	}
 
 	return nil
@@ -118,7 +118,7 @@ func (h *SimpleStateHydrator) HydrateIntoEnvelope(ctx context.Context, env *cont
 		value := result.Entry.Value
 		class := contextdata.MemoryClass(result.Entry.Class)
 
-		env.SetWorkingValue(key, value, class)
+		env.SetWorkingValueWithClass(key, value, class)
 	}
 
 	return nil

@@ -126,7 +126,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 	}
 
 	goal := a.goal(task)
-	env.SetWorkingValue("goalcon.goal", goal, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("goalcon.goal", goal, contextdata.MemoryClassTask)
 
 	ws := NewWorldState()
 	for pred, satisfied := range a.InitialState {
@@ -142,9 +142,9 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 		Recorder:  a.MetricsRecorder,
 	}
 	planResult := solver.Solve(goal, ws)
-	env.SetWorkingValue("goalcon.plan", planResult.Plan, contextdata.MemoryClassTask)
-	env.SetWorkingValue("goalcon.unsatisfied", planResult.Unsatisfied, contextdata.MemoryClassTask)
-	env.SetWorkingValue("goalcon.search_depth", planResult.Depth, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("goalcon.plan", planResult.Plan, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("goalcon.unsatisfied", planResult.Unsatisfied, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("goalcon.search_depth", planResult.Depth, contextdata.MemoryClassTask)
 
 	executorAgent := a.planExecutorAgent()
 	if len(planResult.Plan.Steps) == 0 {
@@ -159,7 +159,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 			AfterStep: func(step plan.PlanStep, state *contextdata.Envelope, _ *plan.Result) {
 				completed := state.StringSliceFromContext("plan.completed_steps")
 				completed = append(completed, step.ID)
-				state.SetWorkingValue("plan.completed_steps", completed, contextdata.MemoryClassTask)
+				state.SetWorkingValueWithClass("plan.completed_steps", completed, contextdata.MemoryClassTask)
 			},
 		},
 	}

@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -120,7 +119,7 @@ func toolParametersFromSchema(schema *schemacoerce.Schema) []ports.ToolParameter
 	return out
 }
 
-func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor {
+func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env ports.State) CapabilityDescriptor {
 	if h.descriptor.ID != "" {
 		return h.descriptor
 	}
@@ -130,14 +129,14 @@ func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env *contex
 	return NormalizeCapabilityDescriptor(h.handler.Descriptor(ctx, env))
 }
 
-func (h instrumentCapabilityHandler) Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec {
+func (h instrumentCapabilityHandler) Availability(ctx context.Context, env ports.State) AvailabilitySpec {
 	if aware, ok := h.handler.(AvailabilityAwareCapabilityHandler); ok {
 		return aware.Availability(ctx, env)
 	}
 	return AvailabilitySpec{Available: true}
 }
 
-func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	invocable, ok := h.handler.(InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
@@ -148,7 +147,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	}
 	var workingData map[string]interface{}
 	if env != nil {
-		workingData = env.WorkingData
+		workingData = env.Snapshot()
 	}
 	approvalBinding := ApprovalBindingFromCapability(desc, workingData, args)
 	approvalMetadata := map[string]string(nil)
@@ -202,7 +201,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*PromptRenderResult, error) {
+func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env ports.State, args map[string]interface{}) (*PromptRenderResult, error) {
 	promptHandler, ok := h.handler.(PromptCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("prompt handler unavailable")
@@ -230,7 +229,7 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *cont
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env *contextdata.Envelope) (*ResourceReadResult, error) {
+func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env ports.State) (*ResourceReadResult, error) {
 	resourceHandler, ok := h.handler.(ResourceCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("resource handler unavailable")
@@ -489,18 +488,18 @@ type legacyToolHandler struct {
 	tool ports.Tool
 }
 
-func (h legacyToolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor {
+func (h legacyToolHandler) Descriptor(ctx context.Context, env ports.State) CapabilityDescriptor {
 	return ToolDescriptor(ctx, unwrapTool(h.tool))
 }
 
-func (h legacyToolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h legacyToolHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.tool == nil {
 		return nil, fmt.Errorf("tool handler unavailable")
 	}
 	return h.tool.Execute(ctx, args)
 }
 
-func (h legacyToolHandler) Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec {
+func (h legacyToolHandler) Availability(ctx context.Context, env ports.State) AvailabilitySpec {
 	if h.tool == nil {
 		return AvailabilitySpec{Available: false, Reason: "tool handler unavailable"}
 	}

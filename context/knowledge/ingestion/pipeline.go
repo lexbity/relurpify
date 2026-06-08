@@ -8,14 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // AcquireFromFile creates a pipeline for ingesting a file.
-func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, scope *permissions.FileScopePolicy) (*Pipeline, error) {
+func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore, scope *permissions.FileScopePolicy) (*Pipeline, error) {
 	if scope != nil {
 		if err := scope.Check(permissions.FileSystemRead, path); err != nil {
 			return nil, fmt.Errorf("file scope denied: %w", err)
@@ -35,11 +36,11 @@ func AcquireFromFile(ctx context.Context, path string, principal identity.Subjec
 		MIMEHint:          detectMIMEType(path, content),
 	}
 
-	return newPipeline(raw, policy, store), nil
+	return newPipeline(raw, policy, evaluator, store), nil
 }
 
 // AcquireFromToolOutput creates a pipeline for ingesting tool output.
-func AcquireFromToolOutput(ctx context.Context, output []byte, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromToolOutput(ctx context.Context, output []byte, principal identity.SubjectRef, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           output,
 		SourcePrincipal:   principal,
@@ -48,11 +49,11 @@ func AcquireFromToolOutput(ctx context.Context, output []byte, principal identit
 		MIMEHint:          detectMIMEType("", output),
 	}
 
-	return newPipeline(raw, policy, store), nil
+	return newPipeline(raw, policy, evaluator, store), nil
 }
 
 // AcquireFromUserInput creates a pipeline for ingesting user input.
-func AcquireFromUserInput(ctx context.Context, input string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromUserInput(ctx context.Context, input string, principal identity.SubjectRef, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           []byte(input),
 		SourcePrincipal:   principal,
@@ -61,11 +62,11 @@ func AcquireFromUserInput(ctx context.Context, input string, principal identity.
 		MIMEHint:          "text/plain",
 	}
 
-	return newPipeline(raw, policy, store), nil
+	return newPipeline(raw, policy, evaluator, store), nil
 }
 
 // AcquireFromCapabilityResult creates a pipeline for ingesting capability results.
-func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) (*Pipeline, error) {
+func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType string, principal identity.SubjectRef, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore) (*Pipeline, error) {
 	raw := RawIngestion{
 		Content:           result,
 		SourcePrincipal:   principal,
@@ -74,14 +75,14 @@ func AcquireFromCapabilityResult(ctx context.Context, result []byte, contentType
 		MIMEHint:          contentType,
 	}
 
-	return newPipeline(raw, policy, store), nil
+	return newPipeline(raw, policy, evaluator, store), nil
 }
 
-func newPipeline(raw RawIngestion, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore) *Pipeline {
+func newPipeline(raw RawIngestion, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore) *Pipeline {
 	return &Pipeline{
 		raw:           raw,
 		policy:        policy,
-		evaluator:     execctx.NewEvaluator(policy),
+		evaluator:     evaluator,
 		store:         store,
 		scanners:      defaultScanners(),
 		quarantineDir: "relurpify_cfg/quarantine",
@@ -225,10 +226,8 @@ func (p *Pipeline) stage5Admission(ctx context.Context, typed *TypedIngestion, r
 	}
 
 	// Check trust class
-	trustClass := p.policy.DefaultTrustClass
-	admitted, reason := p.evaluator.AdmitTrustClass(trustClass)
-	if !admitted {
-		return DispositionReject, DispositionReason{Stage: "admission", Explanation: reason}
+	if !p.evaluator.AdmitTrustClass(p.policy.DefaultTrustClass) {
+		return DispositionReject, DispositionReason{Stage: "admission", Explanation: "trust class rejected"}
 	}
 
 	// Check suspicion scores across all chunks
@@ -240,8 +239,7 @@ func (p *Pipeline) stage5Admission(ctx context.Context, typed *TypedIngestion, r
 	}
 
 	// Check quota
-	remaining, _ := p.evaluator.QuotaRemaining(p.raw.SourcePrincipal)
-	if remaining == 0 {
+	if p.evaluator.QuotaRemaining(p.raw.SourcePrincipal.ID) == 0 {
 		return DispositionQuarantine, DispositionReason{Stage: "admission", Explanation: "quota exceeded"}
 	}
 
@@ -296,7 +294,7 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 			SourcePrincipal:   p.raw.SourcePrincipal,
 			AcquisitionMethod: knowledge.AcquisitionMethod(p.raw.AcquisitionMethod),
 			AcquiredAt:        p.raw.AcquiredAt,
-			TrustClass:        p.policy.DefaultTrustClass,
+			TrustClass:        agentspec.TrustClass(p.policy.DefaultTrustClass),
 			Body: knowledge.ChunkBody{
 				Raw: chunkContent,
 				Fields: map[string]any{

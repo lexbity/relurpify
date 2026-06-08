@@ -182,9 +182,9 @@ func (session *ClarificationSession) StoreClues(
 	defer session.mu.Unlock()
 
 	// Store in planning context for downstream steps using SetWorkingValue method
-	planningContext.SetWorkingValue("clarification_session_id", session.ID, contextdata.MemoryClassTask)
-	planningContext.SetWorkingValue("goal_ambiguities", session.AmbiguityScore.Indicators, contextdata.MemoryClassTask)
-	planningContext.SetWorkingValue("clarification_suggestions", suggestions, contextdata.MemoryClassTask)
+	planningContext.SetWorkingValueWithClass("clarification_session_id", session.ID, contextdata.MemoryClassTask)
+	planningContext.SetWorkingValueWithClass("goal_ambiguities", session.AmbiguityScore.Indicators, contextdata.MemoryClassTask)
+	planningContext.SetWorkingValueWithClass("clarification_suggestions", suggestions, contextdata.MemoryClassTask)
 }
 
 // RecordChoice records a user's clarification decision.

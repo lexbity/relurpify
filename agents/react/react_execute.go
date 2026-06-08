@@ -20,9 +20,9 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *execution.
 		rawLast, _ := env.GetWorkingValue("react.last_tool_result")
 		lastMap, _ := rawLast.(map[string]interface{})
 		if summary, ok := completionSummaryFromState(a, task, env, lastMap); ok {
-			env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
-			env.SetWorkingValue("react.synthetic_summary", summary, contextdata.MemoryClassTask)
-			env.SetWorkingValue("react.final_output", map[string]interface{}{
+			env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
 				"summary": summary,
 				"result":  lastMap,
 			}, contextdata.MemoryClassTask)
@@ -81,7 +81,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 	if path == "" {
 		return nil
 	}
-	res, err := a.Tools.InvokeCapability(ctx, env, "file_read", map[string]any{"path": path})
+	res, err := a.Tools.InvokeCapability(ctx, env.State(), "file_read", map[string]any{"path": path})
 	if err != nil {
 		return err
 	}
@@ -92,8 +92,8 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 	}
 	observation := summarizeToolResult(env, call, res, capability.InsertionDecision{Action: agentspec.InsertionActionSummarized})
 	history := append(getToolObservations(env), observation)
-	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
 	return nil
 }
 

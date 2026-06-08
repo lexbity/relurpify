@@ -6,7 +6,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 )
 
 // InvocationPrecheck is checked after policy evaluation and before invocation.
@@ -35,7 +34,7 @@ func (p WritePathPrecheck) Check(desc CapabilityDescriptor, args map[string]any)
 		return fmt.Errorf("write restricted to documentation paths; cannot determine target path")
 	}
 	for _, glob := range p.Globs {
-		if search.MatchGlob(glob, path) {
+		if ports.MatchGlob(glob, path) {
 			return nil
 		}
 	}

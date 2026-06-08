@@ -91,9 +91,9 @@ func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextd
 		return nil, err
 	}
 	failedCases := failedCaseNames(report)
-	env.SetWorkingValue("testfu.report", report, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.passed", allPassed, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.report", report, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.passed", allPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &execution.Result{
 		Success: allPassed,
 		Data: execution.NewToolResultPayload(map[string]any{
@@ -117,12 +117,12 @@ func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contex
 	}
 	reportMap := map[string]any{"suites": suiteReports}
 	failedCases := failedCaseNames(reportMap)
-	env.SetWorkingValue("testfu.agent_suites_report", suiteReports, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.passed", allPassed, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.total_passed", totalPassed, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.total_failed", totalFailed, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.total_skipped", totalSkipped, contextdata.MemoryClassTask)
-	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.agent_suites_report", suiteReports, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.passed", allPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.total_passed", totalPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.total_failed", totalFailed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.total_skipped", totalSkipped, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &execution.Result{
 		Success: allPassed,
 		Data: execution.NewToolResultPayload(map[string]any{

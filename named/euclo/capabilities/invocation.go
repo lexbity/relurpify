@@ -5,18 +5,17 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // capabilityInvoker matches the framework capability registry invocation contract.
 type capabilityInvoker interface {
-	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
+	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
 }
 
 // InvokeCapability invokes a capability through the capability registry.
 // It adapts the ToolResult to execution.Result.
-func InvokeCapability(ctx context.Context, capID string, task *execution.Task, env *contextdata.Envelope, registry capabilityInvoker) (*execution.Result, error) {
+func InvokeCapability(ctx context.Context, capID string, task *execution.Task, env ports.State, registry capabilityInvoker) (*execution.Result, error) {
 	// Extract args from task.Data or task.Context
 	args := map[string]any{}
 	if task != nil {
@@ -70,7 +69,7 @@ func InvokeCapability(ctx context.Context, capID string, task *execution.Task, e
 }
 
 // InvokeCapabilitySequence invokes a sequence of capabilities with an operator (AND/OR).
-func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, operator string, task *execution.Task, env *contextdata.Envelope, registry capabilityInvoker) (*execution.Result, error) {
+func InvokeCapabilitySequence(ctx context.Context, capabilityIDs []string, operator string, task *execution.Task, env ports.State, registry capabilityInvoker) (*execution.Result, error) {
 	if len(capabilityIDs) == 0 {
 		return &execution.Result{
 			Success: false,

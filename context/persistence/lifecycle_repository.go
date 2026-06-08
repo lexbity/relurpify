@@ -1,16 +1,15 @@
 package persistence
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
-	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
-// LifecycleRepository implements agentlifecycle.Repository using graphdb as the backend.
+// LifecycleRepository implements contextports.LifecycleRepository using graphdb as the backend.
 type LifecycleRepository struct {
 	db *graphdb.Engine
 }
@@ -27,14 +26,13 @@ func (r *LifecycleRepository) Close() error {
 
 // Workflow operations
 
-func (r *LifecycleRepository) CreateWorkflow(ctx context.Context, workflow agentlifecycle.WorkflowRecord) error {
+func (r *LifecycleRepository) CreateWorkflow(workflow contextports.WorkflowRecord) error {
 	if workflow.WorkflowID == "" {
 		workflow.WorkflowID = graphdb.GenerateID("wf")
 	}
-	if workflow.CreatedAt.IsZero() {
-		workflow.CreatedAt = time.Now().UTC()
+	if workflow.StartedAt.IsZero() {
+		workflow.StartedAt = time.Now().UTC()
 	}
-	workflow.UpdatedAt = time.Now().UTC()
 
 	props, err := r.marshalWorkflow(workflow)
 	if err != nil {
@@ -50,7 +48,7 @@ func (r *LifecycleRepository) CreateWorkflow(ctx context.Context, workflow agent
 	return r.db.UpsertNode(node)
 }
 
-func (r *LifecycleRepository) GetWorkflow(ctx context.Context, workflowID string) (*agentlifecycle.WorkflowRecord, error) {
+func (r *LifecycleRepository) GetWorkflow(workflowID string) (*contextports.WorkflowRecord, error) {
 	node, ok := r.db.GetNode(workflowID)
 	if !ok {
 		return nil, fmt.Errorf("workflow not found: %s", workflowID)
@@ -58,13 +56,16 @@ func (r *LifecycleRepository) GetWorkflow(ctx context.Context, workflowID string
 	return r.unmarshalWorkflow(node)
 }
 
-func (r *LifecycleRepository) ListWorkflows(ctx context.Context) ([]agentlifecycle.WorkflowRecord, error) {
+func (r *LifecycleRepository) ListWorkflows(agentID string) ([]contextports.WorkflowRecord, error) {
 	nodes := r.db.ListNodes(graphdb.NodeKindWorkflow)
-	workflows := make([]agentlifecycle.WorkflowRecord, 0, len(nodes))
+	workflows := make([]contextports.WorkflowRecord, 0, len(nodes))
 	for _, node := range nodes {
 		workflow, err := r.unmarshalWorkflow(node)
 		if err != nil {
-			continue // Skip malformed records
+			continue
+		}
+		if agentID != "" && workflow.AgentID != agentID {
+			continue
 		}
 		workflows = append(workflows, *workflow)
 	}
@@ -73,7 +74,7 @@ func (r *LifecycleRepository) ListWorkflows(ctx context.Context) ([]agentlifecyc
 
 // Run operations
 
-func (r *LifecycleRepository) CreateRun(ctx context.Context, run agentlifecycle.WorkflowRunRecord) error {
+func (r *LifecycleRepository) CreateRun(run contextports.WorkflowRunRecord) error {
 	if run.RunID == "" {
 		run.RunID = graphdb.GenerateID("run")
 	}
@@ -104,7 +105,7 @@ func (r *LifecycleRepository) CreateRun(ctx context.Context, run agentlifecycle.
 	return nil
 }
 
-func (r *LifecycleRepository) GetRun(ctx context.Context, runID string) (*agentlifecycle.WorkflowRunRecord, error) {
+func (r *LifecycleRepository) GetRun(runID string) (*contextports.WorkflowRunRecord, error) {
 	node, ok := r.db.GetNode(runID)
 	if !ok {
 		return nil, fmt.Errorf("run not found: %s", runID)
@@ -112,10 +113,10 @@ func (r *LifecycleRepository) GetRun(ctx context.Context, runID string) (*agentl
 	return r.unmarshalRun(node)
 }
 
-func (r *LifecycleRepository) ListRuns(ctx context.Context, workflowID string) ([]agentlifecycle.WorkflowRunRecord, error) {
+func (r *LifecycleRepository) ListRuns(workflowID string) ([]contextports.WorkflowRunRecord, error) {
 	if workflowID == "" {
 		nodes := r.db.ListNodes(graphdb.NodeKindWorkflowRun)
-		runs := make([]agentlifecycle.WorkflowRunRecord, 0, len(nodes))
+		runs := make([]contextports.WorkflowRunRecord, 0, len(nodes))
 		for _, node := range nodes {
 			run, err := r.unmarshalRun(node)
 			if err != nil {
@@ -128,7 +129,7 @@ func (r *LifecycleRepository) ListRuns(ctx context.Context, workflowID string) (
 
 	// List runs for a specific workflow via edges
 	edges := r.db.GetOutEdges(workflowID, graphdb.EdgeKindWorkflowHasRun)
-	runs := make([]agentlifecycle.WorkflowRunRecord, 0, len(edges))
+	runs := make([]contextports.WorkflowRunRecord, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -143,7 +144,7 @@ func (r *LifecycleRepository) ListRuns(ctx context.Context, workflowID string) (
 	return runs, nil
 }
 
-func (r *LifecycleRepository) UpdateRunStatus(ctx context.Context, runID string, status string) error {
+func (r *LifecycleRepository) UpdateRunStatus(runID string, status string) error {
 	node, ok := r.db.GetNode(runID)
 	if !ok {
 		return fmt.Errorf("run not found: %s", runID)
@@ -171,12 +172,12 @@ func (r *LifecycleRepository) UpdateRunStatus(ctx context.Context, runID string,
 
 // Delegation operations
 
-func (r *LifecycleRepository) UpsertDelegation(ctx context.Context, entry agentlifecycle.DelegationEntry) error {
+func (r *LifecycleRepository) UpsertDelegation(entry contextports.DelegationEntry) error {
 	if entry.DelegationID == "" {
 		entry.DelegationID = graphdb.GenerateID("del")
 	}
-	if entry.StartedAt.IsZero() {
-		entry.StartedAt = time.Now().UTC()
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now().UTC()
 	}
 	entry.UpdatedAt = time.Now().UTC()
 
@@ -213,7 +214,7 @@ func (r *LifecycleRepository) UpsertDelegation(ctx context.Context, entry agentl
 	return nil
 }
 
-func (r *LifecycleRepository) GetDelegation(ctx context.Context, delegationID string) (*agentlifecycle.DelegationEntry, error) {
+func (r *LifecycleRepository) GetDelegation(delegationID string) (*contextports.DelegationEntry, error) {
 	node, ok := r.db.GetNode(delegationID)
 	if !ok {
 		return nil, fmt.Errorf("delegation not found: %s", delegationID)
@@ -221,10 +222,10 @@ func (r *LifecycleRepository) GetDelegation(ctx context.Context, delegationID st
 	return r.unmarshalDelegation(node)
 }
 
-func (r *LifecycleRepository) ListDelegations(ctx context.Context, workflowID string) ([]agentlifecycle.DelegationEntry, error) {
+func (r *LifecycleRepository) ListDelegations(workflowID string) ([]contextports.DelegationEntry, error) {
 	if workflowID == "" {
 		nodes := r.db.ListNodes(graphdb.NodeKindDelegation)
-		delegations := make([]agentlifecycle.DelegationEntry, 0, len(nodes))
+		delegations := make([]contextports.DelegationEntry, 0, len(nodes))
 		for _, node := range nodes {
 			delegate, err := r.unmarshalDelegation(node)
 			if err != nil {
@@ -236,7 +237,7 @@ func (r *LifecycleRepository) ListDelegations(ctx context.Context, workflowID st
 	}
 
 	edges := r.db.GetOutEdges(workflowID, graphdb.EdgeKindWorkflowHasDelegation)
-	delegations := make([]agentlifecycle.DelegationEntry, 0, len(edges))
+	delegations := make([]contextports.DelegationEntry, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -251,9 +252,9 @@ func (r *LifecycleRepository) ListDelegations(ctx context.Context, workflowID st
 	return delegations, nil
 }
 
-func (r *LifecycleRepository) ListDelegationsByRun(ctx context.Context, runID string) ([]agentlifecycle.DelegationEntry, error) {
+func (r *LifecycleRepository) ListDelegationsByRun(runID string) ([]contextports.DelegationEntry, error) {
 	edges := r.db.GetOutEdges(runID, graphdb.EdgeKindWorkflowHasDelegation)
-	delegations := make([]agentlifecycle.DelegationEntry, 0, len(edges))
+	delegations := make([]contextports.DelegationEntry, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -268,12 +269,10 @@ func (r *LifecycleRepository) ListDelegationsByRun(ctx context.Context, runID st
 	return delegations, nil
 }
 
-func (r *LifecycleRepository) AppendDelegationTransition(ctx context.Context, transition agentlifecycle.DelegationTransitionEntry) error {
-	if transition.TransitionID == "" {
-		transition.TransitionID = graphdb.GenerateID("trans")
-	}
-	if transition.CreatedAt.IsZero() {
-		transition.CreatedAt = time.Now().UTC()
+func (r *LifecycleRepository) AppendDelegationTransition(transition contextports.DelegationTransitionEntry) error {
+	transID := graphdb.GenerateID("trans")
+	if transition.Timestamp.IsZero() {
+		transition.Timestamp = time.Now().UTC()
 	}
 
 	props, err := r.marshalDelegationTransition(transition)
@@ -282,7 +281,7 @@ func (r *LifecycleRepository) AppendDelegationTransition(ctx context.Context, tr
 	}
 
 	node := graphdb.NodeRecord{
-		ID:     transition.TransitionID,
+		ID:     transID,
 		Kind:   graphdb.NodeKindDelegationTransition,
 		Props:  props,
 		Labels: []string{"delegation_transition"},
@@ -292,16 +291,15 @@ func (r *LifecycleRepository) AppendDelegationTransition(ctx context.Context, tr
 		return err
 	}
 
-	// Link to delegation
 	if transition.DelegationID != "" {
-		return r.db.Link(transition.DelegationID, transition.TransitionID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
+		return r.db.Link(transition.DelegationID, transID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
 	}
 	return nil
 }
 
-func (r *LifecycleRepository) ListDelegationTransitions(ctx context.Context, delegationID string) ([]agentlifecycle.DelegationTransitionEntry, error) {
+func (r *LifecycleRepository) ListDelegationTransitions(delegationID string) ([]contextports.DelegationTransitionEntry, error) {
 	edges := r.db.GetOutEdges(delegationID, graphdb.EdgeKindDelegationHasTransition)
-	transitions := make([]agentlifecycle.DelegationTransitionEntry, 0, len(edges))
+	transitions := make([]contextports.DelegationTransitionEntry, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -318,12 +316,12 @@ func (r *LifecycleRepository) ListDelegationTransitions(ctx context.Context, del
 
 // Event operations
 
-func (r *LifecycleRepository) AppendEvent(ctx context.Context, event agentlifecycle.WorkflowEventRecord) error {
+func (r *LifecycleRepository) AppendEvent(event contextports.WorkflowEventRecord) error {
 	if event.EventID == "" {
-		event.EventID = graphdb.GenerateSequenceID("evt", event.Sequence)
+		event.EventID = graphdb.GenerateSequenceID("evt", uint64(event.Sequence))
 	}
-	if event.CreatedAt.IsZero() {
-		event.CreatedAt = time.Now().UTC()
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now().UTC()
 	}
 
 	props, err := r.marshalEvent(event)
@@ -359,7 +357,7 @@ func (r *LifecycleRepository) AppendEvent(ctx context.Context, event agentlifecy
 	return nil
 }
 
-func (r *LifecycleRepository) ListEvents(ctx context.Context, workflowID string, limit int) ([]agentlifecycle.WorkflowEventRecord, error) {
+func (r *LifecycleRepository) ListEvents(workflowID string, limit int) ([]contextports.WorkflowEventRecord, error) {
 	if workflowID == "" {
 		nodes := r.db.ListNodes(graphdb.NodeKindWorkflowEvent)
 		return r.limitEvents(nodes, limit)
@@ -375,7 +373,7 @@ func (r *LifecycleRepository) ListEvents(ctx context.Context, workflowID string,
 	return r.limitEvents(nodes, limit)
 }
 
-func (r *LifecycleRepository) ListEventsByRun(ctx context.Context, runID string, limit int) ([]agentlifecycle.WorkflowEventRecord, error) {
+func (r *LifecycleRepository) ListEventsByRun(runID string, limit int) ([]contextports.WorkflowEventRecord, error) {
 	edges := r.db.GetOutEdges(runID, graphdb.EdgeKindWorkflowRunHasEvent)
 	nodes := make([]graphdb.NodeRecord, 0, len(edges))
 	for _, edge := range edges {
@@ -388,7 +386,7 @@ func (r *LifecycleRepository) ListEventsByRun(ctx context.Context, runID string,
 
 // Artifact operations
 
-func (r *LifecycleRepository) UpsertArtifact(ctx context.Context, artifact agentlifecycle.WorkflowArtifactRecord) error {
+func (r *LifecycleRepository) UpsertArtifact(artifact contextports.WorkflowArtifactRecord) error {
 	if artifact.ArtifactID == "" {
 		artifact.ArtifactID = graphdb.GenerateID("art")
 	}
@@ -429,7 +427,7 @@ func (r *LifecycleRepository) UpsertArtifact(ctx context.Context, artifact agent
 	return nil
 }
 
-func (r *LifecycleRepository) GetArtifact(ctx context.Context, artifactID string) (*agentlifecycle.WorkflowArtifactRecord, error) {
+func (r *LifecycleRepository) GetArtifact(artifactID string) (*contextports.WorkflowArtifactRecord, error) {
 	node, ok := r.db.GetNode(artifactID)
 	if !ok {
 		return nil, fmt.Errorf("artifact not found: %s", artifactID)
@@ -437,10 +435,10 @@ func (r *LifecycleRepository) GetArtifact(ctx context.Context, artifactID string
 	return r.unmarshalArtifact(node)
 }
 
-func (r *LifecycleRepository) ListArtifacts(ctx context.Context, workflowID string) ([]agentlifecycle.WorkflowArtifactRecord, error) {
+func (r *LifecycleRepository) ListArtifacts(workflowID string) ([]contextports.WorkflowArtifactRecord, error) {
 	if workflowID == "" {
 		nodes := r.db.ListNodes(graphdb.NodeKindWorkflowArtifact)
-		artifacts := make([]agentlifecycle.WorkflowArtifactRecord, 0, len(nodes))
+		artifacts := make([]contextports.WorkflowArtifactRecord, 0, len(nodes))
 		for _, node := range nodes {
 			artifact, err := r.unmarshalArtifact(node)
 			if err != nil {
@@ -452,7 +450,7 @@ func (r *LifecycleRepository) ListArtifacts(ctx context.Context, workflowID stri
 	}
 
 	edges := r.db.GetOutEdges(workflowID, graphdb.EdgeKindWorkflowHasArtifact)
-	artifacts := make([]agentlifecycle.WorkflowArtifactRecord, 0, len(edges))
+	artifacts := make([]contextports.WorkflowArtifactRecord, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -467,9 +465,9 @@ func (r *LifecycleRepository) ListArtifacts(ctx context.Context, workflowID stri
 	return artifacts, nil
 }
 
-func (r *LifecycleRepository) ListArtifactsByRun(ctx context.Context, runID string) ([]agentlifecycle.WorkflowArtifactRecord, error) {
+func (r *LifecycleRepository) ListArtifactsByRun(runID string) ([]contextports.WorkflowArtifactRecord, error) {
 	edges := r.db.GetOutEdges(runID, graphdb.EdgeKindWorkflowRunHasArtifact)
-	artifacts := make([]agentlifecycle.WorkflowArtifactRecord, 0, len(edges))
+	artifacts := make([]contextports.WorkflowArtifactRecord, 0, len(edges))
 	for _, edge := range edges {
 		node, ok := r.db.GetNode(edge.TargetID)
 		if !ok {
@@ -486,15 +484,13 @@ func (r *LifecycleRepository) ListArtifactsByRun(ctx context.Context, runID stri
 
 // Lineage binding operations
 
-func (r *LifecycleRepository) UpsertLineageBinding(ctx context.Context, binding agentlifecycle.LineageBindingRecord) error {
+func (r *LifecycleRepository) UpsertLineageBinding(binding contextports.LineageBindingRecord) error {
 	if binding.BindingID == "" {
 		binding.BindingID = graphdb.GenerateID("lb")
 	}
 	if binding.CreatedAt.IsZero() {
 		binding.CreatedAt = time.Now().UTC()
 	}
-	binding.UpdatedAt = time.Now().UTC()
-
 	props, err := r.marshalLineageBinding(binding)
 	if err != nil {
 		return err
@@ -511,16 +507,14 @@ func (r *LifecycleRepository) UpsertLineageBinding(ctx context.Context, binding 
 		return err
 	}
 
-	// Link to workflow
 	if binding.WorkflowID != "" {
 		if err := r.db.Link(binding.WorkflowID, binding.BindingID, graphdb.EdgeKindLineageBindingForWorkflow, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
-	// Link to run if provided
-	if binding.RunID != "" {
-		if err := r.db.Link(binding.RunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
+	if binding.FromRunID != "" {
+		if err := r.db.Link(binding.FromRunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -528,7 +522,7 @@ func (r *LifecycleRepository) UpsertLineageBinding(ctx context.Context, binding 
 	return nil
 }
 
-func (r *LifecycleRepository) GetLineageBinding(ctx context.Context, bindingID string) (*agentlifecycle.LineageBindingRecord, error) {
+func (r *LifecycleRepository) GetLineageBinding(bindingID string) (*contextports.LineageBindingRecord, error) {
 	node, ok := r.db.GetNode(bindingID)
 	if !ok {
 		return nil, fmt.Errorf("lineage binding not found: %s", bindingID)
@@ -536,156 +530,138 @@ func (r *LifecycleRepository) GetLineageBinding(ctx context.Context, bindingID s
 	return r.unmarshalLineageBinding(node)
 }
 
-func (r *LifecycleRepository) FindLineageBindingByWorkflow(ctx context.Context, workflowID string) ([]agentlifecycle.LineageBindingRecord, error) {
-	edges := r.db.GetOutEdges(workflowID, graphdb.EdgeKindLineageBindingForWorkflow)
-	bindings := make([]agentlifecycle.LineageBindingRecord, 0, len(edges))
-	for _, edge := range edges {
-		node, ok := r.db.GetNode(edge.TargetID)
-		if !ok {
-			continue
-		}
-		binding, err := r.unmarshalLineageBinding(node)
-		if err != nil {
-			continue
-		}
-		bindings = append(bindings, *binding)
-	}
-	return bindings, nil
-}
-
-func (r *LifecycleRepository) FindLineageBindingByRun(ctx context.Context, runID string) ([]agentlifecycle.LineageBindingRecord, error) {
-	edges := r.db.GetOutEdges(runID, graphdb.EdgeKindLineageBindingForRun)
-	bindings := make([]agentlifecycle.LineageBindingRecord, 0, len(edges))
-	for _, edge := range edges {
-		node, ok := r.db.GetNode(edge.TargetID)
-		if !ok {
-			continue
-		}
-		binding, err := r.unmarshalLineageBinding(node)
-		if err != nil {
-			continue
-		}
-		bindings = append(bindings, *binding)
-	}
-	return bindings, nil
-}
-
-func (r *LifecycleRepository) FindLineageBindingByLineageID(ctx context.Context, lineageID string) (*agentlifecycle.LineageBindingRecord, error) {
+func (r *LifecycleRepository) FindLineageBinding(fromEntityID, toEntityID string) (*contextports.LineageBindingRecord, error) {
 	nodes := r.db.ListNodes(graphdb.NodeKindLineageBinding)
 	for _, node := range nodes {
 		binding, err := r.unmarshalLineageBinding(node)
 		if err != nil {
 			continue
 		}
-		if binding.LineageID == lineageID {
+		if binding.FromEntityID == fromEntityID && binding.ToEntityID == toEntityID {
 			return binding, nil
 		}
 	}
-	return nil, fmt.Errorf("lineage binding not found for lineage ID: %s", lineageID)
+	return nil, fmt.Errorf("lineage binding not found for from=%s to=%s", fromEntityID, toEntityID)
 }
 
-func (r *LifecycleRepository) FindLineageBindingByAttemptID(ctx context.Context, attemptID string) (*agentlifecycle.LineageBindingRecord, error) {
+func (r *LifecycleRepository) FindLineageBindingsByFrom(fromEntityID string) ([]contextports.LineageBindingRecord, error) {
 	nodes := r.db.ListNodes(graphdb.NodeKindLineageBinding)
+	var bindings []contextports.LineageBindingRecord
 	for _, node := range nodes {
 		binding, err := r.unmarshalLineageBinding(node)
 		if err != nil {
 			continue
 		}
-		if binding.AttemptID == attemptID {
-			return binding, nil
+		if binding.FromEntityID == fromEntityID {
+			bindings = append(bindings, *binding)
 		}
 	}
-	return nil, fmt.Errorf("lineage binding not found for attempt ID: %s", attemptID)
+	return bindings, nil
+}
+
+func (r *LifecycleRepository) FindLineageBindingsByTo(toEntityID string) ([]contextports.LineageBindingRecord, error) {
+	nodes := r.db.ListNodes(graphdb.NodeKindLineageBinding)
+	var bindings []contextports.LineageBindingRecord
+	for _, node := range nodes {
+		binding, err := r.unmarshalLineageBinding(node)
+		if err != nil {
+			continue
+		}
+		if binding.ToEntityID == toEntityID {
+			bindings = append(bindings, *binding)
+		}
+	}
+	return bindings, nil
 }
 
 // Marshal/unmarshal helpers
 
-func (r *LifecycleRepository) marshalWorkflow(w agentlifecycle.WorkflowRecord) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalWorkflow(w contextports.WorkflowRecord) (json.RawMessage, error) {
 	return json.Marshal(w)
 }
 
-func (r *LifecycleRepository) unmarshalWorkflow(node graphdb.NodeRecord) (*agentlifecycle.WorkflowRecord, error) {
-	var w agentlifecycle.WorkflowRecord
+func (r *LifecycleRepository) unmarshalWorkflow(node graphdb.NodeRecord) (*contextports.WorkflowRecord, error) {
+	var w contextports.WorkflowRecord
 	if err := json.Unmarshal(node.Props, &w); err != nil {
 		return nil, err
 	}
 	return &w, nil
 }
 
-func (r *LifecycleRepository) marshalRun(run agentlifecycle.WorkflowRunRecord) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalRun(run contextports.WorkflowRunRecord) (json.RawMessage, error) {
 	return json.Marshal(run)
 }
 
-func (r *LifecycleRepository) unmarshalRun(node graphdb.NodeRecord) (*agentlifecycle.WorkflowRunRecord, error) {
-	var run agentlifecycle.WorkflowRunRecord
+func (r *LifecycleRepository) unmarshalRun(node graphdb.NodeRecord) (*contextports.WorkflowRunRecord, error) {
+	var run contextports.WorkflowRunRecord
 	if err := json.Unmarshal(node.Props, &run); err != nil {
 		return nil, err
 	}
 	return &run, nil
 }
 
-func (r *LifecycleRepository) marshalDelegation(d agentlifecycle.DelegationEntry) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalDelegation(d contextports.DelegationEntry) (json.RawMessage, error) {
 	return json.Marshal(d)
 }
 
-func (r *LifecycleRepository) unmarshalDelegation(node graphdb.NodeRecord) (*agentlifecycle.DelegationEntry, error) {
-	var d agentlifecycle.DelegationEntry
+func (r *LifecycleRepository) unmarshalDelegation(node graphdb.NodeRecord) (*contextports.DelegationEntry, error) {
+	var d contextports.DelegationEntry
 	if err := json.Unmarshal(node.Props, &d); err != nil {
 		return nil, err
 	}
 	return &d, nil
 }
 
-func (r *LifecycleRepository) marshalDelegationTransition(t agentlifecycle.DelegationTransitionEntry) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalDelegationTransition(t contextports.DelegationTransitionEntry) (json.RawMessage, error) {
 	return json.Marshal(t)
 }
 
-func (r *LifecycleRepository) unmarshalDelegationTransition(node graphdb.NodeRecord) (*agentlifecycle.DelegationTransitionEntry, error) {
-	var t agentlifecycle.DelegationTransitionEntry
+func (r *LifecycleRepository) unmarshalDelegationTransition(node graphdb.NodeRecord) (*contextports.DelegationTransitionEntry, error) {
+	var t contextports.DelegationTransitionEntry
 	if err := json.Unmarshal(node.Props, &t); err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
 
-func (r *LifecycleRepository) marshalEvent(e agentlifecycle.WorkflowEventRecord) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalEvent(e contextports.WorkflowEventRecord) (json.RawMessage, error) {
 	return json.Marshal(e)
 }
 
-func (r *LifecycleRepository) unmarshalEvent(node graphdb.NodeRecord) (*agentlifecycle.WorkflowEventRecord, error) {
-	var e agentlifecycle.WorkflowEventRecord
+func (r *LifecycleRepository) unmarshalEvent(node graphdb.NodeRecord) (*contextports.WorkflowEventRecord, error) {
+	var e contextports.WorkflowEventRecord
 	if err := json.Unmarshal(node.Props, &e); err != nil {
 		return nil, err
 	}
 	return &e, nil
 }
 
-func (r *LifecycleRepository) marshalArtifact(a agentlifecycle.WorkflowArtifactRecord) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalArtifact(a contextports.WorkflowArtifactRecord) (json.RawMessage, error) {
 	return json.Marshal(a)
 }
 
-func (r *LifecycleRepository) unmarshalArtifact(node graphdb.NodeRecord) (*agentlifecycle.WorkflowArtifactRecord, error) {
-	var a agentlifecycle.WorkflowArtifactRecord
+func (r *LifecycleRepository) unmarshalArtifact(node graphdb.NodeRecord) (*contextports.WorkflowArtifactRecord, error) {
+	var a contextports.WorkflowArtifactRecord
 	if err := json.Unmarshal(node.Props, &a); err != nil {
 		return nil, err
 	}
 	return &a, nil
 }
 
-func (r *LifecycleRepository) marshalLineageBinding(lb agentlifecycle.LineageBindingRecord) (json.RawMessage, error) {
+func (r *LifecycleRepository) marshalLineageBinding(lb contextports.LineageBindingRecord) (json.RawMessage, error) {
 	return json.Marshal(lb)
 }
 
-func (r *LifecycleRepository) unmarshalLineageBinding(node graphdb.NodeRecord) (*agentlifecycle.LineageBindingRecord, error) {
-	var lb agentlifecycle.LineageBindingRecord
+func (r *LifecycleRepository) unmarshalLineageBinding(node graphdb.NodeRecord) (*contextports.LineageBindingRecord, error) {
+	var lb contextports.LineageBindingRecord
 	if err := json.Unmarshal(node.Props, &lb); err != nil {
 		return nil, err
 	}
 	return &lb, nil
 }
 
-func (r *LifecycleRepository) limitEvents(nodes []graphdb.NodeRecord, limit int) ([]agentlifecycle.WorkflowEventRecord, error) {
-	events := make([]agentlifecycle.WorkflowEventRecord, 0, len(nodes))
+func (r *LifecycleRepository) limitEvents(nodes []graphdb.NodeRecord, limit int) ([]contextports.WorkflowEventRecord, error) {
+	events := make([]contextports.WorkflowEventRecord, 0, len(nodes))
 	for _, node := range nodes {
 		event, err := r.unmarshalEvent(node)
 		if err != nil {

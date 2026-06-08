@@ -524,12 +524,12 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	env.NodeID = "runtime"
 	if task.Context != nil {
 		for key, value := range task.Context {
-			env.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 		}
 	}
 	if task.Metadata != nil {
 		for key, value := range task.Metadata {
-			env.SetWorkingValue("meta."+key, value, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("meta."+key, value, contextdata.MemoryClassTask)
 		}
 	}
 	r.trackInteractionEnvelope(task.ID, env)
@@ -639,7 +639,7 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 		return nil
 	}
 	if frame.Type != interaction.FrameIntentClarification {
-		env.SetWorkingValue("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
 		return nil
 	}
 	store := intentcontext.NewStateStore()
@@ -663,7 +663,7 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 	if err := store.Write(ctx, env, state); err != nil {
 		return err
 	}
-	env.SetWorkingValue("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
 	return nil
 }
 

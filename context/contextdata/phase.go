@@ -2,7 +2,7 @@ package contextdata
 
 // SetExecutionPhase sets the current execution phase.
 func (e *Envelope) SetExecutionPhase(phase string) {
-	e.SetWorkingValue("_execution_phase", phase, MemoryClassTask)
+	e.SetWorkingValueWithClass("_execution_phase", phase, MemoryClassTask)
 }
 
 // GetExecutionPhase returns the current execution phase.
@@ -24,7 +24,7 @@ func (e *Envelope) AddInteraction(interaction map[string]any) {
 		}
 	}
 	interactions = append(interactions, interaction)
-	e.SetWorkingValue(key, interactions, MemoryClassTask)
+	e.SetWorkingValueWithClass(key, interactions, MemoryClassTask)
 }
 
 // GetInteractions returns all interactions recorded in the envelope.

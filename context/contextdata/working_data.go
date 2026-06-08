@@ -5,10 +5,13 @@ import (
 	"time"
 )
 
-// SetWorkingValue stores a value in working memory.
-//
-// Deprecated: use SetTyped or TypedOverlay instead.
-func (e *Envelope) SetWorkingValue(key string, value any, class MemoryClass) {
+// SetWorkingValue stores a value in working memory without a class.
+func (e *Envelope) SetWorkingValue(key string, value any) {
+	e.SetWorkingValueWithClass(key, value, MemoryClassTask)
+}
+
+// SetWorkingValueWithClass stores a value in working memory with a memory class.
+func (e *Envelope) SetWorkingValueWithClass(key string, value any, class MemoryClass) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -154,7 +157,7 @@ func (e *Envelope) StringSliceFromContext(key string) []string {
 // Deprecated: use TypedOverlay with an explicit scoped key instead.
 func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
 	scopedKey := fmt.Sprintf("%s:%s", scope, key)
-	e.SetWorkingValue(scopedKey, value, MemoryClassTask)
+	e.SetWorkingValueWithClass(scopedKey, value, MemoryClassTask)
 }
 
 // GetHandle retrieves a scoped value.

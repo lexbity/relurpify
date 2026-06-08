@@ -23,11 +23,11 @@ type availabilityWrappedInvocableHandler struct {
 	descriptor capability.CapabilityDescriptor
 }
 
-func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.NormalizeCapabilityDescriptor(h.descriptor)
 }
 
-func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.handler == nil {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}

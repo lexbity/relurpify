@@ -66,7 +66,7 @@ func (n *StepNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 	result, err := executor.executeStep(ctx, env, n.Step)
 
 	// Store result in state with step-specific key
-	env.SetWorkingValue(fmt.Sprintf("rewoo.step.%s", n.Step.ID), result, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(fmt.Sprintf("rewoo.step.%s", n.Step.ID), result, contextdata.MemoryClassTask)
 
 	// Return result to graph
 	return &execution.Result{

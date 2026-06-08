@@ -105,11 +105,11 @@ func (s *StatelessRecoveryStrategy) Execute(ctx context.Context, state *contextd
 
 	// Clear operator-specific state by setting to nil
 	contextKey := fmt.Sprintf("operator_state.%s", stepID)
-	state.SetWorkingValue(contextKey, nil, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(contextKey, nil, contextdata.MemoryClassTask)
 
 	// Clear step history by setting to nil
 	historyKey := fmt.Sprintf("step_history.%s", stepID)
-	state.SetWorkingValue(historyKey, nil, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(historyKey, nil, contextdata.MemoryClassTask)
 
 	return nil
 }

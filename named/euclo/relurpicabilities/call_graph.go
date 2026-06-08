@@ -25,7 +25,7 @@ func NewCallGraphHandler(env agentenv.WorkspaceEnvironment) *CallGraphHandler {
 }
 
 // Descriptor returns the capability descriptor for the call graph handler.
-func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.call_graph",
 		Kind:          agentspec.CapabilityKindTool,
@@ -90,7 +90,8 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 }
 
 // Invoke executes the call graph traversal and returns structured nodes and edges.
-func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	env := contextdata.EnvelopeFromState(st)
 	// Extract arguments
 	entryPoint, ok := stringArg(args, "entry_point")
 	if !ok || entryPoint == "" {

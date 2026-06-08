@@ -97,7 +97,7 @@ func persistDispatchMetadata(env *contextdata.Envelope, dispatcher string, targe
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(contextKeyLastDispatch, map[string]any{
+	env.SetWorkingValueWithClass(contextKeyLastDispatch, map[string]any{
 		"dispatcher": dispatcher,
 		"target":     target,
 		"reason":     reason,

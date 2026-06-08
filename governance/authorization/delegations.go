@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -23,7 +24,7 @@ var ErrDelegationNotFound = errors.New("delegation not found")
 type DelegationCapabilityRegistry interface {
 	GetCoordinationTarget(idOrName string) (governanceports.DescriptorView, bool)
 	CoordinationTargets(selectors ...governanceports.CapabilitySelectorView) []governanceports.DescriptorView
-	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (any, error)
+	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (any, error)
 	CapturePolicySnapshot() *policy.PolicySnapshot
 	EffectiveCoordination(spec governanceports.SpecView) governanceports.CoordinationSpecView
 	BuildDelegationResult(request policy.DelegationRequest, target governanceports.DescriptorView, result any, invokeErr error, snapshot *policy.PolicySnapshot, spec governanceports.SpecView, callerTrust string) *policy.DelegationResult
@@ -169,7 +170,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	if err != nil {
 		return nil, err
 	}
-	result, invokeErr := opts.Registry.InvokeCapability(ctx, effectiveDelegationState(opts.State), target.CapabilityID(), args)
+	result, invokeErr := opts.Registry.InvokeCapability(ctx, effectiveDelegationState(opts.State).State(), target.CapabilityID(), args)
 	delegationResult := opts.Registry.BuildDelegationResult(request, target, result, invokeErr, policySnapshot, opts.AgentSpec, opts.CallerTrust)
 	completed, completeErr := m.CompleteDelegation(started.Request.ID, delegationResult)
 	if completeErr != nil {

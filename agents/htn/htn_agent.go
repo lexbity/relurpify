@@ -251,12 +251,12 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 			Recover: func(ctx context.Context, step pl.PlanStep, stepTask *execution.Task, s *contextdata.Envelope, err error) (*pl.StepRecovery, error) {
 				diagnosis := fmt.Sprintf("retrying step %q after failure: %v", step.ID, err)
 				notes := []string{fmt.Sprintf("step %q failed with: %v", step.ID, err)}
-				s.SetWorkingValue(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
-				s.SetWorkingValue(runtime.ContextKeyLastFailureStep, step.ID, contextdata.MemoryClassTask)
+				s.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
+				s.SetWorkingValueWithClass(runtime.ContextKeyLastFailureStep, step.ID, contextdata.MemoryClassTask)
 				if err != nil {
-					s.SetWorkingValue(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
+					s.SetWorkingValueWithClass(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
 				}
-				s.SetWorkingValue(runtime.ContextKeyLastRecoveryNotes, notes, contextdata.MemoryClassTask)
+				s.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryNotes, notes, contextdata.MemoryClassTask)
 				return &pl.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
 			AfterStep: func(step pl.PlanStep, s *contextdata.Envelope, result *pl.Result) {
@@ -373,7 +373,7 @@ func (a *HTNAgent) afterStep(
 	if !containsStepID(completed, step.ID) {
 		completed = append(completed, step.ID)
 	}
-	env.SetWorkingValue("plan.completed_steps", completed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("plan.completed_steps", completed, contextdata.MemoryClassTask)
 	// Agent-specific execution state loading
 	// execution := runtime.LoadExecutionState(env)
 	// execution.CompletedSteps = append([]string(nil), completed...)

@@ -76,7 +76,7 @@ func (h *browserCapability) SetPermissionManager(manager *fauthorization.Permiss
 	}
 }
 
-func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *browserCapability) Descriptor(context.Context, ports.State) capability.CapabilityDescriptor {
 	desc := capability.CapabilityDescriptor{
 		ID:          "tool:browser",
 		Kind:        agentspec.CapabilityKindTool,
@@ -119,8 +119,8 @@ func browserInputSchema() *schemacoerce.Schema {
 	}
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
-	return h.Execute(ctx, env, args)
+func (h *browserCapability) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	return h.Execute(ctx, contextdata.EnvelopeFromState(env), args)
 }
 
 func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {

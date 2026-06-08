@@ -96,8 +96,8 @@ func (s *ExploreStage) Validate(output any) error {
 }
 func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
 	selection := output.(FileSelection)
-	ctx.SetWorkingValue("pipeline.explore", selection, contextdata.MemoryClassTask)
-	ctx.SetWorkingValue("pipeline.explore.files", filePaths(selection), contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.explore", selection, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.explore.files", filePaths(selection), contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (s *AnalyzeStage) Validate(output any) error {
 	return nil
 }
 func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
-	ctx.SetWorkingValue("pipeline.analyze", output, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.analyze", output, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (s *PlanStage) Validate(output any) error {
 	return nil
 }
 func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
-	ctx.SetWorkingValue("pipeline.plan", output, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.plan", output, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -340,8 +340,8 @@ func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
 	plan := output.(EditPlan)
 	// Coding stages now persist requested edits as an artifact-like intent only.
 	// Mutation must happen through an admitted capability path outside stage Apply.
-	ctx.SetWorkingValue("pipeline.code", plan, contextdata.MemoryClassTask)
-	ctx.SetWorkingValue("pipeline.code.intent_only", true, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.code", plan, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.code.intent_only", true, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -461,7 +461,7 @@ func (s *VerifyStage) Validate(output any) error {
 	return nil
 }
 func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
-	ctx.SetWorkingValue("pipeline.verify", output, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.verify", output, contextdata.MemoryClassTask)
 	return nil
 }
 

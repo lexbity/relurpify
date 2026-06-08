@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
 )
@@ -30,7 +29,7 @@ func NewBisectHandler(env agentenv.WorkspaceEnvironment) *BisectHandler {
 }
 
 // Descriptor returns the capability descriptor for the bisect handler.
-func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.bisect",
 		Kind:          agentspec.CapabilityKindTool,
@@ -93,7 +92,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 }
 
 // Invoke executes git bisect to find the culprit commit.
-func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	goodRef, ok := stringArg(args, "good_ref")
 	if !ok || goodRef == "" {

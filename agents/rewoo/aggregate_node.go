@@ -72,7 +72,7 @@ func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	// Store aggregated results in state
-	env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.tool_results", results, contextdata.MemoryClassTask)
 
 	// Compute summary stats
 	stepsOK := 0

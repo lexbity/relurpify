@@ -230,7 +230,7 @@ func TestClarificationStateValidateRejectsMissingIdentity(t *testing.T) {
 
 func TestStateStoreReadRejectsCorruptState(t *testing.T) {
 	env := contextdata.NewEnvelope("task-4", "session-4")
-	env.SetWorkingValue(ClarificationStateKey, &ClarificationState{
+	env.SetWorkingValueWithClass(ClarificationStateKey, &ClarificationState{
 		TaskID:       "task-4",
 		SessionID:    "session-4",
 		StateVersion: 1,

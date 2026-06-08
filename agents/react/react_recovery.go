@@ -123,7 +123,7 @@ func recordRecoveryProbeUsage(env *contextdata.Envelope, signature, toolName str
 		}
 	}
 	store[signature] = append(store[signature], toolName)
-	env.SetWorkingValue("react.recovery_probes", store, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.recovery_probes", store, contextdata.MemoryClassTask)
 }
 
 func primaryFailureDirectory(env *contextdata.Envelope, lastMap map[string]interface{}) string {

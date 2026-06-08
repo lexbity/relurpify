@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
@@ -59,8 +59,8 @@ type PersistenceAuditRecord struct {
 type Writer struct {
 	Store     *knowledge.ChunkStore
 	Events    EventLog
-	Policy    *execctx.ContextPolicyBundle
-	Evaluator *execctx.Evaluator
+	Policy    *contextports.PolicyBundle
+	Evaluator contextports.PolicyEvaluator
 	AuditLog  []PersistenceAuditRecord
 }
 

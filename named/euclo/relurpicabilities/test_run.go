@@ -12,7 +12,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
@@ -29,7 +28,7 @@ func NewTestRunHandler(env agentenv.WorkspaceEnvironment) *TestRunHandler {
 }
 
 // Descriptor returns the capability descriptor for the test run handler.
-func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.test_run",
 		Kind:          agentspec.CapabilityKindTool,
@@ -99,7 +98,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 }
 
 // Invoke executes the test command and returns parsed results.
-func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	command, ok := stringArg(args, "command")
 	if !ok {

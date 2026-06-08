@@ -29,19 +29,19 @@ func (n *reactObserveNode) Type() agentgraph.NodeType { return agentgraph.NodeTy
 // Execute captures tool output, tracks loop iterations, and determines whether
 // the ReAct loop should continue.
 func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("react.execution_phase", "validating", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.execution_phase", "validating", contextdata.MemoryClassTask)
 	iterVal, _ := env.GetWorkingValue("react.iteration")
 	iter, _ := iterVal.(int)
 	iter++
-	env.SetWorkingValue("react.iteration", iter, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.iteration", iter, contextdata.MemoryClassTask)
 	decisionVal, _ := env.GetWorkingValue("react.decision")
 	decision, _ := decisionVal.(decisionPayload)
 	lastRes, _ := env.GetWorkingValue("react.last_tool_result")
 	lastMap, _ := lastRes.(map[string]interface{})
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
-		env.SetWorkingValue("react.done", true, contextdata.MemoryClassTask)
-		env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
-		env.SetWorkingValue("react.final_output", map[string]interface{}{
+		env.SetWorkingValueWithClass("react.done", true, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
 			"summary": summary,
 			"result":  lastMap,
 		}, contextdata.MemoryClassTask)
@@ -53,7 +53,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 				"complete":   true,
 			}),
 		}
-		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	var diagnostic strings.Builder
@@ -68,7 +68,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	}
 	n.advancePhase(env, decision, lastMap)
 	if n.scheduleRecoveryProbe(env, lastMap) {
-		env.SetWorkingValue("react.done", false, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.done", false, contextdata.MemoryClassTask)
 		result := &execution.Result{
 			NodeID:  n.id,
 			Success: true,
@@ -77,7 +77,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 				"complete":   false,
 			}),
 		}
-		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	if summary, ok := verificationSummaryFromSuccess(n.agent, n.task, env, lastMap); ok {
@@ -108,7 +108,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			setSynthesizedConclusion(env, summary, &diagnostic)
 		} else {
 			completed = true
-			env.SetWorkingValue("react.incomplete_reason", repeatReason, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.incomplete_reason", repeatReason, contextdata.MemoryClassTask)
 		}
 	}
 	if !completed && iter >= n.agent.maxIterations {
@@ -117,10 +117,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			setSynthesizedConclusion(env, summary, &diagnostic)
 		} else {
 			completed = true
-			env.SetWorkingValue("react.incomplete_reason", iterationExhaustionReason(n.task, env), contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.incomplete_reason", iterationExhaustionReason(n.task, env), contextdata.MemoryClassTask)
 		}
 	}
-	env.SetWorkingValue("react.done", completed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.done", completed, contextdata.MemoryClassTask)
 
 	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskID) != "" {
 		scope := n.agent.Memory.Scope(env.TaskID)
@@ -136,9 +136,9 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		summary := diagnostic.String()
 		if synthetic := strings.TrimSpace(envGetString(env, "react.synthetic_summary")); synthetic != "" {
 			summary = synthetic
-			env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 		}
-		env.SetWorkingValue("react.final_output", map[string]interface{}{
+		env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
 			"summary": summary,
 			"result":  lastMap,
 		}, contextdata.MemoryClassTask)
@@ -152,7 +152,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			"complete":   completed,
 		}),
 	}
-	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 	return result, nil
 }
 
@@ -161,10 +161,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 // immediately after detecting a conclusive outcome.
 func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, summary string, lastMap map[string]interface{}, diagnostic *strings.Builder) *execution.Result {
 	diagnostic.WriteString("Conclusion: " + summary + "\n")
-	env.SetWorkingValue("react.synthetic_summary", summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.done", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.final_output", map[string]interface{}{
+	env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.done", true, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
 		"summary": summary,
 		"result":  lastMap,
 	}, contextdata.MemoryClassTask)
@@ -176,7 +176,7 @@ func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, sum
 			"complete":   true,
 		}),
 	}
-	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 	return result
 }
 
@@ -185,8 +185,8 @@ func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, sum
 // control should fall through to the shared final-output block.
 func setSynthesizedConclusion(env *contextdata.Envelope, summary string, diagnostic *strings.Builder) {
 	diagnostic.WriteString("Conclusion: " + summary + "\n")
-	env.SetWorkingValue("react.synthetic_summary", summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 }
 
 func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, lastMap map[string]interface{}) bool {
@@ -216,7 +216,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 		if args == nil {
 			continue
 		}
-		env.SetWorkingValue("react.tool_calls", []model.ToolCall{{Name: probe, Args: args}}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{{Name: probe, Args: args}}, contextdata.MemoryClassTask)
 		recordRecoveryProbeUsage(env, signature, probe)
 		return true
 	}
@@ -241,22 +241,22 @@ func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision deci
 			!strings.Contains(lastTool, "build") &&
 			!strings.Contains(lastTool, "lint") &&
 			!strings.Contains(lastTool, "rustfmt") {
-			env.SetWorkingValue("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
 			return
 		}
 	}
 	switch {
 	case strings.Contains(lastTool, "write") || strings.Contains(lastTool, "create") || strings.Contains(lastTool, "delete"):
-		env.SetWorkingValue("react.phase", contextmgrPhaseVerify, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.phase", contextmgrPhaseVerify, contextdata.MemoryClassTask)
 	case strings.Contains(lastTool, "test") || strings.Contains(lastTool, "build") || strings.Contains(lastTool, "lint") || strings.Contains(lastTool, "rustfmt"):
 		if hasFailure(lastMap) {
-			env.SetWorkingValue("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
 		} else {
-			env.SetWorkingValue("react.phase", contextmgrPhaseVerify, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.phase", contextmgrPhaseVerify, contextdata.MemoryClassTask)
 		}
 	case current == contextmgrPhaseExplore && lastTool != "":
 		if shouldEnterEditPhase(n.task, observations, lastTool, lastMap) {
-			env.SetWorkingValue("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.phase", contextmgrPhaseEdit, contextdata.MemoryClassTask)
 		}
 	default:
 		_ = decision
@@ -407,8 +407,8 @@ func detectRepeatedToolLoop(env *contextdata.Envelope, task *execution.Task) (bo
 		}
 		count++
 	}
-	env.SetWorkingValue("react.repeat_signature", current, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.repeat_count", count, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.repeat_signature", current, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.repeat_count", count, contextdata.MemoryClassTask)
 	if count < stallThresholdForTask(task) {
 		return false, ""
 	}

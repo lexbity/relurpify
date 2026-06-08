@@ -97,8 +97,8 @@ func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 
 		// Build replan context from failures
 		replanContext := buildReplanContext(nil, stepResults, nil)
-		env.SetWorkingValue("rewoo.replan_context", replanContext, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rewoo.attempt", n.CurrentAttempt+1, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.replan_context", replanContext, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.attempt", n.CurrentAttempt+1, contextdata.MemoryClassTask)
 
 		return &execution.Result{
 			Success: true,

@@ -113,7 +113,7 @@ func (a *ChainerAgent) executeChain(ctx context.Context, task *execution.Task, e
 	if err := (&chainRunner{Model: a.Model}).Run(ctx, task, chain, env); err != nil {
 		return nil, err
 	}
-	env.SetWorkingValue("chainer.links_executed", len(chain.Links), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("chainer.links_executed", len(chain.Links), contextdata.MemoryClassTask)
 	data := map[string]any{"links_executed": len(chain.Links)}
 	for _, link := range chain.Links {
 		if value, ok := env.GetWorkingValue(link.OutputKey); ok {
@@ -190,8 +190,8 @@ func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *execut
 		return err
 	}
 	if env != nil {
-		env.SetWorkingValue("chainer.stream.result", result, contextdata.MemoryClassTask)
-		env.SetWorkingValue("chainer.stream.query", query, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("chainer.stream.result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("chainer.stream.query", query, contextdata.MemoryClassTask)
 	}
 	return nil
 }
@@ -205,7 +205,7 @@ func (n *chainerLinkNode) ID() string                { return n.id }
 func (n *chainerLinkNode) Type() agentgraph.NodeType { return agentgraph.NodeTypeSystem }
 func (n *chainerLinkNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if env != nil {
-		env.SetWorkingValue("chainer.inspect_link", n.name, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("chainer.inspect_link", n.name, contextdata.MemoryClassTask)
 	}
 	return &execution.Result{NodeID: n.id, Success: true}, nil
 }

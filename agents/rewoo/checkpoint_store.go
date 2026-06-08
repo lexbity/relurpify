@@ -11,6 +11,7 @@ import (
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
@@ -106,7 +107,18 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 	s.checkpoints[checkpointID] = metadata
 	s.mu.Unlock()
 
-	if ref, err := frameworkpersistence.SaveCheckpointArtifact(ctx, env, s.lifecycleRepo, frameworkpersistence.CheckpointSnapshot{
+	if ref, err := frameworkpersistence.SaveCheckpointArtifact(ctx, env, func(artifact contextports.WorkflowArtifactRecord) error {
+		return s.lifecycleRepo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
+			ArtifactID:      artifact.ArtifactID,
+			WorkflowID:      artifact.WorkflowID,
+			RunID:           artifact.RunID,
+			ContentType:     artifact.ContentType,
+			StorageKind:     agentlifecycle.ArtifactStorageKind(artifact.StorageKind),
+			SummaryText:     artifact.Summary,
+			SummaryMetadata: artifact.Metadata,
+			CreatedAt:       artifact.CreatedAt,
+		})
+	}, frameworkpersistence.CheckpointSnapshot{
 		CheckpointID: checkpointID,
 		WorkflowID:   workflowID,
 		RunID:        runID,
@@ -119,7 +131,7 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 		},
 		InlineRaw: string(mustJSON(metadata)),
 	}); err == nil && ref != nil {
-		env.SetWorkingValue("rewoo.checkpoint_ref", *ref, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.checkpoint_ref", *ref, contextdata.MemoryClassTask)
 	}
 
 	s.debugf("saved checkpoint %s at phase %s attempt %d", checkpointID, phase, attempt)
@@ -155,15 +167,15 @@ func (s *RewooCheckpointStore) RestoreStateFromCheckpoint(ctx context.Context, e
 
 	// Apply snapshot to execution state
 	for key, val := range stateSnapshot {
-		env.SetWorkingValue(key, val, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(key, val, contextdata.MemoryClassTask)
 	}
 	if err := s.restoreArtifactBackedState(ctx, env); err != nil {
 		return err
 	}
 
-	env.SetWorkingValue("rewoo.checkpoint_loaded", checkpoint.CheckpointID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("rewoo.checkpoint_phase", checkpoint.Phase, contextdata.MemoryClassTask)
-	env.SetWorkingValue("rewoo.checkpoint_attempt", checkpoint.Attempt, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.checkpoint_loaded", checkpoint.CheckpointID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.checkpoint_phase", checkpoint.Phase, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.checkpoint_attempt", checkpoint.Attempt, contextdata.MemoryClassTask)
 
 	s.debugf("restored state from checkpoint %s", checkpoint.CheckpointID)
 	return nil
@@ -220,7 +232,7 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &results); err != nil {
 					return err
 				}
-				env.SetWorkingValue("rewoo.tool_results", results, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("rewoo.tool_results", results, contextdata.MemoryClassTask)
 			}
 		}
 	}
@@ -232,7 +244,7 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &plan); err != nil {
 					return err
 				}
-				env.SetWorkingValue("rewoo.plan", &plan, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("rewoo.plan", &plan, contextdata.MemoryClassTask)
 			}
 		}
 	}
@@ -247,9 +259,9 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 					return err
 				}
 				if payload.Synthesis != "" {
-					env.SetWorkingValue("rewoo.synthesis", payload.Synthesis, contextdata.MemoryClassTask)
+					env.SetWorkingValueWithClass("rewoo.synthesis", payload.Synthesis, contextdata.MemoryClassTask)
 				} else if ref.Summary != "" {
-					env.SetWorkingValue("rewoo.synthesis", ref.Summary, contextdata.MemoryClassTask)
+					env.SetWorkingValueWithClass("rewoo.synthesis", ref.Summary, contextdata.MemoryClassTask)
 				}
 			}
 		}
@@ -269,7 +281,7 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 	if _, ok := env.GetWorkingValue("rewoo.plan_ref"); !ok {
 		if rawPlan, ok := env.GetWorkingValue("rewoo.plan"); ok && rawPlan != nil {
 			if ref := s.persistPlanArtifact(ctx, checkpointID, workflowID, runID, rawPlan); ref != nil {
-				env.SetWorkingValue("rewoo.plan_ref", *ref, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("rewoo.plan_ref", *ref, contextdata.MemoryClassTask)
 			}
 		}
 	}
@@ -277,8 +289,8 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 		if rawResults, ok := env.GetWorkingValue("rewoo.tool_results"); ok && rawResults != nil {
 			if results, ok := rawResults.([]RewooStepResult); ok && len(results) > 0 {
 				if ref := s.persistToolResultsArtifact(ctx, checkpointID, workflowID, runID, results); ref != nil {
-					env.SetWorkingValue("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
-					env.SetWorkingValue("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
+					env.SetWorkingValueWithClass("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
+					env.SetWorkingValueWithClass("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
 				}
 			}
 		}
@@ -292,7 +304,7 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 					results, _ = rawResults.([]RewooStepResult)
 				}
 				if ref := s.persistSynthesisArtifact(ctx, checkpointID, workflowID, runID, synthesis, results); ref != nil {
-					env.SetWorkingValue("rewoo.synthesis_ref", *ref, contextdata.MemoryClassTask)
+					env.SetWorkingValueWithClass("rewoo.synthesis_ref", *ref, contextdata.MemoryClassTask)
 				}
 			}
 		}

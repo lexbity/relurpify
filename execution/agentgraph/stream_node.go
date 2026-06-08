@@ -66,15 +66,15 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		if err != nil {
 			return nil, err
 		}
-		env.SetWorkingValue("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
-		env.SetWorkingValue("contextstream.job_mode", string(req.Mode), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("contextstream.job_mode", string(req.Mode), contextdata.MemoryClassTask)
 		go func() {
 			result, err := job.Wait(context.Background())
 			if result != nil {
 				_ = contextstream.ApplyResult(env, result)
 			}
 			if err != nil {
-				env.SetWorkingValue("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
 			}
 		}()
 		return &execution.Result{
@@ -90,8 +90,8 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		result, err := trigger.RequestBlocking(ctx, req)
 		if result != nil {
 			_ = contextstream.ApplyResult(env, result)
-			env.SetWorkingValue("contextstream.result", result, contextdata.MemoryClassTask)
-			env.SetWorkingValue("euclo.stream_result", result, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("contextstream.result", result, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("euclo.stream_result", result, contextdata.MemoryClassTask)
 		}
 		if err != nil {
 			return nil, err

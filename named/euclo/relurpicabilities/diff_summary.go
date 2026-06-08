@@ -32,7 +32,7 @@ func NewDiffSummaryHandler(env agentenv.WorkspaceEnvironment) *DiffSummaryHandle
 }
 
 // Descriptor returns the capability descriptor for the diff summary handler.
-func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.diff_summary",
 		Kind:          agentspec.CapabilityKindTool,
@@ -100,7 +100,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke runs git diff and returns a structured summary.
-func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), nil
 	}

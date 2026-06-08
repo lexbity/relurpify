@@ -18,7 +18,7 @@ func TestAcquireFromFileRespectsFileScope(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
 	require.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
 
-	_, err := AcquireFromFile(context.Background(), protected, identity.SubjectRef{ID: "scanner"}, nil, nil, sandbox.NewFileScopePolicy(workspace, []string{protected}))
+	_, err := AcquireFromFile(context.Background(), protected, identity.SubjectRef{ID: "scanner"}, nil, nil, nil, sandbox.NewFileScopePolicy(workspace, []string{protected}))
 	require.Error(t, err)
 }
 

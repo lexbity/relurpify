@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 // Ranker produces an ordered list of chunk IDs for a query.
@@ -53,7 +53,7 @@ func (r *RankerRegistry) Register(ranker Ranker) {
 }
 
 // Admitted returns rankers that are admitted by the context policy.
-func (r *RankerRegistry) Admitted(policy *execctx.ContextPolicyBundle) []AdmittedRanker {
+func (r *RankerRegistry) Admitted(policy *contextports.PolicyBundle) []AdmittedRanker {
 	if r == nil {
 		return nil
 	}
@@ -61,61 +61,18 @@ func (r *RankerRegistry) Admitted(policy *execctx.ContextPolicyBundle) []Admitte
 		return nil
 	}
 
-	allowed := make(map[string]float64)
-	allowedOrder := make([]string, 0, len(r.rankers))
-	addAllowed := func(id string, weight float64) {
-		if id == "" {
-			return
-		}
-		if weight <= 0 {
-			weight = 1.0
-		}
-		if _, exists := allowed[id]; exists {
-			return
-		}
-		allowed[id] = weight
-		allowedOrder = append(allowedOrder, id)
-	}
+	_ = policy // PolicyBundle does not carry ranker configuration; all registered rankers are admitted.
 
-	if policy != nil {
-		for _, ranker := range policy.Rankers {
-			addAllowed(ranker.ID, float64(ranker.Priority))
-		}
-		for _, rankerID := range policy.SkillContributions.AdmittedRankers {
-			addAllowed(rankerID, 1.0)
-		}
-	}
-
-	if len(allowedOrder) == 0 {
-		result := make([]AdmittedRanker, 0, len(r.order))
-		for _, name := range r.order {
-			ranker, ok := r.rankers[name]
-			if !ok || ranker == nil {
-				continue
-			}
-			result = append(result, AdmittedRanker{
-				Ranker:   ranker,
-				Weight:   1.0,
-				Priority: 1,
-			})
-		}
-		return result
-	}
-
-	result := make([]AdmittedRanker, 0, len(allowedOrder))
-	for _, name := range allowedOrder {
+	result := make([]AdmittedRanker, 0, len(r.order))
+	for _, name := range r.order {
 		ranker, ok := r.rankers[name]
 		if !ok || ranker == nil {
 			continue
 		}
-		priority := int(allowed[name])
-		if priority <= 0 {
-			priority = 1
-		}
 		result = append(result, AdmittedRanker{
 			Ranker:   ranker,
-			Weight:   allowed[name],
-			Priority: priority,
+			Weight:   1.0,
+			Priority: 1,
 		})
 	}
 	return result

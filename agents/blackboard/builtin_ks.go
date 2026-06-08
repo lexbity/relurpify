@@ -341,7 +341,7 @@ func invokeCapabilityIfPresent(ctx context.Context, state *contextdata.Envelope,
 	if _, ok := tools.GetCapability(name); !ok {
 		return nil, false, nil
 	}
-	result, err := tools.InvokeCapability(ctx, state, name, args)
+	result, err := tools.InvokeCapability(ctx, state.State(), name, args)
 	return result, true, err
 }
 
@@ -413,7 +413,7 @@ func executeActionRequest(ctx context.Context, state *contextdata.Envelope, tool
 		if _, exists := tools.GetCapability(target); !exists {
 			return fmt.Sprintf("completed: %s", req.Description), nil
 		}
-		result, err := tools.InvokeCapability(ctx, state, target, req.Args)
+		result, err := tools.InvokeCapability(ctx, state.State(), target, req.Args)
 		if err != nil {
 			return "", err
 		}
@@ -423,7 +423,7 @@ func executeActionRequest(ctx context.Context, state *contextdata.Envelope, tool
 		return fmt.Sprintf("completed: %s", req.Description), nil
 	}
 	if _, ok := tools.GetCapability(capabilityExecutorInvoke); ok {
-		result, err := tools.InvokeCapability(ctx, state, capabilityExecutorInvoke, map[string]any{
+		result, err := tools.InvokeCapability(ctx, state.State(), capabilityExecutorInvoke, map[string]any{
 			"capability": target,
 			"args":       req.Args,
 		})
@@ -432,7 +432,7 @@ func executeActionRequest(ctx context.Context, state *contextdata.Envelope, tool
 		}
 		return summarizeCapabilityResult(result, req.Description), nil
 	}
-	result, err := tools.InvokeCapability(ctx, state, target, req.Args)
+	result, err := tools.InvokeCapability(ctx, state.State(), target, req.Args)
 	if err != nil {
 		return "", err
 	}

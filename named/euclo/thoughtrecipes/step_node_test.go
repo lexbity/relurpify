@@ -60,8 +60,8 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	}
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.task_envelope.instruction", "find symbols", contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.task_envelope.family_hint", "query", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.task_envelope.instruction", "find symbols", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.task_envelope.family_hint", "query", contextdata.MemoryClassTask)
 
 	step := ExecutionStep{
 		ID:           "step1",
@@ -370,9 +370,9 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 
 func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t *testing.T) {
 	parent := contextdata.NewEnvelope("task-parent", "session-parent")
-	parent.SetWorkingValue("input.findings", "parent findings", contextdata.MemoryClassTask)
-	parent.SetWorkingValue("state.unrelated", "keep me on parent", contextdata.MemoryClassTask)
-	parent.SetWorkingValue("scratch.parent_only", "parent scratch", contextdata.MemoryClassTask)
+	parent.SetWorkingValueWithClass("input.findings", "parent findings", contextdata.MemoryClassTask)
+	parent.SetWorkingValueWithClass("state.unrelated", "keep me on parent", contextdata.MemoryClassTask)
+	parent.SetWorkingValueWithClass("scratch.parent_only", "parent scratch", contextdata.MemoryClassTask)
 	state := intentcontext.NewState("task-parent", "session-parent")
 	state.StateVersion = 4
 	state.CurrentTurnID = "turn-parent"

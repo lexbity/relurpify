@@ -23,7 +23,7 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 	if state == nil {
 		return
 	}
-	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 }
 
 // Phase 9: Framework-native persistence integration for HTN runtime artifacts.

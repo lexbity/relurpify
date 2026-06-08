@@ -321,7 +321,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		result.NodeID = current
 		lastResult = result
 		for key, value := range execution.ResultFields(result.Data) {
-			env.SetWorkingValue(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
 		g.emit(telemetry.Event{
 			Type:      telemetry.EventNodeFinish,

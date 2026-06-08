@@ -12,7 +12,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
@@ -30,7 +29,7 @@ func NewTargetedRefactorHandler(env agentenv.WorkspaceEnvironment) *TargetedRefa
 }
 
 // Descriptor returns the capability descriptor for the targeted refactor handler.
-func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.targeted_refactor",
 		Kind:          agentspec.CapabilityKindTool,
@@ -109,7 +108,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextda
 }
 
 // Invoke locates the target symbol and applies the transformation.
-func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
 		return failResult("symbol argument is required"), nil

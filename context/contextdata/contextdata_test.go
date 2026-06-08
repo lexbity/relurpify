@@ -26,7 +26,7 @@ func TestNewEnvelopeCreatesEmptyEnvelope(t *testing.T) {
 
 func TestSetWorkingValueStoresAndRetrieves(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	val, ok := env.GetWorkingValue("key1")
 	if !ok {
@@ -39,7 +39,7 @@ func TestSetWorkingValueStoresAndRetrieves(t *testing.T) {
 
 func TestDeleteWorkingValueRemovesEntry(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 	env.DeleteWorkingValue("key1")
 
 	_, ok := env.GetWorkingValue("key1")
@@ -55,7 +55,7 @@ func TestDeleteWorkingValueRemovesEntry(t *testing.T) {
 
 func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 	parent.AddStreamedContextReference(ChunkReference{
 		ChunkID: ChunkID("chunk-1"),
 		Source:  "test",
@@ -89,12 +89,12 @@ func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 
 func TestCloneEnvelopeIsIndependent(t *testing.T) {
 	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	clone := CloneEnvelope(parent, "branch-1")
 
 	// Modify clone
-	clone.SetWorkingValue("key2", "value2", MemoryClassEphemeral)
+	clone.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	// Parent should not have key2
 	_, ok := parent.GetWorkingValue("key2")
@@ -114,7 +114,7 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
 	env.NodeID = "node-1"
-	env.SetWorkingValue("key1", "value1", MemoryClassTask)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassTask)
 	env.AddStreamedContextReference(ChunkReference{
 		ChunkID: ChunkID("chunk-1"),
 		Source:  "test",
@@ -164,9 +164,9 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 		BudgetTokens:    100,
 		ShortfallTokens: 3,
 	}
-	env.SetWorkingValue("keep", "value-keep", MemoryClassTask)
-	env.SetWorkingValue("keep.local", "value-prefix", MemoryClassTask)
-	env.SetWorkingValue("drop", "value-drop", MemoryClassTask)
+	env.SetWorkingValueWithClass("keep", "value-keep", MemoryClassTask)
+	env.SetWorkingValueWithClass("keep.local", "value-prefix", MemoryClassTask)
+	env.SetWorkingValueWithClass("drop", "value-drop", MemoryClassTask)
 	env.References.WorkingMemory = append(env.References.WorkingMemory,
 		WorkingMemoryReference{TaskID: "task-1", Key: "keep", Class: MemoryClassTask},
 		WorkingMemoryReference{TaskID: "task-1", Key: "keep.local", Class: MemoryClassTask},
@@ -230,10 +230,10 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 
 func TestMergeBranchEnvelopesUnionsWorkingMemory(t *testing.T) {
 	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValue("key2", "value2", MemoryClassSession)
+	env2.SetWorkingValueWithClass("key2", "value2", MemoryClassSession)
 
 	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
 	if err != nil {
@@ -251,10 +251,10 @@ func TestMergeBranchEnvelopesUnionsWorkingMemory(t *testing.T) {
 
 func TestMergeBranchEnvelopesLastWriteWins(t *testing.T) {
 	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValue("key1", "value2", MemoryClassEphemeral)
+	env2.SetWorkingValueWithClass("key1", "value2", MemoryClassEphemeral)
 
 	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
 	if err != nil {
@@ -443,12 +443,12 @@ func TestCheckpointRequest(t *testing.T) {
 
 func TestComputeBranchDelta(t *testing.T) {
 	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
-	parent.SetWorkingValue("key2", "value2", MemoryClassEphemeral)
+	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	parent.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	child := NewEnvelope("task-1", "session-1")
-	child.SetWorkingValue("key2", "modified", MemoryClassEphemeral) // Modified
-	child.SetWorkingValue("key3", "value3", MemoryClassEphemeral)   // Added
+	child.SetWorkingValueWithClass("key2", "modified", MemoryClassEphemeral) // Modified
+	child.SetWorkingValueWithClass("key3", "value3", MemoryClassEphemeral)   // Added
 	// key1 not in child = deleted
 
 	delta := ComputeBranchDelta(parent, child)
@@ -560,7 +560,7 @@ func TestMustEnvelopeFromPanicsOnMissing(t *testing.T) {
 
 func TestEnvelopeSnapshot(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	snapshot := env.Snapshot()
 	if len(snapshot) != 1 {
@@ -577,7 +577,7 @@ func TestEnvelopeSnapshot(t *testing.T) {
 func TestEnvelopeString(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
 	env.NodeID = "node-1"
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1"})
 
 	s := env.String()
@@ -675,8 +675,8 @@ func TestStreamedChunkIDs(t *testing.T) {
 
 func TestWorkingMemoryKeys(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
-	env.SetWorkingValue("key2", "value2", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	// Add reference for different task (shouldn't appear)
 	env.References.WorkingMemory = append(env.References.WorkingMemory, WorkingMemoryReference{
@@ -698,7 +698,7 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
 
 	// Set initial value
-	env.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 	initialRef, _ := env.References.GetWorkingMemoryRef("task-1", "key1")
 	initialCreatedAt := initialRef.CreatedAt
 
@@ -706,7 +706,7 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	time.Sleep(time.Millisecond)
 
 	// Set same key again - should update existing reference, not create duplicate
-	env.SetWorkingValue("key1", "value2", MemoryClassSession)
+	env.SetWorkingValueWithClass("key1", "value2", MemoryClassSession)
 
 	// Should still have only 1 reference for this key
 	refCount := 0
@@ -745,10 +745,10 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 
 func TestMergeBranchEnvelopesSkipsNilEntries(t *testing.T) {
 	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValue("key1", "value1", MemoryClassEphemeral)
+	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
 	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValue("key2", "value2", MemoryClassEphemeral)
+	env2.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	// Merge with nil entries in the slice
 	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, nil, env2, nil})
@@ -785,7 +785,7 @@ func TestNilEnvelopeMethodsPanic(t *testing.T) {
 	}
 
 	var nilEnv *Envelope
-	assertPanics("SetWorkingValue", func() { nilEnv.SetWorkingValue("key", "value", MemoryClassEphemeral) })
+	assertPanics("SetWorkingValue", func() { nilEnv.SetWorkingValueWithClass("key", "value", MemoryClassEphemeral) })
 	assertPanics("DeleteWorkingValue", func() { nilEnv.DeleteWorkingValue("key") })
 	assertPanics("RequestCheckpoint", func() { nilEnv.RequestCheckpoint("reason", 1, true) })
 	assertPanics("ClearCheckpointRequest", func() { nilEnv.ClearCheckpointRequest() })

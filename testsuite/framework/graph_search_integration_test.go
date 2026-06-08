@@ -127,7 +127,7 @@ func TestNodeToEnvelopeStateTransfer(t *testing.T) {
 
 	// Create envelope with initial data
 	env := contextdata.NewEnvelope("transfer-task", "transfer-session")
-	env.SetWorkingValue("input-data", "test-input", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("input-data", "test-input", contextdata.MemoryClassTask)
 
 	// Execute the graph
 	ctx := context.Background()
@@ -162,8 +162,8 @@ func TestEnvelopeAdditiveMutation(t *testing.T) {
 	env := contextdata.NewEnvelope("mutation-task", "mutation-session")
 
 	// Set initial values
-	env.SetWorkingValue("key1", "value1", contextdata.MemoryClassTask)
-	env.SetWorkingValue("key2", "value2", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key1", "value1", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key2", "value2", contextdata.MemoryClassTask)
 
 	// Create a graph with two nodes that each add state
 	g := graph.NewGraph()
@@ -250,7 +250,7 @@ func (n *stateSetterNode) ID() string           { return n.id }
 func (n *stateSetterNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 func (n *stateSetterNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue(n.key, n.value, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(n.key, n.value, contextdata.MemoryClassTask)
 	return &execution.Result{
 		NodeID: n.id,
 		Data: execution.NewToolResultPayload(map[string]any{
@@ -310,7 +310,7 @@ func (n *stateModifierNode) ID() string           { return n.id }
 func (n *stateModifierNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 func (n *stateModifierNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue(n.key, n.modifyValue, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(n.key, n.modifyValue, contextdata.MemoryClassTask)
 	return &execution.Result{
 		NodeID: n.id,
 		Data: execution.NewToolResultPayload(map[string]any{
@@ -343,7 +343,7 @@ func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 	}
 	outputValue := n.transform(inputValue)
-	env.SetWorkingValue(n.outputKey, outputValue, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(n.outputKey, outputValue, contextdata.MemoryClassTask)
 	return &execution.Result{
 		NodeID: n.id,
 		Data: execution.NewToolResultPayload(map[string]any{

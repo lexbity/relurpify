@@ -25,7 +25,7 @@ func NewASTQueryHandler(env agentenv.WorkspaceEnvironment) *ASTQueryHandler {
 }
 
 // Descriptor returns the capability descriptor for the AST query handler.
-func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.ast_query",
 		Kind:          agentspec.CapabilityKindTool,
@@ -93,7 +93,8 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env *contextdata.Envel
 }
 
 // Invoke executes the AST query and returns matching nodes.
-func (h *ASTQueryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	env := contextdata.EnvelopeFromState(st)
 	// Extract arguments
 	query, ok := stringArg(args, "query")
 	if !ok || query == "" {

@@ -253,8 +253,8 @@ func TestEnvelopeMutation(t *testing.T) {
 	envelope := contextdata.NewEnvelope("task-1", "session-1")
 
 	// Set some working values
-	envelope.SetWorkingValue("existing-key-1", "existing-value-1", contextdata.MemoryClassTask)
-	envelope.SetWorkingValue("existing-key-2", 42, contextdata.MemoryClassTask)
+	envelope.SetWorkingValueWithClass("existing-key-1", "existing-value-1", contextdata.MemoryClassTask)
+	envelope.SetWorkingValueWithClass("existing-key-2", 42, contextdata.MemoryClassTask)
 
 	// Add some existing streamed references
 	existingRef := contextdata.ChunkReference{

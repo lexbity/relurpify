@@ -50,7 +50,7 @@ func (n *RecipeCapabilityNode) Execute(ctx context.Context, env *contextdata.Env
 		return &execution.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: capability id is required", n.id)
 	}
 	handler := newRecipeCapabilityHandler(n.capabilityID, n.plan, n.env)
-	if err := capability.RegisterSessionCapability(env, n.capabilityID, handler); err != nil {
+	if err := capability.RegisterSessionCapability(env.State(), n.capabilityID, handler); err != nil {
 		return &execution.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: register session capability: %w", n.id, err)
 	}
 	return &execution.Result{NodeID: n.id, Success: true}, nil
@@ -73,7 +73,7 @@ func newRecipeCapabilityHandler(capabilityID string, plan *ExecutionPlan, env ag
 	}
 }
 
-func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	name := h.capabilityID
 	if h.plan != nil && h.plan.ThoughtRecipe != nil && h.plan.ThoughtRecipe.Name != "" {
 		name = h.plan.ThoughtRecipe.Name
@@ -88,7 +88,8 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextda
 	}
 }
 
-func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *recipeCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	env := contextdata.EnvelopeFromState(st)
 	if h.plan == nil {
 		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
 	}

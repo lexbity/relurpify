@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
@@ -26,7 +25,7 @@ func NewLayerCheckHandler(env agentenv.WorkspaceEnvironment) *LayerCheckHandler 
 }
 
 // Descriptor returns the capability descriptor for the layer check handler.
-func (h *LayerCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *LayerCheckHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.layer_check",
 		Kind:          agentspec.CapabilityKindTool,
@@ -104,7 +103,7 @@ var layerRules = []layerRule{
 }
 
 // Invoke scans the import graph and returns any boundary violations.
-func (h *LayerCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), nil
 	}

@@ -397,8 +397,8 @@ pipeline:
 
 func TestApplyCaptureBindingsWritesExplicitNamespaces(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("input.workspace", "workspace.txt", contextdata.MemoryClassTask)
-	env.SetWorkingValue("state.summary", "ready", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("input.workspace", "workspace.txt", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("state.summary", "ready", contextdata.MemoryClassTask)
 
 	bindings := []CaptureBinding{
 		{

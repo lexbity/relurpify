@@ -170,7 +170,7 @@ func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope)
 		execErr = fmt.Errorf("%s", res.Error)
 	}
 	if content, ok := data["content"].(string); ok {
-		state.SetWorkingValue("use-tool.content", content, contextdata.MemoryClassTask)
+		state.SetWorkingValueWithClass("use-tool.content", content, contextdata.MemoryClassTask)
 	}
 	state.AddInteraction(map[string]any{"actor": "tool:" + n.name, "result": data})
 	return &execution.Result{

@@ -9,7 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
@@ -133,7 +132,7 @@ type ContentProvenance struct {
 	ProviderID   string               `json:"provider_id,omitempty"`
 	TrustClass   agentspec.TrustClass `json:"trust_class,omitempty"`
 	Disposition  ContentDisposition   `json:"disposition,omitempty"`
-	Derivation   *relurpctx.DerivationChain     `json:"derivation,omitempty"` // NEW: transformation history
+	Derivation   *ports.DerivationChain     `json:"derivation,omitempty"` // NEW: transformation history
 }
 
 type CapabilityDescriptorProvider interface {

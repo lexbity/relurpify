@@ -94,7 +94,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 
 	// Store results in working memory
 	if n.resultKey != "" {
-		env.SetWorkingValue(n.resultKey, result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(n.resultKey, result, contextdata.MemoryClassTask)
 	}
 
 	// Also store ranked chunk IDs for easy access
@@ -102,7 +102,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	for _, rc := range result.Ranked {
 		chunkIDs = append(chunkIDs, string(rc.ChunkID))
 	}
-	env.SetWorkingValue(n.resultKey+"_chunks", chunkIDs, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(n.resultKey+"_chunks", chunkIDs, contextdata.MemoryClassTask)
 
 	// Add retrieval reference to envelope
 	ref := contextdata.RetrievalReference{

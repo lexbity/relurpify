@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
@@ -24,7 +23,7 @@ func NewBoundaryReportHandler(env agentenv.WorkspaceEnvironment) *BoundaryReport
 	return &BoundaryReportHandler{env: env}
 }
 
-func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.boundary_report",
 		Kind:          agentspec.CapabilityKindTool,
@@ -57,7 +56,7 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
 	}

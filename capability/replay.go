@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // ToolCallRecord captures one invocation for replay.
@@ -41,7 +40,7 @@ func (e *ErrUnexpectedToolCall) Error() string {
 // JSONL entry to the configured writer.
 type ToolRecorder struct {
 	inner interface {
-		InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error)
+		InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error)
 	}
 	w io.Writer
 }
@@ -49,14 +48,14 @@ type ToolRecorder struct {
 // NewToolRecorder creates a recorder that delegates to inner and writes
 // records to w.
 func NewToolRecorder(inner interface {
-	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error)
+	InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error)
 }, w io.Writer) *ToolRecorder {
 	return &ToolRecorder{inner: inner, w: w}
 }
 
 // InvokeCapability records the call and result, then delegates to the
 // inner invoker.
-func (r *ToolRecorder) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error) {
+func (r *ToolRecorder) InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	start := time.Now()
 	result, err := r.inner.InvokeCapability(ctx, env, idOrName, args)
 	elapsed := time.Since(start)
@@ -117,7 +116,7 @@ func NewToolPlayer(records []ToolCallRecord) *ToolPlayer {
 // InvokeCapability returns the next recorded result for the given
 // tool name. If the name doesn't match the next record, an
 // ErrUnexpectedToolCall is returned.
-func (p *ToolPlayer) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error) {
+func (p *ToolPlayer) InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if p.pos >= len(p.records) {
 		return nil, ErrReplayExhausted
 	}

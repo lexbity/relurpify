@@ -14,7 +14,7 @@ import (
 // CapabilityInvoker routes tool calls through the registered capability path
 // with policy evaluation, safety checks, and provenance recording.
 type CapabilityInvoker interface {
-	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error)
+	InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error)
 }
 
 type toolObservation struct {
@@ -81,7 +81,7 @@ func executeToolCalls(ctx context.Context, env *contextdata.Envelope, calls []mo
 				"pipeline stage: capability invoker required — " +
 					"direct tool.Execute() bypass has been removed")
 		}
-		result, err = invoker.InvokeCapability(ctx, env, call.Name, call.Args)
+		result, err = invoker.InvokeCapability(ctx, env.State(), call.Name, call.Args)
 		if err != nil {
 			return observations, err
 		}

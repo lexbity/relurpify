@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
@@ -26,7 +25,7 @@ func NewBlameTraceHandler(env agentenv.WorkspaceEnvironment) *BlameTraceHandler 
 }
 
 // Descriptor returns the capability descriptor for the blame trace handler.
-func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.blame_trace",
 		Kind:          agentspec.CapabilityKindTool,
@@ -87,7 +86,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke executes git blame and returns parsed blame entries.
-func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {

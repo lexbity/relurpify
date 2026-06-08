@@ -363,8 +363,8 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 		mutationResult.Details["record_error"] = err.Error()
 	}
 	if env != nil {
-		env.SetWorkingValue("euclo.projection.plan_id", plan.PlanID, contextdata.MemoryClassTask)
-		env.SetWorkingValue("euclo.projection.mutation_result", mutationResult, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("euclo.projection.plan_id", plan.PlanID, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("euclo.projection.mutation_result", mutationResult, contextdata.MemoryClassTask)
 	}
 	result.Mutation = mutationResult
 	result.Normalize(state.TaskID, state.SessionID)

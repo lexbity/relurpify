@@ -8,9 +8,9 @@ import (
 
 func TestFilterStateUsesHandoffPolicy(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("keep", "value-keep", contextdata.MemoryClassTask)
-	env.SetWorkingValue("keep.local", "value-prefix", contextdata.MemoryClassTask)
-	env.SetWorkingValue("drop", "value-drop", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("keep", "value-keep", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("keep.local", "value-prefix", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("drop", "value-drop", contextdata.MemoryClassTask)
 
 	filtered := FilterState(env, []string{"keep"})
 	if len(filtered) != 1 {

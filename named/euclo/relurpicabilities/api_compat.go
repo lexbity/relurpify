@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
@@ -26,7 +25,7 @@ func NewAPICompatHandler(env agentenv.WorkspaceEnvironment) *APICompatHandler {
 	return &APICompatHandler{env: env}
 }
 
-func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.api_compat",
 		Kind:          agentspec.CapabilityKindTool,
@@ -62,7 +61,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 	}
 }
 
-func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *APICompatHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}

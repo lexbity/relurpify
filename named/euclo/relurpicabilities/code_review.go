@@ -31,7 +31,7 @@ func NewCodeReviewHandler(env agentenv.WorkspaceEnvironment) *CodeReviewHandler 
 }
 
 // Descriptor returns the capability descriptor for the code review handler.
-func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.code_review",
 		Kind:          agentspec.CapabilityKindTool,
@@ -86,7 +86,8 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke reviews code from the envelope's user files or retrieval context.
-func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	env := contextdata.EnvelopeFromState(st)
 	focus, _ := stringArg(args, "focus")
 	if focus == "" {
 		focus = "all"

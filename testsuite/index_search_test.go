@@ -56,7 +56,7 @@ func HighlightFeature() string {
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	shared.SetWorkingValue(target.File, string(data), contextdata.MemoryClassTask)
+	shared.SetWorkingValueWithClass(target.File, string(data), contextdata.MemoryClassTask)
 	if val, ok := shared.GetWorkingValue(target.File); !ok || val != string(data) {
 		t.Fatalf("shared context missing %s", target.File)
 	}

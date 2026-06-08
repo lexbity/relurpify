@@ -370,7 +370,7 @@ func (b *EnvelopeBuilder) Build() *contextdata.Envelope {
 	env := contextdata.NewEnvelope(b.taskID, b.sessionID)
 	env.NodeID = b.nodeID
 	for _, item := range b.data {
-		env.SetWorkingValue(item.key, item.value, item.class)
+		env.SetWorkingValueWithClass(item.key, item.value, item.class)
 	}
 	return env
 }

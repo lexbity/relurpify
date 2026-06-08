@@ -22,7 +22,7 @@ func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error)
 func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	stepVal, _ := task.Context["current_step"]
 	step, _ := stepVal.(PlanStep)
-	env.SetWorkingValue("shared.conflict", step.ID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("shared.conflict", step.ID, contextdata.MemoryClassTask)
 	return &Result{Success: true}, nil
 }
 
@@ -58,7 +58,7 @@ func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.T
 		}
 	}
 	history = append(history, map[string]any{"role": "assistant", "content": "branch note"})
-	env.SetWorkingValue("_history", history, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("_history", history, contextdata.MemoryClassTask)
 	return &Result{Success: true}, nil
 }
 
@@ -88,8 +88,8 @@ func TestPlanExecutorAllowsCustomParallelMergePolicy(t *testing.T) {
 
 	_, err := (&PlanExecutor{Options: PlanExecutionOptions{
 		MergeBranches: func(parent *contextdata.Envelope, branches []BranchExecutionResult) error {
-			parent.SetWorkingValue("parallel.steps", []string{branches[0].Step.ID, branches[1].Step.ID}, contextdata.MemoryClassTask)
-			parent.SetWorkingValue("parallel.merge_policy", "custom", contextdata.MemoryClassTask)
+			parent.SetWorkingValueWithClass("parallel.steps", []string{branches[0].Step.ID, branches[1].Step.ID}, contextdata.MemoryClassTask)
+			parent.SetWorkingValueWithClass("parallel.merge_policy", "custom", contextdata.MemoryClassTask)
 			return nil
 		},
 	}}).Execute(context.Background(), executor, task, plan, state)
@@ -102,8 +102,8 @@ func TestBranchMergeHelperMergesBranchEnvelopes(t *testing.T) {
 	parent := contextdata.NewEnvelope("task-branch", "session")
 	left := contextdata.CloneEnvelope(parent, "left")
 	right := contextdata.CloneEnvelope(parent, "right")
-	left.SetWorkingValue("left.value", "a", contextdata.MemoryClassTask)
-	right.SetWorkingValue("right.value", "b", contextdata.MemoryClassTask)
+	left.SetWorkingValueWithClass("left.value", "a", contextdata.MemoryClassTask)
+	right.SetWorkingValueWithClass("right.value", "b", contextdata.MemoryClassTask)
 
 	err := mergePlanBranchEnvelopes(parent, []BranchExecutionResult{
 		{Step: PlanStep{ID: "left"}, State: left},

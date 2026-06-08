@@ -46,7 +46,7 @@ func (o TypedOverlay[T]) Set(env *Envelope, val T) {
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(o.key, val, o.class)
+	env.SetWorkingValueWithClass(o.key, val, o.class)
 }
 
 // Key returns the string key this overlay manages.
@@ -63,7 +63,7 @@ func SetTyped[T any](env *Envelope, key string, val T) {
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(key, val, MemoryClassTask)
+	env.SetWorkingValueWithClass(key, val, MemoryClassTask)
 }
 
 // GetTyped retrieves a value from env and asserts it to type T.

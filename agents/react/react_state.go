@@ -34,11 +34,11 @@ func mirrorReactFinalOutputReference(env *contextdata.Envelope) {
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
 		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValue("react.final_output_ref", ref, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.final_output_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 	if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
-		env.SetWorkingValue("react.final_output_summary", summary, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.final_output_summary", summary, contextdata.MemoryClassTask)
 	}
 }
 
@@ -48,7 +48,7 @@ func mirrorReactCheckpointReference(env *contextdata.Envelope) {
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
 		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValue("react.checkpoint_ref", ref, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.checkpoint_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 }
@@ -72,7 +72,7 @@ func compactReactFinalOutputState(env *contextdata.Envelope) {
 	if summary == "" || summary == "<nil>" {
 		return
 	}
-	env.SetWorkingValue("react.final_output", map[string]any{
+	env.SetWorkingValueWithClass("react.final_output", map[string]any{
 		"summary": summary,
 	}, contextdata.MemoryClassTask)
 }
@@ -92,7 +92,7 @@ func compactReactToolObservationsState(env *contextdata.Envelope) {
 	if !ok {
 		return
 	}
-	env.SetWorkingValue("react.tool_observations", compactReactToolObservations(observations), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.tool_observations", compactReactToolObservations(observations), contextdata.MemoryClassTask)
 }
 
 func compactReactToolObservations(observations []ToolObservation) map[string]any {
@@ -139,7 +139,7 @@ func compactReactLastToolResultState(env *contextdata.Envelope) {
 	if !ok {
 		return
 	}
-	env.SetWorkingValue("react.last_tool_result", compactReactLastToolResult(payload), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_tool_result", compactReactLastToolResult(payload), contextdata.MemoryClassTask)
 }
 
 func compactReactLastToolResult(payload map[string]interface{}) map[string]any {
@@ -169,25 +169,25 @@ func compactReactLoopState(env *contextdata.Envelope) {
 		return
 	}
 	if raw, ok := env.GetWorkingValue("react.decision"); ok && raw != nil {
-		env.SetWorkingValue("react.decision", map[string]any{"present": true}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.decision", map[string]any{"present": true}, contextdata.MemoryClassTask)
 	}
 	if raw, ok := env.GetWorkingValue("react.tool_calls"); ok {
 		switch calls := raw.(type) {
 		case []model.ToolCall:
-			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		case []any:
-			env.SetWorkingValue("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.tool_calls", map[string]any{"count": len(calls)}, contextdata.MemoryClassTask)
 		}
 	}
 	if _, ok := env.GetWorkingValue("react.last_tool_result_envelope"); ok {
-		env.SetWorkingValue("react.last_tool_result_envelope", map[string]any{"present": true}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result_envelope", map[string]any{"present": true}, contextdata.MemoryClassTask)
 	}
 	if raw, ok := env.GetWorkingValue("react.last_tool_result_envelopes"); ok {
 		switch envelopes := raw.(type) {
 		case []*capability.CapabilityResultEnvelope:
-			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
 		case []any:
-			env.SetWorkingValue("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)}, contextdata.MemoryClassTask)
 		}
 	}
 }
@@ -219,7 +219,7 @@ func recordActiveToolNames(env *contextdata.Envelope, tools []ports.Tool) {
 	for _, tool := range tools {
 		names = append(names, tool.Name())
 	}
-	env.SetWorkingValue("react.active_tools", names, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.active_tools", names, contextdata.MemoryClassTask)
 }
 
 func (a *ReActAgent) getLastResult(env *contextdata.Envelope) *execution.Result {

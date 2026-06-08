@@ -143,7 +143,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 			}
 			if env != nil {
 				setRouteSelectionContinuation(env, euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID), nextThoughtRecipeID, euclotypes.RouteKindForThoughtRecipeID(thoughtrecipeID), thoughtrecipeID)
-				env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
 			}
 			nextResult, nextErr := nextGraph.Execute(ctx, env)
 			if nextResult != nil {

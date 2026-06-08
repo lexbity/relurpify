@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
@@ -27,7 +26,7 @@ func NewCoverageCheckHandler(env agentenv.WorkspaceEnvironment) *CoverageCheckHa
 }
 
 // Descriptor returns the capability descriptor for the coverage check handler.
-func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            "euclo:cap.coverage_check",
 		Kind:          agentspec.CapabilityKindTool,
@@ -102,7 +101,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 }
 
 // Invoke runs go test -cover and returns per-package coverage results.
-func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}

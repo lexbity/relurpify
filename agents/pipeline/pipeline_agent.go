@@ -100,12 +100,12 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 		final["decoded_output"] = last.DecodedOutput
 	}
 	if _, ok := env.GetWorkingValue("pipeline.results"); !ok {
-		env.SetWorkingValue("pipeline.results", results, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("pipeline.results", results, contextdata.MemoryClassTask)
 	}
 	if _, ok := env.GetWorkingValue("pipeline.final_output"); !ok {
-		env.SetWorkingValue("pipeline.final_output", final, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("pipeline.final_output", final, contextdata.MemoryClassTask)
 	}
-	env.SetWorkingValue("pipeline.results_summary", summarizePipelineResults(results), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("pipeline.results_summary", summarizePipelineResults(results), contextdata.MemoryClassTask)
 	return &execution.Result{
 		Success: true,
 		Data: execution.NewToolResultPayload(map[string]any{
@@ -335,7 +335,7 @@ func (n *pipelineStageNode) Type() graph.NodeType { return graph.NodeTypeSystem 
 
 func (n *pipelineStageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.stage != nil && env != nil {
-		env.SetWorkingValue("pipeline.inspect_stage", n.stage.Name(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("pipeline.inspect_stage", n.stage.Name(), contextdata.MemoryClassTask)
 	}
 	return &execution.Result{NodeID: n.id, Success: true}, nil
 }

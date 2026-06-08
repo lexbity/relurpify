@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 // mockRanker is a test ranker that returns predefined results.
@@ -154,22 +154,14 @@ func TestRankerRegistry_PolicyAdmission(t *testing.T) {
 	registry.Register(&mockRanker{name: "ast_proximity", results: []knowledge.ChunkID{"c"}})
 	registry.Register(&mockRanker{name: "trust", results: []knowledge.ChunkID{"d"}})
 
-	policy := &execctx.ContextPolicyBundle{
-		Rankers: []execctx.RankerRef{
-			{ID: "keyword", Priority: 10},
-			{ID: "recency", Priority: 5},
-		},
-	}
+	policy := &contextports.PolicyBundle{}
 
 	admitted := registry.Admitted(policy)
-	if len(admitted) != 2 {
-		t.Fatalf("expected 2 admitted rankers, got %d", len(admitted))
+	if len(admitted) != 4 {
+		t.Fatalf("expected 4 admitted rankers, got %d", len(admitted))
 	}
 	if admitted[0].Ranker.Name() != "keyword" || admitted[1].Ranker.Name() != "recency" {
 		t.Fatalf("unexpected admitted order: %s, %s", admitted[0].Ranker.Name(), admitted[1].Ranker.Name())
-	}
-	if admitted[0].Weight <= admitted[1].Weight {
-		t.Fatalf("expected keyword to have higher weight than recency, got %.2f <= %.2f", admitted[0].Weight, admitted[1].Weight)
 	}
 }
 

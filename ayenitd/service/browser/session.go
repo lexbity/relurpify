@@ -82,7 +82,7 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 	}
 	handle.noteActivity()
 	if env != nil {
-		env.SetWorkingValue(browserDefaultSessionKey, sessionID, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(browserDefaultSessionKey, sessionID, contextdata.MemoryClassTask)
 	}
 	scope := browserTaskScope(env)
 	emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), scope, "browser session opened", map[string]interface{}{
@@ -112,7 +112,7 @@ func (s *BrowserService) close(env *contextdata.Envelope, args map[string]interf
 	if env != nil {
 		if current, ok := env.GetWorkingValue(browserDefaultSessionKey); ok {
 			if strings.TrimSpace(fmt.Sprint(current)) == sessionID {
-				env.SetWorkingValue(browserDefaultSessionKey, "", contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(browserDefaultSessionKey, "", contextdata.MemoryClassTask)
 			}
 		}
 	}

@@ -332,7 +332,7 @@ func PublishOperatorMetadata(state *contextdata.Envelope, operator string, metad
 		return
 	}
 	key := "htn.operator_metadata." + operator
-	state.SetWorkingValue(key, metadata, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(key, metadata, contextdata.MemoryClassTask)
 }
 
 // GetPublishedOperatorMetadata retrieves operator metadata from context.

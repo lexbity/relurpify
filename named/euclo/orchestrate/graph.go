@@ -502,9 +502,9 @@ func seedDefaultTask(env *contextdata.Envelope) {
 	if task.ID == "" {
 		task.ID = "euclo.task"
 	}
-	env.SetWorkingValue(euclostate.KeyTaskInputLegacy, task, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
-	env.SetWorkingValue(euclostate.KeyTaskRaw, task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskInputLegacy, task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskRaw, task, contextdata.MemoryClassTask)
 }
 
 func defaultFamilyRegistry() *families.KeywordFamilyRegistry {

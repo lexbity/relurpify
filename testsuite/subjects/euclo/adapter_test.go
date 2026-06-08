@@ -11,13 +11,13 @@ import (
 
 func TestCollectPerformancePhases(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.SetWorkingValue("euclo.interaction_state", map[string]any{
+	env.SetWorkingValueWithClass("euclo.interaction_state", map[string]any{
 		"phases_executed": []string{"plan", "review"},
 	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.profile_phase_records", []any{
+	env.SetWorkingValueWithClass("euclo.profile_phase_records", []any{
 		map[string]any{"phase": "plan"},
 	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction_records", []any{
+	env.SetWorkingValueWithClass("euclo.interaction_records", []any{
 		map[string]any{"phase": "review", "duration": "25ms"},
 	}, contextdata.MemoryClassTask)
 

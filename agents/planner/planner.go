@@ -125,11 +125,11 @@ func mirrorPlannerSummaryReference(env *contextdata.Envelope) {
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
 		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValue("planner.summary_ref", ref, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("planner.summary_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 	if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
-		env.SetWorkingValue("planner.summary_artifact_summary", summary, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("planner.summary_artifact_summary", summary, contextdata.MemoryClassTask)
 	}
 }
 
@@ -139,7 +139,7 @@ func mirrorPlannerCheckpointReference(env *contextdata.Envelope) {
 	}
 	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
 		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValue("planner.checkpoint_ref", ref, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("planner.checkpoint_ref", ref, contextdata.MemoryClassTask)
 		}
 	}
 }
@@ -156,11 +156,11 @@ func compactPlannerResultsStateInContext(env *contextdata.Envelope) {
 		return
 	}
 	if compact := compactPlannerResultsState(raw); compact != nil {
-		env.SetWorkingValue("planner.results", compact, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("planner.results", compact, contextdata.MemoryClassTask)
 	}
 	if rawSkipped, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
 		if compact := compactPlannerSkippedToolsState(rawSkipped); compact != nil {
-			env.SetWorkingValue("planner.skipped_tools", compact, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("planner.skipped_tools", compact, contextdata.MemoryClassTask)
 		}
 	}
 }
@@ -330,7 +330,7 @@ func (n *plannerPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 // Execute prompts the LLM for a machine-readable plan. The JSON schema is small
 // enough that contributors can tweak it without retraining anything.
 func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("execution_phase", "planning", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("execution_phase", "planning", contextdata.MemoryClassTask)
 	extraPrompt := ""
 	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
 		extraPrompt = strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
@@ -391,9 +391,9 @@ Use string step ids (UUID-safe).
 		return nil, err
 	}
 	plan, adjustments := normalizePlannerPlan(n.agent, n.task, plan)
-	env.SetWorkingValue("planner.plan", plan, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("planner.plan", plan, contextdata.MemoryClassTask)
 	if len(adjustments) > 0 {
-		env.SetWorkingValue("planner.plan_adjustments", adjustments, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("planner.plan_adjustments", adjustments, contextdata.MemoryClassTask)
 	}
 	if n.agent.Memory != nil {
 		scope := n.agent.Memory.Scope(plannerUUID())
@@ -537,7 +537,7 @@ func (n *plannerExecuteNode) Contract() graph.NodeContract {
 // the planner tolerant of reasoning-only or partially-grounded steps the LLM
 // might propose before the step executor handles the real work.
 func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("execution_phase", "executing", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("execution_phase", "executing", contextdata.MemoryClassTask)
 	value, ok := env.GetWorkingValue("planner.plan")
 	if !ok {
 		return nil, fmt.Errorf("plan not available")
@@ -580,11 +580,11 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 			"id":     step.ID,
 			"output": result.Data,
 		})
-		env.SetWorkingValue(fmt.Sprintf("planner.step.%s", step.ID), result.Data, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(fmt.Sprintf("planner.step.%s", step.ID), result.Data, contextdata.MemoryClassTask)
 	}
-	env.SetWorkingValue("planner.results", stepResults, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("planner.results", stepResults, contextdata.MemoryClassTask)
 	if len(skippedTools) > 0 {
-		env.SetWorkingValue("planner.skipped_tools", skippedTools, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("planner.skipped_tools", skippedTools, contextdata.MemoryClassTask)
 	}
 	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{
 		"results":       stepResults,
@@ -666,13 +666,13 @@ func (n *plannerVerifyNode) Type() graph.NodeType { return graph.NodeTypeObserva
 // systems (CLI, LSP, tests) can display human-friendly "what just happened"
 // messages without parsing the entire state map.
 func (n *plannerVerifyNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("execution_phase", "validating", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("execution_phase", "validating", contextdata.MemoryClassTask)
 	results, _ := env.GetWorkingValue("planner.results")
 	_ = results
 	planVal, _ := env.GetWorkingValue("planner.plan")
 	plan, _ := planVal.(pl.Plan)
 	summary := fmt.Sprintf("Executed plan for task '%s' with %d steps.", n.task.Instruction, len(plan.Steps))
-	env.SetWorkingValue("planner.summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("planner.summary", summary, contextdata.MemoryClassTask)
 	if n.agent.Memory != nil {
 		n.agent.Memory.Scope(plannerUUID()).Set("planner.summary", summary, relurpctx.MemoryClassWorking)
 	}

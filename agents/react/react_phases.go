@@ -68,7 +68,7 @@ func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *execution.
 	if strings.EqualFold(a.Mode, "docs") {
 		phase = contextmgrPhaseEdit
 	}
-	env.SetWorkingValue("react.phase", phase, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.phase", phase, contextdata.MemoryClassTask)
 }
 
 func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *execution.Task) []ports.Tool {

@@ -132,7 +132,7 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *context
 	if resolvedTarget == "" {
 		return nil, decision, false, nil
 	}
-	result, err := d.tools.InvokeCapability(ctx, env, resolvedTarget, args)
+	result, err := d.tools.InvokeCapability(ctx, env.State(), resolvedTarget, args)
 	if err != nil {
 		decision.Mode = "capability"
 		return nil, decision, true, err
@@ -162,7 +162,7 @@ func recordDispatch(env *contextdata.Envelope, decision dispatchDecision) {
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(contextKeyLastDispatch, map[string]any{
+	env.SetWorkingValueWithClass(contextKeyLastDispatch, map[string]any{
 		"target":           decision.RequestedTarget,
 		"requested_target": decision.RequestedTarget,
 		"resolved_target":  decision.ResolvedTarget,

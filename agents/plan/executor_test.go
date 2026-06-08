@@ -26,8 +26,8 @@ func (s *stubExecutor) Execute(ctx context.Context, task *execution.Task, env *c
 	stepVal, ok := task.Context["current_step"]
 	if ok {
 		if step, ok := stepVal.(PlanStep); ok {
-			env.SetWorkingValue("completed."+step.ID, true, contextdata.MemoryClassTask)
-			env.SetWorkingValue("conflict", step.ID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("completed."+step.ID, true, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("conflict", step.ID, contextdata.MemoryClassTask)
 			s.mu.Lock()
 			s.steps = append(s.steps, step.ID)
 			s.mu.Unlock()
@@ -159,7 +159,7 @@ func TestBuildStepTaskHandlesNilTask(t *testing.T) {
 func TestBuildStepTaskDoesNotReadArchitectState(t *testing.T) {
 	step := PlanStep{ID: "s1", Description: "do work"}
 	state := contextdata.NewEnvelope("task-2", "")
-	state.SetWorkingValue("architect.last_step_summary", "framework should not read this", contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass("architect.last_step_summary", "framework should not read this", contextdata.MemoryClassTask)
 	task := buildStepTask(&execution.Task{}, nil, step, state)
 	_ = task
 	if _, ok := task.Context["previous_step_result"]; ok {
@@ -225,7 +225,7 @@ func (e *isolatedExecutor) Execute(ctx context.Context, task *execution.Task, en
 	e.shared.started <- step.ID
 	<-e.shared.release
 	atomic.AddInt32(&e.shared.current, -1)
-	env.SetWorkingValue("completed."+step.ID, true, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("completed."+step.ID, true, contextdata.MemoryClassTask)
 	return &Result{Success: true}, nil
 }
 

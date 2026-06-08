@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
@@ -24,7 +25,7 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 	if state == nil {
 		return
 	}
-	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 }
 
 // Persistence-related methods for HTNAgent (moved from persistence subpackage to allow method definitions)
@@ -45,7 +46,18 @@ func (a *HTNAgent) saveHTNCheckpoint(ctx context.Context, state *contextdata.Env
 	if err != nil {
 		return err
 	}
-	_, err = frameworkpersistence.SaveCheckpointArtifact(ctx, state, repo, frameworkpersistence.CheckpointSnapshot{
+	_, err = frameworkpersistence.SaveCheckpointArtifact(ctx, state, func(artifact contextports.WorkflowArtifactRecord) error {
+		return repo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
+			ArtifactID:      artifact.ArtifactID,
+			WorkflowID:      artifact.WorkflowID,
+			RunID:           artifact.RunID,
+			ContentType:     artifact.ContentType,
+			StorageKind:     agentlifecycle.ArtifactStorageKind(artifact.StorageKind),
+			SummaryText:     artifact.Summary,
+			SummaryMetadata: artifact.Metadata,
+			CreatedAt:       artifact.CreatedAt,
+		})
+	}, frameworkpersistence.CheckpointSnapshot{
 		CheckpointID: snapshot.ResumeCheckpointID,
 		WorkflowID:   workflowID,
 		RunID:        runID,

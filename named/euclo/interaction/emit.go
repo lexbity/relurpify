@@ -25,8 +25,8 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 	}
 
 	frameKey := frameStorageKey(seq)
-	env.SetWorkingValue(frameKey, frame, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction.frame_seq", seq+1, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(frameKey, frame, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", seq+1, contextdata.MemoryClassTask)
 
 	sink := eventLog
 	if sink == nil {

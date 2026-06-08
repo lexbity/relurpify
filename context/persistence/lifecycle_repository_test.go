@@ -1,13 +1,11 @@
 package persistence
 
 import (
-	"context"
 	"os"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
-	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 func setupTestDB(t *testing.T) *graphdb.Engine {
@@ -28,20 +26,19 @@ func TestLifecycleRepository_CreateWorkflow(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	workflow := agentlifecycle.WorkflowRecord{
+	workflow := contextports.WorkflowRecord{
 		WorkflowID: "wf-test-1",
 		Metadata:   map[string]any{"key": "value"},
 	}
 
-	err := repo.CreateWorkflow(ctx, workflow)
+	err := repo.CreateWorkflow(workflow)
 	if err != nil {
 		t.Fatalf("CreateWorkflow failed: %v", err)
 	}
 
 	// Verify it was created
-	retrieved, err := repo.GetWorkflow(ctx, "wf-test-1")
+	retrieved, err := repo.GetWorkflow("wf-test-1")
 	if err != nil {
 		t.Fatalf("GetWorkflow failed: %v", err)
 	}
@@ -54,16 +51,15 @@ func TestLifecycleRepository_GetWorkflow(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	workflow := agentlifecycle.WorkflowRecord{
+	workflow := contextports.WorkflowRecord{
 		WorkflowID: "wf-test-2",
 		Metadata:   map[string]any{"key": "value"},
 	}
 
-	_ = repo.CreateWorkflow(ctx, workflow)
+	_ = repo.CreateWorkflow(workflow)
 
-	retrieved, err := repo.GetWorkflow(ctx, "wf-test-2")
+	retrieved, err := repo.GetWorkflow("wf-test-2")
 	if err != nil {
 		t.Fatalf("GetWorkflow failed: %v", err)
 	}
@@ -76,12 +72,11 @@ func TestLifecycleRepository_ListWorkflows(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-2"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-2"})
 
-	workflows, err := repo.ListWorkflows(ctx)
+	workflows, err := repo.ListWorkflows("")
 	if err != nil {
 		t.Fatalf("ListWorkflows failed: %v", err)
 	}
@@ -94,24 +89,23 @@ func TestLifecycleRepository_CreateRun(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
 	// First create a workflow
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
 
-	run := agentlifecycle.WorkflowRunRecord{
+	run := contextports.WorkflowRunRecord{
 		RunID:      "run-1",
 		WorkflowID: "wf-1",
 		Status:     "running",
 	}
 
-	err := repo.CreateRun(ctx, run)
+	err := repo.CreateRun(run)
 	if err != nil {
 		t.Fatalf("CreateRun failed: %v", err)
 	}
 
 	// Verify it was created
-	retrieved, err := repo.GetRun(ctx, "run-1")
+	retrieved, err := repo.GetRun("run-1")
 	if err != nil {
 		t.Fatalf("GetRun failed: %v", err)
 	}
@@ -124,13 +118,12 @@ func TestLifecycleRepository_ListRuns(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-2", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-2", WorkflowID: "wf-1"})
 
-	runs, err := repo.ListRuns(ctx, "wf-1")
+	runs, err := repo.ListRuns("wf-1")
 	if err != nil {
 		t.Fatalf("ListRuns failed: %v", err)
 	}
@@ -143,17 +136,16 @@ func TestLifecycleRepository_UpdateRunStatus(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1", Status: "running"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1", Status: "running"})
 
-	err := repo.UpdateRunStatus(ctx, "run-1", "completed")
+	err := repo.UpdateRunStatus("run-1", "completed")
 	if err != nil {
 		t.Fatalf("UpdateRunStatus failed: %v", err)
 	}
 
-	retrieved, _ := repo.GetRun(ctx, "run-1")
+	retrieved, _ := repo.GetRun("run-1")
 	if retrieved.Status != "completed" {
 		t.Errorf("expected status completed, got %s", retrieved.Status)
 	}
@@ -166,27 +158,24 @@ func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	delegation := agentlifecycle.DelegationEntry{
-		DelegationID: "del-1",
-		WorkflowID:   "wf-1",
-		RunID:        "run-1",
-		State:        "active",
-		Request: policy.DelegationRequest{
-			TargetProviderID: "provider-1",
-		},
+	delegation := contextports.DelegationEntry{
+		DelegationID:     "del-1",
+		WorkflowID:       "wf-1",
+		RunID:            "run-1",
+		State:            "active",
+		TargetProviderID: "provider-1",
 	}
 
-	err := repo.UpsertDelegation(ctx, delegation)
+	err := repo.UpsertDelegation(delegation)
 	if err != nil {
 		t.Fatalf("UpsertDelegation failed: %v", err)
 	}
 
-	retrieved, err := repo.GetDelegation(ctx, "del-1")
+	retrieved, err := repo.GetDelegation("del-1")
 	if err != nil {
 		t.Fatalf("GetDelegation failed: %v", err)
 	}
@@ -199,15 +188,14 @@ func TestLifecycleRepository_ListDelegations(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	_ = repo.UpsertDelegation(ctx, agentlifecycle.DelegationEntry{DelegationID: "del-1", WorkflowID: "wf-1", RunID: "run-1"})
-	_ = repo.UpsertDelegation(ctx, agentlifecycle.DelegationEntry{DelegationID: "del-2", WorkflowID: "wf-1", RunID: "run-1"})
+	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: "del-1", WorkflowID: "wf-1", RunID: "run-1"})
+	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: "del-2", WorkflowID: "wf-1", RunID: "run-1"})
 
-	delegations, err := repo.ListDelegations(ctx, "wf-1")
+	delegations, err := repo.ListDelegations("wf-1")
 	if err != nil {
 		t.Fatalf("ListDelegations failed: %v", err)
 	}
@@ -220,23 +208,21 @@ func TestLifecycleRepository_AppendDelegationTransition(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.UpsertDelegation(ctx, agentlifecycle.DelegationEntry{DelegationID: "del-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: "del-1", WorkflowID: "wf-1"})
 
-	transition := agentlifecycle.DelegationTransitionEntry{
-		TransitionID: "trans-1",
+	transition := contextports.DelegationTransitionEntry{
 		DelegationID: "del-1",
 		ToState:      "completed",
 	}
 
-	err := repo.AppendDelegationTransition(ctx, transition)
+	err := repo.AppendDelegationTransition(transition)
 	if err != nil {
 		t.Fatalf("AppendDelegationTransition failed: %v", err)
 	}
 
-	transitions, err := repo.ListDelegationTransitions(ctx, "del-1")
+	transitions, err := repo.ListDelegationTransitions("del-1")
 	if err != nil {
 		t.Fatalf("ListDelegationTransitions failed: %v", err)
 	}
@@ -249,12 +235,11 @@ func TestLifecycleRepository_AppendEvent(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	event := agentlifecycle.WorkflowEventRecord{
+	event := contextports.WorkflowEventRecord{
 		EventID:    "evt-1",
 		WorkflowID: "wf-1",
 		RunID:      "run-1",
@@ -263,12 +248,12 @@ func TestLifecycleRepository_AppendEvent(t *testing.T) {
 		Payload:    map[string]any{"msg": "test"},
 	}
 
-	err := repo.AppendEvent(ctx, event)
+	err := repo.AppendEvent(event)
 	if err != nil {
 		t.Fatalf("AppendEvent failed: %v", err)
 	}
 
-	events, err := repo.ListEventsByRun(ctx, "run-1", 10)
+	events, err := repo.ListEventsByRun("run-1", 10)
 	if err != nil {
 		t.Fatalf("ListEventsByRun failed: %v", err)
 	}
@@ -281,25 +266,24 @@ func TestLifecycleRepository_UpsertArtifact(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	artifact := agentlifecycle.WorkflowArtifactRecord{
+	artifact := contextports.WorkflowArtifactRecord{
 		ArtifactID:  "art-1",
 		WorkflowID:  "wf-1",
 		RunID:       "run-1",
-		Kind:        "output",
+		StorageKind: "inline",
 		ContentType: "text/plain",
 	}
 
-	err := repo.UpsertArtifact(ctx, artifact)
+	err := repo.UpsertArtifact(artifact)
 	if err != nil {
 		t.Fatalf("UpsertArtifact failed: %v", err)
 	}
 
-	retrieved, err := repo.GetArtifact(ctx, "art-1")
+	retrieved, err := repo.GetArtifact("art-1")
 	if err != nil {
 		t.Fatalf("GetArtifact failed: %v", err)
 	}
@@ -312,15 +296,14 @@ func TestLifecycleRepository_ListArtifacts(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	_ = repo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{ArtifactID: "art-1", WorkflowID: "wf-1", RunID: "run-1"})
-	_ = repo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{ArtifactID: "art-2", WorkflowID: "wf-1", RunID: "run-1"})
+	_ = repo.UpsertArtifact(contextports.WorkflowArtifactRecord{ArtifactID: "art-1", WorkflowID: "wf-1", RunID: "run-1"})
+	_ = repo.UpsertArtifact(contextports.WorkflowArtifactRecord{ArtifactID: "art-2", WorkflowID: "wf-1", RunID: "run-1"})
 
-	artifacts, err := repo.ListArtifactsByRun(ctx, "run-1")
+	artifacts, err := repo.ListArtifactsByRun("run-1")
 	if err != nil {
 		t.Fatalf("ListArtifactsByRun failed: %v", err)
 	}
@@ -333,25 +316,24 @@ func TestLifecycleRepository_UpsertLineageBinding(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	binding := agentlifecycle.LineageBindingRecord{
-		BindingID:  "lb-1",
-		WorkflowID: "wf-1",
-		RunID:      "run-1",
-		LineageID:  "lineage-1",
-		AttemptID:  "attempt-1",
+	binding := contextports.LineageBindingRecord{
+		BindingID:    "lb-1",
+		WorkflowID:   "wf-1",
+		FromRunID:    "run-1",
+		FromEntityID: "lineage-1",
+		ToEntityID:   "attempt-1",
 	}
 
-	err := repo.UpsertLineageBinding(ctx, binding)
+	err := repo.UpsertLineageBinding(binding)
 	if err != nil {
 		t.Fatalf("UpsertLineageBinding failed: %v", err)
 	}
 
-	retrieved, err := repo.GetLineageBinding(ctx, "lb-1")
+	retrieved, err := repo.GetLineageBinding("lb-1")
 	if err != nil {
 		t.Fatalf("GetLineageBinding failed: %v", err)
 	}
@@ -364,27 +346,29 @@ func TestLifecycleRepository_FindLineageBindingByLineageID(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	binding := agentlifecycle.LineageBindingRecord{
-		BindingID:  "lb-1",
-		WorkflowID: "wf-1",
-		RunID:      "run-1",
-		LineageID:  "lineage-123",
-		AttemptID:  "attempt-1",
+	binding := contextports.LineageBindingRecord{
+		BindingID:    "lb-1",
+		WorkflowID:   "wf-1",
+		FromRunID:    "run-1",
+		FromEntityID: "lineage-123",
+		ToEntityID:   "attempt-1",
 	}
 
-	_ = repo.UpsertLineageBinding(ctx, binding)
+	_ = repo.UpsertLineageBinding(binding)
 
-	retrieved, err := repo.FindLineageBindingByLineageID(ctx, "lineage-123")
+	bindings, err := repo.FindLineageBindingsByFrom("lineage-123")
 	if err != nil {
-		t.Fatalf("FindLineageBindingByLineageID failed: %v", err)
+		t.Fatalf("FindLineageBindingsByFrom failed: %v", err)
 	}
-	if retrieved.LineageID != "lineage-123" {
-		t.Errorf("expected LineageID lineage-123, got %s", retrieved.LineageID)
+	if len(bindings) != 1 {
+		t.Fatalf("expected 1 binding, got %d", len(bindings))
+	}
+	if bindings[0].FromEntityID != "lineage-123" {
+		t.Errorf("expected FromEntityID lineage-123, got %s", bindings[0].FromEntityID)
 	}
 }
 
@@ -392,27 +376,29 @@ func TestLifecycleRepository_FindLineageBindingByAttemptID(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
-	_ = repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-1", WorkflowID: "wf-1"})
 
-	binding := agentlifecycle.LineageBindingRecord{
-		BindingID:  "lb-1",
-		WorkflowID: "wf-1",
-		RunID:      "run-1",
-		LineageID:  "lineage-1",
-		AttemptID:  "attempt-456",
+	binding := contextports.LineageBindingRecord{
+		BindingID:    "lb-1",
+		WorkflowID:   "wf-1",
+		FromRunID:    "run-1",
+		FromEntityID: "lineage-1",
+		ToEntityID:   "attempt-456",
 	}
 
-	_ = repo.UpsertLineageBinding(ctx, binding)
+	_ = repo.UpsertLineageBinding(binding)
 
-	retrieved, err := repo.FindLineageBindingByAttemptID(ctx, "attempt-456")
+	bindings, err := repo.FindLineageBindingsByTo("attempt-456")
 	if err != nil {
-		t.Fatalf("FindLineageBindingByAttemptID failed: %v", err)
+		t.Fatalf("FindLineageBindingsByTo failed: %v", err)
 	}
-	if retrieved.AttemptID != "attempt-456" {
-		t.Errorf("expected AttemptID attempt-456, got %s", retrieved.AttemptID)
+	if len(bindings) != 1 {
+		t.Fatalf("expected 1 binding, got %d", len(bindings))
+	}
+	if bindings[0].ToEntityID != "attempt-456" {
+		t.Errorf("expected ToEntityID attempt-456, got %s", bindings[0].ToEntityID)
 	}
 }
 
@@ -443,16 +429,15 @@ func TestLifecycleRepository_IDGeneration(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
 	// Test auto-generated IDs
-	workflow := agentlifecycle.WorkflowRecord{} // No WorkflowID
-	err := repo.CreateWorkflow(ctx, workflow)
+	workflow := contextports.WorkflowRecord{} // No WorkflowID
+	err := repo.CreateWorkflow(workflow)
 	if err != nil {
 		t.Fatalf("CreateWorkflow with auto ID failed: %v", err)
 	}
 
-	workflows, _ := repo.ListWorkflows(ctx)
+	workflows, _ := repo.ListWorkflows("")
 	if len(workflows) != 1 {
 		t.Errorf("expected 1 workflow, got %d", len(workflows))
 	}
@@ -465,52 +450,48 @@ func TestLifecycleRepository_RoundTrip(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
 	// Create workflow
-	workflow := agentlifecycle.WorkflowRecord{
+	workflow := contextports.WorkflowRecord{
 		WorkflowID: "wf-roundtrip",
 		Metadata:   map[string]any{"key1": "value1", "key2": 123},
 	}
-	_ = repo.CreateWorkflow(ctx, workflow)
+	_ = repo.CreateWorkflow(workflow)
 
 	// Create run
-	run := agentlifecycle.WorkflowRunRecord{
+	run := contextports.WorkflowRunRecord{
 		RunID:      "run-roundtrip",
 		WorkflowID: "wf-roundtrip",
 		Status:     "running",
 		Metadata:   map[string]any{"run_key": "run_value"},
 	}
-	_ = repo.CreateRun(ctx, run)
+	_ = repo.CreateRun(run)
 
 	// Create delegation
-	delegation := agentlifecycle.DelegationEntry{
-		DelegationID: "del-roundtrip",
-		WorkflowID:   "wf-roundtrip",
-		RunID:        "run-roundtrip",
-		State:        "active",
-		TrustClass:   "trusted",
-		Request: policy.DelegationRequest{
-			TargetProviderID: "provider-1",
-		},
-		Metadata: map[string]any{"del_key": "del_value"},
+	delegation := contextports.DelegationEntry{
+		DelegationID:     "del-roundtrip",
+		WorkflowID:       "wf-roundtrip",
+		RunID:            "run-roundtrip",
+		State:            "active",
+		TargetProviderID: "provider-1",
+		Metadata:         map[string]any{"del_key": "del_value"},
 	}
-	_ = repo.UpsertDelegation(ctx, delegation)
+	_ = repo.UpsertDelegation(delegation)
 
 	// Verify round-trip
-	retrievedWorkflow, _ := repo.GetWorkflow(ctx, "wf-roundtrip")
+	retrievedWorkflow, _ := repo.GetWorkflow("wf-roundtrip")
 	if retrievedWorkflow.Metadata["key1"] != "value1" {
 		t.Errorf("metadata round-trip failed: expected key1=value1, got %v", retrievedWorkflow.Metadata["key1"])
 	}
 
-	retrievedRun, _ := repo.GetRun(ctx, "run-roundtrip")
+	retrievedRun, _ := repo.GetRun("run-roundtrip")
 	if retrievedRun.Status != "running" {
 		t.Errorf("run round-trip failed: expected status running, got %s", retrievedRun.Status)
 	}
 
-	retrievedDelegation, _ := repo.GetDelegation(ctx, "del-roundtrip")
-	if retrievedDelegation.TrustClass != "trusted" {
-		t.Errorf("delegation round-trip failed: expected trust class trusted, got %s", retrievedDelegation.TrustClass)
+	retrievedDelegation, _ := repo.GetDelegation("del-roundtrip")
+	if retrievedDelegation.TargetProviderID != "provider-1" {
+		t.Errorf("delegation round-trip failed: expected TargetProviderID provider-1, got %s", retrievedDelegation.TargetProviderID)
 	}
 }
 
@@ -545,22 +526,21 @@ func TestLifecycleRepository_EventLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 	repo := NewLifecycleRepository(db)
-	ctx := context.Background()
 
-	_ = repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{WorkflowID: "wf-1"})
+	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
 
 	// Append 5 events
 	for i := 0; i < 5; i++ {
-		_ = repo.AppendEvent(ctx, agentlifecycle.WorkflowEventRecord{
+		_ = repo.AppendEvent(contextports.WorkflowEventRecord{
 			EventID:    graphdb.GenerateSequenceID("evt", uint64(i)),
 			WorkflowID: "wf-1",
 			EventType:  "test",
-			Sequence:   uint64(i),
+			Sequence:   int64(i),
 		})
 	}
 
 	// List with limit 3
-	events, err := repo.ListEvents(ctx, "wf-1", 3)
+	events, err := repo.ListEvents("wf-1", 3)
 	if err != nil {
 		t.Fatalf("ListEvents failed: %v", err)
 	}
@@ -569,7 +549,7 @@ func TestLifecycleRepository_EventLimit(t *testing.T) {
 	}
 
 	// List without limit
-	allEvents, err := repo.ListEvents(ctx, "wf-1", 0)
+	allEvents, err := repo.ListEvents("wf-1", 0)
 	if err != nil {
 		t.Fatalf("ListEvents failed: %v", err)
 	}

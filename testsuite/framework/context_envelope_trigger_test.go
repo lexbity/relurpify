@@ -78,7 +78,7 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	env := contextdata.NewEnvelope("task", "session")
 
 	// Set a working value
-	env.SetWorkingValue("key1", "value1", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key1", "value1", contextdata.MemoryClassTask)
 
 	// Retrieve the value
 	val, ok := env.GetWorkingValue("key1")
@@ -90,7 +90,7 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	}
 
 	// Set another working value
-	env.SetWorkingValue("key2", 42, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key2", 42, contextdata.MemoryClassTask)
 
 	// Verify both values exist
 	if len(env.WorkingData) != 2 {
@@ -98,7 +98,7 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	}
 
 	// Overwrite existing value
-	env.SetWorkingValue("key1", "newvalue", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key1", "newvalue", contextdata.MemoryClassTask)
 
 	// Verify overwrite worked
 	val, ok = env.GetWorkingValue("key1")
@@ -365,8 +365,8 @@ func TestEnvelopeStateStability(t *testing.T) {
 	env := contextdata.NewEnvelope("task", "session")
 
 	// Set some initial state
-	env.SetWorkingValue("key1", "value1", contextdata.MemoryClassTask)
-	env.SetWorkingValue("key2", 42, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key1", "value1", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("key2", 42, contextdata.MemoryClassTask)
 
 	ref := contextdata.ChunkReference{
 		ChunkID: contextdata.ChunkID("chunk-1"),

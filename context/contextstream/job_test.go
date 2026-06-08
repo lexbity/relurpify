@@ -4,14 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/execution/compiler"
 )
 
 func TestRequestBackgroundCompletesJob(t *testing.T) {
-	trigger := NewTrigger(&fakeCompiler{
-		result: &compiler.CompilationResult{},
-		record: &compiler.CompilationRecord{},
-	})
+	trigger := NewTrigger(&fakeCompiler{})
 	job, err := trigger.RequestBackground(context.Background(), Request{ID: "job-1", Mode: ModeBackground})
 	if err != nil {
 		t.Fatalf("RequestBackground returned error: %v", err)

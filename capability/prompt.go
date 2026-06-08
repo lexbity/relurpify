@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // RenderPrompt executes a runtime-backed prompt capability by capability ID or public name.
-func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*PromptRenderResult, error) {
+func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*PromptRenderResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}

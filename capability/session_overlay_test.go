@@ -14,11 +14,11 @@ type stubSessionHandler struct {
 	called bool
 }
 
-func (h *stubSessionHandler) Descriptor(_ context.Context, _ *contextdata.Envelope) CapabilityDescriptor {
+func (h *stubSessionHandler) Descriptor(_ context.Context, _ ports.State) CapabilityDescriptor {
 	return CapabilityDescriptor{ID: h.id}
 }
 
-func (h *stubSessionHandler) Invoke(_ context.Context, _ *contextdata.Envelope, _ map[string]interface{}) (*ports.ToolResult, error) {
+func (h *stubSessionHandler) Invoke(_ context.Context, _ ports.State, _ map[string]interface{}) (*ports.ToolResult, error) {
 	h.called = true
 	return &ports.ToolResult{Success: true, Data: map[string]any{"source": "session"}}, nil
 }
@@ -33,14 +33,14 @@ func TestRegisterSessionCapability_NilEnvelope(t *testing.T) {
 func TestRegisterSessionCapability_EmptyID(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
 	handler := &stubSessionHandler{id: "test:cap.x"}
-	if err := RegisterSessionCapability(env, "", handler); err == nil {
+	if err := RegisterSessionCapability(env.State(), "", handler); err == nil {
 		t.Fatal("expected error for empty capability id")
 	}
 }
 
 func TestRegisterSessionCapability_NilHandler(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
-	if err := RegisterSessionCapability(env, "test:cap.x", nil); err == nil {
+	if err := RegisterSessionCapability(env.State(), "test:cap.x", nil); err == nil {
 		t.Fatal("expected error for nil handler")
 	}
 }
@@ -49,11 +49,11 @@ func TestRegisterSessionCapability_RoundTrip(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
 	want := &stubSessionHandler{id: "test:cap.x"}
 
-	if err := RegisterSessionCapability(env, "test:cap.x", want); err != nil {
+	if err := RegisterSessionCapability(env.State(), "test:cap.x", want); err != nil {
 		t.Fatalf("RegisterSessionCapability: %v", err)
 	}
 
-	got, ok := LookupSessionCapability(env, "test:cap.x")
+	got, ok := LookupSessionCapability(env.State(), "test:cap.x")
 	if !ok {
 		t.Fatal("expected handler to be found after registration")
 	}
@@ -70,14 +70,14 @@ func TestLookupSessionCapability_NilEnvelope(t *testing.T) {
 
 func TestLookupSessionCapability_EmptyID(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
-	if _, ok := LookupSessionCapability(env, ""); ok {
+	if _, ok := LookupSessionCapability(env.State(), ""); ok {
 		t.Fatal("expected false for empty capability id")
 	}
 }
 
 func TestLookupSessionCapability_Missing(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
-	if _, ok := LookupSessionCapability(env, "test:cap.not_registered"); ok {
+	if _, ok := LookupSessionCapability(env.State(), "test:cap.not_registered"); ok {
 		t.Fatal("expected false for unregistered capability")
 	}
 }
@@ -87,12 +87,12 @@ func TestInvokeCapability_SessionOverrideTakesPrecedence(t *testing.T) {
 	env := contextdata.NewEnvelope("t", "s")
 
 	handler := &stubSessionHandler{id: "test:cap.override"}
-	if err := RegisterSessionCapability(env, "test:cap.override", handler); err != nil {
+	if err := RegisterSessionCapability(env.State(), "test:cap.override", handler); err != nil {
 		t.Fatalf("RegisterSessionCapability: %v", err)
 	}
 
 	// The capability is NOT in the global registry — session overlay must be used.
-	result, err := reg.InvokeCapability(context.Background(), env, "test:cap.override", nil)
+	result, err := reg.InvokeCapability(context.Background(), env.State(), "test:cap.override", nil)
 	if err != nil {
 		t.Fatalf("InvokeCapability: %v", err)
 	}

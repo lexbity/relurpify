@@ -85,11 +85,11 @@ func (r *recordingExecutor) BuildGraph(*execution.Task) (*agentgraph.Graph, erro
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	task := &execution.Task{ID: "task-1", Instruction: "clarify request"}
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 
 	frame := interaction.NewClarificationFrame("task-1", "session-1", "Pick one", []string{"review", "implement"}, nil)
-	env.SetWorkingValue("euclo.interaction.frame.0", frame, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame.0", frame, contextdata.MemoryClassTask)
 
 	executor := &recordingExecutor{}
 	rt := &Runtime{
@@ -123,11 +123,11 @@ func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	env := contextdata.NewEnvelope("task-2", "session-2")
 	task := &execution.Task{ID: "task-2", Instruction: "collect feedback"}
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 
 	frame := interaction.NewOutcomeFeedbackFrame("task-2", "session-2", "complete")
-	env.SetWorkingValue("euclo.interaction.frame.0", frame, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.interaction.frame.0", frame, contextdata.MemoryClassTask)
 
 	executor := &recordingExecutor{}
 	rt := &Runtime{

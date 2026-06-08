@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
@@ -103,8 +103,8 @@ type Scanner interface {
 // Pipeline executes the six stages for a single raw ingestion.
 type Pipeline struct {
 	raw           RawIngestion
-	policy        *execctx.ContextPolicyBundle
-	evaluator     *execctx.Evaluator
+	policy        *contextports.PolicyBundle
+	evaluator     contextports.PolicyEvaluator
 	store         *knowledge.ChunkStore
 	scanners      []Scanner
 	quarantineDir string

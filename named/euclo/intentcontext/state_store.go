@@ -89,18 +89,18 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 	for _, key := range ClarificationWorkingMemoryKeys() {
 		env.DeleteWorkingValue(key)
 	}
-	env.SetWorkingValue(ClarificationStateKey, clone, contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationAmbiguityKey, clone.Ambiguity, contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationTurnsKey, append([]ClarificationTurn(nil), clone.Turns...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationConfirmedEntitiesKey, append([]ConfirmedEntity(nil), clone.ConfirmedEntities...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationConfirmedScopesKey, append([]ConfirmedScope(nil), clone.ConfirmedScopes...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationRelationIntentsKey, append([]RelationIntent(nil), clone.PendingRelationIntents...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationGroundedAnchorsKey, append([]retrieval.AnchorRef(nil), clone.GroundedAnchors...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationPendingProjectionKey, append([]ProjectionIntent(nil), clone.PendingProjection...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationProjectedMutationsKey, append([]ProjectionRecord(nil), clone.AppliedMutations...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationActiveThoughtRecipeKey, clone.ActiveThoughtRecipeID, contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationLastCheckpointIDKey, clone.LastCheckpointID, contextdata.MemoryClassTask)
-	env.SetWorkingValue(ClarificationLastCheckpointSeqKey, clone.LastCheckpointSeq, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationStateKey, clone, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationAmbiguityKey, clone.Ambiguity, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationTurnsKey, append([]ClarificationTurn(nil), clone.Turns...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationConfirmedEntitiesKey, append([]ConfirmedEntity(nil), clone.ConfirmedEntities...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationConfirmedScopesKey, append([]ConfirmedScope(nil), clone.ConfirmedScopes...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationRelationIntentsKey, append([]RelationIntent(nil), clone.PendingRelationIntents...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationGroundedAnchorsKey, append([]retrieval.AnchorRef(nil), clone.GroundedAnchors...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationPendingProjectionKey, append([]ProjectionIntent(nil), clone.PendingProjection...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationProjectedMutationsKey, append([]ProjectionRecord(nil), clone.AppliedMutations...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationActiveThoughtRecipeKey, clone.ActiveThoughtRecipeID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationLastCheckpointIDKey, clone.LastCheckpointID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(ClarificationLastCheckpointSeqKey, clone.LastCheckpointSeq, contextdata.MemoryClassTask)
 	return nil
 }
 

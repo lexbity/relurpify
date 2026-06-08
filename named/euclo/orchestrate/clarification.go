@@ -87,7 +87,7 @@ func registerClarificationCapability(reg *capability.CapabilityRegistry) error {
 
 type clarificationCapabilityHandler struct{}
 
-func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
+func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State) capability.CapabilityDescriptor {
 	return capability.CapabilityDescriptor{
 		ID:            clarificationCapabilityID,
 		Name:          "intent clarification",
@@ -98,7 +98,8 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdat
 	}
 }
 
-func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+	env := contextdata.EnvelopeFromState(st)
 	_ = ctx
 	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
@@ -142,12 +143,12 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			return nil, err
 		}
 		if env != nil {
-			env.SetWorkingValue(clarificationRequestKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(clarificationRequestKey, req, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, nil)
 			if frame != nil {
-				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
@@ -176,13 +177,13 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		emitClarificationAnsweredAndGrounded(ctx, env, state, grounding, nil)
 		req := buildClarificationRequestFromState(state, taskInstruction, maxTokens, mode)
 		if env != nil {
-			env.SetWorkingValue(clarificationGroundingKey, grounding, contextdata.MemoryClassTask)
-			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(clarificationGroundingKey, grounding, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(clarificationRequeryKey, req, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, grounding)
 			if frame != nil {
-				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
@@ -206,8 +207,8 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			return nil, err
 		}
 		if env != nil {
-			env.SetWorkingValue(clarificationProjectionKey, plan, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(clarificationProjectionKey, plan, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		emitClarificationProjected(ctx, env, state, plan)
@@ -215,12 +216,12 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 	case clarificationActionRequery:
 		req := buildClarificationRequestFromState(state, taskInstruction, maxTokens, mode)
 		if env != nil {
-			env.SetWorkingValue(clarificationRequeryKey, req, contextdata.MemoryClassTask)
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(clarificationRequeryKey, req, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 			frame := clarificationFrameFromState(state, req, nil)
 			if frame != nil {
-				env.SetWorkingValue(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
 				}
@@ -237,7 +238,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 				return nil, err
 			}
 			euclostate.SetClarificationNextThoughtRecipeID(env, nextThoughtRecipeID)
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, nextThoughtRecipeID, contextdata.MemoryClassTask)
 			routeKind := euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID)
 			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
@@ -245,7 +246,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			euclostate.SetClarificationNextThoughtRecipeID(env, "")
 			euclostate.SetClarificationUnresolved(env, true)
 			euclostate.SetClarificationUnresolvedReason(env, "missing handoff target")
-			env.SetWorkingValue(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		if nextThoughtRecipeID == "" {
@@ -636,7 +637,7 @@ func buildProjectionPlanFromState(state *intentcontext.ClarificationState) (*int
 		return nil, fmt.Errorf("clarification state is nil")
 	}
 	env := contextdata.NewEnvelope(state.TaskID, state.SessionID)
-	env.SetWorkingValue(intentcontext.ClarificationStateKey, state.Clone(), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(intentcontext.ClarificationStateKey, state.Clone(), contextdata.MemoryClassTask)
 	plan, err := intentcontext.NewIntentCore(nil, nil).BuildProjectionPlan(context.Background(), env)
 	if err != nil {
 		return &intentcontext.ProjectionPlan{

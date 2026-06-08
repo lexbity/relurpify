@@ -101,7 +101,7 @@ func TestCheckpointNodeMaterializesCheckpointFromStreamHook(t *testing.T) {
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.RequestCheckpoint("materialize after stream", 7, true)
-	env.SetWorkingValue("contextstream.result", &contextstream.Result{
+	env.SetWorkingValueWithClass("contextstream.result", &contextstream.Result{
 		Request: contextstream.Request{
 			ID:   "stream-1",
 			Mode: contextstream.ModeBlocking,
@@ -196,7 +196,7 @@ func TestCheckpointNodeMirrorsStreamResultToEnvelope(t *testing.T) {
 	node := NewCheckpointNode("checkpoint-5").WithRepository(repo)
 	env := contextdata.NewEnvelope("task-5", "session-5")
 	env.RequestCheckpoint("stream checkpoint", 1, false)
-	env.SetWorkingValue("contextstream.result", &contextstream.Result{
+	env.SetWorkingValueWithClass("contextstream.result", &contextstream.Result{
 		Request: contextstream.Request{
 			ID:   "stream-2",
 			Mode: contextstream.ModeBackground,

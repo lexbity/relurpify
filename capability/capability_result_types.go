@@ -8,7 +8,6 @@ import (
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/execution"
 )
 
@@ -206,7 +205,7 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 	provenance := envelope.Provenance
 	if provenance.Derivation == nil {
 		// Start a new derivation chain
-		origin := relurpctx.OriginDerivation("capability_result")
+		origin := ports.OriginDerivation("capability_result")
 		provenance.Derivation = &origin
 	} else {
 		// Append to existing chain

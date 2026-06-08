@@ -204,13 +204,13 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 	if task == nil {
 		return
 	}
-	env.SetWorkingValue("task.input", task, contextdata.MemoryClassTask)
-	env.SetWorkingValue("task.id", task.ID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("task.instruction", task.Instruction, contextdata.MemoryClassTask)
-	env.SetWorkingValue("task.type", task.Type, contextdata.MemoryClassTask)
-	env.SetWorkingValue("task.context", task.Context, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.instruction", task.Instruction, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.type", task.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("task.context", task.Context, contextdata.MemoryClassTask)
 	if task.Metadata != nil {
-		env.SetWorkingValue("task.metadata", task.Metadata, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("task.metadata", task.Metadata, contextdata.MemoryClassTask)
 	}
 }
 
@@ -247,11 +247,11 @@ func (a *Agent) captureResumeState(env *contextdata.Envelope) {
 
 func (a *Agent) seedResumeState(env *contextdata.Envelope) {
 	if a.resumeClassification != nil {
-		env.SetWorkingValue(euclostate.KeyResumeClassification, a.resumeClassification, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(euclostate.KeyResumeClassification, a.resumeClassification, contextdata.MemoryClassTask)
 		euclostate.SetIntentClassification(env, a.resumeClassification)
 	}
 	if a.resumeRouteSelection != nil {
-		env.SetWorkingValue(euclostate.KeyResumeRoute, a.resumeRouteSelection, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(euclostate.KeyResumeRoute, a.resumeRouteSelection, contextdata.MemoryClassTask)
 		euclostate.SetRouteSelection(env, a.resumeRouteSelection)
 	}
 }

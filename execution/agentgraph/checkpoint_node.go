@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/governance/identity"
@@ -172,7 +173,18 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return nil, fmt.Errorf("checkpoint node %q missing repository", n.id)
 	}
 
-	ref, err := persistence.SaveCheckpointArtifact(ctx, env, n.repository, snapshot)
+	ref, err := persistence.SaveCheckpointArtifact(ctx, env, func(artifact contextports.WorkflowArtifactRecord) error {
+		return n.repository.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
+			ArtifactID:      artifact.ArtifactID,
+			WorkflowID:      artifact.WorkflowID,
+			RunID:           artifact.RunID,
+			ContentType:     artifact.ContentType,
+			StorageKind:     agentlifecycle.ArtifactStorageKind(artifact.StorageKind),
+			SummaryText:     artifact.Summary,
+			SummaryMetadata: artifact.Metadata,
+			CreatedAt:       artifact.CreatedAt,
+		})
+	}, snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +200,10 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		WorkingMemoryKeys: env.WorkingMemoryKeys(),
 	}
 	env.AddCheckpointReference(checkpointRef)
-	env.SetWorkingValue("checkpoint.id", ref.ArtifactID, contextdata.MemoryClassTask)
-	env.SetWorkingValue("checkpoint.artifact_ref", ref, contextdata.MemoryClassTask)
-	env.SetWorkingValue("checkpoint.materialized", true, contextdata.MemoryClassTask)
-	env.SetWorkingValue("checkpoint.snapshot", snapshot, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("checkpoint.id", ref.ArtifactID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("checkpoint.artifact_ref", ref, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("checkpoint.materialized", true, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("checkpoint.snapshot", snapshot, contextdata.MemoryClassTask)
 	env.ClearCheckpointRequest()
 
 	if n.writer != nil {
@@ -342,3 +354,5 @@ func checkpointRequester(env *contextdata.Envelope) string {
 	}
 	return strings.TrimSpace(env.CheckpointRequest.RequestedBy)
 }
+
+

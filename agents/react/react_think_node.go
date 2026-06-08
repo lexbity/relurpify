@@ -31,7 +31,7 @@ func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 // Execute drives the "think" portion of the ReAct loop and either emits a tool
 // call or final answer instructions.
 func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("react.execution_phase", "planning", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.execution_phase", "planning", contextdata.MemoryClassTask)
 	n.agent.enforceBudget(env)
 	n.agent.manageContextSignals(env)
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
@@ -41,8 +41,8 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			Summary:   summary,
 			Timestamp: time.Now().UTC(),
 		}
-		env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
-		env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.decision", decision, contextdata.MemoryClassTask)
 		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
@@ -100,8 +100,8 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	if err != nil {
 		return nil, err
 	}
-	env.SetWorkingValue("react.tool_calls", toolCalls, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.decision", decision, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.tool_calls", toolCalls, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.decision", decision, contextdata.MemoryClassTask)
 	n.agent.debugf("%s decision=%+v tool_calls=%d", n.id, decision, len(resp.ToolCalls))
 	return &execution.Result{
 		NodeID:  n.id,

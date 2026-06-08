@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // ReadResource executes a runtime-backed resource capability by capability ID or public name.
-func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdata.Envelope, idOrName string) (*ResourceReadResult, error) {
+func (r *CapabilityRegistry) ReadResource(ctx context.Context, state ports.State, idOrName string) (*ResourceReadResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -28,8 +28,8 @@ type SkillIngestionSource struct {
 type WorkspaceScanner struct {
 	Store         *knowledge.ChunkStore
 	Events        EventLog
-	Policy        interface{} // *execctx.ContextPolicyBundle (avoid import cycle)
-	Evaluator     interface{} // *execctx.Evaluator
+	Policy        interface{} // *contextports.PolicyBundle (avoid import cycle)
+	Evaluator     interface{} // contextports.PolicyEvaluator
 	Concurrency   int
 	IncludeGlobs  []string
 	ExcludeGlobs  []string
@@ -247,13 +247,17 @@ func (s *WorkspaceScanner) shouldInclude(path string) bool {
 
 // processFile processes a single file.
 func (s *WorkspaceScanner) processFile(ctx context.Context, root string, file string, report *ScanReport, mu *sync.Mutex) error {
-	var policy *execctx.ContextPolicyBundle
-	if typed, ok := s.Policy.(*execctx.ContextPolicyBundle); ok {
+	var policy *contextports.PolicyBundle
+	if typed, ok := s.Policy.(*contextports.PolicyBundle); ok {
 		policy = typed
+	}
+	var evaluator contextports.PolicyEvaluator
+	if typed, ok := s.Evaluator.(contextports.PolicyEvaluator); ok {
+		evaluator = typed
 	}
 
 	// Create pipeline
-	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, policy, s.Store, s.FileScope)
+	pipeline, err := AcquireFromFile(ctx, file, identity.SubjectRef{ID: "scanner"}, policy, evaluator, s.Store, s.FileScope)
 	if err != nil {
 		return err
 	}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/execution/compiler"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 type triggerContextKey struct{}
@@ -45,11 +45,10 @@ func (t *Trigger) RequestBlocking(ctx context.Context, req Request) (*Result, er
 		return nil, errors.New("contextstream: missing compiler")
 	}
 	started := time.Now().UTC()
-	compilation, record, err := t.Compiler.Compile(ctx, toCompilationRequest(req))
+	compilation, err := t.Compiler.Compile(ctx, toCompilationRequest(req))
 	res := &Result{
 		Request:     req,
 		Compilation: compilation,
-		Record:      record,
 		StartedAt:   started,
 		CompletedAt: time.Now().UTC(),
 		Err:         err,
@@ -77,28 +76,14 @@ func (t *Trigger) RequestBackground(ctx context.Context, req Request) (*Job, err
 	return job, nil
 }
 
-func toCompilationRequest(req Request) compiler.CompilationRequest {
-	return compiler.CompilationRequest{
-		Query:                 req.Query,
-		EventLogSeq:           req.EventLogSeq,
-		MaxTokens:             req.MaxTokens,
-		BudgetShortfallPolicy: req.BudgetShortfallPolicy,
-		Metadata:              cloneRequestMetadata(req.Metadata),
+func toCompilationRequest(req Request) contextports.CompilationRequest {
+	return contextports.CompilationRequest{
+		BudgetTokens: req.MaxTokens,
+		Mode:         string(req.Mode),
 	}
 }
 
-func cloneRequestMetadata(input map[string]any) map[string]any {
-	if len(input) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(input))
-	for k, v := range input {
-		out[k] = v
-	}
-	return out
-}
-
-func trimMetadataFromCompilation(req Request, compilation *compiler.CompilationResult) TrimMetadata {
+func trimMetadataFromCompilation(req Request, compilation *contextports.CompilationResult) TrimMetadata {
 	if compilation == nil {
 		return TrimMetadata{}
 	}

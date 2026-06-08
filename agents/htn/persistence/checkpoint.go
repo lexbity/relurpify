@@ -11,6 +11,7 @@ import (
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkpersistence "codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
@@ -37,7 +38,18 @@ func SaveCheckpoint(ctx context.Context, env *contextdata.Envelope, repo agentli
 	}
 
 	artifactID := generateCheckpointID()
-	ref, err := frameworkpersistence.SaveCheckpointArtifact(ctx, env, repo, frameworkpersistence.CheckpointSnapshot{
+	ref, err := frameworkpersistence.SaveCheckpointArtifact(ctx, env, func(artifact contextports.WorkflowArtifactRecord) error {
+		return repo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
+			ArtifactID:      artifact.ArtifactID,
+			WorkflowID:      artifact.WorkflowID,
+			RunID:           artifact.RunID,
+			ContentType:     artifact.ContentType,
+			StorageKind:     agentlifecycle.ArtifactStorageKind(artifact.StorageKind),
+			SummaryText:     artifact.Summary,
+			SummaryMetadata: artifact.Metadata,
+			CreatedAt:       artifact.CreatedAt,
+		})
+	}, frameworkpersistence.CheckpointSnapshot{
 		CheckpointID: artifactID,
 		WorkflowID:   workflowID,
 		RunID:        runID,
@@ -50,8 +62,8 @@ func SaveCheckpoint(ctx context.Context, env *contextdata.Envelope, repo agentli
 		return fmt.Errorf("htn: failed to save checkpoint artifact: %w", err)
 	}
 	if ref != nil {
-		env.SetWorkingValue(runtime.ContextKeyCheckpointRef, *ref, contextdata.MemoryClassTask)
-		env.SetWorkingValue(runtime.ContextKeyCheckpointSummary, SummarizeHTNCheckpoint(snapshot), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(runtime.ContextKeyCheckpointRef, *ref, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(runtime.ContextKeyCheckpointSummary, SummarizeHTNCheckpoint(snapshot), contextdata.MemoryClassTask)
 	}
 
 	// Update execution state with checkpoint ID.
@@ -70,15 +82,34 @@ func RestoreCheckpoint(ctx context.Context, env *contextdata.Envelope, repo agen
 		return nil
 	}
 
-	latestCheckpoint, err := frameworkpersistence.LoadLatestCheckpointArtifact(ctx, repo, runID, "htn_checkpoint")
+	latestPort, err := frameworkpersistence.LoadLatestCheckpointArtifact(ctx, func(runID string) ([]contextports.WorkflowArtifactRecord, error) {
+		list, err := repo.ListArtifactsByRun(ctx, runID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]contextports.WorkflowArtifactRecord, 0, len(list))
+		for _, a := range list {
+			out = append(out, contextports.WorkflowArtifactRecord{
+				ArtifactID:  a.ArtifactID,
+				WorkflowID:  a.WorkflowID,
+				RunID:       a.RunID,
+				ContentType: a.ContentType,
+				StorageKind: string(a.StorageKind),
+				Summary:     a.SummaryText,
+				Metadata:    a.SummaryMetadata,
+				CreatedAt:   a.CreatedAt,
+			})
+		}
+		return out, nil
+	}, runID)
 	if err != nil {
 		return fmt.Errorf("htn: failed to list checkpoint artifacts: %w", err)
 	}
-	if latestCheckpoint == nil {
+	if latestPort == nil {
 		return nil // no checkpoint to restore
 	}
 
-	snapshot, err := DecodeHTNCheckpointSnapshot(latestCheckpoint.InlineRawText)
+	snapshot, err := DecodeHTNCheckpointSnapshot(latestPort.Metadata["inline_raw"].(string))
 	if err != nil {
 		return fmt.Errorf("htn: failed to decode checkpoint: %w", err)
 	}
@@ -87,13 +118,13 @@ func RestoreCheckpoint(ctx context.Context, env *contextdata.Envelope, repo agen
 		return fmt.Errorf("htn: failed to restore checkpoint state: %w", err)
 	}
 
-	env.SetWorkingValue(runtime.ContextKeyCheckpointRef, relurpctx.ArtifactReference{
-		ArtifactID: latestCheckpoint.ArtifactID,
-		WorkflowID: latestCheckpoint.WorkflowID,
-		RunID:      latestCheckpoint.RunID,
+	env.SetWorkingValueWithClass(runtime.ContextKeyCheckpointRef, relurpctx.ArtifactReference{
+		ArtifactID: latestPort.ArtifactID,
+		WorkflowID: latestPort.WorkflowID,
+		RunID:      latestPort.RunID,
 	}, contextdata.MemoryClassTask)
-	env.SetWorkingValue(runtime.ContextKeyCheckpointSummary, latestCheckpoint.SummaryText, contextdata.MemoryClassTask)
-	runtime.PublishResumeState(env, latestCheckpoint.ArtifactID)
+	env.SetWorkingValueWithClass(runtime.ContextKeyCheckpointSummary, latestPort.Summary, contextdata.MemoryClassTask)
+	runtime.PublishResumeState(env, latestPort.ArtifactID)
 	return nil
 }
 
@@ -138,8 +169,8 @@ func restoreSnapshotToContext(env *contextdata.Envelope, snapshot *runtime.HTNSt
 
 	// Restore selected method.
 	if snapshot.Method.Name != "" {
-		env.SetWorkingValue(runtime.ContextKeySelectedMethod, snapshot.Method, contextdata.MemoryClassTask)
-		env.SetWorkingValue(runtime.ContextKnowledgeMethod, snapshot.Method.Name, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(runtime.ContextKeySelectedMethod, snapshot.Method, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(runtime.ContextKnowledgeMethod, snapshot.Method.Name, contextdata.MemoryClassTask)
 	}
 
 	// Restore plan.
@@ -151,7 +182,7 @@ func restoreSnapshotToContext(env *contextdata.Envelope, snapshot *runtime.HTNSt
 	runtime.PublishExecutionState(env, snapshot.Execution)
 
 	// Restore metrics.
-	env.SetWorkingValue(runtime.ContextKeyMetrics, snapshot.Metrics, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(runtime.ContextKeyMetrics, snapshot.Metrics, contextdata.MemoryClassTask)
 
 	// Restore preflight state.
 	if snapshot.Preflight.Report != nil {
@@ -227,7 +258,7 @@ func persistDispatchMetadata(env *contextdata.Envelope, dispatcher string, targe
 		"reason":           reason,
 		"timestamp":        time.Now().UTC().Unix(),
 	}
-	env.SetWorkingValue(runtime.ContextKeyCheckpoint, metadata, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(runtime.ContextKeyCheckpoint, metadata, contextdata.MemoryClassTask)
 }
 
 func taskMetadataToAny(input map[string]string) map[string]any {
@@ -246,11 +277,11 @@ func persistRecoveryMetadata(env *contextdata.Envelope, diagnosis string, notes 
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
-	env.SetWorkingValue(runtime.ContextKeyLastRecoveryNotes, append([]string{}, notes...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(runtime.ContextKeyLastFailureStep, stepID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryNotes, append([]string{}, notes...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(runtime.ContextKeyLastFailureStep, stepID, contextdata.MemoryClassTask)
 	if err != nil {
-		env.SetWorkingValue(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
 	}
 }
 

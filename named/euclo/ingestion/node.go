@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
@@ -146,7 +147,9 @@ func (n *IngestionNode) ingestExplicitFiles(ctx context.Context, env *contextdat
 	root := strings.TrimSpace(n.spec.WorkspaceRoot)
 	for _, filePath := range files {
 		absPath := n.resolvePath(root, filePath)
-		pipeline, err := frameworkingestion.AcquireFromFile(ctx, absPath, defaultPrincipal(task), n.policyBundle(), store, nil)
+		pipeline, err := frameworkingestion.AcquireFromFile(ctx, absPath, defaultPrincipal(task), &contextports.PolicyBundle{
+			DefaultTrustClass: string(agentspec.TrustClassBuiltinTrusted),
+		}, nil, store, nil)
 		if err != nil {
 			return err
 		}
@@ -257,16 +260,16 @@ func (n *IngestionNode) resolvePath(root, filePath string) string {
 }
 
 func (n *IngestionNode) writeSummary(env *contextdata.Envelope, result *IngestionResult, summary map[string]any, err error) {
-	env.SetWorkingValue("euclo.ingestion_result", result, contextdata.MemoryClassTask)
-	env.SetWorkingValue("euclo.ingestion.summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.ingestion_result", result, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("euclo.ingestion.summary", summary, contextdata.MemoryClassTask)
 	if err != nil {
-		env.SetWorkingValue("euclo.ingestion.error", err.Error(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("euclo.ingestion.error", err.Error(), contextdata.MemoryClassTask)
 	}
 }
 
 func (n *IngestionNode) storeFileSummary(env *contextdata.Envelope, path string, ingestResult *frameworkingestion.IngestResult) {
 	key := "euclo.ingested.file." + sanitize(path)
-	env.SetWorkingValue(key, map[string]any{
+	env.SetWorkingValueWithClass(key, map[string]any{
 		"chunks_committed":   ingestResult.ChunksCommitted,
 		"chunks_quarantined": ingestResult.ChunksQuarantined,
 		"chunks_rejected":    ingestResult.ChunksRejected,

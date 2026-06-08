@@ -43,8 +43,8 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		}
 	}
 	env.RequestCheckpoint("rewoo:"+n.phase, 50, false)
-	env.SetWorkingValue("rewoo.checkpoint_phase", n.phase, contextdata.MemoryClassTask)
-	env.SetWorkingValue("rewoo.checkpoint_attempt", attempt, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.checkpoint_phase", n.phase, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.checkpoint_attempt", attempt, contextdata.MemoryClassTask)
 
 	if n.Debugf != nil {
 		n.Debugf("checkpoint requested at phase %s attempt %d", n.phase, attempt)

@@ -246,7 +246,7 @@ func TestChunkSourceRetention(t *testing.T) {
 	envCtx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", sessionID)
 	envelope.NodeID = nodeID
-	envelope.SetWorkingValue("workflow.id", workflowID, contextdata.MemoryClassTask)
+	envelope.SetWorkingValueWithClass("workflow.id", workflowID, contextdata.MemoryClassTask)
 	envCtx = contextdata.WithEnvelope(envCtx, envelope)
 
 	// Ingest with source context

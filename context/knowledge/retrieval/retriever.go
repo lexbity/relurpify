@@ -7,14 +7,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
 // Retriever performs scatter-gather retrieval using multiple rankers.
 type Retriever struct {
 	registry *RankerRegistry
 	store    *knowledge.ChunkStore
-	policy   *execctx.ContextPolicyBundle
+	policy   *contextports.PolicyBundle
 }
 
 // NewRetriever creates a new retriever.
@@ -26,7 +26,7 @@ func NewRetriever(registry *RankerRegistry, store *knowledge.ChunkStore) *Retrie
 }
 
 // WithPolicy sets the context policy for ranker admission and filtering.
-func (r *Retriever) WithPolicy(policy *execctx.ContextPolicyBundle) *Retriever {
+func (r *Retriever) WithPolicy(policy *contextports.PolicyBundle) *Retriever {
 	r.policy = policy
 	return r
 }

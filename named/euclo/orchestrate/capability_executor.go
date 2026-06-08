@@ -77,9 +77,9 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		err    error
 	)
 	if n.registry == nil {
-		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env, nil)
+		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env.State(), nil)
 	} else {
-		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env, n.registry)
+		result, err = capabilities.InvokeCapability(ctx, capabilityID, task, env.State(), n.registry)
 	}
 	if env != nil {
 		euclostate.SetExecutionKind(env, euclostate.ExecutionKindCapability)

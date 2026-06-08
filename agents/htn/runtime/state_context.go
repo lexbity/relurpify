@@ -27,9 +27,9 @@ func publishTaskState(env *contextdata.Envelope, task *execution.Task) {
 			}
 		}
 	}
-	env.SetWorkingValue(contextKeyTask, summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKeyTaskType, task.Type, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKnowledgeTaskType, task.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyTask, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyTaskType, task.Type, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKnowledgeTaskType, task.Type, contextdata.MemoryClassTask)
 	mustPublishHTNState(env)
 }
 
@@ -43,8 +43,8 @@ func publishMethodState(env *contextdata.Envelope, method *Method) {
 		resolved := ResolveMethod(*method)
 		summary = methodStateFromResolved(resolved)
 	}
-	env.SetWorkingValue(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
 	mustPublishHTNState(env)
 }
 
@@ -57,8 +57,8 @@ func publishResolvedMethodState(env *contextdata.Envelope, method *ResolvedMetho
 	if method != nil {
 		summary = methodStateFromResolved(*method)
 	}
-	env.SetWorkingValue(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
 	mustPublishHTNState(env)
 }
 
@@ -76,7 +76,7 @@ func publishPlanState(env *contextdata.Envelope, p *plan.Plan) {
 		}
 	}
 	cloned.Files = append([]string(nil), p.Files...)
-	env.SetWorkingValue(contextKeyPlan, &cloned, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyPlan, &cloned, contextdata.MemoryClassTask)
 	execution := loadExecutionState(env)
 	execution.PlannedStepCount = len(cloned.Steps)
 	publishExecutionState(env, execution)
@@ -88,10 +88,10 @@ func publishWorkflowRetrieval(env *contextdata.Envelope, payload any, applied bo
 		return
 	}
 	if payload != nil {
-		env.SetWorkingValue(contextKeyWorkflowRetrieval, payload, contextdata.MemoryClassTask)
-		env.SetWorkingValue(contextKeyWorkflowRetrievalPayload, payload, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyWorkflowRetrieval, payload, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyWorkflowRetrievalPayload, payload, contextdata.MemoryClassTask)
 	}
-	env.SetWorkingValue(contextKeyRetrievalApplied, applied, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyRetrievalApplied, applied, contextdata.MemoryClassTask)
 	mustPublishHTNState(env)
 }
 
@@ -101,14 +101,14 @@ func publishPreflightState(env *contextdata.Envelope, report *graph.PreflightRep
 		return
 	}
 	if report != nil {
-		env.SetWorkingValue(contextKeyPreflightReport, report, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyPreflightReport, report, contextdata.MemoryClassTask)
 	} else {
-		env.SetWorkingValue(contextKeyPreflightReport, nil, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyPreflightReport, nil, contextdata.MemoryClassTask)
 	}
 	if err != nil {
-		env.SetWorkingValue(contextKeyPreflightError, err.Error(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyPreflightError, err.Error(), contextdata.MemoryClassTask)
 	} else {
-		env.SetWorkingValue(contextKeyPreflightError, "", contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyPreflightError, "", contextdata.MemoryClassTask)
 	}
 	mustPublishHTNState(env)
 }
@@ -120,7 +120,7 @@ func publishCheckpointState(env *contextdata.Envelope, checkpointID, stageName s
 	}
 	snapshot, _, err := LoadStateFromEnvelope(env)
 	if err != nil {
-		env.SetWorkingValue(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
 		return
 	}
 	checkpoint := CheckpointState{
@@ -133,7 +133,7 @@ func publishCheckpointState(env *contextdata.Envelope, checkpointID, stageName s
 		CompletedSteps: append([]string(nil), completedStepsFromEnvelope(env)...),
 		Snapshot:       snapshot,
 	}
-	env.SetWorkingValue(contextKeyCheckpoint, checkpoint, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyCheckpoint, checkpoint, contextdata.MemoryClassTask)
 }
 
 // publishResumeState records checkpoint resume information in envelope working memory.
@@ -145,7 +145,7 @@ func publishResumeState(env *contextdata.Envelope, checkpointID string) {
 	execution.Resumed = true
 	execution.ResumeCheckpointID = checkpointID
 	publishExecutionState(env, execution)
-	env.SetWorkingValue(contextKeyResumeCheckpointID, checkpointID, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyResumeCheckpointID, checkpointID, contextdata.MemoryClassTask)
 }
 
 // completedStepsFromEnvelope extracts the list of completed step IDs from envelope working memory.
@@ -176,8 +176,8 @@ func appendCompletedStep(env *contextdata.Envelope, stepID string) {
 	}
 	completed := completedStepsFromEnvelope(env)
 	completed = append(completed, stepID)
-	env.SetWorkingValue(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
 	execution := loadExecutionState(env)
 	execution.CompletedSteps = append([]string(nil), completed...)
 	execution.CompletedStepCount = len(completed)
@@ -195,9 +195,9 @@ func publishExecutionState(env *contextdata.Envelope, execution ExecutionState) 
 	if execution.CompletedStepCount > 0 && execution.LastCompletedStep == "" {
 		execution.LastCompletedStep = execution.CompletedSteps[execution.CompletedStepCount-1]
 	}
-	env.SetWorkingValue(contextKeyExecution, execution, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKeyCompletedSteps, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
-	env.SetWorkingValue(legacyPlanCompletedStepsKey, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyExecution, execution, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyCompletedSteps, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
 	termination := ""
 	if raw, ok := env.GetWorkingValue(contextKeyTermination); ok {
 		if s, ok := raw.(string); ok {
@@ -213,8 +213,8 @@ func publishTerminationState(env *contextdata.Envelope, termination string) {
 	if env == nil {
 		return
 	}
-	env.SetWorkingValue(contextKeyTermination, termination, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKnowledgeTermination, termination, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyTermination, termination, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKnowledgeTermination, termination, contextdata.MemoryClassTask)
 	execution := loadExecutionState(env)
 	publishMetricsAndSummary(env, execution, termination)
 	mustPublishHTNState(env)
@@ -229,7 +229,7 @@ func publishMetricsAndSummary(env *contextdata.Envelope, execution ExecutionStat
 		PlannedStepCount:   execution.PlannedStepCount,
 		CompletedStepCount: execution.CompletedStepCount,
 	}
-	env.SetWorkingValue(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
 	taskType := fmt.Sprint(executionTaskType(env))
 	methodName := ""
 	if raw, ok := env.GetWorkingValue(contextKeySelectedMethod); ok {
@@ -238,7 +238,7 @@ func publishMetricsAndSummary(env *contextdata.Envelope, execution ExecutionStat
 			methodName = method.Name
 		}
 	}
-	env.SetWorkingValue(contextKnowledgeSummary, fmt.Sprintf(
+	env.SetWorkingValueWithClass(contextKnowledgeSummary, fmt.Sprintf(
 		"task_type=%s method=%s planned=%d completed=%d termination=%s",
 		taskType,
 		methodName,
@@ -246,7 +246,7 @@ func publishMetricsAndSummary(env *contextdata.Envelope, execution ExecutionStat
 		metrics.CompletedStepCount,
 		termination,
 	), contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
 }
 
 // loadExecutionState extracts ExecutionState from envelope working memory.

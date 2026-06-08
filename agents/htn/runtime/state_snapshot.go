@@ -145,14 +145,14 @@ func mustPublishHTNState(env *contextdata.Envelope) {
 	}
 	snapshot, loaded, err := LoadStateFromEnvelope(env)
 	if err != nil {
-		env.SetWorkingValue(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
 		return
 	}
 	if !loaded || snapshot == nil {
 		return
 	}
-	env.SetWorkingValue(contextKeyState, *snapshot, contextdata.MemoryClassTask)
-	env.SetWorkingValue(contextKeyStateError, "", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyState, *snapshot, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(contextKeyStateError, "", contextdata.MemoryClassTask)
 }
 
 // normalizeHTNState ensures all HTN state fields are consistent and complete.

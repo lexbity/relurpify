@@ -29,7 +29,7 @@ func envelopeSet(state *contextdata.Envelope, key string, value any) {
 	if state == nil {
 		return
 	}
-	state.SetWorkingValue(key, value, contextdata.MemoryClassTask)
+	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 }
 
 // envelopeGetString retrieves a value and converts it to string.

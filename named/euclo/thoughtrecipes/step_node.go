@@ -301,7 +301,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	}
 
 	args := n.buildCapabilityArgs(env)
-	toolResult, err := reg.InvokeCapability(ctx, env, n.step.CapabilityID, args)
+	toolResult, err := reg.InvokeCapability(ctx, env.State(), n.step.CapabilityID, args)
 
 	data := map[string]any{
 		"capability_id": n.step.CapabilityID,

@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -39,7 +39,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 
 	// 4. Quota check
 	if w.Evaluator != nil {
-		remaining, _ := w.Evaluator.QuotaRemaining(req.SourcePrincipal)
+		remaining := w.Evaluator.QuotaRemaining(req.SourcePrincipal.ID)
 		if remaining == 0 {
 			result.Action = ActionQuarantined
 			result.Error = fmt.Errorf("quota exceeded")
@@ -146,10 +146,10 @@ func (w *Writer) validateRequest(req PersistenceRequest) error {
 	}
 
 	// Check max content size from policy
-	if w.Policy != nil && w.Policy.Quota.MaxTokensPerWindow > 0 {
+	if w.Policy != nil && w.Policy.MaxTokensPerWindow > 0 {
 		// Rough estimate: 1 token ≈ 4 bytes for text
 		estimatedTokens := len(req.Content) / 4
-		if estimatedTokens > w.Policy.Quota.MaxTokensPerWindow {
+		if estimatedTokens > w.Policy.MaxTokensPerWindow {
 			return fmt.Errorf("content exceeds max size: %d tokens estimated", estimatedTokens)
 		}
 	}
@@ -160,7 +160,7 @@ func (w *Writer) validateRequest(req PersistenceRequest) error {
 // determineTrustClass determines the trust class from source principal.
 func (w *Writer) determineTrustClass(principal identity.SubjectRef) agentspec.TrustClass {
 	if w.Policy != nil && w.Policy.DefaultTrustClass != "" {
-		return w.Policy.DefaultTrustClass
+		return agentspec.TrustClass(w.Policy.DefaultTrustClass)
 	}
 	return agentspec.TrustClassWorkspaceTrusted
 }
@@ -234,7 +234,7 @@ func (w *Writer) writeAuditRecord(req PersistenceRequest, result *PersistenceRes
 	}
 
 	if w.Policy != nil {
-		record.TrustClass = w.Policy.DefaultTrustClass
+		record.TrustClass = agentspec.TrustClass(w.Policy.DefaultTrustClass)
 	}
 
 	w.AuditLog = append(w.AuditLog, record)
@@ -246,12 +246,12 @@ func (w *Writer) generateAuditID() string {
 }
 
 // NewWriter creates a new persistence writer.
-func NewWriter(store *knowledge.ChunkStore, events EventLog, policy *execctx.ContextPolicyBundle) *Writer {
+func NewWriter(store *knowledge.ChunkStore, events EventLog, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator) *Writer {
 	return &Writer{
 		Store:     store,
 		Events:    events,
 		Policy:    policy,
-		Evaluator: execctx.NewEvaluator(policy),
+		Evaluator: evaluator,
 		AuditLog:  make([]PersistenceAuditRecord, 0),
 	}
 }

@@ -4,11 +4,10 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 type CapabilityHandler interface {
-	Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor
+	Descriptor(ctx context.Context, env ports.State) CapabilityDescriptor
 }
 
 type PromptMessage struct {
@@ -29,22 +28,22 @@ type ResourceReadResult struct {
 
 type InvocableCapabilityHandler interface {
 	CapabilityHandler
-	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error)
+	Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error)
 }
 
 type PromptCapabilityHandler interface {
 	CapabilityHandler
-	RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*PromptRenderResult, error)
+	RenderPrompt(ctx context.Context, env ports.State, args map[string]interface{}) (*PromptRenderResult, error)
 }
 
 type ResourceCapabilityHandler interface {
 	CapabilityHandler
-	ReadResource(ctx context.Context, env *contextdata.Envelope) (*ResourceReadResult, error)
+	ReadResource(ctx context.Context, env ports.State) (*ResourceReadResult, error)
 }
 
 type AvailabilityAwareCapabilityHandler interface {
 	CapabilityHandler
-	Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec
+	Availability(ctx context.Context, env ports.State) AvailabilitySpec
 }
 
 type BackgroundInvocationHandle struct {
@@ -56,5 +55,5 @@ type BackgroundInvocationHandle struct {
 
 type BackgroundCapabilityHandler interface {
 	CapabilityHandler
-	InvokeBackground(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*BackgroundInvocationHandle, error)
+	InvokeBackground(ctx context.Context, env ports.State, args map[string]interface{}) (*BackgroundInvocationHandle, error)
 }

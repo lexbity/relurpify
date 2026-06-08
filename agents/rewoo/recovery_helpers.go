@@ -156,21 +156,21 @@ func RecoverStepFailure(ctx context.Context, env *contextdata.Envelope, diagnosi
 	switch recommendedScenario.SuggestedAction {
 	case "retry":
 		// Retry: mark failed steps for retry
-		env.SetWorkingValue("rewoo.retry_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rewoo.recovery_action", "retry", contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.retry_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.recovery_action", "retry", contextdata.MemoryClassTask)
 		return nil
 
 	case "replan":
 		// Replan: signal replan is needed with context
-		env.SetWorkingValue("rewoo.replan_required", true, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rewoo.failed_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rewoo.recovery_action", "replan", contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.replan_required", true, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.failed_steps", recommendedScenario.FailedSteps, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.recovery_action", "replan", contextdata.MemoryClassTask)
 		return nil
 
 	case "synthesize_from_results":
 		// Synthesize: continue with partial results
-		env.SetWorkingValue("rewoo.synthesis_partial", true, contextdata.MemoryClassTask)
-		env.SetWorkingValue("rewoo.recovery_action", "synthesize_from_results", contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.synthesis_partial", true, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("rewoo.recovery_action", "synthesize_from_results", contextdata.MemoryClassTask)
 		return nil
 
 	default:

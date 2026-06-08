@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 type mockInvoker2 struct {
@@ -16,7 +15,7 @@ type mockInvoker2 struct {
 	err     error
 }
 
-func (m *mockInvoker2) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error) {
+func (m *mockInvoker2) InvokeCapability(ctx context.Context, env ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

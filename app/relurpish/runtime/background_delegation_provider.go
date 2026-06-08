@@ -187,7 +187,7 @@ func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context,
 	if state == nil {
 		state = contextdata.NewEnvelope(request.ID, sessionID)
 	}
-	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.CapabilityID(), args)
+	result, err := p.runtime.Tools.InvokeCapability(ctx, state.State(), target.CapabilityID(), args)
 	status := "completed"
 	if err != nil {
 		status = "failed"

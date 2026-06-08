@@ -55,13 +55,13 @@ func (n *reactActNode) Contract() agentgraph.NodeContract {
 // Execute runs any pending tool calls or directly invokes the requested tool
 // referenced in the latest decision payload.
 func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	env.SetWorkingValue("react.execution_phase", "executing", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.execution_phase", "executing", contextdata.MemoryClassTask)
 	activeTools := activeToolSet(env)
 	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
 		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
 			calls = filterToolCalls(calls)
 			if len(calls) == 0 {
-				env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 			} else {
 				results := make(map[string]interface{})
 				envelopes := make(map[string]*capability.CapabilityResultEnvelope)
@@ -84,7 +84,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						toolErrors = append(toolErrors, fmt.Sprintf("unknown tool %s", call.Name))
 						continue
 					}
-					if !n.agent.Tools.CapabilityAvailable(ctx, env, call.Name) {
+					if !n.agent.Tools.CapabilityAvailable(ctx, env.State(), call.Name) {
 						errResult := &ports.ToolResult{
 							Success: false,
 							Error:   fmt.Sprintf("tool %q is unavailable right now.", call.Name),
@@ -97,7 +97,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						continue
 					}
 					n.agent.debugf("%s executing tool=%s id=%s args=%v", n.id, call.Name, callID, call.Args)
-					res, err := n.agent.Tools.InvokeCapability(ctx, env, call.Name, call.Args)
+					res, err := n.agent.Tools.InvokeCapability(ctx, env.State(), call.Name, call.Args)
 					if err != nil {
 						// Convert hard tool errors (e.g. schema validation, permission denial)
 						// into soft ToolResult failures so the LLM can observe and recover.
@@ -126,9 +126,9 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						}
 					}
 				}
-				env.SetWorkingValue("react.last_tool_result", results, contextdata.MemoryClassTask)
-				env.SetWorkingValue("react.last_tool_result_envelopes", envelopes, contextdata.MemoryClassTask)
-				env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("react.last_tool_result", results, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("react.last_tool_result_envelopes", envelopes, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 				result := &execution.Result{
 					NodeID:  n.id,
 					Success: overallSuccess,
@@ -140,12 +140,12 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 				if len(toolErrors) > 0 {
 					result.Error = strings.Join(toolErrors, "; ")
 				}
-				env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 				return result, nil
 			}
 		}
 		if n.agent.Config != nil && !n.agent.Config.NativeToolCalling {
-			env.SetWorkingValue("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 		}
 	}
 	val, ok := env.GetWorkingValue("react.decision")
@@ -155,34 +155,34 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	decision := val.(decisionPayload)
 	toolName := strings.TrimSpace(decision.Tool)
 	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
-		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: true}
-		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	if !n.capabilityAllowed(toolName, activeTools) || !n.agent.Tools.HasCapability(toolName) {
 		lower := strings.ToLower(toolName)
 		if lower == "" || strings.Contains(lower, "none") {
-			env.SetWorkingValue("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
 			result := &execution.Result{NodeID: n.id, Success: true}
-			env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 			return result, nil
 		}
 		// Feed error back to the LLM so it can retry with a valid tool name.
 		errMsg := fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", toolName)
-		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
-		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
-	if !n.agent.Tools.CapabilityAvailable(ctx, env, toolName) {
+	if !n.agent.Tools.CapabilityAvailable(ctx, env.State(), toolName) {
 		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
-		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
-		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
-	res, err := n.agent.Tools.InvokeCapability(ctx, env, toolName, decision.Arguments)
+	res, err := n.agent.Tools.InvokeCapability(ctx, env.State(), toolName, decision.Arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +194,8 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	envelope := n.capabilityEnvelope(ctx, env, nil, call, res)
 	n.recordObservation(env, call, res, envelope)
 	n.latchVerificationSuccess(env, call.Name, res)
-	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.last_tool_result_envelope", envelope, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_tool_result_envelope", envelope, contextdata.MemoryClassTask)
 	n.agent.debugf("%s tool=%s result=%v", n.id, decision.Tool, res.Data)
 	result := &execution.Result{
 		NodeID:  n.id,
@@ -207,7 +207,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		Error: strings.TrimSpace(res.Error),
 	}
 	n.refreshIndexesAfterMutation(call, res)
-	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 	return result, nil
 }
 
@@ -224,9 +224,9 @@ func (n *reactActNode) latchVerificationSuccess(env *contextdata.Envelope, toolN
 		return
 	}
 	summary := verificationSuccessSummary(toolName, fmt.Sprint(res.Data["stdout"]))
-	env.SetWorkingValue("react.verification_latched_summary", summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.synthetic_summary", summary, contextdata.MemoryClassTask)
-	env.SetWorkingValue("react.incomplete_reason", "", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.verification_latched_summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 }
 
 func (n *reactActNode) capabilityAllowed(name string, active map[string]struct{}) bool {
@@ -341,7 +341,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.T
 			history = history[len(history)-limit:]
 		}
 	}
-	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
 	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
 		summary := strings.TrimSpace(observation.Summary)
 		knowledge.IngestObservationAsync(contextdata.WithEnvelope(context.Background(), env), n.agent.OutputIngester, summary)
