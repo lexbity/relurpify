@@ -23,6 +23,7 @@ type AllowlistFile struct {
 	Globs             []string `yaml:"glob_violations"`
 	Stubs             []string `yaml:"stub_violations"`
 	InternalConsumers []string `yaml:"internal_consumer_violations"`
+	Converters        []string `yaml:"converter_violations"`
 }
 
 // LoadAllowlist reads the allowlist from a YAML file.
@@ -48,6 +49,7 @@ func LoadAllowlist(path string) (Allowlist, error) {
 		"glob":              f.Globs,
 		"stub":              f.Stubs,
 		"internal-consumer": f.InternalConsumers,
+		"converter":         f.Converters,
 	}
 	for cat, items := range categories {
 		a.entries[cat] = make(map[string]bool)

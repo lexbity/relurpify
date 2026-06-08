@@ -2,6 +2,7 @@ package capability
 
 import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/safety"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -15,7 +16,7 @@ type compiledRuntimePolicy struct {
 	globalPolicies             map[string]agentspec.AgentPermissionLevel
 	insertionPolicies          []agentspec.CapabilityInsertionPolicy
 	providerPolicies           map[string]agentspec.ProviderPolicy
-	runtimeSafety              *agentspec.RuntimeSafetySpec
+	runtimeSafety              *safety.RuntimeSafetySpec
 }
 
 type executionRuntimeState struct {
@@ -55,7 +56,7 @@ func specProviderPolicies(spec *agentspec.AgentRuntimeSpec) map[string]agentspec
 	return spec.ProviderPolicies
 }
 
-func specRuntimeSafety(spec *agentspec.AgentRuntimeSpec) *agentspec.RuntimeSafetySpec {
+func specRuntimeSafety(spec *agentspec.AgentRuntimeSpec) *safety.RuntimeSafetySpec {
 	if spec == nil {
 		return nil
 	}

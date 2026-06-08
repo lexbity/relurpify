@@ -121,8 +121,8 @@ func TestCheckpointNodeMaterializesCheckpointFromStreamHook(t *testing.T) {
 	if repo.artifact.ArtifactID == "" {
 		t.Fatal("expected checkpoint artifact to be persisted")
 	}
-	if repo.artifact.Kind != "checkpoint" {
-		t.Fatalf("unexpected artifact kind: %q", repo.artifact.Kind)
+	if repo.artifact.StorageKind != "inline" {
+		t.Fatalf("unexpected artifact storage kind: %q", repo.artifact.StorageKind)
 	}
 	if repo.artifact.WorkflowID != "task-1" || repo.artifact.RunID != "session-1" {
 		t.Fatalf("unexpected workflow/run ids: %+v", repo.artifact)

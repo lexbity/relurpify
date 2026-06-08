@@ -13,7 +13,7 @@ type Result struct {
 	Violations []string
 }
 
-// RunAll runs all five architecture gates and returns their results.
+// RunAll runs all architecture gates and returns their results.
 func RunAll(root, allowlistPath string) ([]Result, error) {
 	pkgs, err := ListPackages(root)
 	if err != nil {
@@ -34,6 +34,7 @@ func RunAll(root, allowlistPath string) ([]Result, error) {
 		"bucket":    CheckBuckets(pkgs, reverse, 3, root, Allowlist{}),
 		"consumer":  CheckConsumers(pkgs, reverse, Allowlist{}),
 		"forbidden": CheckForbiddenImports(pkgs, Allowlist{}),
+		"converter": CheckStructIdentityConverters(pkgs, root, Allowlist{}),
 	}
 
 	globRaw, _ := runGlobGate(root)

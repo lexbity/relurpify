@@ -217,39 +217,6 @@ type ProviderConfig struct {
 	Config          map[string]any     `json:"config,omitempty" yaml:"config,omitempty"`
 }
 
-type RuntimeSafetySpec struct {
-	MaxCallsPerCapability     int   `yaml:"max_calls_per_capability,omitempty" json:"max_calls_per_capability,omitempty"`
-	MaxCallsPerProvider       int   `yaml:"max_calls_per_provider,omitempty" json:"max_calls_per_provider,omitempty"`
-	MaxBytesPerSession        int   `yaml:"max_bytes_per_session,omitempty" json:"max_bytes_per_session,omitempty"`
-	MaxOutputTokensSession    int   `yaml:"max_output_tokens_per_session,omitempty" json:"max_output_tokens_per_session,omitempty"`
-	MaxSubprocessesPerSession int   `yaml:"max_subprocesses_per_session,omitempty" json:"max_subprocesses_per_session,omitempty"`
-	MaxNetworkRequestsSession int   `yaml:"max_network_requests_per_session,omitempty" json:"max_network_requests_per_session,omitempty"`
-	RedactSensitiveMetadata   *bool `yaml:"redact_sensitive_metadata,omitempty" json:"redact_sensitive_metadata,omitempty"`
-}
-
-func (s RuntimeSafetySpec) Validate() error {
-	for name, value := range map[string]int{
-		"max_calls_per_capability":         s.MaxCallsPerCapability,
-		"max_calls_per_provider":           s.MaxCallsPerProvider,
-		"max_bytes_per_session":            s.MaxBytesPerSession,
-		"max_output_tokens_session":        s.MaxOutputTokensSession,
-		"max_subprocesses_per_session":     s.MaxSubprocessesPerSession,
-		"max_network_requests_per_session": s.MaxNetworkRequestsSession,
-	} {
-		if value < 0 {
-			return fmt.Errorf("%s must be >= 0", name)
-		}
-	}
-	return nil
-}
-
-func (s RuntimeSafetySpec) RedactionEnabled() bool {
-	if s.RedactSensitiveMetadata == nil {
-		return true
-	}
-	return *s.RedactSensitiveMetadata
-}
-
 func ValidateSessionPolicy(policy SessionPolicy) error {
 	if strings.TrimSpace(policy.ID) == "" {
 		return fmt.Errorf("id required")

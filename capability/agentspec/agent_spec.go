@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/safety"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
@@ -27,7 +28,7 @@ type AgentRuntimeSpec struct {
 	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
 	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
 	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
-	RuntimeSafety       *RuntimeSafetySpec              `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
+	RuntimeSafety       *safety.RuntimeSafetySpec       `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
 	Orchestration       AgentOrchestrationConfig        `yaml:"orchestration,omitempty" json:"orchestration,omitempty"`
 	Bash                AgentBashPermissions            `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`

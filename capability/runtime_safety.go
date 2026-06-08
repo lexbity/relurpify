@@ -2,16 +2,26 @@ package capability
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/capability/safety"
 )
 
+// RevocationSnapshot captures the current set of revoked capabilities, providers, and sessions.
+type RevocationSnapshot struct {
+	Capabilities map[string]string `json:"capabilities,omitempty"`
+	Providers    map[string]string `json:"providers,omitempty"`
+	Sessions     map[string]string `json:"sessions,omitempty"`
+}
+
+// runtimeSafetyController tracks runtime budgets and revocations.
 type runtimeSafetyController struct {
 	mu sync.Mutex
 
-	spec *execution.RuntimeSafetySpec
+	spec *safety.RuntimeSafetySpec
 
 	capabilityCalls     map[string]int
 	providerCalls       map[string]int
@@ -39,7 +49,7 @@ func newRuntimeSafetyController() *runtimeSafetyController {
 	}
 }
 
-func (c *runtimeSafetyController) Configure(spec *execution.RuntimeSafetySpec) {
+func (c *runtimeSafetyController) Configure(spec *safety.RuntimeSafetySpec) {
 	if c == nil {
 		return
 	}
@@ -53,7 +63,7 @@ func (c *runtimeSafetyController) Configure(spec *execution.RuntimeSafetySpec) {
 	c.spec = &clone
 }
 
-func (c *runtimeSafetyController) SnapshotSpec() *execution.RuntimeSafetySpec {
+func (c *runtimeSafetyController) SnapshotSpec() *safety.RuntimeSafetySpec {
 	if c == nil {
 		return nil
 	}
@@ -66,13 +76,13 @@ func (c *runtimeSafetyController) SnapshotSpec() *execution.RuntimeSafetySpec {
 	return &clone
 }
 
-func (c *runtimeSafetyController) RevocationSnapshot() execution.RevocationSnapshot {
+func (c *runtimeSafetyController) RevocationSnapshot() RevocationSnapshot {
 	if c == nil {
-		return execution.RevocationSnapshot{}
+		return RevocationSnapshot{}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return execution.RevocationSnapshot{
+	return RevocationSnapshot{
 		Capabilities: cloneReasonMap(c.revokedCapabilities),
 		Providers:    cloneReasonMap(c.revokedProviders),
 		Sessions:     cloneReasonMap(c.revokedSessions),
@@ -184,8 +194,8 @@ func (c *runtimeSafetyController) RecordResult(desc CapabilityDescriptor, result
 	if sessionID == "" {
 		return nil
 	}
-	bytes := EstimatePayloadBytes(result)
-	tokens := EstimatePayloadTokens(result)
+	bytes := estimatePayloadBytes(result)
+	tokens := estimatePayloadTokens(result)
 	if limit := c.spec.MaxBytesPerSession; limit > 0 && c.sessionBytes[sessionID]+bytes > limit {
 		return fmt.Errorf("session %s blocked: byte budget exceeded", sessionID)
 	}
@@ -215,7 +225,7 @@ func (c *runtimeSafetyController) RecordSessionNetworkRequest(sessionID string, 
 	return c.consumeSessionBudgetLocked(sessionID, count, c.specMaxNetworkRequests, c.sessionNetworkReqs, "network request budget exceeded")
 }
 
-func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*execution.RuntimeSafetySpec) int, bucket map[string]int, message string) error {
+func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*safety.RuntimeSafetySpec) int, bucket map[string]int, message string) error {
 	if sessionID == "" || c.spec == nil {
 		return nil
 	}
@@ -227,14 +237,14 @@ func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, c
 	return nil
 }
 
-func (c *runtimeSafetyController) specMaxSubprocesses(spec *execution.RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxSubprocesses(spec *safety.RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}
 	return spec.MaxSubprocessesPerSession
 }
 
-func (c *runtimeSafetyController) specMaxNetworkRequests(spec *execution.RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxNetworkRequests(spec *safety.RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}
@@ -274,4 +284,150 @@ func defaultReason(reason string) string {
 		return "revoked by runtime policy"
 	}
 	return reason
+}
+
+// RedactAny converts arbitrary structured data into a redacted representation
+// suitable for persistence or export.
+func RedactAny(input any) any {
+	if input == nil {
+		return nil
+	}
+	switch typed := input.(type) {
+	case map[string]interface{}:
+		return RedactMetadataMap(typed)
+	case map[string]string:
+		out := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			out[key] = redactValue(key, value)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, RedactAny(item))
+		}
+		return out
+	case []string:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, redactValue("", item))
+		}
+		return out
+	case string:
+		return redactValue("", typed)
+	default:
+		return input
+	}
+}
+
+// RedactMetadataMap redacts sensitive values from a metadata map.
+func RedactMetadataMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		out[key] = redactValue(key, value)
+	}
+	return out
+}
+
+func redactValue(key string, value interface{}) interface{} {
+	if isSensitiveKey(key) {
+		return "[REDACTED]"
+	}
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return RedactMetadataMap(typed)
+	case map[string]string:
+		out := make(map[string]interface{}, len(typed))
+		for k, v := range typed {
+			out[k] = redactValue(k, v)
+		}
+		return out
+	case []string:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, redactValue(key, item))
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, redactValue(key, item))
+		}
+		return out
+	case string:
+		if looksSensitiveValue(typed) {
+			return "[REDACTED]"
+		}
+		return typed
+	default:
+		return value
+	}
+}
+
+func isSensitiveKey(key string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	for _, needle := range []string{
+		"secret", "token", "password", "cookie", "authorization", "auth", "credential", "api_key", "apikey",
+	} {
+		if strings.Contains(key, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksSensitiveValue(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	if lower == "" {
+		return false
+	}
+	for _, needle := range []string{"bearer ", "ghp_", "github_pat_", "sk-", "authorization:", "session="} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func estimatePayloadBytes(values ...interface{}) int {
+	total := 0
+	for _, value := range values {
+		total += len(strings.TrimSpace(fmt.Sprint(value)))
+	}
+	return total
+}
+
+func estimatePayloadTokens(values ...interface{}) int {
+	return estimatePayloadBytes(values...) / 4
+}
+
+func cloneRevocationSnapshot(input RevocationSnapshot) RevocationSnapshot {
+	return RevocationSnapshot{
+		Capabilities: cloneStringMap(input.Capabilities),
+		Providers:    cloneStringMap(input.Providers),
+		Sessions:     cloneStringMap(input.Sessions),
+	}
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]string, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func SortedKeys(input map[string]string) []string {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

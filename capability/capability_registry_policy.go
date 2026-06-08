@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/capability/safety"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -43,7 +43,7 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *agentspec.AgentR
 	r.setCapabilityPolicies(spec.CapabilityPolicies)
 	r.setExposurePolicies(effectiveExposurePolicies(spec))
 	r.setClassPolicies(spec.GlobalPolicies)
-	r.configureRuntimeSafety(execution.RuntimeSafetySpecToCore(spec.RuntimeSafety))
+	r.configureRuntimeSafety(spec.RuntimeSafety)
 
 	r.mu.Lock()
 	r.syncAgentSpecAwareEntriesLocked(spec, agentID)
@@ -276,7 +276,7 @@ func cloneGlobalPolicies(input map[string]agentspec.AgentPermissionLevel) map[st
 	return out
 }
 
-func (r *CapabilityRegistry) configureRuntimeSafety(spec *execution.RuntimeSafetySpec) {
+func (r *CapabilityRegistry) configureRuntimeSafety(spec *safety.RuntimeSafetySpec) {
 	if r == nil {
 		return
 	}
@@ -309,7 +309,7 @@ func cloneProviderPolicies(input map[string]agentspec.ProviderPolicy) map[string
 	return out
 }
 
-func cloneRuntimeSafetySpec(input *agentspec.RuntimeSafetySpec) *agentspec.RuntimeSafetySpec {
+func cloneRuntimeSafetySpec(input *safety.RuntimeSafetySpec) *safety.RuntimeSafetySpec {
 	if input == nil {
 		return nil
 	}
@@ -403,7 +403,7 @@ func clonePolicySnapshot(input *PolicySnapshot) *PolicySnapshot {
 		GlobalPolicies:     cloneGlobalPolicies(input.GlobalPolicies),
 		ProviderPolicies:   cloneProviderPolicies(input.ProviderPolicies),
 		RuntimeSafety:      cloneRuntimeSafetySpec(input.RuntimeSafety),
-		Revocations: execution.RevocationSnapshot{
+		Revocations: RevocationSnapshot{
 			Capabilities: cloneSnapshotStringMap(input.Revocations.Capabilities),
 			Providers:    cloneSnapshotStringMap(input.Revocations.Providers),
 			Sessions:     cloneSnapshotStringMap(input.Revocations.Sessions),

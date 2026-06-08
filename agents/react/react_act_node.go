@@ -309,7 +309,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 			TaskID:    strings.TrimSpace(envGetString(env, "task.id")),
 			Message:   "insertion decision recorded",
 			Timestamp: time.Now().UTC(),
-			Metadata:  execution.RedactMetadataMap(metadata),
+			Metadata:  capability.RedactMetadataMap(metadata),
 		})
 	}
 	if res != nil {

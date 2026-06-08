@@ -7,8 +7,8 @@ import (
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/safety"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
-	"codeburg.org/lexbit/relurpify/execution"
 )
 
 
@@ -92,8 +92,8 @@ type PolicySnapshot struct {
 	InsertionPolicies  []agentspec.CapabilityInsertionPolicy     `json:"insertion_policies,omitempty"`
 	GlobalPolicies     map[string]agentspec.AgentPermissionLevel `json:"global_policies,omitempty"`
 	ProviderPolicies   map[string]agentspec.ProviderPolicy       `json:"provider_policies,omitempty"`
-	RuntimeSafety      *agentspec.RuntimeSafetySpec              `json:"runtime_safety,omitempty"`
-	Revocations        execution.RevocationSnapshot                        `json:"revocations,omitempty"`
+	RuntimeSafety      *safety.RuntimeSafetySpec                 `json:"runtime_safety,omitempty"`
+	Revocations        RevocationSnapshot                        `json:"revocations,omitempty"`
 }
 
 type CapabilityResultEnvelope struct {

@@ -13,8 +13,8 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -842,7 +842,7 @@ func marshalDelegationArtifact(snapshot policy.DelegationSnapshot) string {
 		"state":   snapshot.State,
 		"result":  snapshot.Result,
 	}
-	data, err := json.Marshal(execution.RedactAny(payload))
+	data, err := json.Marshal(capability.RedactAny(payload))
 	if err != nil {
 		return "{}"
 	}
