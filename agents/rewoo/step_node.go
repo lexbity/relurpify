@@ -15,7 +15,7 @@ import (
 type StepNode struct {
 	id                 string
 	Step               RewooStep
-	Registry           *capability.Registry
+	Registry           *capability.CapabilityRegistry
 	PermissionChecker  permissions.CapabilityChecker
 	OnFailure          StepOnFailure
 	OnPermissionDenied StepOnFailure
@@ -26,7 +26,7 @@ type StepNode struct {
 func NewStepNode(
 	id string,
 	step RewooStep,
-	registry *capability.Registry,
+	registry *capability.CapabilityRegistry,
 	onFailure StepOnFailure,
 ) *StepNode {
 	return &StepNode{

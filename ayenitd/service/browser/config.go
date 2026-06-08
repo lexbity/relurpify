@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -14,9 +15,9 @@ import (
 // BrowserServiceConfig wires the workspace-owned browser service.
 type BrowserServiceConfig struct {
 	WorkspaceRoot     string
-	FileScope         *sandbox.FileScopePolicy
+	FileScope         *permissions.FileScopePolicy
 	Registration      *fauthorization.AgentRegistration
-	Registry          *capability.Registry
+	Registry          *capability.CapabilityRegistry
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *agentspec.AgentRuntimeSpec
 	CommandPolicy     sandbox.CommandPolicy

@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -54,7 +53,7 @@ func (m *plannerModelStub) Chat(ctx context.Context, messages []model.Message, o
 	return &model.LLMResponse{Text: m.response}, nil
 }
 
-func (m *plannerModelStub) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *plannerModelStub) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: m.response}, nil
 }
 

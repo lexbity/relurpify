@@ -5,12 +5,13 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/execution"
 )
 
 type runtimeSafetyController struct {
 	mu sync.Mutex
 
-	spec *RuntimeSafetySpec
+	spec *execution.RuntimeSafetySpec
 
 	capabilityCalls     map[string]int
 	providerCalls       map[string]int
@@ -38,7 +39,7 @@ func newRuntimeSafetyController() *runtimeSafetyController {
 	}
 }
 
-func (c *runtimeSafetyController) Configure(spec *RuntimeSafetySpec) {
+func (c *runtimeSafetyController) Configure(spec *execution.RuntimeSafetySpec) {
 	if c == nil {
 		return
 	}
@@ -52,7 +53,7 @@ func (c *runtimeSafetyController) Configure(spec *RuntimeSafetySpec) {
 	c.spec = &clone
 }
 
-func (c *runtimeSafetyController) SnapshotSpec() *RuntimeSafetySpec {
+func (c *runtimeSafetyController) SnapshotSpec() *execution.RuntimeSafetySpec {
 	if c == nil {
 		return nil
 	}
@@ -65,13 +66,13 @@ func (c *runtimeSafetyController) SnapshotSpec() *RuntimeSafetySpec {
 	return &clone
 }
 
-func (c *runtimeSafetyController) RevocationSnapshot() RevocationSnapshot {
+func (c *runtimeSafetyController) RevocationSnapshot() execution.RevocationSnapshot {
 	if c == nil {
-		return RevocationSnapshot{}
+		return execution.RevocationSnapshot{}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return RevocationSnapshot{
+	return execution.RevocationSnapshot{
 		Capabilities: cloneReasonMap(c.revokedCapabilities),
 		Providers:    cloneReasonMap(c.revokedProviders),
 		Sessions:     cloneReasonMap(c.revokedSessions),
@@ -214,7 +215,7 @@ func (c *runtimeSafetyController) RecordSessionNetworkRequest(sessionID string, 
 	return c.consumeSessionBudgetLocked(sessionID, count, c.specMaxNetworkRequests, c.sessionNetworkReqs, "network request budget exceeded")
 }
 
-func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*RuntimeSafetySpec) int, bucket map[string]int, message string) error {
+func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, count int, limitFn func(*execution.RuntimeSafetySpec) int, bucket map[string]int, message string) error {
 	if sessionID == "" || c.spec == nil {
 		return nil
 	}
@@ -226,14 +227,14 @@ func (c *runtimeSafetyController) consumeSessionBudgetLocked(sessionID string, c
 	return nil
 }
 
-func (c *runtimeSafetyController) specMaxSubprocesses(spec *RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxSubprocesses(spec *execution.RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}
 	return spec.MaxSubprocessesPerSession
 }
 
-func (c *runtimeSafetyController) specMaxNetworkRequests(spec *RuntimeSafetySpec) int {
+func (c *runtimeSafetyController) specMaxNetworkRequests(spec *execution.RuntimeSafetySpec) int {
 	if spec == nil {
 		return 0
 	}

@@ -81,7 +81,7 @@ func PublishTerminationState(env *contextdata.Envelope, termination string) {
 }
 
 // PlanPreflight checks plan step required capabilities against the registry.
-func PlanPreflight(plan *plan.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+func PlanPreflight(plan *plan.Plan, registry *capability.CapabilityRegistry) (*graph.PreflightReport, error) {
 	return planPreflight(plan, registry)
 }
 

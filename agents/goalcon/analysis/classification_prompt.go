@@ -75,15 +75,15 @@ func ParseClassificationResponse(rawResponse string) (*ClassificationResponse, e
 }
 
 // classifyWithLLM invokes the language model for goal classification.
-func classifyWithLLM(model model.LanguageModel, instruction string, availablePredicates []string) (*ClassificationResponse, error) {
-	if model == nil {
+func classifyWithLLM(lm model.LanguageModel, instruction string, availablePredicates []string) (*ClassificationResponse, error) {
+	if lm == nil {
 		return nil, fmt.Errorf("language model is nil")
 	}
 
 	prompt := buildClassificationPrompt(instruction, availablePredicates)
 
 	// Invoke model with default options
-	resp, err := model.Generate(context.Background(), prompt, &model.LLMOptions{})
+	resp, err := lm.Generate(context.Background(), prompt, &model.LLMOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("model.Generate failed: %w", err)
 	}

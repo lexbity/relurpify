@@ -6,11 +6,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 const commandApprovalAction = "command:exec"
+
+// BashConfig holds the allow/deny patterns and default decision for
+// bash command authorization.
+type BashConfig struct {
+	AllowPatterns []string
+	DenyPatterns  []string
+	Default       string
+}
 
 // CommandAuthorizationRequest describes a command that should be validated
 // against executable permissions and manifest bash policy.
@@ -22,7 +30,7 @@ type CommandAuthorizationRequest struct {
 
 // AuthorizeCommand centralizes runtime command authorization so all wrappers
 // share the same executable, bash policy, and HITL approval behavior.
-func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID string, spec *agentspec.AgentRuntimeSpec, req CommandAuthorizationRequest) error {
+func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID string, bashCfg *BashConfig, req CommandAuthorizationRequest) error {
 	if len(req.Command) == 0 {
 		return fmt.Errorf("command empty")
 	}
@@ -45,7 +53,7 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 				Action:       "command:dynamic",
 				Resource:     cmdStr,
 				RequiresHITL: true,
-			}, "Command contains dynamic execution syntax (eval, command substitution, or backticks)", GrantScopeOneTime, RiskLevelHigh, 0)
+			}, "Command contains dynamic execution syntax (eval, command substitution, or backticks)", policy.GrantScopeOneTime, policy.RiskLevelHigh, 0)
 		}
 
 		if manager != nil {
@@ -76,15 +84,15 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 			return err
 		}
 	}
-	if spec == nil {
+	if bashCfg == nil {
 		return nil
 	}
 	commandString := strings.TrimSpace(binary + " " + strings.Join(args, " "))
-	decision := decideCommandByPatterns(commandString, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
+	decision := decideCommandByPatterns(commandString, bashCfg.AllowPatterns, bashCfg.DenyPatterns, bashCfg.Default)
 	switch decision {
-	case agentspec.AgentPermissionDeny:
+	case "deny":
 		return fmt.Errorf("command blocked: denied by bash_permissions")
-	case agentspec.AgentPermissionAsk:
+	case "ask":
 		if manager == nil {
 			return fmt.Errorf("command blocked: approval required but permission manager missing")
 		}
@@ -98,7 +106,7 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 			Resource:     commandString,
 			Metadata:     metadata,
 			RequiresHITL: true,
-		}, "bash permission policy", GrantScopeOneTime, RiskLevelMedium, 0)
+		}, "bash permission policy", policy.GrantScopeOneTime, policy.RiskLevelMedium, 0)
 	default:
 		return nil
 	}
@@ -117,7 +125,7 @@ func extractShellCommandString(binary string, args []string) string {
 	return strings.Join(append([]string{binary}, args...), " ")
 }
 
-func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
+func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision string) string {
 	target = strings.TrimSpace(target)
 	for _, pattern := range denyPatterns {
 		pattern = strings.TrimSpace(pattern)
@@ -125,7 +133,7 @@ func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return agentspec.AgentPermissionDeny
+			return "deny"
 		}
 	}
 	for _, pattern := range allowPatterns {
@@ -134,11 +142,11 @@ func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return agentspec.AgentPermissionAllow
+			return "allow"
 		}
 	}
 	if defaultDecision == "" {
-		return agentspec.AgentPermissionAllow
+		return "allow"
 	}
 	return defaultDecision
 }

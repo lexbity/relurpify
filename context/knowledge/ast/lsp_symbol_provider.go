@@ -50,7 +50,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 
 // AttachASTSymbolProvider inspects the registry for the LSP document symbols
 // tool and wires it into the AST indexer when present.
-func AttachASTSymbolProvider(manager *IndexManager, registry *capability.Registry) {
+func AttachASTSymbolProvider(manager *IndexManager, registry *capability.CapabilityRegistry) {
 	if manager == nil || registry == nil {
 		return
 	}

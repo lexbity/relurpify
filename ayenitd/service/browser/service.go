@@ -46,9 +46,9 @@ const (
 type BrowserService struct {
 	mu sync.Mutex
 
-	registry          *capability.Registry
+	registry          *capability.CapabilityRegistry
 	permissionManager *fauthorization.PermissionManager
-	fileScope         *sandbox.FileScopePolicy
+	fileScope         *permissions.FileScopePolicy
 	telemetry         telemetry.Telemetry
 
 	workspaceRoot   string
@@ -176,7 +176,7 @@ func shouldEnableBrowserService(spec *agentspec.AgentRuntimeSpec) bool {
 	return spec != nil && spec.Browser != nil && spec.Browser.Enabled
 }
 
-func (s *BrowserService) fileScopePolicy() *sandbox.FileScopePolicy {
+func (s *BrowserService) fileScopePolicy() *permissions.FileScopePolicy {
 	if s == nil {
 		return nil
 	}

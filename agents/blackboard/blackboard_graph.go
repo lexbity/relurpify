@@ -189,7 +189,7 @@ func (n *blackboardEvaluateNode) Execute(_ context.Context, state *contextdata.E
 type blackboardDispatchNode struct {
 	id         string
 	controller *Controller
-	tools      *capability.Registry
+	tools      *capability.CapabilityRegistry
 	model      model.LanguageModel
 	semctx     execctx.AgentSemanticContext
 	telemetry  telemetry.Telemetry

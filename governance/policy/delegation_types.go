@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 )
 
 type RecoverabilityMode string
@@ -50,7 +48,7 @@ type DelegationRequest struct {
 	TaskType           string               `json:"task_type"`
 	Instruction        string               `json:"instruction"`
 	ResourceRefs       []string             `json:"resource_refs,omitempty"`
-	ExpectedResult     *schemacoerce.Schema `json:"expected_result,omitempty"`
+	ExpectedResult     *any `json:"expected_result,omitempty"`
 	Depth              int                  `json:"depth,omitempty"`
 	PolicySnapshotID   string               `json:"policy_snapshot_id,omitempty"`
 	ApprovalRequired   bool                 `json:"approval_required,omitempty"`

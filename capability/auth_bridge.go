@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -16,45 +15,35 @@ import (
 // vocabulary so *authorization.PermissionManager and authorization.PolicyEngine
 // satisfy them structurally without capability importing authorization.
 type PermissionManagerHandle interface {
-	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope GrantScope, risk RiskLevel, duration time.Duration) error
-	AuthorizeTool(ctx context.Context, agentID string, tool ports.Tool, args map[string]any) error
+	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error
+	AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]any) error
 }
 
 type PolicyEngine interface {
-	Evaluate(ctx context.Context, req PolicyRequest) (PolicyDecision, error)
+	Evaluate(ctx context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error)
 }
 
-// Canonical governance/policy types, re-exported so capability call sites keep
-// their short names.
-type PolicyDecision = policy.PolicyDecision
-type GrantScope = policy.GrantScope
-type RiskLevel = policy.RiskLevel
 
-const (
-	GrantScopeOneTime = policy.GrantScopeOneTime
-	GrantScopeSession = policy.GrantScopeSession
-	RiskLevelMedium   = policy.RiskLevelMedium
-)
 
 type ApprovalRequest struct {
 	AgentID            string
 	Manager            PermissionManagerHandle
 	Permission         permissions.PermissionDescriptor
 	Justification      string
-	Scope              GrantScope
-	Risk               RiskLevel
+	Scope              policy.GrantScope
+	Risk               policy.RiskLevel
 	Duration           time.Duration
 	MissingManagerErr  string
 	DenyReasonFallback string
 }
 
-func EnforcePolicyRequest(ctx context.Context, engine PolicyEngine, req PolicyRequest, approval ApprovalRequest) (PolicyDecision, error) {
+func EnforcePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.PolicyRequest, approval ApprovalRequest) (policy.PolicyDecision, error) {
 	if engine == nil {
-		return PolicyDecision{Effect: "allow", Reason: "no policy engine"}, nil
+		return policy.PolicyDecision{Effect: "allow", Reason: "no policy engine"}, nil
 	}
 	decision, err := engine.Evaluate(ctx, req)
 	if err != nil {
-		return PolicyDecision{}, err
+		return policy.PolicyDecision{}, err
 	}
 	switch decision.Effect {
 	case "", "allow":

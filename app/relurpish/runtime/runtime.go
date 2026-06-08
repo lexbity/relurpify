@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -28,6 +29,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -45,7 +47,7 @@ import (
 type Runtime struct {
 	Config          Config
 	Workspace       *agentenv.Workspace
-	Tools           *capability.Registry
+	Tools           *capability.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Agent           agentgraph.WorkflowExecutor
 	Model           model.LanguageModel
@@ -204,11 +206,19 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
-		var agentSpec *agentspec.AgentRuntimeSpec
-		if registration.Manifest != nil {
-			agentSpec = registration.Manifest.Spec.Agent
+		var bashCfg *fauthorization.BashConfig
+		if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
+			spec := registration.Manifest.Spec.Agent
+			bashCfg = &fauthorization.BashConfig{
+				AllowPatterns: spec.Bash.AllowPatterns,
+				DenyPatterns:  spec.Bash.DenyPatterns,
+				Default:       string(spec.Bash.Default),
+			}
 		}
-		cfg.CommandPolicy = fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, agentSpec, "runtime")
+		authPolicy := fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, bashCfg, "runtime")
+		cfg.CommandPolicy = sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error {
+			return authPolicy.CheckCommand(ctx, req.Args, req.Env)
+		})
 	}
 
 	// Extend telemetry with an event log sink. The event log is now created
@@ -769,12 +779,12 @@ func (r *Runtime) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 }
 
 // ApproveHITL approves a pending request with the supplied scope.
-func (r *Runtime) ApproveHITL(requestID, approver string, scope fauthorization.GrantScope, duration time.Duration) error {
+func (r *Runtime) ApproveHITL(requestID, approver string, scope policy.GrantScope, duration time.Duration) error {
 	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
 	if scope == "" {
-		scope = fauthorization.GrantScopeOneTime
+		scope = policy.GrantScopeOneTime
 	}
 	var expiresAt time.Time
 	if duration > 0 {

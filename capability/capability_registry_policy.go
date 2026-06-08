@@ -8,8 +8,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -49,7 +51,7 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *agentspec.AgentR
 }
 
 // UseSandboxScope wires sandbox-enforced filesystem scope into file tools.
-func (r *CapabilityRegistry) UseSandboxScope(scope *sandbox.FileScopePolicy) {
+func (r *CapabilityRegistry) UseSandboxScope(scope *permissions.FileScopePolicy) {
 	if r == nil || scope == nil {
 		return
 	}
@@ -104,12 +106,12 @@ func (r *CapabilityRegistry) setCapabilityPolicies(policies []agentspec.Capabili
 	r.mu.Unlock()
 }
 
-func (r *CapabilityRegistry) setExposurePolicies(policies []CapabilityExposurePolicy) {
+func (r *CapabilityRegistry) setExposurePolicies(policies []agentspec.CapabilityExposurePolicy) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
-	r.exposurePolicies = append([]CapabilityExposurePolicy{}, policies...)
+	r.exposurePolicies = append([]agentspec.CapabilityExposurePolicy{}, policies...)
 	r.refreshRuntimePolicyLocked()
 	telemetry := r.telemetry
 	resolved := r.snapshotResolvedExposureLocked()
@@ -119,7 +121,7 @@ func (r *CapabilityRegistry) setExposurePolicies(policies []CapabilityExposurePo
 	}
 }
 
-func (r *CapabilityRegistry) AddExposurePolicies(policies []CapabilityExposurePolicy) {
+func (r *CapabilityRegistry) AddExposurePolicies(policies []agentspec.CapabilityExposurePolicy) {
 	if r == nil || len(policies) == 0 {
 		return
 	}
@@ -136,7 +138,7 @@ func (r *CapabilityRegistry) AddExposurePolicies(policies []CapabilityExposurePo
 
 type resolvedExposure struct {
 	descriptor CapabilityDescriptor
-	exposure   CapabilityExposure
+	exposure   agentspec.CapabilityExposure
 }
 
 func (r *CapabilityRegistry) snapshotResolvedExposureLocked() []resolvedExposure {
@@ -153,25 +155,25 @@ func (r *CapabilityRegistry) snapshotResolvedExposureLocked() []resolvedExposure
 	return out
 }
 
-func effectiveExposurePolicies(spec *agentspec.AgentRuntimeSpec) []CapabilityExposurePolicy {
+func effectiveExposurePolicies(spec *agentspec.AgentRuntimeSpec) []agentspec.CapabilityExposurePolicy {
 	if spec == nil {
 		return nil
 	}
-	policies := append([]CapabilityExposurePolicy{}, spec.ExposurePolicies...)
+	policies := append([]agentspec.CapabilityExposurePolicy{}, spec.ExposurePolicies...)
 	if spec.Browser != nil && spec.Browser.Enabled {
-		policies = append(policies, CapabilityExposurePolicy{
+		policies = append(policies, agentspec.CapabilityExposurePolicy{
 			Selector: agentspec.CapabilitySelector{
 				Name:            "browser",
 				RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyProvider},
 			},
-			Access: CapabilityExposureCallable,
+			Access: agentspec.CapabilityExposureCallable,
 		})
 	}
 	return policies
 }
 
 // EffectiveExposure resolves the effective visibility of a
-func (r *CapabilityRegistry) EffectiveExposure(desc CapabilityDescriptor) CapabilityExposure {
+func (r *CapabilityRegistry) EffectiveExposure(desc CapabilityDescriptor) agentspec.CapabilityExposure {
 	if r == nil {
 		return defaultCapabilityExposure(desc)
 	}
@@ -180,7 +182,7 @@ func (r *CapabilityRegistry) EffectiveExposure(desc CapabilityDescriptor) Capabi
 	return r.effectiveExposureLocked(desc)
 }
 
-func (r *CapabilityRegistry) effectiveExposureLocked(desc CapabilityDescriptor) CapabilityExposure {
+func (r *CapabilityRegistry) effectiveExposureLocked(desc CapabilityDescriptor) agentspec.CapabilityExposure {
 	result := defaultCapabilityExposure(desc)
 	entry, ok := r.entries[desc.ID]
 	if ok {
@@ -199,53 +201,53 @@ func (r *CapabilityRegistry) effectiveExposureLocked(desc CapabilityDescriptor) 
 	return result
 }
 
-func defaultCapabilityExposure(desc CapabilityDescriptor) CapabilityExposure {
+func defaultCapabilityExposure(desc CapabilityDescriptor) agentspec.CapabilityExposure {
 	switch desc.RuntimeFamily {
 	case agentspec.CapabilityRuntimeFamilyLocalTool:
-		return CapabilityExposureCallable
+		return agentspec.CapabilityExposureCallable
 	case agentspec.CapabilityRuntimeFamilyProvider:
-		return CapabilityExposureInspectable
+		return agentspec.CapabilityExposureInspectable
 	default:
 		switch desc.Kind {
 		case agentspec.CapabilityKindTool:
 			switch desc.Source.Scope {
-			case agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
-				return CapabilityExposureInspectable
+			case taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+				return agentspec.CapabilityExposureInspectable
 			default:
-				return CapabilityExposureCallable
+				return agentspec.CapabilityExposureCallable
 			}
 		default:
-			return CapabilityExposureInspectable
+			return agentspec.CapabilityExposureInspectable
 		}
 	}
 }
 
-func defaultCapabilityExposureForEntry(desc CapabilityDescriptor, entry *capabilityEntry) CapabilityExposure {
+func defaultCapabilityExposureForEntry(desc CapabilityDescriptor, entry *capabilityEntry) agentspec.CapabilityExposure {
 	if entry == nil {
 		return defaultCapabilityExposure(desc)
 	}
 	switch desc.RuntimeFamily {
 	case agentspec.CapabilityRuntimeFamilyLocalTool:
-		return CapabilityExposureCallable
+		return agentspec.CapabilityExposureCallable
 	case agentspec.CapabilityRuntimeFamilyProvider:
-		return CapabilityExposureInspectable
+		return agentspec.CapabilityExposureInspectable
 	case agentspec.CapabilityRuntimeFamilyRelurpic:
 		if _, ok := entry.handler.(InvocableCapabilityHandler); ok {
-			return CapabilityExposureCallable
+			return agentspec.CapabilityExposureCallable
 		}
-		return CapabilityExposureInspectable
+		return agentspec.CapabilityExposureInspectable
 	default:
 		return defaultCapabilityExposure(desc)
 	}
 }
 
-func exposureRestrictiveness(access CapabilityExposure) int {
+func exposureRestrictiveness(access agentspec.CapabilityExposure) int {
 	switch access {
-	case CapabilityExposureHidden:
+	case agentspec.CapabilityExposureHidden:
 		return 0
-	case CapabilityExposureInspectable:
+	case agentspec.CapabilityExposureInspectable:
 		return 1
-	case CapabilityExposureCallable:
+	case agentspec.CapabilityExposureCallable:
 		return 2
 	default:
 		return 1
@@ -274,7 +276,7 @@ func cloneGlobalPolicies(input map[string]agentspec.AgentPermissionLevel) map[st
 	return out
 }
 
-func (r *CapabilityRegistry) configureRuntimeSafety(spec *RuntimeSafetySpec) {
+func (r *CapabilityRegistry) configureRuntimeSafety(spec *execution.RuntimeSafetySpec) {
 	if r == nil {
 		return
 	}
@@ -287,11 +289,11 @@ func (r *CapabilityRegistry) configureRuntimeSafety(spec *RuntimeSafetySpec) {
 	controller.Configure(spec)
 }
 
-func cloneInsertionPolicies(input []CapabilityInsertionPolicy) []CapabilityInsertionPolicy {
+func cloneInsertionPolicies(input []agentspec.CapabilityInsertionPolicy) []agentspec.CapabilityInsertionPolicy {
 	if len(input) == 0 {
 		return nil
 	}
-	out := make([]CapabilityInsertionPolicy, len(input))
+	out := make([]agentspec.CapabilityInsertionPolicy, len(input))
 	copy(out, input)
 	return out
 }
@@ -369,7 +371,7 @@ func (r *CapabilityRegistry) capturePolicySnapshotLocked(now time.Time) *PolicyS
 		AgentID:            r.registeredAgentID,
 		ToolPolicies:       make(map[string]agentspec.ToolPolicy, len(policy.toolPolicies)),
 		CapabilityPolicies: append([]agentspec.CapabilityPolicy{}, policy.capabilityPolicies...),
-		ExposurePolicies:   append([]CapabilityExposurePolicy{}, policy.exposurePolicies...),
+		ExposurePolicies:   append([]agentspec.CapabilityExposurePolicy{}, policy.exposurePolicies...),
 		GlobalPolicies:     cloneGlobalPolicies(policy.globalPolicies),
 	}
 	if policy != nil {
@@ -396,12 +398,12 @@ func clonePolicySnapshot(input *PolicySnapshot) *PolicySnapshot {
 		AgentID:            input.AgentID,
 		ToolPolicies:       cloneToolPolicies(input.ToolPolicies),
 		CapabilityPolicies: append([]agentspec.CapabilityPolicy{}, input.CapabilityPolicies...),
-		ExposurePolicies:   append([]CapabilityExposurePolicy{}, input.ExposurePolicies...),
+		ExposurePolicies:   append([]agentspec.CapabilityExposurePolicy{}, input.ExposurePolicies...),
 		InsertionPolicies:  cloneInsertionPolicies(input.InsertionPolicies),
 		GlobalPolicies:     cloneGlobalPolicies(input.GlobalPolicies),
 		ProviderPolicies:   cloneProviderPolicies(input.ProviderPolicies),
 		RuntimeSafety:      cloneRuntimeSafetySpec(input.RuntimeSafety),
-		Revocations: RevocationSnapshot{
+		Revocations: execution.RevocationSnapshot{
 			Capabilities: cloneSnapshotStringMap(input.Revocations.Capabilities),
 			Providers:    cloneSnapshotStringMap(input.Revocations.Providers),
 			Sessions:     cloneSnapshotStringMap(input.Revocations.Sessions),
@@ -531,7 +533,7 @@ func effectiveClassPolicy(tool ports.Tool, policies map[string]agentspec.AgentPe
 }
 
 // UseTelemetry wires a telemetry sink for all tool executions.
-func (r *CapabilityRegistry) UseTelemetry(telemetry Telemetry) {
+func (r *CapabilityRegistry) UseTelemetry(telemetry fwtelemetry.Telemetry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.telemetry = telemetry

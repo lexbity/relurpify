@@ -4,8 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -128,7 +127,7 @@ func matchAnyActor(values []policy.ActorMatch, req policy.PolicyRequest) bool {
 	return false
 }
 
-func matchesMinRiskClasses(minValues []agentspec.RiskClass, actual []agentspec.RiskClass) bool {
+func matchesMinRiskClasses(minValues []taxonomy.RiskClass, actual []taxonomy.RiskClass) bool {
 	for _, minValue := range minValues {
 		threshold := riskRank(minValue)
 		for _, actualRisk := range actual {
@@ -167,7 +166,7 @@ func containsFold(values []string, want string) bool {
 	return false
 }
 
-func containsProviderKind(values []capability.ProviderKind, want capability.ProviderKind) bool {
+func containsProviderKind(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -185,7 +184,7 @@ func containsExternalProvider(values []string, want string) bool {
 	return false
 }
 
-func containsTrustClass(values []agentspec.TrustClass, want agentspec.TrustClass) bool {
+func containsTrustClass(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -194,7 +193,7 @@ func containsTrustClass(values []agentspec.TrustClass, want agentspec.TrustClass
 	return false
 }
 
-func containsCapabilityKind(values []agentspec.CapabilityKind, want agentspec.CapabilityKind) bool {
+func containsCapabilityKind(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -203,7 +202,7 @@ func containsCapabilityKind(values []agentspec.CapabilityKind, want agentspec.Ca
 	return false
 }
 
-func containsRuntimeFamily(values []agentspec.CapabilityRuntimeFamily, want agentspec.CapabilityRuntimeFamily) bool {
+func containsRuntimeFamily(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -212,7 +211,7 @@ func containsRuntimeFamily(values []agentspec.CapabilityRuntimeFamily, want agen
 	return false
 }
 
-func containsEffectClass(values []agentspec.EffectClass, actual []agentspec.EffectClass) bool {
+func containsEffectClass(values []taxonomy.EffectClass, actual []taxonomy.EffectClass) bool {
 	for _, value := range values {
 		for _, candidate := range actual {
 			if candidate == value {
@@ -259,21 +258,21 @@ func containsRouteMode(values []string, want string) bool {
 	return false
 }
 
-func riskRank(risk agentspec.RiskClass) int {
+func riskRank(risk taxonomy.RiskClass) int {
 	switch risk {
-	case agentspec.RiskClassReadOnly:
+	case taxonomy.RiskClassReadOnly:
 		return 1
-	case agentspec.RiskClassSessioned:
+	case taxonomy.RiskClassSessioned:
 		return 2
-	case agentspec.RiskClassNetwork:
+	case taxonomy.RiskClassNetwork:
 		return 3
-	case agentspec.RiskClassExecute:
+	case taxonomy.RiskClassExecute:
 		return 4
-	case agentspec.RiskClassCredentialed:
+	case taxonomy.RiskClassCredentialed:
 		return 5
-	case agentspec.RiskClassExfiltration:
+	case taxonomy.RiskClassExfiltration:
 		return 6
-	case agentspec.RiskClassDestructive:
+	case taxonomy.RiskClassDestructive:
 		return 7
 	default:
 		return 0

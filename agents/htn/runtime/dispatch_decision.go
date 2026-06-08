@@ -120,7 +120,7 @@ func selectorsFromStep(step plan.PlanStep) []agentspec.CapabilitySelector {
 	return []agentspec.CapabilitySelector{{Kind: agentspec.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
 }
 
-func resolveDispatchTarget(registry *capability.Registry, explicitTarget string, selectors []agentspec.CapabilitySelector) (string, string) {
+func resolveDispatchTarget(registry *capability.CapabilityRegistry, explicitTarget string, selectors []agentspec.CapabilitySelector) (string, string) {
 	if registry == nil {
 		return "", "registry_unavailable"
 	}

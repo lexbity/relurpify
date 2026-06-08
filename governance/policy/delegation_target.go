@@ -1,21 +1,22 @@
 package policy
 
-import agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
+import (
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+)
 
 // DelegationTarget is the policy-relevant view of a delegation target.
-// capability.CapabilityDescriptor satisfies this interface.
 type DelegationTarget interface {
 	CapabilityID() string
 	CapabilityName() string
-	CapabilityTrustClass() agentspec.TrustClass
-	CoordinationRole() agentspec.CoordinationRole
+	CapabilityTrustClass() string
+	CoordinationRole() string
 	CoordinationTarget() bool
-	LongRunning() agentspec.EnabledState
-	CapabilityRuntimeFamily() agentspec.CapabilityRuntimeFamily
-	SourceScope() agentspec.CapabilityScope
+	LongRunning() int32
+	CapabilityRuntimeFamily() string
+	SourceScope() taxonomy.CapabilityScope
 	SourceProviderID() string
 	SourceSessionID() string
 	CoordinationTaskTypes() []string
-	CoordinationExecutionModes() []agentspec.CoordinationExecutionMode
-	DirectInsertionAllowed() agentspec.EnabledState
+	CoordinationExecutionModes() []string
+	DirectInsertionAllowed() int32
 }

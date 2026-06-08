@@ -19,7 +19,7 @@ const (
 )
 
 type primitiveDispatcher struct {
-	tools    *capability.Registry
+	tools    *capability.CapabilityRegistry
 	fallback graph.WorkflowExecutor
 }
 
@@ -27,11 +27,11 @@ type primitiveDispatcher struct {
 // and falls back to the provided workflow executor when no capability target
 // resolves. Use NewPrimitiveDispatcher when an executor-shaped wrapper is
 // required, such as plan execution with branch isolation.
-func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+func DispatchTask(ctx context.Context, tools *capability.CapabilityRegistry, fallback graph.WorkflowExecutor, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, env)
 }
 
-func NewPrimitiveDispatcher(tools *capability.Registry, fallback graph.WorkflowExecutor) plan.WorkflowExecutor {
+func NewPrimitiveDispatcher(tools *capability.CapabilityRegistry, fallback graph.WorkflowExecutor) plan.WorkflowExecutor {
 	return &primitiveDispatcher{
 		tools:    tools,
 		fallback: fallback,

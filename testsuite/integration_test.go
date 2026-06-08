@@ -102,7 +102,7 @@ func (s *scriptedLLM) Chat(context.Context, []model.Message, *model.LLMOptions) 
 	return nil, fmt.Errorf("chat not supported")
 }
 
-func (s *scriptedLLM) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (s *scriptedLLM) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return nil, fmt.Errorf("chat tools not supported")
 }
 

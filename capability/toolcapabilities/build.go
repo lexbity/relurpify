@@ -41,7 +41,7 @@ func WithSubmitter(s jobs.Submitter) BuildOption {
 //
 // Tools whose manifests are not admitted (missing Go impl, strict-mode
 // violations, or unlisted backends) are excluded with a warning log.
-func Build(workspace string, runner ports.CommandRunner, manifests []*toolcapabilities.ToolManifest, opts ...BuildOption) []ports.Tool {
+func Build(workspace string, runner ports.CommandRunner, manifests []*ToolManifest, opts ...BuildOption) []ports.Tool {
 	var cfg buildConfig
 	for _, o := range opts {
 		o(&cfg)
@@ -54,7 +54,7 @@ func Build(workspace string, runner ports.CommandRunner, manifests []*toolcapabi
 		if m == nil {
 			continue
 		}
-		name := toolcapabilities.NormalizeToolName(m.Name)
+		name := ports.NormalizeToolName(m.Name)
 		if name == "" {
 			continue
 		}
@@ -86,7 +86,7 @@ func Build(workspace string, runner ports.CommandRunner, manifests []*toolcapabi
 }
 
 // buildOne constructs a single tool from its manifest.
-func buildOne(workspace string, runner ports.CommandRunner, manifest toolcapabilities.ToolManifest, strict bool) (ports.Tool, error) {
+func buildOne(workspace string, runner ports.CommandRunner, manifest ports.ToolManifest, strict bool) (ports.Tool, error) {
 	switch manifest.Execution.Backend {
 	case ports.ToolBackendSubprocess:
 		return subprocess.NewTool(manifest, runner), nil
@@ -109,7 +109,7 @@ func buildOne(workspace string, runner ports.CommandRunner, manifest toolcapabil
 }
 
 // buildGoNative constructs a go_native tool from the native registry.
-func buildGoNative(workspace string, manifest toolcapabilities.ToolManifest, strict bool) (ports.Tool, error) {
+func buildGoNative(workspace string, manifest ports.ToolManifest, strict bool) (ports.Tool, error) {
 	impl := manifest.Execution.Implementation
 	if impl == "" {
 		impl = manifest.Name
@@ -139,14 +139,14 @@ func buildGoNative(workspace string, manifest toolcapabilities.ToolManifest, str
 // admission wraps the capability-level ToolAdmissionPolicy for use during
 // Build, applying tool-level consistency checks.
 type admission struct {
-	manifests map[string]toolcapabilities.ToolManifest
+	manifests map[string]ports.ToolManifest
 }
 
-func newAdmission(manifests []*toolcapabilities.ToolManifest) *admission {
-	m := make(map[string]toolcapabilities.ToolManifest, len(manifests))
+func newAdmission(manifests []*ports.ToolManifest) *admission {
+	m := make(map[string]ports.ToolManifest, len(manifests))
 	for _, p := range manifests {
 		if p != nil {
-			m[toolcapabilities.NormalizeToolName(p.Name)] = *p
+			m[ports.NormalizeToolName(p.Name)] = *p
 		}
 	}
 	return &admission{manifests: m}
@@ -156,7 +156,7 @@ func (a *admission) Admit(tool ports.Tool) (bool, error) {
 	if tool == nil {
 		return false, fmt.Errorf("tool required")
 	}
-	name := toolcapabilities.NormalizeToolName(tool.Name())
+	name := ports.NormalizeToolName(tool.Name())
 	if _, ok := a.manifests[name]; !ok {
 		return false, nil // not in manifest — silently skip
 	}
@@ -185,7 +185,7 @@ func AssertParamKeys(impl ports.Tool, name string, manifestParams []ports.ToolPa
 
 	declared := make(map[string]struct{}, len(manifestParams))
 	for _, p := range manifestParams {
-		key := toolcapabilities.NormalizeToolName(p.Name)
+		key := ports.NormalizeToolName(p.Name)
 		if key != "" {
 			declared[key] = struct{}{}
 		}
@@ -193,7 +193,7 @@ func AssertParamKeys(impl ports.Tool, name string, manifestParams []ports.ToolPa
 
 	var missing []string
 	for _, key := range consumed {
-		normalized := toolcapabilities.NormalizeToolName(key)
+		normalized := ports.NormalizeToolName(key)
 		if normalized == "" {
 			continue
 		}
@@ -214,7 +214,7 @@ func AssertParamKeys(impl ports.Tool, name string, manifestParams []ports.ToolPa
 
 // AssertParamKeysOnConstructor asserts param key consistency by constructing
 // a tool from the given constructor and checking it against the manifest.
-func AssertParamKeysOnConstructor(key string, ctor ports.NativeToolConstructor, manifest toolcapabilities.ToolManifest) error {
+func AssertParamKeysOnConstructor(key string, ctor ports.NativeToolConstructor, manifest ports.ToolManifest) error {
 	if ctor == nil {
 		return nil
 	}

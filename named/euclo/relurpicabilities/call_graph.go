@@ -7,6 +7,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -35,11 +36,11 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "graph", "read-only"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -89,7 +90,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 }
 
 // Invoke executes the call graph traversal and returns structured nodes and edges.
-func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	entryPoint, ok := stringArg(args, "entry_point")
 	if !ok || entryPoint == "" {
@@ -152,7 +153,7 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	}
 	writeRetrievalReferences(env, "call_graph_"+entryPoint, allNodes)
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":     true,

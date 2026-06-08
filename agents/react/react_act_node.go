@@ -9,6 +9,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -264,7 +265,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 				Description: call.Name,
 				TrustClass:  agentspec.TrustClassWorkspaceTrusted,
 				Source: capability.CapabilitySource{
-					Scope: agentspec.CapabilityScopeWorkspace,
+					Scope: taxonomy.CapabilityScopeWorkspace,
 				},
 			}
 		}
@@ -328,7 +329,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.T
 	if visible {
 		observation.Summary = displaySummary
 		switch decision.Action {
-		case capability.InsertionActionMetadataOnly, capability.InsertionActionHITLRequired:
+		case agentspec.InsertionActionMetadataOnly, agentspec.InsertionActionHITLRequired:
 			observation.Data = nil
 		}
 	}

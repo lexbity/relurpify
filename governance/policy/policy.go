@@ -3,9 +3,19 @@ package policy
 import (
 	"fmt"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
+
+// SkillStepTemplate is a plan-step template that agents may offer the LLM.
+type SkillStepTemplate struct {
+	Kind        string
+	Description string
+}
+
+// AgentReviewApprovalRules configures approval rules for agent review.
+type AgentReviewApprovalRules struct {
+	RequireVerificationEvidence bool
+	RejectOnUnresolvedErrors    bool
+}
 
 // ResolvedAgentPolicy carries the resolved agent policy collapsed from the
 // agent spec's orchestration configuration.  It is what the agent strategies
@@ -20,7 +30,7 @@ type ResolvedAgentPolicy struct {
 
 // EffectiveAgentPolicy bundles the spec with its resolved
 type EffectiveAgentPolicy struct {
-	Spec   *agentspec.AgentRuntimeSpec
+	Spec   any
 	Policy ResolvedAgentPolicy
 }
 
@@ -29,7 +39,7 @@ type ResolvedPlanningPolicy struct {
 	RequiredBeforeEdit          []string
 	PreferredEditCapabilities   []string
 	PreferredVerifyCapabilities []string
-	StepTemplates               []agentspec.SkillStepTemplate
+	StepTemplates               []SkillStepTemplate
 	RequireVerificationStep     bool
 }
 
@@ -37,7 +47,7 @@ type ResolvedPlanningPolicy struct {
 type ResolvedReviewPolicy struct {
 	Criteria        []string
 	FocusTags       []string
-	ApprovalRules   agentspec.AgentReviewApprovalRules
+	ApprovalRules   AgentReviewApprovalRules
 	SeverityWeights map[string]float64
 }
 

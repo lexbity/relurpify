@@ -11,27 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
-// RiskLevel and GrantScope are owned by governance/policy so the capability
-// domain's permission-manager port can reference the same types this package's
-// PermissionManager satisfies. Re-exported here for authorization-internal use.
-type RiskLevel = policy.RiskLevel
-
-const (
-	RiskLevelLow    = policy.RiskLevelLow
-	RiskLevelMedium = policy.RiskLevelMedium
-	RiskLevelHigh   = policy.RiskLevelHigh
-)
-
-type GrantScope = policy.GrantScope
-
-const (
-	GrantScopeOneTime     = policy.GrantScopeOneTime
-	GrantScopeSession     = policy.GrantScopeSession
-	GrantScopePersistent  = policy.GrantScopePersistent
-	GrantScopeConditional = policy.GrantScopeConditional
-	GrantScopeTask        = policy.GrantScopeTask
-)
-
 type HITLTimeoutBehavior string
 
 const (
@@ -44,9 +23,9 @@ type PermissionRequest struct {
 	ID              string                           `json:"id"`
 	Permission      permissions.PermissionDescriptor `json:"permission"`
 	Justification   string                           `json:"justification"`
-	Scope           GrantScope                       `json:"scope"`
+	Scope           policy.GrantScope                `json:"scope"`
 	Duration        time.Duration                    `json:"duration"`
-	Risk            RiskLevel                        `json:"risk"`
+	Risk            policy.RiskLevel                 `json:"risk"`
 	RunID           string                           `json:"run_id,omitempty"`
 	Timeout         time.Duration                    `json:"timeout,omitempty"`
 	TimeoutBehavior HITLTimeoutBehavior              `json:"timeout_behavior,omitempty"`
@@ -56,13 +35,13 @@ type PermissionRequest struct {
 
 // PermissionDecision encapsulates an approval or rejection.
 type PermissionDecision struct {
-	RequestID  string            `json:"request_id"`
-	Approved   bool              `json:"approved"`
-	ApprovedBy string            `json:"approved_by"`
-	Scope      GrantScope        `json:"scope"`
-	ExpiresAt  time.Time         `json:"expires_at"`
-	Reason     string            `json:"reason,omitempty"`
-	Conditions map[string]string `json:"conditions,omitempty"`
+	RequestID  string              `json:"request_id"`
+	Approved   bool                `json:"approved"`
+	ApprovedBy string              `json:"approved_by"`
+	Scope      policy.GrantScope   `json:"scope"`
+	ExpiresAt  time.Time           `json:"expires_at"`
+	Reason     string              `json:"reason,omitempty"`
+	Conditions map[string]string   `json:"conditions,omitempty"`
 }
 
 // HITLBroker coordinates blocking and async approvals.
@@ -267,7 +246,7 @@ func (h *HITLBroker) Approve(decision PermissionDecision) error {
 	if decision.Scope == "" {
 		decision.Scope = req.Scope
 	}
-	if decision.ExpiresAt.IsZero() && decision.Scope == GrantScopeOneTime {
+	if decision.ExpiresAt.IsZero() && decision.Scope == policy.GrantScopeOneTime {
 		decision.ExpiresAt = h.clock().Add(time.Minute)
 	}
 	if waiter, ok := h.waiters[decision.RequestID]; ok {
@@ -317,7 +296,7 @@ func (h *HITLBroker) PendingRequests() []*PermissionRequest {
 }
 
 // GrantManual creates a permission grant without the async flow.
-func GrantManual(permission permissions.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) *PermissionGrant {
+func GrantManual(permission permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) *PermissionGrant {
 	grant := &PermissionGrant{
 		ID:         fmt.Sprintf("manual-%d", time.Now().UnixNano()),
 		Permission: permission,

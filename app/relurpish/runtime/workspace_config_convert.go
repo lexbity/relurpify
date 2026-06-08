@@ -3,8 +3,8 @@ package runtime
 import (
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -62,25 +62,6 @@ func convertCoreCapabilitySelectors(values []agentspec.CapabilitySelector) []con
 	return out
 }
 
-func convertNodePlatformString(value string) capability.NodePlatform {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case string(capability.NodePlatformMacOS):
-		return capability.NodePlatformMacOS
-	case string(capability.NodePlatformLinux):
-		return capability.NodePlatformLinux
-	case string(capability.NodePlatformIOS):
-		return capability.NodePlatformIOS
-	case string(capability.NodePlatformAndroid):
-		return capability.NodePlatformAndroid
-	case string(capability.NodePlatformWindows):
-		return capability.NodePlatformWindows
-	case string(capability.NodePlatformHeadless):
-		return capability.NodePlatformHeadless
-	default:
-		return capability.NodePlatformHeadless
-	}
-}
-
 func convertRuntimeFamilies(values []string) []agentspec.CapabilityRuntimeFamily {
 	if len(values) == 0 {
 		return nil
@@ -103,18 +84,18 @@ func convertRuntimeFamiliesToStrings(values []agentspec.CapabilityRuntimeFamily)
 	return out
 }
 
-func convertRuntimeScopes(values []string) []agentspec.CapabilityScope {
+func convertRuntimeScopes(values []string) []taxonomy.CapabilityScope {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]agentspec.CapabilityScope, 0, len(values))
+	out := make([]taxonomy.CapabilityScope, 0, len(values))
 	for _, value := range values {
-		out = append(out, agentspec.CapabilityScope(strings.TrimSpace(value)))
+		out = append(out, taxonomy.CapabilityScope(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeScopesToStrings(values []agentspec.CapabilityScope) []string {
+func convertRuntimeScopesToStrings(values []taxonomy.CapabilityScope) []string {
 	if len(values) == 0 {
 		return nil
 	}
@@ -147,18 +128,18 @@ func convertRuntimeTrustClassesToStrings(values []agentspec.TrustClass) []string
 	return out
 }
 
-func convertRuntimeRiskClasses(values []string) []agentspec.RiskClass {
+func convertRuntimeRiskClasses(values []string) []taxonomy.RiskClass {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]agentspec.RiskClass, 0, len(values))
+	out := make([]taxonomy.RiskClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, agentspec.RiskClass(strings.TrimSpace(value)))
+		out = append(out, taxonomy.RiskClass(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeRiskClassesToStrings(values []agentspec.RiskClass) []string {
+func convertRuntimeRiskClassesToStrings(values []taxonomy.RiskClass) []string {
 	if len(values) == 0 {
 		return nil
 	}
@@ -169,18 +150,18 @@ func convertRuntimeRiskClassesToStrings(values []agentspec.RiskClass) []string {
 	return out
 }
 
-func convertRuntimeEffectClasses(values []string) []agentspec.EffectClass {
+func convertRuntimeEffectClasses(values []string) []taxonomy.EffectClass {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]agentspec.EffectClass, 0, len(values))
+	out := make([]taxonomy.EffectClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, agentspec.EffectClass(strings.TrimSpace(value)))
+		out = append(out, taxonomy.EffectClass(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeEffectClassesToStrings(values []agentspec.EffectClass) []string {
+func convertRuntimeEffectClassesToStrings(values []taxonomy.EffectClass) []string {
 	if len(values) == 0 {
 		return nil
 	}

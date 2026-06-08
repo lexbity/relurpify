@@ -26,7 +26,7 @@ type frameworkPolicyContext struct {
 	permissionManager *authorization.PermissionManager
 	agentID           string
 	agentSpec         *agentspec.AgentRuntimeSpec
-	sandboxScope      *sandbox.FileScopePolicy
+	sandboxScope      *permissions.FileScopePolicy
 }
 
 func (c *frameworkPolicyContext) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
@@ -45,7 +45,7 @@ func (c *frameworkPolicyContext) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, 
 	c.agentID = agentID
 }
 
-func (c *frameworkPolicyContext) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+func (c *frameworkPolicyContext) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	if c == nil {
 		return
 	}
@@ -54,7 +54,13 @@ func (c *frameworkPolicyContext) SetSandboxScope(scope *sandbox.FileScopePolicy)
 
 func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agentenv.WorkspaceEnvironment, req sandbox.CommandRequest, source string) error {
 	if c != nil && c.permissionManager != nil {
-		return authorization.AuthorizeCommand(ctx, c.permissionManager, c.agentID, c.agentSpec, authorization.CommandAuthorizationRequest{
+		bashCfg := &authorization.BashConfig{}
+		if c.agentSpec != nil {
+			bashCfg.AllowPatterns = c.agentSpec.Bash.AllowPatterns
+			bashCfg.DenyPatterns = c.agentSpec.Bash.DenyPatterns
+			bashCfg.Default = string(c.agentSpec.Bash.Default)
+		}
+		return authorization.AuthorizeCommand(ctx, c.permissionManager, c.agentID, bashCfg, authorization.CommandAuthorizationRequest{
 			Command: append([]string(nil), req.Args...),
 			Env:     append([]string(nil), req.Env...),
 			Source:  source,
@@ -85,7 +91,7 @@ func workspaceRoot(env agentenv.WorkspaceEnvironment) string {
 	return "."
 }
 
-func (c *frameworkPolicyContext) fileScopePolicy(env agentenv.WorkspaceEnvironment) *sandbox.FileScopePolicy {
+func (c *frameworkPolicyContext) fileScopePolicy(env agentenv.WorkspaceEnvironment) *permissions.FileScopePolicy {
 	if c != nil && c.sandboxScope != nil {
 		return c.sandboxScope
 	}

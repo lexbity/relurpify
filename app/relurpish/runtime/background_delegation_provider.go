@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -36,13 +37,13 @@ func newBackgroundDelegationProvider() *backgroundDelegationProvider {
 func (p *backgroundDelegationProvider) Descriptor() capability.ProviderDescriptor {
 	return capability.ProviderDescriptor{
 		ID:                 backgroundDelegationProviderID,
-		Kind:               capability.ProviderKindAgentRuntime,
+		Kind:               agentspec.ProviderKindAgentRuntime,
 		ActivationScope:    "runtime",
 		TrustBaseline:      agentspec.TrustClassBuiltinTrusted,
 		RecoverabilityMode: policy.RecoverabilityInProcess,
 		SupportsHealth:     true,
 		Security: capability.ProviderSecurityProfile{
-			Origin:                     capability.ProviderOriginLocal,
+			Origin:                     agentspec.ProviderOriginLocal,
 			RequiresFrameworkMediation: true,
 		},
 	}
@@ -118,7 +119,7 @@ func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]capa
 	return out, nil
 }
 
-func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts fauthorization.DelegationExecutionOptions) (*fauthorization.BackgroundDelegationHandle, error) {
+func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target governanceports.DescriptorView, args map[string]any, opts fauthorization.DelegationExecutionOptions) (*fauthorization.BackgroundDelegationHandle, error) {
 	if p == nil || p.runtime == nil || p.runtime.Tools == nil {
 		return nil, fmt.Errorf("background delegation provider unavailable")
 	}
@@ -142,7 +143,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 				ProviderID:     p.Descriptor().ID,
 				WorkflowID:     request.WorkflowID,
 				TaskID:         request.TaskID,
-				TrustClass:     target.CapabilityTrustClass(),
+				TrustClass:     agentspec.TrustClass(target.TrustClass()),
 				Recoverability: p.Descriptor().RecoverabilityMode,
 				CreatedAt:      now,
 				LastActivityAt: now,
@@ -180,7 +181,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	}, nil
 }
 
-func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
+func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request policy.DelegationRequest, target governanceports.DescriptorView, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
 	defer close(session.results)
 	state := opts.State
 	if state == nil {

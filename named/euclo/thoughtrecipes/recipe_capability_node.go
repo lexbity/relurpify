@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
@@ -82,27 +83,27 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env *contextda
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          name,
-		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeWorkspace},
+		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeWorkspace},
 		Availability:  capability.AvailabilitySpec{Available: true},
 	}
 }
 
-func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *recipeCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.plan == nil {
-		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
+		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
 	}
 	graph, err := BuildThoughtRecipeGraph(h.plan, h.env, nil)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
+		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
 	}
 	result, err := graph.Execute(ctx, env)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{Success: false}, fmt.Errorf("recipe capability %s: execute: %w", h.capabilityID, err)
+		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: execute: %w", h.capabilityID, err)
 	}
 	success := result != nil && result.Success
 	data := map[string]any{}
 	if result != nil && result.Data != nil {
 		data = execution.ResultFields(result.Data)
 	}
-	return &ports.CapabilityExecutionResult{Success: success, Data: data}, nil
+	return &ports.ToolResult{Success: success, Data: data}, nil
 }

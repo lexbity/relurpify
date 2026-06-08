@@ -82,7 +82,7 @@ func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []capability.Pro
 	for i, provider := range spec.Providers {
 		out[i] = capability.ProviderConfig{
 			ID:              provider.ID,
-			Kind:            capability.ProviderKind(provider.Kind),
+			Kind:            agentspec.ProviderKind(provider.Kind),
 			Enabled:         provider.Enabled,
 			Target:          provider.Target,
 			ActivationScope: provider.ActivationScope,
@@ -151,9 +151,9 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 			Actor:          identity.EventActor{Kind: "agent", ID: r.AgentWorkspace().Registration.ID},
 			CapabilityID:   "provider:" + desc.ID + ":activate",
 			CapabilityName: "provider:" + desc.ID + ":activate",
-			ProviderKind:   desc.Kind,
-			ProviderOrigin: desc.Security.Origin,
-			TrustClass:     desc.TrustBaseline,
+			ProviderKind:   string(desc.Kind),
+			ProviderOrigin: string(desc.Security.Origin),
+			TrustClass:     string(desc.TrustBaseline),
 		}, fauthorization.ApprovalRequest{
 			AgentID: r.AgentWorkspace().Registration.ID,
 			Manager: r.AgentWorkspace().Registration.Permissions,
@@ -165,8 +165,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 				RequiresHITL: true,
 			},
 			Justification:      fmt.Sprintf("activate provider %s", desc.ID),
-			Scope:              fauthorization.GrantScopeSession,
-			Risk:               fauthorization.RiskLevelMedium,
+			Scope:              policy.GrantScopeSession,
+			Risk:               policy.RiskLevelMedium,
 			MissingManagerErr:  fmt.Sprintf("provider %s activation requires approval but permission manager is missing", desc.ID),
 			DenyReasonFallback: fmt.Sprintf("provider %s activation denied by policy", desc.ID),
 		})
@@ -176,10 +176,10 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 		return nil
 	}
 	level := agentspec.AgentPermissionAllow
-	if desc.Security.Origin == capability.ProviderOriginRemote {
+	if desc.Security.Origin == agentspec.ProviderOriginRemote {
 		level = agentspec.AgentPermissionAsk
 	}
-	if desc.Kind == capability.ProviderKindBuiltin || desc.Kind == capability.ProviderKindAgentRuntime {
+	if desc.Kind == agentspec.ProviderKindBuiltin || desc.Kind == agentspec.ProviderKindAgentRuntime {
 		level = agentspec.AgentPermissionAllow
 	}
 	if r.AgentWorkspace().AgentSpec != nil && r.AgentWorkspace().AgentSpec.ProviderPolicies != nil {
@@ -209,7 +209,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc capabili
 			Resource:     desc.ID,
 			Metadata:     metadata,
 			RequiresHITL: true,
-		}, fmt.Sprintf("activate provider %s", desc.ID), fauthorization.GrantScopeSession, fauthorization.RiskLevelMedium, 0)
+		}, fmt.Sprintf("activate provider %s", desc.ID), policy.GrantScopeSession, policy.RiskLevelMedium, 0)
 	default:
 		return fmt.Errorf("provider %s activation policy %s invalid", desc.ID, level)
 	}

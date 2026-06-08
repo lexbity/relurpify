@@ -27,7 +27,7 @@ type TestEnvironment struct {
 	PermissionManager *authorization.PermissionManager
 
 	// Registry manages tool capability registration and dispatch.
-	Registry *capability.Registry
+	Registry *capability.CapabilityRegistry
 
 	// TelemetrySink captures telemetry events for assertion.
 	TelemetrySink *recordingTelemetrySink

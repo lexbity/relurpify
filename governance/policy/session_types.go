@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 )
 
@@ -30,7 +29,7 @@ type SessionBoundary struct {
 	ChannelID      string               `json:"channel_id,omitempty"`
 	PeerID         string               `json:"peer_id,omitempty"`
 	Binding        *SessionBinding      `json:"binding,omitempty"`
-	TrustClass     agentspec.TrustClass `json:"trust_class"`
+	TrustClass     string `json:"trust_class"`
 	CreatedAt      time.Time            `json:"created_at"`
 	LastActivityAt time.Time            `json:"last_activity_at,omitempty"`
 }

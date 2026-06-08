@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
@@ -45,7 +44,7 @@ func (m *mockReviewModel) Chat(ctx context.Context, messages []model.Message, op
 	return m.Generate(ctx, "", options)
 }
 
-func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *mockReviewModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.Generate(ctx, "", options)
 }
 

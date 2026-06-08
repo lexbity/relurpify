@@ -106,7 +106,6 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 
 	// Container identity for lifecycle management.
 	containerName := "relurpify-sandbox-" + randSuffix()
-	handle := NewContainerHandle(containerName, runtimeName, runtimeBinary)
 
 	args := []string{"run", "--rm", "--name", containerName, "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
 	for _, mount := range r.protectedMounts() {
@@ -149,11 +148,6 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
-	execCtx, cancel := context.WithCancel(ctx)
-	if req.Timeout > 0 {
-		execCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
 	start := time.Now()
 	cmd := exec.Command(runtimeBinary, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -200,8 +194,6 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 				return
 			case <-time.After(grace):
 			}
-
-			_ = handle.CheckOOM(ctx, &oomKilled)
 
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 			select {

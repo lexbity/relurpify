@@ -18,13 +18,13 @@ import (
 //	per_item  → one block per array element at item_path
 //	per_field → one block per top-level field
 //	whole     → single block (fallback)
-func ChunkToolResult(result *ports.ToolResult, returns toolcapabilities.ToolManifestReturns, provenance capability.ContentProvenance) []capability.ContentBlock {
+func ChunkToolResult(result *ports.ToolResult, returns ports.ToolManifestReturns, provenance capability.ContentProvenance) []capability.ContentBlock {
 	if result == nil {
 		return nil
 	}
 
 	chunking := returns.Chunking
-	if chunking == nil || chunking.Mode == "" || chunking.Mode == toolcapabilities.ChunkingModeWhole {
+	if chunking == nil || chunking.Mode == "" || chunking.Mode == ports.ChunkingModeWhole {
 		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
@@ -41,23 +41,23 @@ func ChunkToolResult(result *ports.ToolResult, returns toolcapabilities.ToolMani
 	}
 }
 
-func chunkJSON(stdout string, chunking toolcapabilities.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
+func chunkJSON(stdout string, chunking ports.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	var parsed any
 	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
 		return capability.CapabilityResultBlocks(result, provenance)
 	}
 
 	switch chunking.Mode {
-	case toolcapabilities.ChunkingModePerItem:
+	case ports.ChunkingModePerItem:
 		return chunkJSONPerItem(parsed, chunking, result, provenance)
-	case toolcapabilities.ChunkingModePerField:
+	case ports.ChunkingModePerField:
 		return chunkJSONPerField(parsed, chunking, result, provenance)
 	default:
 		return capability.CapabilityResultBlocks(result, provenance)
 	}
 }
 
-func chunkJSONPerItem(parsed any, chunking toolcapabilities.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
+func chunkJSONPerItem(parsed any, chunking ports.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	var items []any
 
 	if chunking.ItemPath != "" {
@@ -99,7 +99,7 @@ func chunkJSONPerItem(parsed any, chunking toolcapabilities.ToolManifestReturnsC
 	return blocks
 }
 
-func chunkJSONPerField(parsed any, chunking toolcapabilities.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
+func chunkJSONPerField(parsed any, chunking ports.ToolManifestReturnsChunking, result *ports.ToolResult, provenance capability.ContentProvenance) []capability.ContentBlock {
 	m, ok := parsed.(map[string]any)
 	if !ok || len(m) == 0 {
 		return capability.CapabilityResultBlocks(result, provenance)

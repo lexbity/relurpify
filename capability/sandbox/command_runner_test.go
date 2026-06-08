@@ -39,7 +39,7 @@ func TestSandboxCommandRunner_ProcessGroupCleanupAfterTimeout(t *testing.T) {
 		t.Fatalf("sandbox verify failed: %v", err)
 	}
 
-	runner, err := NewSandboxCommandRunner(&sandbox.CommandRunnerConfig{
+	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{
 		Workspace: t.TempDir(),
 	}, rt)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestSandboxCommandRunner_ProcessGroupCleanupDoesNotPanicOnAlreadyExited(t *
 		t.Fatalf("sandbox verify failed: %v", err)
 	}
 
-	runner, err := NewSandboxCommandRunner(&sandbox.CommandRunnerConfig{
+	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{
 		Workspace: t.TempDir(),
 	}, rt)
 	if err != nil {

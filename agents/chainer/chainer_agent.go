@@ -22,7 +22,7 @@ import (
 // to its OutputKey.
 type ChainerAgent struct {
 	Model           model.LanguageModel
-	Tools           *capability.Registry
+	Tools           *capability.CapabilityRegistry
 	Config          *execution.Config
 	Chain           *Chain
 	ChainBuilder    func(*execution.Task) (*Chain, error)

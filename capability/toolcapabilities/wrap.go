@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // withCapability wraps a ports.Tool and overrides its capability class
@@ -16,8 +17,8 @@ import (
 type withCapability struct {
 	ports.Tool
 	trust  agentspec.TrustClass
-	risk   []agentspec.RiskClass
-	effect []agentspec.EffectClass
+	risk   []taxonomy.RiskClass
+	effect []taxonomy.EffectClass
 }
 
 func (w *withCapability) TrustClass() agentspec.TrustClass {
@@ -27,18 +28,18 @@ func (w *withCapability) TrustClass() agentspec.TrustClass {
 	return agentspec.TrustClassBuiltinTrusted
 }
 
-func (w *withCapability) RiskClasses() []agentspec.RiskClass {
-	return append([]agentspec.RiskClass(nil), w.risk...)
+func (w *withCapability) RiskClasses() []taxonomy.RiskClass {
+	return append([]taxonomy.RiskClass(nil), w.risk...)
 }
 
-func (w *withCapability) EffectClasses() []agentspec.EffectClass {
-	return append([]agentspec.EffectClass(nil), w.effect...)
+func (w *withCapability) EffectClasses() []taxonomy.EffectClass {
+	return append([]taxonomy.EffectClass(nil), w.effect...)
 }
 
 // wrapWithCapability returns a tool whose capability classes are sourced from
 // the manifest. When the manifest has no capability data, the original tool is
 // returned unchanged.
-func wrapWithCapability(tool ports.Tool, manifest toolcapabilities.ToolManifest) ports.Tool {
+func wrapWithCapability(tool ports.Tool, manifest ports.ToolManifest) ports.Tool {
 	if tool == nil {
 		return nil
 	}
@@ -47,13 +48,13 @@ func wrapWithCapability(tool ports.Tool, manifest toolcapabilities.ToolManifest)
 		return tool
 	}
 	trust := agentspec.TrustClass(cap.TrustClass)
-	risk := make([]agentspec.RiskClass, len(cap.RiskClass))
+	risk := make([]taxonomy.RiskClass, len(cap.RiskClass))
 	for i, c := range cap.RiskClass {
-		risk[i] = agentspec.RiskClass(c)
+		risk[i] = taxonomy.RiskClass(c)
 	}
-	effect := make([]agentspec.EffectClass, len(cap.EffectClass))
+	effect := make([]taxonomy.EffectClass, len(cap.EffectClass))
 	for i, c := range cap.EffectClass {
-		effect[i] = agentspec.EffectClass(c)
+		effect[i] = taxonomy.EffectClass(c)
 	}
 	return &withCapability{
 		Tool:   tool,
@@ -66,9 +67,9 @@ func wrapWithCapability(tool ports.Tool, manifest toolcapabilities.ToolManifest)
 // Compile-time check that withCapability implements the required interfaces.
 var _ ports.Tool = (*withCapability)(nil)
 var _ interface{ TrustClass() agentspec.TrustClass } = (*withCapability)(nil)
-var _ interface{ RiskClasses() []agentspec.RiskClass } = (*withCapability)(nil)
+var _ interface{ RiskClasses() []taxonomy.RiskClass } = (*withCapability)(nil)
 var _ interface {
-	EffectClasses() []agentspec.EffectClass
+	EffectClasses() []taxonomy.EffectClass
 } = (*withCapability)(nil)
 
 // Ensure the wrapped tool is available when wrapped.

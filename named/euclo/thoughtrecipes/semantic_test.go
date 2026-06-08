@@ -144,9 +144,9 @@ agent reviewer uses react
 	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
 		t.Fatalf("register hidden_tool: %v", err)
 	}
-	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: "hidden_tool"},
-		Access:   capability.CapabilityExposureHidden,
+		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
 	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()

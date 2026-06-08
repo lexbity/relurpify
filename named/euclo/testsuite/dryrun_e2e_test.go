@@ -32,11 +32,11 @@ func (h *countingCapabilityHandler) Descriptor(context.Context, *contextdata.Env
 	}
 }
 
-func (h *countingCapabilityHandler) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *countingCapabilityHandler) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.ToolResult, error) {
 	h.mu.Lock()
 	h.count++
 	h.mu.Unlock()
-	return &ports.CapabilityExecutionResult{Success: true, Data: map[string]any{"ok": true}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"ok": true}}, nil
 }
 
 func (h *countingCapabilityHandler) Count() int {

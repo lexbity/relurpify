@@ -56,7 +56,7 @@ type AgentBootstrapOptions struct {
 }
 
 type BootstrappedAgentRuntime struct {
-	Registry             *capability.Registry
+	Registry             *capability.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
 	Memory               *memory.WorkingMemoryStore

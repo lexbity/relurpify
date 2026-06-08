@@ -29,11 +29,11 @@ func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *dryRunCountingHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	h.mu.Lock()
 	h.invocations++
 	h.mu.Unlock()
-	return &ports.CapabilityExecutionResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
 }
 
 func (h *dryRunCountingHandler) count() int {
@@ -94,9 +94,9 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 	if err := reg.RegisterInvocableCapability(hidden); err != nil {
 		t.Fatalf("register hidden: %v", err)
 	}
-	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{ID: hidden.id},
-		Access:   capability.CapabilityExposureHidden,
+		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
 	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{

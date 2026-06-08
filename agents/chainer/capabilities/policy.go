@@ -5,6 +5,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/agents/chainer"
 	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // PolicyEvaluator determines whether a link can invoke a tool based on
@@ -17,11 +18,11 @@ import (
 //
 // Phase 6+ will add: user approval tracking, risk class evaluation, audit logging
 type PolicyEvaluator struct {
-	registry *capability.Registry
+	registry *capability.CapabilityRegistry
 }
 
 // NewPolicyEvaluator creates a policy evaluator with a tool registry.
-func NewPolicyEvaluator(registry *capability.Registry) *PolicyEvaluator {
+func NewPolicyEvaluator(registry *capability.CapabilityRegistry) *PolicyEvaluator {
 	return &PolicyEvaluator{
 		registry: registry,
 	}
@@ -105,7 +106,7 @@ func checkLinkConstraints(link *chainer.Link, toolID string) bool {
 //   - InsertionActionMetadataOnly: Include only metadata (no content)
 //   - InsertionActionHITLRequired: Require human approval
 //   - InsertionActionDenied: Block tool completely
-func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) capability.InsertionAction {
+func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) agentspec.InsertionAction {
 	// Ensure we have an evaluator to use CanInvoke
 	evaluator := e
 	if evaluator == nil {
@@ -114,7 +115,7 @@ func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) 
 
 	// Check if tool is allowed
 	if !evaluator.CanInvoke(link, toolID) {
-		return capability.InsertionActionDenied
+		return agentspec.InsertionActionDenied
 	}
 
 	// Phase 6: Default to direct inclusion
@@ -123,7 +124,7 @@ func (e *PolicyEvaluator) EvaluateToolAccess(link *chainer.Link, toolID string) 
 	// - Tool risk class (high-risk → HITL required)
 	// - Link data sensitivity
 
-	return capability.InsertionActionDirect
+	return agentspec.InsertionActionDirect
 }
 
 // ValidateRequiredTools checks that all required tools are available.
@@ -158,14 +159,14 @@ type ToolAccessPolicy struct {
 	LinkName      string
 	AllowedTools  []string // Allowed tools (nil = all)
 	RequiredTools []string // Required tools
-	DefaultAction capability.InsertionAction
+	DefaultAction agentspec.InsertionAction
 }
 
 // GetAccessPolicy returns the tool access policy for a link.
 func (e *PolicyEvaluator) GetAccessPolicy(link *chainer.Link) *ToolAccessPolicy {
 	if link == nil {
 		return &ToolAccessPolicy{
-			DefaultAction: capability.InsertionActionDirect,
+			DefaultAction: agentspec.InsertionActionDirect,
 		}
 	}
 
@@ -173,6 +174,6 @@ func (e *PolicyEvaluator) GetAccessPolicy(link *chainer.Link) *ToolAccessPolicy 
 		LinkName:      link.Name,
 		AllowedTools:  link.AllowedTools,
 		RequiredTools: link.RequiredTools,
-		DefaultAction: capability.InsertionActionDirect, // Phase 6 default
+		DefaultAction: agentspec.InsertionActionDirect, // Phase 6 default
 	}
 }

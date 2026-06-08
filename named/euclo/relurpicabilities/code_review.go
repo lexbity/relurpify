@@ -13,6 +13,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -41,11 +42,11 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		Category:      "review_synthesis",
 		Tags:          []string{"review", "llm", "relurpic"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -85,14 +86,14 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke reviews code from the envelope's user files or retrieval context.
-func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	focus, _ := stringArg(args, "focus")
 	if focus == "" {
 		focus = "all"
 	}
 
 	if !hasReviewContext(env) {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -106,7 +107,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 
 	contextText, fileCount := buildReviewContext(env)
 	if fileCount == 0 && strings.TrimSpace(contextText) == "" {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: true,
 			Data: map[string]interface{}{
 				"success":    true,
@@ -135,7 +136,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 		}
 	}
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

@@ -308,7 +308,7 @@ func (stubThoughtRecipeModel) Chat(context.Context, []model.Message, *model.LLMO
 	return &model.LLMResponse{Text: "{}"}, nil
 }
 
-func (stubThoughtRecipeModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (stubThoughtRecipeModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
@@ -316,7 +316,7 @@ type recordingThoughtRecipeModel struct {
 	nativeToolCalling bool
 	generatePrompts   []string
 	chatMessages      [][]model.Message
-	chatToolSpecs     [][]ports.LLMToolSpec
+	chatToolSpecs     [][]model.LLMToolSpec
 }
 
 func (m *recordingThoughtRecipeModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
@@ -342,11 +342,11 @@ func (m *recordingThoughtRecipeModel) Chat(ctx context.Context, messages []model
 	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (m *recordingThoughtRecipeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *recordingThoughtRecipeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
 	m.chatMessages = append(m.chatMessages, append([]model.Message(nil), messages...))
-	m.chatToolSpecs = append(m.chatToolSpecs, append([]ports.LLMToolSpec(nil), tools...))
+	m.chatToolSpecs = append(m.chatToolSpecs, append([]model.LLMToolSpec(nil), tools...))
 	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
@@ -394,7 +394,7 @@ func (h *recordingCapabilityHandler) Descriptor(context.Context, *contextdata.En
 	}
 }
 
-func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.called = true
@@ -402,7 +402,7 @@ func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env *contextdat
 	for key, value := range args {
 		h.args[key] = value
 	}
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]any{
 			"name": "code_review",
@@ -464,7 +464,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	return model, taskEnv, plan
 }
 
-func toolSpecNames(specs []ports.LLMToolSpec) []string {
+func toolSpecNames(specs []model.LLMToolSpec) []string {
 	if len(specs) == 0 {
 		return nil
 	}

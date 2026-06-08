@@ -37,5 +37,5 @@
 //	result, err := agent.Execute(ctx, task, envelope)
 //
 // Note: Euclo does not import REFERENCE_ONLY/euclo_broken_legacy or platform/ packages.
-// Platform access goes through capability invocations via framework/capability.Registry.
+// Platform access goes through capability invocations via framework/capability.CapabilityRegistry.
 package euclo

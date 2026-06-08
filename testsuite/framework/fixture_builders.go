@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -624,13 +623,13 @@ func clonePolicyRule(rule policy.PolicyRule) policy.PolicyRule {
 		ContextClasses:            append([]string(nil), rule.Conditions.ContextClasses...),
 		SensitivityClasses:        append([]string(nil), rule.Conditions.SensitivityClasses...),
 		RouteModes:                append([]string(nil), rule.Conditions.RouteModes...),
-		ProviderKinds:             append([]capability.ProviderKind(nil), rule.Conditions.ProviderKinds...),
+		ProviderKinds:             append([]string(nil), rule.Conditions.ProviderKinds...),
 		ExternalProviders:         append([]string(nil), rule.Conditions.ExternalProviders...),
-		MinRiskClasses:            append([]agentspec.RiskClass(nil), rule.Conditions.MinRiskClasses...),
-		TrustClasses:              append([]agentspec.TrustClass(nil), rule.Conditions.TrustClasses...),
-		CapabilityKinds:           append([]agentspec.CapabilityKind(nil), rule.Conditions.CapabilityKinds...),
-		RuntimeFamilies:           append([]agentspec.CapabilityRuntimeFamily(nil), rule.Conditions.RuntimeFamilies...),
-		EffectClasses:             append([]agentspec.EffectClass(nil), rule.Conditions.EffectClasses...),
+		MinRiskClasses:            append([]taxonomy.RiskClass(nil), rule.Conditions.MinRiskClasses...),
+		TrustClasses:              append([]string(nil), rule.Conditions.TrustClasses...),
+		CapabilityKinds:           append([]string(nil), rule.Conditions.CapabilityKinds...),
+		RuntimeFamilies:           append([]string(nil), rule.Conditions.RuntimeFamilies...),
+		EffectClasses:             append([]taxonomy.EffectClass(nil), rule.Conditions.EffectClasses...),
 		Partitions:                append([]string(nil), rule.Conditions.Partitions...),
 		ChannelIDs:                append([]string(nil), rule.Conditions.ChannelIDs...),
 		SessionScopes:             append([]policy.SessionScope(nil), rule.Conditions.SessionScopes...),

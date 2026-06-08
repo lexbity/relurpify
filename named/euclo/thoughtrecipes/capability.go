@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	capability "codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -225,23 +225,23 @@ func CapabilityRequirementsSatisfied(trigger TriggerPolicyRequirements, capabili
 func capabilityRequiresWrite(desc capability.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case agentspec.EffectClassFilesystemMutation,
-			agentspec.EffectClassProcessSpawn,
-			agentspec.EffectClassNetworkEgress,
-			agentspec.EffectClassCredentialUse,
-			agentspec.EffectClassExternalState,
-			agentspec.EffectClassSessionCreation:
+		case taxonomy.EffectClassFilesystemMutation,
+			taxonomy.EffectClassProcessSpawn,
+			taxonomy.EffectClassNetworkEgress,
+			taxonomy.EffectClassCredentialUse,
+			taxonomy.EffectClassExternalState,
+			taxonomy.EffectClassSessionCreation:
 			return true
 		}
 	}
 	for _, risk := range desc.RiskClasses {
 		switch risk {
-		case agentspec.RiskClassDestructive,
-			agentspec.RiskClassExecute,
-			agentspec.RiskClassNetwork,
-			agentspec.RiskClassCredentialed,
-			agentspec.RiskClassExfiltration,
-			agentspec.RiskClassSessioned:
+		case taxonomy.RiskClassDestructive,
+			taxonomy.RiskClassExecute,
+			taxonomy.RiskClassNetwork,
+			taxonomy.RiskClassCredentialed,
+			taxonomy.RiskClassExfiltration,
+			taxonomy.RiskClassSessioned:
 			return true
 		}
 	}

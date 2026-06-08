@@ -75,7 +75,7 @@ func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	return false
 }
 
-func registerClarificationCapability(reg *capability.Registry) error {
+func registerClarificationCapability(reg *capability.CapabilityRegistry) error {
 	if reg == nil {
 		return nil
 	}
@@ -98,7 +98,7 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, *contextdat
 	}
 }
 
-func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
 	if err != nil {
@@ -160,7 +160,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		grounding, anchors, validationErrs := buildGroundingFromState(state, args)
 		if len(validationErrs) > 0 {
 			emitClarificationAnswered(ctx, env, state, grounding, validationErrs)
-			return &ports.CapabilityExecutionResult{
+			return &ports.ToolResult{
 				Success: false,
 				Error:   strings.Join(validationErrs, "; "),
 				Data:    result,
@@ -193,7 +193,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 	case clarificationActionProject:
 		plan, planErr := buildProjectionPlanFromState(state)
 		if planErr != nil {
-			return &ports.CapabilityExecutionResult{
+			return &ports.ToolResult{
 				Success: false,
 				Error:   planErr.Error(),
 				Data:    result,
@@ -252,7 +252,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 			emitClarificationGateResult(ctx, env, state, false, "unresolved", "missing handoff target")
 			result["next_thoughtrecipe_id"] = ""
 			result["unresolved"] = true
-			return &ports.CapabilityExecutionResult{
+			return &ports.ToolResult{
 				Success: false,
 				Error:   "clarification handoff requires a next thoughtrecipe id",
 				Data:    result,
@@ -261,14 +261,14 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, env *contex
 		emitClarificationCompleted(ctx, env, state, nextThoughtRecipeID)
 		result["next_thoughtrecipe_id"] = nextThoughtRecipeID
 	default:
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("unsupported clarification action %q", action),
 			Data:    result,
 		}, fmt.Errorf("unsupported clarification action %q", action)
 	}
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data:    result,
 	}, nil

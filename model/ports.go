@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -175,6 +174,15 @@ type LLMToolSpec struct {
 	InputSchema *Schema `json:"input_schema,omitempty"`
 }
 
-// Schema is a JSON Schema type descriptor, aliased to schemacoerce.Schema
-// to ensure a single canonical definition.
-type Schema = schemacoerce.Schema
+// Schema is a JSON Schema type descriptor for LLM tool parameter definitions.
+type Schema struct {
+	Type        string             `json:"type,omitempty" yaml:"type,omitempty"`
+	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
+	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
+	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
+	Default     interface{}        `json:"default,omitempty" yaml:"default,omitempty"`
+	Enum        []interface{}      `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
+	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
+	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
+}

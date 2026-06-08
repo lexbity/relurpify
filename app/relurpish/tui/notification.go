@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,7 +17,7 @@ import (
 // Notification tea messages emitted by NotificationBar.
 type NotifHITLApproveMsg struct {
 	ID     string
-	Scope  fauthorization.GrantScope // OneTime, Session, or Persistent (always)
+	Scope  policy.GrantScope // OneTime, Session, or Persistent (always)
 	Action string                    // raw HITL action, e.g. "tool:cli_mkdir"
 }
 type NotifHITLDenyMsg struct{ ID string }
@@ -197,21 +198,21 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopeOneTime, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: policy.GrantScopeOneTime, Action: action}
 			}
 		}
 	case "s", "S":
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopeSession, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: policy.GrantScopeSession, Action: action}
 			}
 		}
 	case "a", "A":
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopePersistent, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: policy.GrantScopePersistent, Action: action}
 			}
 		}
 	case "n", "N":

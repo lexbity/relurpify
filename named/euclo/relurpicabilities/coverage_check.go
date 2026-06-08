@@ -8,6 +8,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -37,11 +38,11 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 		Category:      "verification",
 		Tags:          []string{"testing", "coverage", "shell", "tool"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
-		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassExecute},
+		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassProcessSpawn},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -101,7 +102,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env *contextdata.
 }
 
 // Invoke runs go test -cover and returns per-package coverage results.
-func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}
@@ -144,7 +145,7 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env *contextdata.Enve
 
 	passed := res.ExitCode == 0 && (threshold == 0 || totalCoverage >= threshold)
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,

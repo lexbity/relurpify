@@ -2,6 +2,8 @@ package capability
 
 import (
 	"sort"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // CapabilitySnapshot pairs an admitted capability descriptor with its current
@@ -9,7 +11,7 @@ import (
 // policy-denied entries without consulting live registry internals.
 type CapabilitySnapshot struct {
 	Descriptor CapabilityDescriptor
-	Exposure   CapabilityExposure
+	Exposure   agentspec.CapabilityExposure
 }
 
 // AllCapabilitySnapshots returns every admitted capability together with its

@@ -10,6 +10,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -40,11 +41,11 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextda
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "ast", "write"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassDestructive},
-		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassFilesystemMutation},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassDestructive},
+		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -108,7 +109,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env *contextda
 }
 
 // Invoke locates the target symbol and applies the transformation.
-func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
 		return failResult("symbol argument is required"), nil
@@ -178,7 +179,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.E
 
 	if preview {
 		result["updated_content"] = newContent
-		return &ports.CapabilityExecutionResult{Success: true, Data: result}, nil
+		return &ports.ToolResult{Success: true, Data: result}, nil
 	}
 
 	if err := h.authorizeFileWrite(ctx, h.env, resolvedSourcePath); err != nil {
@@ -191,7 +192,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env *contextdata.E
 		_ = h.env.IndexManager.RefreshFiles([]string{resolvedSourcePath})
 	}
 	result["applied"] = true
-	return &ports.CapabilityExecutionResult{Success: true, Data: result}, nil
+	return &ports.ToolResult{Success: true, Data: result}, nil
 }
 
 type targetedRefactorProposal struct {

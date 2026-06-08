@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/governance/identity"
@@ -36,7 +35,7 @@ type WorkspaceScanner struct {
 	ExcludeGlobs  []string
 	Scanners      []Scanner
 	QuarantineDir string
-	FileScope     *fsandbox.FileScopePolicy
+	FileScope     *permissions.FileScopePolicy
 }
 
 // Scan performs a full workspace scan.
@@ -105,7 +104,7 @@ func (s *WorkspaceScanner) Scan(ctx context.Context, root string) (*ScanReport, 
 }
 
 // SetFileScope configures the filesystem boundary enforced during workspace scans.
-func (s *WorkspaceScanner) SetFileScope(scope *fsandbox.FileScopePolicy) {
+func (s *WorkspaceScanner) SetFileScope(scope *permissions.FileScopePolicy) {
 	s.FileScope = scope
 }
 

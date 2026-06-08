@@ -17,7 +17,7 @@ import (
 var rewooErrReplanRequired = errors.New("rewoo: replan required")
 
 type rewooExecutor struct {
-	Registry           *capability.Registry
+	Registry           *capability.CapabilityRegistry
 	PermissionChecker  permissions.CapabilityChecker
 	OnFailure          StepOnFailure
 	MaxSteps           int
@@ -96,7 +96,7 @@ func (e *rewooExecutor) Execute(ctx context.Context, plan *RewooPlan, env *conte
 }
 
 // ExecutePlan runs a ReWOO plan mechanically without any LLM involvement.
-func ExecutePlan(ctx context.Context, registry *capability.Registry, plan *RewooPlan, env *contextdata.Envelope, opts RewooOptions) ([]RewooStepResult, error) {
+func ExecutePlan(ctx context.Context, registry *capability.CapabilityRegistry, plan *RewooPlan, env *contextdata.Envelope, opts RewooOptions) ([]RewooStepResult, error) {
 	executor := &rewooExecutor{
 		Registry:        registry,
 		OnFailure:       opts.OnFailure,

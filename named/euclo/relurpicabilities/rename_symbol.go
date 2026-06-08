@@ -9,6 +9,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -34,10 +35,10 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 		Description:   "Renames a symbol across the workspace using AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "rename", "ast", "write"},
-		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassDestructive},
-		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassFilesystemMutation},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassDestructive},
+		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -61,7 +62,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env *contextdata.E
 	}
 }
 
-func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	from, ok := stringArg(args, "from")
 	if !ok || strings.TrimSpace(from) == "" {
 		return failResult("from argument is required"), fmt.Errorf("from argument is required")
@@ -162,7 +163,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env *contextdata.Envel
 	if preview {
 		result["updated_files"] = previewFiles
 	}
-	return &ports.CapabilityExecutionResult{Success: true, Data: result}, nil
+	return &ports.ToolResult{Success: true, Data: result}, nil
 }
 
 func (h *RenameSymbolHandler) normalizedFileHint(fileHint string) (string, error) {

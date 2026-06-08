@@ -21,7 +21,7 @@ import (
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
 type GoalConAgent struct {
 	Model            model.LanguageModel
-	Tools            *capability.Registry
+	Tools            *capability.CapabilityRegistry
 	Memory           *memory.WorkingMemoryStore
 	Config           *execution.Config
 	Operators        *OperatorRegistry

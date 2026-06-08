@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
@@ -129,7 +128,7 @@ func TestDefaultPolicyAllowRejectedAtRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy(agentspec.AgentPermissionAllow)
+	m.SetDefaultPolicy("allow")
 }
 
 func TestDefaultPolicyAskIsValid(t *testing.T) {
@@ -143,7 +142,7 @@ func TestDefaultPolicyAskIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy(agentspec.AgentPermissionAsk)
+	m.SetDefaultPolicy("ask")
 }
 
 func TestDefaultPolicyDenyIsValid(t *testing.T) {
@@ -157,7 +156,7 @@ func TestDefaultPolicyDenyIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	m.SetDefaultPolicy("deny")
 }
 
 func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {

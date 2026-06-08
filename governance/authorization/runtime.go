@@ -8,16 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
+
+// SandboxBackendFactory creates a SandboxRuntime for the given backend.
+type SandboxBackendFactory func(ctx context.Context, backend string, cfg SandboxConfig, image, workspace string) (SandboxRuntime, error)
 
 // RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
@@ -27,7 +28,8 @@ type RuntimeConfig struct {
 	ConfigPath       string
 	Image            string
 	Backend          string
-	Sandbox          sandbox.SandboxConfig
+	SandboxCfg       SandboxConfig
+	BackendFactory   SandboxBackendFactory
 	AuditLimit       int
 	BaseFS           string
 	StateDir         string
@@ -39,7 +41,7 @@ type AgentRegistration struct {
 	ID               string
 	Manifest         *config.AgentManifest
 	ManifestSnapshot *config.AgentManifestSnapshot
-	Runtime          sandbox.SandboxRuntime
+	Runtime          SandboxRuntime
 	Permissions      *PermissionManager
 	Policy           PolicyEngine
 	Audit            policy.AuditLogger
@@ -83,7 +85,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if image == "" && agentManifest != nil {
 		image = agentManifest.Spec.Image
 	}
-	runtime, err := SelectSandboxRuntime(cfg.Backend, cfg.Sandbox, image, cfg.BaseFS)
+	runtime, err := selectSandboxRuntime(ctx, cfg.Backend, cfg.SandboxCfg, image, cfg.BaseFS, cfg.BackendFactory)
 	if err != nil {
 		return nil, err
 	}
@@ -92,23 +94,23 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := policy.NewInMemoryAuditLogger(cfg.AuditLimit)
-	var permissions *PermissionManager
+	var permManager *PermissionManager
 	if len(agentManifest.Spec.Permissions.FileSystem) > 0 ||
 		len(agentManifest.Spec.Permissions.Executables) > 0 ||
 		len(agentManifest.Spec.Permissions.Network) > 0 ||
 		len(agentManifest.Spec.Permissions.Capabilities) > 0 ||
 		len(agentManifest.Spec.Permissions.IPC) > 0 {
-		permissions, err = NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
+		permManager, err = NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
 		if err != nil {
 			return nil, fmt.Errorf("permission manager init: %w", err)
 		}
 	}
-	if permissions != nil {
+	if permManager != nil {
 		stateDir := cfg.StateDir
 		if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
 			stateDir = filepath.Join(cfg.BaseFS, secretscan.RuntimeStateDirName)
 		}
-		permissions.SetFilesystemGuardRoots(
+		permManager.SetFilesystemGuardRoots(
 			[]string{
 				filepath.Join(cfg.BaseFS, "relurpify_cfg"),
 				filepath.Join(cfg.BaseFS, ".git"),
@@ -122,16 +124,16 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 						"agent spec sets default_policy=allow which is not permitted; " +
 							"use default_policy=ask for HITL or declare explicit permissions")
 				}
-				permissions.SetDefaultPolicy(policy)
+				permManager.SetDefaultPolicy(string(policy))
 			}
 		}
-		permissions.AttachRuntime(runtime)
+		permManager.AttachRuntime(runtime)
 	}
-	policy := BuildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
-	if err := runtime.ValidatePolicy(policy); err != nil {
+	sboxPolicy := buildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
+	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
-	if err := runtime.ApplyPolicy(ctx, policy); err != nil {
+	if err := runtime.ApplyPolicy(ctx, sboxPolicy); err != nil {
 		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
 	}
 	return &AgentRegistration{
@@ -139,47 +141,24 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		Manifest:         agentManifest,
 		ManifestSnapshot: manifestSnapshot,
 		Runtime:          runtime,
-		Permissions:      permissions,
+		Permissions:      permManager,
 		Audit:            audit,
 		HITL:             hitl,
 	}, nil
 }
 
-// SelectSandboxRuntime returns a sandbox runtime for the given backend.
-// Supported backends: "" (defaults to gvisor), "gvisor", "docker".
-// Unsupported backends ("local", "none", or any unknown value) return an error.
-// This is the central, policy-resolved chokepoint for obtaining a sandbox runtime.
-// The supported-backend vocabulary is defined by sandbox.SupportedSandboxBackends;
-// cfgload validation derives from the same source.
-func SelectSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string) (sandbox.SandboxRuntime, error) {
-	b := strings.ToLower(strings.TrimSpace(backend))
-	if b == "" {
-		b = "gvisor"
+// selectSandboxRuntime returns a sandbox runtime using the provided factory.
+func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg SandboxConfig, image, workspace string, factory SandboxBackendFactory) (SandboxRuntime, error) {
+	if factory != nil {
+		return factory(ctx, backend, sandboxCfg, image, workspace)
 	}
-	if !sandbox.IsSupportedSandboxBackend(b) {
-		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
-		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: %s)", backend, supported)
-	}
-	switch b {
-	case "gvisor":
-		return sandbox.NewSandboxRuntime(sandboxCfg), nil
-	case "docker":
-		return dockersandbox.NewBackend(dockersandbox.Config{
-			DockerPath: sandboxCfg.ContainerRuntime,
-			Image:      image,
-			Workspace:  workspace,
-		}), nil
-	default:
-		return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
-	}
+	return nil, fmt.Errorf("no sandbox backend factory configured")
 }
 
-// BuildSandboxPolicy constructs a sandbox policy from an agent manifest and
-// protected paths. Protected paths are always included; manifest-derived
-// rules (network, read-only, no-new-privileges) are added when the manifest
-// is non-nil.
-func BuildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
-	policy := sandbox.SandboxPolicy{
+// buildSandboxPolicy constructs a sandbox policy from an agent manifest and
+// protected paths.
+func buildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) SandboxPolicy {
+	policy := SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
 	if agentManifest == nil {
@@ -191,16 +170,14 @@ func BuildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []st
 	return policy
 }
 
-// buildNetworkPolicy converts network permissions into sandbox-friendly rules
-// so the selected backend enforces the same view of allowed hosts/ports as the
-// permission manager.
-func buildNetworkPolicy(perms []permissions.NetworkPermission) []sandbox.NetworkRule {
-	var rules []sandbox.NetworkRule
+// buildNetworkPolicy converts network permissions into sandbox-friendly rules.
+func buildNetworkPolicy(perms []permissions.NetworkPermission) []NetworkRule {
+	var rules []NetworkRule
 	for _, perm := range perms {
 		if perm.Direction != "egress" {
 			continue
 		}
-		rules = append(rules, sandbox.NetworkRule{
+		rules = append(rules, NetworkRule{
 			Direction: perm.Direction,
 			Protocol:  perm.Protocol,
 			Host:      perm.Host,
@@ -233,7 +210,7 @@ func (r *AgentRegistration) QueryAudit(ctx context.Context, filter policy.AuditQ
 }
 
 // GrantPermission allows operators to programmatically approve scopes.
-func (r *AgentRegistration) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
+func (r *AgentRegistration) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
 	if r == nil || r.Permissions == nil {
 		return
 	}

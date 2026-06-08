@@ -14,8 +14,8 @@ type ApprovalRequest struct {
 	Manager            *PermissionManager
 	Permission         permissions.PermissionDescriptor
 	Justification      string
-	Scope              GrantScope
-	Risk               RiskLevel
+	Scope              policy.GrantScope
+	Risk               policy.RiskLevel
 	Duration           time.Duration
 	MissingManagerErr  string
 	DenyReasonFallback string

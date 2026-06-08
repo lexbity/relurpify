@@ -29,7 +29,7 @@ type ResourceReadResult struct {
 
 type InvocableCapabilityHandler interface {
 	CapabilityHandler
-	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error)
+	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error)
 }
 
 type PromptCapabilityHandler interface {

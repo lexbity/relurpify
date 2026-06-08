@@ -15,7 +15,7 @@ func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{}
+	returns := ports.ToolManifestReturns{}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
 	require.Len(t, blocks, 1)
 	_, ok := blocks[0].(capability.StructuredContentBlock)
@@ -27,10 +27,10 @@ func TestChunkToolResultNonJSONFallback(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": "plain text"},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModePerItem,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
@@ -42,10 +42,10 @@ func TestChunkPerItemFromArray(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `[{"path":"a.go","line":1},{"path":"b.go","line":2}]`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode:      toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode:      ports.ChunkingModePerItem,
 			RefFields: []string{"path", "line"},
 		},
 	}
@@ -67,10 +67,10 @@ func TestChunkPerItemFromObjectWithMatches(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `{"matches":[{"path":"a.go","line":1},{"path":"b.go","line":2}]}`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode:      toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode:      ports.ChunkingModePerItem,
 			RefFields: []string{"path"},
 		},
 	}
@@ -83,10 +83,10 @@ func TestChunkPerItemWithItemPath(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `{"data":{"items":[{"id":1},{"id":2},{"id":3}]}}`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode:     toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode:     ports.ChunkingModePerItem,
 			ItemPath: "data.items[]",
 		},
 	}
@@ -99,10 +99,10 @@ func TestChunkPerField(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `{"name":"test","version":1,"active":true}`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModePerField,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModePerField,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
@@ -121,10 +121,10 @@ func TestChunkWholeReturnsSingleBlock(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `[1,2,3]`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModeWhole,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModeWhole,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
@@ -136,10 +136,10 @@ func TestChunkMalformedJSONFallback(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": `{invalid json`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModePerItem,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
@@ -151,10 +151,10 @@ func TestChunkEmptyStdoutFallback(t *testing.T) {
 		Success: true,
 		Data:    map[string]interface{}{"stdout": ""},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModePerItem,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})
@@ -167,10 +167,10 @@ func TestChunkResultPreservesErrorBlock(t *testing.T) {
 		Error:   "something failed",
 		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
 	}
-	returns := toolcapabilities.ToolManifestReturns{
+	returns := ports.ToolManifestReturns{
 		Type: "json",
-		Chunking: &toolcapabilities.ToolManifestReturnsChunking{
-			Mode: toolcapabilities.ChunkingModePerItem,
+		Chunking: &ports.ToolManifestReturnsChunking{
+			Mode: ports.ChunkingModePerItem,
 		},
 	}
 	blocks := ChunkToolResult(result, returns, capability.ContentProvenance{})

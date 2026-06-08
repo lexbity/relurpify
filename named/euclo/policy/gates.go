@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -26,7 +27,7 @@ const (
 // PermissionManager captures the subset of authorization.PermissionManager
 // behavior required by GateNode.
 type PermissionManager interface {
-	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope authorization.GrantScope, risk authorization.RiskLevel, duration time.Duration) error
+	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error
 }
 
 // HITLBroker captures the subset of authorization.HITLBroker behavior required
@@ -184,7 +185,7 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 				RequiresHITL: true,
 			},
 			Justification:   n.reasonString(decision),
-			Scope:           authorization.GrantScopeOneTime,
+			Scope:           govpolicy.GrantScopeOneTime,
 			Risk:            n.riskLevel(decision),
 			Duration:        0,
 			Timeout:         n.approvalTimeout,
@@ -216,7 +217,7 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 			Resource:     n.resourceID(env),
 			RequiresHITL: true,
 		}
-		if err := n.permissionManager.RequireApproval(ctx, n.agentID, desc, n.reasonString(decision), authorization.GrantScopeOneTime, n.riskLevel(decision), n.approvalTimeout); err != nil {
+		if err := n.permissionManager.RequireApproval(ctx, n.agentID, desc, n.reasonString(decision), govpolicy.GrantScopeOneTime, n.riskLevel(decision), n.approvalTimeout); err != nil {
 			return nil, err
 		}
 		return &interaction.HITLResponse{ChosenSlot: "approve"}, nil
@@ -242,11 +243,11 @@ func (n *GateNode) reasonString(decision *PolicyDecision) string {
 	return strings.Join(decision.ReasonCodes, ", ")
 }
 
-func (n *GateNode) riskLevel(decision *PolicyDecision) authorization.RiskLevel {
+func (n *GateNode) riskLevel(decision *PolicyDecision) govpolicy.RiskLevel {
 	if decision != nil && decision.HITLRequired {
-		return authorization.RiskLevelMedium
+		return govpolicy.RiskLevelMedium
 	}
-	return authorization.RiskLevelLow
+	return govpolicy.RiskLevelLow
 }
 
 func (n *GateNode) resourceID(env *contextdata.Envelope) string {

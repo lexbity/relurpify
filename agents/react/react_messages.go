@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -254,11 +255,11 @@ func summarizeToolResult(state *contextdata.Envelope, call model.ToolCall, res *
 // Summarized → moderate, MetadataOnly → minimal.
 func clipSizeForDecision(decision capability.InsertionDecision) int {
 	switch decision.Action {
-	case capability.InsertionActionDirect:
+	case agentspec.InsertionActionDirect:
 		return 4000
-	case capability.InsertionActionSummarized:
+	case agentspec.InsertionActionSummarized:
 		return 900
-	case capability.InsertionActionMetadataOnly:
+	case agentspec.InsertionActionMetadataOnly:
 		return 120
 	default:
 		return 320

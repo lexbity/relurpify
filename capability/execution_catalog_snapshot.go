@@ -8,13 +8,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ExecutionCapabilityCatalogEntry records the effective visibility of one
 // admitted capability for a single execution snapshot.
 type ExecutionCapabilityCatalogEntry struct {
 	Descriptor    CapabilityDescriptor
-	Exposure      CapabilityExposure
+	Exposure      agentspec.CapabilityExposure
 	Inspectable   bool
 	Callable      bool
 	ModelCallable bool
@@ -45,7 +46,7 @@ type ExecutionCapabilityCatalogSnapshot struct {
 	callableCapabilities   []CapabilityDescriptor
 	inspectableCaps        []CapabilityDescriptor
 	modelCallableTools     []ports.Tool
-	modelCallableToolSpecs []ports.LLMToolSpec
+	modelCallableToolSpecs []model.LLMToolSpec
 	policySnapshot         *PolicySnapshot
 	allowedCapabilities    []agentspec.CapabilitySelector
 }
@@ -78,7 +79,7 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 		callableCapabilities:   make([]CapabilityDescriptor, 0, len(r.entries)),
 		inspectableCaps:        make([]CapabilityDescriptor, 0, len(r.entries)),
 		modelCallableTools:     make([]ports.Tool, 0, len(r.entries)),
-		modelCallableToolSpecs: make([]ports.LLMToolSpec, 0, len(r.entries)),
+		modelCallableToolSpecs: make([]model.LLMToolSpec, 0, len(r.entries)),
 		policySnapshot:         r.capturePolicySnapshotLocked(now),
 		allowedCapabilities:    CloneCapabilitySelectors(r.allowedCapabilities),
 	}
@@ -102,9 +103,9 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 		catalogEntry := ExecutionCapabilityCatalogEntry{
 			Descriptor:    entry.descriptor,
 			Exposure:      exposure,
-			Inspectable:   exposure != CapabilityExposureHidden,
-			Callable:      exposure == CapabilityExposureCallable && available,
-			ModelCallable: exposure == CapabilityExposureCallable && available && (entry.legacyTool != nil || isInvocableCapabilityEntry(entry)),
+			Inspectable:   exposure != agentspec.CapabilityExposureHidden,
+			Callable:      exposure == agentspec.CapabilityExposureCallable && available,
+			ModelCallable: exposure == agentspec.CapabilityExposureCallable && available && (entry.legacyTool != nil || isInvocableCapabilityEntry(entry)),
 			LocalTool:     entry.legacyTool != nil,
 			localTool:     entry.legacyTool,
 		}
@@ -160,11 +161,11 @@ func (s *ExecutionCapabilityCatalogSnapshot) InspectableCapabilities() []Capabil
 }
 
 // ModelCallableLLMToolSpecs returns the precompiled LLM tool specs for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []ports.LLMToolSpec {
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []model.LLMToolSpec {
 	if s == nil {
 		return nil
 	}
-	return append([]ports.LLMToolSpec(nil), s.modelCallableToolSpecs...)
+	return append([]model.LLMToolSpec(nil), s.modelCallableToolSpecs...)
 }
 
 // ModelCallableTools returns the callable local tools for this execution.

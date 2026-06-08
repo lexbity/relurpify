@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // CommandHandler is a function that handles a slash command and returns the updated model.
@@ -939,7 +939,7 @@ func pendingHITLSummaryCmd(svc HITLServiceIface) tea.Cmd {
 }
 
 // approveHITLRootCmd approves a HITL request with the given scope.
-func approveHITLRootCmd(svc HITLServiceIface, requestID string, scope fauthorization.GrantScope) tea.Cmd {
+func approveHITLRootCmd(svc HITLServiceIface, requestID string, scope policy.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}

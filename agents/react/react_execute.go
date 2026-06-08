@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -89,7 +90,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 		Name: "file_read",
 		Args: map[string]any{"path": path},
 	}
-	observation := summarizeToolResult(env, call, res, capability.InsertionDecision{Action: capability.InsertionActionSummarized})
+	observation := summarizeToolResult(env, call, res, capability.InsertionDecision{Action: agentspec.InsertionActionSummarized})
 	history := append(getToolObservations(env), observation)
 	env.SetWorkingValue("react.tool_observations", history, contextdata.MemoryClassTask)
 	env.SetWorkingValue("react.last_tool_result", res.Data, contextdata.MemoryClassTask)

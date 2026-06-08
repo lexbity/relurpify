@@ -9,6 +9,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -39,11 +40,11 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 		Category:      "testing",
 		Tags:          []string{"testing", "shell", "tool"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassExecute},
-		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassProcessSpawn},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassExecute},
+		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassProcessSpawn},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -98,7 +99,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env *contextdata.Envelo
 }
 
 // Invoke executes the test command and returns parsed results.
-func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	command, ok := stringArg(args, "command")
 	if !ok {
@@ -138,7 +139,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 	// Execute command
 	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success":      false,
@@ -164,7 +165,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env *contextdata.Envelope, 
 		passed = false
 	}
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: res.ExitCode == 0,
 		Data: map[string]interface{}{
 			"success":      res.ExitCode == 0,

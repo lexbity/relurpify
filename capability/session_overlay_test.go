@@ -18,9 +18,9 @@ func (h *stubSessionHandler) Descriptor(_ context.Context, _ *contextdata.Envelo
 	return CapabilityDescriptor{ID: h.id}
 }
 
-func (h *stubSessionHandler) Invoke(_ context.Context, _ *contextdata.Envelope, _ map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *stubSessionHandler) Invoke(_ context.Context, _ *contextdata.Envelope, _ map[string]interface{}) (*ports.ToolResult, error) {
 	h.called = true
-	return &ports.CapabilityExecutionResult{Success: true, Data: map[string]any{"source": "session"}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"source": "session"}}, nil
 }
 
 func TestRegisterSessionCapability_NilEnvelope(t *testing.T) {

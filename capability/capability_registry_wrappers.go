@@ -12,7 +12,8 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/governance/policy"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // wrapTool decorates a tool with the instrumentation wrapper.
@@ -136,7 +137,7 @@ func (h instrumentCapabilityHandler) Availability(ctx context.Context, env *cont
 	return AvailabilitySpec{Available: true}
 }
 
-func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	invocable, ok := h.handler.(InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
@@ -264,7 +265,7 @@ func requestCapabilityApproval(ctx context.Context, desc CapabilityDescriptor, s
 		Resource:     stateSnapshot.agentID,
 		Metadata:     metadata,
 		RequiresHITL: true,
-	}, reason, GrantScopeOneTime, RiskLevelMedium, 0)
+	}, reason, policy.GrantScopeOneTime, policy.RiskLevelMedium, 0)
 }
 
 func enforceDescriptorExecutionPolicies(ctx context.Context, desc CapabilityDescriptor, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
@@ -330,7 +331,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			return nil, err
 		}
 	}
-	traceCtx, _ := telemetry.TraceContextFromContext(ctx)
+	traceCtx, _ := fwtelemetry.TraceContextFromContext(ctx)
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		meta := map[string]interface{}{
@@ -343,7 +344,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			meta["trace_id"] = traceCtx.TraceID
 			meta["span_id"] = traceCtx.SpanID
 		}
-		stateSnapshot.telemetry.Emit(Event{
+		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
 			Type:      EventToolCall,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s invoked", t.Tool.Name()),
@@ -410,7 +411,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 			metadata["error"] = err.Error()
 		}
 		metadata["duration_ms"] = time.Since(startedAt).Milliseconds()
-		stateSnapshot.telemetry.Emit(Event{
+		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
 			Type:      EventToolResult,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s completed", t.Tool.Name()),
@@ -440,7 +441,7 @@ func redactTelemetryMetadata(controller *runtimeSafetyController, metadata map[s
 	return RedactMetadataMap(metadata)
 }
 
-func emitCapabilitySecurityEvent(telemetry Telemetry, event string, desc CapabilityDescriptor, exposure CapabilityExposure, reason string) {
+func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, desc CapabilityDescriptor, exposure agentspec.CapabilityExposure, reason string) {
 	if telemetry == nil || desc.ID == "" {
 		return
 	}
@@ -462,7 +463,7 @@ func emitCapabilitySecurityEvent(telemetry Telemetry, event string, desc Capabil
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	telemetry.Emit(Event{
+	telemetry.Emit(fwtelemetry.Event{
 		Type:      EventStateChange,
 		Timestamp: time.Now().UTC(),
 		Message:   strings.ReplaceAll(event, "_", " "),
@@ -509,11 +510,11 @@ func (h legacyToolHandler) Availability(ctx context.Context, env *contextdata.En
 	return AvailabilitySpec{Available: true}
 }
 
-func emitCapabilityInvocationTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, args map[string]interface{}) {
+func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc CapabilityDescriptor, agentID string, args map[string]interface{}) {
 	if telemetry == nil {
 		return
 	}
-	telemetry.Emit(Event{
+	telemetry.Emit(fwtelemetry.Event{
 		Type:      EventCapabilityCall,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
@@ -528,7 +529,7 @@ func emitCapabilityInvocationTelemetry(telemetry Telemetry, desc CapabilityDescr
 	})
 }
 
-func emitCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *ports.CapabilityExecutionResult, err error, duration time.Duration) {
+func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc CapabilityDescriptor, agentID string, result *ports.ToolResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -549,7 +550,7 @@ func emitCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescripto
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(Event{
+	telemetry.Emit(fwtelemetry.Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),
@@ -557,7 +558,7 @@ func emitCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescripto
 	})
 }
 
-func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *PromptRenderResult, err error, duration time.Duration) {
+func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc CapabilityDescriptor, agentID string, result *PromptRenderResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -575,7 +576,7 @@ func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDes
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(Event{
+	telemetry.Emit(fwtelemetry.Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),
@@ -583,7 +584,7 @@ func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDes
 	})
 }
 
-func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityDescriptor, agentID string, result *ResourceReadResult, err error, duration time.Duration) {
+func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc CapabilityDescriptor, agentID string, result *ResourceReadResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -601,7 +602,7 @@ func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc CapabilityD
 		metadata["error"] = err.Error()
 	}
 	metadata["duration_ms"] = duration.Milliseconds()
-	telemetry.Emit(Event{
+	telemetry.Emit(fwtelemetry.Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s completed", desc.Name),

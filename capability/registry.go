@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -29,11 +29,8 @@ type AgentSpecAware interface {
 // SandboxScopeAware allows tools and capability handlers to receive the
 // sandbox-enforced file scope.
 type SandboxScopeAware interface {
-	SetSandboxScope(scope *sandbox.FileScopePolicy)
+	SetSandboxScope(scope *permissions.FileScopePolicy)
 }
-
-// Registry is an alias for CapabilityRegistry.
-type Registry = CapabilityRegistry
 
 // CapabilityRegistry maintains framework-owned capability descriptors plus the
 // narrowed local-tool runtime and temporary model-bridge shims used during the
@@ -49,19 +46,18 @@ type CapabilityRegistry struct {
 	permissionManager   PermissionManagerHandle
 	registeredAgentID   string
 	agentSpec           *agentspec.AgentRuntimeSpec
-	sandboxScope        *sandbox.FileScopePolicy
+	sandboxScope        *permissions.FileScopePolicy
 	runtimePolicy       *compiledRuntimePolicy
 	allowedCapabilities []agentspec.CapabilitySelector
 	allowedMatchers     []compiledSelector
 	toolPolicies        map[string]agentspec.ToolPolicy
 	capabilityPolicies  []agentspec.CapabilityPolicy
-	exposurePolicies    []CapabilityExposurePolicy
+	exposurePolicies    []agentspec.CapabilityExposurePolicy
 	globalPolicies      map[string]agentspec.AgentPermissionLevel
 	guidanceBroker      RecoveryGuidanceBroker
-	telemetry           Telemetry
+	telemetry           fwtelemetry.Telemetry
 	safety              *runtimeSafetyController
 	policyEngine        PolicyEngine
-	nodeProviders       map[string]NodeProvider
 	modelProfile        *model.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
@@ -94,6 +90,16 @@ func (r *CapabilityRegistry) SetMetrics(metrics *fwtelemetry.ToolCallMetrics) {
 	r.mu.Lock()
 	r.metrics = metrics
 	r.mu.Unlock()
+}
+
+// SetPolicyEngine wires a policy engine for capability evaluation.
+func (r *CapabilityRegistry) SetPolicyEngine(engine PolicyEngine) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.policyEngine = engine
 }
 
 // UseToolAdmission configures manifest-driven tool gating for legacy tool registration.
@@ -159,7 +165,7 @@ type RegistrationBatchItem struct {
 
 type admissionEvent struct {
 	descriptor CapabilityDescriptor
-	exposure   CapabilityExposure
+	exposure   agentspec.CapabilityExposure
 }
 
 func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
@@ -610,7 +616,7 @@ func (r *CapabilityRegistry) CallableTools() []ports.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]ports.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 			continue
 		}
 		if !toolAvailableForPrompt(entry.legacyTool) {
@@ -628,7 +634,7 @@ func (r *CapabilityRegistry) InspectableTools() []ports.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]ports.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == agentspec.CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, entry.legacyTool)
@@ -670,7 +676,7 @@ func (r *CapabilityRegistry) GetCoordinationTarget(idOrName string) (policy.Dele
 	if !ok || desc.Coordination == nil || !desc.Coordination.Target {
 		return CapabilityDescriptor{}, false
 	}
-	if r.EffectiveExposure(desc) == CapabilityExposureHidden {
+	if r.EffectiveExposure(desc) == agentspec.CapabilityExposureHidden {
 		return CapabilityDescriptor{}, false
 	}
 	return desc, true
@@ -687,7 +693,7 @@ func (r *CapabilityRegistry) CallableCapabilities() []CapabilityDescriptor {
 	defer r.mu.RUnlock()
 	res := make([]CapabilityDescriptor, 0, len(r.capabilities))
 	for _, capability := range r.capabilities {
-		if r.effectiveExposureLocked(capability) != CapabilityExposureCallable {
+		if r.effectiveExposureLocked(capability) != agentspec.CapabilityExposureCallable {
 			continue
 		}
 		res = append(res, capability)
@@ -708,7 +714,7 @@ func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.Capabili
 		if entry == nil || entry.descriptor.Coordination == nil || !entry.descriptor.Coordination.Target {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == agentspec.CapabilityExposureHidden {
 			continue
 		}
 		matched := true
@@ -731,7 +737,7 @@ func (r *CapabilityRegistry) InspectableCapabilities() []CapabilityDescriptor {
 	defer r.mu.RUnlock()
 	res := make([]CapabilityDescriptor, 0, len(r.capabilities))
 	for _, capability := range r.capabilities {
-		if r.effectiveExposureLocked(capability) == CapabilityExposureHidden {
+		if r.effectiveExposureLocked(capability) == agentspec.CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, capability)
@@ -763,7 +769,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(ports.Tool) bool) *Capabili
 		safety:              r.safety,
 		toolPolicies:        make(map[string]agentspec.ToolPolicy, len(r.toolPolicies)),
 		capabilityPolicies:  append([]agentspec.CapabilityPolicy{}, r.capabilityPolicies...),
-		exposurePolicies:    append([]CapabilityExposurePolicy{}, r.exposurePolicies...),
+		exposurePolicies:    append([]agentspec.CapabilityExposurePolicy{}, r.exposurePolicies...),
 		globalPolicies:      cloneGlobalPolicies(r.globalPolicies),
 	}
 	for name, pol := range r.toolPolicies {

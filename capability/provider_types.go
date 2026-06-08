@@ -7,59 +7,33 @@ import (
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-)
-
-type ProviderKind = agentspec.ProviderKind
-
-const (
-	ProviderKindBuiltin      ProviderKind = agentspec.ProviderKindBuiltin
-	ProviderKindPlugin       ProviderKind = agentspec.ProviderKindPlugin
-	ProviderKindMCPClient    ProviderKind = agentspec.ProviderKindMCPClient
-	ProviderKindMCPServer    ProviderKind = agentspec.ProviderKindMCPServer
-	ProviderKindAgentRuntime ProviderKind = agentspec.ProviderKindAgentRuntime
-	ProviderKindLSP          ProviderKind = agentspec.ProviderKindLSP
-	ProviderKindNodeDevice   ProviderKind = agentspec.ProviderKindNodeDevice
-)
-
-type RecoverabilityMode = policy.RecoverabilityMode
-
-const (
-	RecoverabilityEphemeral        RecoverabilityMode = policy.RecoverabilityEphemeral
-	RecoverabilityInProcess        RecoverabilityMode = policy.RecoverabilityInProcess
-	RecoverabilityPersistedRestore RecoverabilityMode = policy.RecoverabilityPersistedRestore
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type ProviderDescriptor struct {
-	ID                 string                  `json:"id"`
-	Kind               ProviderKind            `json:"kind"`
+	ID                 string                    `json:"id"`
+	Kind               agentspec.ProviderKind    `json:"kind"`
 	ConfiguredSource   string                  `json:"configured_source,omitempty"`
 	ActivationScope    string                  `json:"activation_scope,omitempty"`
 	TrustBaseline      agentspec.TrustClass    `json:"trust_baseline,omitempty"`
-	RecoverabilityMode RecoverabilityMode      `json:"recoverability_mode,omitempty"`
+	RecoverabilityMode policy.RecoverabilityMode `json:"recoverability_mode,omitempty"`
 	SupportsHealth     bool                    `json:"supports_health,omitempty"`
 	Security           ProviderSecurityProfile `json:"security,omitempty"`
 }
 
 type ProviderConfig struct {
 	ID              string               `json:"id"`
-	Kind            ProviderKind         `json:"kind"`
+	Kind            agentspec.ProviderKind `json:"kind"`
 	Enabled         bool                 `json:"enabled"`
 	Target          string               `json:"target,omitempty"`
 	ActivationScope string               `json:"activation_scope,omitempty"`
 	TrustBaseline   agentspec.TrustClass `json:"trust_baseline,omitempty"`
-	Recoverability  RecoverabilityMode   `json:"recoverability,omitempty"`
+	Recoverability  policy.RecoverabilityMode `json:"recoverability,omitempty"`
 	Config          map[string]any       `json:"config,omitempty"`
 }
 
-type ProviderOriginKind = agentspec.ProviderOriginKind
-
-const (
-	ProviderOriginLocal  ProviderOriginKind = agentspec.ProviderOriginLocal
-	ProviderOriginRemote ProviderOriginKind = agentspec.ProviderOriginRemote
-)
-
 type ProviderSecurityProfile struct {
-	Origin                     ProviderOriginKind `json:"origin,omitempty"`
+	Origin                     agentspec.ProviderOriginKind `json:"origin,omitempty"`
 	HoldsCredentials           bool               `json:"holds_credentials,omitempty"`
 	CredentialDomains          []string           `json:"credential_domains,omitempty"`
 	SafeForDirectInsertion     bool               `json:"safe_for_direct_insertion,omitempty"`
@@ -73,7 +47,7 @@ type ProviderSession struct {
 	WorkflowID     string                 `json:"workflow_id,omitempty"`
 	TaskID         string                 `json:"task_id,omitempty"`
 	TrustClass     agentspec.TrustClass   `json:"trust_class,omitempty"`
-	Recoverability RecoverabilityMode     `json:"recoverability,omitempty"`
+Recoverability  policy.RecoverabilityMode   `json:"recoverability,omitempty"`
 	CreatedAt      string                 `json:"created_at,omitempty"`
 	LastActivityAt string                 `json:"last_activity_at,omitempty"`
 	Health         string                 `json:"health,omitempty"`
@@ -88,7 +62,7 @@ type ProviderHealthSnapshot struct {
 
 type ProviderSnapshot struct {
 	ProviderID      string                 `json:"provider_id"`
-	Recoverability  RecoverabilityMode     `json:"recoverability,omitempty"`
+	Recoverability  policy.RecoverabilityMode `json:"recoverability,omitempty"`
 	Descriptor      ProviderDescriptor     `json:"descriptor"`
 	Health          ProviderHealthSnapshot `json:"health,omitempty"`
 	CapabilityIDs   []string               `json:"capability_ids,omitempty"`
@@ -146,7 +120,7 @@ func (d ProviderDescriptor) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch d.Kind {
-	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
+	case agentspec.ProviderKindBuiltin, agentspec.ProviderKindPlugin, agentspec.ProviderKindAgentRuntime, agentspec.ProviderKindLSP, agentspec.ProviderKindNodeDevice:
 	default:
 		return fmt.Errorf("provider kind %s invalid", d.Kind)
 	}
@@ -156,7 +130,7 @@ func (d ProviderDescriptor) Validate() error {
 		return fmt.Errorf("trust baseline %s invalid", d.TrustBaseline)
 	}
 	switch d.RecoverabilityMode {
-	case "", RecoverabilityEphemeral, RecoverabilityInProcess, RecoverabilityPersistedRestore:
+	case "", policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
 	default:
 		return fmt.Errorf("recoverability mode %s invalid", d.RecoverabilityMode)
 	}
@@ -171,7 +145,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch c.Kind {
-	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
+	case agentspec.ProviderKindBuiltin, agentspec.ProviderKindPlugin, agentspec.ProviderKindAgentRuntime, agentspec.ProviderKindLSP, agentspec.ProviderKindNodeDevice:
 	default:
 		return fmt.Errorf("provider kind %s invalid", c.Kind)
 	}
@@ -181,7 +155,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("trust baseline %s invalid", c.TrustBaseline)
 	}
 	switch c.Recoverability {
-	case "", RecoverabilityEphemeral, RecoverabilityInProcess, RecoverabilityPersistedRestore:
+	case "", policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
 	default:
 		return fmt.Errorf("recoverability mode %s invalid", c.Recoverability)
 	}
@@ -199,7 +173,7 @@ func (s ProviderSnapshot) Validate() error {
 		return fmt.Errorf("descriptor provider id %s does not match snapshot provider id %s", s.Descriptor.ID, s.ProviderID)
 	}
 	switch s.Recoverability {
-	case "", RecoverabilityEphemeral, RecoverabilityInProcess, RecoverabilityPersistedRestore:
+	case "", policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
 	default:
 		return fmt.Errorf("recoverability mode %s invalid", s.Recoverability)
 	}
@@ -214,7 +188,7 @@ func (s ProviderSessionSnapshot) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch s.Session.Recoverability {
-	case "", RecoverabilityEphemeral, RecoverabilityInProcess, RecoverabilityPersistedRestore:
+	case "", policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
 	default:
 		return fmt.Errorf("recoverability mode %s invalid", s.Session.Recoverability)
 	}
@@ -223,7 +197,7 @@ func (s ProviderSessionSnapshot) Validate() error {
 
 func (p ProviderSecurityProfile) Validate() error {
 	switch p.Origin {
-	case "", ProviderOriginLocal, ProviderOriginRemote:
+	case "", agentspec.ProviderOriginLocal, agentspec.ProviderOriginRemote:
 	default:
 		return fmt.Errorf("origin %s invalid", p.Origin)
 	}
@@ -263,7 +237,7 @@ func NormalizeProviderCapability(desc CapabilityDescriptor, provider ProviderDes
 	} else {
 		desc.TrustClass = moreRestrictiveTrustClass(desc.TrustClass, baseline)
 	}
-	if provider.Security.Origin == ProviderOriginRemote {
+	if provider.Security.Origin == agentspec.ProviderOriginRemote {
 		desc = normalizeRemoteCapabilityDescriptor(desc, provider)
 	}
 	return desc, nil
@@ -286,24 +260,24 @@ func normalizeRemoteCapabilityDescriptor(desc CapabilityDescriptor, provider Pro
 	return desc
 }
 
-func normalizeProviderCapabilityScope(scope agentspec.CapabilityScope, provider ProviderDescriptor) agentspec.CapabilityScope {
+func normalizeProviderCapabilityScope(scope taxonomy.CapabilityScope, provider ProviderDescriptor) taxonomy.CapabilityScope {
 	switch provider.Security.Origin {
-	case ProviderOriginRemote:
-		return agentspec.CapabilityScopeRemote
-	case ProviderOriginLocal:
-		if scope == agentspec.CapabilityScopeRemote {
-			return agentspec.CapabilityScopeRemote
+	case agentspec.ProviderOriginRemote:
+		return taxonomy.CapabilityScopeRemote
+	case agentspec.ProviderOriginLocal:
+		if scope == taxonomy.CapabilityScopeRemote {
+			return taxonomy.CapabilityScopeRemote
 		}
-		return agentspec.CapabilityScopeProvider
+		return taxonomy.CapabilityScopeProvider
 	default:
 		if scope != "" {
 			return scope
 		}
-		return agentspec.CapabilityScopeProvider
+		return taxonomy.CapabilityScopeProvider
 	}
 }
 
-func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope agentspec.CapabilityScope) agentspec.TrustClass {
+func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope taxonomy.CapabilityScope) agentspec.TrustClass {
 	if policy.DefaultTrust != "" {
 		return policy.DefaultTrust
 	}
@@ -311,11 +285,11 @@ func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentsp
 		return provider.TrustBaseline
 	}
 	switch scope {
-	case agentspec.CapabilityScopeRemote:
+	case taxonomy.CapabilityScopeRemote:
 		return agentspec.TrustClassRemoteDeclared
-	case agentspec.CapabilityScopeWorkspace:
+	case taxonomy.CapabilityScopeWorkspace:
 		return agentspec.TrustClassWorkspaceTrusted
-	case agentspec.CapabilityScopeBuiltin:
+	case taxonomy.CapabilityScopeBuiltin:
 		return agentspec.TrustClassBuiltinTrusted
 	default:
 		return agentspec.TrustClassProviderLocalUntrusted

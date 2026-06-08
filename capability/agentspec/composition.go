@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type MemoryMode string
@@ -102,16 +104,16 @@ func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
 		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
 	}
 	if selector.SourceScopes != nil {
-		selector.SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
+		selector.SourceScopes = append([]taxonomy.CapabilityScope{}, selector.SourceScopes...)
 	}
 	if selector.TrustClasses != nil {
 		selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
 	}
 	if selector.RiskClasses != nil {
-		selector.RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
+		selector.RiskClasses = append([]taxonomy.RiskClass{}, selector.RiskClasses...)
 	}
 	if selector.EffectClasses != nil {
-		selector.EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
+		selector.EffectClasses = append([]taxonomy.EffectClass{}, selector.EffectClasses...)
 	}
 	if selector.CoordinationRoles != nil {
 		selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
@@ -165,7 +167,7 @@ func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
 	return out
 }
 
-func capabilityScopesToStrings(values []CapabilityScope) []string {
+func capabilityScopesToStrings(values []taxonomy.CapabilityScope) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -181,7 +183,7 @@ func trustClassesToStrings(values []TrustClass) []string {
 	return out
 }
 
-func riskClassesToStrings(values []RiskClass) []string {
+func riskClassesToStrings(values []taxonomy.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -189,7 +191,7 @@ func riskClassesToStrings(values []RiskClass) []string {
 	return out
 }
 
-func effectClassesToStrings(values []EffectClass) []string {
+func effectClassesToStrings(values []taxonomy.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))

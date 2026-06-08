@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -22,16 +23,16 @@ func renderInsertionFilteredSummary(agent *ReActAgent, task *execution.Task, too
 	}
 	decision := resolveInsertionDecision(agent, task, envelope)
 	switch decision.Action {
-	case capability.InsertionActionDirect, capability.InsertionActionSummarized:
+	case agentspec.InsertionActionDirect, agentspec.InsertionActionSummarized:
 		if summary, ok := visibleBlockSummary(envelope); ok {
 			return summary, true
 		}
 		return summarizeToolPayload(payload), true
-	case capability.InsertionActionMetadataOnly:
+	case agentspec.InsertionActionMetadataOnly:
 		return metadataOnlyInsertionText(toolName, envelope), true
-	case capability.InsertionActionHITLRequired:
+	case agentspec.InsertionActionHITLRequired:
 		return fmt.Sprintf("output withheld pending approval for capability %s", capabilityDisplayName(toolName, envelope)), true
-	case capability.InsertionActionDenied:
+	case agentspec.InsertionActionDenied:
 		return "", false
 	default:
 		return "", false
@@ -48,7 +49,7 @@ func visibleBlockSummary(envelope *capability.CapabilityResultEnvelope) (string,
 			break
 		}
 		switch envelope.BlockInsertions[i].Decision.Action {
-		case capability.InsertionActionDirect, capability.InsertionActionSummarized:
+		case agentspec.InsertionActionDirect, agentspec.InsertionActionSummarized:
 		default:
 			continue
 		}

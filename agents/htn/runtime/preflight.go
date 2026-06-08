@@ -13,7 +13,7 @@ import (
 // planPreflight checks plan step required capabilities against the registry.
 // If the registry has no capabilities registered, the check is skipped (allows
 // fallback dispatch to work without failing upfront).
-func planPreflight(plan *plan.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+func planPreflight(plan *plan.Plan, registry *capability.CapabilityRegistry) (*graph.PreflightReport, error) {
 	report := &graph.PreflightReport{GeneratedAt: time.Now().UTC()}
 	if plan == nil || registry == nil {
 		return report, nil

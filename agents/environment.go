@@ -17,7 +17,7 @@ import (
 type AgentEnvironment struct {
 	Config         *execution.Config
 	Model          model.LanguageModel
-	Registry       *capability.Registry
+	Registry       *capability.CapabilityRegistry
 	Memory         *memory.WorkingMemoryStore
 	IndexManager   *ast.IndexManager
 	SearchEngine   *search.SearchEngine

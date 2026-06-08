@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -133,7 +134,7 @@ func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (capability.
 	return a.Tools.GetCapability(idOrName)
 }
 
-func executionCallableTools(registry *capability.Registry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []ports.Tool {
+func executionCallableTools(registry *capability.CapabilityRegistry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []ports.Tool {
 	if catalog != nil {
 		return catalog.ModelCallableTools()
 	}
@@ -215,7 +216,9 @@ func (a *ReActAgent) resolvedAgentPolicy() policy.ResolvedAgentPolicy {
 	if a == nil || a.Config == nil || a.Config.AgentSpec == nil {
 		return policy.ResolvedAgentPolicy{}
 	}
-	return policyresolve.ResolveAgentPolicy(a.Tools, a.Config.AgentSpec.Orchestration)
+	reg := capability.NewPolicyResolveRegistry(a.Tools)
+	cfg := agentspec.ToPolicyResolveOrchConfig(a.Config.AgentSpec.Orchestration)
+	return policyresolve.ResolveAgentPolicy(reg, cfg)
 }
 
 func (a *ReActAgent) recoveryProbeTools() []string {

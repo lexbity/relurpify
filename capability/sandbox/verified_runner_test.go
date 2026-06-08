@@ -32,7 +32,7 @@ type stubProviderRuntime struct {
 	runner CommandRunner
 }
 
-func (s *stubProviderRuntime) NewCommandRunner(_ *sandbox.CommandRunnerConfig) (CommandRunner, error) {
+func (s *stubProviderRuntime) NewCommandRunner(_ *CommandRunnerConfig) (CommandRunner, error) {
 	return s.runner, nil
 }
 
@@ -62,7 +62,7 @@ func TestNewVerifiedCommandRunner_Success(t *testing.T) {
 		},
 	}
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{
+	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
 
@@ -86,7 +86,7 @@ func TestNewVerifiedCommandRunner_VerifyFails(t *testing.T) {
 		verifyError: expectedErr,
 	}
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{
+	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
 
@@ -107,7 +107,7 @@ func TestNewVerifiedCommandRunner_NilRuntime(t *testing.T) {
 	ctx := context.Background()
 
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{
+	config := &CommandRunnerConfig{
 		Workspace: "/tmp/test",
 	}
 
@@ -132,7 +132,7 @@ func TestNewVerifiedCommandRunner_CommandRunnerProvider(t *testing.T) {
 		runner: fakeRunner,
 	}
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{}
+	config := &CommandRunnerConfig{}
 
 	runner, err := NewVerifiedCommandRunner(ctx, rt, policy, config)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestNewVerifiedCommandRunner_ValidatePolicyFails(t *testing.T) {
 		validateError: expectedErr,
 	}
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{
+	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
 
@@ -181,7 +181,7 @@ func TestNewVerifiedCommandRunner_ApplyPolicyFails(t *testing.T) {
 		applyError: expectedErr,
 	}
 	policy := SandboxPolicy{}
-	config := &sandbox.CommandRunnerConfig{
+	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
 

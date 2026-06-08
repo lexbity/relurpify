@@ -1,6 +1,7 @@
 package ayenitd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.CapabilityRegistry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil
@@ -22,6 +23,16 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		return fmt.Errorf("browser registry unavailable")
 	}
 	fileScope := fsandbox.NewFileScopePolicy(cfg.Workspace, nil)
+	bashCfg := &fauthorization.BashConfig{}
+	if spec != nil {
+		bashCfg.AllowPatterns = spec.Bash.AllowPatterns
+		bashCfg.DenyPatterns = spec.Bash.DenyPatterns
+		bashCfg.Default = string(spec.Bash.Default)
+	}
+	authPolicy := fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, bashCfg, "browser")
+	cmdPolicy := fsandbox.CommandPolicyFunc(func(ctx context.Context, req fsandbox.CommandRequest) error {
+		return authPolicy.CheckCommand(ctx, req.Args, req.Env)
+	})
 	browserService := browsersvc.New(browsersvc.BrowserServiceConfig{
 		WorkspaceRoot:     cfg.Workspace,
 		FileScope:         fileScope,
@@ -29,7 +40,7 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		Registry:          registry,
 		PermissionManager: registration.Permissions,
 		AgentSpec:         spec,
-		CommandPolicy:     fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, spec, "browser"),
+		CommandPolicy:     cmdPolicy,
 		DefaultBackend:    browserDefaultBackend(spec),
 		AllowedBackends:   browserAllowedBackends(spec),
 		Telemetry:         tel,

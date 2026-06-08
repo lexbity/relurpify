@@ -20,7 +20,7 @@ import (
 // RewooAgent executes a ReWOO-style plan with mechanical tool execution.
 type RewooAgent struct {
 	Model        model.LanguageModel
-	Tools        *capability.Registry
+	Tools        *capability.CapabilityRegistry
 	Memory       *memory.WorkingMemoryStore
 	Config       *execution.Config
 	IndexManager *ast.IndexManager

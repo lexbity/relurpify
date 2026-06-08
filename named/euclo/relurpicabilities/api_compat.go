@@ -10,6 +10,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -35,10 +36,10 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 		Description:   "Compares exported signatures between git refs and flags breaking changes",
 		Category:      "migration_compat",
 		Tags:          []string{"migration", "compatibility", "git", "api"},
-		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -61,7 +62,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env *contextdata.Enve
 	}
 }
 
-func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
 	}
@@ -120,7 +121,7 @@ func (h *APICompatHandler) Invoke(ctx context.Context, env *contextdata.Envelope
 	breaking, compatible := compareAPISignatures(baseRecords, headRecords)
 	summary := fmt.Sprintf("%d breaking changes and %d compatible additions across %d Go files", len(breaking), len(compatible), len(paths))
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":    true,

@@ -5,6 +5,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -19,8 +20,8 @@ type ParadigmInput struct {
 	InsertionPolicies   []agentspec.CapabilityPolicy
 	ToolExecutionPolicy map[string]agentspec.ToolPolicy
 	ProviderPolicies    map[string]agentspec.ProviderPolicy
-	Task                *capability.Task
-	Tools               *capability.Registry
+	Task                *execution.Task
+	Tools               *capability.CapabilityRegistry
 	Mode                string
 }
 
@@ -41,7 +42,7 @@ func (in *ParadigmInput) BuildRuntimeContext(consumerID string, state map[string
 	}
 }
 
-func extractVariables(task *capability.Task) map[string]string {
+func extractVariables(task *execution.Task) map[string]string {
 	if task == nil {
 		return nil
 	}

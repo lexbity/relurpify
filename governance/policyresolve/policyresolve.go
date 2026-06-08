@@ -4,14 +4,89 @@ import (
 	"sort"
 	"strings"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+)
+
+// RegistryView is the governance-owned view of the capability registry for
+// policy resolution. Descriptors are passed as any; callers must ensure
+// values returned by GetCapability and CallableCapabilities satisfy
+// ports.DescriptorView.
+type RegistryView interface {
+	GetCapability(idOrName string) (any, bool)
+	CallableCapabilities() []any
+	EffectiveExposure(desc any) string
+}
+
+// CapabilitySelector is a local type matching agentspec.CapabilitySelector fields
+// needed for policy resolution.
+type CapabilitySelector struct {
+	ID                          string
+	Name                        string
+	Kind                        string
+	RuntimeFamilies             []string
+	Tags                        []string
+	ExcludeTags                 []string
+	SourceScopes                []string
+	TrustClasses                []string
+	RiskClasses                 []string
+	EffectClasses               []string
+	CoordinationRoles           []string
+	CoordinationTaskTypes       []string
+	CoordinationExecutionModes  []string
+	CoordinationLongRunning     int32
+	CoordinationDirectInsertion int32
+}
+
+// AgentVerificationPolicy holds verification-related orchestration config.
+type AgentVerificationPolicy struct {
+	SuccessTools               []string
+	SuccessCapabilitySelectors []CapabilitySelector
+	StopOnSuccess              bool
+}
+
+// AgentRecoveryPolicy holds recovery-related orchestration config.
+type AgentRecoveryPolicy struct {
+	FailureProbeTools               []string
+	FailureProbeCapabilitySelectors []CapabilitySelector
+}
+
+// AgentPlanningPolicy holds planning-related orchestration config.
+type AgentPlanningPolicy struct {
+	RequiredBeforeEdit          []CapabilitySelector
+	PreferredEditCapabilities   []CapabilitySelector
+	PreferredVerifyCapabilities []CapabilitySelector
+	StepTemplates               []policy.SkillStepTemplate
+	RequireVerificationStep     bool
+}
+
+// AgentReviewPolicy holds review-related orchestration config.
+type AgentReviewPolicy struct {
+	Criteria        []string
+	FocusTags       []string
+	ApprovalRules   policy.AgentReviewApprovalRules
+	SeverityWeights map[string]float64
+}
+
+// AgentOrchestrationConfig mirrors agentspec.AgentOrchestrationConfig fields
+// needed for policy resolution.
+type AgentOrchestrationConfig struct {
+	PhaseCapabilities        map[string][]string
+	PhaseCapabilitySelectors map[string][]CapabilitySelector
+	Verification             AgentVerificationPolicy
+	Recovery                 AgentRecoveryPolicy
+	Planning                 AgentPlanningPolicy
+	Review                   AgentReviewPolicy
+}
+
+var (
+	capabilityExposureCallable = "callable"
 )
 
 // ResolveAgentPolicy resolves the agent spec's orchestration configuration
 // against the capability registry to produce a policy.ResolvedAgentPolicy.
-func ResolveAgentPolicy(registry *capability.Registry, config agentspec.AgentOrchestrationConfig) policy.ResolvedAgentPolicy {
+func ResolveAgentPolicy(registry RegistryView, config AgentOrchestrationConfig) policy.ResolvedAgentPolicy {
 	phaseCapabilities := resolvePhaseCapabilities(registry, config)
 	return policy.ResolvedAgentPolicy{
 		PhaseCapabilities:               phaseCapabilities,
@@ -21,7 +96,7 @@ func ResolveAgentPolicy(registry *capability.Registry, config agentspec.AgentOrc
 			RequiredBeforeEdit:          resolveCapabilityNames(registry, nil, config.Planning.RequiredBeforeEdit),
 			PreferredEditCapabilities:   resolveCapabilityNames(registry, nil, config.Planning.PreferredEditCapabilities),
 			PreferredVerifyCapabilities: resolveCapabilityNames(registry, nil, config.Planning.PreferredVerifyCapabilities),
-			StepTemplates:               append([]agentspec.SkillStepTemplate{}, config.Planning.StepTemplates...),
+			StepTemplates:               config.Planning.StepTemplates,
 			RequireVerificationStep:     config.Planning.RequireVerificationStep,
 		},
 		Review: policy.ResolvedReviewPolicy{
@@ -33,29 +108,15 @@ func ResolveAgentPolicy(registry *capability.Registry, config agentspec.AgentOrc
 	}
 }
 
-// ResolveEffectiveAgentPolicy resolves policy from the effective spec,
-// falling back through task context and the provided fallback spec.
-func ResolveEffectiveAgentPolicy(task *capability.Task, fallback *agentspec.AgentRuntimeSpec, registry *capability.Registry) policy.EffectiveAgentPolicy {
-	spec := effectiveSpec(task, fallback)
-	if spec == nil {
-		return policy.EffectiveAgentPolicy{}
-	}
+// ResolveEffectiveAgentPolicy resolves policy from the effective orchestration config.
+func ResolveEffectiveAgentPolicy(cfg AgentOrchestrationConfig, registry RegistryView) policy.EffectiveAgentPolicy {
 	return policy.EffectiveAgentPolicy{
-		Spec:   spec,
-		Policy: ResolveAgentPolicy(registry, spec.Orchestration),
+		Spec:   cfg,
+		Policy: ResolveAgentPolicy(registry, cfg),
 	}
 }
 
-func effectiveSpec(task *capability.Task, fallback *agentspec.AgentRuntimeSpec) *agentspec.AgentRuntimeSpec {
-	if task != nil && task.Context != nil {
-		if spec, ok := task.Context["agent_spec"].(*agentspec.AgentRuntimeSpec); ok && spec != nil {
-			return spec
-		}
-	}
-	return fallback
-}
-
-func resolvePhaseCapabilities(registry *capability.Registry, config agentspec.AgentOrchestrationConfig) map[string][]string {
+func resolvePhaseCapabilities(registry RegistryView, config AgentOrchestrationConfig) map[string][]string {
 	if len(config.PhaseCapabilities) == 0 && len(config.PhaseCapabilitySelectors) == 0 {
 		return nil
 	}
@@ -69,7 +130,7 @@ func resolvePhaseCapabilities(registry *capability.Registry, config agentspec.Ag
 	return out
 }
 
-func resolveCapabilityNames(registry *capability.Registry, explicit []string, selectors []agentspec.CapabilitySelector) []string {
+func resolveCapabilityNames(registry RegistryView, explicit []string, selectors []CapabilitySelector) []string {
 	var out []string
 	for _, name := range explicit {
 		name = strings.TrimSpace(name)
@@ -78,7 +139,7 @@ func resolveCapabilityNames(registry *capability.Registry, explicit []string, se
 		}
 		if registry != nil {
 			cd, ok := registry.GetCapability(name)
-			if !ok || registry.EffectiveExposure(cd) != capability.CapabilityExposureCallable {
+			if !ok || registry.EffectiveExposure(cd) != capabilityExposureCallable {
 				continue
 			}
 			name = resolvedCapabilityName(cd)
@@ -96,13 +157,13 @@ func resolveCapabilityNames(registry *capability.Registry, explicit []string, se
 				continue
 			}
 			cd, ok := registry.GetCapability(name)
-			if ok && registry.EffectiveExposure(cd) == capability.CapabilityExposureCallable && capability.SelectorMatchesDescriptor(selector, cd) {
+			if ok && registry.EffectiveExposure(cd) == capabilityExposureCallable && selectorMatchesDescriptor(selector, cd) {
 				out = mergeResolvedNames(out, []string{resolvedCapabilityName(cd)})
 			}
 			continue
 		}
 		for _, cd := range candidates {
-			if capability.SelectorMatchesDescriptor(selector, cd) {
+			if selectorMatchesDescriptor(selector, cd) {
 				out = mergeResolvedNames(out, []string{resolvedCapabilityName(cd)})
 			}
 		}
@@ -110,14 +171,14 @@ func resolveCapabilityNames(registry *capability.Registry, explicit []string, se
 	return out
 }
 
-func selectorCapabilityName(selector agentspec.CapabilitySelector) string {
+func selectorCapabilityName(selector CapabilitySelector) string {
 	if name := strings.TrimSpace(selector.Name); name != "" {
 		return name
 	}
 	return strings.TrimSpace(selector.ID)
 }
 
-func registryCapabilitiesSorted(registry *capability.Registry) []capability.CapabilityDescriptor {
+func registryCapabilitiesSorted(registry RegistryView) []any {
 	if registry == nil {
 		return nil
 	}
@@ -128,11 +189,123 @@ func registryCapabilitiesSorted(registry *capability.Registry) []capability.Capa
 	return capabilities
 }
 
-func resolvedCapabilityName(cap capability.CapabilityDescriptor) string {
-	if name := strings.TrimSpace(cap.Name); name != "" {
+func resolvedCapabilityName(desc any) string {
+	d, ok := desc.(ports.DescriptorView)
+	if !ok {
+		return ""
+	}
+	if name := strings.TrimSpace(d.CapabilityName()); name != "" {
 		return name
 	}
-	return strings.TrimSpace(cap.ID)
+	return strings.TrimSpace(d.CapabilityID())
+}
+
+func selectorMatchesDescriptor(selector CapabilitySelector, desc any) bool {
+	d, ok := desc.(ports.DescriptorView)
+	if !ok {
+		return false
+	}
+	if strings.TrimSpace(selector.ID) != "" && !strings.EqualFold(strings.TrimSpace(selector.ID), d.CapabilityID()) {
+		return false
+	}
+	if strings.TrimSpace(selector.Name) != "" && !strings.EqualFold(strings.TrimSpace(selector.Name), d.CapabilityName()) {
+		return false
+	}
+	if selector.Kind != "" && selector.Kind != d.CapabilityKind() {
+		return false
+	}
+	if len(selector.RuntimeFamilies) > 0 && !containsAny(selector.RuntimeFamilies, d.RuntimeFamily()) {
+		return false
+	}
+	if len(selector.Tags) > 0 && !containsAll(selector.Tags, d.Tags()) {
+		return false
+	}
+	if len(selector.ExcludeTags) > 0 && containsAnyInSlice(selector.ExcludeTags, d.Tags()) {
+		return false
+	}
+	if len(selector.SourceScopes) > 0 && !containsAny(selector.SourceScopes, d.SourceScope()) {
+		return false
+	}
+	if len(selector.TrustClasses) > 0 && !containsAny(selector.TrustClasses, d.TrustClass()) {
+		return false
+	}
+	if len(selector.RiskClasses) > 0 && !containsAnyInRiskClass(selector.RiskClasses, d.RiskClasses()) {
+		return false
+	}
+	if len(selector.EffectClasses) > 0 && !containsAnyInEffectClass(selector.EffectClasses, d.EffectClasses()) {
+		return false
+	}
+	if len(selector.CoordinationRoles) > 0 && !containsAny(selector.CoordinationRoles, d.CoordinationRole()) {
+		return false
+	}
+	if len(selector.CoordinationTaskTypes) > 0 && !containsAll(selector.CoordinationTaskTypes, d.CoordinationTaskTypes()) {
+		return false
+	}
+	if len(selector.CoordinationExecutionModes) > 0 && !containsAnyInSlice(selector.CoordinationExecutionModes, d.CoordinationExecutionModes()) {
+		return false
+	}
+	if selector.CoordinationLongRunning != 0 {
+		if d.CoordinationLongRunning() != selector.CoordinationLongRunning {
+			return false
+		}
+	}
+	if selector.CoordinationDirectInsertion != 0 {
+		if d.CoordinationDirectInsertionAllowed() != selector.CoordinationDirectInsertion {
+			return false
+		}
+	}
+	return true
+}
+
+func containsAny(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAnyInSlice(values, wants []string) bool {
+	for _, w := range wants {
+		for _, v := range values {
+			if v == w {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsAnyInRiskClass(values []string, want []taxonomy.RiskClass) bool {
+	for _, w := range want {
+		for _, v := range values {
+			if string(w) == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsAnyInEffectClass(values []string, want []taxonomy.EffectClass) bool {
+	for _, w := range want {
+		for _, v := range values {
+			if string(w) == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsAll(values []string, haystack []string) bool {
+	for _, want := range values {
+		if !containsAny(haystack, want) {
+			return false
+		}
+	}
+	return true
 }
 
 func mergeResolvedNames(base, extra []string) []string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -15,7 +14,7 @@ type (
 	LLMResponse      = model.LLMResponse
 	TokenUsageReport = telemetry.TokenUsageReport
 	Message          = model.Message
-	LLMToolSpec      = ports.LLMToolSpec
+	LLMToolSpec      = model.LLMToolSpec
 )
 
 // SessionAwareBackend is implemented by backends that can bind and evict

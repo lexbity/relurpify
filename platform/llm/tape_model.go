@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -216,7 +215,7 @@ func (t *TapeModel) Chat(ctx context.Context, messages []model.Message, options 
 	})
 }
 
-func (t *TapeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (t *TapeModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name)

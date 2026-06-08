@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
@@ -23,7 +22,7 @@ func TestPermissionManagerBlocksWorkspaceMetadataAndStateByDefault(t *testing.T)
 
 	pm, err := NewPermissionManager(workspace, declared, nil, nil)
 	require.NoError(t, err)
-	pm.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	pm.SetDefaultPolicy("deny")
 	pm.SetFilesystemGuardRoots(
 		[]string{
 			filepath.Join(workspace, "relurpify_cfg"),
@@ -48,7 +47,7 @@ func TestPermissionManagerAllowsExplicitStateDirDeclaration(t *testing.T) {
 
 	pm, err := NewPermissionManager(workspace, declared, nil, nil)
 	require.NoError(t, err)
-	pm.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	pm.SetDefaultPolicy("deny")
 	pm.SetFilesystemGuardRoots(
 		[]string{
 			filepath.Join(workspace, "relurpify_cfg"),

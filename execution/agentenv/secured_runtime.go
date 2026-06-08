@@ -86,7 +86,16 @@ func buildSecuredRuntime(ctx context.Context, in SecuredRuntimeInput) (*SecuredR
 	}
 	var cmdPolicy sandbox.CommandPolicy
 	if permManager != nil {
-		cmdPolicy = fauthorization.NewCommandAuthorizationPolicy(permManager, in.AgentID, in.AgentSpec, "sandbox")
+		bashCfg := &fauthorization.BashConfig{}
+		if in.AgentSpec != nil {
+			bashCfg.AllowPatterns = in.AgentSpec.Bash.AllowPatterns
+			bashCfg.DenyPatterns = in.AgentSpec.Bash.DenyPatterns
+			bashCfg.Default = string(in.AgentSpec.Bash.Default)
+		}
+		authPolicy := fauthorization.NewCommandAuthorizationPolicy(permManager, in.AgentID, bashCfg, "sandbox")
+		cmdPolicy = sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {
+			return authPolicy.CheckCommand(ctx, req.Args, req.Env)
+		})
 	} else {
 		cmdPolicy = defaultDenyPolicy()
 	}
@@ -132,12 +141,12 @@ func buildRunnerForInputImpl(in SecuredRuntimeInput) (sandbox.CommandRunner, *sa
 	if in.SecurityBundle == nil {
 		return nil, nil, fmt.Errorf("security bundle required to build sandbox runner")
 	}
-	sboxRuntime, err := fauthorization.SelectSandboxRuntime(in.SandboxBackend, sandbox.SandboxConfig{}, "", in.Workspace)
+	sboxRuntime, err := newSandboxRuntime(in.SandboxBackend, sandbox.SandboxConfig{}, "", in.Workspace)
 	if err != nil {
 		return nil, nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
 	runnerConfig := buildRunnerConfig(in.Workspace, in.Manifest)
-	sboxPolicy := fauthorization.BuildSandboxPolicy(in.Manifest, append([]string(nil), in.SecurityBundle.Sandbox.ProtectedPaths...))
+	sboxPolicy := newSandboxPolicy(in.Manifest, in.SecurityBundle.Sandbox.ProtectedPaths)
 	runner, err := sandbox.NewVerifiedCommandRunner(in.Context, sboxRuntime, sboxPolicy, runnerConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build verified runner: %w", err)
@@ -156,4 +165,35 @@ func defaultDenyPolicy() sandbox.CommandPolicy {
 			Policy:  "default-deny",
 		}
 	})
+}
+
+// newSandboxRuntime creates a sandbox runtime for the given backend.
+func newSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string) (sandbox.SandboxRuntime, error) {
+	b := strings.ToLower(strings.TrimSpace(backend))
+	if b == "" {
+		b = "gvisor"
+	}
+	if !sandbox.IsSupportedSandboxBackend(b) {
+		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
+		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: %s)", backend, supported)
+	}
+	switch b {
+	case "gvisor":
+		return sandbox.NewSandboxRuntime(sandboxCfg), nil
+	default:
+		return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
+	}
+}
+
+// newSandboxPolicy constructs a sandbox policy from an agent manifest.
+func newSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) sandbox.SandboxPolicy {
+	policy := sandbox.SandboxPolicy{
+		ProtectedPaths: append([]string(nil), protectedPaths...),
+	}
+	if agentManifest == nil {
+		return policy
+	}
+	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
+	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
+	return policy
 }

@@ -273,11 +273,11 @@ func envGetString(env *contextdata.Envelope, key string) string {
 }
 
 func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) string {
-	var fallback *agentspec.AgentRuntimeSpec
-	if agent != nil && agent.Config != nil {
-		fallback = agent.Config.AgentSpec
+	var cfg policyresolve.AgentOrchestrationConfig
+	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
+		cfg = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}
-	effective := policyresolve.ResolveEffectiveAgentPolicy(task, fallback, nil)
+	effective := policyresolve.ResolveEffectiveAgentPolicy(cfg, nil)
 	if effective.Spec == nil {
 		return "Consider correctness, completeness, quality, security, performance."
 	}
@@ -292,11 +292,11 @@ func reflectionApprovalPasses(agent *ReflectionAgent, env *contextdata.Envelope,
 }
 
 func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
-	var fallback *agentspec.AgentRuntimeSpec
-	if agent != nil && agent.Config != nil {
-		fallback = agent.Config.AgentSpec
+	var cfg policyresolve.AgentOrchestrationConfig
+	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
+		cfg = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}
-	effective := policyresolve.ResolveEffectiveAgentPolicy(nil, fallback, nil)
+	effective := policyresolve.ResolveEffectiveAgentPolicy(cfg, nil)
 	if effective.Spec == nil {
 		return reflectionAssessment{
 			Allowed:              review.Approve,

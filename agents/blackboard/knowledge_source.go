@@ -34,7 +34,7 @@ type KnowledgeSource interface {
 	CanActivate(bb *Blackboard) bool
 	// Execute reads from bb, does work, and writes results back.
 	// The semctx parameter provides typed access to pre-resolved semantic context.
-	Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, model model.LanguageModel, semctx execctx.AgentSemanticContext) error
+	Execute(ctx context.Context, bb *Blackboard, tools *capability.CapabilityRegistry, model model.LanguageModel, semctx execctx.AgentSemanticContext) error
 	// Priority breaks ties when multiple KS can activate. Higher wins.
 	Priority() int
 }

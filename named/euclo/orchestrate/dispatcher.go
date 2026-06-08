@@ -19,7 +19,7 @@ import (
 // selected route for downstream nodes.
 type Dispatcher struct {
 	id                    string
-	capabilityRegistry    *capability.Registry
+	capabilityRegistry    *capability.CapabilityRegistry
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	workspace             string
 }
@@ -30,7 +30,7 @@ func NewDispatcher(id string) *Dispatcher {
 }
 
 // WithCapabilityRegistry wires the capability registry used for route selection.
-func (d *Dispatcher) WithCapabilityRegistry(reg *capability.Registry) *Dispatcher {
+func (d *Dispatcher) WithCapabilityRegistry(reg *capability.CapabilityRegistry) *Dispatcher {
 	if d != nil && reg != nil {
 		d.capabilityRegistry = reg
 	}

@@ -10,9 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/ports"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -22,14 +21,16 @@ import (
 var ErrDelegationNotFound = errors.New("delegation not found")
 
 type DelegationCapabilityRegistry interface {
-	CapturePolicySnapshot() *capability.PolicySnapshot
-	GetCoordinationTarget(idOrName string) (policy.DelegationTarget, bool)
-	CoordinationTargets(selectors ...agentspec.CapabilitySelector) []policy.DelegationTarget
-	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
+	GetCoordinationTarget(idOrName string) (governanceports.DescriptorView, bool)
+	CoordinationTargets(selectors ...governanceports.CapabilitySelectorView) []governanceports.DescriptorView
+	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (any, error)
+	CapturePolicySnapshot() *policy.PolicySnapshot
+	EffectiveCoordination(spec governanceports.SpecView) governanceports.CoordinationSpecView
+	BuildDelegationResult(request policy.DelegationRequest, target governanceports.DescriptorView, result any, invokeErr error, snapshot *policy.PolicySnapshot, spec governanceports.SpecView, callerTrust string) *policy.DelegationResult
 }
 
 type BackgroundDelegationOutcome struct {
-	Result *ports.ToolResult
+	Result any
 	Error  error
 }
 
@@ -42,29 +43,29 @@ type BackgroundDelegationHandle struct {
 }
 
 type DelegationBackgroundRunner interface {
-	StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target policy.DelegationTarget, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
+	StartBackgroundDelegation(ctx context.Context, request policy.DelegationRequest, target governanceports.DescriptorView, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
 }
 
 type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
-	AgentSpec        *agentspec.AgentRuntimeSpec
+	AgentSpec        governanceports.SpecView
 	State            *contextdata.Envelope
 	LifecycleRepo    agentlifecycle.Repository
 	WorkflowRunID    string
 	WorkflowStepID   string
 	CallerAgentID    string
-	CallerTrust      agentspec.TrustClass
+	CallerTrust      string
 	Recoverability   policy.RecoverabilityMode
 	Background       bool
 	Metadata         map[string]any
 }
 
 type DelegationStartOptions struct {
-	TrustClass     agentspec.TrustClass
+	TrustClass     string
 	Recoverability policy.RecoverabilityMode
 	Background     bool
-	PolicySnapshot *capability.PolicySnapshot
+	PolicySnapshot *policy.PolicySnapshot
 	Metadata       map[string]any
 	OnCancel       func(context.Context, policy.DelegationSnapshot) error
 }
@@ -105,7 +106,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	if opts.Registry == nil {
 		return nil, fmt.Errorf("delegation registry required")
 	}
-	coordination := agentspec.EffectiveCoordination(opts.AgentSpec)
+	coordination := opts.Registry.EffectiveCoordination(opts.AgentSpec)
 	target, err := resolveDelegationTarget(request, opts.Registry, coordination)
 	if err != nil {
 		return nil, err
@@ -115,9 +116,9 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	}
 	request = cloneDelegationRequest(request)
 	request.CallerAgentID = firstNonEmpty(request.CallerAgentID, opts.CallerAgentID)
-	request.TargetCapabilityID = target.ID
-	request.TargetProviderID = firstNonEmpty(request.TargetProviderID, target.Source.ProviderID)
-	request.TargetSessionID = firstNonEmpty(request.TargetSessionID, target.Source.SessionID)
+	request.TargetCapabilityID = target.CapabilityID()
+	request.TargetProviderID = firstNonEmpty(request.TargetProviderID, target.SourceProviderID())
+	request.TargetSessionID = firstNonEmpty(request.TargetSessionID, target.SourceSessionID())
 	request.ResourceRefs = resolveDelegationResourceRefs(request, target, opts)
 	args, err := buildDelegationInvocationArgs(ctx, request, target, opts)
 	if err != nil {
@@ -128,7 +129,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	runBackground := shouldRunDelegationInBackground(target, opts.Background)
 	if runBackground {
 		if opts.BackgroundRunner == nil {
-			return nil, fmt.Errorf("background delegation runner required for %s", target.Name)
+			return nil, fmt.Errorf("background delegation runner required for %s", target.CapabilityName())
 		}
 		handle, err := opts.BackgroundRunner.StartBackgroundDelegation(ctx, request, target, args, opts)
 		if err != nil {
@@ -137,12 +138,12 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 		request.TargetProviderID = firstNonEmpty(request.TargetProviderID, handle.ProviderID)
 		request.TargetSessionID = firstNonEmpty(request.TargetSessionID, handle.SessionID)
 		started, err := m.StartDelegation(ctx, request, DelegationStartOptions{
-			TrustClass:     target.TrustClass,
+			TrustClass:     target.TrustClass(),
 			Recoverability: effectiveDelegationRecoverability(firstRecoverability(handle.Recoverability, opts.Recoverability)),
 			Background:     true,
 			PolicySnapshot: policySnapshot,
 			Metadata: mergeAnyMaps(opts.Metadata, map[string]any{
-				"target_role":   string(target.Coordination.Role),
+				"target_role":   target.CoordinationRole(),
 				"task_type":     request.TaskType,
 				"resource_refs": append([]string{}, request.ResourceRefs...),
 			}),
@@ -155,12 +156,12 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 		return started, nil
 	}
 	started, err := m.StartDelegation(ctx, request, DelegationStartOptions{
-		TrustClass:     target.TrustClass,
+		TrustClass:     target.TrustClass(),
 		Recoverability: effectiveDelegationRecoverability(opts.Recoverability),
 		Background:     opts.Background,
 		PolicySnapshot: policySnapshot,
 		Metadata: mergeAnyMaps(opts.Metadata, map[string]any{
-			"target_role":   string(target.Coordination.Role),
+			"target_role":   target.CoordinationRole(),
 			"task_type":     request.TaskType,
 			"resource_refs": append([]string{}, request.ResourceRefs...),
 		}),
@@ -168,8 +169,8 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	if err != nil {
 		return nil, err
 	}
-	result, invokeErr := opts.Registry.InvokeCapability(ctx, effectiveDelegationState(opts.State), target.ID, args)
-	delegationResult := buildDelegationResult(request, target, result, invokeErr, policySnapshot, opts.AgentSpec, opts.CallerTrust)
+	result, invokeErr := opts.Registry.InvokeCapability(ctx, effectiveDelegationState(opts.State), target.CapabilityID(), args)
+	delegationResult := opts.Registry.BuildDelegationResult(request, target, result, invokeErr, policySnapshot, opts.AgentSpec, opts.CallerTrust)
 	completed, completeErr := m.CompleteDelegation(started.Request.ID, delegationResult)
 	if completeErr != nil {
 		return nil, completeErr
@@ -418,71 +419,73 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentli
 	return nil
 }
 
-func resolveDelegationTarget(request policy.DelegationRequest, registry DelegationCapabilityRegistry, coordination agentspec.AgentCoordinationSpec) (capability.CapabilityDescriptor, error) {
+func resolveDelegationTarget(request policy.DelegationRequest, registry DelegationCapabilityRegistry, coordination governanceports.CoordinationSpecView) (governanceports.DescriptorView, error) {
 	if registry == nil {
-		return capability.CapabilityDescriptor{}, fmt.Errorf("delegation registry required")
+		return nil, fmt.Errorf("delegation registry required")
 	}
 	targetID := strings.TrimSpace(request.TargetCapabilityID)
 	if targetID != "" {
-		dt, ok := registry.GetCoordinationTarget(targetID)
+		target, ok := registry.GetCoordinationTarget(targetID)
 		if !ok {
-			return capability.CapabilityDescriptor{}, fmt.Errorf("delegation target %s not admitted", targetID)
-		}
-		target, ok := dt.(capability.CapabilityDescriptor)
-		if !ok {
-			return capability.CapabilityDescriptor{}, fmt.Errorf("delegation target %s has unexpected descriptor type", targetID)
+			return nil, fmt.Errorf("delegation target %s not admitted", targetID)
 		}
 		return target, nil
 	}
-	selectors := make([]agentspec.CapabilitySelector, 0, len(coordination.DelegationTargetSelectors))
+	selectors := make([]governanceports.CapabilitySelectorView, 0, len(coordination.DelegationTargetSelectors))
 	for _, selector := range coordination.DelegationTargetSelectors {
 		selectors = append(selectors, selector)
 	}
 	candidates := registry.CoordinationTargets(selectors...)
-	for _, dt := range candidates {
-		candidate, ok := dt.(capability.CapabilityDescriptor)
-		if !ok {
+	for _, candidate := range candidates {
+		if !delegationSelectorMatchesTaskType(request.TaskType, candidate) {
 			continue
 		}
-		if !capability.SelectorMatchesDescriptor(agentspec.CapabilitySelector{
-			CoordinationTaskTypes: []string{request.TaskType},
-		}, candidate) {
-			continue
-		}
-		if role := delegationRequestedRole(request); role != "" && (candidate.Coordination == nil || candidate.Coordination.Role != role) {
+		if role := delegationRequestedRole(request); role != "" && candidate.CoordinationRole() != role {
 			continue
 		}
 		return candidate, nil
 	}
 	if role := delegationRequestedRole(request); role != "" {
-		return capability.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s and role %s", request.TaskType, role)
+		return nil, fmt.Errorf("no admitted delegation target for task type %s and role %s", request.TaskType, role)
 	}
-	return capability.CapabilityDescriptor{}, fmt.Errorf("no admitted delegation target for task type %s", request.TaskType)
+	return nil, fmt.Errorf("no admitted delegation target for task type %s", request.TaskType)
 }
 
-func validateDelegationTargetPolicy(request policy.DelegationRequest, target capability.CapabilityDescriptor, coordination agentspec.AgentCoordinationSpec) error {
-	if target.Coordination == nil || !target.Coordination.Target {
-		return fmt.Errorf("capability %s is not a coordination target", target.ID)
+func delegationSelectorMatchesTaskType(taskType string, target governanceports.DescriptorView) bool {
+	if taskType == "" {
+		return true
+	}
+	for _, tt := range target.CoordinationTaskTypes() {
+		if strings.EqualFold(strings.TrimSpace(tt), strings.TrimSpace(taskType)) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateDelegationTargetPolicy(request policy.DelegationRequest, target governanceports.DescriptorView, coordination governanceports.CoordinationSpecView) error {
+	if !target.CoordinationTarget() {
+		return fmt.Errorf("capability %s is not a coordination target", target.CapabilityID())
 	}
 	if coordination.MaxDelegationDepth > 0 && request.Depth > coordination.MaxDelegationDepth {
 		return fmt.Errorf("delegation depth %d exceeds max %d", request.Depth, coordination.MaxDelegationDepth)
 	}
-	if target.RuntimeFamily == agentspec.CapabilityRuntimeFamilyProvider && target.Source.Scope == agentspec.CapabilityScopeRemote && !coordination.AllowRemoteDelegation {
-		return fmt.Errorf("remote delegation to %s is not allowed", target.Name)
+	if target.RuntimeFamily() == "provider" && target.SourceScope() == string(taxonomy.CapabilityScopeRemote) && !coordination.AllowRemoteDelegation {
+		return fmt.Errorf("remote delegation to %s is not allowed", target.CapabilityName())
 	}
-	if target.Coordination.LongRunning == capability.EnabledStateEnabled && !coordination.AllowBackgroundDelegation {
-		return fmt.Errorf("background delegation to %s is not allowed", target.Name)
+	if target.CoordinationLongRunning() == 1 && !coordination.AllowBackgroundDelegation {
+		return fmt.Errorf("background delegation to %s is not allowed", target.CapabilityName())
 	}
-	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.Coordination.ExecutionModes) && target.Coordination.LongRunning != capability.EnabledStateEnabled {
-		return fmt.Errorf("delegation target %s is not background-capable", target.Name)
+	if requestPrefersBackground(request) && !containsBackgroundExecutionMode(target.CoordinationExecutionModes()) && target.CoordinationLongRunning() != 1 {
+		return fmt.Errorf("delegation target %s is not background-capable", target.CapabilityName())
 	}
 	if requestPrefersBackground(request) && !coordination.AllowBackgroundDelegation {
-		return fmt.Errorf("session-backed or background delegation to %s is not allowed", target.Name)
+		return fmt.Errorf("session-backed or background delegation to %s is not allowed", target.CapabilityName())
 	}
 	return nil
 }
 
-func resolveDelegationResourceRefs(request policy.DelegationRequest, target capability.CapabilityDescriptor, opts DelegationExecutionOptions) []string {
+func resolveDelegationResourceRefs(request policy.DelegationRequest, target governanceports.DescriptorView, opts DelegationExecutionOptions) []string {
 	if len(request.ResourceRefs) > 0 {
 		return dedupeStringSlice(request.ResourceRefs)
 	}
@@ -491,7 +494,7 @@ func resolveDelegationResourceRefs(request policy.DelegationRequest, target capa
 	return nil
 }
 
-func buildDelegationInvocationArgs(ctx context.Context, request policy.DelegationRequest, target capability.CapabilityDescriptor, opts DelegationExecutionOptions) (map[string]any, error) {
+func buildDelegationInvocationArgs(ctx context.Context, request policy.DelegationRequest, target governanceports.DescriptorView, opts DelegationExecutionOptions) (map[string]any, error) {
 	args := map[string]any{
 		"instruction":   request.Instruction,
 		"task_id":       request.TaskID,
@@ -503,68 +506,29 @@ func buildDelegationInvocationArgs(ctx context.Context, request policy.Delegatio
 	}
 	// TODO: Implement resource projection via lifecycle repository in Phase 4
 	// For now, skip resource summaries
-	role := agentspec.CoordinationRole("")
-	if target.Coordination != nil {
-		role = target.Coordination.Role
-	}
+	role := target.CoordinationRole()
 	switch role {
-	case agentspec.CoordinationRoleArchitect:
+	case "architect":
 		args["context_summary"] = ""
-	case agentspec.CoordinationRoleReviewer:
+	case "reviewer":
 		args["artifact_summary"] = ""
 		args["acceptance_criteria"] = normalizeStringArray(args["acceptance_criteria"])
-	case agentspec.CoordinationRoleVerifier:
+	case "verifier":
 		args["artifact_summary"] = ""
 		if criteria, ok := args["verification_criteria"]; ok {
 			args["verification_criteria"] = normalizeStringArray(criteria)
 		} else {
 			args["verification_criteria"] = normalizeStringArray(args["acceptance_criteria"])
 		}
-	case agentspec.CoordinationRoleExecutor:
+	case "executor":
 		args["args"] = normalizeArgumentMap(args["args"])
 	}
 	return args, nil
 }
 
-func buildDelegationResult(request policy.DelegationRequest, target capability.CapabilityDescriptor, result *ports.ToolResult, invokeErr error, snapshot *capability.PolicySnapshot, spec *agentspec.AgentRuntimeSpec, callerTrust agentspec.TrustClass) *policy.DelegationResult {
-	if invokeErr != nil {
-		failed := policy.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, policy.DelegationStateFailed, false, nil)
-		failed.Diagnostics = []string{invokeErr.Error()}
-		return failed
-	}
-	if result == nil {
-		result = &ports.ToolResult{Success: true}
-	}
-	state := policy.DelegationStateSucceeded
-	if !result.Success {
-		state = policy.DelegationStateFailed
-	}
-	delegationResult := policy.NewDelegationResult(request, target.ID, target.Source.ProviderID, target.Source.SessionID, state, result.Success, result.Data)
-	if result.Error != "" {
-		delegationResult.Diagnostics = append(delegationResult.Diagnostics, result.Error)
-	}
-	var approval *capability.ApprovalBinding
-	if pb := policy.ApprovalBindingFromDelegation(request, delegationResult); pb != nil {
-		approval = &capability.ApprovalBinding{CapabilityID: pb.CapabilityID, TaskID: pb.TaskID, WorkflowID: pb.WorkflowID}
-	}
-	envelope := capability.NewCapabilityResultEnvelope(target, result, capability.ContentDispositionRaw, snapshot, approval)
-	decision := capability.EffectiveInsertionDecision(spec, envelope)
-	if target.Coordination != nil && target.Coordination.DirectInsertionAllowed != capability.EnabledStateEnabled && decision.Action == capability.InsertionActionDirect {
-		decision.Action = capability.InsertionActionSummarized
-		decision.Reason = "coordination target requires summarized insertion"
-	}
-	if requiresCrossTrustApproval(callerTrust, target.TrustClass, spec, request) {
-		decision.Action = capability.InsertionActionHITLRequired
-		decision.RequiresHITL = true
-		decision.Reason = "cross-trust delegation requires approval"
-	}
-	delegationResult.Provenance = envelope.Provenance
-	delegationResult.Disposition = envelope.Disposition
-	policy.ApplyDelegationInsertionDecision(delegationResult, decision)
-	return delegationResult
-}
 
-func (m *DelegationManager) awaitBackgroundDelegation(id string, request policy.DelegationRequest, target capability.CapabilityDescriptor, handle *BackgroundDelegationHandle, snapshot *capability.PolicySnapshot, opts DelegationExecutionOptions) {
+
+func (m *DelegationManager) awaitBackgroundDelegation(id string, request policy.DelegationRequest, target governanceports.DescriptorView, handle *BackgroundDelegationHandle, snapshot *policy.PolicySnapshot, opts DelegationExecutionOptions) {
 	if m == nil || handle == nil || handle.Results == nil {
 		return
 	}
@@ -572,7 +536,7 @@ func (m *DelegationManager) awaitBackgroundDelegation(id string, request policy.
 	if !ok {
 		outcome.Error = fmt.Errorf("background delegation session %s closed without result", handle.SessionID)
 	}
-	result := buildDelegationResult(request, target, outcome.Result, outcome.Error, snapshot, opts.AgentSpec, opts.CallerTrust)
+	result := opts.Registry.BuildDelegationResult(request, target, outcome.Result, outcome.Error, snapshot, opts.AgentSpec, opts.CallerTrust)
 	_, _ = m.CompleteDelegation(id, result)
 }
 
@@ -613,28 +577,6 @@ func projectDelegationResources(ctx context.Context, refs []string, repo agentli
 	return nil, nil
 }
 
-func summarizeResourceRead(result *capability.ResourceReadResult) string {
-	if result == nil || len(result.Contents) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(result.Contents))
-	for _, block := range result.Contents {
-		switch typed := block.(type) {
-		case capability.TextContentBlock:
-			text := strings.TrimSpace(typed.Text)
-			if text != "" {
-				parts = append(parts, text)
-			}
-		case capability.StructuredContentBlock:
-			encoded, err := json.Marshal(typed.Data)
-			if err == nil && len(encoded) > 0 {
-				parts = append(parts, string(encoded))
-			}
-		}
-	}
-	return strings.Join(parts, "\n")
-}
-
 func effectiveDelegationRecoverability(mode policy.RecoverabilityMode) policy.RecoverabilityMode {
 	switch mode {
 	case policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
@@ -661,7 +603,7 @@ func effectiveDelegationState(env *contextdata.Envelope) *contextdata.Envelope {
 	return contextdata.NewEnvelope("default", "default")
 }
 
-func delegationRequestedRole(request policy.DelegationRequest) agentspec.CoordinationRole {
+func delegationRequestedRole(request policy.DelegationRequest) string {
 	if request.Metadata == nil {
 		return ""
 	}
@@ -673,13 +615,13 @@ func delegationRequestedRole(request policy.DelegationRequest) agentspec.Coordin
 	if strings.EqualFold(role, "<nil>") {
 		return ""
 	}
-	return agentspec.CoordinationRole(role)
+	return role
 }
 
-func containsBackgroundExecutionMode(modes []agentspec.CoordinationExecutionMode) bool {
+func containsBackgroundExecutionMode(modes []string) bool {
 	for _, mode := range modes {
 		switch mode {
-		case agentspec.CoordinationExecutionModeBackgroundAgent, agentspec.CoordinationExecutionModeSessionBacked:
+		case "background-service", "session-backed":
 			return true
 		}
 	}
@@ -704,14 +646,11 @@ func requestPrefersBackground(request policy.DelegationRequest) bool {
 	}
 }
 
-func shouldRunDelegationInBackground(target capability.CapabilityDescriptor, requested bool) bool {
-	if target.Coordination == nil {
-		return false
-	}
-	if target.Coordination.LongRunning == capability.EnabledStateEnabled {
+func shouldRunDelegationInBackground(target governanceports.DescriptorView, requested bool) bool {
+	if target.CoordinationLongRunning() == 1 {
 		return true
 	}
-	return requested && containsBackgroundExecutionMode(target.Coordination.ExecutionModes)
+	return requested && containsBackgroundExecutionMode(target.CoordinationExecutionModes())
 }
 
 func dedupeStringSlice(input []string) []string {
@@ -769,16 +708,6 @@ func normalizeArgumentMap(value any) map[string]any {
 		return typed
 	}
 	return map[string]any{}
-}
-
-func requiresCrossTrustApproval(callerTrust, targetTrust agentspec.TrustClass, spec *agentspec.AgentRuntimeSpec, request policy.DelegationRequest) bool {
-	if request.ApprovalRequired {
-		return true
-	}
-	if callerTrust == "" || callerTrust == targetTrust {
-		return false
-	}
-	return agentspec.EffectiveCoordination(spec).RequireApprovalCrossTrust
 }
 
 func mergeAnyMaps(parts ...map[string]any) map[string]any {

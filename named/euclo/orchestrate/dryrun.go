@@ -9,6 +9,6 @@ import (
 )
 
 // DryRun resolves a route request without executing it and returns the ranked candidate set.
-func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.Registry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
+func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *capability.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
 	return dryRun(ctx, env, req, caps, thoughtrecipes)
 }

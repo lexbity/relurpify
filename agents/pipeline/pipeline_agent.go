@@ -27,7 +27,7 @@ type PipelineStageFactory interface {
 type PipelineAgent struct {
 	Model             model.LanguageModel
 	Config            *execution.Config
-	Tools             *capability.Registry
+	Tools             *capability.CapabilityRegistry
 	WorkflowStatePath string
 
 	Stages       []Stage

@@ -17,7 +17,7 @@ type scopeAwareReactModel struct {
 	nativeToolCalling bool
 	generatePrompts   []string
 	chatMessages      [][]model.Message
-	chatToolSpecs     [][]ports.LLMToolSpec
+	chatToolSpecs     [][]model.LLMToolSpec
 }
 
 func (m *scopeAwareReactModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
@@ -46,11 +46,11 @@ func (m *scopeAwareReactModel) Chat(ctx context.Context, messages []model.Messag
 	}, nil
 }
 
-func (m *scopeAwareReactModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []ports.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *scopeAwareReactModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	_ = ctx
 	_ = options
 	m.chatMessages = append(m.chatMessages, append([]model.Message(nil), messages...))
-	m.chatToolSpecs = append(m.chatToolSpecs, append([]ports.LLMToolSpec(nil), tools...))
+	m.chatToolSpecs = append(m.chatToolSpecs, append([]model.LLMToolSpec(nil), tools...))
 	return &model.LLMResponse{
 		Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`,
 	}, nil

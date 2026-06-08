@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 )
 
@@ -44,7 +44,7 @@ func (p WritePathPrecheck) Check(desc CapabilityDescriptor, args map[string]any)
 
 func hasWriteEffect(desc CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
-		if effect == agentspec.EffectClassFilesystemMutation {
+		if effect == taxonomy.EffectClassFilesystemMutation {
 			return true
 		}
 	}

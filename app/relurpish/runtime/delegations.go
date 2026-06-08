@@ -25,7 +25,7 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request policy.Delegati
 	if r == nil || r.Delegations == nil || r.Tools == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
-	opts.Registry = r.Tools
+	opts.Registry = capability.NewDelegationRegistry(r.Tools)
 	opts.AgentSpec = r.AgentWorkspace().AgentSpec
 	opts.State = firstDelegationContext(opts.State)
 	if shouldUseBackgroundDelegation(request) {

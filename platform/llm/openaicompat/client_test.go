@@ -12,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -97,7 +96,7 @@ func TestChatWithTools_NativeEnabled_Sync(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
-	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.ToolCalls, 1)
 	require.Equal(t, "echo", resp.ToolCalls[0].Name)
@@ -119,7 +118,7 @@ func TestChatWithTools_NativeEnabled_Streaming(t *testing.T) {
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
 	var got strings.Builder
-	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, &model.LLMOptions{
+	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, &model.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
@@ -142,7 +141,7 @@ func TestChatWithTools_NativeDisabled(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: false}, "")
-	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
 }
@@ -164,7 +163,7 @@ func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 	profile := &ModelProfile{}
 	profile.ToolCalling.NativeAPI = false
 	client.SetProfile(profile)
-	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", resp.Text)
 	require.False(t, client.UsesNativeToolCalling())

@@ -24,7 +24,7 @@ type PreflightIssue struct {
 // Returns []PreflightIssue if problems found (empty if all OK).
 func PreflightCheck(
 	ctx context.Context,
-	registry *capability.Registry,
+	registry *capability.CapabilityRegistry,
 	plan *RewooPlan,
 	pc permissions.CapabilityChecker,
 ) []PreflightIssue {
@@ -120,7 +120,7 @@ func PreflightCheck(
 // IsValidPlan returns true if there are no error-level preflight issues.
 func IsValidPlan(
 	ctx context.Context,
-	registry *capability.Registry,
+	registry *capability.CapabilityRegistry,
 	plan *RewooPlan,
 	pc permissions.CapabilityChecker,
 ) bool {

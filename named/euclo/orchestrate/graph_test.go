@@ -148,8 +148,8 @@ func (testGraphCapability) Descriptor(context.Context, *contextdata.Envelope) ca
 	}
 }
 
-func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
-	return &ports.CapabilityExecutionResult{
+func (testGraphCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*ports.ToolResult, error) {
+	return &ports.ToolResult{
 		Success: true,
 		Data:    map[string]any{"executed": true},
 	}, nil

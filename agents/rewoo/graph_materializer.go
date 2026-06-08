@@ -113,7 +113,7 @@ func computeDepths(steps []RewooStep, depMap map[string]map[string]bool) map[str
 func MaterializePlanGraph(
 	g *graph.Graph,
 	plan *RewooPlan,
-	registry *capability.Registry,
+	registry *capability.CapabilityRegistry,
 	permissionChecker permissions.CapabilityChecker,
 	options RewooOptions,
 	debugf func(string, ...interface{}),

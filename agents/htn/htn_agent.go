@@ -85,7 +85,7 @@ type HTNAgent struct {
 	// Model is the language model used by the primitive executor.
 	Model model.LanguageModel
 	// Tools is the capability registry passed to the primitive executor.
-	Tools *capability.Registry
+	Tools *capability.CapabilityRegistry
 	// Config holds runtime configuration.
 	Config *execution.Config
 	// Methods is the method library. Defaults to NewMethodLibrary() when nil.

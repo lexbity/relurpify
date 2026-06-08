@@ -1,0 +1,45 @@
+# Phase 1 (updated P3): 9 known domain-direction violations (the "wrong-direction" edges from §1.1 cycles).
+# Phase 3 retired the capability↔model edge (model→capability removed).
+# Each exception lists the importing domain (src_domain), the imported domain (dst_domain),
+# and the phase that retires it. In warn mode these are suppressed; enforce mode reports them.
+# Domains not listed: testsuite, tooling (unrestricted).
+# (Locked: no-contracts-bucket; GP-2/GP-3 framework-domain-rearchitecture)
+version: 1
+direction_violations:
+  # 1. execution ↔ context — minority: context→execution
+  - src_domain: context
+    dst_domain: execution
+    phase: P11
+  # 2. platform ↔ capability — minority: capability→platform
+  - src_domain: capability
+    dst_domain: platform
+    phase: P7
+  # 3. execution ↔ capability — minority: capability→execution
+  - src_domain: capability
+    dst_domain: execution
+    phase: P12
+  # 4. governance ↔ capability — minority: governance→capability
+  - src_domain: governance
+    dst_domain: capability
+    phase: P6
+  # 5. platform ↔ governance — minority: governance→platform
+  - src_domain: governance
+    dst_domain: platform
+    phase: P8
+  # 6. context ↔ capability — minority: capability→context
+  - src_domain: capability
+    dst_domain: context
+    phase: P10
+  # 7. context ↔ governance — minority: governance→context
+  - src_domain: governance
+    dst_domain: context
+    phase: P13
+  # 8. execution ↔ governance — minority: governance→execution
+  - src_domain: governance
+    dst_domain: execution
+    phase: P14
+  # 9. governance ↔ userconfig — minority: userconfig→governance
+  - src_domain: userconfig
+    dst_domain: governance
+    phase: P15
+

@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
@@ -40,7 +39,7 @@ type IndexManager struct {
 	config           IndexConfig
 	symbolProvider   DocumentSymbolProvider
 	pathFilter       func(path string, isDir bool) bool
-	fileScope        *sandbox.FileScopePolicy
+	fileScope        *permissions.FileScopePolicy
 	workspaceIndex   workspaceIndexState
 }
 
@@ -111,7 +110,7 @@ func (im *IndexManager) SetPathFilter(filter func(path string, isDir bool) bool)
 
 // SetFileScope installs a sandbox file scope that is enforced before files are
 // read or indexed.
-func (im *IndexManager) SetFileScope(scope *sandbox.FileScopePolicy) {
+func (im *IndexManager) SetFileScope(scope *permissions.FileScopePolicy) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 	im.fileScope = scope

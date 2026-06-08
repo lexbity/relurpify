@@ -17,10 +17,10 @@ import (
 
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
 type mockCapabilityRegistryProvider struct {
-	registry *capability.Registry
+	registry *capability.CapabilityRegistry
 }
 
-func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *capability.Registry {
+func (m *mockCapabilityRegistryProvider) CapabilityRegistry() *capability.CapabilityRegistry {
 	return m.registry
 }
 

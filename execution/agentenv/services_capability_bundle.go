@@ -43,7 +43,7 @@ var (
 // CapabilityBundle groups the runtime-scoped capability registry and the
 // shared indexing/search services built alongside it.
 type CapabilityBundle struct {
-	Registry     *capability.Registry
+	Registry     *capability.CapabilityRegistry
 	IndexManager *ast.IndexManager
 	SearchEngine *search.SearchEngine
 }
@@ -203,7 +203,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner *fsandbox.AuthorizedR
 //
 // This function exists to keep the app layer from importing platform/shell
 // directly (layer violation).
-func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*capability.Registry, error) {
+func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*capability.CapabilityRegistry, error) {
 	capReg := newCapabilityRegistryFn()
 
 	// Load manifests and build tools through the governance package.

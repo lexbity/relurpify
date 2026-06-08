@@ -866,7 +866,7 @@ func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.Wor
 	}
 }
 
-func (n *ThoughtRecipeStepNode) scopedRegistry() *capability.Registry {
+func (n *ThoughtRecipeStepNode) scopedRegistry() *capability.CapabilityRegistry {
 	if n == nil || n.env.Registry == nil {
 		return nil
 	}

@@ -12,6 +12,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -19,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -1036,7 +1038,7 @@ func capabilityAvailabilityLabel(spec capability.AvailabilitySpec) string {
 	return "unavailable"
 }
 
-func riskClassStrings(values []agentspec.RiskClass) []string {
+func riskClassStrings(values []taxonomy.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -1044,7 +1046,7 @@ func riskClassStrings(values []agentspec.RiskClass) []string {
 	return out
 }
 
-func effectClassStrings(values []agentspec.EffectClass) []string {
+func effectClassStrings(values []taxonomy.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -1112,7 +1114,7 @@ func (r *runtimeAdapter) PendingHITL() []*fauthorization.PermissionRequest {
 	return r.rt.PendingHITL()
 }
 
-func (r *runtimeAdapter) ApproveHITL(requestID, approver string, scope fauthorization.GrantScope, duration time.Duration) error {
+func (r *runtimeAdapter) ApproveHITL(requestID, approver string, scope policy.GrantScope, duration time.Duration) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}

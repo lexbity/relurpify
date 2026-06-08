@@ -3,7 +3,9 @@ package capability
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ModelCallableTools returns callable local tools for agent-internal use such
@@ -33,7 +35,7 @@ func (r *CapabilityRegistry) ModelCallableTools() []ports.Tool {
 	entries := r.localToolEntriesLocked()
 	res := make([]ports.Tool, 0, len(entries))
 	for _, entry := range entries {
-		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 			continue
 		}
 		if !toolAvailableForPrompt(entry.legacyTool) {
@@ -49,18 +51,18 @@ func (r *CapabilityRegistry) ModelCallableTools() []ports.Tool {
 // (provider-backed, Relurpic). This is what callers should pass to
 // LanguageModel.ChatWithTools — Ollama-specific formatting is handled in
 // platform/llm, not here.
-func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []ports.LLMToolSpec {
+func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []model.LLMToolSpec {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]ports.LLMToolSpec, 0, len(r.entries))
+	res := make([]model.LLMToolSpec, 0, len(r.entries))
 	for _, entry := range r.entries {
 		if entry == nil {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
+		if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 			continue
 		}
 		if entry.legacyTool != nil {
@@ -91,7 +93,7 @@ func (r *CapabilityRegistry) GetModelTool(name string) (ports.Tool, bool) {
 	if !ok || entry == nil || entry.legacyTool == nil {
 		return nil, false
 	}
-	if r.effectiveExposureLocked(entry.descriptor) != CapabilityExposureCallable {
+	if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 		return nil, false
 	}
 	return entry.legacyTool, true

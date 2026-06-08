@@ -310,7 +310,7 @@ func browserLaunchPolicy(cfg browserSessionConfig) sandbox.CommandPolicy {
 
 func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPolicy {
 	if cfg.service != nil && cfg.service.commandPolicy != nil {
-		return commandPolicyAdapter{policy: cfg.service.commandPolicy}
+		return cfg.service.commandPolicy
 	}
 	if cfg.registration == nil || cfg.registration.Permissions == nil {
 		return nil
@@ -322,24 +322,27 @@ func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPol
 	if spec == nil && cfg.registration != nil && cfg.registration.Manifest != nil {
 		spec = cfg.registration.Manifest.Spec.Agent
 	}
-	return commandPolicyAdapter{policy: fauthorization.NewCommandAuthorizationPolicy(cfg.registration.Permissions, cfg.registration.ID, spec, "browser")}
+	var bashCfg *fauthorization.BashConfig
+	if spec != nil {
+		bashCfg = &fauthorization.BashConfig{
+			AllowPatterns: spec.Bash.AllowPatterns,
+			DenyPatterns:  spec.Bash.DenyPatterns,
+			Default:       string(spec.Bash.Default),
+		}
+	}
+	authPolicy := fauthorization.NewCommandAuthorizationPolicy(cfg.registration.Permissions, cfg.registration.ID, bashCfg, "browser")
+	return commandPolicyAdapter{authPolicy: authPolicy}
 }
 
 type commandPolicyAdapter struct {
-	policy sandbox.CommandPolicy
+	authPolicy *fauthorization.CommandAuthorizationPolicy
 }
 
 func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req ports.CommandRequest) error {
-	if a.policy == nil {
+	if a.authPolicy == nil {
 		return nil
 	}
-	return a.policy.AllowCommand(ctx, sandbox.CommandRequest{
-		Workdir: req.Workdir,
-		Args:    append([]string(nil), req.Args...),
-		Env:     append([]string(nil), req.Env...),
-		Input:   req.Input,
-		Timeout: req.Timeout,
-	})
+	return a.authPolicy.CheckCommand(ctx, req.Args, req.Env)
 }
 
 type budgetManagerAdapter struct {

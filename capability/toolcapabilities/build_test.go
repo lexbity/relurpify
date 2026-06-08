@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type toolWithKeys struct {
@@ -64,7 +65,7 @@ func TestAssertParamKeysNormalizesNames(t *testing.T) {
 }
 
 func TestAssertParamKeysOnConstructorPasses(t *testing.T) {
-	manifest := toolcapabilities.ToolManifest{
+	manifest := ports.ToolManifest{
 		Name: "search_grep",
 		Parameters: []ports.ToolParameter{
 			{Name: "pattern", Type: "string", Required: true},
@@ -78,7 +79,7 @@ func TestAssertParamKeysOnConstructorPasses(t *testing.T) {
 }
 
 func TestAssertParamKeysOnConstructorFails(t *testing.T) {
-	manifest := toolcapabilities.ToolManifest{
+	manifest := ports.ToolManifest{
 		Name: "bad_tool",
 		Parameters: []ports.ToolParameter{
 			{Name: "declared", Type: "string"},
@@ -93,7 +94,7 @@ func TestAssertParamKeysOnConstructorFails(t *testing.T) {
 }
 
 func TestAssertParamKeysOnConstructorNilCtor(t *testing.T) {
-	err := AssertParamKeysOnConstructor("nil", nil, toolcapabilities.ToolManifest{Name: "nil"})
+	err := AssertParamKeysOnConstructor("nil", nil, ports.ToolManifest{Name: "nil"})
 	require.NoError(t, err)
 }
 
@@ -106,16 +107,16 @@ func (n *nopRunner) Run(_ context.Context, _ ports.CommandRequest) (*ports.Comma
 }
 
 func TestBuildSubprocessTool(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{
 		{
 			Name:        "cli_echo",
 			Family:      "text",
 			Description: "echo",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendSubprocess,
-				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
+				Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"filesystem_read"},
@@ -127,15 +128,15 @@ func TestBuildSubprocessTool(t *testing.T) {
 }
 
 func TestBuildSubprocessToolMissingDescription(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{
 		{
 			Name:   "no_desc",
 			Family: "text",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendSubprocess,
-				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"tool"}},
+				Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"filesystem_read"},
@@ -146,21 +147,21 @@ func TestBuildSubprocessToolMissingDescription(t *testing.T) {
 }
 
 func TestBuildCompositeTool(t *testing.T) {
-	tools := Build("/ws", nil, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", nil, []*ports.ToolManifest{
 		{
 			Name:        "pipe_tool",
 			Family:      "shell",
 			Description: "pipeline",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendComposite,
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"filesystem_read"},
 			},
-			Composition: &toolcapabilities.ToolManifestComposition{
-				Steps: []toolcapabilities.ToolManifestCompositionStep{
+			Composition: &ports.ToolManifestComposition{
+				Steps: []ports.ToolManifestCompositionStep{
 					{Tool: "cli_fd", Alias: "files"},
 				},
 			},
@@ -173,16 +174,16 @@ func TestBuildCompositeTool(t *testing.T) {
 
 func TestBuildNonStrictModeGoNativeMissingImplSkipped(t *testing.T) {
 	// Without StrictMode, a missing implementation is logged and skipped (not hard-fail)
-	tools := Build("/ws", nil, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", nil, []*ports.ToolManifest{
 		{
 			Name:        "missing_impl",
 			Family:      "search",
 			Description: "missing",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend:        ports.ToolBackendGoNative,
 				Implementation: "does_not_exist",
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"read_only"},
 				EffectClass: []string{"filesystem_read"},
@@ -193,16 +194,16 @@ func TestBuildNonStrictModeGoNativeMissingImplSkipped(t *testing.T) {
 }
 
 func TestBuildStrictModeGoNativeMissingImpl(t *testing.T) {
-	tools := Build("/ws", nil, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", nil, []*ports.ToolManifest{
 		{
 			Name:        "missing_impl",
 			Family:      "search",
 			Description: "missing",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend:        ports.ToolBackendGoNative,
 				Implementation: "does_not_exist",
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"read_only"},
 				EffectClass: []string{"filesystem_read"},
@@ -221,16 +222,16 @@ func TestBuildGoNativeToolFromRegistry(t *testing.T) {
 		return &testTool{name: "test_greeter"}
 	})
 
-	tools := Build("/ws", nil, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", nil, []*ports.ToolManifest{
 		{
 			Name:        "test_greeter",
 			Family:      "test",
 			Description: "greeter",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend:        ports.ToolBackendGoNative,
 				Implementation: "test_greeter",
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"read_only"},
 				EffectClass: []string{"filesystem_read"},
@@ -242,20 +243,20 @@ func TestBuildGoNativeToolFromRegistry(t *testing.T) {
 }
 
 func TestBuildExcludesNilManifests(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{nil})
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{nil})
 	require.Empty(t, tools)
 }
 
 func TestBuildExcludesEmptyName(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{
 		{
 			Name:   "",
 			Family: "text",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendSubprocess,
-				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
+				Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"filesystem_read"},
@@ -270,8 +271,8 @@ func TestBuildExcludesEmptyName(t *testing.T) {
 func TestWrapWithCapabilityProvidesManifestTrustClass(t *testing.T) {
 	tool := wrapWithCapability(
 		&testTool{name: "trusted_tool"},
-		toolcapabilities.ToolManifest{
-			Capability: toolcapabilities.ToolManifestCapability{
+		ports.ToolManifest{
+			Capability: ports.ToolManifestCapability{
 				TrustClass: "untrusted",
 			},
 		},
@@ -284,44 +285,44 @@ func TestWrapWithCapabilityProvidesManifestTrustClass(t *testing.T) {
 func TestWrapWithCapabilityProvidesManifestRiskClasses(t *testing.T) {
 	tool := wrapWithCapability(
 		&testTool{name: "risk_tool"},
-		toolcapabilities.ToolManifest{
-			Capability: toolcapabilities.ToolManifestCapability{
+		ports.ToolManifest{
+			Capability: ports.ToolManifestCapability{
 				RiskClass: []string{"execute", "network"},
 			},
 		},
 	)
-	provider, ok := tool.(interface{ RiskClasses() []agentspec.RiskClass })
+	provider, ok := tool.(interface{ RiskClasses() []taxonomy.RiskClass })
 	require.True(t, ok)
-	require.Equal(t, []agentspec.RiskClass{"execute", "network"}, provider.RiskClasses())
+	require.Equal(t, []taxonomy.RiskClass{"execute", "network"}, provider.RiskClasses())
 }
 
 func TestWrapWithCapabilityProvidesManifestEffectClasses(t *testing.T) {
 	tool := wrapWithCapability(
 		&testTool{name: "effect_tool"},
-		toolcapabilities.ToolManifest{
-			Capability: toolcapabilities.ToolManifestCapability{
+		ports.ToolManifest{
+			Capability: ports.ToolManifestCapability{
 				EffectClass: []string{"filesystem_read", "process_spawn"},
 			},
 		},
 	)
 	provider, ok := tool.(interface {
-		EffectClasses() []agentspec.EffectClass
+		EffectClasses() []taxonomy.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []agentspec.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
+	require.Equal(t, []taxonomy.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
 }
 
 func TestWrapWithCapabilityReturnsOriginalWhenNoCapability(t *testing.T) {
 	original := &testTool{name: "plain"}
-	wrapped := wrapWithCapability(original, toolcapabilities.ToolManifest{})
+	wrapped := wrapWithCapability(original, ports.ToolManifest{})
 	require.Same(t, original, wrapped, "must return original tool when no capability data")
 }
 
 func TestWrapWithCapabilityDelegatesToUnderlyingTool(t *testing.T) {
 	tool := wrapWithCapability(
 		&testTool{name: "delegate"},
-		toolcapabilities.ToolManifest{
-			Capability: toolcapabilities.ToolManifestCapability{
+		ports.ToolManifest{
+			Capability: ports.ToolManifestCapability{
 				TrustClass: "untrusted",
 			},
 		},
@@ -339,16 +340,16 @@ func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
 		return &testTool{name: "cap_test"}
 	})
 
-	tools := Build("/ws", nil, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", nil, []*ports.ToolManifest{
 		{
 			Name:        "cap_test",
 			Family:      "test",
 			Description: "capability test",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend:        ports.ToolBackendGoNative,
 				Implementation: "cap_test",
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "untrusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"process_spawn"},
@@ -361,28 +362,28 @@ func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
 	require.True(t, ok, "Build must wrap tools with TrustClass provider")
 	require.Equal(t, agentspec.TrustClass("untrusted"), trustProv.TrustClass())
 
-	riskProv, ok := tools[0].(interface{ RiskClasses() []agentspec.RiskClass })
+	riskProv, ok := tools[0].(interface{ RiskClasses() []taxonomy.RiskClass })
 	require.True(t, ok)
-	require.Equal(t, []agentspec.RiskClass{"execute"}, riskProv.RiskClasses())
+	require.Equal(t, []taxonomy.RiskClass{"execute"}, riskProv.RiskClasses())
 
 	effectProv, ok := tools[0].(interface {
-		EffectClasses() []agentspec.EffectClass
+		EffectClasses() []taxonomy.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []agentspec.EffectClass{"process_spawn"}, effectProv.EffectClasses())
+	require.Equal(t, []taxonomy.EffectClass{"process_spawn"}, effectProv.EffectClasses())
 }
 
 func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{
 		{
 			Name:        "no_cap",
 			Family:      "text",
 			Description: "no capability",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendSubprocess,
-				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
+				Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			},
-			Capability: toolcapabilities.ToolManifestCapability{},
+			Capability: ports.ToolManifestCapability{},
 		},
 	})
 	require.Len(t, tools, 1)
@@ -393,16 +394,16 @@ func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {
 
 func TestUnlistedManifestExcluded(t *testing.T) {
 	// Tools built from manifests not provided to Build must not appear
-	tools := Build("/ws", &nopRunner{}, []*toolcapabilities.ToolManifest{
+	tools := Build("/ws", &nopRunner{}, []*ports.ToolManifest{
 		{
 			Name:        "allowed",
 			Family:      "text",
 			Description: "allowed tool",
-			Execution: toolcapabilities.ToolManifestExecution{
+			Execution: ports.ToolManifestExecution{
 				Backend: ports.ToolBackendSubprocess,
-				Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
+				Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			},
-			Capability: toolcapabilities.ToolManifestCapability{
+			Capability: ports.ToolManifestCapability{
 				TrustClass:  "builtin_trusted",
 				RiskClass:   []string{"execute"},
 				EffectClass: []string{"filesystem_read"},

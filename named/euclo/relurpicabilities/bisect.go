@@ -10,6 +10,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -40,11 +41,11 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 		Category:      "git",
 		Tags:          []string{"git", "bisect", "read-only"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -92,7 +93,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env *contextdata.Envelop
 }
 
 // Invoke executes git bisect to find the culprit commit.
-func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	goodRef, ok := stringArg(args, "good_ref")
 	if !ok || goodRef == "" {
@@ -125,7 +126,7 @@ func (h *BisectHandler) Invoke(ctx context.Context, env *contextdata.Envelope, a
 	return h.runDeterministicBisect(ctx, goodRef, badRef, testCommand, maxSteps)
 }
 
-func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.CapabilityExecutionResult, error) {
+func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.ToolResult, error) {
 	workdir := workspacePath(h.env)
 	if err := h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "start"}); err != nil {
 		return failResult(fmt.Sprintf("failed to start bisect: %v", err)), nil
@@ -174,7 +175,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 
 	_ = h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "reset"})
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,
@@ -185,7 +186,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 	}, nil
 }
 
-func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.CapabilityExecutionResult, error) {
+func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.ToolResult, error) {
 	// The model-guided path uses the same command primitives as the
 	// deterministic fallback, but lets the model decide which action to take
 	// next. If the model path fails to produce a valid plan, the caller falls
@@ -290,7 +291,7 @@ func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, 
 
 done:
 	_ = h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "reset"})
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":        true,

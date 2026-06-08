@@ -7,7 +7,7 @@ import (
 
 // DefaultPermissionSet builds a minimal permission set that allows workspace read/write
 // and grants all registered tool capabilities.
-func DefaultPermissionSet(registry *capability.Registry, workspacePath string) *permissions.PermissionSet {
+func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath string) *permissions.PermissionSet {
 	perm := &permissions.PermissionSet{
 		// Allow read/write on workspace
 		FileSystem: []permissions.FileSystemPermission{

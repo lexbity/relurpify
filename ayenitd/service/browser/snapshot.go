@@ -131,13 +131,13 @@ func (s *BrowserService) SnapshotProvider(ctx context.Context) (*capability.Prov
 		Recoverability: policy.RecoverabilityInProcess,
 		Descriptor: capability.ProviderDescriptor{
 			ID:                 "browser",
-			Kind:               capability.ProviderKindAgentRuntime,
+			Kind:               agentspec.ProviderKindAgentRuntime,
 			ActivationScope:    defaultBrowserScope,
 			TrustBaseline:      agentspec.TrustClassProviderLocalUntrusted,
 			RecoverabilityMode: policy.RecoverabilityInProcess,
 			SupportsHealth:     true,
 			Security: capability.ProviderSecurityProfile{
-				Origin:                     capability.ProviderOriginLocal,
+				Origin:                     agentspec.ProviderOriginLocal,
 				SafeForDirectInsertion:     false,
 				RequiresFrameworkMediation: true,
 			},

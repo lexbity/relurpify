@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -24,8 +22,8 @@ type (
 	LLMOptions    = model.LLMOptions
 	LLMResponse   = model.LLMResponse
 	Message       = model.Message
-	LLMToolSpec   = ports.LLMToolSpec
-	Schema        = schemacoerce.Schema
+	LLMToolSpec   = model.LLMToolSpec
+	Schema        = model.Schema
 	ModelProfile  = model.ModelProfile
 )
 

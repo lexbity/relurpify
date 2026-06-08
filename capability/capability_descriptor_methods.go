@@ -1,33 +1,35 @@
 package capability
 
-import agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
+import (
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+)
 
 func (d CapabilityDescriptor) CapabilityID() string                       { return d.ID }
 func (d CapabilityDescriptor) CapabilityName() string                     { return d.Name }
-func (d CapabilityDescriptor) CapabilityTrustClass() agentspec.TrustClass { return d.TrustClass }
-func (d CapabilityDescriptor) CoordinationRole() agentspec.CoordinationRole {
+func (d CapabilityDescriptor) CapabilityTrustClass() string { return string(d.TrustClass) }
+func (d CapabilityDescriptor) CoordinationRole() string {
 	return coordinationRole(d)
 }
-func (d CapabilityDescriptor) CoordinationTarget() bool            { return coordinationTarget(d) }
-func (d CapabilityDescriptor) LongRunning() agentspec.EnabledState { return longRunning(d) }
-func (d CapabilityDescriptor) CapabilityRuntimeFamily() agentspec.CapabilityRuntimeFamily {
-	return d.RuntimeFamily
+func (d CapabilityDescriptor) CoordinationTarget() bool { return coordinationTarget(d) }
+func (d CapabilityDescriptor) LongRunning() int32      { return longRunning(d) }
+func (d CapabilityDescriptor) CapabilityRuntimeFamily() string {
+	return string(d.RuntimeFamily)
 }
-func (d CapabilityDescriptor) SourceScope() agentspec.CapabilityScope { return scope(d) }
+func (d CapabilityDescriptor) SourceScope() taxonomy.CapabilityScope { return scope(d) }
 func (d CapabilityDescriptor) SourceProviderID() string               { return sourceProviderID(d) }
 func (d CapabilityDescriptor) SourceSessionID() string                { return sourceSessionID(d) }
 
 func (d CapabilityDescriptor) CoordinationTaskTypes() []string { return coordinationTaskTypes(d) }
-func (d CapabilityDescriptor) CoordinationExecutionModes() []agentspec.CoordinationExecutionMode {
+func (d CapabilityDescriptor) CoordinationExecutionModes() []string {
 	return coordinationExecutionModes(d)
 }
-func (d CapabilityDescriptor) DirectInsertionAllowed() agentspec.EnabledState {
+func (d CapabilityDescriptor) DirectInsertionAllowed() int32 {
 	return directInsertionAllowed(d)
 }
 
-func coordinationRole(d CapabilityDescriptor) agentspec.CoordinationRole {
+func coordinationRole(d CapabilityDescriptor) string {
 	if d.Coordination != nil {
-		return d.Coordination.Role
+		return string(d.Coordination.Role)
 	}
 	return ""
 }
@@ -36,14 +38,14 @@ func coordinationTarget(d CapabilityDescriptor) bool {
 	return d.Coordination != nil && d.Coordination.Target
 }
 
-func longRunning(d CapabilityDescriptor) agentspec.EnabledState {
+func longRunning(d CapabilityDescriptor) int32 {
 	if d.Coordination != nil {
-		return agentspec.EnabledState(d.Coordination.LongRunning)
+		return int32(d.Coordination.LongRunning)
 	}
-	return agentspec.EnabledStateUnset
+	return 0
 }
 
-func scope(d CapabilityDescriptor) agentspec.CapabilityScope { return d.Source.Scope }
+func scope(d CapabilityDescriptor) taxonomy.CapabilityScope { return d.Source.Scope }
 func sourceProviderID(d CapabilityDescriptor) string         { return d.Source.ProviderID }
 func sourceSessionID(d CapabilityDescriptor) string          { return d.Source.SessionID }
 
@@ -54,16 +56,20 @@ func coordinationTaskTypes(d CapabilityDescriptor) []string {
 	return nil
 }
 
-func coordinationExecutionModes(d CapabilityDescriptor) []agentspec.CoordinationExecutionMode {
+func coordinationExecutionModes(d CapabilityDescriptor) []string {
 	if d.Coordination != nil {
-		return d.Coordination.ExecutionModes
+		out := make([]string, len(d.Coordination.ExecutionModes))
+		for i, m := range d.Coordination.ExecutionModes {
+			out[i] = string(m)
+		}
+		return out
 	}
 	return nil
 }
 
-func directInsertionAllowed(d CapabilityDescriptor) agentspec.EnabledState {
+func directInsertionAllowed(d CapabilityDescriptor) int32 {
 	if d.Coordination != nil {
-		return agentspec.EnabledState(d.Coordination.DirectInsertionAllowed)
+		return int32(d.Coordination.DirectInsertionAllowed)
 	}
-	return agentspec.EnabledStateUnset
+	return 0
 }

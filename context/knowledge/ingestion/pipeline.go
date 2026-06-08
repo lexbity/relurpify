@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/governance/identity"
@@ -16,7 +15,7 @@ import (
 )
 
 // AcquireFromFile creates a pipeline for ingesting a file.
-func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, scope *sandbox.FileScopePolicy) (*Pipeline, error) {
+func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, scope *permissions.FileScopePolicy) (*Pipeline, error) {
 	if scope != nil {
 		if err := scope.Check(permissions.FileSystemRead, path); err != nil {
 			return nil, fmt.Errorf("file scope denied: %w", err)

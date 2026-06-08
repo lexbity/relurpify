@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // PolicyRule is a declarative security rule evaluated at invocation time.
@@ -28,13 +28,13 @@ type PolicyConditions struct {
 	ContextClasses            []string                            `yaml:"context_classes,omitempty"`
 	SensitivityClasses        []string                            `yaml:"sensitivity_classes,omitempty"`
 	RouteModes                []string                            `yaml:"route_modes,omitempty"`
-	ProviderKinds             []agentspec.ProviderKind            `yaml:"provider_kinds,omitempty"`
+	ProviderKinds             []string            `yaml:"provider_kinds,omitempty"`
 	ExternalProviders         []string                            `yaml:"external_providers,omitempty"`
-	MinRiskClasses            []agentspec.RiskClass               `yaml:"min_risk_classes,omitempty"`
-	TrustClasses              []agentspec.TrustClass              `yaml:"trust_classes,omitempty"`
-	CapabilityKinds           []agentspec.CapabilityKind          `yaml:"capability_kinds,omitempty"`
-	RuntimeFamilies           []agentspec.CapabilityRuntimeFamily `yaml:"runtime_families,omitempty"`
-	EffectClasses             []agentspec.EffectClass             `yaml:"effect_classes,omitempty"`
+	MinRiskClasses            []taxonomy.RiskClass               `yaml:"min_risk_classes,omitempty"`
+	TrustClasses              []string              `yaml:"trust_classes,omitempty"`
+	CapabilityKinds           []string          `yaml:"capability_kinds,omitempty"`
+	RuntimeFamilies           []string `yaml:"runtime_families,omitempty"`
+	EffectClasses             []taxonomy.EffectClass             `yaml:"effect_classes,omitempty"`
 	Partitions                []string                            `yaml:"partitions,omitempty"`
 	ChannelIDs                []string                            `yaml:"channel_ids,omitempty"`
 	SessionScopes             []SessionScope                      `yaml:"session_scopes,omitempty"`
@@ -89,13 +89,13 @@ type PolicyRequest struct {
 	ContextClass           string
 	SensitivityClass       string
 	RouteMode              string
-	CapabilityKind         agentspec.CapabilityKind
-	RuntimeFamily          agentspec.CapabilityRuntimeFamily
-	ProviderKind           agentspec.ProviderKind
-	ProviderOrigin         agentspec.ProviderOriginKind
-	TrustClass             agentspec.TrustClass
-	RiskClasses            []agentspec.RiskClass
-	EffectClasses          []agentspec.EffectClass
+	CapabilityKind         string
+	RuntimeFamily          string
+	ProviderKind           string
+	ProviderOrigin         string
+	TrustClass             string
+	RiskClasses            []taxonomy.RiskClass
+	EffectClasses          []taxonomy.EffectClass
 	Partition              string
 	ChannelID              string
 	SessionID              string

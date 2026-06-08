@@ -37,11 +37,11 @@ func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *stubCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.args = args
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"answer": "ok",

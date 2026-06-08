@@ -9,13 +9,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // HITLServiceIface is the interface for the HITL approval service.
 type HITLServiceIface interface {
 	PendingHITL() []*authorization.PermissionRequest
-	ApproveHITL(requestID, approver string, scope authorization.GrantScope, duration time.Duration) error
+	ApproveHITL(requestID, approver string, scope policy.GrantScope, duration time.Duration) error
 	DenyHITL(requestID, reason string) error
 	SubscribeHITL() (<-chan authorization.HITLEvent, func())
 }
@@ -41,7 +42,7 @@ type hitlResolvedMsg struct {
 	err       error
 }
 
-func approveHITLCmd(svc HITLServiceIface, requestID string, scope authorization.GrantScope) tea.Cmd {
+func approveHITLCmd(svc HITLServiceIface, requestID string, scope policy.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}

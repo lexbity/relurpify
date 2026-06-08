@@ -2,8 +2,6 @@ package permissions
 
 import (
 	"context"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // PermissionType enumerates the supported permission families.
@@ -112,7 +110,7 @@ func (e *PermissionDeniedError) Error() string { return e.Message }
 
 // FilePermissionChecker checks filesystem access.
 type FilePermissionChecker interface {
-	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error
+	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix any) error
 }
 
 // NetworkPermissionChecker checks network access.
@@ -123,4 +121,10 @@ type NetworkPermissionChecker interface {
 // CapabilityChecker checks capability access.
 type CapabilityChecker interface {
 	CheckCapability(ctx context.Context, agentID, capability string) error
+}
+
+// AgentReviewApprovalRules configures approval rules for agent review.
+type AgentReviewApprovalRules struct {
+	RequireVerificationEvidence bool `yaml:"require_verification_evidence,omitempty" json:"require_verification_evidence,omitempty"`
+	RejectOnUnresolvedErrors    bool `yaml:"reject_on_unresolved_errors,omitempty" json:"reject_on_unresolved_errors,omitempty"`
 }

@@ -9,6 +9,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -33,10 +34,10 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 		Description:   "Generates a workspace layering report with dependency counts and violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "report"},
-		Source:        capability.CapabilitySource{Scope: agentspec.CapabilityScopeBuiltin},
+		Source:        capability.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -56,7 +57,7 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env *contextdata
 	}
 }
 
-func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.IndexManager == nil {
 		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
 	}
@@ -114,7 +115,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env *contextdata.Env
 	report := buildBoundaryReportMarkdown(layer, checked, dependencyCounts, violations)
 	summary := fmt.Sprintf("%d import edges checked, %d violations found", checked, len(violations))
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":           true,

@@ -26,7 +26,7 @@ type Candidate struct {
 
 // AdmitCandidates admits capability candidates against the final selector set
 // and records explicit results.
-func AdmitCandidates(registry *Registry, candidates []Candidate, allowed []agentspec.CapabilitySelector) ([]AdmissionResult, error) {
+func AdmitCandidates(registry *CapabilityRegistry, candidates []Candidate, allowed []agentspec.CapabilitySelector) ([]AdmissionResult, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}

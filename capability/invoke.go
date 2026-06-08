@@ -13,9 +13,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // InvokeCapability executes an invocable capability by capability ID or public name.
@@ -244,15 +246,15 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 	agentID := r.registeredAgentID
 	manager := r.permissionManager
 	r.mu.RUnlock()
-	_, err := EnforcePolicyRequest(ctx, policyEngine, PolicyRequest{
-		Target:         PolicyTargetCapability,
+	_, err := EnforcePolicyRequest(ctx, policyEngine, policy.PolicyRequest{
+		Target:         policy.PolicyTargetCapability,
 		Actor:          identity.EventActor{Kind: "agent", ID: agentID},
 		CapabilityID:   desc.ID,
 		CapabilityName: desc.Name,
-		CapabilityKind: desc.Kind,
-		RuntimeFamily:  desc.RuntimeFamily,
+		CapabilityKind: string(desc.Kind),
+		RuntimeFamily:  string(desc.RuntimeFamily),
 		ProviderKind:   providerKindForDescriptor(desc),
-		TrustClass:     desc.TrustClass,
+		TrustClass:     string(desc.TrustClass),
 		RiskClasses:    desc.RiskClasses,
 		EffectClasses:  desc.EffectClasses,
 	}, ApprovalRequest{
@@ -265,8 +267,8 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 			RequiresHITL: true,
 		},
 		Justification:      "capability policy approval",
-		Scope:              GrantScopeSession,
-		Risk:               RiskLevelMedium,
+		Scope:              policy.GrantScopeSession,
+		Risk:               policy.RiskLevelMedium,
 		MissingManagerErr:  "approval required but permission manager unavailable",
 		DenyReasonFallback: "denied by policy",
 	})
@@ -324,7 +326,7 @@ func (r *CapabilityRegistry) InvocableCapabilities() []CapabilityDescriptor {
 		if _, ok := entry.handler.(InvocableCapabilityHandler); !ok {
 			continue
 		}
-		if r.effectiveExposureLocked(entry.descriptor) == CapabilityExposureHidden {
+		if r.effectiveExposureLocked(entry.descriptor) == agentspec.CapabilityExposureHidden {
 			continue
 		}
 		res = append(res, entry.descriptor)
@@ -332,11 +334,11 @@ func (r *CapabilityRegistry) InvocableCapabilities() []CapabilityDescriptor {
 	return res
 }
 
-func providerKindForDescriptor(desc CapabilityDescriptor) ProviderKind {
+func providerKindForDescriptor(desc CapabilityDescriptor) string {
 	switch desc.Source.Scope {
-	case agentspec.CapabilityScopeProvider, agentspec.CapabilityScopeRemote:
-		return ProviderKindNodeDevice
+	case taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+		return "node-device"
 	default:
-		return ProviderKindBuiltin
+		return "builtin"
 	}
 }

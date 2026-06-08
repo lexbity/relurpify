@@ -25,7 +25,7 @@ type BlackboardAgent struct {
 	// Model is the language model available to knowledge sources.
 	Model model.LanguageModel
 	// Tools is the capability registry available to knowledge sources.
-	Tools *capability.Registry
+	Tools *capability.CapabilityRegistry
 	// Memory is the memory store for the agent.
 	Memory *memory.WorkingMemoryStore
 	// Config holds runtime configuration.

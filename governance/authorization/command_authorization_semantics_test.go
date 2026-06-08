@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -57,12 +56,10 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 	}
 
 	// Default policy for undeclared operations is Deny so we can assert on hard failures
-	pm.SetDefaultPolicy(agentspec.AgentPermissionDeny)
+	pm.SetDefaultPolicy("deny")
 
-	spec := &agentspec.AgentRuntimeSpec{
-		Bash: agentspec.AgentBashPermissions{
-			Default: agentspec.AgentPermissionAllow,
-		},
+	spec := &BashConfig{
+		Default: "allow",
 	}
 
 	ctx := context.Background()
@@ -106,7 +103,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 		Source:  "test",
 	}
 	// For HITL check, we set default policy to Ask
-	pm.SetDefaultPolicy(agentspec.AgentPermissionAsk)
+	pm.SetDefaultPolicy("ask")
 	err4 := AuthorizeCommand(ctx, pm, "test-agent", spec, req4)
 	if err4 != nil {
 		t.Errorf("expected dynamic command to request HITL and pass successfully, got error: %v", err4)

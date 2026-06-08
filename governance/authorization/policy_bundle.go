@@ -3,7 +3,6 @@ package authorization
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -12,14 +11,14 @@ import (
 // engine derived from an effective agent spec or contract.
 type CompiledPolicyBundle struct {
 	AgentID string
-	Spec    *agentspec.AgentRuntimeSpec
+	Spec    any
 	Rules   []policy.PolicyRule
 	Engine  PolicyEngine
 }
 
 // BuildFromSpec compiles policy rules and constructs a bundle directly from an
 // agent identifier and effective runtime spec.
-func BuildFromSpec(agentID string, spec *agentspec.AgentRuntimeSpec, engine PolicyEngine, rules []policy.PolicyRule) (*CompiledPolicyBundle, error) {
+func BuildFromSpec(agentID string, spec any, engine PolicyEngine, rules []policy.PolicyRule) (*CompiledPolicyBundle, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent id required")
 	}

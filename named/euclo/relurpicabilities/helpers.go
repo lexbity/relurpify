@@ -38,8 +38,8 @@ func intArg(args map[string]interface{}, key string, defaultValue int) (int, boo
 }
 
 // failResult returns a failure result with an error message.
-func failResult(message string) *ports.CapabilityExecutionResult {
-	return &ports.CapabilityExecutionResult{
+func failResult(message string) *ports.ToolResult {
+	return &ports.ToolResult{
 		Success: false,
 		Data: map[string]interface{}{
 			"success": false,

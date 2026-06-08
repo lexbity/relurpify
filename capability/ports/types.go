@@ -6,11 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/model"
 )
-
-// Ensure ports types match the canonical model types.
-type LLMToolSpec = model.LLMToolSpec
 
 // ToolParameterType enumerates the allowed parameter types.
 type ToolParameterType string
@@ -115,9 +111,6 @@ type ParamKeysProvider interface {
 	ParamKeys() []string
 }
 
-// CapabilityExecutionResult is an alias for backwards compatibility.
-type CapabilityExecutionResult = ToolResult
-
 // CommandRequest is a request to run a command in a sandboxed environment.
 type CommandRequest struct {
 	Workdir       string        `json:"workdir,omitempty"`
@@ -166,9 +159,6 @@ type Schema struct {
 	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
 }
-
-// ToolCall represents a tool invocation requested by an LLM.
-type ToolCall = model.ToolCall
 
 // ToolRegistry is a read-only interface for looking up tool manifests.
 type ToolRegistry interface {

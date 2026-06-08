@@ -12,12 +12,13 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
@@ -55,7 +56,7 @@ func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) 
 }
 
 func (h *browserCapability) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(".", permissions.FileSystemRead)}
+	return ports.ToolPermissions{Permissions: govpolicy.NewFileSystemPermissionSet(".", permissions.FileSystemRead)}
 }
 
 func (h *browserCapability) Tags() []string {
@@ -85,11 +86,11 @@ func (h *browserCapability) Descriptor(context.Context, *contextdata.Envelope) c
 		Category:    "browser",
 		Source: capability.CapabilitySource{
 			ProviderID: "browser",
-			Scope:      agentspec.CapabilityScopeProvider,
+			Scope:      taxonomy.CapabilityScopeProvider,
 		},
 		TrustClass:    agentspec.TrustClassProviderLocalUntrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassNetwork, agentspec.RiskClassSessioned, agentspec.RiskClassExfiltration},
-		EffectClasses: []agentspec.EffectClass{agentspec.EffectClassNetworkEgress, agentspec.EffectClassContextInsertion, agentspec.EffectClassSessionCreation},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassNetwork, taxonomy.RiskClassSessioned, taxonomy.RiskClassExfiltration},
+		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassContextInsertion, taxonomy.EffectClassSessionCreation},
 		InputSchema:   browserInputSchema(),
 		Availability: capability.AvailabilitySpec{
 			Available: true,
@@ -118,7 +119,7 @@ func browserInputSchema() *schemacoerce.Schema {
 	}
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *browserCapability) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	return h.Execute(ctx, env, args)
 }
 
@@ -306,9 +307,9 @@ func (h *browserCapability) authorizeAction(ctx context.Context, action string, 
 	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("browser action %s denied by agent spec", action)
 	case agentspec.AgentPermissionAsk:
-		risk := fauthorization.RiskLevelMedium
+		risk := govpolicy.RiskLevelMedium
 		if action == browserActionExecuteJS {
-			risk = fauthorization.RiskLevelHigh
+			risk = govpolicy.RiskLevelHigh
 		}
 		return h.service.requireActionApproval(ctx, action, env, args, risk)
 	default:
@@ -388,7 +389,7 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 	return nil
 }
 
-func (s *BrowserService) requireActionApproval(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}, risk fauthorization.RiskLevel) error {
+func (s *BrowserService) requireActionApproval(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}, risk govpolicy.RiskLevel) error {
 	if s == nil || s.permissionManager == nil {
 		return fmt.Errorf("browser action %s requires approval but permission manager missing", action)
 	}
@@ -407,5 +408,5 @@ func (s *BrowserService) requireActionApproval(ctx context.Context, action strin
 		Resource:     resource,
 		Metadata:     metadata,
 		RequiresHITL: true,
-	}, "browser action approval", fauthorization.GrantScopeOneTime, risk, 0)
+	}, "browser action approval", govpolicy.GrantScopeOneTime, risk, 0)
 }

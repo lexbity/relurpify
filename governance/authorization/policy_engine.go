@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -40,7 +39,7 @@ func FromManifestWithConfig(m *config.AgentManifest, agentID string, manager *Pe
 
 // FromAgentSpecWithConfig constructs a ManifestPolicyEngine from an effective
 // runtime spec rather than a raw manifest.
-func FromAgentSpecWithConfig(spec *agentspec.AgentRuntimeSpec, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
+func FromAgentSpecWithConfig(spec ports.SpecView, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
 	rules, err := CompileAgentSpecPolicyRules(spec)
 	if err != nil {
 		return nil, err
@@ -105,13 +104,13 @@ func (e *ManifestPolicyEngine) resumeFallbackDecision(req policy.PolicyRequest) 
 
 func (e *ManifestPolicyEngine) capabilityFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	switch req.TrustClass {
-	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
+	case "builtin-trusted", "workspace-trusted":
 		return policy.PolicyDecisionAllow("workspace trusted")
 	default:
 		switch e.manager.DefaultPolicy() {
-		case agentspec.AgentPermissionAllow:
+		case "allow":
 			return policy.PolicyDecisionAllow("default policy: allow")
-		case agentspec.AgentPermissionDeny:
+		case "deny":
 			return policy.PolicyDecisionDeny(
 				fmt.Sprintf("capability %q denied by default policy for agent %s", req.CapabilityName, e.agentID),
 			)
@@ -123,12 +122,12 @@ func (e *ManifestPolicyEngine) capabilityFallbackDecision(req policy.PolicyReque
 
 func (e *ManifestPolicyEngine) providerFallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
 	switch req.ProviderKind {
-	case capability.ProviderKindBuiltin, capability.ProviderKindAgentRuntime:
+	case "builtin", "agent-runtime":
 		return policy.PolicyDecisionAllow("provider kind trusted by default")
 	}
-	if req.ProviderOrigin == capability.ProviderOriginRemote ||
-		req.ProviderKind == capability.ProviderKindMCPClient ||
-		req.ProviderKind == capability.ProviderKindMCPServer {
+	if req.ProviderOrigin == "remote" ||
+		req.ProviderKind == "mcp-client" ||
+		req.ProviderKind == "mcp-server" {
 		return policy.PolicyDecisionRequireApproval(nil)
 	}
 	return policy.PolicyDecisionAllow("provider allowed by default")

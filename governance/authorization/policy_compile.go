@@ -5,7 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -27,41 +28,41 @@ func CompileManifestPolicyRules(m *config.AgentManifest) ([]pol.PolicyRule, erro
 
 // CompileAgentSpecPolicyRules compiles policy surfaces from an effective agent
 // spec rather than a raw manifest.
-func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]pol.PolicyRule, error) {
+func CompileAgentSpecPolicyRules(spec ports.SpecView) ([]pol.PolicyRule, error) {
 	if spec == nil {
 		return nil, nil
 	}
 	var rules []pol.PolicyRule
 
-	for toolName, policy := range spec.ToolExecutionPolicy {
+	for toolName, policy := range spec.GetToolExecutionPolicy() {
 		rule, ok := compileToolExecutionPolicy(toolName, policy)
 		if !ok {
 			continue
 		}
 		rules = append(rules, rule)
 	}
-	for i, policy := range spec.CapabilityPolicies {
+	for i, policy := range spec.GetCapabilityPolicies() {
 		rule, err := compileCapabilityPolicy(i, policy)
 		if err != nil {
 			return nil, err
 		}
 		rules = append(rules, rule)
 	}
-	for providerID, policy := range spec.ProviderPolicies {
+	for providerID, policy := range spec.GetProviderPolicies() {
 		rule, ok := compileProviderPolicy(providerID, policy)
 		if !ok {
 			continue
 		}
 		rules = append(rules, rule)
 	}
-	for i, policy := range spec.SessionPolicies {
+	for i, policy := range spec.GetSessionPolicies() {
 		rule, err := compileSessionPolicy(i, policy)
 		if err != nil {
 			return nil, err
 		}
 		rules = append(rules, rule)
 	}
-	for key, level := range spec.GlobalPolicies {
+	for key, level := range spec.GetGlobalPolicies() {
 		rule, err := compileGlobalPolicy(key, level)
 		if err != nil {
 			return nil, err
@@ -80,7 +81,7 @@ func CompileAgentSpecPolicyRules(spec *agentspec.AgentRuntimeSpec) ([]pol.Policy
 	return rules, nil
 }
 
-func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (pol.PolicyRule, bool) {
+func compileToolExecutionPolicy(toolName string, policy ports.ToolPolicyView) (pol.PolicyRule, bool) {
 	if strings.TrimSpace(toolName) == "" || policy.Execute == "" {
 		return pol.PolicyRule{}, false
 	}
@@ -91,14 +92,14 @@ func compileToolExecutionPolicy(toolName string, policy agentspec.ToolPolicy) (p
 		Enabled:  true,
 		Conditions: pol.PolicyConditions{
 			Capabilities:    []string{toolName},
-			CapabilityKinds: []agentspec.CapabilityKind{agentspec.CapabilityKindTool},
-			RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyLocalTool},
+			CapabilityKinds: []string{"tool"},
+			RuntimeFamilies: []string{"local-tool"},
 		},
 		Effect: permissionLevelToEffect(policy.Execute, ""),
 	}, true
 }
 
-func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (pol.PolicyRule, error) {
+func compileCapabilityPolicy(index int, policy ports.CapabilityPolicyView) (pol.PolicyRule, error) {
 	conditions, err := compileCapabilitySelector(policy.Selector)
 	if err != nil {
 		return pol.PolicyRule{}, fmt.Errorf("capability_policies[%d] unsupported selector: %w", index, err)
@@ -113,7 +114,7 @@ func compileCapabilityPolicy(index int, policy agentspec.CapabilityPolicy) (pol.
 	}, nil
 }
 
-func compileProviderPolicy(providerID string, policy agentspec.ProviderPolicy) (pol.PolicyRule, bool) {
+func compileProviderPolicy(providerID string, policy ports.ProviderPolicyView) (pol.PolicyRule, bool) {
 	if strings.TrimSpace(providerID) == "" || policy.Activate == "" {
 		return pol.PolicyRule{}, false
 	}
@@ -129,7 +130,7 @@ func compileProviderPolicy(providerID string, policy agentspec.ProviderPolicy) (
 	}, true
 }
 
-func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (pol.PolicyRule, error) {
+func compileSessionPolicy(index int, policy ports.SessionPolicyView) (pol.PolicyRule, error) {
 	corePolicy := pol.SessionPolicy{
 		ID:       policy.ID,
 		Name:     policy.Name,
@@ -139,19 +140,19 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (pol.Policy
 			Partitions:                append([]string{}, policy.Selector.Partitions...),
 			ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
 			Scopes:                    convertSessionScopes(policy.Selector.Scopes),
-			TrustClasses:              append([]agentspec.TrustClass{}, policy.Selector.TrustClasses...),
+			TrustClasses:              append([]string{}, policy.Selector.TrustClasses...),
 			Operations:                convertSessionOperations(policy.Selector.Operations),
 			ActorKinds:                append([]string{}, policy.Selector.ActorKinds...),
 			ActorIDs:                  append([]string{}, policy.Selector.ActorIDs...),
-			ExternalProviders:         convertExternalProvidersToStrings(policy.Selector.ExternalProviders),
+			ExternalProviders:         append([]string{}, policy.Selector.ExternalProvider...),
 			RequireOwnership:          policy.Selector.RequireOwnership,
 			RequireDelegation:         policy.Selector.RequireDelegation,
 			RequireExternalBinding:    policy.Selector.RequireExternalBinding,
 			RequireResolvedExternal:   policy.Selector.RequireResolvedExternal,
 			RequireRestrictedExternal: policy.Selector.RequireRestrictedExternal,
-			AuthenticatedOnly:         policy.Selector.AuthenticatedOnly,
+			AuthenticatedOnly:         policy.Selector.AuthOnly,
 		},
-		Effect:      agentspec.AgentPermissionLevel(policy.Effect),
+		Effect:      policy.Effect,
 		Approvers:   append([]string{}, policy.Approvers...),
 		ApprovalTTL: policy.ApprovalTTL,
 		Reason:      policy.Reason,
@@ -160,7 +161,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (pol.Policy
 		return pol.PolicyRule{}, err
 	}
 	conditions := pol.PolicyConditions{
-		TrustClasses:              append([]agentspec.TrustClass{}, corePolicy.Selector.TrustClasses...),
+		TrustClasses:              append([]string{}, corePolicy.Selector.TrustClasses...),
 		Partitions:                append([]string{}, corePolicy.Selector.Partitions...),
 		ChannelIDs:                append([]string{}, corePolicy.Selector.ChannelIDs...),
 		SessionScopes:             append([]pol.SessionScope{}, corePolicy.Selector.Scopes...),
@@ -199,7 +200,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (pol.Policy
 	}, nil
 }
 
-func convertSessionScopes(values []agentspec.SessionScope) []pol.SessionScope {
+func convertSessionScopes(values []string) []pol.SessionScope {
 	out := make([]pol.SessionScope, 0, len(values))
 	for _, value := range values {
 		out = append(out, pol.SessionScope(value))
@@ -207,7 +208,7 @@ func convertSessionScopes(values []agentspec.SessionScope) []pol.SessionScope {
 	return out
 }
 
-func convertSessionOperations(values []agentspec.SessionOperation) []pol.SessionOperation {
+func convertSessionOperations(values []string) []pol.SessionOperation {
 	out := make([]pol.SessionOperation, 0, len(values))
 	for _, value := range values {
 		out = append(out, pol.SessionOperation(value))
@@ -215,15 +216,15 @@ func convertSessionOperations(values []agentspec.SessionOperation) []pol.Session
 	return out
 }
 
-func convertExternalProvidersToStrings(values []agentspec.ExternalProvider) []string {
+func convertExternalProvidersToStrings(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
-		out = append(out, string(value))
+		out = append(out, value)
 	}
 	return out
 }
 
-func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*pol.PolicyRule, error) {
+func compileGlobalPolicy(key string, level string) (*pol.PolicyRule, error) {
 	key = strings.TrimSpace(strings.ToLower(key))
 	if key == "" || key == "default_tool_policy" || level == "" {
 		return nil, nil
@@ -236,32 +237,32 @@ func compileGlobalPolicy(key string, level agentspec.AgentPermissionLevel) (*pol
 		Effect:   permissionLevelToEffect(level, ""),
 	}
 	switch key {
-	case string(agentspec.TrustClassBuiltinTrusted), string(agentspec.TrustClassWorkspaceTrusted), string(agentspec.TrustClassProviderLocalUntrusted), string(agentspec.TrustClassRemoteDeclared), string(agentspec.TrustClassRemoteApproved):
-		rule.Conditions.TrustClasses = []agentspec.TrustClass{agentspec.TrustClass(key)}
-	case string(agentspec.RiskClassReadOnly), string(agentspec.RiskClassDestructive), string(agentspec.RiskClassExecute), string(agentspec.RiskClassNetwork), string(agentspec.RiskClassCredentialed), string(agentspec.RiskClassExfiltration), string(agentspec.RiskClassSessioned):
-		rule.Conditions.MinRiskClasses = []agentspec.RiskClass{agentspec.RiskClass(key)}
-	case string(agentspec.CapabilityRuntimeFamilyLocalTool), string(agentspec.CapabilityRuntimeFamilyProvider), string(agentspec.CapabilityRuntimeFamilyRelurpic):
-		rule.Conditions.RuntimeFamilies = []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamily(key)}
-	case string(agentspec.EffectClassFilesystemMutation), string(agentspec.EffectClassProcessSpawn), string(agentspec.EffectClassNetworkEgress), string(agentspec.EffectClassCredentialUse), string(agentspec.EffectClassExternalState), string(agentspec.EffectClassSessionCreation), string(agentspec.EffectClassContextInsertion):
-		rule.Conditions.EffectClasses = []agentspec.EffectClass{agentspec.EffectClass(key)}
+	case "builtin-trusted", "workspace-trusted", "provider-local-untrusted", "remote-declared-untrusted", "remote-approved":
+		rule.Conditions.TrustClasses = []string{key}
+	case string(taxonomy.RiskClassReadOnly), string(taxonomy.RiskClassDestructive), string(taxonomy.RiskClassExecute), string(taxonomy.RiskClassNetwork), string(taxonomy.RiskClassCredentialed), string(taxonomy.RiskClassExfiltration), string(taxonomy.RiskClassSessioned):
+		rule.Conditions.MinRiskClasses = []taxonomy.RiskClass{taxonomy.RiskClass(key)}
+	case "local-tool", "provider", "relurpic":
+		rule.Conditions.RuntimeFamilies = []string{key}
+	case string(taxonomy.EffectClassFilesystemMutation), string(taxonomy.EffectClassProcessSpawn), string(taxonomy.EffectClassNetworkEgress), string(taxonomy.EffectClassCredentialUse), string(taxonomy.EffectClassExternalState), string(taxonomy.EffectClassSessionCreation), string(taxonomy.EffectClassContextInsertion):
+		rule.Conditions.EffectClasses = []taxonomy.EffectClass{taxonomy.EffectClass(key)}
 	default:
 		return nil, fmt.Errorf("unsupported global policy class %q", key)
 	}
 	return rule, nil
 }
 
-func compileCapabilitySelector(selector agentspec.CapabilitySelector) (pol.PolicyConditions, error) {
+func compileCapabilitySelector(selector ports.CapabilitySelectorView) (pol.PolicyConditions, error) {
 	legacy := selector
 	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
-		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
-		selector.CoordinationLongRunning != agentspec.EnabledStateUnset || selector.CoordinationDirectInsertion != agentspec.EnabledStateUnset {
+		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecModes) > 0 ||
+		selector.CoordinationLongRunning != 0 || selector.CoordinationDirectInsertion != 0 {
 		return pol.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}
 	conditions := pol.PolicyConditions{
-		TrustClasses:    append([]agentspec.TrustClass{}, legacy.TrustClasses...),
-		MinRiskClasses:  append([]agentspec.RiskClass{}, legacy.RiskClasses...),
-		RuntimeFamilies: append([]agentspec.CapabilityRuntimeFamily{}, legacy.RuntimeFamilies...),
-		EffectClasses:   append([]agentspec.EffectClass{}, legacy.EffectClasses...),
+		TrustClasses:    append([]string{}, legacy.TrustClasses...),
+		MinRiskClasses:  append([]taxonomy.RiskClass{}, toRiskClasses(legacy.RiskClasses)...),
+		RuntimeFamilies: append([]string{}, legacy.RuntimeFamilies...),
+		EffectClasses:   append([]taxonomy.EffectClass{}, toEffectClasses(legacy.EffectClasses)...),
 	}
 	if legacy.ID != "" {
 		conditions.Capabilities = append(conditions.Capabilities, legacy.ID)
@@ -270,23 +271,39 @@ func compileCapabilitySelector(selector agentspec.CapabilitySelector) (pol.Polic
 		conditions.Capabilities = append(conditions.Capabilities, legacy.Name)
 	}
 	if legacy.Kind != "" {
-		conditions.CapabilityKinds = []agentspec.CapabilityKind{legacy.Kind}
+		conditions.CapabilityKinds = []string{legacy.Kind}
 	}
 	return conditions, nil
 }
 
-func permissionLevelToEffect(level agentspec.AgentPermissionLevel, reason string) pol.PolicyEffect {
+func toRiskClasses(values []string) []taxonomy.RiskClass {
+	out := make([]taxonomy.RiskClass, 0, len(values))
+	for _, v := range values {
+		out = append(out, taxonomy.RiskClass(v))
+	}
+	return out
+}
+
+func toEffectClasses(values []string) []taxonomy.EffectClass {
+	out := make([]taxonomy.EffectClass, 0, len(values))
+	for _, v := range values {
+		out = append(out, taxonomy.EffectClass(v))
+	}
+	return out
+}
+
+func permissionLevelToEffect(level string, reason string) pol.PolicyEffect {
 	return pol.PolicyEffect{
 		Action: permissionLevelToAction(level),
 		Reason: reason,
 	}
 }
 
-func permissionLevelToAction(level agentspec.AgentPermissionLevel) string {
+func permissionLevelToAction(level string) string {
 	switch level {
-	case agentspec.AgentPermissionAllow:
+	case "allow":
 		return "allow"
-	case agentspec.AgentPermissionDeny:
+	case "deny":
 		return "deny"
 	default:
 		return "require_approval"

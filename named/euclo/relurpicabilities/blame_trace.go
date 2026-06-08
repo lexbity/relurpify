@@ -7,6 +7,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -36,11 +37,11 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 		Category:      "git",
 		Tags:          []string{"git", "blame", "read-only"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -86,7 +87,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env *contextdata.Env
 }
 
 // Invoke executes git blame and returns parsed blame entries.
-func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {
@@ -152,7 +153,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Execute command
 	res, err := h.env.CommandRunner.Run(ctx, req)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -162,7 +163,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 		}, nil
 	}
 	if res.ExitCode != 0 {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -175,7 +176,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelop
 	// Parse porcelain blame output
 	entries := parsePorcelainBlame(res.Stdout)
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -118,7 +117,7 @@ func (stubLanguageModel) Chat(context.Context, []model.Message, *model.LLMOption
 	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: "ok"}, nil
 }
 

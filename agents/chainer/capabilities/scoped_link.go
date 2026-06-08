@@ -2,7 +2,7 @@ package capabilities
 
 import (
 	"codeburg.org/lexbit/relurpify/agents/chainer"
-	capability "codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // ScopedLink wraps a chainer.Link and provides tool scoping capability.
@@ -59,9 +59,9 @@ func (s *ScopedLink) AllowedToolNames() []string {
 //   - InsertionActionMetadataOnly: Include only metadata
 //   - InsertionActionHITLRequired: Require user approval
 //   - InsertionActionDenied: Block tool access
-func (s *ScopedLink) ToolAccessPolicy(toolID string) capability.InsertionAction {
+func (s *ScopedLink) ToolAccessPolicy(toolID string) agentspec.InsertionAction {
 	if s == nil || s.link == nil {
-		return capability.InsertionActionDirect // No restrictions
+		return agentspec.InsertionActionDirect // No restrictions
 	}
 
 	// Check if tool is in allowed list
@@ -74,7 +74,7 @@ func (s *ScopedLink) ToolAccessPolicy(toolID string) capability.InsertionAction 
 			}
 		}
 		if !allowed {
-			return capability.InsertionActionDenied
+			return agentspec.InsertionActionDenied
 		}
 	}
 
@@ -83,5 +83,5 @@ func (s *ScopedLink) ToolAccessPolicy(toolID string) capability.InsertionAction 
 		return s.evaluator.EvaluateToolAccess(s.link, toolID)
 	}
 
-	return capability.InsertionActionDirect // Allow by default
+	return agentspec.InsertionActionDirect // Allow by default
 }

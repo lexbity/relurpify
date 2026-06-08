@@ -8,6 +8,7 @@ import (
 
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type CapabilityCatalog interface {
@@ -242,7 +243,7 @@ func blockingPreflightError(issues []PreflightIssue) error {
 	return nil
 }
 
-func riskExceeds(max agentspec.RiskClass, actual []agentspec.RiskClass) bool {
+func riskExceeds(max taxonomy.RiskClass, actual []taxonomy.RiskClass) bool {
 	if max == "" {
 		return false
 	}
@@ -255,7 +256,7 @@ func riskExceeds(max agentspec.RiskClass, actual []agentspec.RiskClass) bool {
 	return false
 }
 
-func maxRiskRank(risks []agentspec.RiskClass) int {
+func maxRiskRank(risks []taxonomy.RiskClass) int {
 	max := 0
 	for _, risk := range risks {
 		if rank := riskRank(risk); rank > max {
@@ -265,21 +266,21 @@ func maxRiskRank(risks []agentspec.RiskClass) int {
 	return max
 }
 
-func riskRank(risk agentspec.RiskClass) int {
+func riskRank(risk taxonomy.RiskClass) int {
 	switch risk {
-	case agentspec.RiskClassReadOnly:
+	case taxonomy.RiskClassReadOnly:
 		return 1
-	case agentspec.RiskClassSessioned:
+	case taxonomy.RiskClassSessioned:
 		return 2
-	case agentspec.RiskClassNetwork:
+	case taxonomy.RiskClassNetwork:
 		return 3
-	case agentspec.RiskClassExecute:
+	case taxonomy.RiskClassExecute:
 		return 4
-	case agentspec.RiskClassCredentialed:
+	case taxonomy.RiskClassCredentialed:
 		return 5
-	case agentspec.RiskClassExfiltration:
+	case taxonomy.RiskClassExfiltration:
 		return 6
-	case agentspec.RiskClassDestructive:
+	case taxonomy.RiskClassDestructive:
 		return 7
 	default:
 		return 0

@@ -2,7 +2,7 @@ package pipeline
 
 import "codeburg.org/lexbit/relurpify/capability"
 
-func (a *PipelineAgent) CapabilityRegistry() *capability.Registry {
+func (a *PipelineAgent) CapabilityRegistry() *capability.CapabilityRegistry {
 	if a == nil {
 		return nil
 	}

@@ -54,7 +54,7 @@ func TaskPayload(task *execution.Task, key string) []byte {
 // new multi-step agents.
 type PlannerAgent struct {
 	Model           model.LanguageModel
-	Tools           *capability.Registry
+	Tools           *capability.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Config          *execution.Config
 	StreamMode      contextstream.Mode
@@ -592,7 +592,7 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 	})}, nil
 }
 
-func normalizePlannerStepParams(registry *capability.Registry, toolName string, params map[string]interface{}) map[string]interface{} {
+func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolName string, params map[string]interface{}) map[string]interface{} {
 	if len(params) == 0 {
 		return params
 	}
@@ -705,7 +705,9 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	if agent == nil || agent.Config == nil || agent.Config.AgentSpec == nil {
 		return ""
 	}
-	p := policyresolve.ResolveEffectiveAgentPolicy(nil, agent.Config.AgentSpec, agent.Tools).Policy
+	cfg := agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
+	reg := capability.NewPolicyResolveRegistry(agent.Tools)
+	p := policyresolve.ResolveEffectiveAgentPolicy(cfg, reg).Policy
 	return policy.RenderPlanningPolicy(p, policy.PlanningRenderOptions{
 		IncludePhaseCapabilities:   true,
 		IncludeVerificationSuccess: true,
@@ -743,11 +745,12 @@ func normalizePlannerPlan(agent *PlannerAgent, task *execution.Task, plan pl.Pla
 		adjustments = append(adjustments, fmt.Sprintf("assigned ids to %d plan steps", added))
 	}
 	repairPlannerSteps(agent.Tools, &plan, &adjustments)
-	var fallback *agentspec.AgentRuntimeSpec
-	if agent.Config != nil {
-		fallback = agent.Config.AgentSpec
+	var fallback policyresolve.AgentOrchestrationConfig
+	if agent.Config != nil && agent.Config.AgentSpec != nil {
+		fallback = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}
-	effective := policyresolve.ResolveEffectiveAgentPolicy(task, fallback, agent.Tools)
+	reg := capability.NewPolicyResolveRegistry(agent.Tools)
+	effective := policyresolve.ResolveEffectiveAgentPolicy(fallback, reg)
 	if effective.Spec == nil {
 		return plan, adjustments
 	}
@@ -1114,7 +1117,7 @@ func insertPlannerStep(steps []pl.PlanStep, index int, step pl.PlanStep) []pl.Pl
 	return steps
 }
 
-func repairPlannerSteps(registry *capability.Registry, plan *pl.Plan, adjustments *[]string) {
+func repairPlannerSteps(registry *capability.CapabilityRegistry, plan *pl.Plan, adjustments *[]string) {
 	if registry == nil || plan == nil {
 		return
 	}
@@ -1130,7 +1133,7 @@ func repairPlannerSteps(registry *capability.Registry, plan *pl.Plan, adjustment
 	}
 }
 
-func repairPlannerStep(registry *capability.Registry, step pl.PlanStep) (pl.PlanStep, bool, string) {
+func repairPlannerStep(registry *capability.CapabilityRegistry, step pl.PlanStep) (pl.PlanStep, bool, string) {
 	switch strings.TrimSpace(step.Tool) {
 	case "file_search":
 		if _, hasPattern := step.Params["pattern"]; hasPattern {

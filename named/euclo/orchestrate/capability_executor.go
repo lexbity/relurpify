@@ -16,7 +16,7 @@ import (
 // CapabilityExecutionNode executes a selected capability through the framework registry.
 type CapabilityExecutionNode struct {
 	id       string
-	registry *capability.Registry
+	registry *capability.CapabilityRegistry
 }
 
 // NewCapabilityExecutionNode creates a new capability execution node.
@@ -27,7 +27,7 @@ func NewCapabilityExecutionNode(id string) *CapabilityExecutionNode {
 }
 
 // WithCapabilityRegistry sets the registry used to invoke capabilities.
-func (n *CapabilityExecutionNode) WithCapabilityRegistry(reg *capability.Registry) *CapabilityExecutionNode {
+func (n *CapabilityExecutionNode) WithCapabilityRegistry(reg *capability.CapabilityRegistry) *CapabilityExecutionNode {
 	if n != nil && reg != nil {
 		n.registry = reg
 	}

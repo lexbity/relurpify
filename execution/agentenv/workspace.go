@@ -196,7 +196,7 @@ type BootstrappedAgentRuntime struct {
 	AgentConfig          *execution.Config
 	Backend              llm.ManagedBackend
 	Environment          WorkspaceEnvironment
-	Registry             *capability.Registry
+	Registry             *capability.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
 	CapabilityAdmissions []capability.AdmissionResult
@@ -510,6 +510,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		SecurityBundle:   cfg.SecurityBundle,
 		ConfigPath:       cfg.ConfigPath,
 		Backend:          cfg.SandboxBackend,
+		BackendFactory:   newSandboxBackendFactory(),
 		AuditLimit:       cfg.AuditLimit,
 		BaseFS:           cfg.Workspace,
 		StateDir:         cfg.StateDir,
@@ -532,7 +533,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 			Workspace:       cfg.Workspace,
 		}
 	}
-	runner, err := fsandbox.NewCommandRunner(runnerConfig, registration.Runtime)
+	runner, err := fsandbox.NewCommandRunner(runnerConfig, &reverseSandboxRuntimeAdapter{inner: registration.Runtime})
 	if err != nil {
 		logFile.Close()
 		return nil, err

@@ -12,6 +12,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -42,11 +43,11 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 		Category:      "review_synthesis",
 		Tags:          []string{"git", "diff", "review", "relurpic"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -99,7 +100,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke runs git diff and returns a structured summary.
-func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.env.CommandRunner == nil {
 		return failResult("CommandRunner not available in environment"), nil
 	}
@@ -139,7 +140,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	}
 	statRes, err := h.env.CommandRunner.Run(ctx, statReq)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -167,7 +168,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	}
 	nameRes, err := h.env.CommandRunner.Run(ctx, nameReq)
 	if err != nil {
-		return &ports.CapabilityExecutionResult{
+		return &ports.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"success": false,
@@ -194,7 +195,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 		}
 	}
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success":       true,

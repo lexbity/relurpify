@@ -109,9 +109,9 @@ func RegistryHasTool(agent graph.WorkflowExecutor, toolName string) bool {
 }
 
 // extractCapabilityRegistry gets the capability registry from an agent
-func extractCapabilityRegistry(agent graph.WorkflowExecutor) *capability.Registry {
+func extractCapabilityRegistry(agent graph.WorkflowExecutor) *capability.CapabilityRegistry {
 	type capabilityRegistryProvider interface {
-		CapabilityRegistry() *capability.Registry
+		CapabilityRegistry() *capability.CapabilityRegistry
 	}
 	if provider, ok := agent.(capabilityRegistryProvider); ok {
 		return provider.CapabilityRegistry()

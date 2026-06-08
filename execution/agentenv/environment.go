@@ -6,6 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
@@ -23,11 +24,11 @@ import (
 )
 
 type VerificationPlanner interface {
-	SelectVerificationPlan(context.Context, agentenv.VerificationPlanRequest) (agentenv.VerificationPlan, bool, error)
+	SelectVerificationPlan(context.Context, VerificationPlanRequest) (VerificationPlan, bool, error)
 }
 
 type CompatibilitySurfaceExtractor interface {
-	ExtractSurface(context.Context, agentenv.CompatibilitySurfaceRequest) (agentenv.CompatibilitySurface, bool, error)
+	ExtractSurface(context.Context, CompatibilitySurfaceRequest) (CompatibilitySurface, bool, error)
 }
 
 // WorkspaceEnvironment is the canonical runtime environment shared by all agents
@@ -51,7 +52,7 @@ type WorkspaceEnvironment struct {
 	Config        *execution.Config
 	Model         model.LanguageModel
 	CommandPolicy sandbox.CommandPolicy
-	FileScope     *sandbox.FileScopePolicy
+	FileScope     *permissions.FileScopePolicy
 	// CommandRunner is the sandbox-enforced runner built by ayenitd from the
 	// manifest-declared command allowlist. Named agents and their capability
 	// handlers use this to execute shell, git, and test commands without
@@ -63,7 +64,7 @@ type WorkspaceEnvironment struct {
 	// Capability + permission
 	// Registry is the single implementation of the capability registry interface.
 	// Kept as concrete type for direct access to registration methods.
-	Registry *capability.Registry
+	Registry *capability.CapabilityRegistry
 	// PermissionManager is the single implementation of the permission manager interface.
 	// Kept as concrete type for direct access to permission enforcement methods.
 	PermissionManager *fauthorization.PermissionManager
@@ -135,7 +136,7 @@ type WorkspaceEnvironment struct {
 
 // WithRegistry returns a shallow copy with Registry replaced.
 // Agents use this to scope capability access for child executions.
-func (e WorkspaceEnvironment) WithRegistry(r *capability.Registry) WorkspaceEnvironment {
+func (e WorkspaceEnvironment) WithRegistry(r *capability.CapabilityRegistry) WorkspaceEnvironment {
 	e.Registry = r
 	return e
 }
@@ -155,7 +156,7 @@ func (e WorkspaceEnvironment) WithCommandRunner(r sandbox.CommandRunner) Workspa
 }
 
 // WithFileScope returns a shallow copy with FileScope replaced.
-func (e WorkspaceEnvironment) WithFileScope(scope *sandbox.FileScopePolicy) WorkspaceEnvironment {
+func (e WorkspaceEnvironment) WithFileScope(scope *permissions.FileScopePolicy) WorkspaceEnvironment {
 	e.FileScope = scope
 	return e
 }

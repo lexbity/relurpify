@@ -2,27 +2,124 @@
 // PermissionManager authorises tool calls, file access, executable invocations, and
 // network requests against permissions declared in the agent manifest, applying a
 // three-level policy (Allow / Ask / Deny) with Human-in-the-Loop approval flows
-// and configurable GrantScope (OneTime, Session, Persistent).
+// and configurable policy.GrantScope (OneTime, Session, Persistent).
 package authorization
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 const permissionMatchAll = "**"
+
+// AgentFilePermissionSet stores glob allow/deny rules.
+type AgentFilePermissionSet struct {
+	AllowPatterns     []string
+	DenyPatterns      []string
+	Default           string
+	RequireApproval   bool
+	DocumentationOnly bool
+}
+
+// AgentFileMatrix scopes write/edit operations.
+type AgentFileMatrix struct {
+	Write AgentFilePermissionSet
+	Edit  AgentFilePermissionSet
+}
+
+// ToolPermissions describes the permissions a tool requires.
+type ToolPermissions struct {
+	Permissions *permissions.PermissionSet
+}
+
+func (t ToolPermissions) Validate() error {
+	if t.Permissions == nil {
+		return errors.New("tool permissions missing")
+	}
+	return t.Permissions.Validate()
+}
+
+// Tool is the governance-owned view of a capability tool.
+type Tool interface {
+	Name() string
+	Permissions() ToolPermissions
+	Tags() []string
+}
+
+// SandboxConfig exposes runtime knobs for a sandbox backend.
+type SandboxConfig struct {
+	RunscPath        string
+	ContainerRuntime string
+	Platform         string
+	NetworkIsolation bool
+	ReadOnlyRoot     bool
+	SeccompProfile   string
+}
+
+// SandboxPolicy captures the backend-neutral security intent for a sandbox runtime.
+type SandboxPolicy struct {
+	NetworkRules    []NetworkRule
+	ReadOnlyRoot    bool
+	ProtectedPaths  []string
+	NoNewPrivileges bool
+	SeccompProfile  string
+	AllowedEnvKeys  []string
+	DeniedEnvKeys   []string
+}
+
+// NetworkRule defines network access rules for sandbox policies.
+type NetworkRule struct {
+	Direction   string
+	Protocol    string
+	Host        string
+	Port        int
+	Description string
+}
+
+// SandboxRuntime describes a sandbox runtime with policy methods.
+type SandboxRuntime interface {
+	Verify(ctx context.Context) error
+	ValidatePolicy(policy SandboxPolicy) error
+	ApplyPolicy(ctx context.Context, policy SandboxPolicy) error
+	Policy() SandboxPolicy
+	RunConfig() SandboxConfig
+	Name() string
+}
+
+// isPrivateOrLoopbackHost checks if the host is a private/loopback address.
+func isPrivateOrLoopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return isPrivateIP(ip)
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return false
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return true
+	}
+	return false
+}
 
 // hitlRateMax is the maximum HITL requests per key within hitlRateWindow before
 // subsequent requests are rejected with a rate-limit error.
@@ -48,12 +145,12 @@ type PermissionManager struct {
 	declared         *permissions.PermissionSet
 	audit            policy.AuditLogger
 	hitl             HITLProvider
-	runtime          sandbox.SandboxRuntime
+	runtime          SandboxRuntime
 	grants           map[string]*PermissionGrant
 	mu               sync.RWMutex
 	grantClock       func() time.Time
-	netPolicy        []sandbox.NetworkRule
-	defaultPolicy    agentspec.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
+	netPolicy        []NetworkRule
+	defaultPolicy    string // governs undeclared tool permissions; default is Ask
 	eventLogger      func(context.Context, permissions.PermissionDescriptor, string, string, map[string]interface{})
 	runtimePolicyErr error
 	taskGrants       map[string]taskGrant
@@ -108,7 +205,7 @@ func (m *PermissionManager) SetFilesystemGuardRoots(protectedRoots, excludedRoot
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
-func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
+func (m *PermissionManager) AttachRuntime(runtime SandboxRuntime) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtime = runtime
@@ -117,7 +214,7 @@ func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
 
 // SetDefaultPolicy configures how undeclared permissions are handled.
 // agentspec.AgentPermissionAsk (default) routes to HITL; Allow bypasses; Deny hard-blocks.
-func (m *PermissionManager) SetDefaultPolicy(level agentspec.AgentPermissionLevel) {
+func (m *PermissionManager) SetDefaultPolicy(level string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.defaultPolicy = level
@@ -131,16 +228,16 @@ func (m *PermissionManager) SetEventLogger(logger func(context.Context, permissi
 }
 
 // DefaultPolicy returns the configured default policy level, falling back to Ask.
-func (m *PermissionManager) DefaultPolicy() agentspec.AgentPermissionLevel {
+func (m *PermissionManager) DefaultPolicy() string {
 	return m.effectiveDefaultPolicy()
 }
 
 // effectiveDefaultPolicy returns the configured policy, falling back to Ask.
-func (m *PermissionManager) effectiveDefaultPolicy() agentspec.AgentPermissionLevel {
+func (m *PermissionManager) effectiveDefaultPolicy() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.defaultPolicy == "" {
-		return agentspec.AgentPermissionAsk
+		return "ask"
 	}
 	return m.defaultPolicy
 }
@@ -183,55 +280,59 @@ func expandWorkspacePlaceholder(workspace, pattern string) string {
 // AuthorizeTool ensures the tool requirements fit the declared permissions.
 // Undeclared permissions are handled according to the configured defaultPolicy:
 // Ask (default) routes to HITL, Allow proceeds, Deny returns an error.
-func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool ports.Tool, args map[string]interface{}) error {
+func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]interface{}) error {
 	if m == nil || tool == nil {
 		return errors.New("permission manager or tool missing")
 	}
-	if m.toolAllowedByTaskGrant(ctx, tool) {
+	t, ok := tool.(Tool)
+	if !ok {
+		return errors.New("tool does not implement authorization.Tool")
+	}
+	if m.toolAllowedByTaskGrant(ctx, t) {
 		desc := permissions.PermissionDescriptor{
 			Type:     permissions.PermissionTypeHITL,
-			Action:   fmt.Sprintf("tool:%s", tool.Name()),
+			Action:   fmt.Sprintf("tool:%s", t.Name()),
 			Resource: agentID,
 		}
-		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]interface{}{"tags": tool.Tags()})
-		m.emitPolicyDecision(ctx, desc, "allow", "task grant matched tool tags", map[string]interface{}{"tags": tool.Tags()})
+		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]interface{}{"tags": t.Tags()})
+		m.emitPolicyDecision(ctx, desc, "allow", "task grant matched tool tags", map[string]interface{}{"tags": t.Tags()})
 		return nil
 	}
-	requirements := tool.Permissions()
+	requirements := t.Permissions()
 	if err := requirements.Validate(); err != nil {
-		return fmt.Errorf("tool %s permission invalid: %w", tool.Name(), err)
+		return fmt.Errorf("tool %s permission invalid: %w", t.Name(), err)
 	}
 	undeclared := m.collectUndeclared(requirements.Permissions)
 	if len(undeclared) > 0 {
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionDeny:
+		case "deny":
 			m.emitPolicyDecision(ctx, permissions.PermissionDescriptor{
 				Type:     permissions.PermissionTypeHITL,
-				Action:   fmt.Sprintf("tool:%s", tool.Name()),
+				Action:   fmt.Sprintf("tool:%s", t.Name()),
 				Resource: agentID,
 			}, "deny", "tool exceeds declared permissions", map[string]interface{}{"undeclared": undeclared})
-			return fmt.Errorf("tool %s exceeds agent permissions: %s", tool.Name(), strings.Join(undeclared, "; "))
-		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
+			return fmt.Errorf("tool %s exceeds agent permissions: %s", t.Name(), strings.Join(undeclared, "; "))
+		default: // "ask"
 			m.emitPolicyDecision(ctx, permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", tool.Name()),
+				Action:       fmt.Sprintf("tool:%s", t.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
 			}, "require_approval", "undeclared permissions require approval", map[string]interface{}{"undeclared": undeclared})
 			if err := m.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", tool.Name()),
+				Action:       fmt.Sprintf("tool:%s", t.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
-			}, fmt.Sprintf("tool %s requires: %s", tool.Name(), strings.Join(undeclared, ", ")),
-				GrantScopeSession, RiskLevelMedium, 0); err != nil {
+			}, fmt.Sprintf("tool %s requires: %s", t.Name(), strings.Join(undeclared, ", ")),
+				policy.GrantScopeSession, policy.RiskLevelMedium, 0); err != nil {
 				return err
 			}
 		}
 	}
 	desc := permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeHITL,
-		Action:   fmt.Sprintf("tool:%s", tool.Name()),
+		Action:   fmt.Sprintf("tool:%s", t.Name()),
 		Resource: agentID,
 	}
 	m.log(ctx, agentID, desc, "tool_allowed", nil)
@@ -277,7 +378,7 @@ func (m *PermissionManager) RevokeTaskGrant(runID string) {
 }
 
 // GrantPermission records a manual approval for a specific permission key.
-func (m *PermissionManager) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
+func (m *PermissionManager) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
 	if m == nil {
 		return
 	}
@@ -287,7 +388,7 @@ func (m *PermissionManager) GrantPermission(desc permissions.PermissionDescripto
 	m.grants[desc.Action+":"+desc.Resource] = grant
 }
 
-func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool ports.Tool) bool {
+func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool Tool) bool {
 	if m == nil || tool == nil {
 		return false
 	}
@@ -339,9 +440,9 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			Resource: clean,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionDeny:
+		case "deny":
 			return m.deny(ctx, agentID, desc, "not declared")
-		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
+		default: // AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -379,9 +480,9 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			Resource: binary,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionDeny:
+		case "deny":
 			return m.deny(ctx, agentID, desc, "binary not declared")
-		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
+		default: // AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -427,7 +528,7 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 	// reachable regardless of agent configuration. This prevents SSRF to
 	// cloud metadata services, localhost services, and internal networks.
 	// The denylist is owned and enforced by the sandbox package.
-	if sandbox.IsPrivateOrLoopbackHost(host) {
+	if isPrivateOrLoopbackHost(host) {
 		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
 			Type:     permissions.PermissionTypeNetwork,
 			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
@@ -442,9 +543,9 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			Resource: host,
 		}
 		switch m.effectiveDefaultPolicy() {
-		case agentspec.AgentPermissionDeny:
+		case "deny":
 			return m.deny(ctx, agentID, desc, "network scope missing")
-		default: // agentspec.AgentPermissionAsk (Allow is rejected at registration time)
+		default: // AgentPermissionAsk (Allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -476,7 +577,7 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rule := sandbox.NetworkRule{
+	rule := NetworkRule{
 		Direction: direction,
 		Protocol:  protocol,
 		Host:      host,
@@ -496,9 +597,9 @@ func (m *PermissionManager) applyRuntimePolicyLocked() {
 
 // Policy returns the merged sandbox policy currently known to the
 // permission manager. Callers get a copy and can inspect it without racing.
-func (m *PermissionManager) Policy() sandbox.SandboxPolicy {
+func (m *PermissionManager) Policy() SandboxPolicy {
 	if m == nil {
-		return sandbox.SandboxPolicy{}
+		return SandboxPolicy{}
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -515,15 +616,15 @@ func (m *PermissionManager) RuntimePolicyError() error {
 	return m.runtimePolicyErr
 }
 
-func (m *PermissionManager) currentSandboxPolicyLocked() sandbox.SandboxPolicy {
+func (m *PermissionManager) currentSandboxPolicyLocked() SandboxPolicy {
 	if m == nil {
-		return sandbox.SandboxPolicy{}
+		return SandboxPolicy{}
 	}
-	policy := sandbox.SandboxPolicy{}
+	policy := SandboxPolicy{}
 	if m.runtime != nil {
 		policy = m.runtime.Policy()
 	}
-	policy.NetworkRules = append([]sandbox.NetworkRule(nil), m.netPolicy...)
+	policy.NetworkRules = append([]NetworkRule(nil), m.netPolicy...)
 	return policy
 }
 
@@ -892,8 +993,8 @@ func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, des
 	grant, err := m.hitl.RequestPermission(ctx, PermissionRequest{
 		Permission:    desc,
 		Justification: "runtime request",
-		Scope:         GrantScopeSession,
-		Risk:          RiskLevelMedium,
+		Scope:         policy.GrantScopeSession,
+		Risk:          policy.RiskLevelMedium,
 	})
 	if err != nil {
 		return err
@@ -924,7 +1025,7 @@ func (m *PermissionManager) checkHITLRateLimit(key string) error {
 
 // RequireApproval requests HITL approval for an arbitrary runtime decision
 // (tool gating, file matrix, bash policy) and caches the resulting grant.
-func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope GrantScope, risk RiskLevel, duration time.Duration) error {
+func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error {
 	if m == nil {
 		return errors.New("permission manager missing")
 	}
@@ -947,10 +1048,10 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 		return m.deny(ctx, agentID, desc, "hitl approval required")
 	}
 	if scope == "" {
-		scope = GrantScopeOneTime
+		scope = policy.GrantScopeOneTime
 	}
 	if risk == "" {
-		risk = RiskLevelMedium
+		risk = policy.RiskLevelMedium
 	}
 	grant, err := m.hitl.RequestPermission(ctx, PermissionRequest{
 		Permission:    desc,
@@ -1119,7 +1220,7 @@ type HITLProvider interface {
 type PermissionGrant struct {
 	ID          string
 	Permission  permissions.PermissionDescriptor
-	Scope       GrantScope
+	Scope       policy.GrantScope
 	ExpiresAt   time.Time
 	ApprovedBy  string
 	Conditions  map[string]string
@@ -1210,7 +1311,7 @@ func matchEnv(patterns, env []string) bool {
 
 // CheckFilePermission implements permissions.FilePermissionChecker.
 // It validates a file operation against the agent's file matrix.
-func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {
+func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix AgentFileMatrix) error {
 	rel := absPath
 	if basePath != "" {
 		if r, err := filepath.Rel(basePath, absPath); err == nil {
@@ -1228,7 +1329,7 @@ func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, ba
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.AgentPermissionLevel(perm.Default))
 	if perm.RequireApproval {
 		decision = permissions.AgentPermissionAsk
 	}
@@ -1246,7 +1347,7 @@ func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, ba
 			Action:       fmt.Sprintf("file_matrix:%s", action),
 			Resource:     rel,
 			RequiresHITL: true,
-		}, "file permission matrix", GrantScopeOneTime, RiskLevelMedium, 0)
+		}, "file permission matrix", policy.GrantScopeOneTime, policy.RiskLevelMedium, 0)
 	default:
 		return nil
 	}

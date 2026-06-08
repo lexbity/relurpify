@@ -22,7 +22,7 @@ type PlanStepAgent struct {
 }
 
 // NewPlanStepAgent creates an adapter for executing plan steps as an agent.
-func NewPlanStepAgent(registry *capability.Registry, plan *plan.Plan) *PlanStepAgent {
+func NewPlanStepAgent(registry *capability.CapabilityRegistry, plan *plan.Plan) *PlanStepAgent {
 	return &PlanStepAgent{
 		stepExecutor: NewStepExecutor(registry),
 		plan:         plan,
@@ -228,13 +228,13 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 // ExecutionAdapter provides high-level integration between plan execution and agent execution.
 type ExecutionAdapter struct {
 	executor        *StepExecutor
-	registry        *capability.Registry
+	registry        *capability.CapabilityRegistry
 	metricsRecorder *audit.MetricsRecorder
 	failureMode     FailureMode
 }
 
 // NewExecutionAdapter creates a new execution adapter.
-func NewExecutionAdapter(registry *capability.Registry, recorder *audit.MetricsRecorder) *ExecutionAdapter {
+func NewExecutionAdapter(registry *capability.CapabilityRegistry, recorder *audit.MetricsRecorder) *ExecutionAdapter {
 	executor := NewStepExecutor(registry)
 	executor.SetMetricsRecorder(recorder)
 

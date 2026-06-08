@@ -264,7 +264,7 @@ func (n *migrationPlannerNode) Execute(ctx context.Context, state *contextdata.E
 
 type migrationCapabilityNode struct {
 	id       string
-	registry *capability.Registry
+	registry *capability.CapabilityRegistry
 	toolName string
 }
 

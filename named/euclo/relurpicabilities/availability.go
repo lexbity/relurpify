@@ -8,9 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 type relurpicCapabilitySpec struct {
@@ -27,7 +27,7 @@ func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env
 	return capability.NormalizeCapabilityDescriptor(h.descriptor)
 }
 
-func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h.handler == nil {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}
@@ -50,13 +50,13 @@ func (h availabilityWrappedInvocableHandler) SetAgentSpec(spec *agentspec.AgentR
 	}
 }
 
-func (h availabilityWrappedInvocableHandler) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+func (h availabilityWrappedInvocableHandler) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	if aware, ok := h.handler.(capability.SandboxScopeAware); ok {
 		aware.SetSandboxScope(scope)
 	}
 }
 
-func computeAvailability(reg *capability.Registry, requiredTools []string) capability.AvailabilitySpec {
+func computeAvailability(reg *capability.CapabilityRegistry, requiredTools []string) capability.AvailabilitySpec {
 	if len(requiredTools) == 0 {
 		return capability.AvailabilitySpec{Available: true}
 	}
@@ -72,14 +72,14 @@ func computeAvailability(reg *capability.Registry, requiredTools []string) capab
 		if !ok {
 			return capability.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s", toolName)}
 		}
-		if reg.EffectiveExposure(desc) != capability.CapabilityExposureCallable {
+		if reg.EffectiveExposure(desc) != agentspec.CapabilityExposureCallable {
 			return capability.AvailabilitySpec{Available: false, Reason: fmt.Sprintf("tool dependency missing: %s (not callable)", toolName)}
 		}
 	}
 	return capability.AvailabilitySpec{Available: true}
 }
 
-func registerRelurpicCapability(reg *capability.Registry, spec relurpicCapabilitySpec) error {
+func registerRelurpicCapability(reg *capability.CapabilityRegistry, spec relurpicCapabilitySpec) error {
 	if reg == nil {
 		return fmt.Errorf("capability registry is nil")
 	}

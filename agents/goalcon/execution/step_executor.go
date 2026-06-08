@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/capability"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -18,7 +19,7 @@ import (
 type StepExecutionRequest struct {
 	Step               plan.PlanStep
 	Context            *contextdata.Envelope
-	CapabilityRegistry *capability.Registry
+	CapabilityRegistry *capability.CapabilityRegistry
 	Timeout            time.Duration
 	OnFailure          FailureMode // How to handle step failure
 }
@@ -47,14 +48,14 @@ type StepExecutionResult struct {
 
 // StepExecutor executes individual plan steps via capability invocation.
 type StepExecutor struct {
-	registry   *capability.Registry
+	registry   *capability.CapabilityRegistry
 	timeout    time.Duration
 	metrics    *audit.MetricsRecorder      // Optional metrics recording
 	auditTrail *audit.CapabilityAuditTrail // Optional audit trail (Phase 5)
 }
 
 // NewStepExecutor creates a new step executor.
-func NewStepExecutor(registry *capability.Registry) *StepExecutor {
+func NewStepExecutor(registry *capability.CapabilityRegistry) *StepExecutor {
 	return &StepExecutor{
 		registry: registry,
 		timeout:  30 * time.Second, // Default timeout
@@ -244,7 +245,7 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 
 	// For Phase 5 placeholder, we use metadata-only insertion
 	decision := capability.InsertionDecision{
-		Action: capability.InsertionActionMetadataOnly,
+		Action: agentspec.InsertionActionMetadataOnly,
 		Reason: "phase-5-placeholder-execution",
 	}
 
@@ -294,7 +295,7 @@ func (ec *ExecutorChain) ExecuteSteps(
 	ctx context.Context,
 	steps []plan.PlanStep,
 	planContext *contextdata.Envelope,
-	registry *capability.Registry,
+	registry *capability.CapabilityRegistry,
 ) []*StepExecutionResult {
 	if ec == nil || ec.executor == nil {
 		return nil

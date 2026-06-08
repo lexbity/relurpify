@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // ClassificationResponse is defined in classification_prompt.go
@@ -24,7 +25,7 @@ type ClarificationChoice struct {
 	AlternativeText  string // User-provided custom clarification (if not using suggestion)
 	Timestamp        time.Time
 	ApprovedBy       string // User who made the decision
-	GrantScope       authorization.GrantScope
+	GrantScope       policy.GrantScope
 }
 
 // ClarificationSession tracks a goal clarification interaction.
@@ -145,7 +146,7 @@ func (gc *GoalClarifier) requestHITLClarification(
 			Resource: fmt.Sprintf("goal:%s", session.Goal.Description),
 		},
 		Justification:   justification,
-		Scope:           authorization.GrantScopeTask,
+		Scope:           policy.GrantScopeTask,
 		Risk:            gc.riskLevelForScore(session.AmbiguityScore.OverallScore),
 		Timeout:         2 * time.Minute,
 		TimeoutBehavior: authorization.HITLTimeoutBehaviorSkip,
@@ -156,14 +157,14 @@ func (gc *GoalClarifier) requestHITLClarification(
 }
 
 // riskLevelForScore maps ambiguity score to risk level.
-func (gc *GoalClarifier) riskLevelForScore(score float32) authorization.RiskLevel {
+func (gc *GoalClarifier) riskLevelForScore(score float32) policy.RiskLevel {
 	switch {
 	case score < 0.4:
-		return authorization.RiskLevelLow
+		return policy.RiskLevelLow
 	case score < 0.7:
-		return authorization.RiskLevelMedium
+		return policy.RiskLevelMedium
 	default:
-		return authorization.RiskLevelHigh
+		return policy.RiskLevelHigh
 	}
 }
 

@@ -21,7 +21,6 @@ import (
 // BuildFromSpec constructs a workflow executor from the runtime spec and wires
 // the shared environment through InitializeEnvironment when supported.
 // This is a local dispatch table for generic agent paradigms only.
-// Named agents (e.g., coding, rex, architect) are handled by named/factory.BuildFromSpec.
 func BuildFromSpec(env *agentenv.WorkspaceEnvironment, spec agentspec.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 	if env != nil {
 		env.IngestOutputs = spec.IngestOutputsEnabled()
@@ -54,7 +53,7 @@ func BuildFromSpec(env *agentenv.WorkspaceEnvironment, spec agentspec.AgentRunti
 	case "goalcon":
 		return goalconpkg.New(env, goalconpkg.DefaultOperatorRegistry()), nil
 	default:
-		return nil, fmt.Errorf("unknown agent type %q (named agents should use named/factory.BuildFromSpec)", agentType)
+		return nil, fmt.Errorf("unknown agent type %q", agentType)
 	}
 }
 

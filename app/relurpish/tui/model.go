@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
@@ -628,7 +629,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			hitlSvc = m.chat.HITLService()
 		}
 		cmds := []tea.Cmd{approveHITLRootCmd(hitlSvc, msg.ID, msg.Scope)}
-		if msg.Scope == fauthorization.GrantScopePersistent {
+		if msg.Scope == policy.GrantScopePersistent {
 			cmds = append(cmds, savePolicyCmd(m.runtime, msg.Action))
 		}
 		return m, tea.Batch(cmds...)

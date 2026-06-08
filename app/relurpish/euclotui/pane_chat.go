@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -1289,7 +1289,7 @@ func insertionBadge(insertion tui.StructuredInsertion) string {
 	}
 }
 
-func effectClassLabels(classes []agentspec.EffectClass) []string {
+func effectClassLabels(classes []taxonomy.EffectClass) []string {
 	if len(classes) == 0 {
 		return nil
 	}

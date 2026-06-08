@@ -3,8 +3,6 @@ package policy
 import (
 	"fmt"
 	"strings"
-
-	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
 // SessionOperation identifies the action being authorized against a session.
@@ -24,7 +22,7 @@ type SessionSelector struct {
 	Partitions                []string               `json:"partitions,omitempty"`
 	ChannelIDs                []string               `json:"channel_ids,omitempty"`
 	Scopes                    []SessionScope         `json:"scopes,omitempty"`
-	TrustClasses              []agentspec.TrustClass `json:"trust_classes,omitempty"`
+	TrustClasses              []string `json:"trust_classes,omitempty"`
 	Operations                []SessionOperation     `json:"operations,omitempty"`
 	ActorKinds                []string               `json:"actor_kinds,omitempty"`
 	ActorIDs                  []string               `json:"actor_ids,omitempty"`
@@ -44,7 +42,7 @@ type SessionPolicy struct {
 	Priority    int                            `json:"priority,omitempty"`
 	Enabled     bool                           `json:"enabled"`
 	Selector    SessionSelector                `json:"selector"`
-	Effect      agentspec.AgentPermissionLevel `json:"effect"`
+	Effect      string `json:"effect"`
 	Approvers   []string                       `json:"approvers,omitempty"`
 	ApprovalTTL string                         `json:"approval_ttl,omitempty"`
 	Reason      string                         `json:"reason,omitempty"`
@@ -62,7 +60,7 @@ func ValidateSessionPolicy(policy SessionPolicy) error {
 		return fmt.Errorf("selector invalid: %w", err)
 	}
 	switch policy.Effect {
-	case agentspec.AgentPermissionAllow, agentspec.AgentPermissionAsk, agentspec.AgentPermissionDeny:
+	case "allow", "ask", "deny":
 	default:
 		return fmt.Errorf("effect=%s invalid", policy.Effect)
 	}
@@ -115,7 +113,7 @@ func ValidateSessionSelector(selector SessionSelector) error {
 		}
 	}
 	for _, trustClass := range selector.TrustClasses {
-		if strings.TrimSpace(string(trustClass)) == "" {
+		if strings.TrimSpace(trustClass) == "" {
 			return fmt.Errorf("trust_classes contains empty trust class")
 		}
 	}

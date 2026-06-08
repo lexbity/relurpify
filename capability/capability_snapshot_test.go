@@ -51,7 +51,7 @@ func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 	if snapshots[0].Descriptor.ID != desc.ID {
 		t.Fatalf("expected descriptor %q, got %q", desc.ID, snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != CapabilityExposureInspectable {
+	if snapshots[0].Exposure != agentspec.CapabilityExposureInspectable {
 		t.Fatalf("expected inspectable exposure, got %q", snapshots[0].Exposure)
 	}
 }
@@ -67,9 +67,9 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 	if err := reg.RegisterCapability(desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
-	reg.AddExposurePolicies([]CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: desc.Name},
-		Access:   CapabilityExposureHidden,
+		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
 	if got := reg.AllCapabilities(); len(got) != 0 {
@@ -83,7 +83,7 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 	if snapshots[0].Descriptor.ID != desc.ID {
 		t.Fatalf("expected descriptor %q, got %q", desc.ID, snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != CapabilityExposureHidden {
+	if snapshots[0].Exposure != agentspec.CapabilityExposureHidden {
 		t.Fatalf("expected hidden exposure, got %q", snapshots[0].Exposure)
 	}
 }
@@ -116,9 +116,9 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 	if err := reg.RegisterCapability(hidden); err != nil {
 		t.Fatalf("register hidden capability: %v", err)
 	}
-	reg.AddExposurePolicies([]CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{ID: hidden.ID},
-		Access:   CapabilityExposureHidden,
+		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
 	scoped := reg.WithAllowlist([]string{hidden.ID})
@@ -129,7 +129,7 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 	if snapshots[0].Descriptor.ID != hidden.ID {
 		t.Fatalf("expected hidden capability in scoped snapshot, got %q", snapshots[0].Descriptor.ID)
 	}
-	if snapshots[0].Exposure != CapabilityExposureHidden {
+	if snapshots[0].Exposure != agentspec.CapabilityExposureHidden {
 		t.Fatalf("expected hidden exposure in scoped snapshot, got %q", snapshots[0].Exposure)
 	}
 }

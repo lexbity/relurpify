@@ -10,6 +10,7 @@ import (
 
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // AuditEntry represents a single capability invocation in the audit trail.
@@ -23,8 +24,8 @@ type AuditEntry struct {
 
 	// Classification
 	TrustClass    agentspec.TrustClass    `json:"trust_class" yaml:"trust_class"`
-	EffectClasses []agentspec.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	RiskClasses   []agentspec.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	EffectClasses []taxonomy.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	RiskClasses   []taxonomy.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
 
 	// Execution
 	InputSummary  string `json:"input_summary,omitempty" yaml:"input_summary,omitempty"`

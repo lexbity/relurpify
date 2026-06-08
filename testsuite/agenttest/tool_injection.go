@@ -170,7 +170,7 @@ func filterOverridesForTool(overrides []ToolResponseOverride, toolName string) [
 }
 
 // WrapRegistryWithInterceptor wraps all tools in the registry with injection support
-func WrapRegistryWithInterceptor(registry *capability.Registry, overrides []ToolResponseOverride) *capability.Registry {
+func WrapRegistryWithInterceptor(registry *capability.CapabilityRegistry, overrides []ToolResponseOverride) *capability.CapabilityRegistry {
 	if registry == nil || len(overrides) == 0 {
 		return registry
 	}

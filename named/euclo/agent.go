@@ -19,6 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
@@ -214,14 +215,14 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 }
 
 type modelAdapter struct {
-	model platformmodel2.LanguageModel
+	model model.LanguageModel
 }
 
 func (m *modelAdapter) Complete(ctx context.Context, req intake.CompletionRequest) (intake.CompletionResponse, error) {
 	if m == nil || m.model == nil {
 		return intake.CompletionResponse{}, fmt.Errorf("no language model configured")
 	}
-	resp, err := m.model.Generate(ctx, req.Prompt, &platformmodel2.LLMOptions{
+	resp, err := m.model.Generate(ctx, req.Prompt, &model.LLMOptions{
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})

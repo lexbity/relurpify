@@ -233,9 +233,9 @@ func TestComputeAvailability_EmptyRequirements(t *testing.T) {
 func TestComputeAvailability_NonCallableToolCounts(t *testing.T) {
 	reg := capability.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
-	reg.AddExposurePolicies([]capability.CapabilityExposurePolicy{{
+	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: "file_write"},
-		Access:   capability.CapabilityExposureHidden,
+		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
 	got := computeAvailability(reg, []string{"file_write"})

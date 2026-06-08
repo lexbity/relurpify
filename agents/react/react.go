@@ -21,7 +21,7 @@ import (
 // thinks about the task, acts using tools, and observes results until completion.
 type ReActAgent struct {
 	Model           model.LanguageModel
-	Tools           *capability.Registry
+	Tools           *capability.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Config          *execution.Config
 	IndexManager    *ast.IndexManager

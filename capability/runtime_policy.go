@@ -1,16 +1,19 @@
 package capability
 
-import "codeburg.org/lexbit/relurpify/capability/agentspec"
+import (
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+)
 
 type compiledRuntimePolicy struct {
 	agentSpec                  *agentspec.AgentRuntimeSpec
 	toolPolicies               map[string]agentspec.ToolPolicy
 	capabilityPolicies         []agentspec.CapabilityPolicy
 	compiledCapabilityPolicies []compiledCapabilityPolicy
-	exposurePolicies           []CapabilityExposurePolicy
+	exposurePolicies           []agentspec.CapabilityExposurePolicy
 	compiledExposurePolicies   []compiledExposurePolicy
 	globalPolicies             map[string]agentspec.AgentPermissionLevel
-	insertionPolicies          []CapabilityInsertionPolicy
+	insertionPolicies          []agentspec.CapabilityInsertionPolicy
 	providerPolicies           map[string]agentspec.ProviderPolicy
 	runtimeSafety              *agentspec.RuntimeSafetySpec
 }
@@ -20,16 +23,16 @@ type executionRuntimeState struct {
 	manager   PermissionManagerHandle
 	policy    *compiledRuntimePolicy
 	safety    *runtimeSafetyController
-	telemetry Telemetry
+	telemetry fwtelemetry.Telemetry
 }
 
-func compileRuntimePolicy(spec *agentspec.AgentRuntimeSpec, toolPolicies map[string]agentspec.ToolPolicy, capabilityPolicies []agentspec.CapabilityPolicy, exposurePolicies []CapabilityExposurePolicy, globalPolicies map[string]agentspec.AgentPermissionLevel) *compiledRuntimePolicy {
+func compileRuntimePolicy(spec *agentspec.AgentRuntimeSpec, toolPolicies map[string]agentspec.ToolPolicy, capabilityPolicies []agentspec.CapabilityPolicy, exposurePolicies []agentspec.CapabilityExposurePolicy, globalPolicies map[string]agentspec.AgentPermissionLevel) *compiledRuntimePolicy {
 	return &compiledRuntimePolicy{
 		agentSpec:                  spec,
 		toolPolicies:               cloneToolPolicies(toolPolicies),
 		capabilityPolicies:         append([]agentspec.CapabilityPolicy{}, capabilityPolicies...),
 		compiledCapabilityPolicies: compileCapabilityPolicies(capabilityPolicies),
-		exposurePolicies:           append([]CapabilityExposurePolicy{}, exposurePolicies...),
+		exposurePolicies:           append([]agentspec.CapabilityExposurePolicy{}, exposurePolicies...),
 		compiledExposurePolicies:   compileExposurePolicies(exposurePolicies),
 		globalPolicies:             cloneGlobalPolicies(globalPolicies),
 		insertionPolicies:          cloneInsertionPolicies(specInsertionPolicies(spec)),
@@ -38,7 +41,7 @@ func compileRuntimePolicy(spec *agentspec.AgentRuntimeSpec, toolPolicies map[str
 	}
 }
 
-func specInsertionPolicies(spec *agentspec.AgentRuntimeSpec) []CapabilityInsertionPolicy {
+func specInsertionPolicies(spec *agentspec.AgentRuntimeSpec) []agentspec.CapabilityInsertionPolicy {
 	if spec == nil {
 		return nil
 	}

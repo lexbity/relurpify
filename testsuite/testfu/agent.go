@@ -23,7 +23,7 @@ type suiteRunner interface {
 
 type Agent struct {
 	Config    *execution.Config
-	Tools     *capability.Registry
+	Tools     *capability.CapabilityRegistry
 	Workspace string
 	Runner    suiteRunner
 }
@@ -194,7 +194,7 @@ func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]
 	return results, allPassed, nil
 }
 
-func (a *Agent) CapabilityRegistry() *capability.Registry {
+func (a *Agent) CapabilityRegistry() *capability.CapabilityRegistry {
 	if a == nil {
 		return nil
 	}

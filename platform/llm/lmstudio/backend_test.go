@@ -12,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
@@ -117,13 +116,13 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		ChatWithToolsNative: func(backend any) error {
 			_, err := backend.(interface {
 				Model() model.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 			return err
 		},
 		ChatWithToolsFallback: func(backend any) (string, error) {
 			resp, err := backend.(interface {
 				Model() model.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 			if err != nil {
 				return "", err
 			}
@@ -272,7 +271,7 @@ func TestLMStudioBackend_ChatWithTools_Native(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
-	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.ToolCalls, 1)
 	require.Equal(t, "echo", resp.ToolCalls[0].Name)

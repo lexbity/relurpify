@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 )
 
@@ -25,7 +24,7 @@ type ProvenanceRecord struct {
 	TaskID          string
 	LinkName        string
 	ToolID          string
-	InsertionAction capability.InsertionAction
+	InsertionAction agentspec.InsertionAction
 	TrustClass      agentspec.TrustClass
 	ApprovedBy      string // User/system identifier (if approval required)
 	PolicySnapshot  string // Policy ID or description
@@ -41,7 +40,7 @@ func NewProvenanceTracker(taskID string) *ProvenanceTracker {
 }
 
 // Record documents a tool invocation.
-func (t *ProvenanceTracker) Record(linkName, toolID string, action capability.InsertionAction) error {
+func (t *ProvenanceTracker) Record(linkName, toolID string, action agentspec.InsertionAction) error {
 	if t == nil {
 		return fmt.Errorf("provenance tracker not initialized")
 	}
@@ -62,7 +61,7 @@ func (t *ProvenanceTracker) Record(linkName, toolID string, action capability.In
 }
 
 // RecordWithApproval documents a tool invocation with approval info.
-func (t *ProvenanceTracker) RecordWithApproval(linkName, toolID string, action capability.InsertionAction, approvedBy string) error {
+func (t *ProvenanceTracker) RecordWithApproval(linkName, toolID string, action agentspec.InsertionAction, approvedBy string) error {
 	if t == nil {
 		return fmt.Errorf("provenance tracker not initialized")
 	}
@@ -190,15 +189,15 @@ func (t *ProvenanceTracker) Summary() *ProvenanceSummary {
 		toolSet[record.ToolID] = true
 
 		switch record.InsertionAction {
-		case capability.InsertionActionDirect:
+		case agentspec.InsertionActionDirect:
 			summary.DirectInclusions++
-		case capability.InsertionActionSummarized:
+		case agentspec.InsertionActionSummarized:
 			summary.SummarizedResults++
-		case capability.InsertionActionMetadataOnly:
+		case agentspec.InsertionActionMetadataOnly:
 			summary.MetadataOnlyResults++
-		case capability.InsertionActionHITLRequired:
+		case agentspec.InsertionActionHITLRequired:
 			summary.ApprovalRequired++
-		case capability.InsertionActionDenied:
+		case agentspec.InsertionActionDenied:
 			summary.Denied++
 		}
 	}
@@ -211,7 +210,7 @@ func (t *ProvenanceTracker) Summary() *ProvenanceSummary {
 //
 // Phase 6 stub: Records the insertion action for the tool result.
 // Full CapabilityResultEnvelope wrapping deferred to Phase 6+.
-func (t *ProvenanceTracker) WrapResult(toolID string, result any, action capability.InsertionAction) map[string]any {
+func (t *ProvenanceTracker) WrapResult(toolID string, result any, action agentspec.InsertionAction) map[string]any {
 	return map[string]any{
 		"result":           result,
 		"insertion_action": action,

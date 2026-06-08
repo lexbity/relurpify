@@ -3,9 +3,6 @@ package authorization
 import (
 	"context"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // CommandAuthorizationPolicy adapts PermissionManager command checks to the
@@ -13,27 +10,27 @@ import (
 type CommandAuthorizationPolicy struct {
 	manager *PermissionManager
 	agentID string
-	spec    *agentspec.AgentRuntimeSpec
+	bashCfg *BashConfig
 	source  string
 }
 
 // NewCommandAuthorizationPolicy creates a sandbox policy adapter backed by the
 // current authorization state.
-func NewCommandAuthorizationPolicy(manager *PermissionManager, agentID string, spec *agentspec.AgentRuntimeSpec, source string) sandbox.CommandPolicy {
-	return CommandAuthorizationPolicy{
+func NewCommandAuthorizationPolicy(manager *PermissionManager, agentID string, bashCfg *BashConfig, source string) *CommandAuthorizationPolicy {
+	return &CommandAuthorizationPolicy{
 		manager: manager,
 		agentID: agentID,
-		spec:    spec,
+		bashCfg: bashCfg,
 		source:  source,
 	}
 }
 
-// AllowCommand implements sandbox.CommandPolicy.
-func (p CommandAuthorizationPolicy) AllowCommand(ctx context.Context, req sandbox.CommandRequest) error {
+// CheckCommand verifies a command against the authorization policy.
+func (p *CommandAuthorizationPolicy) CheckCommand(ctx context.Context, args, env []string) error {
 	reqSpec := CommandAuthorizationRequest{
-		Command: append([]string(nil), req.Args...),
-		Env:     append([]string(nil), req.Env...),
+		Command: append([]string(nil), args...),
+		Env:     append([]string(nil), env...),
 		Source:  strings.TrimSpace(p.source),
 	}
-	return AuthorizeCommand(ctx, p.manager, p.agentID, p.spec, reqSpec)
+	return AuthorizeCommand(ctx, p.manager, p.agentID, p.bashCfg, reqSpec)
 }

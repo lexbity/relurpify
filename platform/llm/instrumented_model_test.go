@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -55,7 +54,7 @@ func (m *profileAwareStubModel) Chat(context.Context, []model.Message, *model.LL
 	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (m *profileAwareStubModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *profileAwareStubModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: "ok"}, nil
 }
 
@@ -187,7 +186,7 @@ func (stubResponseModel) Chat(context.Context, []model.Message, *model.LLMOption
 	return &model.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
 }
 
-func (stubResponseModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (stubResponseModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: "hello", FinishReason: "stop"}, nil
 }
 
@@ -215,7 +214,7 @@ func (stubUsageResponseModel) Chat(context.Context, []model.Message, *model.LLMO
 	}, nil
 }
 
-func (stubUsageResponseModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (stubUsageResponseModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",

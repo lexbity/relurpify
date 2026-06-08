@@ -19,7 +19,7 @@ type ToolScope struct {
 // ScopeRegistry clones the registry, removing tools outside the given scope.
 // If WritePathGlobs is non-empty a WritePathPrecheck is attached so path
 // restrictions are enforced at invocation time.
-func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.Registry {
+func ScopeRegistry(registry *capability.CapabilityRegistry, scope ToolScope) *capability.CapabilityRegistry {
 	if registry == nil {
 		return capability.NewRegistry()
 	}

@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -22,8 +20,8 @@ type (
 	LLMOptions          = model.LLMOptions
 	LLMResponse         = model.LLMResponse
 	Message             = model.Message
-	LLMToolSpec         = ports.LLMToolSpec
-	Schema              = schemacoerce.Schema
+	LLMToolSpec         = model.LLMToolSpec
+	Schema              = model.Schema
 	BackendClass        = model.BackendClass
 	BackendCapabilities = model.BackendCapabilities
 	ModelProfile        = model.ModelProfile

@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 )
@@ -113,13 +112,13 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		ChatWithToolsNative: func(backend any) error {
 			_, err := backend.(interface {
 				Model() model.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 			return err
 		},
 		ChatWithToolsFallback: func(backend any) (string, error) {
 			resp, err := backend.(interface {
 				Model() model.LanguageModel
-			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []ports.LLMToolSpec{{Name: "echo"}}, nil)
+			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 			if err != nil {
 				return "", err
 			}

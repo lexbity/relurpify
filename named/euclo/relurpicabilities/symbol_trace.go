@@ -7,6 +7,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -35,11 +36,11 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 		Category:      "code_analysis",
 		Tags:          []string{"callgraph", "trace", "read-only"},
 		Source: capability.CapabilitySource{
-			Scope: agentspec.CapabilityScopeBuiltin,
+			Scope: taxonomy.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []agentspec.RiskClass{agentspec.RiskClassReadOnly},
-		EffectClasses: []agentspec.EffectClass{},
+		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
+		EffectClasses: []taxonomy.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{
@@ -85,7 +86,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env *contextdata.En
 }
 
 // Invoke executes the symbol trace and returns call graph information.
-func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	// Extract arguments
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
@@ -130,7 +131,7 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env *contextdata.Envelo
 	// Convert to trace entries
 	entries := traceEntries(callees, callers)
 
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"success": true,

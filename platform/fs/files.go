@@ -19,18 +19,12 @@ import (
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
-// Re-export FileScope types for local usage
-type (
-	FileScopePolicy = permissions.FileScopePolicy
-	FileScopeError  = permissions.FileScopeError
-)
-
 var (
 	ErrFileScopeOutsideWorkspace = permissions.ErrFileScopeOutsideWorkspace
 	ErrFileScopeProtectedPath    = permissions.ErrFileScopeProtectedPath
 )
 
-func NewFileScopePolicy(workspace string, protectedPaths []string) *FileScopePolicy {
+func NewFileScopePolicy(workspace string, protectedPaths []string) *permissions.FileScopePolicy {
 	return permissions.NewFileScopePolicy(workspace, protectedPaths)
 }
 
@@ -55,7 +49,7 @@ type ReadFileTool struct {
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *ReadFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -63,7 +57,7 @@ func (t *ReadFileTool) SetPermissionManager(manager FilePermissionChecker, agent
 	t.agentID = agentID
 }
 
-func (t *ReadFileTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *ReadFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -133,7 +127,7 @@ type WriteFileTool struct {
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *WriteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -146,7 +140,7 @@ func (t *WriteFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID s
 	t.agentID = agentID
 }
 
-func (t *WriteFileTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *WriteFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -229,7 +223,7 @@ type ListFilesTool struct {
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *ListFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -237,7 +231,7 @@ func (t *ListFilesTool) SetPermissionManager(manager FilePermissionChecker, agen
 	t.agentID = agentID
 }
 
-func (t *ListFilesTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *ListFilesTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -329,7 +323,7 @@ type SearchInFilesTool struct {
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *SearchInFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -337,7 +331,7 @@ func (t *SearchInFilesTool) SetPermissionManager(manager FilePermissionChecker, 
 	t.agentID = agentID
 }
 
-func (t *SearchInFilesTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *SearchInFilesTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -453,7 +447,7 @@ type CreateFileTool struct {
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *CreateFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -466,7 +460,7 @@ func (t *CreateFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID 
 	t.agentID = agentID
 }
 
-func (t *CreateFileTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *CreateFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -526,7 +520,7 @@ type DeleteFileTool struct {
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *FileScopePolicy
+	scope    *permissions.FileScopePolicy
 }
 
 func (t *DeleteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -539,7 +533,7 @@ func (t *DeleteFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID 
 	t.agentID = agentID
 }
 
-func (t *DeleteFileTool) SetSandboxScope(scope *FileScopePolicy) {
+func (t *DeleteFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
 	t.scope = scope
 }
 
@@ -671,7 +665,7 @@ func sandboxProtectedPath(err error) bool {
 	if err == nil {
 		return false
 	}
-	var scopeErr *FileScopeError
+	var scopeErr *permissions.FileScopeError
 	if errors.As(err, &scopeErr) {
 		return scopeErr.Reason == ErrFileScopeProtectedPath.Error()
 	}
@@ -748,7 +742,7 @@ func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agent
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.AgentPermissionLevel(perm.Default))
 	if perm.RequireApproval {
 		decision = permissions.AgentPermissionAsk
 	}

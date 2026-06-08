@@ -32,7 +32,7 @@ type RootGraph struct {
 // RootGraphConfig configures dependency wiring for the root graph.
 type RootGraphConfig struct {
 	Env                   agentenv.WorkspaceEnvironment
-	CapabilityRegistry    *capability.Registry
+	CapabilityRegistry    *capability.CapabilityRegistry
 	ThoughtRecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	FamilyRegistry        *families.KeywordFamilyRegistry
 	Workspace             string
@@ -56,7 +56,7 @@ func WithWorkspaceEnvironment(env agentenv.WorkspaceEnvironment) RootGraphOption
 }
 
 // WithCapabilityRegistry wires the capability registry.
-func WithCapabilityRegistry(reg *capability.Registry) RootGraphOption {
+func WithCapabilityRegistry(reg *capability.CapabilityRegistry) RootGraphOption {
 	return func(opts *RootGraphConfig) {
 		opts.CapabilityRegistry = reg
 	}

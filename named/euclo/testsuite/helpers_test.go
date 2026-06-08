@@ -43,7 +43,7 @@ func (stubLanguageModel) Chat(context.Context, []model.Message, *model.LLMOption
 	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []ports.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+func (stubLanguageModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return &model.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
@@ -76,18 +76,18 @@ func (r *recordingTelemetry) types() []telemetry.EventType {
 
 type testCapabilityHandler struct {
 	descriptor capability.CapabilityDescriptor
-	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error)
+	invoke     func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error)
 }
 
 func (h *testCapabilityHandler) Descriptor(context.Context, *contextdata.Envelope) capability.CapabilityDescriptor {
 	return h.descriptor
 }
 
-func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.CapabilityExecutionResult, error) {
+func (h *testCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	if h != nil && h.invoke != nil {
 		return h.invoke(ctx, env, args)
 	}
-	return &ports.CapabilityExecutionResult{
+	return &ports.ToolResult{
 		Success: true,
 		Data: map[string]any{
 			"capability_id": h.descriptor.ID,
@@ -107,9 +107,9 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *capability.CapabilityRe
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 				Availability:  capability.AvailabilitySpec{Available: true},
 			},
-			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error) {
-				return func(context.Context, *contextdata.Envelope, map[string]any) (*ports.CapabilityExecutionResult, error) {
-					return &ports.CapabilityExecutionResult{
+			invoke: func(id string) func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error) {
+				return func(context.Context, *contextdata.Envelope, map[string]any) (*ports.ToolResult, error) {
+					return &ports.ToolResult{
 						Success: true,
 						Data: map[string]any{
 							"capability_id": id,

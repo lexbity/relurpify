@@ -4,11 +4,12 @@ import (
 	"strings"
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *CapabilityResultEnvelope) InsertionDecision {
 	if envelope == nil {
-		return InsertionDecision{Action: InsertionActionDenied, Reason: "capability result envelope missing"}
+		return InsertionDecision{Action: agentspec.InsertionActionDenied, Reason: "capability result envelope missing"}
 	}
 	decision := envelope.Insertion
 	if decision.Action == "" {
@@ -22,14 +23,14 @@ func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *Capa
 		if !SelectorMatchesDescriptor(agentspec.CapabilitySelector(policy.Selector), envelope.Descriptor) {
 			continue
 		}
-		action := InsertionAction(policy.Action)
+		action := agentspec.InsertionAction(policy.Action)
 		if insertionRestrictiveness(action) >= insertionRestrictiveness(override) {
 			override = action
 			decision.Reason = "manifest insertion policy override"
 		}
 	}
 	decision.Action = override
-	decision.RequiresHITL = override == InsertionActionHITLRequired
+	decision.RequiresHITL = override == agentspec.InsertionActionHITLRequired
 	if decision.PolicySnapshotID == "" && envelope.Policy != nil {
 		decision.PolicySnapshotID = envelope.Policy.ID
 	}
@@ -95,7 +96,7 @@ func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc Capab
 	return true
 }
 
-func containsScope(values []agentspec.CapabilityScope, want agentspec.CapabilityScope) bool {
+func containsScope(values []taxonomy.CapabilityScope, want taxonomy.CapabilityScope) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -153,7 +154,7 @@ func containsTrust(values []agentspec.TrustClass, want agentspec.TrustClass) boo
 	return false
 }
 
-func containsAnyRisk(values []agentspec.RiskClass, haystack []agentspec.RiskClass) bool {
+func containsAnyRisk(values []taxonomy.RiskClass, haystack []taxonomy.RiskClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {
@@ -164,7 +165,7 @@ func containsAnyRisk(values []agentspec.RiskClass, haystack []agentspec.RiskClas
 	return false
 }
 
-func containsAnyEffect(values []agentspec.EffectClass, haystack []agentspec.EffectClass) bool {
+func containsAnyEffect(values []taxonomy.EffectClass, haystack []taxonomy.EffectClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {

@@ -1,14 +1,6 @@
 package toolcapabilities
 
-import (
-	"sort"
-
-	"codeburg.org/lexbit/relurpify/capability/ports"
-)
-
-// ToolRegistry describes the minimal lookup surface for platform tool
-// resolution.
-type ToolRegistry = ports.ToolRegistry
+import "sort"
 
 // StaticToolRegistry is a deterministic in-memory registry backed by loaded
 // tool manifests.

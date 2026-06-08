@@ -7,36 +7,11 @@ import (
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
+	"codeburg.org/lexbit/relurpify/execution"
 )
 
-type InsertionAction = agentspec.InsertionAction
-
-const (
-	InsertionActionDirect       InsertionAction = agentspec.InsertionActionDirect
-	InsertionActionSummarized   InsertionAction = agentspec.InsertionActionSummarized
-	InsertionActionMetadataOnly InsertionAction = agentspec.InsertionActionMetadataOnly
-	InsertionActionHITLRequired InsertionAction = agentspec.InsertionActionHITLRequired
-	InsertionActionDenied       InsertionAction = agentspec.InsertionActionDenied
-)
-
-// CapabilityExposure defines the exposure level of a
-type CapabilityExposure = agentspec.CapabilityExposure
-
-const (
-	// CapabilityExposureHidden means the capability is not exposed.
-	CapabilityExposureHidden = agentspec.CapabilityExposureHidden
-	// CapabilityExposureInspectable means the capability can be inspected but not called.
-	CapabilityExposureInspectable = agentspec.CapabilityExposureInspectable
-	// CapabilityExposureCallable means the capability can be called.
-	CapabilityExposureCallable = agentspec.CapabilityExposureCallable
-)
-
-// CapabilityExposurePolicy configures visibility of admitted capabilities.
-type CapabilityExposurePolicy = agentspec.CapabilityExposurePolicy
-
-// CapabilityInsertionPolicy configures how capability output may be inserted.
-type CapabilityInsertionPolicy = agentspec.CapabilityInsertionPolicy
 
 type ContentDisposition string
 
@@ -48,7 +23,7 @@ const (
 )
 
 type InsertionDecision struct {
-	Action           InsertionAction `json:"action"`
+	Action           agentspec.InsertionAction `json:"action"`
 	Reason           string          `json:"reason,omitempty"`
 	RequiresHITL     bool            `json:"requires_hitl,omitempty"`
 	PolicySnapshotID string          `json:"policy_snapshot_id,omitempty"`
@@ -64,7 +39,7 @@ type ApprovalBinding struct {
 	CapabilityName string                  `json:"capability_name,omitempty"`
 	ProviderID     string                  `json:"provider_id,omitempty"`
 	SessionID      string                  `json:"session_id,omitempty"`
-	EffectClasses  []agentspec.EffectClass `json:"effect_classes,omitempty"`
+	EffectClasses  []taxonomy.EffectClass `json:"effect_classes,omitempty"`
 	TargetResource string                  `json:"target_resource,omitempty"`
 	TaskID         string                  `json:"task_id,omitempty"`
 	WorkflowID     string                  `json:"workflow_id,omitempty"`
@@ -119,7 +94,7 @@ type PolicySnapshot struct {
 	GlobalPolicies     map[string]agentspec.AgentPermissionLevel `json:"global_policies,omitempty"`
 	ProviderPolicies   map[string]agentspec.ProviderPolicy       `json:"provider_policies,omitempty"`
 	RuntimeSafety      *agentspec.RuntimeSafetySpec              `json:"runtime_safety,omitempty"`
-	Revocations        RevocationSnapshot                        `json:"revocations,omitempty"`
+	Revocations        execution.RevocationSnapshot                        `json:"revocations,omitempty"`
 }
 
 type CapabilityResultEnvelope struct {
@@ -183,7 +158,7 @@ func ApplyInsertionDecision(envelope *CapabilityResultEnvelope, decision Inserti
 	if decision.PolicySnapshotID == "" && envelope.Policy != nil {
 		decision.PolicySnapshotID = envelope.Policy.ID
 	}
-	decision.RequiresHITL = decision.Action == InsertionActionHITLRequired
+	decision.RequiresHITL = decision.Action == agentspec.InsertionActionHITLRequired
 	envelope.Insertion = decision
 	envelope.BlockInsertions = buildContentBlockInsertions(envelope.ContentBlocks, decision)
 	return envelope
@@ -192,21 +167,21 @@ func ApplyInsertionDecision(envelope *CapabilityResultEnvelope, decision Inserti
 func DefaultInsertionDecision(descriptor CapabilityDescriptor, disposition ContentDisposition) InsertionDecision {
 	switch descriptor.TrustClass {
 	case agentspec.TrustClassBuiltinTrusted, agentspec.TrustClassWorkspaceTrusted:
-		return InsertionDecision{Action: InsertionActionDirect, Reason: "trusted capability output allowed for direct insertion"}
+		return InsertionDecision{Action: agentspec.InsertionActionDirect, Reason: "trusted capability output allowed for direct insertion"}
 	case agentspec.TrustClassLLMGenerated, agentspec.TrustClassToolResult:
-		return InsertionDecision{Action: InsertionActionSummarized, Reason: "generated capability output requires summarized insertion"}
+		return InsertionDecision{Action: agentspec.InsertionActionSummarized, Reason: "generated capability output requires summarized insertion"}
 	case agentspec.TrustClassRemoteApproved:
-		return InsertionDecision{Action: InsertionActionSummarized, Reason: "remote-approved capability output requires summarized insertion"}
+		return InsertionDecision{Action: agentspec.InsertionActionSummarized, Reason: "remote-approved capability output requires summarized insertion"}
 	case agentspec.TrustClassProviderLocalUntrusted, agentspec.TrustClassRemoteDeclared:
-		return InsertionDecision{Action: InsertionActionMetadataOnly, Reason: "untrusted capability output defaults to metadata-only insertion"}
+		return InsertionDecision{Action: agentspec.InsertionActionMetadataOnly, Reason: "untrusted capability output defaults to metadata-only insertion"}
 	}
 	switch disposition {
 	case ContentDispositionMetadataOnly:
-		return InsertionDecision{Action: InsertionActionMetadataOnly, Reason: "metadata-only content disposition"}
+		return InsertionDecision{Action: agentspec.InsertionActionMetadataOnly, Reason: "metadata-only content disposition"}
 	case ContentDispositionSummarized:
-		return InsertionDecision{Action: InsertionActionSummarized, Reason: "summarized content disposition"}
+		return InsertionDecision{Action: agentspec.InsertionActionSummarized, Reason: "summarized content disposition"}
 	default:
-		return InsertionDecision{Action: InsertionActionSummarized, Reason: "capability output requires summarized insertion by default"}
+		return InsertionDecision{Action: agentspec.InsertionActionSummarized, Reason: "capability output requires summarized insertion by default"}
 	}
 }
 
@@ -245,10 +220,10 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 		decision = envelope.Insertion
 	}
 	switch decision.Action {
-	case InsertionActionDirect:
-		decision.Action = InsertionActionSummarized
+	case agentspec.InsertionActionDirect:
+		decision.Action = agentspec.InsertionActionSummarized
 		decision.Reason = "summarized insertion preserves provenance"
-	case InsertionActionSummarized, InsertionActionMetadataOnly, InsertionActionHITLRequired, InsertionActionDenied:
+	case agentspec.InsertionActionSummarized, agentspec.InsertionActionMetadataOnly, agentspec.InsertionActionHITLRequired, agentspec.InsertionActionDenied:
 	default:
 		decision = envelope.Insertion
 	}
@@ -269,7 +244,7 @@ func ToolResultEnvelope(result *ports.ToolResult) (*CapabilityResultEnvelope, bo
 
 // CapabilityExecutionEnvelope returns the capability envelope attached to an
 // execution result.
-func CapabilityExecutionEnvelope(result *ports.CapabilityExecutionResult) (*CapabilityResultEnvelope, bool) {
+func CapabilityExecutionEnvelope(result *ports.ToolResult) (*CapabilityResultEnvelope, bool) {
 	return ToolResultEnvelope(result)
 }
 
@@ -329,7 +304,7 @@ func defaultBlockInsertionDecision(block ContentBlock, inherited InsertionDecisi
 	switch block.(type) {
 	case BinaryReferenceContentBlock, EmbeddedResourceContentBlock, ResourceLinkContentBlock:
 		decision := inherited
-		decision.Action = InsertionActionMetadataOnly
+		decision.Action = agentspec.InsertionActionMetadataOnly
 		decision.Reason = "resource and binary content defaults to metadata-only insertion"
 		decision.RequiresHITL = false
 		return decision
@@ -345,7 +320,7 @@ func moreRestrictiveInsertionDecision(base, candidate InsertionDecision) Inserti
 	if candidate.PolicySnapshotID == "" {
 		candidate.PolicySnapshotID = base.PolicySnapshotID
 	}
-	candidate.RequiresHITL = candidate.Action == InsertionActionHITLRequired
+	candidate.RequiresHITL = candidate.Action == agentspec.InsertionActionHITLRequired
 	return candidate
 }
 
@@ -399,17 +374,17 @@ func inferTargetResource(args map[string]interface{}) string {
 	return ""
 }
 
-func insertionRestrictiveness(action InsertionAction) int {
+func insertionRestrictiveness(action agentspec.InsertionAction) int {
 	switch action {
-	case InsertionActionDirect:
+	case agentspec.InsertionActionDirect:
 		return 0
-	case InsertionActionSummarized:
+	case agentspec.InsertionActionSummarized:
 		return 1
-	case InsertionActionMetadataOnly:
+	case agentspec.InsertionActionMetadataOnly:
 		return 2
-	case InsertionActionHITLRequired:
+	case agentspec.InsertionActionHITLRequired:
 		return 3
-	case InsertionActionDenied:
+	case agentspec.InsertionActionDenied:
 		return 4
 	default:
 		return 4

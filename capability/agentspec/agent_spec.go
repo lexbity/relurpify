@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // AgentRuntimeSpec describes CLI/runtime level configuration derived from the
@@ -184,10 +186,10 @@ type CapabilitySelector struct {
 	RuntimeFamilies             []CapabilityRuntimeFamily   `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
 	Tags                        []string                    `yaml:"tags,omitempty" json:"tags,omitempty"`
 	ExcludeTags                 []string                    `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
-	SourceScopes                []CapabilityScope           `yaml:"source_scopes,omitempty" json:"source_scopes,omitempty"`
+	SourceScopes                []taxonomy.CapabilityScope  `yaml:"source_scopes,omitempty" json:"source_scopes,omitempty"`
 	TrustClasses                []TrustClass                `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
-	RiskClasses                 []RiskClass                 `yaml:"risk_classes,omitempty" json:"risk_classes,omitempty"`
-	EffectClasses               []EffectClass               `yaml:"effect_classes,omitempty" json:"effect_classes,omitempty"`
+	RiskClasses                 []taxonomy.RiskClass        `yaml:"risk_classes,omitempty" json:"risk_classes,omitempty"`
+	EffectClasses               []taxonomy.EffectClass      `yaml:"effect_classes,omitempty" json:"effect_classes,omitempty"`
 	CoordinationRoles           []CoordinationRole          `yaml:"coordination_roles,omitempty" json:"coordination_roles,omitempty"`
 	CoordinationTaskTypes       []string                    `yaml:"coordination_task_types,omitempty" json:"coordination_task_types,omitempty"`
 	CoordinationExecutionModes  []CoordinationExecutionMode `yaml:"coordination_execution_modes,omitempty" json:"coordination_execution_modes,omitempty"`
@@ -670,7 +672,7 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 	}
 	for _, scope := range selector.SourceScopes {
 		switch scope {
-		case CapabilityScopeBuiltin, CapabilityScopeWorkspace, CapabilityScopeProvider, CapabilityScopeRemote:
+		case taxonomy.CapabilityScopeBuiltin, taxonomy.CapabilityScopeWorkspace, taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
 		default:
 			return fmt.Errorf("source scope %s invalid", scope)
 		}
@@ -691,14 +693,14 @@ func ValidateCapabilitySelector(selector CapabilitySelector) error {
 	}
 	for _, risk := range selector.RiskClasses {
 		switch risk {
-		case RiskClassReadOnly, RiskClassDestructive, RiskClassExecute, RiskClassNetwork, RiskClassCredentialed, RiskClassExfiltration, RiskClassSessioned:
+		case taxonomy.RiskClassReadOnly, taxonomy.RiskClassDestructive, taxonomy.RiskClassExecute, taxonomy.RiskClassNetwork, taxonomy.RiskClassCredentialed, taxonomy.RiskClassExfiltration, taxonomy.RiskClassSessioned:
 		default:
 			return fmt.Errorf("risk class %s invalid", risk)
 		}
 	}
 	for _, effect := range selector.EffectClasses {
 		switch effect {
-		case EffectClassFilesystemMutation, EffectClassProcessSpawn, EffectClassNetworkEgress, EffectClassCredentialUse, EffectClassExternalState, EffectClassSessionCreation, EffectClassContextInsertion:
+		case taxonomy.EffectClassFilesystemMutation, taxonomy.EffectClassProcessSpawn, taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassCredentialUse, taxonomy.EffectClassExternalState, taxonomy.EffectClassSessionCreation, taxonomy.EffectClassContextInsertion:
 		default:
 			return fmt.Errorf("effect class %s invalid", effect)
 		}
@@ -892,20 +894,20 @@ func ValidatePolicyClassKey(key string) error {
 		string(CapabilityRuntimeFamilyLocalTool),
 		string(CapabilityRuntimeFamilyProvider),
 		string(CapabilityRuntimeFamilyRelurpic),
-		string(RiskClassReadOnly),
-		string(RiskClassDestructive),
-		string(RiskClassExecute),
-		string(RiskClassNetwork),
-		string(RiskClassCredentialed),
-		string(RiskClassExfiltration),
-		string(RiskClassSessioned),
-		string(EffectClassFilesystemMutation),
-		string(EffectClassProcessSpawn),
-		string(EffectClassNetworkEgress),
-		string(EffectClassCredentialUse),
-		string(EffectClassExternalState),
-		string(EffectClassSessionCreation),
-		string(EffectClassContextInsertion):
+		string(taxonomy.RiskClassReadOnly),
+		string(taxonomy.RiskClassDestructive),
+		string(taxonomy.RiskClassExecute),
+		string(taxonomy.RiskClassNetwork),
+		string(taxonomy.RiskClassCredentialed),
+		string(taxonomy.RiskClassExfiltration),
+		string(taxonomy.RiskClassSessioned),
+		string(taxonomy.EffectClassFilesystemMutation),
+		string(taxonomy.EffectClassProcessSpawn),
+		string(taxonomy.EffectClassNetworkEgress),
+		string(taxonomy.EffectClassCredentialUse),
+		string(taxonomy.EffectClassExternalState),
+		string(taxonomy.EffectClassSessionCreation),
+		string(taxonomy.EffectClassContextInsertion):
 		return nil
 	default:
 		return fmt.Errorf("unknown capability class")
