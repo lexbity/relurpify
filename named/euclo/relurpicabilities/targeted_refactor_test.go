@@ -19,7 +19,7 @@ func newTargetedRefactorTestDeps(t *testing.T) (SymbolQuerier, EdgeStore, Worksp
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
 	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
 
-	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 

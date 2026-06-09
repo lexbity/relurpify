@@ -30,7 +30,7 @@ func HighlightFeature() string {
 		t.Fatalf("write markdown: %v", err)
 	}
 
-	store, err := ast.NewSQLiteStore(filepath.Join(temp, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(temp, "index.db"))
 	if err != nil {
 		t.Fatalf("sqlite init failed: %v", err)
 	}
@@ -63,7 +63,7 @@ func HighlightFeature() string {
 }
 
 type astCodeIndex struct {
-	store *ast.SQLiteStore
+	store ast.IndexStore
 }
 
 func (a *astCodeIndex) GetFileMetadata(string) (any, bool)                       { return nil, false }

@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"syscall"
 
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // ProbeResult represents the outcome of a single platform runtime check.
@@ -31,15 +29,6 @@ func ProbeWorkspace(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend ll
 		Required: true,
 		OK:       wsOk,
 		Message:  wsMsg,
-	})
-
-	// 2. SQLite writable locations
-	sqliteOk, sqliteMsg := checkSQLiteWritable(cfg.Workspace)
-	results = append(results, ProbeResult{
-		Name:     "sqlite_writable",
-		Required: true,
-		OK:       sqliteOk,
-		Message:  sqliteMsg,
 	})
 
 	// 3. Inference backend reachable
@@ -77,20 +66,6 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 	}
 	f.Close()
 	return true, "workspace directory exists and is readable"
-}
-
-func checkSQLiteWritable(workspace string) (bool, string) {
-	paths := config.New(workspace)
-	sessionsDir := paths.SessionsDir()
-	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
-		return false, fmt.Sprintf("cannot create sessions dir: %s", err)
-	}
-	testFile := filepath.Join(sessionsDir, ".probe_write_test")
-	if err := os.WriteFile(testFile, []byte("test"), 0o644); err != nil {
-		return false, fmt.Sprintf("sessions dir not writable: %s", err)
-	}
-	_ = os.Remove(testFile)
-	return true, "SQLite locations are writable"
 }
 
 func checkInferenceBackend(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) (bool, string) {

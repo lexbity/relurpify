@@ -125,7 +125,7 @@ func TestHybridSearchFeedsSharedContextMigration(t *testing.T) {
 		t.Fatalf("write notes: %v", err)
 	}
 
-	store, err := ast.NewSQLiteStore(filepath.Join(temp, "idx.db"))
+	store, err := ast.NewTestStore(filepath.Join(temp, "idx.db"))
 	if err != nil {
 		t.Fatalf("sqlite: %v", err)
 	}
@@ -327,7 +327,7 @@ func (s *migrationVectorStore) Query(context.Context, string, int) ([]search.Vec
 }
 
 type migrationCodeIndex struct {
-	store *ast.SQLiteStore
+	store ast.IndexStore
 }
 
 func (a *migrationCodeIndex) GetFileMetadata(string) (any, bool) { return nil, false }

@@ -103,16 +103,6 @@ func TestProbeWorkspace_WorkspaceExists(t *testing.T) {
 	}
 }
 
-func TestProbeWorkspace_SQLiteWritable(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
-	})
-	r := findResult(t, results, "sqlite_writable")
-	if !r.OK {
-		t.Errorf("sqlite_writable: expected OK for writable temp dir, got: %s", r.Message)
-	}
-}
-
 func TestProbeWorkspace_InferenceUnhealthy(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		warmErr: errors.New("backend unavailable"),

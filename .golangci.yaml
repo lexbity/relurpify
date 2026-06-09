@@ -20,7 +20,7 @@ linters:
     - unused        # Finds unused constants, variables, functions, and types
     - errcheck      # Ensures errors are not silently ignored
     - errorlint     # Enforces modern error wrapping (%w) and checking
-    - gosec         # Scans for security vulnerabilities (SQLi, weak crypto, etc.)
+    - gosec         # Scans for security vulnerabilities (SQL, weak crypto, etc.)
     - errchkjson    # Checks JSON encoding/decoding error handling and unsupported types
     - unconvert     # Finds unnecessary type conversions
     - wastedassign  # Finds assigned values that are never used
@@ -28,7 +28,6 @@ linters:
     # --- Concurrency & Memory Invariants ---
     - copyloopvar   # Standard v2 check for loop pointer variable bugs
     - bodyclose     # Ensures HTTP response bodies are explicitly closed
-    - sqlclosecheck # Ensures SQL rows/statements are closed
     - rowserrcheck  # Ensures SQL rows errors are checked after iteration
     - contextcheck  # Verifies context inheritance is not broken across sub-calls
     - durationcheck # Catches nonsensical duration arithmetic

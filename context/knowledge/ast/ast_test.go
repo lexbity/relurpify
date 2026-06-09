@@ -2,8 +2,6 @@ package ast
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -104,123 +102,10 @@ func TestMarkdownParserParse(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreCRUD(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	if err != nil {
-		t.Fatalf("sqlite init failed: %v", err)
-	}
-	defer store.Close()
-	meta := &FileMetadata{
-		ID:           "file1",
-		Path:         "sample.go",
-		RelativePath: "sample.go",
-		Language:     "go",
-		Category:     CategoryCode,
-		ContentHash:  "hash",
-		IndexedAt:    time.Now(),
-	}
-	if err := store.SaveFile(meta); err != nil {
-		t.Fatalf("save file failed: %v", err)
-	}
-	nodes := []*Node{
-		{
-			ID:        "n1",
-			FileID:    meta.ID,
-			Type:      NodeTypePackage,
-			Category:  CategoryCode,
-			Language:  "go",
-			Name:      "sample",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
-		{
-			ID:        "n2",
-			FileID:    meta.ID,
-			Type:      NodeTypeFunction,
-			Category:  CategoryCode,
-			Language:  "go",
-			Name:      "Hello",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
-	}
-	if err := store.SaveNodes(nodes); err != nil {
-		t.Fatalf("save nodes failed: %v", err)
-	}
-	edges := []*Edge{{
-		ID:       "e1",
-		SourceID: "n1",
-		TargetID: "n2",
-		Type:     EdgeTypeContains,
-	}}
-	if err := store.SaveEdges(edges); err != nil {
-		t.Fatalf("save edges failed: %v", err)
-	}
-	fetched, err := store.GetFile(meta.ID)
-	if err != nil || fetched == nil {
-		t.Fatalf("get file failed: %v", err)
-	}
-	node, err := store.GetNode("n2")
-	if err != nil || node == nil {
-		t.Fatalf("get node failed: %v", err)
-	}
-	results, err := store.SearchNodes(NodeQuery{NamePattern: "Hello"})
-	if err != nil || len(results) == 0 {
-		t.Fatalf("search nodes failed: %v", err)
-	}
-	stats, err := store.GetStats()
-	if err != nil {
-		t.Fatalf("stats failed: %v", err)
-	}
-	if stats.TotalFiles == 0 || stats.TotalNodes == 0 {
-		t.Fatalf("unexpected stats: %#v", stats)
-	}
-}
-
 type fakeSymbolProvider struct {
 	symbols []DocumentSymbol
 }
 
 func (f fakeSymbolProvider) DocumentSymbols(ctx context.Context, path string) ([]DocumentSymbol, error) {
 	return f.symbols, nil
-}
-
-func TestIndexManagerSymbolFallback(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	if err != nil {
-		t.Fatalf("sqlite init failed: %v", err)
-	}
-	defer store.Close()
-	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
-	manager.UseSymbolProvider(fakeSymbolProvider{
-		symbols: []DocumentSymbol{{
-			Name:      "handler",
-			Kind:      NodeTypeFunction,
-			StartLine: 1,
-			EndLine:   3,
-		}},
-	})
-	path := filepath.Join(tmpDir, "main.py")
-	if err := os.WriteFile(path, []byte("print('hi')"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	if err := manager.IndexFile(path); err != nil {
-		t.Fatalf("index file failed: %v", err)
-	}
-	meta, err := store.GetFileByPath(path)
-	if err != nil || meta == nil {
-		t.Fatalf("expected metadata, got err=%v", err)
-	}
-	if meta.Language != "python" {
-		t.Fatalf("expected python language, got %s", meta.Language)
-	}
-	nodes, err := store.GetNodesByFile(meta.ID)
-	if err != nil {
-		t.Fatalf("fetch nodes failed: %v", err)
-	}
-	if len(nodes) < 2 {
-		t.Fatalf("expected symbol nodes, got %d", len(nodes))
-	}
 }

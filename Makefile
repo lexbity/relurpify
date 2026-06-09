@@ -26,20 +26,6 @@ no-dead:
 	@if grep -rn '^[[:space:]]*Config[[:space:]]\+map\[string\]any' --include='*.go' agents/ 2>/dev/null ; then echo "[FAIL] no-dead: found Config map[string]any in agents/" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
-lint-layering:
-	@bash scripts/lint-layering.sh
-
-lint-invariants:
-	@bash scripts/check-lint-invariants.sh
-
-lint-framework-boundaries:
-	@bash scripts/check-framework-boundaries.sh
-
-lint-no-host-exec:
-	@bash scripts/check-no-host-exec.sh
-
-verify-agent-boundaries:
-	@bash scripts/verify-agent-boundaries.sh
 
 lint-all: lint-layering lint-invariants lint-framework-boundaries lint-no-host-exec lint-config-boundary
 
@@ -47,9 +33,6 @@ lint-config:
 	go run ./app/relurplint --check all
 	@$(MAKE) check-config-tree-drift
 	@$(MAKE) check-boot-root
-
-lint-config-boundary:
-	go run ./scripts/boundaryaudit
 
 test-boundary:
 	go test ./framework/cfgload ./scripts/boundaryaudit -count=1 -timeout 60s

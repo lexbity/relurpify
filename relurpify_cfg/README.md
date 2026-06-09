@@ -79,7 +79,6 @@ relurpify_cfg/
 
 The following are explicitly excluded from `relurpify_cfg/` and belong in `.relurpify_state/` (gitignored at project root):
 
-- `sessions.db`, `events.db`, any SQLite databases
 - `logs/`, `telemetry/`, any runtime output
 - Test run artifacts, temp directories
 - Any file with a path containing `/tmp/`

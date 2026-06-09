@@ -62,8 +62,6 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Enve
 		case "database_path":
 			if db := inferredPathFromObservations(env, "database_path"); db != "" {
 				args[name] = db
-			} else if path := primaryFailurePath(env, lastMap); isSQLiteFailurePath(path) {
-				args[name] = path
 			}
 		case "query":
 			if strings.Contains(strings.ToLower(tool.Name()), "sqlite") {
@@ -234,10 +232,6 @@ func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) str
 			if path != "" && path != "<nil>" {
 				for _, key := range keys {
 					switch key {
-					case "database_path":
-						if isSQLiteFailurePath(path) {
-							return path
-						}
 					case "module_path", "workspace_path", "go_mod":
 						if strings.HasSuffix(path, ".toml") || strings.HasSuffix(path, ".mod") || strings.HasSuffix(path, ".work") || strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".cfg") || strings.HasSuffix(path, ".txt") || strings.HasSuffix(path, "Cargo.toml") {
 							return path
@@ -280,32 +274,4 @@ func inferredGoManifest(env *contextdata.Envelope) string {
 		dataKeys:   []string{"module_path", "workspace_path", "go_mod"},
 		pathSuffix: []string{"go.mod", "go.work"},
 	})
-}
-
-func inferredSQLiteDatabase(env *contextdata.Envelope) string {
-	observations := getToolObservations(env)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		switch obs.Tool {
-		case "sqlite_database_detect":
-			if db := strings.TrimSpace(fmt.Sprint(obs.Data["database_path"])); db != "" {
-				return db
-			}
-		case "sqlite_query", "sqlite_schema_inspect", "sqlite_integrity_check":
-			if db := strings.TrimSpace(fmt.Sprint(obs.Data["database"])); db != "" {
-				return db
-			}
-		case "file_read":
-			path := strings.TrimSpace(fmt.Sprint(obs.Args["path"]))
-			if isSQLiteFailurePath(path) {
-				return path
-			}
-		}
-	}
-	return ""
-}
-
-func isSQLiteFailurePath(path string) bool {
-	lower := strings.ToLower(strings.TrimSpace(path))
-	return strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") || strings.HasSuffix(lower, ".sqlite3")
 }

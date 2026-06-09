@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
@@ -29,6 +32,9 @@ func NewGraphIndexStore(g *graphdb.Engine) *GraphIndexStore {
 // ────────────────────────────────────────────────────────────────────
 
 func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	if metadata == nil {
 		return errors.New("metadata required")
 	}
@@ -50,6 +56,7 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 		"summary":        metadata.Summary,
 		"summary_hash":   metadata.SummaryHash,
 		"size":           metadata.Size,
+		"indexed_at":     metadata.IndexedAt,
 	})
 	labels := []string{
 		"lang:" + metadata.Language,
@@ -71,6 +78,9 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 }
 
 func (s *GraphIndexStore) GetFile(fileID string) (*FileMetadata, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	node, ok := s.g.GetNode(fileID)
 	if !ok || node.Kind != "ast_file" {
 		return nil, nil
@@ -79,6 +89,9 @@ func (s *GraphIndexStore) GetFile(fileID string) (*FileMetadata, error) {
 }
 
 func (s *GraphIndexStore) GetFileByPath(path string) (*FileMetadata, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	// Use the stable ID which is "path:{path}".
 	nodes := s.g.ListNodesByLabel("ast_file", "file:"+path)
 	if len(nodes) == 0 {
@@ -88,6 +101,9 @@ func (s *GraphIndexStore) GetFileByPath(path string) (*FileMetadata, error) {
 }
 
 func (s *GraphIndexStore) ListFiles(category Category) ([]*FileMetadata, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	var nodes []graphdb.NodeRecord
 	if category == "" {
 		nodes = s.g.ListNodes("ast_file")
@@ -106,6 +122,9 @@ func (s *GraphIndexStore) ListFiles(category Category) ([]*FileMetadata, error) 
 }
 
 func (s *GraphIndexStore) DeleteFile(fileID string) error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	return s.g.DeleteNode(fileID)
 }
 
@@ -114,7 +133,13 @@ func (s *GraphIndexStore) DeleteFile(fileID string) error {
 // ────────────────────────────────────────────────────────────────────
 
 func (s *GraphIndexStore) SaveNodes(nodes []*Node) error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
 		if err := s.saveNode(n); err != nil {
 			return err
 		}
@@ -159,6 +184,9 @@ func (s *GraphIndexStore) saveNode(n *Node) error {
 }
 
 func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	node, ok := s.g.GetNode(nodeID)
 	if !ok || node.Kind != "ast_node" {
 		return nil, nil
@@ -167,6 +195,9 @@ func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
 }
 
 func (s *GraphIndexStore) GetNodesByFile(fileID string) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	nodes := s.g.ListNodesByLabel("ast_node", "file:"+fileID)
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
@@ -180,6 +211,9 @@ func (s *GraphIndexStore) GetNodesByFile(fileID string) ([]*Node, error) {
 }
 
 func (s *GraphIndexStore) GetNodesByType(nodeType NodeType) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	nodes := s.g.ListNodesByLabel("ast_node", "type:"+string(nodeType))
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
@@ -193,6 +227,9 @@ func (s *GraphIndexStore) GetNodesByType(nodeType NodeType) ([]*Node, error) {
 }
 
 func (s *GraphIndexStore) GetNodesByName(name string) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	nodes := s.g.ListNodesByLabel("ast_node", "name:"+name)
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
@@ -206,6 +243,9 @@ func (s *GraphIndexStore) GetNodesByName(name string) ([]*Node, error) {
 }
 
 func (s *GraphIndexStore) SearchNodes(query NodeQuery) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	// Use the index to narrow results.
 	var candidates []graphdb.NodeRecord
 	if len(query.Types) > 0 {
@@ -226,6 +266,22 @@ func (s *GraphIndexStore) SearchNodes(query NodeQuery) ([]*Node, error) {
 			out = append(out, an)
 		}
 	}
+
+	// Deterministic sorting
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+
+	if query.Offset > 0 {
+		if query.Offset >= len(out) {
+			return nil, nil
+		}
+		out = out[query.Offset:]
+	}
+	if query.Limit > 0 && query.Limit < len(out) {
+		out = out[:query.Limit]
+	}
+
 	return out, nil
 }
 
@@ -270,7 +326,13 @@ func (s *GraphIndexStore) DeleteNode(nodeID string) error {
 // ────────────────────────────────────────────────────────────────────
 
 func (s *GraphIndexStore) SaveEdges(edges []*Edge) error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	for _, e := range edges {
+		if e == nil {
+			continue
+		}
 		if err := s.saveEdge(e); err != nil {
 			return err
 		}
@@ -288,10 +350,13 @@ func (s *GraphIndexStore) saveEdge(e *Edge) error {
 }
 
 func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	// Find the edge by searching through connected nodes.
 	// Edge IDs are stored in edge props, so we need to search.
 	// For simplicity, iterate out edges from known nodes.
-	// This is O(n) but the SQLite version is also O(1) via PK lookup.
+	// This is O(n)
 	nodes := s.g.ListNodes("")
 	for _, n := range nodes {
 		edges := s.g.GetOutEdges(n.ID)
@@ -311,16 +376,25 @@ func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
 }
 
 func (s *GraphIndexStore) GetEdgesBySource(sourceID string) ([]*Edge, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	gedges := s.g.GetOutEdges(sourceID)
 	return collectEdges(gedges)
 }
 
 func (s *GraphIndexStore) GetEdgesByTarget(targetID string) ([]*Edge, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	gedges := s.g.GetInEdges(targetID)
 	return collectEdges(gedges)
 }
 
 func (s *GraphIndexStore) GetEdgesByType(edgeType EdgeType) ([]*Edge, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	// Walk all nodes and collect edges matching the type.
 	var out []*Edge
 	nodes := s.g.ListNodes("")
@@ -336,6 +410,9 @@ func (s *GraphIndexStore) GetEdgesByType(edgeType EdgeType) ([]*Edge, error) {
 }
 
 func (s *GraphIndexStore) SearchEdges(query EdgeQuery) ([]*Edge, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	var candidates []graphdb.EdgeRecord
 	egk := toEdgeKinds(query.Types)
 	if len(query.SourceIDs) > 0 {
@@ -357,10 +434,33 @@ func (s *GraphIndexStore) SearchEdges(query EdgeQuery) ([]*Edge, error) {
 			candidates = append(candidates, s.g.GetOutEdges(n.ID)...)
 		}
 	}
-	return collectEdges(candidates)
+	out, err := collectEdges(candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	// Deterministic sorting
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+
+	if query.Offset > 0 {
+		if query.Offset >= len(out) {
+			return nil, nil
+		}
+		out = out[query.Offset:]
+	}
+	if query.Limit > 0 && query.Limit < len(out) {
+		out = out[:query.Limit]
+	}
+
+	return out, nil
 }
 
 func (s *GraphIndexStore) DeleteEdge(edgeID string) error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	edge, err := s.GetEdge(edgeID)
 	if err != nil || edge == nil {
 		return err
@@ -397,14 +497,78 @@ func (s *GraphIndexStore) GetReferencedBy(nodeID string) ([]*Node, error) {
 }
 
 func (s *GraphIndexStore) GetDependencies(nodeID string) ([]*Node, error) {
-	return s.traverseNodes(nodeID, EdgeTypeImports, graphdb.DirectionOut)
+	return s.traverseNodesRecursive(nodeID, graphdb.DirectionOut)
 }
 
 func (s *GraphIndexStore) GetDependents(nodeID string) ([]*Node, error) {
-	return s.traverseNodes(nodeID, EdgeTypeImports, graphdb.DirectionIn)
+	return s.traverseNodesRecursive(nodeID, graphdb.DirectionIn)
+}
+
+func (s *GraphIndexStore) traverseNodesRecursive(startNodeID string, dir graphdb.Direction) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
+	visited := make(map[string]bool)
+	var queue []string
+
+	// Collect first-level neighbors of allowed types
+	var firstLevel []string
+	allowedKinds := []graphdb.EdgeKind{
+		graphdb.EdgeKind(EdgeTypeImports),
+		graphdb.EdgeKind(EdgeTypeDependsOn),
+		graphdb.EdgeKind(EdgeTypeReferences),
+	}
+	for _, k := range allowedKinds {
+		firstLevel = append(firstLevel, s.g.Neighbors(startNodeID, dir, k)...)
+	}
+	for _, id := range firstLevel {
+		if !visited[id] {
+			visited[id] = true
+			queue = append(queue, id)
+		}
+	}
+
+	// BFS
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+
+		var neighbors []string
+		for _, k := range allowedKinds {
+			neighbors = append(neighbors, s.g.Neighbors(curr, dir, k)...)
+		}
+		for _, nid := range neighbors {
+			if !visited[nid] {
+				visited[nid] = true
+				queue = append(queue, nid)
+			}
+		}
+	}
+
+	// Convert IDs to Nodes
+	out := make([]*Node, 0, len(visited))
+	for id := range visited {
+		n, err := s.GetNode(id)
+		if err != nil {
+			return nil, err
+		}
+		if n != nil {
+			out = append(out, n)
+		}
+	}
+
+	// Deterministic sorting to ensure stable tests
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+
+	return out, nil
 }
 
 func (s *GraphIndexStore) traverseNodes(nodeID string, edgeType EdgeType, dir graphdb.Direction) ([]*Node, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	neighborIDs := s.g.Neighbors(nodeID, dir, graphdb.EdgeKind(edgeType))
 	out := make([]*Node, 0, len(neighborIDs))
 	for _, nid := range neighborIDs {
@@ -424,20 +588,59 @@ func (s *GraphIndexStore) traverseNodes(nodeID string, edgeType EdgeType, dir gr
 // ────────────────────────────────────────────────────────────────────
 
 func (s *GraphIndexStore) BeginTransaction() (Transaction, error) {
-	return noopTransaction{}, nil
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
+	return &graphTransaction{store: s}, nil
 }
 
 func (s *GraphIndexStore) Vacuum() error {
+	if s.g.IsClosed() {
+		return errors.New("store is closed")
+	}
 	return nil
 }
 
 func (s *GraphIndexStore) GetStats() (*IndexStats, error) {
+	if s.g.IsClosed() {
+		return nil, errors.New("store is closed")
+	}
 	files := s.g.ListNodes("ast_file")
 	nodes := s.g.ListNodes("ast_node")
 	stats := &IndexStats{
-		TotalFiles: len(files),
-		TotalNodes: len(nodes),
+		TotalFiles:      len(files),
+		TotalNodes:      len(nodes),
+		NodesByType:     make(map[NodeType]int),
+		EdgesByType:     make(map[EdgeType]int),
+		FilesByCategory: make(map[Category]int),
 	}
+	for _, n := range nodes {
+		an, err := nodeToASTNode(n)
+		if err == nil && an != nil {
+			stats.NodesByType[an.Type]++
+		}
+	}
+	for _, f := range files {
+		fm, err := nodeToFileMetadata(f)
+		if err == nil && fm != nil {
+			stats.FilesByCategory[fm.Category]++
+		}
+	}
+
+	var totalEdges int
+	allNodes := s.g.ListNodes("")
+	for _, n := range allNodes {
+		gedges := s.g.GetOutEdges(n.ID)
+		for _, e := range gedges {
+			props := edgePropsToMap(e.Props)
+			if et, ok := props["type"].(string); ok {
+				stats.EdgesByType[EdgeType(et)]++
+				totalEdges++
+			}
+		}
+	}
+	stats.TotalEdges = totalEdges
+
 	return stats, nil
 }
 
@@ -445,13 +648,46 @@ func (s *GraphIndexStore) GetStats() (*IndexStats, error) {
 // Internal helpers
 // ────────────────────────────────────────────────────────────────────
 
-type noopTransaction struct{}
+type graphTransaction struct {
+	store *GraphIndexStore
+	nodes []*Node
+	edges []*Edge
+	files []string
+}
 
-func (noopTransaction) SaveNodes(_ []*Node) error    { return nil }
-func (noopTransaction) SaveEdges(_ []*Edge) error     { return nil }
-func (noopTransaction) DeleteFile(_ string) error     { return nil }
-func (noopTransaction) Commit() error                 { return nil }
-func (noopTransaction) Rollback() error               { return nil }
+func (t *graphTransaction) SaveNodes(nodes []*Node) error {
+	t.nodes = append(t.nodes, nodes...)
+	return nil
+}
+
+func (t *graphTransaction) SaveEdges(edges []*Edge) error {
+	t.edges = append(t.edges, edges...)
+	return nil
+}
+
+func (t *graphTransaction) DeleteFile(fileID string) error {
+	t.files = append(t.files, fileID)
+	return nil
+}
+
+func (t *graphTransaction) Commit() error {
+	for _, fileID := range t.files {
+		if err := t.store.DeleteFile(fileID); err != nil {
+			return err
+		}
+	}
+	if err := t.store.SaveNodes(t.nodes); err != nil {
+		return err
+	}
+	if err := t.store.SaveEdges(t.edges); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *graphTransaction) Rollback() error {
+	return nil
+}
 
 func mustMarshal(v any) json.RawMessage {
 	data, _ := json.Marshal(v)
@@ -460,23 +696,24 @@ func mustMarshal(v any) json.RawMessage {
 
 func nodeToFileMetadata(n graphdb.NodeRecord) (*FileMetadata, error) {
 	var props struct {
-		Path         string `json:"path"`
-		RelativePath string `json:"relative_path"`
-		Language     string `json:"language"`
-		Category     string `json:"category"`
-		LineCount    int    `json:"line_count"`
-		LOC          int    `json:"loc"`
-		TokenCount   int    `json:"token_count"`
-		Complexity   int    `json:"complexity"`
-		ContentHash  string `json:"content_hash"`
-		Hash         string `json:"hash"`
-		RootNodeID   string `json:"root_node_id"`
-		NodeCount    int    `json:"node_count"`
-		EdgeCount    int    `json:"edge_count"`
-		ParserVer    string `json:"parser_version"`
-		Summary      string `json:"summary"`
-		SummaryHash  string `json:"summary_hash"`
-		Size         int64  `json:"size"`
+		Path         string    `json:"path"`
+		RelativePath string    `json:"relative_path"`
+		Language     string    `json:"language"`
+		Category     string    `json:"category"`
+		LineCount    int       `json:"line_count"`
+		LOC          int       `json:"loc"`
+		TokenCount   int       `json:"token_count"`
+		Complexity   int       `json:"complexity"`
+		ContentHash  string    `json:"content_hash"`
+		Hash         string    `json:"hash"`
+		RootNodeID   string    `json:"root_node_id"`
+		NodeCount    int       `json:"node_count"`
+		EdgeCount    int       `json:"edge_count"`
+		ParserVer    string    `json:"parser_version"`
+		Summary      string    `json:"summary"`
+		SummaryHash  string    `json:"summary_hash"`
+		Size         int64     `json:"size"`
+		IndexedAt    time.Time `json:"indexed_at"`
 	}
 	if err := json.Unmarshal(n.Props, &props); err != nil {
 		return nil, fmt.Errorf("unmarshal file metadata: %w", err)
@@ -500,6 +737,7 @@ func nodeToFileMetadata(n graphdb.NodeRecord) (*FileMetadata, error) {
 		Summary:       props.Summary,
 		SummaryHash:   props.SummaryHash,
 		Size:          props.Size,
+		IndexedAt:     props.IndexedAt,
 	}, nil
 }
 
@@ -524,20 +762,20 @@ func nodeToASTNode(n graphdb.NodeRecord) (*Node, error) {
 		return nil, fmt.Errorf("unmarshal ast node: %w", err)
 	}
 	return &Node{
-		ID:         n.ID,
-		ParentID:   props.ParentID,
-		FileID:     props.FileID,
-		Type:       NodeType(props.NodeType),
-		Category:   Category(props.Category),
-		Language:   props.Language,
-		StartLine:  props.StartLine,
-		EndLine:    props.EndLine,
-		StartCol:   props.StartCol,
-		EndCol:     props.EndCol,
-		Name:       props.Name,
-		Signature:  props.Signature,
-		DocString:  props.DocString,
-		IsExported: props.IsExported,
+		ID:          n.ID,
+		ParentID:    props.ParentID,
+		FileID:      props.FileID,
+		Type:        NodeType(props.NodeType),
+		Category:    Category(props.Category),
+		Language:    props.Language,
+		StartLine:   props.StartLine,
+		EndLine:     props.EndLine,
+		StartCol:    props.StartCol,
+		EndCol:      props.EndCol,
+		Name:        props.Name,
+		Signature:   props.Signature,
+		DocString:   props.DocString,
+		IsExported:  props.IsExported,
 		ContentHash: props.ContentHash,
 	}, nil
 }
@@ -603,5 +841,26 @@ func matchName(name, pattern string) bool {
 	if pattern == "" || name == "" {
 		return false
 	}
-	return strings.Contains(name, pattern) || strings.HasPrefix(name, pattern)
+	// Convert wildcard pattern (e.g. "Hel%") to a Go regexp pattern.
+	var regexStr strings.Builder
+	regexStr.WriteString("(?i)^")
+	for _, char := range pattern {
+		switch char {
+		case '%':
+			regexStr.WriteString(".*")
+		case '_':
+			regexStr.WriteString(".")
+		case '.', '+', '*', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|', '\\':
+			regexStr.WriteRune('\\')
+			regexStr.WriteRune(char)
+		default:
+			regexStr.WriteRune(char)
+		}
+	}
+	regexStr.WriteString("$")
+	r, err := regexp.Compile(regexStr.String())
+	if err != nil {
+		return strings.Contains(strings.ToLower(name), strings.ToLower(pattern))
+	}
+	return r.MatchString(name)
 }

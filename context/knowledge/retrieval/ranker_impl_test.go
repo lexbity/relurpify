@@ -64,7 +64,7 @@ func TestRecencyRanker_HalfLife(t *testing.T) {
 
 func TestASTProximityRanker_SameFile(t *testing.T) {
 	workspace := t.TempDir()
-	store, err := ast.NewSQLiteStore(filepath.Join(workspace, "ast.db"))
+	store, err := ast.NewTestStore(filepath.Join(workspace, "ast.db"))
 	if err != nil {
 		t.Fatalf("open ast store: %v", err)
 	}

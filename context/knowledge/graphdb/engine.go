@@ -588,3 +588,17 @@ func (e *Engine) applyLegacyJSONOp(payload []byte) error {
 	}
 	return nil
 }
+
+// IsClosed returns true if the engine has been closed.
+func (e *Engine) IsClosed() bool {
+	if e == nil || e.stopCh == nil {
+		return true
+	}
+	select {
+	case <-e.stopCh:
+		return true
+	default:
+		return false
+	}
+}
+

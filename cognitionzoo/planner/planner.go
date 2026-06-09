@@ -1025,11 +1025,6 @@ func plannerExtractJSON(raw string) string {
 	return "{}"
 }
 
-func isSQLiteFailurePath(path string) bool {
-	lower := strings.ToLower(strings.TrimSpace(path))
-	return strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") || strings.HasSuffix(lower, ".sqlite3")
-}
-
 func plannerPrimaryPath(task *execution.Task, plan pl.Plan) string {
 	for _, path := range plannerTaskPaths(task) {
 		if path != "" {
@@ -1067,20 +1062,6 @@ func plannerWorkingDirectory(task *execution.Task, plan pl.Plan) string {
 		return clean
 	}
 	return "."
-}
-
-func plannerDatabasePath(task *execution.Task, plan pl.Plan) string {
-	for _, path := range plannerTaskPaths(task) {
-		if isSQLiteFailurePath(path) {
-			return path
-		}
-	}
-	for _, path := range plan.Files {
-		if isSQLiteFailurePath(path) {
-			return path
-		}
-	}
-	return ""
 }
 
 func plannerTaskPaths(task *execution.Task) []string {

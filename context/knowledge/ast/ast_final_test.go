@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 
 func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -43,7 +42,7 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 
 func TestIndexManagerPersistWithContentHash(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -198,180 +197,6 @@ func External() // declared but not defined`
 	assert.True(t, found)
 }
 
-// ==================== SQLiteStore Additional Tests ====================
-
-func TestSQLiteStoreSaveNodesWithNilNode(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	// Save with a nil node in the slice
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", CreatedAt: time.Now(), UpdatedAt: time.Now()},
-		nil, // nil node should be skipped
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	// Verify only n1 was saved
-	node, err := store.GetNode("n1")
-	require.NoError(t, err)
-	assert.Equal(t, "Hello", node.Name)
-}
-
-func TestSQLiteStoreSaveEdgesWithNilEdge(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeFunction, Name: "World", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	// Save with a nil edge in the slice
-	edges := []*Edge{
-		{ID: "e1", SourceID: "n1", TargetID: "n2", Type: EdgeTypeCalls},
-		nil, // nil edge should be skipped
-	}
-	require.NoError(t, store.SaveEdges(edges))
-
-	// Verify only e1 was saved
-	edge, err := store.GetEdge("e1")
-	require.NoError(t, err)
-	assert.Equal(t, EdgeTypeCalls, edge.Type)
-}
-
-func TestSQLiteStoreInsertNodesWithEmptySlice(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	// Should not error with empty slice
-	err = store.SaveNodes([]*Node{})
-	assert.NoError(t, err)
-}
-
-func TestSQLiteStoreInsertEdgesWithEmptySlice(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	// Should not error with empty slice
-	err = store.SaveEdges([]*Edge{})
-	assert.NoError(t, err)
-}
-
-func TestSQLiteStoreSearchNodesWithExportedFilter(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	exported := true
-	notExported := false
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", IsExported: true, CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeFunction, Name: "world", Category: CategoryCode, Language: "go", IsExported: false, CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	// Search for exported nodes
-	results, err := store.SearchNodes(NodeQuery{IsExported: &exported})
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, "Hello", results[0].Name)
-
-	// Search for non-exported nodes
-	results, err = store.SearchNodes(NodeQuery{IsExported: &notExported})
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, "world", results[0].Name)
-}
-
-func TestSQLiteStoreSearchNodesWithOffset(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "A", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeFunction, Name: "B", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n3", FileID: fileID, Type: NodeTypeFunction, Name: "C", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	// Search with offset
-	results, err := store.SearchNodes(NodeQuery{Offset: 1, Limit: 10})
-	require.NoError(t, err)
-	assert.Len(t, results, 2) // Should skip first node
-}
-
-func TestSQLiteStoreGetStatsWithData(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeStruct, Name: "World", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	edges := []*Edge{
-		{ID: "e1", SourceID: "n1", TargetID: "n2", Type: EdgeTypeCalls},
-	}
-	require.NoError(t, store.SaveEdges(edges))
-
-	stats, err := store.GetStats()
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.TotalFiles)
-	assert.Equal(t, 2, stats.TotalNodes)
-	assert.Equal(t, 1, stats.TotalEdges)
-	assert.Greater(t, len(stats.NodesByType), 0)
-	assert.Greater(t, len(stats.EdgesByType), 0)
-}
-
 // ==================== Graph Schema Additional Tests ====================
 
 func TestGraphNodeRecordWithInvalidMarshal(t *testing.T) {
@@ -435,7 +260,7 @@ func TestParserRegistryGetParserNotFound(t *testing.T) {
 
 func TestIndexManagerCloseWhileRunning(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
@@ -511,233 +336,26 @@ func TestHashContentConsistent(t *testing.T) {
 	assert.NotEqual(t, hash1, hash3)
 }
 
-// ==================== IndexManager BeginTransaction Test ====================
-
-func TestSQLiteStoreBeginTransactionError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// Should error because db is closed
-	_, err = store.BeginTransaction()
-	assert.Error(t, err)
-}
-
-// ==================== SQLiteStore SaveFile Error ====================
-
-func TestSQLiteStoreSaveFileNil(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	err = store.SaveFile(nil)
-	assert.Error(t, err)
-}
-
-// ==================== SQLiteStore Close Nil DB ====================
-
-func TestSQLiteStoreCloseNil(t *testing.T) {
-	store := &SQLiteStore{db: nil}
-	err := store.Close()
-	assert.NoError(t, err)
-}
-
-// ==================== scanFiles Error Path ====================
-
-func TestSQLiteStoreScanFilesError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.ListFiles(CategoryCode)
-	assert.Error(t, err)
-}
-
-// ==================== scanFile Error Path ====================
-
-func TestSQLiteStoreScanFileError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.GetFile("nonexistent")
-	assert.Error(t, err)
-}
-
-// ==================== scanNode Error Path ====================
-
-func TestSQLiteStoreScanNodeError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.GetNode("nonexistent")
-	assert.Error(t, err)
-}
-
-// ==================== scanNodes Error Path ====================
-
-func TestSQLiteStoreScanNodesError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.GetNodesByType(NodeTypeFunction)
-	assert.Error(t, err)
-}
-
-// ==================== scanEdge Error Path ====================
-
-func TestSQLiteStoreScanEdgeError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.GetEdge("nonexistent")
-	assert.Error(t, err)
-}
-
-// ==================== scanEdges Error Path ====================
-
-func TestSQLiteStoreScanEdgesError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.GetEdgesByType(EdgeTypeCalls)
-	assert.Error(t, err)
-}
-
-// ==================== placeholders Edge Cases ====================
-
-func TestPlaceholdersZeroAndNegative(t *testing.T) {
-	// Test with 0
-	result := placeholders(0)
-	assert.Equal(t, "", result)
-
-	// Test with negative (shouldn't happen but check robustness)
-	result = placeholders(-1)
-	assert.Equal(t, "", result)
-}
-
-// ==================== getRelatedNodes Error Path ====================
-
-func TestSQLiteStoreGetRelatedNodesError(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	store.Close()
-
-	// This should error because db is closed
-	_, err = store.getRelatedNodes("node1", EdgeTypeCalls, true)
-	assert.Error(t, err)
-}
-
-// ==================== SearchNodes Query Builder ====================
-
-func TestSQLiteStoreSearchNodesWithMultipleFilters(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeFunction, Name: "World", Category: CategoryCode, Language: "python", CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	// Search with multiple filters
-	results, err := store.SearchNodes(NodeQuery{
-		Types:       []NodeType{NodeTypeFunction},
-		Categories:  []Category{CategoryCode},
-		Languages:   []string{"go"},
-		FileIDs:     []string{fileID},
-		NamePattern: "Hel%",
-	})
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, "Hello", results[0].Name)
-}
-
-// ==================== SearchEdges Query Builder ====================
-
-func TestSQLiteStoreSearchEdgesWithMultipleFilters(t *testing.T) {
-	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	defer store.Close()
-
-	fileID := GenerateFileID("/test.go")
-	require.NoError(t, store.SaveFile(&FileMetadata{
-		ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
-		ContentHash: "hash", IndexedAt: time.Now(),
-	}))
-
-	now := time.Now()
-	nodes := []*Node{
-		{ID: "n1", FileID: fileID, Type: NodeTypeFunction, Name: "Hello", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n2", FileID: fileID, Type: NodeTypeFunction, Name: "World", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-		{ID: "n3", FileID: fileID, Type: NodeTypeFunction, Name: "Foo", Category: CategoryCode, Language: "go", CreatedAt: now, UpdatedAt: now},
-	}
-	require.NoError(t, store.SaveNodes(nodes))
-
-	edges := []*Edge{
-		{ID: "e1", SourceID: "n1", TargetID: "n2", Type: EdgeTypeCalls},
-		{ID: "e2", SourceID: "n1", TargetID: "n3", Type: EdgeTypeImports},
-	}
-	require.NoError(t, store.SaveEdges(edges))
-
-	// Search with multiple filters
-	results, err := store.SearchEdges(EdgeQuery{
-		Types:     []EdgeType{EdgeTypeCalls},
-		SourceIDs: []string{"n1"},
-		TargetIDs: []string{"n2"},
-	})
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, "e1", results[0].ID)
-}
-
-// ==================== Test sql.ErrNoRows handling ====================
+// ==================== Test not found handling ====================
 
 func TestGetFileByPathNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
-	_, err = store.GetFileByPath("/nonexistent.go")
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	file, err := store.GetFileByPath("/nonexistent.go")
+	assert.NoError(t, err)
+	assert.Nil(t, file)
 }
 
 func TestGetEdgeNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
-	_, err = store.GetEdge("nonexistent")
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	edge, err := store.GetEdge("nonexistent")
+	assert.NoError(t, err)
+	assert.Nil(t, edge)
 }

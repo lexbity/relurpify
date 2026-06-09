@@ -30,7 +30,7 @@ func Hello() {}
 
 func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -52,7 +52,7 @@ func Hello() {}
 
 func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -82,26 +82,27 @@ func Hello() {}
 	assert.NoError(t, err)
 
 	// File should be removed from index
-	_, err = manager.Store().GetFileByPath(path)
-	assert.Error(t, err) // Should error because file was removed
+	file, err := manager.Store().GetFileByPath(path)
+	assert.NoError(t, err)
+	assert.Nil(t, file)
 }
 
 func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
-	// Remove a file that was never indexed - returns sql error
+	// Remove a file that was never indexed - should not error under graphdb
 	err = manager.removeIndexedFile("/nonexistent/path.go")
-	assert.Error(t, err) // Returns sql.ErrNoRows
+	assert.NoError(t, err)
 }
 
 func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -123,7 +124,7 @@ func Hello() {}
 
 func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -138,15 +139,15 @@ func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 func TestIndexManagerLastIndexedAtNotFound(t *testing.T) {
 	manager, _ := newTestIndexManager(t)
 
-	// Query for non-existent file - returns sql error
+	// Query for non-existent file - returns no error, zero time
 	ts, err := manager.LastIndexedAt("/nonexistent.go")
-	assert.Error(t, err) // Returns sql.ErrNoRows
+	assert.NoError(t, err)
 	assert.True(t, ts.IsZero())
 }
 
 func TestIndexManagerPersistErrorCases(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -160,7 +161,7 @@ func TestIndexManagerPersistErrorCases(t *testing.T) {
 
 func TestIndexManagerIndexFileReadError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -196,7 +197,7 @@ func Hello() {}
 
 func TestIndexManagerBuildSymbolNodesWithChildren(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -226,7 +227,7 @@ func TestIndexManagerBuildSymbolNodesWithChildren(t *testing.T) {
 
 func TestIndexManagerBuildSymbolNodesWithEmptyKind(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -286,7 +287,7 @@ func Hello() {}
 
 func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -303,7 +304,7 @@ func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 
 func TestIndexManagerIndexWorkspaceContextCanceled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -345,7 +346,7 @@ func C() { A() }
 
 func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
@@ -367,7 +368,7 @@ func Hello() {}
 
 func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -390,7 +391,7 @@ func Hello() {}
 
 func TestIndexManagerIndexFilesParallelError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -448,7 +449,7 @@ func TestMarkdownParserParseIncremental(t *testing.T) {
 
 func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
 	defer store.Close()
 

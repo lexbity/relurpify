@@ -16,18 +16,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/cognitionzoo"
+	agents "codeburg.org/lexbit/relurpify/cognitionzoo"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
-	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/execution/session"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -299,9 +298,6 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			ModelFactory: modelProduct.ModelFactory,
 		},
 		Scope: session.ScopeFull,
-		EventLogFactory: func(path string) (event.Log, error) {
-			return persistence.NewSQLiteEventLog(path)
-		},
 	})
 	if err != nil {
 		return nil, err

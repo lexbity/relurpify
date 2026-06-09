@@ -17,7 +17,7 @@ import (
 func TestWorkspaceBootstrapServiceEmitsBootstrapComplete(t *testing.T) {
 	workspace := t.TempDir()
 	writeTestFile(t, filepath.Join(workspace, "main.go"), "package main\nfunc main(){}\n")
-	store, err := ast.NewSQLiteStore(filepath.Join(workspace, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(workspace, "index.db"))
 	if err != nil {
 		t.Fatalf("new sqlite store: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestWorkspaceBootstrapServiceRespectsIndexPathFilter(t *testing.T) {
 	workspace := t.TempDir()
 	writeTestFile(t, filepath.Join(workspace, "keep.go"), "package main\nfunc keep(){}\n")
 	writeTestFile(t, filepath.Join(workspace, "skip.go"), "package main\nfunc skip(){}\n")
-	store, err := ast.NewSQLiteStore(filepath.Join(workspace, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(workspace, "index.db"))
 	if err != nil {
 		t.Fatalf("new sqlite store: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestWorkspaceBootstrapServiceRespectsIndexPathFilter(t *testing.T) {
 func TestWorkspaceBootstrapServiceIdempotent(t *testing.T) {
 	workspace := t.TempDir()
 	writeTestFile(t, filepath.Join(workspace, "main.go"), "package main\nfunc main(){}\n")
-	store, err := ast.NewSQLiteStore(filepath.Join(workspace, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(workspace, "index.db"))
 	if err != nil {
 		t.Fatalf("new sqlite store: %v", err)
 	}

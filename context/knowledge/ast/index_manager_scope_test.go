@@ -16,7 +16,7 @@ func TestIndexManagerRespectsFileScope(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
 	require.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
 
-	store, err := NewSQLiteStore(filepath.Join(workspace, "index.db"))
+	store, err := NewTestStore(filepath.Join(workspace, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
@@ -26,6 +26,6 @@ func TestIndexManagerRespectsFileScope(t *testing.T) {
 	require.NoError(t, manager.IndexFile(protected))
 
 	file, err := manager.Store().GetFileByPath(protected)
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.Nil(t, file)
 }

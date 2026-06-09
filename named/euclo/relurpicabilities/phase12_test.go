@@ -83,7 +83,7 @@ func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
 	path := filepath.Join(dir, "sample.go")
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
 	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
-	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
@@ -109,7 +109,7 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	path := filepath.Join(dir, "sample.go")
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
 	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
-	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
@@ -136,7 +136,7 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	bPath := filepath.Join(dir, "b.go")
 	require.NoError(t, os.WriteFile(aPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
 	require.NoError(t, os.WriteFile(bPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
-	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})

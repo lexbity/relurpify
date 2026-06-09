@@ -12,8 +12,7 @@
 //
 // IndexManager coordinates incremental re-indexing as files change.
 // IndexStore persists symbol records in a graphdb-backed store
-// (graph_index_store.go) with optional migration from SQLite (sqlite_store.go)
-// for existing deployments. Agents query the index to locate definitions,
+// (graph_index_store.go). Agents query the index to locate definitions,
 // references, and documentation anchors before deciding which files to read.
 //
 // # Symbol types

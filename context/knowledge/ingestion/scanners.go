@@ -31,7 +31,7 @@ func (s *SignatureScanner) Scan(ctx context.Context, chunk TypedChunk) ScanResul
 	if len(s.Patterns) == 0 {
 		// Initialize default patterns
 		s.Patterns = []*regexp.Regexp{
-			// SQL injection patterns
+			// DB injection patterns
 			regexp.MustCompile(`(?i)(SELECT\s+.*FROM|INSERT\s+INTO|UPDATE\s+.*SET|DELETE\s+FROM)`),
 			// Command injection
 			regexp.MustCompile(`(?i)(;\s*rm\s+-rf|\|\s*bash|\|\s*sh\s+-c)`),

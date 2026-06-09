@@ -63,7 +63,7 @@ func (p *blockingParser) SupportsIncremental() bool { return false }
 func newTestIndexManager(t *testing.T) (*IndexManager, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	if err != nil {
 		t.Fatalf("sqlite init failed: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestIndexManagerWaitUntilReadyReturnsCancellationError(t *testing.T) {
 
 func TestIndexManagerCloseWaitsForAsyncIndexToFinish(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	if err != nil {
 		t.Fatalf("sqlite init failed: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestIndexManagerIndexWorkspaceMarksReady(t *testing.T) {
 
 func TestIndexManagerIndexWorkspaceParallelReturnsWithoutDeadlockOnErrors(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	if err != nil {
 		t.Fatalf("sqlite init failed: %v", err)
 	}
