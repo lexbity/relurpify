@@ -9,5 +9,4 @@ import (
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/sqlite"
 )

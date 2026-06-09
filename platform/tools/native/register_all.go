@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
 	"codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
 	"codeburg.org/lexbit/relurpify/platform/tools/native/search"
-	"codeburg.org/lexbit/relurpify/platform/tools/native/sqlite"
 )
 
 // AllConstructors returns a map of all built-in native tool constructors keyed
@@ -32,6 +31,5 @@ func AllConstructors() map[string]ports.NativeToolConstructor {
 	collect(langrust.Constructors())
 	collect(lsp.Constructors())
 	collect(search.Constructors())
-	collect(sqlite.Constructors())
 	return out
 }

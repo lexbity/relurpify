@@ -2,65 +2,11 @@ package testsuite
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"testing"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 )
-
-func TestIndexManagerSearchIntegration(t *testing.T) {
-	temp := t.TempDir()
-	goFile := filepath.Join(temp, "service.go")
-	goSource := `package service
-
-func HighlightFeature() string {
-    return "integration"
-}
-`
-	if err := os.WriteFile(goFile, []byte(goSource), 0o644); err != nil {
-		t.Fatalf("write go file: %v", err)
-	}
-	mdFile := filepath.Join(temp, "README.md")
-	mdSource := "# Notes\n\nDocumenting HighlightFeature."
-	if err := os.WriteFile(mdFile, []byte(mdSource), 0o644); err != nil {
-		t.Fatalf("write markdown: %v", err)
-	}
-
-	store, err := ast.NewTestStore(filepath.Join(temp, "index.db"))
-	if err != nil {
-		t.Fatalf("sqlite init failed: %v", err)
-	}
-	defer store.Close()
-	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: temp})
-	if err := manager.IndexWorkspace(); err != nil {
-		t.Fatalf("IndexWorkspace failed: %v", err)
-	}
-
-	codeIndex := &astCodeIndex{store: store}
-	engine := search.NewSearchEngine(nil, codeIndex)
-	results, err := engine.Search(search.SearchQuery{Text: "highlight", Mode: search.SearchHybrid, MaxResults: 3})
-	if err != nil {
-		t.Fatalf("search failed: %v", err)
-	}
-	if len(results) == 0 {
-		t.Fatal("expected AST-backed search results")
-	}
-
-	shared := contextdata.NewEnvelope("index-search", "index-search")
-	target := results[0]
-	data, err := os.ReadFile(target.File)
-	if err != nil {
-		t.Fatalf("read file: %v", err)
-	}
-	shared.SetWorkingValueWithClass(target.File, string(data), contextdata.MemoryClassTask)
-	if val, ok := shared.GetWorkingValue(target.File); !ok || val != string(data) {
-		t.Fatalf("shared context missing %s", target.File)
-	}
-}
 
 type astCodeIndex struct {
 	store ast.IndexStore

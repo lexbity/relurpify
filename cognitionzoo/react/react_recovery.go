@@ -59,14 +59,7 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Enve
 				path = "."
 			}
 			args[name] = path
-		case "database_path":
-			if db := inferredPathFromObservations(env, "database_path"); db != "" {
-				args[name] = db
-			}
-		case "query":
-			if strings.Contains(strings.ToLower(tool.Name()), "sqlite") {
-				args[name] = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name LIMIT 20;"
-			}
+
 		}
 	}
 	for name, need := range required {

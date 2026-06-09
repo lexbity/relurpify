@@ -159,7 +159,7 @@ func TestProbeWorkspace_AllResultNamesPresent(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
-	want := []string{"workspace_directory", "sqlite_writable", "inference_backend", "disk_space"}
+	want := []string{"workspace_directory", "inference_backend", "disk_space"}
 	got := make(map[string]bool, len(results))
 	for _, r := range results {
 		got[r.Name] = true

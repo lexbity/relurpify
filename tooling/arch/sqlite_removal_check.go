@@ -1,5 +1,12 @@
 package arch
 
+import (
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"strings"
+)
+
 // SQLiteFreePackages lists module-relative package prefixes that must not
 // import "database/sql" or "github.com/mattn/go-sqlite3" in production code.
 // Migration files explicitly named "migration" are exempt.
@@ -11,7 +18,7 @@ var SQLiteFreePackages = []string{
 }
 
 // CheckSQLiteFree reports packages that illegally import database/sql or
-// go-sqlite3. Migration files (containing "migration" in the path) are exempt.
+// go-sqlite3. Migration files (containing "migration" in the path/filename) are exempt.
 func CheckSQLiteFree(pkgs []GoPackage, allowlist Allowlist) []string {
 	var violations []string
 	sqliteImports := []string{
@@ -19,20 +26,47 @@ func CheckSQLiteFree(pkgs []GoPackage, allowlist Allowlist) []string {
 		"github.com/mattn/go-sqlite3",
 	}
 
+	fset := token.NewFileSet()
+
 	for _, pkg := range pkgs {
 		if !hasAnyPrefix(pkg.ImportPath, SQLiteFreePackages) {
 			continue
 		}
-		// Exempt migration directories.
+		// Exempt package paths containing "migration".
 		if hasPathPrefix(pkg.ImportPath, "migration") || containsInPath(pkg.ImportPath, "migration") {
 			continue
 		}
-		for _, forbid := range sqliteImports {
-			for _, imp := range pkg.Imports {
-				if imp == forbid {
-					v := pkg.ImportPath + " imports " + forbid + " (SQLite banned in graph/AST packages)"
-					if !allowlist.Contains("sqlite", v) {
-						violations = append(violations, v)
+
+		// Check non-migration Go files in this package
+		var goFiles []string
+		for _, f := range pkg.GoFiles {
+			if !strings.Contains(strings.ToLower(f), "migration") {
+				goFiles = append(goFiles, f)
+			}
+		}
+		for _, f := range pkg.TestGoFiles {
+			if !strings.Contains(strings.ToLower(f), "migration") {
+				goFiles = append(goFiles, f)
+			}
+		}
+
+		for _, filename := range goFiles {
+			fullPath := filepath.Join(pkg.Dir, filename)
+			fileAst, err := parser.ParseFile(fset, fullPath, nil, parser.ImportsOnly)
+			if err != nil {
+				continue // skip files that fail to parse
+			}
+			for _, impSpec := range fileAst.Imports {
+				if impSpec.Path == nil {
+					continue
+				}
+				impPath := strings.Trim(impSpec.Path.Value, "\"")
+				for _, forbid := range sqliteImports {
+					if impPath == forbid {
+						v := pkg.ImportPath + " imports " + forbid + " (SQLite banned in graph/AST packages)"
+						if !allowlist.Contains("sqlite", v) {
+							violations = append(violations, v)
+						}
 					}
 				}
 			}

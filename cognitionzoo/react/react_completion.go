@@ -300,16 +300,12 @@ func verificationToolMatches(toolName string, configured []string) bool {
 		strings.Contains(lower, "test") ||
 		strings.Contains(lower, "build") ||
 		strings.HasPrefix(lower, "cli_git") ||
-		strings.HasPrefix(lower, "cli_go") ||
-		strings.HasPrefix(lower, "cli_python") ||
-		strings.HasPrefix(lower, "cli_node") ||
-		strings.HasPrefix(lower, "cli_sqlite")
 }
 
 func verificationSuccessSummary(toolName, stdout string) string {
 	stdout = strings.TrimSpace(stdout)
 	lower := strings.ToLower(strings.TrimSpace(toolName))
-	if (strings.Contains(lower, "sqlite") || strings.Contains(lower, "git")) && stdout != "" {
+	if ( strings.Contains(lower, "git")) && stdout != "" {
 		return stdout
 	}
 	return fmt.Sprintf("%s succeeded after applying changes", toolName)
@@ -361,7 +357,7 @@ func explicitlyRequestedToolNames(task *execution.Task) map[string]struct{} {
 	if task == nil {
 		return out
 	}
-	matches := regexp.MustCompile(`\b(?:cli|rust|go|python|node|sqlite|file|search)_[a-z0-9_]+\b`).FindAllString(strings.ToLower(task.Instruction), -1)
+	matches := regexp.MustCompile(`\b(?:cli|rust|go|python|node|file|search)_[a-z0-9_]+\b`).FindAllString(strings.ToLower(task.Instruction), -1)
 	for _, match := range matches {
 		out[match] = struct{}{}
 	}

@@ -13,7 +13,6 @@ import (
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
 	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/sqlite"
 )
 
 // expectedNativeKeys lists every go_native tool key that should be registered
@@ -51,10 +50,6 @@ var expectedNativeKeys = []string{
 	"search_find_similar",
 	"search_grep",
 	"search_semantic",
-	"sqlite_database_detect",
-	"sqlite_integrity_check",
-	"sqlite_query",
-	"sqlite_schema_inspect",
 	"lsp_document_symbols",
 	"lsp_format",
 	"lsp_get_definition",

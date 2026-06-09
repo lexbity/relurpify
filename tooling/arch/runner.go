@@ -35,6 +35,7 @@ func RunAll(root, allowlistPath string) ([]Result, error) {
 		"consumer":  CheckConsumers(pkgs, reverse, Allowlist{}),
 		"forbidden": CheckForbiddenImports(pkgs, Allowlist{}),
 		"converter": CheckStructIdentityConverters(pkgs, root, Allowlist{}),
+		"sqlite":    CheckSQLiteFree(pkgs, Allowlist{}),
 	}
 
 	globRaw, _ := runGlobGate(root)

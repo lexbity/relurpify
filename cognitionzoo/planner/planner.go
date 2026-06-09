@@ -951,18 +951,10 @@ func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[s
 			} else {
 				args[name] = "."
 			}
-		case "database_path":
-			if db := plannerDatabasePath(task, plan); db != "" {
-				args[name] = db
-			}
 		case "action":
 			args[name] = "list_symbols"
 		case "category":
 			args[name] = "function"
-		case "query":
-			if strings.Contains(strings.ToLower(tool.Name()), "sqlite") {
-				args[name] = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name LIMIT 20;"
-			}
 		}
 		if _, ok := args[name]; !ok && param.Default != nil {
 			args[name] = param.Default

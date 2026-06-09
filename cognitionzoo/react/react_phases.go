@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -284,9 +284,6 @@ func isLanguageExecutionTool(name string, task *execution.Task) bool {
 		return true
 	}
 	if strings.Contains(name, "cargo") || strings.Contains(name, "rustfmt") {
-		return true
-	}
-	if strings.Contains(name, "sqlite") {
 		return true
 	}
 	if strings.Contains(name, "test") || strings.Contains(name, "build") || strings.Contains(name, "lint") || strings.Contains(name, "format") || strings.Contains(name, "check") {
