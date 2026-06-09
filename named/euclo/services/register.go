@@ -53,6 +53,16 @@ func WithCapabilityRegistrar(cr CapabilityRegistrar) Option {
 	}
 }
 
+// WithCapabilityDeps sets the session-level runtime dependencies used to
+// construct live capability handlers. Call this instead of WithCapabilityRegistrar
+// when using the default registrar with real IndexManager, CommandRunner, etc.
+func WithCapabilityDeps(deps CapabilityDeps) Option {
+	return func(r *Registration) {
+		r.capabilityRegistrar = &defaultCapabilityRegistrar{deps: deps}
+	}
+}
+
+
 // WithPromptRegistrar sets a custom prompt registrar.
 func WithPromptRegistrar(pr PromptRegistrar) Option {
 	return func(r *Registration) {

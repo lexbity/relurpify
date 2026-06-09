@@ -299,13 +299,13 @@ func verificationToolMatches(toolName string, configured []string) bool {
 	return strings.Contains(lower, "cargo") ||
 		strings.Contains(lower, "test") ||
 		strings.Contains(lower, "build") ||
-		strings.HasPrefix(lower, "cli_git") ||
+		strings.HasPrefix(lower, "cli_git")
 }
 
 func verificationSuccessSummary(toolName, stdout string) string {
 	stdout = strings.TrimSpace(stdout)
 	lower := strings.ToLower(strings.TrimSpace(toolName))
-	if ( strings.Contains(lower, "git")) && stdout != "" {
+	if strings.Contains(lower, "git") && stdout != "" {
 		return stdout
 	}
 	return fmt.Sprintf("%s succeeded after applying changes", toolName)

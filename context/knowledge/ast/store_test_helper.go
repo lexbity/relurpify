@@ -2,6 +2,7 @@ package ast
 
 import (
 	"path/filepath"
+	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
@@ -32,3 +33,20 @@ func NewTestStore(dbPath string) (*TestStore, error) {
 		engine:     engine,
 	}, nil
 }
+
+func newTestIndexManager(t *testing.T) (*IndexManager, string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	if err != nil {
+		t.Fatalf("store init failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
+	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 1})
+	return manager, tmpDir
+}
+

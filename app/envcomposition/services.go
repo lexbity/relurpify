@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
@@ -25,14 +27,29 @@ var eucloCapabilityIDs = []string{
 	"euclo:cap.coverage_check",
 }
 
+// RelurpicRegistrationDeps carries the session-level deps needed to wire
+// capability handlers with real implementations at registration time.
+type RelurpicRegistrationDeps struct {
+	IndexManager  *ast.IndexManager
+	Workspace     string
+	CommandRunner relurpicabilities.CommandRuntime
+	CommandPolicy relurpicabilities.CommandPolicy
+	Model         model.LanguageModel
+}
+
 // BuildRelurpicRegistration registers all Euclo relurpic capabilities with the
-// given capability registry.
-func BuildRelurpicRegistration(reg *regpkg.CapabilityRegistry) error {
+// given capability registry, wiring real session deps into each handler.
+func BuildRelurpicRegistration(reg *regpkg.CapabilityRegistry, deps RelurpicRegistrationDeps) error {
 	if reg == nil {
 		return fmt.Errorf("capability registry required")
 	}
 	return relurpicabilities.RegisterAll(relurpicabilities.RegistrationDeps{
-		Registry: reg,
-		Declared: eucloCapabilityIDs,
+		Registry:      reg,
+		Declared:      eucloCapabilityIDs,
+		IndexManager:  deps.IndexManager,
+		Workspace:     deps.Workspace,
+		CommandRunner: deps.CommandRunner,
+		CommandPolicy: deps.CommandPolicy,
+		Model:         deps.Model,
 	})
 }

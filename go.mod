@@ -8,7 +8,6 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/dgraph-io/badger/v4 v4.9.2
 	github.com/gorilla/websocket v1.4.1
-	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/muesli/termenv v0.16.0
 	github.com/sourcegraph/jsonrpc2 v0.2.1
 	github.com/spf13/cobra v1.10.1
