@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -21,32 +20,25 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 		WithThoughtRecipeLoader(thoughtrecipeLoader),
 	)
 
-	funcs := reg.AgentRegistrationFuncs()
-
-	env := agentenv.AgentContext{Registry: registry.NewRegistry()}
-	if err := funcs.RegisterCapabilities(env); err != nil {
+	if err := reg.RegisterCapabilities(registry.NewRegistry()); err != nil {
 		t.Fatalf("RegisterCapabilities returned error: %v", err)
 	}
 	if !capReg.called {
 		t.Fatal("expected custom capability registrar to be called")
 	}
 
-	if err := funcs.RegisterPromptProviders(env); err != nil {
+	if err := reg.RegisterPromptProviders(&countingPromptRegistry{seen: make(map[string]bool)}); err != nil {
 		t.Fatalf("RegisterPromptProviders returned error: %v", err)
 	}
 	if !promptReg.called {
 		t.Fatal("expected custom prompt registrar to be called")
 	}
 
-	loaded, err := funcs.LoadThoughtRecipes()
+	loaded, err := reg.LoadThoughtRecipes()
 	if err != nil {
 		t.Fatalf("LoadThoughtRecipes returned error: %v", err)
 	}
-	result, ok := loaded.(*thoughtrecipepkg.LoadResult)
-	if !ok {
-		t.Fatalf("expected LoadThoughtRecipes to return *thoughtrecipe.LoadResult, got %T", loaded)
-	}
-	if result != thoughtrecipeLoader.result {
+	if loaded != thoughtrecipeLoader.result {
 		t.Fatal("expected custom thoughtrecipe loader result to be returned")
 	}
 }

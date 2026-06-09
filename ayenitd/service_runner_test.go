@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/session"
 )
 
 type runnerService struct {
@@ -24,13 +24,12 @@ func (s *runnerService) Stop() error {
 }
 
 func TestStartWorkspaceServicesStartsRegisteredServices(t *testing.T) {
-	sm := agentenv.NewServiceManager()
+	sm := session.NewServiceManager()
 	svc := &runnerService{}
-	sm.RegisterWithInfo("runner", svc, agentenv.ServiceRegistrationInfo{Source: "ayenitd/service_runner_test.go", Owner: "workspace", Notes: []string{"test registration"}})
-	ws := &agentenv.Workspace{ServiceManager: sm}
+	sm.RegisterWithInfo("runner", svc, session.ServiceRegistrationInfo{Source: "test", Owner: "workspace", Notes: []string{"test registration"}})
 
-	if err := StartWorkspaceServices(context.Background(), ws); err != nil {
-		t.Fatalf("StartWorkspaceServices returned %v", err)
+	if err := sm.StartAll(context.Background()); err != nil {
+		t.Fatalf("StartAll returned %v", err)
 	}
 	if svc.startCount.Load() != 1 {
 		t.Fatalf("startCount = %d, want 1", svc.startCount.Load())

@@ -43,6 +43,17 @@ func TestDomainLayout(t *testing.T) {
 	}
 }
 
+func TestNoExecutionCommandPackage(t *testing.T) {
+	// command execution is owned by capability/sandbox, not execution.
+	matches, err := filepath.Glob(filepath.Join("..", "..", "execution", "command", "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) > 0 {
+		t.Errorf("execution/command/ still contains %d entries; command execution must live in capability/sandbox", len(matches))
+	}
+}
+
 func TestNoFrameworkPackage(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join("..", "..", "framework", "*"))
 	if err != nil {

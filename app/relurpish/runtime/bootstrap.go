@@ -12,8 +12,9 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -38,10 +39,10 @@ type AgentBootstrapOptions struct {
 	ManifestSnapshot    *config.AgentManifestSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
 	ProfileResolution   modelselect.ProfileResolution
-	PermissionManager   agentenv.PermissionManager
+	PermissionManager   permissions.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               model.LanguageModel
-	Backend             agentenv.ModelBackend
+	Backend             model.ModelBackend
 	InferenceModel      string
 	Telemetry           telemetry.Telemetry
 	SkipASTIndex        bool
@@ -59,19 +60,18 @@ type BootstrappedAgentRuntime struct {
 	Memory               *memory.WorkingMemoryStore
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
-	Backend              agentenv.ModelBackend
-	Environment          agentenv.AgentContext
+	Backend              model.ModelBackend
 	CapabilityAdmissions []registry.AdmissionResult
 	Contract             *config.EffectiveAgentContract
-	CompiledPolicy       *agentenv.CompiledPolicy
+	CompiledPolicy       *session.CompiledPolicy
 }
 
-// BootstrapAgentRuntime delegates to agentenv.BootstrapAgentRuntime and then
+// BootstrapAgentRuntime delegates to session.BootstrapAgentRuntime and then
 // registers relurpic and agent capabilities on top. agentenv intentionally omits
 // relurpic capabilities because named agents register their own. app/relurpish
 // registers them here.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
-	boot, err := agentenv.BootstrapAgentRuntime(workspace, agentenv.AgentBootstrapOptions{
+	boot, err := session.BootstrapAgentRuntime(workspace, session.AgentBootstrapOptions{
 		Context:             opts.Context,
 		AgentID:             opts.AgentID,
 		AgentName:           opts.AgentName,
@@ -101,11 +101,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Registry:             boot.Registry,
 		IndexManager:         boot.IndexManager,
 		SearchEngine:         boot.SearchEngine,
-		Memory:               boot.Environment.WorkingMemory,
 		AgentSpec:            boot.AgentSpec,
 		AgentConfig:          boot.AgentConfig,
 		Backend:              boot.Backend,
-		Environment:          boot.Environment,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		Contract:             boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,

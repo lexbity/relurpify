@@ -2,18 +2,14 @@ package graphdb
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-// newTestEngine creates an engine with test‑friendly options.
+// newTestEngine creates a Badger‑backed engine in a temp directory.
 func newTestEngine(t *testing.T) (*Engine, Options) {
 	t.Helper()
 	opts := DefaultOptions(t.TempDir())
-	opts.AutoSaveInterval = 10 * time.Millisecond
-	opts.AutoSaveThreshold = 100
-	opts.AOFRewriteThresholdBytes = 1 << 20
 	engine, err := Open(opts)
 	require.NoError(t, err)
 	t.Cleanup(func() {

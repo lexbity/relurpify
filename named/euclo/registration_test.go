@@ -2,55 +2,23 @@ package euclo
 
 import (
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/named/euclo/services"
 )
 
 func TestGetRegistrationFuncs(t *testing.T) {
-	regFuncs := GetRegistrationFuncs()
+	reg := services.NewRegistration()
 
-	// Verify that all registration functions are set
-	if regFuncs.RegisterCapabilities == nil {
-		t.Error("RegisterCapabilities should not be nil")
-	}
-	if regFuncs.RegisterPromptProviders == nil {
-		t.Error("RegisterPromptProviders should not be nil")
-	}
-	if regFuncs.LoadThoughtRecipes == nil {
-		t.Error("LoadThoughtRecipes should not be nil")
-	}
-}
-
-func TestRegisterCapabilities(t *testing.T) {
-	// Test that registerEucloCapabilities can be called
-	// Note: This requires a full AgentContext setup, so we just verify
-	// the function exists and has the correct signature
-	regFuncs := GetRegistrationFuncs()
-	if regFuncs.RegisterCapabilities == nil {
-		t.Fatal("RegisterCapabilities should not be nil")
-	}
-
-	// We can't easily test this without a full AgentContext,
-	// but we can verify the function is callable
-	// This is more of an integration test scenario
-}
-
-func TestRegisterPromptProviders(t *testing.T) {
-	regFuncs := GetRegistrationFuncs()
-	if regFuncs.RegisterPromptProviders == nil {
-		t.Fatal("RegisterPromptProviders should not be nil")
-	}
-
-	// Similar to RegisterCapabilities, this requires a full AgentContext
-	// with a PromptRegistry to test properly
+	// Verify registration functions are method values on a valid receiver.
+	_ = reg.RegisterCapabilities
+	_ = reg.RegisterPromptProviders
+	_ = reg.LoadThoughtRecipes
 }
 
 func TestLoadThoughtRecipes(t *testing.T) {
-	regFuncs := GetRegistrationFuncs()
-	if regFuncs.LoadThoughtRecipes == nil {
-		t.Fatal("LoadThoughtRecipes should not be nil")
-	}
+	reg := services.NewRegistration()
 
-	// Test that LoadThoughtRecipes can be called
-	thoughtrecipes, err := regFuncs.LoadThoughtRecipes()
+	thoughtrecipes, err := reg.LoadThoughtRecipes()
 	if err != nil {
 		t.Errorf("LoadThoughtRecipes returned error: %v", err)
 	}

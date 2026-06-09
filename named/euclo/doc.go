@@ -29,8 +29,8 @@
 //
 // Usage:
 //
-//	env := agentenv.OpenWorkspace(...)
-//	agent := euclo.New(env, euclo.WithConfig(config))
+//	deps := &paradigm.Deps{...}
+//	agent := euclo.New(deps, euclo.WithConfig(config))
 //	if err := agent.Initialize(cfg); err != nil {
 //	    return err
 //	}

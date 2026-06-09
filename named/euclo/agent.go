@@ -1,9 +1,3 @@
-// Package euclo implements the coding-specialized top-level agent that resolves
-// user requests to deterministic execution routes through agentgraph workflows.
-//
-// Euclo is a WorkflowExecutor: it builds and executes agentgraph.Graph structures
-// that compose framework system nodes, context stream triggers, ingestion nodes,
-// /agents execution backends, and HITL gates.
 package euclo
 
 import (
@@ -16,23 +10,27 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
-	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
+
+// defaultRegistrar provides default registration for capabilities, prompts,
+// and thoughtrecipes.
+var defaultRegistrar = services.NewRegistration()
 
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
 type Agent struct {
 	resumeMu sync.Mutex
 
-	env         agentenv.AgentContext
+	deps        *paradigm.Deps
 	config      EucloConfig
 	initialized bool
 
@@ -43,10 +41,10 @@ type Agent struct {
 	resumeRouteSelection *euclotypes.RouteSelection
 }
 
-// New creates a new Euclo agent with the given workspace environment and options.
-func New(env agentenv.AgentContext, opts ...Option) *Agent {
+// New creates a new Euclo agent with the given paradigm deps and options.
+func New(deps *paradigm.Deps, opts ...Option) *Agent {
 	a := &Agent{
-		env:    env,
+		deps:   deps,
 		config: DefaultConfig(),
 	}
 
@@ -86,41 +84,19 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		return nil
 	}
 
-	if a.env.Registry == nil {
+	if a.deps.Registry == nil {
 		return fmt.Errorf("workspace capability registry is nil")
 	}
 
-	regFuncs := GetRegistrationFuncs()
-
-	if regFuncs.RegisterCapabilities != nil {
-		if err := regFuncs.RegisterCapabilities(a.env); err != nil {
-			return fmt.Errorf("failed to register capabilities: %w", err)
-		}
-	}
-
-	if regFuncs.RegisterPromptProviders != nil {
-		if err := regFuncs.RegisterPromptProviders(a.env); err != nil {
-			return fmt.Errorf("failed to register prompt providers: %w", err)
-		}
-	}
-
 	// Load the thoughtrecipe registry from the DSL source tree.
-	if regFuncs.LoadThoughtRecipes != nil {
-		loaded, err := regFuncs.LoadThoughtRecipes()
-		if err != nil {
-			return fmt.Errorf("failed to load thoughtrecipes: %w", err)
-		}
-		switch v := loaded.(type) {
-		case *thoughtrecipe.LoadResult:
-			if v != nil {
-				a.thoughtrecipeRegistry = v.Registry
-			}
-		case *thoughtrecipe.ThoughtRecipeRegistry:
-			a.thoughtrecipeRegistry = v
-		}
-		if a.thoughtrecipeRegistry == nil {
-			a.thoughtrecipeRegistry = thoughtrecipe.NewThoughtRecipeRegistry()
-		}
+	loaded, err := defaultRegistrar.LoadThoughtRecipes()
+	if err != nil {
+		return fmt.Errorf("failed to load thoughtrecipes: %w", err)
+	}
+	if loaded != nil && loaded.Registry != nil {
+		a.thoughtrecipeRegistry = loaded.Registry
+	} else {
+		a.thoughtrecipeRegistry = thoughtrecipe.NewThoughtRecipeRegistry()
 	}
 
 	a.initialized = true
@@ -134,8 +110,8 @@ func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextd
 		}
 	}
 
-	if a.env.StreamTrigger != nil {
-		ctx = contextstream.WithTrigger(ctx, a.env.StreamTrigger)
+	if a.deps.StreamTrigger != nil {
+		ctx = contextstream.WithTrigger(ctx, a.deps.StreamTrigger)
 	}
 
 	seedTaskEnvelope(env, task)
@@ -165,27 +141,15 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
 	deps := orchestrate.RootGraphDeps{
-		Workspace:            workspaceRootPath(a.env),
-		DispatchCapabilities: a.env.Registry,
+		Workspace:            workspaceRootPath(a.deps),
+		DispatchCapabilities: a.deps.Registry,
 		ThoughtRecipes:       a.thoughtrecipeRegistry,
-		Paradigm: &paradigm.Deps{
-			Config:         a.env.Config,
-			Model:          a.env.Model,
-			Registry:       a.env.Registry,
-			WorkingMemory:  a.env.WorkingMemory,
-			IndexManager:   a.env.IndexManager,
-			SearchEngine:   a.env.SearchEngine,
-			StreamTrigger:  a.env.StreamTrigger,
-			OutputIngester: a.env.OutputIngester,
-			IngestOutputs:  a.env.IngestOutputs,
-			PromptRegistry: a.env.PromptRegistry,
-			AgentLifecycle: a.env.AgentLifecycle,
-		},
-		StreamTrigger:     a.env.StreamTrigger,
-		MaxStreamTokens:   a.config.MaxStreamTokens,
-		DefaultStreamMode: a.config.DefaultStreamMode,
-		Checkpoints:       a.config.CheckpointRepository,
-		Persistence:       a.config.PersistenceWriter,
+		Paradigm:             a.deps,
+		StreamTrigger:        a.deps.StreamTrigger,
+		MaxStreamTokens:      a.config.MaxStreamTokens,
+		DefaultStreamMode:    a.config.DefaultStreamMode,
+		Checkpoints:          a.config.CheckpointRepository,
+		Persistence:          a.config.PersistenceWriter,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(deps)
 	if err != nil {
@@ -210,11 +174,11 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	return graph, nil
 }
 
-func workspaceRootPath(env agentenv.AgentContext) string {
-	if env.IndexManager == nil {
+func workspaceRootPath(deps *paradigm.Deps) string {
+	if deps.IndexManager == nil {
 		return ""
 	}
-	return strings.TrimSpace(env.IndexManager.WorkspacePath())
+	return strings.TrimSpace(deps.IndexManager.WorkspacePath())
 }
 
 func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {

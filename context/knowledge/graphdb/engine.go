@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -29,8 +28,7 @@ type Engine struct {
 	testHookApplyFailure error
 }
 
-// Open initializes an engine from durable storage. The backend is
-// selected by opts.Backend (defaults to Badger for new stores).
+// Open initializes a Badger-backed engine from durable storage.
 func Open(opts Options) (*Engine, error) {
 	start := time.Now()
 	engine := &Engine{
@@ -44,58 +42,10 @@ func Open(opts Options) (*Engine, error) {
 		return nil, errors.New("graphdb: data dir is required")
 	}
 
-	backend := opts.Backend
-	if backend == "" {
-		backend = BackendBadger
-	}
-
-	switch backend {
-	case BackendAOF:
-		return openAOFEngine(engine, opts, start)
-	case BackendBadger:
-		return openBadgerEngine(engine, opts, start)
-	default:
-		return nil, fmt.Errorf("graphdb: unknown backend %q", backend)
-	}
-}
-
-func openAOFEngine(engine *Engine, opts Options, start time.Time) (*Engine, error) {
-	if opts.AOFFileName == "" || opts.SnapshotFileName == "" {
-		return nil, errors.New("graphdb: AOF and snapshot file names are required")
-	}
-	if err := os.MkdirAll(opts.DataDir, 0o755); err != nil {
-		return nil, err
-	}
-
-	engine.lastSave.Store(time.Now().UnixNano())
-
-	bk := newAOFBackend(opts)
-	bk.applyBinary = engine.applyBinaryOp
-	bk.applyLegacy = engine.applyLegacyJSONOp
-	if err := bk.load(context.TODO(), engine.store); err != nil {
-		return nil, err
-	}
-	engine.bk = bk
-
-	engine.wg.Add(1)
-	go engine.background()
-
-	engine.emitEvent(Event{
-		Kind:     EventOpenComplete,
-		Duration: time.Since(start),
-	})
-	return engine, nil
-}
-
-func openBadgerEngine(engine *Engine, opts Options, start time.Time) (*Engine, error) {
 	badgerDir := opts.BadgerDir
 	if badgerDir == "" {
 		badgerDir = opts.DataDir
 	}
-
-	// Auto‑migrate from AOF if AOF files exist and no Badger store yet.
-	aofPath := filepath.Join(opts.DataDir, opts.AOFFileName)
-	_ = aofPath // used below if we add migration detection
 
 	engine.lastSave.Store(time.Now().UnixNano())
 
@@ -316,13 +266,7 @@ func (e *Engine) persist(kind string, payload any) error {
 		Duration:  time.Since(start),
 	})
 	e.dirty.Add(1)
-	if e.opts.AOFRewriteThresholdBytes > 0 {
-		if ab, ok := e.bk.(*aofBackend); ok {
-			if size, err := ab.aofSize(); err == nil && size >= e.opts.AOFRewriteThresholdBytes {
-				_ = e.Snapshot()
-			}
-		}
-	}
+	// AOFRewriteThreshold check removed with AOF backend retirement.
 	return nil
 }
 

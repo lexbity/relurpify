@@ -14,9 +14,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
@@ -215,9 +215,11 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	}
 	info.ProfileReason = r.rt.AgentWorkspace().ProfileResolution.Reason
 	info.ProfileSource = r.rt.AgentWorkspace().ProfileResolution.SourcePath
-	if r.rt.AgentWorkspace().Backend != nil {
-		if health, err := r.rt.AgentWorkspace().Backend.Health(context.Background()); err == nil && health != nil {
-			info.BackendState = string(health.State)
+	if be := r.rt.AgentWorkspace().Backend; be != nil {
+		if mb, ok := be.(llm.ManagedBackend); ok {
+			if health, err := mb.Health(context.Background()); err == nil && health != nil {
+				info.BackendState = string(health.State)
+			}
 		}
 	}
 
@@ -375,15 +377,17 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	var models []string
-	if r.rt.AgentWorkspace().Backend != nil {
-		backendModels, err := r.rt.AgentWorkspace().Backend.ListModels(ctx)
-		if err != nil {
-			return nil, err
+	if be := r.rt.AgentWorkspace().Backend; be != nil {
+		if mb, ok := be.(llm.ManagedBackend); ok {
+			backendModels, err := mb.ListModels(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, model := range backendModels {
+				models = append(models, model.Name)
+			}
+			return models, nil
 		}
-		for _, model := range backendModels {
-			models = append(models, model.Name)
-		}
-		return models, nil
 	}
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.rt.Config), r.rt.ProviderSecrets())
 	if err != nil {
@@ -1428,7 +1432,7 @@ func (r *runtimeAdapter) planNotes(workflowID string) map[string][]string {
 	return out
 }
 
-func matchesCorpusScope(scope, corpusScope string, instances []agentenv.PatternInstance) bool {
+func matchesCorpusScope(scope, corpusScope string, instances []knowledge.PatternInstance) bool {
 	scope = normalizeScope(scope)
 	corpusScope = normalizeScope(corpusScope)
 	if scope == "" || corpusScope == "" {

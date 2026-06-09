@@ -2,8 +2,7 @@
 //
 // Each handler is constructed with explicit family-specific dependency contracts
 // (CommandDeps, IndexDeps, WorkspaceFiles+IndexRefresher, SymbolQuerier,
-// model.LanguageModel) instead of agentenv.AgentContext. Registration uses
-// RegistrationDeps{Registry, Declared}.
+// model.LanguageModel). Registration uses RegistrationDeps{Registry, Declared}.
 //
 // Capability families:
 // - command: test_run, diff_summary, bisect, api_compat, coverage_check, blame_trace

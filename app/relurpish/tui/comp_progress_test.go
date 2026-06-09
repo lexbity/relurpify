@@ -90,8 +90,7 @@ func TestProgressBarMultipleSetTarget(t *testing.T) {
 
 func TestProgressBarReduceMotionJumpsToTarget(t *testing.T) {
 	b := NewProgressBar()
-	r := NewReduceMotion()
-	// Ensure reduced is true — manually set.
+	r := NewReduceMotion(true)
 	// Since detect() checks CI env which may be set in test runner,
 	// we just verify the logic path.
 	if r.Reduced() {

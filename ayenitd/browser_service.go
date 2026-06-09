@@ -9,17 +9,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/session"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *registry.CapabilityRegistry, sm *agentenv.ServiceManager, tel telemetry.Telemetry) error {
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, capRegistry *registry.CapabilityRegistry, sm session.ServiceManager, tel telemetry.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil
 	}
-	if registry == nil {
+	if capRegistry == nil {
 		return fmt.Errorf("browser registry unavailable")
 	}
 	fileScope := fsandbox.NewFileScopePolicy(cfg.Workspace, nil)
@@ -37,7 +37,7 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		WorkspaceRoot:     cfg.Workspace,
 		FileScope:         fileScope,
 		Registration:      registration,
-		Registry:          registry,
+		Registry:          capRegistry,
 		PermissionManager: registration.Permissions,
 		AgentSpec:         spec,
 		CommandPolicy:     cmdPolicy,
@@ -46,11 +46,7 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		Telemetry:         tel,
 	})
 	if sm != nil {
-		sm.RegisterWithInfo("browser", browserService, agentenv.ServiceRegistrationInfo{
-			Source: "ayenitd/browser_service.go",
-			Owner:  "workspace",
-			Notes:  []string{"registered by ayenitd", "browser.enabled=true"},
-		})
+		sm.RegisterService("browser", browserService)
 	}
 	return nil
 }

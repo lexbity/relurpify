@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
@@ -27,8 +26,7 @@ var eucloCapabilityIDs = []string{
 }
 
 // BuildRelurpicRegistration registers all Euclo relurpic capabilities with the
-// given capability registry. This is the app-level entrypoint for capability
-// registration, replacing the transitional AgentRegistrationFuncs bridge.
+// given capability registry.
 func BuildRelurpicRegistration(reg *regpkg.CapabilityRegistry) error {
 	if reg == nil {
 		return fmt.Errorf("capability registry required")
@@ -37,22 +35,4 @@ func BuildRelurpicRegistration(reg *regpkg.CapabilityRegistry) error {
 		Registry: reg,
 		Declared: eucloCapabilityIDs,
 	})
-}
-
-// AgentRegistrationFuncs returns the transitional agentenv.AgentRegistrationFuncs
-// that extracts the capability registry from the AgentContext and delegates to
-// RegisterAll. This is the last remaining bridge from agentenv to Euclo
-// registration; it will be removed once all callers use BuildRelurpicRegistration.
-func AgentRegistrationFuncs() agentenv.AgentRegistrationFuncs {
-	return agentenv.AgentRegistrationFuncs{
-		RegisterCapabilities: func(env agentenv.AgentContext) error {
-			if env.Registry == nil {
-				return fmt.Errorf("capability registry is nil")
-			}
-			return relurpicabilities.RegisterAll(relurpicabilities.RegistrationDeps{
-				Registry: env.Registry,
-				Declared: eucloCapabilityIDs,
-			})
-		},
-	}
 }

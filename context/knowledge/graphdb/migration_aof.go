@@ -47,6 +47,46 @@ func readMigrationState(txn *badger.Txn) (*migrationState, error) {
 	return &st, nil
 }
 
+// loadAOFStore reads AOF and snapshot files into a new adjacency store.
+// It returns a reference to the store and the engine used for replay
+// (caller must close the engine).
+func loadAOFStore(aofPath, snapPath string) (*adjacencyStore, error) {
+	store := newAdjacencyStore()
+
+	// 1. Load snapshot if present.
+	state, err := readSnapshot(snapPath)
+	if err != nil {
+		return nil, fmt.Errorf("read snapshot: %w", err)
+	}
+	for _, node := range state.Nodes {
+		n := node
+		store.nodes[node.ID] = &n
+		store.addNodeSourceIndex(node)
+		store.addNodeLabels(node)
+	}
+	for key, history := range state.NodeHistory {
+		store.nodeHistory[key] = cloneNodeHistory(history)
+	}
+	for _, edge := range state.Forward {
+		store.forward[edge.SourceID] = append(store.forward[edge.SourceID], cloneEdge(edge))
+		store.reverse[edge.TargetID] = append(store.reverse[edge.TargetID], cloneEdge(edge))
+	}
+	for key, history := range state.EdgeHistory {
+		store.edgeHistory[key] = cloneEdgeHistory(history)
+	}
+	for key, result := range state.MutationResults {
+		store.mutationResults[key] = cloneMutationResult(result)
+	}
+
+	// 2. Replay AOF over the loaded snapshot.
+	eng := &Engine{store: store}
+	if err := replayAOF(aofPath, eng.applyBinaryOp, eng.applyLegacyJSONOp); err != nil {
+		return nil, fmt.Errorf("replay AOF: %w", err)
+	}
+
+	return store, nil
+}
+
 func writeMigrationState(txn *badger.Txn, st migrationState) error {
 	val, err := json.Marshal(st)
 	if err != nil {
@@ -60,16 +100,14 @@ func writeMigrationState(txn *badger.Txn, st migrationState) error {
 // writes it into a Badger‑backed store idempotently.  Already‑completed
 // migrations are skipped; interrupted migrations resume by re‑writing.
 func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) error {
-	// 1. Load source data from AOF/snapshot files.
-	aofOpts := DefaultOptions(aofDir)
-	src, err := Open(aofOpts)
-	if err != nil {
-		return fmt.Errorf("graphdb migration: open source: %w", err)
-	}
-	defer src.Close()
+	aofPath := filepath.Join(aofDir, "graphdb.aof")
+	snapPath := filepath.Join(aofDir, "graphdb.snapshot")
 
-	aofPath := filepath.Join(aofOpts.DataDir, aofOpts.AOFFileName)
-	snapPath := filepath.Join(aofOpts.DataDir, aofOpts.SnapshotFileName)
+	// 1. Load source data from AOF/snapshot files into an adjacency store.
+	src, err := loadAOFStore(aofPath, snapPath)
+	if err != nil {
+		return fmt.Errorf("graphdb migration: load source: %w", err)
+	}
 
 	// 2. Open target Badger store.
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
@@ -106,27 +144,28 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 	}); err != nil {
 		return err
 	}
+	_ = snapPath // used via source info above
 
 	// 5. Collect all data from the source adjacency store.
-	src.store.mu.RLock()
+	src.mu.RLock()
 
-	nodeList := make([]NodeRecord, 0, len(src.store.nodes))
-	for _, node := range src.store.nodes {
+	nodeList := make([]NodeRecord, 0, len(src.nodes))
+	for _, node := range src.nodes {
 		nodeList = append(nodeList, *node)
 	}
 
 	edgeList := make([]EdgeRecord, 0)
-	for _, edges := range src.store.forward {
+	for _, edges := range src.forward {
 		for _, edge := range edges {
 			edgeList = append(edgeList, edge)
 		}
 	}
 
-	mutResults := make([]MutationResult, 0, len(src.store.mutationResults))
-	for _, result := range src.store.mutationResults {
+	mutResults := make([]MutationResult, 0, len(src.mutationResults))
+	for _, result := range src.mutationResults {
 		mutResults = append(mutResults, result)
 	}
-	src.store.mu.RUnlock()
+	src.mu.RUnlock()
 
 	// 6. Write nodes in chunks.
 	for i := 0; i < len(nodeList); i += migrationChunkSize {

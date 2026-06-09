@@ -1,4 +1,4 @@
-package agentenv
+package session
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/persistence/artifactstore"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/execution/workspace"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/jobs"
@@ -25,7 +26,6 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
-	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
@@ -34,9 +34,9 @@ import (
 // resources. Close() must be called when the session ends. Restart() may
 // be used to cleanly stop and re-start services without rebuilding stores.
 type Workspace struct {
-	Environment       AgentContext
+	Environment       agentEnv
 	Registration      *Registration
-	Backend           ModelBackend
+	Backend           model.ModelBackend
 	ProfileResolution modelselect.ProfileResolution
 
 	// Internals held for Close()/Restart()
@@ -55,7 +55,7 @@ type Workspace struct {
 	Logger    *log.Logger
 
 	// Service management (new for dynamic lifecycle)
-	ServiceManager *ServiceManager
+	ServiceManager *serviceManager
 }
 
 // Close releases all resources held by the Workspace. This includes:
@@ -82,9 +82,22 @@ func (w *Workspace) Close() error {
 		}
 	}
 
+	if w.Environment.ArtifactStore != nil {
+		if err := w.Environment.ArtifactStore.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close artifact store: %w", err))
+		}
+	}
+
 	if w.eventLog != nil {
 		if err := w.eventLog.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close event log: %w", err))
+		}
+	}
+
+	// Close IndexManager if present (allocated in BootstrapAgentRuntime).
+	if w.Environment.IndexManager != nil {
+		if err := w.Environment.IndexManager.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close index manager: %w", err))
 		}
 	}
 
@@ -163,12 +176,12 @@ type AgentBootstrapOptions struct {
 	ManifestSnapshot     *config.AgentManifestSnapshot
 	SecurityBundle       *cfgsecurity.Bundle
 	ProfileResolution    modelselect.ProfileResolution
-	PermissionManager    PermissionManager
+	PermissionManager    permissions.PermissionManager
 	Runner               fsandbox.CommandRunner
 	CommandPolicy        fsandbox.CommandPolicy
 	SandboxBackend       string
 	Model                model.LanguageModel
-	Backend              ModelBackend
+	Backend              model.ModelBackend
 	InferenceModel       string
 	Telemetry            telemetry.Telemetry
 	SkipASTIndex         bool
@@ -192,8 +205,8 @@ type AgentBootstrapOptions struct {
 type BootstrappedAgentRuntime struct {
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
-	Backend              ModelBackend
-	Environment          AgentContext
+	Backend              model.ModelBackend
+	Environment          agentEnv
 	Registry             *regpkg.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
@@ -262,7 +275,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		registry.UseTelemetry(opts.Telemetry)
 	}
 	if opts.PermissionManager != nil {
-		registry.UsePermissionManager(opts.AgentID, opts.PermissionManager)
+		if h, ok := opts.PermissionManager.(regpkg.PermissionManagerHandle); ok {
+			registry.UsePermissionManager(opts.AgentID, h)
+		}
 	}
 	if opts.ProfileResolution.Profile != nil {
 		registry.SetModelProfile(opts.ProfileResolution.Profile)
@@ -304,7 +319,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	// Create working memory store
 	wm := memory.NewWorkingMemoryStore()
 
-	env := AgentContext{
+	env := agentEnv{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
 		CommandRunner:                 authRunner,
@@ -322,8 +337,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		EventLog:                      nil,
 		Scheduler:                     nil,
 		ServiceManager:                nil,
-		VerificationPlanner:           nil,
-		CompatibilitySurfaceExtractor: nil,
 	}
 
 	return &BootstrappedAgentRuntime{
@@ -381,7 +394,16 @@ func buildCompiledPolicy(contract *config.EffectiveAgentContract, engine regpkg.
 //	cfg.Scope is a WorkspaceScope field, not a positional parameter.
 //	ScopeFull = every optional layer.
 //	ScopeEmbeddedAgent = security + capabilities only.
-func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
+func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err error) {
+	var cleanup CloseStack
+	defer func() {
+		if err != nil {
+			if closeErr := cleanup.Close(ctx); closeErr != nil {
+				log.Printf("workspace: cleanup error during failed open: %v", closeErr)
+			}
+		}
+	}()
+
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -429,20 +451,20 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	} else {
 		// Embedded scope defaults.
 		if cfg.StateDir == "" {
-			cfg.StateDir = config.DefaultWorkspaceStateDir(cfg.Workspace)
+			cfg.StateDir = workspace.StateDir(cfg.Workspace)
 		}
 	}
 
-	defaultStateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
-	defaultLogPath := filepath.Join(defaultStateDir, "logs", "agentenv.log")
-	defaultTelemetryPath := filepath.Join(defaultStateDir, "telemetry", "agentenv.jsonl")
+	defaultStateDir := workspace.StateDir(cfg.Workspace)
+	defaultLogPath := filepath.Join(defaultStateDir, "logs", "workspace.log")
+	defaultTelemetryPath := filepath.Join(defaultStateDir, "telemetry", "workspace.jsonl")
 	defaultEventsPath := filepath.Join(defaultStateDir, "events.db")
 	defaultMemoryPath := filepath.Join(defaultStateDir, "memory")
 	if cfg.LogPath == "" || filepath.Clean(cfg.LogPath) == filepath.Clean(defaultLogPath) {
-		cfg.LogPath = filepath.Join(cfg.StateDir, "logs", "agentenv.log")
+		cfg.LogPath = filepath.Join(cfg.StateDir, "logs", "workspace.log")
 	}
 	if cfg.TelemetryPath == "" || filepath.Clean(cfg.TelemetryPath) == filepath.Clean(defaultTelemetryPath) {
-		cfg.TelemetryPath = filepath.Join(cfg.StateDir, "telemetry", "agentenv.jsonl")
+		cfg.TelemetryPath = filepath.Join(cfg.StateDir, "telemetry", "workspace.jsonl")
 	}
 	if cfg.EventsPath == "" || filepath.Clean(cfg.EventsPath) == filepath.Clean(defaultEventsPath) {
 		cfg.EventsPath = filepath.Join(cfg.StateDir, "events.db")
@@ -461,7 +483,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	}
 
 	// Phase B: LLM Backend (gated by Scope.LLMBackend)
-	var backend ModelBackend
+	var backend model.ModelBackend
 	if cfg.Scope.LLMBackend {
 		if cfg.ModelProduct == nil || cfg.ModelProduct.Backend == nil {
 			return nil, fmt.Errorf("app-composed model runtime required")
@@ -475,15 +497,16 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	if err != nil {
 		return nil, err
 	}
+	cleanup.Add(func(ctx context.Context) error { return logFile.Close() })
 
 	// Phase C.5: Event Log Setup (gated by Scope.Services)
 	var eventLog event.Log
 	if cfg.Scope.Services && cfg.EventLogFactory != nil && cfg.EventsPath != "" {
 		eventLog, err = cfg.EventLogFactory(cfg.EventsPath)
 		if err != nil {
-			logFile.Close()
 			return nil, fmt.Errorf("create event log: %w", err)
 		}
+		cleanup.Add(func(ctx context.Context) error { return eventLog.Close() })
 	}
 
 	// Phase D: KnowledgeStore initialization deferred until after BootstrapAgentRuntime
@@ -496,21 +519,17 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	}
 	registration := cfg.Registration
 	if registration == nil {
-		logFile.Close()
 		return nil, fmt.Errorf("app-composed registration required")
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
 	if cfg.SecurityRuntime == nil {
-		logFile.Close()
 		return nil, fmt.Errorf("app-composed security runtime required")
 	}
 	if cfg.SecurityRuntime.Runner == nil {
-		logFile.Close()
 		return nil, fmt.Errorf("security runtime missing runner")
 	}
 	if cfg.SecurityRuntime.PolicyEngine == nil {
-		logFile.Close()
 		return nil, fmt.Errorf("security runtime missing policy engine")
 	}
 	runner := cfg.SecurityRuntime.Runner
@@ -582,7 +601,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	}
 	boot, err := BootstrapAgentRuntime(cfg.Workspace, bootstrapOpts)
 	if err != nil {
-		logFile.Close()
 		return nil, err
 	}
 
@@ -597,11 +615,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	// Provider registration is deferred to named-agent Initialize() calls.
 	promptRegistry, err := BuildPromptRegistry(cfg.Workspace, tel)
 	if err != nil {
-		logFile.Close()
 		return nil, fmt.Errorf("build prompt registry: %w", err)
 	}
 	boot.Environment.PromptRegistry = promptRegistry
-	logger.Printf("agentenv: prompt registry loaded: %d prompts", promptRegistry.Count())
+	logger.Printf("workspace: prompt registry loaded: %d prompts", promptRegistry.Count())
 
 	// Phase H: ServiceManager, Scheduler, Knowledge, and Retrieval
 	// (gated by Scope.Services and Scope.Knowledge)
@@ -611,27 +628,29 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 	// Phase H.5: Artifact Store — per-session durable storage for tool output.
 	artifactStore, err := artifactstore.NewDiskStore(cfg.Workspace, 0)
 	if err != nil {
-		logFile.Close()
 		return nil, fmt.Errorf("create artifact store: %w", err)
 	}
+	cleanup.Add(func(ctx context.Context) error { return artifactStore.Close() })
 	env.ArtifactStore = artifactStore
 
-	var sm *ServiceManager
+	var sm *serviceManager
 	if cfg.Scope.Services {
 		scheduler := NewServiceScheduler()
 		env.Scheduler = scheduler
 		sm = NewServiceManager()
 		sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
-			Source: "execution/agentenv/workspace.go",
+			Source: "execution/session/workspace.go",
 			Owner:  "execution",
 			Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
 		})
 		env.ServiceManager = sm
+		cleanup.Add(func(ctx context.Context) error {
+			return sm.Clear()
+		})
 	}
 
 	if cfg.Scope.Knowledge {
 		if cfg.KnowledgeProduct == nil {
-			logFile.Close()
 			return nil, fmt.Errorf("app-composed knowledge runtime required")
 		}
 		env.KnowledgeStore = cfg.KnowledgeProduct.KnowledgeStore
@@ -658,28 +677,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegis
 		ServiceManager:       sm,
 	}
 
-	// Call agent registration functions
-	if regFuncs.RegisterCapabilities != nil {
-		if err := regFuncs.RegisterCapabilities(env); err != nil {
-			if env.IndexManager != nil {
-				_ = env.IndexManager.Close()
-			}
-			logFile.Close()
-			return nil, fmt.Errorf("agent capability registration: %w", err)
-		}
-	}
-
-	if regFuncs.RegisterPromptProviders != nil {
-		if err := regFuncs.RegisterPromptProviders(env); err != nil {
-			if env.IndexManager != nil {
-				_ = env.IndexManager.Close()
-			}
-			logFile.Close()
-			return nil, fmt.Errorf("agent prompt provider registration: %w", err)
-		}
-	}
-
-	logger.Printf("agentenv: workspace opened successfully")
+	logger.Printf("workspace: workspace opened successfully")
 	return ws, nil
 }
 
@@ -712,17 +710,17 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	logPath := cfg.LogPath
 	if logPath == "" {
 		if cfg.StateDir != "" {
-			logPath = filepath.Join(cfg.StateDir, "logs", "agentenv.log")
+			logPath = filepath.Join(cfg.StateDir, "logs", "workspace.log")
 		} else {
-			logPath = filepath.Join(cfg.Workspace, secretscan.RuntimeStateDirName, "logs", "agentenv.log")
+			logPath = filepath.Join(cfg.Workspace, workspace.StateDirName, "logs", "workspace.log")
 		}
 	}
 	telemetryPath := cfg.TelemetryPath
 	if telemetryPath == "" {
 		if cfg.StateDir != "" {
-			telemetryPath = filepath.Join(cfg.StateDir, "telemetry", "agentenv.jsonl")
+			telemetryPath = filepath.Join(cfg.StateDir, "telemetry", "workspace.jsonl")
 		} else {
-			telemetryPath = filepath.Join(cfg.Workspace, secretscan.RuntimeStateDirName, "telemetry", "agentenv.jsonl")
+			telemetryPath = filepath.Join(cfg.Workspace, workspace.StateDirName, "telemetry", "workspace.jsonl")
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
@@ -732,7 +730,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open log: %w", err)
 	}
-	logger := log.New(logFile, "agentenv ", log.LstdFlags|log.Lmicroseconds)
+	logger := log.New(logFile, "workspace ", log.LstdFlags|log.Lmicroseconds)
 
 	var sinks []telemetry.Telemetry
 	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"testing"
 )
 
@@ -34,7 +35,7 @@ func TestReduceMotionCollapseReduced(t *testing.T) {
 	defer restore()
 	os.Setenv("CI", "true")
 
-	r := NewReduceMotion()
+	r := NewReduceMotion(true)
 	if !r.Reduced() {
 		t.Skip("not reduced — can't test collapse")
 	}
@@ -62,7 +63,7 @@ func TestReduceMotionCollapseNotReduced(t *testing.T) {
 	os.Unsetenv("SSH_CONNECTION")
 	os.Setenv("TERM", "xterm-256color")
 
-	r := NewReduceMotion()
+	r := NewReduceMotion(false)
 	if r.Reduced() {
 		t.Skip("reduced — can't test non-reduced collapse")
 	}

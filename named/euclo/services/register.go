@@ -1,16 +1,12 @@
 package services
 
 import (
-	"fmt"
-
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 // Registration provides Euclo's service registration functions.
-// This is the primary entrypoint for framework integration.
 type Registration struct {
 	capabilityRegistrar CapabilityRegistrar
 	promptRegistrar     PromptRegistrar
@@ -18,7 +14,6 @@ type Registration struct {
 }
 
 // NewRegistration creates a new Registration with default implementations.
-// Optional overrides are applied after the defaults are installed.
 func NewRegistration(opts ...Option) *Registration {
 	r := &Registration{
 		capabilityRegistrar: &defaultCapabilityRegistrar{},
@@ -33,27 +28,18 @@ func NewRegistration(opts ...Option) *Registration {
 	return r
 }
 
-// AgentRegistrationFuncs returns the registration functions for agentenv.
-func (r *Registration) AgentRegistrationFuncs() agentenv.AgentRegistrationFuncs {
-	return agentenv.AgentRegistrationFuncs{
-		RegisterCapabilities:    r.registerCapabilities,
-		RegisterPromptProviders: r.registerPromptProviders,
-		LoadThoughtRecipes:      r.loadThoughtRecipes,
-	}
+// RegisterCapabilities registers all capabilities with the given registry.
+func (r *Registration) RegisterCapabilities(reg *registry.CapabilityRegistry) error {
+	return r.capabilityRegistrar.RegisterAll(reg)
 }
 
-func (r *Registration) registerCapabilities(env agentenv.AgentContext) error {
-	if env.Registry == nil {
-		return fmt.Errorf("capability registry is nil")
-	}
-	return r.capabilityRegistrar.RegisterAll(env.Registry)
+// RegisterPromptProviders registers all prompt providers with the given registry.
+func (r *Registration) RegisterPromptProviders(reg prompt.Registry) error {
+	return r.promptRegistrar.RegisterAll(reg)
 }
 
-func (r *Registration) registerPromptProviders(env agentenv.AgentContext) error {
-	return r.promptRegistrar.RegisterAll(env.PromptRegistry)
-}
-
-func (r *Registration) loadThoughtRecipes() (interface{}, error) {
+// LoadThoughtRecipes loads all thoughtrecipes.
+func (r *Registration) LoadThoughtRecipes() (*thoughtrecipe.LoadResult, error) {
 	return r.thoughtrecipeLoader.LoadAll()
 }
 
@@ -82,7 +68,6 @@ func WithThoughtRecipeLoader(rl ThoughtRecipeLoader) Option {
 }
 
 // CapabilityRegistrar abstracts capability registration.
-// Implementations receive the concrete registry and register their capability handlers.
 type CapabilityRegistrar interface {
 	RegisterAll(reg *registry.CapabilityRegistry) error
 }

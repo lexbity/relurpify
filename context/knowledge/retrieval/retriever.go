@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
 
@@ -133,6 +134,7 @@ func (r *Retriever) traversalCandidates(query RetrievalQuery) []knowledge.ChunkI
 		EdgeKinds: edgeKinds,
 		Direction: direction,
 		MaxDepth:  spec.MaxDepth,
+		Limit:     math.MaxInt32,
 	})
 	if len(nodes) == 0 {
 		return nil

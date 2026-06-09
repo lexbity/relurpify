@@ -1,8 +1,6 @@
-package agentenv
+package session
 
 import (
-	"context"
-
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -22,19 +20,10 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
-type VerificationPlanner interface {
-	SelectVerificationPlan(context.Context, VerificationPlanRequest) (VerificationPlan, bool, error)
-}
-
-type CompatibilitySurfaceExtractor interface {
-	ExtractSurface(context.Context, CompatibilitySurfaceRequest) (CompatibilitySurface, bool, error)
-}
-
-// AgentContext is the canonical runtime environment shared by all agents
-// in a workspace session. It is produced by ayenitd.Open() and passed directly
-// to agent constructors. It is shallow-copyable; agents may narrow scope
-// (e.g. replace Registry for a child execution) without rebuilding.
-type AgentContext struct {
+// agentEnv is the internal runtime data shared within a workspace session.
+// It is not exported — consumers use session controllers or the Workspace
+// struct's individual fields instead.
+type agentEnv struct {
 	// Identity + model
 	Config        *execution.Config
 	Model         model.LanguageModel
@@ -54,7 +43,7 @@ type AgentContext struct {
 	Registry *registry.CapabilityRegistry
 	// PermissionManager is the single implementation of the permission manager interface.
 	// Kept as concrete type for direct access to permission enforcement methods.
-	PermissionManager PermissionManager
+	PermissionManager permissions.PermissionManager
 
 	// Code intelligence
 	// IndexManager is the single implementation of the AST index manager interface.
@@ -76,7 +65,7 @@ type AgentContext struct {
 	// IngestOutputs enables runtime output ingestion for agents that opt in.
 	IngestOutputs bool
 	// PatternStore is the pattern store interface.
-	PatternStore PatternStore
+	PatternStore knowledge.PatternStore
 	// AgentLifecycle is the runtime agent lifecycle management interface.
 	// This handles delegation, event, and lineage persistence.
 	AgentLifecycle agentlifecycle.Repository
@@ -105,7 +94,7 @@ type AgentContext struct {
 
 	// Scheduling + services
 	Scheduler      *ServiceScheduler
-	ServiceManager *ServiceManager
+	ServiceManager *serviceManager
 	// JobSubmitter allows capability handlers and agents to enqueue long-running
 	// work into the framework job queue without holding a full JobStore reference.
 	// Nil when the workspace is not backed by a persistent job store (e.g., in
@@ -116,59 +105,6 @@ type AgentContext struct {
 	// Created by OpenWorkspace; GC'd at session end or when size cap is exceeded.
 	ArtifactStore artifactstore.Store
 
-	// Optional agents (interfaces)
-	VerificationPlanner           VerificationPlanner
-	CompatibilitySurfaceExtractor CompatibilitySurfaceExtractor
 }
 
-// WithRegistry returns a shallow copy with Registry replaced.
-// Agents use this to scope capability access for child executions.
-func (e AgentContext) WithRegistry(r *registry.CapabilityRegistry) AgentContext {
-	e.Registry = r
-	return e
-}
 
-// WithMemory returns a shallow copy with WorkingMemory replaced.
-func (e AgentContext) WithMemory(m *memory.WorkingMemoryStore) AgentContext {
-	e.WorkingMemory = m
-	return e
-}
-
-// WithCommandRunner returns a shallow copy with CommandRunner replaced.
-// Use this in tests to inject a recording or no-op runner without building a
-// full sandbox runtime.
-func (e AgentContext) WithCommandRunner(r sandbox.CommandRunner) AgentContext {
-	e.CommandRunner = r
-	return e
-}
-
-// WithFileScope returns a shallow copy with FileScope replaced.
-func (e AgentContext) WithFileScope(scope *permissions.FileScopePolicy) AgentContext {
-	e.FileScope = scope
-	return e
-}
-
-// WithJobSubmitter returns a shallow copy with JobSubmitter replaced.
-func (e AgentContext) WithJobSubmitter(s jobs.Submitter) AgentContext {
-	e.JobSubmitter = s
-	return e
-}
-
-// WithService adds a service to the ServiceManager via manager.Register().
-// This is useful for registering dynamic services at runtime.
-func (e AgentContext) WithService(id string, s Service) AgentContext {
-	if e.ServiceManager == nil {
-		return e
-	}
-	if e.ServiceManager.Registry == nil {
-		e.ServiceManager.Registry = make(map[string]Service)
-	}
-	e.ServiceManager.Registry[id] = s
-	return e
-}
-
-// WithPromptRegistry returns a shallow copy with PromptRegistry replaced.
-func (e AgentContext) WithPromptRegistry(r prompt.Registry) AgentContext {
-	e.PromptRegistry = r
-	return e
-}

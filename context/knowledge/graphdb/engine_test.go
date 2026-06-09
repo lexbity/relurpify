@@ -1,7 +1,6 @@
 package graphdb
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -49,50 +48,36 @@ func TestOpen_WithExistingSnapshot(t *testing.T) {
 	require.Equal(t, "other", edges[0].TargetID)
 }
 
-func TestSnapshot_RewritesAOF(t *testing.T) {
+func TestSnapshotAndReopen_Badger(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
-	engine, err := Open(opts)
-	require.NoError(t, err)
-
-	for i := 0; i < 10; i++ {
-		id := string(rune('a' + i))
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
-	}
-	require.NoError(t, engine.Snapshot())
-
-	// after snapshot, AOF file should be small (truncated)
-	aofPath := filepath.Join(opts.DataDir, opts.AOFFileName)
-	info, err := os.Stat(aofPath)
-	require.NoError(t, err)
-	require.Zero(t, info.Size())
-
-	// engine still works
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "new", Kind: "function"}))
-	require.NoError(t, engine.Close())
-}
-
-func TestClose_WithSnapshotOnClose(t *testing.T) {
-	dir := t.TempDir()
-	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
-	opts.SnapshotOnClose = true
 	engine, err := Open(opts)
 	require.NoError(t, err)
 
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "snap", Kind: "function"}))
+	require.NoError(t, engine.Snapshot())
 	require.NoError(t, engine.Close())
 
-	// AOF should be empty
-	aofPath := filepath.Join(opts.DataDir, opts.AOFFileName)
-	info, err := os.Stat(aofPath)
-	require.NoError(t, err)
-	require.Zero(t, info.Size())
-
-	// snapshot should contain the node
 	eng2, err := Open(opts)
 	require.NoError(t, err)
 	defer eng2.Close()
 	_, ok := eng2.GetNode("snap")
+	require.True(t, ok)
+}
+
+func TestCloseAndReopen_Badger(t *testing.T) {
+	dir := t.TempDir()
+	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
+	engine, err := Open(opts)
+	require.NoError(t, err)
+
+	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "persist", Kind: "function"}))
+	require.NoError(t, engine.Close())
+
+	eng2, err := Open(opts)
+	require.NoError(t, err)
+	defer eng2.Close()
+	_, ok := eng2.GetNode("persist")
 	require.True(t, ok)
 }
 

@@ -64,19 +64,6 @@ func TestBadgerBackend_MaintenanceGCEmpty(t *testing.T) {
 	require.False(t, result.Reclaimed)
 }
 
-func TestAOFBackend_Maintenance(t *testing.T) {
-	engine, _ := newTestEngine(t)
-
-	// Access the aofBackend directly.
-	ab, ok := engine.bk.(*aofBackend)
-	require.True(t, ok)
-
-	result, err := ab.maintenance(context.Background(), MaintenanceRequest{ValueLogGC: true})
-	require.NoError(t, err)
-	require.Equal(t, "aof", result.Backend)
-	require.False(t, result.Reclaimed, "AOF backend reports GC as no-op")
-}
-
 // ────────────────────────────────────────────────────────────────────
 // Backup
 // ────────────────────────────────────────────────────────────────────
@@ -94,15 +81,6 @@ func TestBadgerBackend_Backup(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, bb.backup(context.Background(), &buf))
 	require.Greater(t, buf.Len(), 0, "backup should produce output")
-}
-
-func TestAOFBackend_BackupNotSupported(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	ab, ok := engine.bk.(*aofBackend)
-	require.True(t, ok)
-
-	err := ab.backup(context.Background(), &bytes.Buffer{})
-	require.ErrorIs(t, err, ErrBackupUnsupported)
 }
 
 // ────────────────────────────────────────────────────────────────────

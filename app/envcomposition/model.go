@@ -3,7 +3,6 @@ package envcomposition
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
@@ -13,7 +12,7 @@ import (
 // is created at workspace-open time when telemetry is available.
 type ModelRuntime struct {
 	Backend      llm.ManagedBackend
-	ModelFactory agentenv.ModelFactory
+	ModelFactory model.ModelFactory
 }
 
 // ModelRuntimeInput carries parameters for BuildModelRuntime.

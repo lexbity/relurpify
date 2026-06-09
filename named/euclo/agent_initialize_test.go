@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 )
 
 var testRelurpicCapabilities = []string{
@@ -27,8 +27,7 @@ var testRelurpicCapabilities = []string{
 }
 
 func TestAgentInitializeDoesNotPanic(t *testing.T) {
-	// Create a minimal AgentContext
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -37,10 +36,8 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 		Registry: registry.NewRegistry(),
 	}
 
-	// Create agent with the environment
-	agent := New(env)
+	agent := New(deps)
 
-	// Initialize should not panic
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("agent.Initialize panicked: %v", r)
@@ -52,24 +49,21 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 		t.Fatalf("agent.Initialize failed: %v", err)
 	}
 
-	// Verify initialization state
 	if !agent.initialized {
 		t.Fatal("agent should be initialized after Initialize call")
 	}
 
-	// Verify thoughtrecipeRegistry is set
 	if agent.thoughtrecipeRegistry == nil {
 		t.Fatal("thoughtrecipeRegistry should be set after Initialize")
 	}
 }
 
 func TestAgentInitializeWithNilRegistry(t *testing.T) {
-	// Test with nil registry - should error gracefully
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Registry: nil,
 	}
 
-	agent := New(env)
+	agent := New(deps)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -78,8 +72,7 @@ func TestAgentInitializeWithNilRegistry(t *testing.T) {
 	}()
 
 	err := agent.Initialize(nil)
-	// Should error because registry is nil
 	if err == nil {
-		t.Fatal("expected error when env.Registry is nil")
+		t.Fatal("expected error when Registry is nil")
 	}
 }

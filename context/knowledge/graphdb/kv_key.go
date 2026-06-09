@@ -156,16 +156,16 @@ func keyEdgeByStable(stableID, sourceID, targetID string, kind EdgeKind) []byte 
 func keyNodeHistory(id string, timestamp int64, seq uint64) []byte {
 	var buf []byte
 	buf = append(buf, encodeKey(famHistoryNode, id)...)
-	buf = binary.LittleEndian.AppendUint64(buf, uint64(timestamp))
-	buf = binary.LittleEndian.AppendUint64(buf, seq)
+	buf = binary.BigEndian.AppendUint64(buf, uint64(timestamp))
+	buf = binary.BigEndian.AppendUint64(buf, seq)
 	return buf
 }
 
 func keyEdgeHistory(sourceID string, kind EdgeKind, targetID string, timestamp int64, seq uint64) []byte {
 	var buf []byte
 	buf = append(buf, encodeKey(famHistoryEdge, sourceID, string(kind), targetID)...)
-	buf = binary.LittleEndian.AppendUint64(buf, uint64(timestamp))
-	buf = binary.LittleEndian.AppendUint64(buf, seq)
+	buf = binary.BigEndian.AppendUint64(buf, uint64(timestamp))
+	buf = binary.BigEndian.AppendUint64(buf, seq)
 	return buf
 }
 

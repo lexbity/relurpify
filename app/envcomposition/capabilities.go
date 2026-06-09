@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -25,18 +24,17 @@ import (
 
 var (
 	newCapabilityRegistryFn   = regpkg.NewRegistry
-	newASTSQLiteStoreFn       = ast.NewSQLiteStore
+	newASTIndexStoreFn        = func(g *graphdb.Engine) ast.IndexStore { return ast.NewGraphIndexStore(g) }
 	newGraphDBFn              = graphdb.Open
 	startIndexingFn           = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
 	newSearchEngineFn         = search.NewSearchEngine
 	attachASTSymbolProviderFn = ast.AttachASTSymbolProvider
-	cleanupCapabilityBundleFn = func(store *ast.SQLiteStore, manager *ast.IndexManager) {
+	cleanupCapabilityBundleFn = func(g *graphdb.Engine, manager *ast.IndexManager) {
 		if manager != nil {
 			_ = manager.Close()
-			return
 		}
-		if store != nil {
-			_ = store.Close()
+		if g != nil {
+			_ = g.Close()
 		}
 	}
 )
@@ -88,7 +86,7 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 		buildCtx = context.Background()
 	}
 	registry := newCapabilityRegistryFn()
-	var store *ast.SQLiteStore
+	var astEngine *graphdb.Engine
 	var manager *ast.IndexManager
 	platformCfg, err := config.LoadPlatformConfig(workspace)
 	if err != nil {
@@ -98,7 +96,7 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 	registry.UseToolAdmission(regpkg.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
-			cleanupCapabilityBundleFn(store, manager)
+			cleanupCapabilityBundleFn(astEngine, manager)
 		}
 	}()
 	if cfg.PermissionManager != nil {
@@ -149,19 +147,18 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err
 	}
-	store, err = newASTSQLiteStoreFn(paths.ASTIndexDB())
+
+	// Create a Badger‑backed graphdb engine for AST index storage.
+	astEngine, err = newGraphDBFn(graphdb.DefaultOptions(indexDir))
 	if err != nil {
 		return nil, err
 	}
+	store := newASTIndexStoreFn(astEngine)
 	manager = ast.NewIndexManager(store, ast.IndexConfig{
 		WorkspacePath:   workspace,
 		ParallelWorkers: 4,
 	})
-	graphEngine, err := newGraphDBFn(graphdb.DefaultOptions(filepath.Join(paths.MemoryDir(), "graphdb")))
-	if err != nil {
-		return nil, err
-	}
-	manager.GraphDB = graphEngine
+	manager.GraphDB = astEngine
 	fileScope := fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths)
 	manager.SetFileScope(fileScope)
 	manager.SetPathFilter(func(path string, isDir bool) bool {

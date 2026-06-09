@@ -25,7 +25,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
@@ -47,7 +47,8 @@ import (
 // registration, and log management.
 type Runtime struct {
 	Config          Config
-	Workspace       *agentenv.Workspace
+	Workspace       *session.Workspace
+	Session         *session.WorkspaceSession
 	Tools           *registry.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Agent           agentgraph.WorkflowExecutor
@@ -73,7 +74,7 @@ type Runtime struct {
 }
 
 // AgentWorkspace returns the execution workspace for this Runtime.
-func (r *Runtime) AgentWorkspace() *agentenv.Workspace {
+func (r *Runtime) AgentWorkspace() *session.Workspace {
 	return r.Workspace
 }
 
@@ -186,9 +187,9 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if err != nil {
 		return nil, fmt.Errorf("compose authorization registration: %w", err)
 	}
-	var securityRuntime *agentenv.RuntimeSecurity
-	var capabilityProduct *agentenv.CapabilityProduct
-	var knowledgeProduct *agentenv.KnowledgeProduct
+	var securityRuntime *session.RuntimeSecurity
+	var capabilityProduct *session.CapabilityProduct
+	var knowledgeProduct *session.KnowledgeProduct
 	var modelProduct *envcomposition.ModelRuntime
 	if manifestSnapshot != nil && manifestSnapshot.Manifest != nil {
 		agentSpec := manifestSnapshot.Manifest.Spec.Agent
@@ -205,7 +206,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		if err != nil {
 			return nil, fmt.Errorf("compose security runtime: %w", err)
 		}
-		securityRuntime = &agentenv.RuntimeSecurity{
+		securityRuntime = &session.RuntimeSecurity{
 			Runner:        securityProduct.Runner,
 			PolicyEngine:  securityProduct.PolicyEngine,
 			CommandPolicy: securityProduct.CommandPolicy,
@@ -224,7 +225,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		if err != nil {
 			return nil, fmt.Errorf("compose capability runtime: %w", err)
 		}
-		capabilityProduct = &agentenv.CapabilityProduct{
+		capabilityProduct = &session.CapabilityProduct{
 			Registry:     capProduct.Registry,
 			IndexManager: capProduct.IndexManager,
 			SearchEngine: capProduct.SearchEngine,
@@ -237,7 +238,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		if err != nil {
 			return nil, fmt.Errorf("compose knowledge runtime: %w", err)
 		}
-		knowledgeProduct = &agentenv.KnowledgeProduct{
+		knowledgeProduct = &session.KnowledgeProduct{
 			KnowledgeStore:  knowledgeRuntime.KnowledgeStore,
 			KnowledgeEvents: knowledgeRuntime.KnowledgeEvents,
 			Retriever:       knowledgeRuntime.Retriever,
@@ -256,7 +257,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			return nil, fmt.Errorf("compose model runtime: %w", err)
 		}
 	}
-	registrationView := &agentenv.Registration{
+	registrationView := &session.Registration{
 		ID:               registration.ID,
 		Manifest:         registration.Manifest,
 		ManifestSnapshot: registration.ManifestSnapshot,
@@ -265,7 +266,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		Audit:            registration.Audit,
 		HITL:             registration.HITL,
 	}
-	ws, err := agentenv.OpenWorkspace(ctx, agentenv.WorkspaceConfig{
+	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
 		InferenceProvider:          cfg.InferenceProvider,
@@ -293,19 +294,20 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		SecurityRuntime:            securityRuntime,
 		CapabilityProduct:          capabilityProduct,
 		KnowledgeProduct:           knowledgeProduct,
-		ModelProduct: &agentenv.ModelProduct{
+		ModelProduct: &model.ModelProduct{
 			Backend:      modelProduct.Backend,
 			ModelFactory: modelProduct.ModelFactory,
 		},
-		Scope: agentenv.ScopeFull,
+		Scope: session.ScopeFull,
 		EventLogFactory: func(path string) (event.Log, error) {
 			return persistence.NewSQLiteEventLog(path)
 		},
-	}, envcomposition.AgentRegistrationFuncs())
+	})
 	if err != nil {
 		return nil, err
 	}
 
+	sess := session.NewSessionFromWorkspace(ws, cfg.Workspace)
 	env := ws.Environment
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
@@ -383,6 +385,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	rt := &Runtime{
 		Config:               cfg,
 		Workspace:            ws,
+		Session:              sess,
 		Tools:                env.Registry,
 		Memory:               env.WorkingMemory,
 		Model:                env.Model,
@@ -414,7 +417,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
-	agent := instantiateAgent(cfg, paradigmDepsFromAgentContext(env))
+	agent := instantiateAgent(cfg, rt.paradigmDeps())
 	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
@@ -423,11 +426,11 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 
 	rt.Agent = agent
-	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, rt.Workspace, registration); err != nil {
+	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
 		_ = rt.Close()
 		return nil, fmt.Errorf("register workspace services: %w", err)
 	}
-	if err := ayenitd.StartWorkspaceServices(ctx, rt.Workspace); err != nil {
+	if err := ayenitd.StartWorkspaceServices(ctx, sess); err != nil {
 		_ = rt.Close()
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
@@ -523,7 +526,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config.EffectiveAgentContract, compiledPolicy *agentenv.CompiledPolicy) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config.EffectiveAgentContract, compiledPolicy *session.CompiledPolicy) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -589,23 +592,23 @@ func instantiateAgent(cfg Config, deps *paradigm.Deps) agentgraph.WorkflowExecut
 	}
 }
 
-func paradigmDepsFromAgentContext(env agentenv.AgentContext) *paradigm.Deps {
+func (r *Runtime) paradigmDeps() *paradigm.Deps {
 	return &paradigm.Deps{
-		Config:         env.Config,
-		Model:          env.Model,
-		Registry:       env.Registry,
-		WorkingMemory:  env.WorkingMemory,
-		IndexManager:   env.IndexManager,
-		SearchEngine:   env.SearchEngine,
-		StreamTrigger:  env.StreamTrigger,
-		OutputIngester: env.OutputIngester,
-		IngestOutputs:  env.IngestOutputs,
-		PromptRegistry: env.PromptRegistry,
-		AgentLifecycle: env.AgentLifecycle,
+		Config:         r.Workspace.Environment.Config,
+		Model:          r.Model,
+		Registry:       r.Tools,
+		WorkingMemory:  r.Memory,
+		IndexManager:   r.IndexManager,
+		SearchEngine:   r.SearchEngine,
+		StreamTrigger:  r.Workspace.Environment.StreamTrigger,
+		OutputIngester: r.Workspace.Environment.OutputIngester,
+		IngestOutputs:  r.Workspace.Environment.IngestOutputs,
+		PromptRegistry: r.Workspace.Environment.PromptRegistry,
+		AgentLifecycle: r.AgentLifecycle,
 	}
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *agentenv.CompiledPolicy, error) {
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *session.CompiledPolicy, error) {
 	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, config.ResolveOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
@@ -616,7 +619,7 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.Effecti
 	if effectiveContract.AgentSpec == nil {
 		return nil, nil, fmt.Errorf("agent spec required")
 	}
-	compiledPolicy := &agentenv.CompiledPolicy{
+	compiledPolicy := &session.CompiledPolicy{
 		AgentID: effectiveContract.AgentID,
 		Spec:    effectiveContract.AgentSpec,
 		Engine:  r.Workspace.PolicyEngine,

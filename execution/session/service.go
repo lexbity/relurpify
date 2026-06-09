@@ -1,4 +1,4 @@
-package agentenv
+package session
 
 import (
 	"context"
@@ -10,7 +10,105 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/execution/workspace"
 )
+
+// OpenMode declares feature layers to include when opening a workspace session.
+type OpenMode int
+
+const (
+	// OpenModeDefault opens all configured feature layers (full scope).
+	OpenModeDefault OpenMode = iota
+	// OpenModeEmbeddedAgent opens only security and capabilities, no LLM
+	// backend, knowledge, services, or telemetry sink.
+	OpenModeEmbeddedAgent
+)
+
+// WorkspaceService is the app-facing contract for opening workspace sessions.
+type WorkspaceService interface {
+	OpenWorkspace(ctx context.Context, req OpenWorkspaceRequest) (*WorkspaceSession, error)
+}
+
+// OpenWorkspaceRequest captures session-level parameters for opening a workspace.
+type OpenWorkspaceRequest struct {
+	WorkspaceRoot string
+	ConfigPath    string
+	AgentName     string
+	Mode          OpenMode
+}
+
+// WorkspaceSession is a coherent, open workspace session with focused
+// controller access. Close is idempotent and safe to call multiple times.
+type WorkspaceSession struct {
+	ID        string
+	Workspace workspace.Identity
+
+	Security  SecurityController
+	Knowledge KnowledgeController
+	Agents    NamedAgentController
+	Tools     CapabilityController
+	Telemetry TelemetryView
+
+	serviceManager sessionServiceManager
+	closeOnce      sync.Once
+	closeFn        func(context.Context) error
+}
+
+// sessionServiceManager is the interface for the session's internal service manager.
+type sessionServiceManager interface {
+	RegisterService(id string, svc Service)
+	StartAll(ctx context.Context) error
+	Snapshots() []ServiceSnapshot
+}
+
+// SetCloseFn sets the close function for the session. Must be called before
+// the first call to Close.
+func (s *WorkspaceSession) SetCloseFn(fn func(context.Context) error) {
+	s.closeFn = fn
+}
+
+// Close releases all resources held by the session. Idempotent and nil-safe.
+func (s *WorkspaceSession) Close(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	var err error
+	s.closeOnce.Do(func() {
+		if s.closeFn != nil {
+			err = s.closeFn(ctx)
+		}
+	})
+	return err
+}
+
+// SetServiceManager sets the internal service manager for the session.
+func (s *WorkspaceSession) SetServiceManager(sm sessionServiceManager) {
+	s.serviceManager = sm
+}
+
+// RegisterService registers a background service on the session's service manager.
+func (s *WorkspaceSession) RegisterService(id string, svc Service) {
+	if s.serviceManager != nil {
+		s.serviceManager.RegisterService(id, svc)
+	}
+}
+
+// StartServices starts all registered background services.
+func (s *WorkspaceSession) StartServices(ctx context.Context) error {
+	if s.serviceManager == nil {
+		return nil
+	}
+	return s.serviceManager.StartAll(ctx)
+}
+
+// ServiceSnapshots returns the current status of all registered services.
+func (s *WorkspaceSession) ServiceSnapshots() []ServiceSnapshot {
+	if s.serviceManager == nil {
+		return nil
+	}
+	return s.serviceManager.Snapshots()
+}
 
 // Service is the universal interface for all background services, workers,
 // and periodic tasks in a workspace. Any service registered with ServiceManager
@@ -42,10 +140,16 @@ type ServiceRegistrationInfo struct {
 	Notes  []string
 }
 
-// ServiceManager handles registration and lifecycle orchestration for all
-// services within a workspace session. It supports dynamic registration,
-// batch start/stop operations, and clean resource cleanup.
-type ServiceManager struct {
+// ServiceManager provides lifecycle management for background services
+// within a workspace session.
+type ServiceManager interface {
+	RegisterService(id string, svc Service)
+	StartAll(ctx context.Context) error
+	Snapshots() []ServiceSnapshot
+}
+
+// serviceManager is the concrete implementation of ServiceManager.
+type serviceManager struct {
 	Registry map[string]Service
 	Statuses map[string]string
 	Info     map[string]ServiceRegistrationInfo
@@ -56,22 +160,32 @@ type ServiceManager struct {
 
 // NewServiceManager creates a new empty service registry ready for dynamic
 // service registration. Use this during Workspace initialization.
-func NewServiceManager() *ServiceManager {
-	return &ServiceManager{
+func NewServiceManager() *serviceManager {
+	return &serviceManager{
 		Registry: make(map[string]Service),
 		Statuses: make(map[string]string),
 		Info:     make(map[string]ServiceRegistrationInfo),
 	}
 }
 
+// RegisterService registers a service and satisfies the ServiceManager interface.
+func (sm *serviceManager) RegisterService(id string, s Service) {
+	sm.Register(id, s)
+}
+
+// Snapshots returns the current service snapshots and satisfies the ServiceManager interface.
+func (sm *serviceManager) Snapshots() []ServiceSnapshot {
+	return sm.Snapshot()
+}
+
 // Register adds a service to the manager by ID. If the service already exists,
 // it will be overwritten (previous instance is automatically stopped).
-func (sm *ServiceManager) Register(id string, s Service) {
+func (sm *serviceManager) Register(id string, s Service) {
 	sm.RegisterWithInfo(id, s, ServiceRegistrationInfo{Source: "internal"})
 }
 
 // RegisterWithInfo adds a service with explicit provenance metadata.
-func (sm *ServiceManager) RegisterWithInfo(id string, s Service, info ServiceRegistrationInfo) {
+func (sm *serviceManager) RegisterWithInfo(id string, s Service, info ServiceRegistrationInfo) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -92,7 +206,7 @@ func (sm *ServiceManager) RegisterWithInfo(id string, s Service, info ServiceReg
 }
 
 // Deregister removes a service from the registry and stops it if already started.
-func (sm *ServiceManager) Deregister(id string) {
+func (sm *serviceManager) Deregister(id string) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -114,7 +228,7 @@ func (sm *ServiceManager) Deregister(id string) {
 // StartAll asynchronously starts all registered services. Services are started
 // in parallel to avoid blocking startup time. Errors from individual services
 // are logged but do not halt the startup of other services.
-func (sm *ServiceManager) StartAll(ctx context.Context) error {
+func (sm *serviceManager) StartAll(ctx context.Context) error {
 	sm.Mu.Lock()
 	if len(sm.Registry) == 0 {
 		sm.Mu.Unlock()
@@ -145,7 +259,7 @@ func (sm *ServiceManager) StartAll(ctx context.Context) error {
 
 // StopAll synchronously stops all registered services. Returns an error only if
 // one or more services returned a stop error. This is used in Workspace.Close().
-func (sm *ServiceManager) StopAll() error {
+func (sm *serviceManager) StopAll() error {
 	if sm == nil {
 		return nil
 	}
@@ -173,7 +287,7 @@ func (sm *ServiceManager) StopAll() error {
 
 // Get returns a service by ID. Returns nil if not found. This allows callers
 // to access specific services without re-registering them (e.g., scheduler).
-func (sm *ServiceManager) Get(id string) Service {
+func (sm *serviceManager) Get(id string) Service {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -184,7 +298,7 @@ func (sm *ServiceManager) Get(id string) Service {
 }
 
 // Snapshot returns the current registry with lifecycle status for each service.
-func (sm *ServiceManager) Snapshot() []ServiceSnapshot {
+func (sm *serviceManager) Snapshot() []ServiceSnapshot {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -210,7 +324,7 @@ func (sm *ServiceManager) Snapshot() []ServiceSnapshot {
 }
 
 // Has checks if a service with the given ID is registered.
-func (sm *ServiceManager) Has(id string) bool {
+func (sm *serviceManager) Has(id string) bool {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -219,7 +333,7 @@ func (sm *ServiceManager) Has(id string) bool {
 }
 
 // Count returns the number of currently registered services.
-func (sm *ServiceManager) Count() int {
+func (sm *serviceManager) Count() int {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -227,7 +341,7 @@ func (sm *ServiceManager) Count() int {
 }
 
 // ListIDs returns a snapshot of all registered service IDs in unspecified order.
-func (sm *ServiceManager) ListIDs() []string {
+func (sm *serviceManager) ListIDs() []string {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
@@ -240,7 +354,7 @@ func (sm *ServiceManager) ListIDs() []string {
 
 // Clear removes all services from the registry and stops them. Useful for
 // restarting or cleaning up state without creating a new Workspace.
-func (sm *ServiceManager) Clear() error {
+func (sm *serviceManager) Clear() error {
 	err := sm.StopAll()
 	sm.Mu.Lock()
 	sm.Registry = make(map[string]Service)
@@ -251,7 +365,7 @@ func (sm *ServiceManager) Clear() error {
 }
 
 // Start starts one registered service and updates its status.
-func (sm *ServiceManager) Start(id string, ctx context.Context) error {
+func (sm *serviceManager) Start(id string, ctx context.Context) error {
 	if sm == nil {
 		return fmt.Errorf("service manager unavailable")
 	}
@@ -265,7 +379,7 @@ func (sm *ServiceManager) Start(id string, ctx context.Context) error {
 }
 
 // Stop stops one registered service and updates its status.
-func (sm *ServiceManager) Stop(id string) error {
+func (sm *serviceManager) Stop(id string) error {
 	if sm == nil {
 		return fmt.Errorf("service manager unavailable")
 	}
@@ -279,14 +393,14 @@ func (sm *ServiceManager) Stop(id string) error {
 }
 
 // Restart stops and then starts one registered service.
-func (sm *ServiceManager) Restart(id string, ctx context.Context) error {
+func (sm *serviceManager) Restart(id string, ctx context.Context) error {
 	if err := sm.Stop(id); err != nil {
 		return err
 	}
 	return sm.Start(id, ctx)
 }
 
-func (sm *ServiceManager) startService(id string, svc Service, ctx context.Context) error {
+func (sm *serviceManager) startService(id string, svc Service, ctx context.Context) error {
 	if svc == nil {
 		return fmt.Errorf("service %s unavailable", id)
 	}
@@ -301,7 +415,7 @@ func (sm *ServiceManager) startService(id string, svc Service, ctx context.Conte
 	return nil
 }
 
-func (sm *ServiceManager) stopService(id string, svc Service) error {
+func (sm *serviceManager) stopService(id string, svc Service) error {
 	if svc == nil {
 		return fmt.Errorf("service %s unavailable", id)
 	}
@@ -313,7 +427,7 @@ func (sm *ServiceManager) stopService(id string, svc Service) error {
 	return nil
 }
 
-func (sm *ServiceManager) setStatus(id, status string) {
+func (sm *serviceManager) setStatus(id, status string) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 	if sm.Statuses == nil {

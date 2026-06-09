@@ -9,35 +9,30 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
-// TestAgentCompiles verifies that New returns a non-nil *Agent without panic.
 func TestAgentCompiles(t *testing.T) {
-	// Create a minimal workspace environment
-	env := agentenv.AgentContext{}
-	agent := New(env)
+	deps := &paradigm.Deps{
+		Registry: registry.NewRegistry(),
+	}
+	agent := New(deps)
 
 	if agent == nil {
 		t.Fatal("New() returned nil")
 	}
 }
 
-// TestAgentImplementsWorkflowExecutor verifies compile-time interface assertion.
 func TestAgentImplementsWorkflowExecutor(t *testing.T) {
-	// This test passes if the code compiles - the var _ agentgraph.WorkflowExecutor
-	// line in agent.go ensures this at compile time.
-	// We also verify at runtime:
 	var _ agentgraph.WorkflowExecutor = (*Agent)(nil)
 }
 
-// TestBuildGraphReturnsGraph verifies that BuildGraph returns a non-nil *agentgraph.Graph.
 func TestBuildGraphReturnsGraph(t *testing.T) {
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -45,7 +40,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -63,10 +58,8 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 	}
 }
 
-// TestExecuteCallsBuildGraph verifies that Execute calls BuildGraph and graph.Execute.
-// This is a minimal test since the full graph execution requires more setup.
 func TestExecuteCallsBuildGraph(t *testing.T) {
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -74,7 +67,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -82,16 +75,9 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 		Instruction: "test instruction",
 	}
 
-	// Create a minimal envelope
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
 
-	// Execute may return an error because the graph is stubbed, but it should
-	// attempt to build and execute the graph.
-	// For Phase 1, we're mainly verifying no panic and proper method calls.
 	_, err := agent.Execute(context.Background(), task, envelope)
-
-	// Phase 1: The graph has minimal nodes, so execution may fail validation.
-	// We just verify no panic occurred.
 	_ = err
 }
 
@@ -128,7 +114,7 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 }
 
 func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -136,11 +122,11 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 	if err := agent.Initialize(nil); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
-	agent.env.Registry = nil
+	agent.deps.Registry = nil
 
 	task := &execution.Task{
 		ID:          "task-43",
@@ -169,9 +155,8 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 	}
 }
 
-// TestInitializeStoresConfig verifies that Initialize stores config and marks initialized.
 func TestInitializeStoresConfig(t *testing.T) {
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -179,7 +164,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 
 	config := &execution.Config{}
 
@@ -192,22 +177,19 @@ func TestInitializeStoresConfig(t *testing.T) {
 		t.Error("agent.initialized should be true after Initialize")
 	}
 
-	// Second call should not error
 	err = agent.Initialize(config)
 	if err != nil {
 		t.Fatalf("Second Initialize call returned error: %v", err)
 	}
 }
 
-// TestExecuteStashesResumeClassification verifies that Execute handles resume state.
-// Note: Resume state handling is stubbed for Phase 1 and will be fully implemented in Phase 14.
 func TestExecuteStashesResumeClassification(t *testing.T) {
 	t.Skip("Phase 1: Resume state handling is stubbed; will be fully implemented in Phase 14")
 
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -243,10 +225,8 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 	}
 }
 
-// TestExecuteClearsResumeStateAfterGraph verifies resume state is cleared after Execute.
-// Note: Resume state clearing is stubbed for Phase 1.
 func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
 				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
@@ -254,7 +234,7 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(env)
+	agent := New(deps)
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -285,10 +265,11 @@ func graphStartNodeID(graph *agentgraph.Graph) string {
 	return value.String()
 }
 
-// TestCapabilitiesReturnsExpectedIDs verifies Capabilities() returns expected capability IDs.
 func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
-	env := agentenv.AgentContext{}
-	agent := New(env)
+	deps := &paradigm.Deps{
+		Registry: registry.NewRegistry(),
+	}
+	agent := New(deps)
 
 	caps := agent.Capabilities()
 
@@ -296,7 +277,6 @@ func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
 		t.Error("Capabilities() returned empty slice")
 	}
 
-	// Expected capabilities for Phase 1
 	expected := []string{"euclo.agent", "euclo.routing", "euclo.classification"}
 	if len(caps) != len(expected) {
 		t.Errorf("Capabilities() returned %d items, expected %d", len(caps), len(expected))
@@ -309,7 +289,6 @@ func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
 	}
 }
 
-// TestDefaultConfig returns valid default configuration.
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
@@ -326,16 +305,17 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-// TestWithConfigOption verifies WithConfig option sets the config.
 func TestWithConfigOption(t *testing.T) {
-	env := agentenv.AgentContext{}
+	deps := &paradigm.Deps{
+		Registry: registry.NewRegistry(),
+	}
 	customConfig := EucloConfig{
 		BuiltinFamilies:        false,
 		WorkspaceIngestionMode: "full",
 		MaxStreamTokens:        4096,
 	}
 
-	agent := New(env, WithConfig(customConfig))
+	agent := New(deps, WithConfig(customConfig))
 
 	if agent.config.BuiltinFamilies {
 		t.Error("WithConfig should have set BuiltinFamilies to false")

@@ -657,7 +657,9 @@ func (b *badgerBackend) markEdgesForNode(txn *badger.Txn, nodeID string, deleted
 }
 
 func (b *badgerBackend) putNodeHistory(txn *badger.Txn, node NodeRecord) error {
-	key := keyNodeHistory(node.ID, node.UpdatedAt, node.StateVersion)
+	// Use current time for the key to avoid collisions when multiple
+	// history entries share the same UpdatedAt.
+	key := keyNodeHistory(node.ID, time.Now().UnixNano(), node.StateVersion)
 	val, err := json.Marshal(node)
 	if err != nil {
 		return err
@@ -666,7 +668,7 @@ func (b *badgerBackend) putNodeHistory(txn *badger.Txn, node NodeRecord) error {
 }
 
 func (b *badgerBackend) putEdgeHistory(txn *badger.Txn, edge EdgeRecord) error {
-	key := keyEdgeHistory(edge.SourceID, edge.Kind, edge.TargetID, edge.CreatedAt, uint64(edge.Weight))
+	key := keyEdgeHistory(edge.SourceID, edge.Kind, edge.TargetID, time.Now().UnixNano(), uint64(edge.Weight))
 	val, err := json.Marshal(edge)
 	if err != nil {
 		return err

@@ -602,23 +602,7 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 // Backend‑specific entry points
 // ────────────────────────────────────────────────────────────────────
 
-func TestBackendConformance_AOF(t *testing.T) {
-	testBackendConformance(t, func(t *testing.T) (*Engine, reopenFunc) {
-		opts := DefaultOptions(t.TempDir())
-		engine, err := Open(opts)
-		require.NoError(t, err)
-		t.Cleanup(func() { engine.Close() })
-		reopen := func(t *testing.T) *Engine {
-			eng, err := Open(opts)
-			require.NoError(t, err)
-			t.Cleanup(func() { eng.Close() })
-			return eng
-		}
-		return engine, reopen
-	})
-}
-
-func TestBackendConformance_Badger(t *testing.T) {
+func TestBackendConformance(t *testing.T) {
 	runBadgerConformance(t)
 }
 

@@ -9,12 +9,12 @@ import (
 	"testing"
 )
 
-// TestNoPlatformImportsInAgentenv ensures execution/agentenv does not import
+// TestNoPlatformImportsInSession ensures execution/session does not import
 // platform packages for app-level construction. These are app/envcomposition's
 // responsibility.
-func TestNoPlatformImportsInAgentenv(t *testing.T) {
-	agentenvDir := filepath.Join("..", "..", "execution", "agentenv")
-	entries, err := os.ReadDir(agentenvDir)
+func TestNoPlatformImportsInSession(t *testing.T) {
+	sessionDir := filepath.Join("..", "..", "execution", "session")
+	entries, err := os.ReadDir(sessionDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,61 +25,7 @@ func TestNoPlatformImportsInAgentenv(t *testing.T) {
 		if strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
-		path := filepath.Join(agentenvDir, entry.Name())
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, imp := range f.Imports {
-			path := strings.Trim(imp.Path.Value, `"`)
-			if strings.HasPrefix(path, "codeburg.org/lexbit/relurpify/platform/") {
-				t.Errorf("%s imports %s (should move to app/envcomposition)", entry.Name(), path)
-			}
-		}
-	}
-}
-
-// TestNoEnvcompositionImportsInAgentenv ensures execution/agentenv does not
-// import app/envcomposition. Agentenv is below app in the DAG and must not
-// depend upward.
-func TestNoEnvcompositionImportsInAgentenv(t *testing.T) {
-	agentenvDir := filepath.Join("..", "..", "execution", "agentenv")
-	entries, err := os.ReadDir(agentenvDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		path := filepath.Join(agentenvDir, entry.Name())
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, imp := range f.Imports {
-			path := strings.Trim(imp.Path.Value, `"`)
-			if strings.Contains(path, "relurpify/app/envcomposition") {
-				t.Errorf("%s imports app/envcomposition (directional violation)", entry.Name())
-			}
-		}
-	}
-}
-
-// TestNoAgentenvImportsInCognitionzoo keeps generic agent paradigms decoupled
-// from the broad execution workspace context. App/named packages adapt broad
-// workspace state into cognitionzoo/paradigm.Deps.
-func TestNoAgentenvImportsInCognitionzoo(t *testing.T) {
-	root := filepath.Join("..", "..", "cognitionzoo")
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
-			return nil
-		}
+		path := filepath.Join(sessionDir, entry.Name())
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
@@ -87,13 +33,42 @@ func TestNoAgentenvImportsInCognitionzoo(t *testing.T) {
 		}
 		for _, imp := range f.Imports {
 			importPath := strings.Trim(imp.Path.Value, `"`)
-			if importPath == "codeburg.org/lexbit/relurpify/execution/agentenv" {
-				rel, _ := filepath.Rel(filepath.Join("..", ".."), path)
-				t.Errorf("%s imports execution/agentenv", rel)
+			if strings.HasPrefix(importPath, "codeburg.org/lexbit/relurpify/platform/") {
+				t.Errorf("%s imports %s (should move to app/envcomposition)", entry.Name(), importPath)
 			}
 		}
-		return nil
-	})
+	}
+}
+
+// TestNoEnvcompositionImportsInSession ensures execution/session does not
+// import app/envcomposition. Session is below app in the DAG and must not
+// depend upward.
+func TestNoEnvcompositionImportsInSession(t *testing.T) {
+	sessionDir := filepath.Join("..", "..", "execution", "session")
+	entries, err := os.ReadDir(sessionDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join(sessionDir, entry.Name())
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imp := range f.Imports {
+			importPath := strings.Trim(imp.Path.Value, `"`)
+			if strings.Contains(importPath, "relurpify/app/envcomposition") {
+				t.Errorf("%s imports app/envcomposition (directional violation)", entry.Name())
+			}
+		}
+	}
 }
 
 // TestBuildBuiltinCapabilityBundleIsDeprecated verifies production files no
