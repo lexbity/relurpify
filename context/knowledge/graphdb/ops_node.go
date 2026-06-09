@@ -17,6 +17,9 @@ func (e *Engine) UpsertNodes(nodes []NodeRecord) error {
 	if len(nodes) == 0 {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	now := time.Now().UnixNano()
 	batch := make([]NodeRecord, 0, len(nodes))
 	for _, node := range nodes {
@@ -31,6 +34,10 @@ func (e *Engine) UpsertNodes(nodes []NodeRecord) error {
 			return err
 		}
 	} else if err := e.persist("upsert_nodes", nodeBatchOp{Nodes: batch}); err != nil {
+		return err
+	}
+	if err := e.applyHook(); err != nil {
+		e.markDirty(err)
 		return err
 	}
 	e.store.mu.Lock()
@@ -51,11 +58,18 @@ func (e *Engine) DeleteNodes(ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if len(ids) == 1 {
 		if err := e.persist("delete_node", deleteNodeOp{ID: ids[0]}); err != nil {
 			return err
 		}
 	} else if err := e.persist("delete_nodes", deleteNodesOp{IDs: ids}); err != nil {
+		return err
+	}
+	if err := e.applyHook(); err != nil {
+		e.markDirty(err)
 		return err
 	}
 	deletedAt := time.Now().UnixNano()
@@ -202,12 +216,19 @@ func (e *Engine) AnnotateNode(id string, props map[string]any) error {
 	if id == "" || len(props) == 0 {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if err := e.persist("annotate_node", annotateNodeOp{ID: id, Props: props}); err != nil {
 		return err
 	}
 	e.store.mu.Lock()
 	defer e.store.mu.Unlock()
-	return e.annotateNodeLocked(id, props, time.Now().UnixNano())
+	if err := e.annotateNodeLocked(id, props, time.Now().UnixNano()); err != nil {
+		e.markDirty(err)
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) annotateNodeLocked(id string, props map[string]any, updatedAt int64) error {

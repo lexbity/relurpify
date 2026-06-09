@@ -43,6 +43,9 @@ func (e *Engine) LinkEdges(edges []EdgeRecord) error {
 	if len(edges) == 0 {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if len(edges) == 1 {
 		if err := e.persist("link_edge", edgeOp{Edge: edges[0]}); err != nil {
 			return err
@@ -51,6 +54,10 @@ func (e *Engine) LinkEdges(edges []EdgeRecord) error {
 		if err := e.persist("link_edges", edgeBatchOp{Edges: edges}); err != nil {
 			return err
 		}
+	}
+	if err := e.applyHook(); err != nil {
+		e.markDirty(err)
+		return err
 	}
 	e.store.mu.Lock()
 	defer e.store.mu.Unlock()
@@ -62,7 +69,14 @@ func (e *Engine) LinkEdges(edges []EdgeRecord) error {
 
 // Unlink soft-deletes or hard-removes an edge.
 func (e *Engine) Unlink(sourceID, targetID string, kind EdgeKind, hard bool) error {
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if err := e.persist("unlink_edge", unlinkOp{SourceID: sourceID, TargetID: targetID, Kind: kind, Hard: hard}); err != nil {
+		return err
+	}
+	if err := e.applyHook(); err != nil {
+		e.markDirty(err)
 		return err
 	}
 	e.store.mu.Lock()
@@ -146,6 +160,9 @@ func (e *Engine) AnnotateEdge(sourceID, targetID string, kind EdgeKind, props ma
 	if sourceID == "" || targetID == "" || kind == "" || len(props) == 0 {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if err := e.persist("annotate_edge", annotateEdgeOp{
 		SourceID: sourceID,
 		TargetID: targetID,
@@ -156,7 +173,11 @@ func (e *Engine) AnnotateEdge(sourceID, targetID string, kind EdgeKind, props ma
 	}
 	e.store.mu.Lock()
 	defer e.store.mu.Unlock()
-	return e.annotateEdgeLocked(sourceID, targetID, kind, props)
+	if err := e.annotateEdgeLocked(sourceID, targetID, kind, props); err != nil {
+		e.markDirty(err)
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) annotateEdgeLocked(sourceID, targetID string, kind EdgeKind, props map[string]any) error {

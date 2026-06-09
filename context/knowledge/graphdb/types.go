@@ -4,9 +4,79 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 )
+
+// ErrQueryLimitExceeded is returned when a query reaches its configured
+// result limit before exhausting the traversal space. Callers MAY use
+// partial results alongside this error.
+var ErrQueryLimitExceeded = errors.New("graphdb: query limit exceeded")
+
+// ────────────────────────────────────────────────────────────────────
+// Maintenance
+// ────────────────────────────────────────────────────────────────────
+
+// MaintenanceRequest describes a requested storage maintenance operation.
+type MaintenanceRequest struct {
+	ValueLogGC     bool
+	IntegrityCheck bool
+}
+
+// MaintenanceResult reports the outcome of a maintenance request.
+type MaintenanceResult struct {
+	Backend        string
+	Reclaimed      bool
+	CheckedRecords int
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Observability
+// ────────────────────────────────────────────────────────────────────
+
+// EventObserver receives structured events emitted by the engine.
+// Implementations MUST be safe for concurrent use.
+type EventObserver interface {
+	Observe(event Event)
+}
+
+// Event carries structured telemetry from a single graphdb operation.
+type Event struct {
+	Kind       string
+	Backend    string
+	NodeCount  int
+	EdgeCount  int
+	BatchSize  int
+	Duration   time.Duration
+	ErrorClass string
+}
+
+// Event kinds emitted by the engine and backends.
+const (
+	EventOpenStart          = "graphdb.open.start"
+	EventOpenComplete       = "graphdb.open.complete"
+	EventBackendCommit      = "graphdb.backend.commit"
+	EventBackendCommitFail  = "graphdb.backend.commit_failed"
+	EventMemoryApplyFail    = "graphdb.memory_apply_failed"
+	EventTraversalComplete  = "graphdb.traversal.complete"
+	EventTraversalCancelled = "graphdb.traversal_cancelled"
+	EventBadgerGC           = "graphdb.badger.gc"
+	EventMigrationStart     = "graphdb.migration.start"
+	EventMigrationProgress  = "graphdb.migration.progress"
+	EventMigrationComplete  = "graphdb.migration.complete"
+)
+
+// ────────────────────────────────────────────────────────────────────
+// Backup
+// ────────────────────────────────────────────────────────────────────
+
+// ErrBackupUnsupported is returned by backends that do not support backup.
+var ErrBackupUnsupported = errors.New("graphdb: backup not supported by this backend")
+
+// ────────────────────────────────────────────────────────────────────
+// Graph types
+// ────────────────────────────────────────────────────────────────────
 
 // NodeKind and EdgeKind are opaque typed strings. The engine assigns no meaning
 // to their values.
@@ -71,10 +141,32 @@ type PathResult struct {
 }
 
 type GraphQuery struct {
-	RootIDs   []string   `json:"root_ids"`
-	EdgeKinds []EdgeKind `json:"edge_kinds"`
-	Direction Direction  `json:"direction"`
-	MaxDepth  int        `json:"max_depth"`
+	RootIDs      []string   `json:"root_ids"`
+	EdgeKinds    []EdgeKind `json:"edge_kinds"`
+	NodeKinds    []NodeKind `json:"node_kinds,omitempty"`
+	Direction    Direction  `json:"direction"`
+	MaxDepth     int        `json:"max_depth"`
+	Limit        int        `json:"limit"`
+	MaxEdges     int        `json:"max_edges"`
+	Cursor       string     `json:"cursor,omitempty"`
+	IncludeProps bool       `json:"include_props,omitempty"`
+}
+
+const (
+	defaultMaxEdgesMultiplier = 4
+	defaultMaxEdgesCap        = 64000
+)
+
+// defaultMaxEdges returns a reasonable MaxEdges for the given Limit.
+func defaultMaxEdges(limit int) int {
+	if limit <= 0 {
+		return defaultMaxEdgesCap
+	}
+	edges := limit * defaultMaxEdgesMultiplier
+	if edges > defaultMaxEdgesCap {
+		return defaultMaxEdgesCap
+	}
+	return edges
 }
 
 type ImpactResult struct {

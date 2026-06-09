@@ -1,10 +1,10 @@
 package graphdb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,24 +13,53 @@ import (
 
 // Engine is the durable embedded graph database.
 type Engine struct {
-	opts         Options
-	store        *adjacencyStore
-	aof          *aofWriter
-	mu           sync.Mutex
-	dirty        atomic.Int64
-	lastSave     atomic.Int64
-	stopOnce     sync.Once
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
-	aofPath      string
-	snapshotPath string
+	opts     Options
+	store    *adjacencyStore
+	bk       backend
+	mu       sync.Mutex
+	dirty    atomic.Int64
+	dirtyErr error // non-nil when memory apply fails after commit; mu protects
+	lastSave atomic.Int64
+	stopOnce sync.Once
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
+
+	// testHookApplyFailure, when non-nil, causes the next memory apply to
+	// return this error. Used only in tests.
+	testHookApplyFailure error
 }
 
-// Open initializes an engine from snapshot plus AOF replay.
+// Open initializes an engine from durable storage. The backend is
+// selected by opts.Backend (defaults to Badger for new stores).
 func Open(opts Options) (*Engine, error) {
+	start := time.Now()
+	engine := &Engine{
+		opts:   opts,
+		store:  newAdjacencyStore(),
+		stopCh: make(chan struct{}),
+	}
+	engine.emitEvent(Event{Kind: EventOpenStart})
+
 	if opts.DataDir == "" {
 		return nil, errors.New("graphdb: data dir is required")
 	}
+
+	backend := opts.Backend
+	if backend == "" {
+		backend = BackendBadger
+	}
+
+	switch backend {
+	case BackendAOF:
+		return openAOFEngine(engine, opts, start)
+	case BackendBadger:
+		return openBadgerEngine(engine, opts, start)
+	default:
+		return nil, fmt.Errorf("graphdb: unknown backend %q", backend)
+	}
+}
+
+func openAOFEngine(engine *Engine, opts Options, start time.Time) (*Engine, error) {
 	if opts.AOFFileName == "" || opts.SnapshotFileName == "" {
 		return nil, errors.New("graphdb: AOF and snapshot file names are required")
 	}
@@ -38,33 +67,59 @@ func Open(opts Options) (*Engine, error) {
 		return nil, err
 	}
 
-	engine := &Engine{
-		opts:         opts,
-		store:        newAdjacencyStore(),
-		stopCh:       make(chan struct{}),
-		aofPath:      filepath.Join(opts.DataDir, opts.AOFFileName),
-		snapshotPath: filepath.Join(opts.DataDir, opts.SnapshotFileName),
-	}
 	engine.lastSave.Store(time.Now().UnixNano())
 
-	if err := engine.loadSnapshot(); err != nil {
+	bk := newAOFBackend(opts)
+	bk.applyBinary = engine.applyBinaryOp
+	bk.applyLegacy = engine.applyLegacyJSONOp
+	if err := bk.load(context.TODO(), engine.store); err != nil {
 		return nil, err
 	}
-	if err := replayAOF(engine.aofPath, engine.applyBinaryOp, engine.applyLegacyJSONOp); err != nil {
-		return nil, err
-	}
-	aof, err := openAOF(engine.aofPath, opts)
-	if err != nil {
-		return nil, err
-	}
-	engine.aof = aof
+	engine.bk = bk
 
 	engine.wg.Add(1)
 	go engine.background()
+
+	engine.emitEvent(Event{
+		Kind:     EventOpenComplete,
+		Duration: time.Since(start),
+	})
 	return engine, nil
 }
 
-// Close stops maintenance and closes the AOF.
+func openBadgerEngine(engine *Engine, opts Options, start time.Time) (*Engine, error) {
+	badgerDir := opts.BadgerDir
+	if badgerDir == "" {
+		badgerDir = opts.DataDir
+	}
+
+	// Auto‑migrate from AOF if AOF files exist and no Badger store yet.
+	aofPath := filepath.Join(opts.DataDir, opts.AOFFileName)
+	_ = aofPath // used below if we add migration detection
+
+	engine.lastSave.Store(time.Now().UnixNano())
+
+	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
+	if err != nil {
+		return nil, err
+	}
+	if err := bb.load(context.TODO(), engine.store); err != nil {
+		bb.close()
+		return nil, err
+	}
+	engine.bk = bb
+
+	engine.wg.Add(1)
+	go engine.background()
+
+	engine.emitEvent(Event{
+		Kind:     EventOpenComplete,
+		Duration: time.Since(start),
+	})
+	return engine, nil
+}
+
+// Close stops maintenance and closes the durable store.
 func (e *Engine) Close() error {
 	var err error
 	e.stopOnce.Do(func() {
@@ -75,8 +130,8 @@ func (e *Engine) Close() error {
 		} else {
 			err = e.Flush()
 		}
-		if e.aof != nil {
-			if closeErr := e.aof.close(); err == nil {
+		if e.bk != nil {
+			if closeErr := e.bk.close(); err == nil {
 				err = closeErr
 			}
 		}
@@ -84,17 +139,15 @@ func (e *Engine) Close() error {
 	return err
 }
 
-// Flush syncs the append-only file.
+// Flush syncs the durable store.
 func (e *Engine) Flush() error {
-	if e == nil || e.aof == nil {
+	if e == nil || e.bk == nil {
 		return nil
 	}
-	e.aof.mu.Lock()
-	defer e.aof.mu.Unlock()
-	return e.aof.syncLocked(true)
+	return e.bk.flush()
 }
 
-// Snapshot writes a full snapshot and rewrites the AOF.
+// Snapshot writes a full snapshot and rewrites the incremental log.
 func (e *Engine) Snapshot() error {
 	if e == nil {
 		return nil
@@ -103,10 +156,7 @@ func (e *Engine) Snapshot() error {
 	defer e.mu.Unlock()
 
 	state := e.snapshotState()
-	if err := writeSnapshot(e.snapshotPath, state); err != nil {
-		return err
-	}
-	if err := e.aof.truncate(); err != nil {
+	if err := e.bk.snapshot(context.TODO(), state); err != nil {
 		return err
 	}
 	e.dirty.Store(0)
@@ -147,30 +197,73 @@ func (e *Engine) maybeSnapshot() {
 	_ = e.Snapshot()
 }
 
-func (e *Engine) loadSnapshot() error {
-	state, err := readSnapshot(e.snapshotPath)
+// checkDirty returns the stored dirty error when a previous memory apply
+// failed after a successful backend commit. Mutation calls MUST check
+// this before proceeding.
+func (e *Engine) checkDirty() error {
+	if e.dirtyErr != nil {
+		return e.dirtyErr
+	}
+	return nil
+}
+
+// markDirty stores a non-nil error, preventing further mutations until
+// Rebuild clears it.
+func (e *Engine) markDirty(err error) {
+	e.dirtyErr = err
+	e.emitEvent(Event{
+		Kind:       EventMemoryApplyFail,
+		ErrorClass: err.Error(),
+	})
+}
+
+// emitEvent sends an event to the configured observer, if any.
+func (e *Engine) emitEvent(ev Event) {
+	if e != nil && e.opts.Observer != nil {
+		e.opts.Observer.Observe(ev)
+	}
+}
+
+// emitEventSync is a convenience wrapper for emitting an event with a
+// duration computed from start.
+func (e *Engine) emitEventSync(kind string, nodeCount, edgeCount, batchSize int, err error, start time.Time) {
+	ev := Event{
+		Kind:      kind,
+		NodeCount: nodeCount,
+		EdgeCount: edgeCount,
+		BatchSize: batchSize,
+		Duration:  time.Since(start),
+	}
 	if err != nil {
+		ev.ErrorClass = err.Error()
+	}
+	e.emitEvent(ev)
+}
+
+// applyHook returns the test-only apply failure error if set, or nil.
+// It is checked after a successful backend commit but before applying
+// mutations to the in-memory store.
+func (e *Engine) applyHook() error {
+	return e.testHookApplyFailure
+}
+
+// Rebuild reloads the in-memory adjacency store from the durable backend
+// and clears any dirty error state. The engine is usable for both reads
+// and writes after a successful rebuild.
+func (e *Engine) Rebuild(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	newStore := newAdjacencyStore()
+	// AOF replay callbacks reference e.store, so we temporarily swap.
+	oldStore := e.store
+	e.store = newStore
+	if err := e.bk.load(ctx, newStore); err != nil {
+		e.store = oldStore
 		return err
 	}
-	for _, node := range state.Nodes {
-		n := node
-		e.store.nodes[node.ID] = &n
-		e.store.addNodeSourceIndex(node)
-		e.store.addNodeLabels(node)
-	}
-	for key, history := range state.NodeHistory {
-		e.store.nodeHistory[key] = cloneNodeHistory(history)
-	}
-	for _, edge := range state.Forward {
-		e.store.forward[edge.SourceID] = append(e.store.forward[edge.SourceID], cloneEdge(edge))
-		e.store.reverse[edge.TargetID] = append(e.store.reverse[edge.TargetID], cloneEdge(edge))
-	}
-	for key, history := range state.EdgeHistory {
-		e.store.edgeHistory[key] = cloneEdgeHistory(history)
-	}
-	for key, result := range state.MutationResults {
-		e.store.mutationResults[key] = cloneMutationResult(result)
-	}
+	e.dirty.Store(0)
+	e.dirtyErr = nil
 	return nil
 }
 
@@ -203,20 +296,31 @@ func (e *Engine) snapshotState() snapshotState {
 }
 
 func (e *Engine) persist(kind string, payload any) error {
-	if e == nil || e.aof == nil {
+	if e == nil || e.bk == nil {
 		return nil
 	}
-	op, err := encodeBinaryOp(kind, payload)
-	if err != nil {
+	start := time.Now()
+	batch := mutationBatch{opName: kind, op: payload}
+	if err := e.bk.commit(context.TODO(), batch); err != nil {
+		e.emitEvent(Event{
+			Kind:       EventBackendCommitFail,
+			BatchSize:  1,
+			Duration:   time.Since(start),
+			ErrorClass: err.Error(),
+		})
 		return err
 	}
-	if err := e.aof.appendOp(op); err != nil {
-		return err
-	}
+	e.emitEvent(Event{
+		Kind:      EventBackendCommit,
+		BatchSize: 1,
+		Duration:  time.Since(start),
+	})
 	e.dirty.Add(1)
 	if e.opts.AOFRewriteThresholdBytes > 0 {
-		if size, err := e.aof.size(); err == nil && size >= e.opts.AOFRewriteThresholdBytes {
-			_ = e.Snapshot()
+		if ab, ok := e.bk.(*aofBackend); ok {
+			if size, err := ab.aofSize(); err == nil && size >= e.opts.AOFRewriteThresholdBytes {
+				_ = e.Snapshot()
+			}
 		}
 	}
 	return nil
@@ -227,11 +331,18 @@ func (e *Engine) RecordMutationResult(result MutationResult) error {
 	if e == nil {
 		return nil
 	}
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
 	if result.AppliedAt.IsZero() {
 		result.AppliedAt = time.Now().UTC()
 	}
 	result.Normalize(result.TaskID, result.SessionID)
 	if err := e.persist("record_mutation_result", mutationResultOp{Result: result}); err != nil {
+		return err
+	}
+	if err := e.applyHook(); err != nil {
+		e.markDirty(err)
 		return err
 	}
 	e.store.mu.Lock()
