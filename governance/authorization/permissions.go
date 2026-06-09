@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -249,7 +250,11 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 	}
 	t, ok := tool.(Tool)
 	if !ok {
-		return errors.New("tool does not implement authorization.Tool")
+		pt, ok2 := tool.(ports.Tool)
+		if !ok2 {
+			return errors.New("tool does not implement authorization.Tool or ports.Tool")
+		}
+		t = ToolFromPorts(pt)
 	}
 	if m.toolAllowedByTaskGrant(ctx, t) {
 		desc := permissions.PermissionDescriptor{

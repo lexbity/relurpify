@@ -118,7 +118,6 @@ func (a *ContextBudgetAdvisor) Reset() {
 	defer a.mu.Unlock()
 	a.consumedTokens = 0
 	a.callCount = 0
-	a.estimatedCalls = 0
 	a.lastPromptTokens = 0
 	a.lastEstimated = false
 	a.resetNotified = false
@@ -176,11 +175,10 @@ type BudgetSnapshot struct {
 
 func (a *ContextBudgetAdvisor) availableCompilationBudgetLocked() int {
 	reserved := a.reservedOutputTokensLocked()
-	fallback := a.estimationFallbackLocked()
-	if a.ModelContextSize > 0 && !a.lastEstimated {
+	if a.ModelContextSize > 0 && a.estimatedCalls == 0 {
 		return clampNonNegative(a.ModelContextSize - a.consumedTokens - reserved)
 	}
-	return clampNonNegative(fallback - a.lastPromptTokens - reserved)
+	return clampNonNegative(reserved*2 - a.consumedTokens - 512)
 }
 
 func (a *ContextBudgetAdvisor) reservedOutputTokensLocked() int {

@@ -55,6 +55,7 @@ type ToolManifest struct {
 	Family        string                   `yaml:"family,omitempty" json:"family,omitempty"`
 	Intent        []string                 `yaml:"intent,omitempty" json:"intent,omitempty"`
 	Description   string                   `yaml:"description,omitempty" json:"description,omitempty"`
+	Guidance      *ToolManifestGuidance    `yaml:"guidance,omitempty" json:"guidance,omitempty"`
 	Parameters    []ToolParameter          `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	Execution     ToolManifestExecution    `yaml:"execution" json:"execution"`
 	Returns       ToolManifestReturns      `yaml:"returns,omitempty" json:"returns,omitempty"`

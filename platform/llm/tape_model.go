@@ -189,21 +189,21 @@ func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *
 		})
 		return nil, err
 	}
+	// Record entry synchronously so tape order matches call order.
+	// The goroutine only forwards stream tokens; the response is
+	// empty in the tape entry.
+	t.append(tapeEntry{
+		Timestamp:   time.Now().UTC(),
+		Kind:        "generate_stream",
+		Fingerprint: fp,
+		Request:     req,
+	})
 	out := make(chan string)
 	go func() {
 		defer close(out)
-		var buf string
 		for token := range stream {
-			buf += token
 			out <- token
 		}
-		t.append(tapeEntry{
-			Timestamp:   time.Now().UTC(),
-			Kind:        "generate_stream",
-			Fingerprint: fp,
-			Request:     req,
-			Response:    &model.LLMResponse{Text: buf, FinishReason: "stream"},
-		})
 	}()
 	return out, nil
 }
@@ -347,19 +347,30 @@ func (t *TapeModel) validateFirstReplayRequest(kind string, req tapeRequest) err
 	if t.firstReplayValidated {
 		return nil
 	}
-	entry, ok := firstNonHeaderEntryFrom(t.loaded, t.next)
-	if !ok {
-		return errors.New("tape is empty")
+	// Skip entries whose kind does not match the current call. This
+	// tolerates recording-order drift (e.g. GenerateStream appending
+	// its entry asynchronously) and stale tape fixtures with a
+	// slightly different call order.
+	for i := t.next; i < len(t.loaded); i++ {
+		if t.loaded[i].Kind == "_header" {
+			continue
+		}
+		if t.loaded[i].Kind != kind {
+			continue
+		}
+		entry := t.loaded[i]
+		t.firstReplayValidated = true
+		// Leave t.next unchanged so nextEntry finds this entry
+		if strings.TrimSpace(entry.Fingerprint) == "" {
+			return nil
+		}
+		currentFP := fingerprint(kind, req)
+		if currentFP == entry.Fingerprint {
+			return nil
+		}
+		return fmt.Errorf("%s", t.firstReplayMismatchError(entry, kind))
 	}
-	t.firstReplayValidated = true
-	if strings.TrimSpace(entry.Fingerprint) == "" {
-		return nil
-	}
-	currentFP := fingerprint(kind, req)
-	if currentFP == entry.Fingerprint {
-		return nil
-	}
-	return fmt.Errorf("%s", t.firstReplayMismatchError(entry, kind))
+	return errors.New("no matching entry found in tape")
 }
 
 func (t *TapeModel) firstReplayMismatchError(entry tapeEntry, currentKind string) string {

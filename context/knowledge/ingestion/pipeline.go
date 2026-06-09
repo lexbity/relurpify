@@ -260,6 +260,15 @@ type commitResult struct {
 	quarantinePath string
 }
 
+// defaultTrustClass returns the configured default trust class from the
+// policy bundle, or a safe default when no policy is configured.
+func defaultTrustClass(policy *contextports.PolicyBundle) agentspec.TrustClass {
+	if policy == nil || policy.DefaultTrustClass == "" {
+		return agentspec.TrustClassWorkspaceTrusted
+	}
+	return agentspec.TrustClass(policy.DefaultTrustClass)
+}
+
 // stage6Commit commits chunks to the store.
 func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edges []CandidateEdges, disposition IngestDisposition) (*commitResult, error) {
 	result := &commitResult{}
@@ -294,7 +303,7 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 			SourcePrincipal:   p.raw.SourcePrincipal,
 			AcquisitionMethod: knowledge.AcquisitionMethod(p.raw.AcquisitionMethod),
 			AcquiredAt:        p.raw.AcquiredAt,
-			TrustClass:        agentspec.TrustClass(p.policy.DefaultTrustClass),
+			TrustClass:        defaultTrustClass(p.policy),
 			Body: knowledge.ChunkBody{
 				Raw: chunkContent,
 				Fields: map[string]any{

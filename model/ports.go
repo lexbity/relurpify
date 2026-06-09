@@ -23,7 +23,7 @@ type LLMOptions struct {
 	Stop           []string
 	TopP           float64
 	Stream         bool
-	StreamCallback func(string)
+	StreamCallback func(string) `json:"-"`
 }
 
 // LLMResponse is the result of a model invocation.

@@ -174,6 +174,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	}
 
 	ref, err := persistence.SaveCheckpointArtifact(ctx, env, func(artifact contextports.WorkflowArtifactRecord) error {
+		inlineRaw, _ := artifact.Metadata["inline_raw"].(string)
 		return n.repository.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
 			ArtifactID:      artifact.ArtifactID,
 			WorkflowID:      artifact.WorkflowID,
@@ -182,6 +183,8 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			StorageKind:     agentlifecycle.ArtifactStorageKind(artifact.StorageKind),
 			SummaryText:     artifact.Summary,
 			SummaryMetadata: artifact.Metadata,
+			InlineRawText:   inlineRaw,
+			RawSizeBytes:    int64(len(inlineRaw)),
 			CreatedAt:       artifact.CreatedAt,
 		})
 	}, snapshot)
