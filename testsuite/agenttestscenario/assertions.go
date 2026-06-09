@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	chaintelemetry "codeburg.org/lexbit/relurpify/agentschainer/telemetry"
+	chaintelemetry "codeburg.org/lexbit/relurpify/cognitionzoo/chainer/telemetry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 )

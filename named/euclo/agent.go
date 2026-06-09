@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -163,17 +164,33 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 	}
 
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
-	rootGraph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(a.env),
-		orchestrate.WithWorkspace(workspaceRootPath(a.env)),
-		orchestrate.WithCapabilityRegistry(a.env.Registry),
-		orchestrate.WithThoughtRecipeRegistry(a.thoughtrecipeRegistry),
-		orchestrate.WithMaxStreamTokens(a.config.MaxStreamTokens),
-		orchestrate.WithDefaultStreamMode(a.config.DefaultStreamMode),
-		orchestrate.WithStreamTrigger(a.env.StreamTrigger),
-		orchestrate.WithCheckpointRepository(a.config.CheckpointRepository),
-		orchestrate.WithPersistenceWriter(a.config.PersistenceWriter),
-	)
+	deps := orchestrate.RootGraphDeps{
+		Workspace:            workspaceRootPath(a.env),
+		DispatchCapabilities: a.env.Registry,
+		ThoughtRecipes:       a.thoughtrecipeRegistry,
+		Paradigm: &paradigm.Deps{
+			Config:         a.env.Config,
+			Model:          a.env.Model,
+			Registry:       a.env.Registry,
+			WorkingMemory:  a.env.WorkingMemory,
+			IndexManager:   a.env.IndexManager,
+			SearchEngine:   a.env.SearchEngine,
+			StreamTrigger:  a.env.StreamTrigger,
+			OutputIngester: a.env.OutputIngester,
+			IngestOutputs:  a.env.IngestOutputs,
+			PromptRegistry: a.env.PromptRegistry,
+			AgentLifecycle: a.env.AgentLifecycle,
+		},
+		StreamTrigger:     a.env.StreamTrigger,
+		MaxStreamTokens:   a.config.MaxStreamTokens,
+		DefaultStreamMode: a.config.DefaultStreamMode,
+		Checkpoints:       a.config.CheckpointRepository,
+		Persistence:       a.config.PersistenceWriter,
+	}
+	rootGraph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build root graph: %w", err)
+	}
 	graph := rootGraph.Graph()
 	if graph == nil {
 		return nil, fmt.Errorf("root graph is nil")

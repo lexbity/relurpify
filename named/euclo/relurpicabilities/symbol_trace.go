@@ -10,18 +10,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
 type SymbolTraceHandler struct {
-	env agentenv.AgentContext
+	grapher GraphReader
 }
 
 // NewSymbolTraceHandler creates a new symbol trace handler.
-func NewSymbolTraceHandler(env agentenv.AgentContext) *SymbolTraceHandler {
-	return &SymbolTraceHandler{env: env}
+func NewSymbolTraceHandler(grapher GraphReader) *SymbolTraceHandler {
+	return &SymbolTraceHandler{grapher: grapher}
 }
 
 // Descriptor returns the capability descriptor for the symbol trace handler.
@@ -93,15 +92,13 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env ports.State, args m
 		return failResult("symbol argument is required and must be non-empty"), nil
 	}
 
-	// Check for IndexManager
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), nil
+	if h.grapher == nil {
+		return failResult("graph service not available"), nil
 	}
 
-	// Get call graph
-	callGraph, err := h.env.IndexManager.GetCallGraph(symbol)
+	callGraph, err := h.grapher.GetCallGraph(symbol)
 	if err != nil {
-		return failResult(fmt.Sprintf("trace failed: %v", err)), nil
+		return failResult(fmt.Sprintf("euclo:cap.symbol_trace trace failed: %v", err)), nil
 	}
 
 	// Convert root node to map

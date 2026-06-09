@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -10,12 +11,52 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
+
+// detectReduceMotion checks terminal and environment to decide whether
+// animations should be disabled. It is the single location where env var
+// reads for motion detection happen, keeping them out of library code.
+func detectReduceMotion() bool {
+	// 1. Explicit env var opt-out.
+	if v := os.Getenv("RELPURIFY_REDUCE_MOTION"); v != "" {
+		return true
+	}
+	// 2. CI environments — always reduce.
+	if v := os.Getenv("CI"); v != "" {
+		return true
+	}
+	if v := os.Getenv("GITHUB_ACTIONS"); v != "" {
+		return true
+	}
+	// 3. Non-interactive / pipe — no terminal to animate on.
+	stat, _ := os.Stdout.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		return true
+	}
+	// 4. SSH or remote session — local motion may not render smoothly.
+	if v := os.Getenv("SSH_TTY"); v != "" {
+		return true
+	}
+	if v := os.Getenv("SSH_CONNECTION"); v != "" {
+		return true
+	}
+	// 5. Dumb terminal or very limited colour support.
+	profile := termenv.EnvColorProfile()
+	if profile == termenv.Ascii {
+		return true
+	}
+	term := os.Getenv("TERM")
+	if term == "dumb" || term == "" {
+		return true
+	}
+	return false
+}
 
 // RootModel is the top-level Bubble Tea model. It owns the layout and routes
 // messages to focused panes.  Panes are held by pointer so mutations survive
@@ -271,7 +312,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		activeSurface:     state.surface,
 		th:                resolveSurfaceTheme(state.surface),
 		anim:              NewAnimationManager(),
-		reduce:            NewReduceMotion(),
+		reduce:            NewReduceMotion(detectReduceMotion()),
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 	m.propagateTheme()

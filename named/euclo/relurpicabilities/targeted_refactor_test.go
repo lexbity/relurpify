@@ -9,16 +9,29 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 )
 
+func newTargetedRefactorTestDeps(t *testing.T) (SymbolQuerier, EdgeStore, WorkspaceFiles, IndexRefresher, string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "sample.go")
+	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+
+	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir})
+	require.NoError(t, manager.IndexFile(path))
+
+	return manager, store, &workspaceFileSystem{workspace: tmpDir}, manager, path
+}
+
 func TestTargetedRefactorPreviewUsesExplicitReplacement(t *testing.T) {
-	env, path := newTargetedRefactorTestEnv(t)
-	handler := NewTargetedRefactorHandler(env)
+	querier, estore, files, refresher, path := newTargetedRefactorTestDeps(t)
+	handler := NewTargetedRefactorHandler(querier, estore, files, refresher, nil)
 
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
 		"symbol":         "Hello",
@@ -43,8 +56,8 @@ func TestTargetedRefactorPreviewUsesExplicitReplacement(t *testing.T) {
 }
 
 func TestTargetedRefactorWritesReplacementAndRefreshesIndex(t *testing.T) {
-	env, path := newTargetedRefactorTestEnv(t)
-	handler := NewTargetedRefactorHandler(env)
+	querier, estore, files, refresher, path := newTargetedRefactorTestDeps(t)
+	handler := NewTargetedRefactorHandler(querier, estore, files, refresher, nil)
 
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
 		"symbol":         "Hello",
@@ -63,34 +76,6 @@ func TestTargetedRefactorWritesReplacementAndRefreshesIndex(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(content), "return \"goodbye\"")
 	require.NotContains(t, string(content), "return \"old\"")
-}
-
-func newTargetedRefactorTestEnv(t *testing.T) (agentenv.AgentContext, string) {
-	t.Helper()
-
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "sample.go")
-	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
-	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
-
-	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
-
-	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir})
-	require.NoError(t, manager.IndexFile(path))
-
-	env := agentenv.AgentContext{
-		Config:            &execution.Config{},
-		Registry:          registry.NewRegistry(),
-		IndexManager:      manager,
-		CommandRunner:     nil,
-		PermissionManager: nil,
-		Model:             nil,
-		CommandPolicy:     sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
-		FileScope:         sandbox.NewFileScopePolicy(tmpDir, nil),
-	}
-	return env, path
 }
 
 func TestTargetedRefactorResolvesMostSpecificNode(t *testing.T) {

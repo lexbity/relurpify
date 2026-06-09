@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -14,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
@@ -78,7 +79,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("step1.execute", agentenv.AgentContext{Registry: reg}, step)
+	node := NewThoughtRecipeStepNode("step1.execute", &paradigm.Deps{Registry: reg}, step)
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -138,7 +139,7 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 			Prompt: "Which module should be updated?",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
 
 	rctx := node.buildRuntimeContext(env)
 	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
@@ -185,7 +186,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 			Prompt:   "inline fallback should not be used",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{PromptRegistry: registry}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{PromptRegistry: registry}, step)
 
 	task, err := node.buildTask(env)
 	if err != nil {
@@ -217,7 +218,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		t.Fatalf("register file_write: %v", err)
 	}
 
-	env := agentenv.AgentContext{Registry: reg}
+	deps := &paradigm.Deps{Registry: reg}
 	baseEnv := contextdata.NewEnvelope("task-scope", "session-scope")
 	scopedStep := ExecutionStep{
 		ID:                 "scope.step",
@@ -227,7 +228,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 			ID: "scope.step",
 		},
 	}
-	scopedNode := NewThoughtRecipeStepNode("scope.step", env, scopedStep)
+	scopedNode := NewThoughtRecipeStepNode("scope.step", deps, scopedStep)
 	rctx := scopedNode.buildRuntimeContext(baseEnv)
 
 	if got, want := runtimeToolNames(rctx.Tools), []string{"file_write"}; !equalStringSlices(got, want) {
@@ -258,7 +259,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 			ID: "scope.next",
 		},
 	}
-	nextNode := NewThoughtRecipeStepNode("scope.next", env, nextStep)
+	nextNode := NewThoughtRecipeStepNode("scope.next", deps, nextStep)
 	nextRctx := nextNode.buildRuntimeContext(baseEnv)
 	if got, want := runtimeToolNames(nextRctx.Tools), []string{"file_read", "file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
@@ -279,7 +280,7 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 			PromptID: "euclo.intent.clarify.question.v1",
 		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", agentenv.AgentContext{}, step)
+	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
 
 	if _, err := node.buildTask(env); err == nil {
 		t.Fatal("expected buildTask to fail without a prompt registry")
@@ -341,7 +342,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("extract.step", agentenv.AgentContext{}, step)
+	node := NewThoughtRecipeStepNode("extract.step", &paradigm.Deps{}, step)
 	task, err := node.buildTask(env)
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
@@ -400,7 +401,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 			Type: "delegate",
 		},
 	}
-	node := NewThoughtRecipeStepNode("delegate.step.execute", agentenv.AgentContext{}, step)
+	node := NewThoughtRecipeStepNode("delegate.step.execute", &paradigm.Deps{}, step)
 
 	child := node.buildDelegationEnvelope(parent)
 	if child == nil {
@@ -477,7 +478,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 			Prompt: "Choose a mode.",
 		},
 	}
-	node := NewThoughtRecipeStepNode("ask.step.execute", agentenv.AgentContext{}, step)
+	node := NewThoughtRecipeStepNode("ask.step.execute", &paradigm.Deps{}, step)
 
 	first, err := node.Execute(context.Background(), env)
 	if err != nil {

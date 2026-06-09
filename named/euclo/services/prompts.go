@@ -1,24 +1,24 @@
 package services
 
 import (
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
-	"codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
+	zoopromptprovider "codeburg.org/lexbit/relurpify/cognitionzoo/promptprovider"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	eucloprovider "codeburg.org/lexbit/relurpify/named/euclo/promptprovider"
 )
 
 // defaultPromptRegistrar implements PromptRegistrar using Euclo's prompt providers.
 type defaultPromptRegistrar struct{}
 
-func (r *defaultPromptRegistrar) RegisterAll(env agentenv.AgentContext) error {
-	if env.PromptRegistry == nil {
+func (r *defaultPromptRegistrar) RegisterAll(registry prompt.Registry) error {
+	if registry == nil {
 		return nil // No registry to register with.
 	}
 	// Register generic paradigm providers.
-	if err := promptprovider.RegisterAll(env.PromptRegistry); err != nil {
+	if err := zoopromptprovider.RegisterAll(registry); err != nil {
 		return err
 	}
 	// Register Euclo-specific providers.
-	if err := eucloprovider.RegisterAll(env.PromptRegistry); err != nil {
+	if err := eucloprovider.RegisterAll(registry); err != nil {
 		return err
 	}
 	return nil

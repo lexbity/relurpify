@@ -24,11 +24,12 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 			Name: "review",
 		},
 	})
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	deps.ThoughtRecipes = thoughtrecipes
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-file-grounding", "session-file-grounding")
 	seedTask(env, "review the auth package", "review.go")

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
@@ -24,149 +24,83 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
+// RootGraphDeps is the explicit dependency contract for graph execution.
+// It replaces agentenv.AgentContext as the construction input to RootGraph.
+type RootGraphDeps struct {
+	Workspace           string
+	DispatchCapabilities *registry.CapabilityRegistry
+	ThoughtRecipes      *thoughtrecipepkg.ThoughtRecipeRegistry
+	Families            *families.KeywordFamilyRegistry
+	Paradigm            *paradigm.Deps
+	StreamTrigger       *contextstream.Trigger
+	MaxStreamTokens     int
+	DefaultStreamMode   contextstream.Mode
+	PermissionManager   policy.PermissionManager
+	HITLBroker          policy.HITLBroker
+	Checkpoints         agentlifecycle.Repository
+	Persistence         *persistence.Writer
+}
+
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
 type RootGraph struct {
 	graph *agentgraph.Graph
 }
 
-// RootGraphConfig configures dependency wiring for the root graph.
-type RootGraphConfig struct {
-	Env                   agentenv.AgentContext
-	CapabilityRegistry    *registry.CapabilityRegistry
-	ThoughtRecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
-	FamilyRegistry        *families.KeywordFamilyRegistry
-	Workspace             string
-	StreamTrigger         *contextstream.Trigger
-	MaxStreamTokens       int
-	DefaultStreamMode     contextstream.Mode
-	PermissionManager     policy.PermissionManager
-	HITLBroker            policy.HITLBroker
-	CheckpointRepository  agentlifecycle.Repository
-	PersistenceWriter     *persistence.Writer
-}
-
-// RootGraphOption mutates RootGraphConfig.
-type RootGraphOption func(*RootGraphConfig)
-
-// WithAgentContext wires the workspace environment.
-func WithAgentContext(env agentenv.AgentContext) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.Env = env
+// NewRootGraph creates a new root graph from explicit dependencies.
+func NewRootGraph(deps RootGraphDeps) (*RootGraph, error) {
+	if err := validateRootGraphDeps(deps); err != nil {
+		return nil, err
 	}
-}
-
-// WithCapabilityRegistry wires the capability registry.
-func WithCapabilityRegistry(reg *registry.CapabilityRegistry) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.CapabilityRegistry = reg
+	paradigmDeps := deps.Paradigm
+	capReg := deps.DispatchCapabilities
+	thoughtReg := deps.ThoughtRecipes
+	famReg := deps.Families
+	maxTokens := deps.MaxStreamTokens
+	if maxTokens <= 0 {
+		maxTokens = 8192
 	}
-}
-
-// WithThoughtRecipeRegistry wires the thoughtrecipe registry.
-func WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.ThoughtRecipeRegistry = reg
+	streamMode := deps.DefaultStreamMode
+	if streamMode == "" {
+		streamMode = contextstream.ModeBlocking
 	}
-}
-
-// WithFamilyRegistry wires the family registry.
-func WithFamilyRegistry(reg *families.KeywordFamilyRegistry) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.FamilyRegistry = reg
+	if famReg == nil {
+		famReg = defaultFamilyRegistry()
 	}
-}
-
-// WithWorkspace wires the workspace root.
-func WithWorkspace(workspace string) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.Workspace = strings.TrimSpace(workspace)
-	}
-}
-
-// WithStreamTrigger wires the context stream trigger.
-func WithStreamTrigger(trigger *contextstream.Trigger) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.StreamTrigger = trigger
-	}
-}
-
-// WithMaxStreamTokens sets the stream token budget.
-func WithMaxStreamTokens(tokens int) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		if tokens > 0 {
-			opts.MaxStreamTokens = tokens
-		}
-	}
-}
-
-// WithDefaultStreamMode sets the default stream mode.
-func WithDefaultStreamMode(mode contextstream.Mode) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.DefaultStreamMode = mode
-	}
-}
-
-// WithPermissionManager sets the permission manager for policy gates.
-func WithPermissionManager(pm policy.PermissionManager) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.PermissionManager = pm
-	}
-}
-
-// WithHITLBroker sets the HITL broker for policy gates.
-func WithHITLBroker(broker policy.HITLBroker) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.HITLBroker = broker
-	}
-}
-
-// WithCheckpointRepository wires the repository used for checkpoint persistence.
-func WithCheckpointRepository(repo agentlifecycle.Repository) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.CheckpointRepository = repo
-	}
-}
-
-// WithPersistenceWriter wires the optional persistence writer for mirrored checkpoint writes.
-func WithPersistenceWriter(writer *persistence.Writer) RootGraphOption {
-	return func(opts *RootGraphConfig) {
-		opts.PersistenceWriter = writer
-	}
-}
-
-// NewRootGraph creates a new root graph with all components wired together.
-func NewRootGraph(opts ...RootGraphOption) *RootGraph {
-	cfg := RootGraphConfig{
-		FamilyRegistry:    defaultFamilyRegistry(),
-		MaxStreamTokens:   8192,
-		DefaultStreamMode: contextstream.ModeBlocking,
-		HITLBroker:        permissiveHITLBroker{},
-	}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
-	if cfg.FamilyRegistry == nil {
-		cfg.FamilyRegistry = defaultFamilyRegistry()
-	}
-	if cfg.HITLBroker == nil {
-		cfg.HITLBroker = permissiveHITLBroker{}
+	hitl := deps.HITLBroker
+	if hitl == nil {
+		hitl = permissiveHITLBroker{}
 	}
 
 	g := agentgraph.NewGraph()
-	for _, node := range buildNodes(cfg) {
+	nodes, err := buildNodes(buildNodeInput{
+		capReg:                 capReg,
+		thoughtReg:             thoughtReg,
+		paradigmDeps:           paradigmDeps,
+		famReg:                 famReg,
+		maxTokens:              maxTokens,
+		streamMode:             streamMode,
+		streamTrigger:          deps.StreamTrigger,
+		workspace:              deps.Workspace,
+		permissionManager:      deps.PermissionManager,
+		hitlBroker:             hitl,
+		checkpointRepository:   deps.Checkpoints,
+		persistenceWriter:      deps.Persistence,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range nodes {
 		if err := g.AddNode(node); err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
 	if err := wireEdges(g); err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err := g.SetStart("euclo.intake"); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return &RootGraph{graph: g}
+	return &RootGraph{graph: g}, nil
 }
 
 // Graph returns the underlying agentgraph graph.
@@ -194,27 +128,59 @@ func (g *RootGraph) SetStart(nodeID string) error {
 	return g.graph.SetStart(nodeID)
 }
 
-func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
-	dispatchCapReg := cfg.CapabilityRegistry
-	thoughtrecipeReg := cfg.ThoughtRecipeRegistry
+func validateRootGraphDeps(deps RootGraphDeps) error {
+	if deps.Paradigm == nil {
+		return &errMissingDeps{name: "paradigm deps"}
+	}
+	return nil
+}
+
+type errMissingDeps struct {
+	name string
+}
+
+func (e *errMissingDeps) Error() string {
+	return "root graph: missing required dependency: " + e.name
+}
+
+type buildNodeInput struct {
+	capReg               *registry.CapabilityRegistry
+	thoughtReg           *thoughtrecipepkg.ThoughtRecipeRegistry
+	paradigmDeps         *paradigm.Deps
+	famReg               *families.KeywordFamilyRegistry
+	maxTokens            int
+	streamMode           contextstream.Mode
+	streamTrigger        *contextstream.Trigger
+	workspace            string
+	permissionManager    policy.PermissionManager
+	hitlBroker           policy.HITLBroker
+	checkpointRepository agentlifecycle.Repository
+	persistenceWriter    *persistence.Writer
+}
+
+func buildNodes(in buildNodeInput) ([]agentgraph.Node, error) {
+	dispatchCapReg := in.capReg
+	thoughtrecipeReg := in.thoughtReg
 	if thoughtrecipeReg == nil {
 		thoughtrecipeReg = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
 	ensureClarificationThoughtRecipe(thoughtrecipeReg)
-	thoughtrecipeCapReg := cfg.Env.Registry
+	var thoughtrecipeCapReg *registry.CapabilityRegistry
+	if in.paradigmDeps != nil {
+		thoughtrecipeCapReg = in.paradigmDeps.Registry
+	}
 	if thoughtrecipeCapReg == nil {
 		thoughtrecipeCapReg = registry.NewRegistry()
-		cfg.Env.Registry = thoughtrecipeCapReg
 	}
 	if err := registerClarificationCapability(thoughtrecipeCapReg); err != nil {
-		panic(err)
+		return nil, err
 	}
 	intakePipeline := intake.NewIntakePipelineNode(
 		"euclo.intake",
-		cfg.FamilyRegistry,
-		cfg.MaxStreamTokens,
-		cfg.DefaultStreamMode,
-		cfg.StreamTrigger,
+		in.famReg,
+		in.maxTokens,
+		in.streamMode,
+		in.streamTrigger,
 	)
 	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedDefaultTask(env)
@@ -253,8 +219,8 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	})
 
 	checkpointNode := agentgraph.NewCheckpointNode("euclo.checkpoint").
-		WithRepository(cfg.CheckpointRepository).
-		WithWriter(cfg.PersistenceWriter)
+		WithRepository(in.checkpointRepository).
+		WithWriter(in.persistenceWriter)
 
 	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if env != nil {
@@ -291,8 +257,8 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	})
 
 	gate := policy.NewGateNode("euclo.policy_gate", policy.NewEvaluator()).
-		WithPermissionManager(cfg.PermissionManager).
-		WithHITLBroker(cfg.HITLBroker)
+		WithPermissionManager(in.permissionManager).
+		WithHITLBroker(in.hitlBroker)
 	policyGateNode := newStageNode("euclo.policy_gate", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedPolicyDefaults(env)
 		data, err := gate.Execute(ctx, env)
@@ -307,14 +273,14 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 	})
 
 	dispatchNode := NewDispatcher("euclo.dispatch").
-		WithWorkspace(cfg.Workspace).
+		WithWorkspace(in.workspace).
 		WithCapabilityRegistry(dispatchCapReg).
 		WithThoughtRecipeRegistry(thoughtrecipeReg)
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
 	thoughtrecipeExec := NewThoughtRecipeExecutorNode("euclo.execute_thoughtrecipe").
-		WithAgentContext(cfg.Env).
+		WithParadigmDeps(in.paradigmDeps).
 		WithIngestionPipeline(nil)
 	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 
@@ -360,7 +326,7 @@ func buildNodes(cfg RootGraphConfig) []agentgraph.Node {
 		mergeNode,
 		reportNode,
 		doneNode,
-	}
+	}, nil
 }
 
 func wireEdges(g *agentgraph.Graph) error {

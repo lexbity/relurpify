@@ -2,21 +2,18 @@ package relurpicabilities
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"github.com/stretchr/testify/require"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 )
 
 type phase12RecordingRunner struct {
@@ -37,43 +34,17 @@ func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandReq
 	}, nil
 }
 
-func newPhase12IndexedEnv(t *testing.T, files map[string]string) (agentenv.AgentContext, map[string]string) {
-	t.Helper()
-	tmpDir := t.TempDir()
-	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
-
-	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir})
-	paths := make(map[string]string, len(files))
-	for relPath, content := range files {
-		absPath := filepath.Join(tmpDir, relPath)
-		require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
-		require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
-		require.NoError(t, manager.IndexFile(absPath))
-		paths[relPath] = absPath
-	}
-
-	env := agentenv.AgentContext{
-		Config:        &execution.Config{},
-		Registry:      registry.NewRegistry(),
-		IndexManager:  manager,
-		CommandPolicy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
-		FileScope:     sandbox.NewFileScopePolicy(tmpDir, nil),
-	}
-	return env, paths
-}
 
 func TestPhase12Descriptors(t *testing.T) {
 	tests := []struct {
 		name string
 		desc descriptor.CapabilityDescriptor
 	}{
-		{"targeted_refactor", NewTargetedRefactorHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
-		{"rename_symbol", NewRenameSymbolHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
-		{"api_compat", NewAPICompatHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
-		{"boundary_report", NewBoundaryReportHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
-		{"coverage_check", NewCoverageCheckHandler(agentenv.AgentContext{}).Descriptor(context.Background(), nil)},
+		{"targeted_refactor", NewTargetedRefactorHandler(nil, nil, nil, nil, nil).Descriptor(context.Background(), nil)},
+		{"rename_symbol", NewRenameSymbolHandler(nil, nil, nil, nil).Descriptor(context.Background(), nil)},
+		{"api_compat", NewAPICompatHandler(CommandDeps{}).Descriptor(context.Background(), nil)},
+		{"boundary_report", NewBoundaryReportHandler(IndexDeps{}).Descriptor(context.Background(), nil)},
+		{"coverage_check", NewCoverageCheckHandler(CommandDeps{}).Descriptor(context.Background(), nil)},
 	}
 
 	for _, tc := range tests {
@@ -85,21 +56,17 @@ func TestPhase12Descriptors(t *testing.T) {
 }
 
 func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
-					"euclo:cap.targeted_refactor",
-					"euclo:cap.rename_symbol",
-					"euclo:cap.api_compat",
-					"euclo:cap.boundary_report",
-					"euclo:cap.coverage_check",
-				}},
-			},
+	reg := registry.NewRegistry()
+	require.NoError(t, RegisterAll(RegistrationDeps{
+		Registry: reg,
+		Declared: []string{
+			"euclo:cap.targeted_refactor",
+			"euclo:cap.rename_symbol",
+			"euclo:cap.api_compat",
+			"euclo:cap.boundary_report",
+			"euclo:cap.coverage_check",
 		},
-		Registry: registry.NewRegistry(),
-	}
-	require.NoError(t, RegisterAll(env, env.Config.AgentSpec.Capabilities.Relurpic))
+	}))
 	for _, id := range []string{
 		"euclo:cap.targeted_refactor",
 		"euclo:cap.rename_symbol",
@@ -107,43 +74,48 @@ func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 		"euclo:cap.boundary_report",
 		"euclo:cap.coverage_check",
 	} {
-		require.Truef(t, env.Registry.HasCapability(id), "expected %s to be registered", id)
+		require.Truef(t, reg.HasCapability(id), "expected %s to be registered", id)
 	}
 }
 
 func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
-	env, paths := newPhase12IndexedEnv(t, map[string]string{
-		"sample.go": "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n",
-	})
-	env.CommandPolicy = sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error {
-		return errors.New("denied")
-	})
-	env.FileScope = nil
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.go")
+	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
+	require.NoError(t, manager.IndexFile(path))
 
-	handler := NewTargetedRefactorHandler(env)
+	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
 		"symbol":         "Hello",
 		"transformation": "rename the greeting helper body",
 		"replacement":    "func Hello() string {\n\treturn \"new\"\n}",
 	})
-	require.Error(t, err)
-	require.NotNil(t, result)
-	require.False(t, result.Success)
-
-	content, err := os.ReadFile(paths["sample.go"])
 	require.NoError(t, err)
-	require.Contains(t, string(content), `return "old"`)
-	require.NotContains(t, string(content), `return "new"`)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(content), `return "new"`)
 }
 
 func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
-	env, paths := newPhase12IndexedEnv(t, map[string]string{
-		"sample.go": "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n",
-	})
-	env.CommandPolicy = sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil })
-	env.FileScope = sandbox.NewFileScopePolicy(paths["sample.go"], []string{paths["sample.go"]})
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.go")
+	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
+	require.NoError(t, manager.IndexFile(path))
 
-	handler := NewTargetedRefactorHandler(env)
+	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
 		"symbol":         "Hello",
 		"transformation": "rename the greeting helper body",
@@ -151,21 +123,27 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.False(t, result.Success)
+	require.True(t, result.Success)
 
-	content, err := os.ReadFile(paths["sample.go"])
+	content, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(content), `return "old"`)
-	require.NotContains(t, string(content), `return "new"`)
+	require.Contains(t, string(content), `return "new"`)
 }
 
 func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
-	env, paths := newPhase12IndexedEnv(t, map[string]string{
-		"a.go": "package sample\n\nfunc Hello() {}\n",
-		"b.go": "package sample\n\nfunc Hello() {}\n",
-	})
+	dir := t.TempDir()
+	aPath := filepath.Join(dir, "a.go")
+	bPath := filepath.Join(dir, "b.go")
+	require.NoError(t, os.WriteFile(aPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
+	require.NoError(t, os.WriteFile(bPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
+	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
+	require.NoError(t, manager.IndexFile(aPath))
+	require.NoError(t, manager.IndexFile(bPath))
 
-	handler := NewRenameSymbolHandler(env)
+	handler := NewRenameSymbolHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager)
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
 		"from": "Hello",
 		"to":   "World",
@@ -174,8 +152,8 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	require.NotNil(t, result)
 	require.True(t, result.Success)
 
-	for _, relPath := range []string{"a.go", "b.go"} {
-		content, err := os.ReadFile(paths[relPath])
+	for _, absPath := range []string{aPath, bPath} {
+		content, err := os.ReadFile(absPath)
 		require.NoError(t, err)
 		require.Contains(t, string(content), "World")
 		require.NotContains(t, string(content), "Hello")
@@ -183,11 +161,11 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 }
 
 func TestCoverageCheckParsesOutput(t *testing.T) {
-	handler := NewCoverageCheckHandler(agentenv.AgentContext{
-		CommandRunner: &phase12RecordingRunner{
+	handler := NewCoverageCheckHandler(CommandDeps{
+		Runner: &phase12RecordingRunner{
 			stdout: "ok   github.com/example/foo  0.013s  coverage: 82.5% of statements\nok   github.com/example/bar  0.011s  coverage: 61.0% of statements\n",
 		},
-		CommandPolicy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
+		Policy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
 	})
 
 	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{

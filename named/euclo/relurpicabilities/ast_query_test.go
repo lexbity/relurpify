@@ -9,7 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
@@ -152,8 +151,7 @@ func (m *mockIndexStore) GetStats() (*ast.IndexStats, error) {
 }
 
 func TestASTQueryHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewASTQueryHandler(wsEnv)
+	handler := NewASTQueryHandler(nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -200,10 +198,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewASTQueryHandler(wsEnv)
+	handler := NewASTQueryHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -233,10 +228,7 @@ func TestASTQueryHandlerEmptyQueryErrors(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewASTQueryHandler(wsEnv)
+	handler := NewASTQueryHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -281,10 +273,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewASTQueryHandler(wsEnv)
+	handler := NewASTQueryHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -329,10 +318,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewASTQueryHandler(wsEnv)
+	handler := NewASTQueryHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -351,8 +337,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 }
 
 func TestSymbolTraceHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewSymbolTraceHandler(wsEnv)
+	handler := NewSymbolTraceHandler(nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -397,10 +382,7 @@ func TestSymbolTraceHandlerCallees(t *testing.T) {
 	}
 	store.SaveNodes([]*ast.Node{rootNode, calleeNode})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewSymbolTraceHandler(wsEnv)
+	handler := NewSymbolTraceHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -425,10 +407,7 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewSymbolTraceHandler(wsEnv)
+	handler := NewSymbolTraceHandler(indexManager)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -455,8 +434,7 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 }
 
 func TestCallGraphHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewCallGraphHandler(wsEnv)
+	handler := NewCallGraphHandler(IndexDeps{})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -512,10 +490,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewCallGraphHandler(wsEnv)
+	handler := NewCallGraphHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Workspace: indexManager.WorkspacePath()})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -545,10 +520,7 @@ func TestCallGraphHandlerEntryPointNotFound(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewCallGraphHandler(wsEnv)
+	handler := NewCallGraphHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Workspace: indexManager.WorkspacePath()})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -592,10 +564,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewCallGraphHandler(wsEnv)
+	handler := NewCallGraphHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Workspace: indexManager.WorkspacePath()})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -614,8 +583,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 }
 
 func TestBlameTraceHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewBlameTraceHandler(wsEnv)
+	handler := NewBlameTraceHandler(CommandDeps{}, nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -645,12 +613,14 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBlameTraceHandler(wsEnv)
+	handler := NewBlameTraceHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -686,12 +656,14 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBlameTraceHandler(wsEnv)
+	handler := NewBlameTraceHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -716,12 +688,14 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBlameTraceHandler(wsEnv)
+	handler := NewBlameTraceHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -771,12 +745,14 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 	}
 	store.SaveNodes(nodes)
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBlameTraceHandler(wsEnv)
+	handler := NewBlameTraceHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -792,8 +768,7 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 }
 
 func TestBisectHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewBisectHandler(wsEnv)
+	handler := NewBisectHandler(CommandDeps{}, nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -823,12 +798,14 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBisectHandler(wsEnv)
+	handler := NewBisectHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -866,12 +843,14 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBisectHandler(wsEnv)
+	handler := NewBisectHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -907,12 +886,14 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewBisectHandler(wsEnv)
+	handler := NewBisectHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -938,8 +919,7 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 }
 
 func TestCodeReviewHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewCodeReviewHandler(wsEnv)
+	handler := NewCodeReviewHandler(nil, nil, nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -964,8 +944,7 @@ func TestCodeReviewHandlerDescriptor(t *testing.T) {
 }
 
 func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewCodeReviewHandler(wsEnv)
+	handler := NewCodeReviewHandler(nil, nil, nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -1000,8 +979,7 @@ func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
 }
 
 func TestDiffSummaryHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewDiffSummaryHandler(wsEnv)
+	handler := NewDiffSummaryHandler(CommandDeps{}, nil)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -1031,12 +1009,14 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		IndexManager:  indexManager,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewDiffSummaryHandler(wsEnv)
+	handler := NewDiffSummaryHandler(
+		CommandDeps{
+			Runner:    mockRunner,
+			Policy:    allowCommandPolicy(),
+			Workspace: indexManager.WorkspacePath(),
+		},
+		nil,
+	)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -1064,8 +1044,7 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 }
 
 func TestLayerCheckHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewLayerCheckHandler(wsEnv)
+	handler := NewLayerCheckHandler(IndexDeps{})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -1089,10 +1068,7 @@ func TestLayerCheckHandlerCleanWorkspace(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewLayerCheckHandler(wsEnv)
+	handler := NewLayerCheckHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Store: indexManager.Store(), Workspace: indexManager.WorkspacePath()})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -1130,10 +1106,7 @@ func TestLayerCheckHandlerLayerFilter(t *testing.T) {
 	store := &mockIndexStore{}
 	indexManager := ast.NewIndexManager(store, ast.IndexConfig{})
 
-	wsEnv := agentenv.AgentContext{
-		IndexManager: indexManager,
-	}
-	handler := NewLayerCheckHandler(wsEnv)
+	handler := NewLayerCheckHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Store: indexManager.Store(), Workspace: indexManager.WorkspacePath()})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")

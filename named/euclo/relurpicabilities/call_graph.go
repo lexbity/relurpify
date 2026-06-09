@@ -11,18 +11,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
 type CallGraphHandler struct {
-	env agentenv.AgentContext
+	deps IndexDeps
 }
 
 // NewCallGraphHandler creates a new call graph handler.
-func NewCallGraphHandler(env agentenv.AgentContext) *CallGraphHandler {
-	return &CallGraphHandler{env: env}
+func NewCallGraphHandler(deps IndexDeps) *CallGraphHandler {
+	return &CallGraphHandler{deps: deps}
 }
 
 // Descriptor returns the capability descriptor for the call graph handler.
@@ -102,15 +101,13 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[
 	depth, _ := intArg(args, "depth", 3)
 	includeDeps, _ := args["include_dependencies"].(bool)
 
-	// Check for IndexManager
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), nil
+	if h.deps.Grapher == nil {
+		return failResult("graph service not available"), nil
 	}
 
-	// Get call graph for entry point
-	callGraph, err := h.env.IndexManager.GetCallGraph(entryPoint)
+	callGraph, err := h.deps.Grapher.GetCallGraph(entryPoint)
 	if err != nil {
-		return failResult(fmt.Sprintf("call graph lookup failed: %v", err)), nil
+		return failResult(fmt.Sprintf("euclo:cap.call_graph lookup failed: %v", err)), nil
 	}
 
 	// Collect all nodes from the call graph
@@ -131,9 +128,8 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[
 		}
 	}
 
-	// Optionally include dependency graph
-	if includeDeps {
-		depGraph, err := h.env.IndexManager.GetDependencyGraph(entryPoint)
+	if includeDeps && h.deps.Grapher != nil {
+		depGraph, err := h.deps.Grapher.GetDependencyGraph(entryPoint)
 		if err == nil {
 			nodeSet[depGraph.Root.ID] = depGraph.Root
 			for _, dep := range depGraph.Dependencies {

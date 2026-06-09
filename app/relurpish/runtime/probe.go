@@ -364,7 +364,7 @@ func summarizeManifest(path string) ManifestSummary {
 
 // Status collects runtime + environment data for the status view.
 func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
-	env := ProbeEnvironment(ctx, r.Config, r.secrets, r.AgentWorkspace().Backend)
+	env := ProbeEnvironment(ctx, r.Config, r.secrets, r.modelBackend)
 	snapshot := StatusSnapshot{
 		Environment:  env,
 		PendingHITL:  r.PendingHITL(),

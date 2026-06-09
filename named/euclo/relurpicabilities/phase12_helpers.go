@@ -2,149 +2,30 @@ package relurpicabilities
 
 import (
 	"bytes"
-	"context"
-	"fmt"
 	goast "go/ast"
 	"go/parser"
 	"go/printer"
 	"go/token"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
-	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-type frameworkPolicyContext struct {
-	permissionManager *authorization.PermissionManager
-	agentID           string
-	agentSpec         *agentspec.AgentRuntimeSpec
-	sandboxScope      *permissions.FileScopePolicy
-}
-
-func (c *frameworkPolicyContext) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	if c == nil {
-		return
-	}
-	c.permissionManager = manager
-	c.agentID = agentID
-}
-
-func (c *frameworkPolicyContext) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
-	if c == nil {
-		return
-	}
-	c.agentSpec = spec
-	c.agentID = agentID
-}
-
-func (c *frameworkPolicyContext) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	if c == nil {
-		return
-	}
-	c.sandboxScope = scope
-}
-
-func (c *frameworkPolicyContext) authorizeCommand(ctx context.Context, env agentenv.AgentContext, req sandbox.CommandRequest, source string) error {
-	if c != nil && c.permissionManager != nil {
-		bashCfg := &authorization.BashConfig{}
-		if c.agentSpec != nil {
-			bashCfg.AllowPatterns = c.agentSpec.Bash.AllowPatterns
-			bashCfg.DenyPatterns = c.agentSpec.Bash.DenyPatterns
-			bashCfg.Default = string(c.agentSpec.Bash.Default)
-		}
-		return authorization.AuthorizeCommand(ctx, c.permissionManager, c.agentID, bashCfg, authorization.CommandAuthorizationRequest{
-			Command: append([]string(nil), req.Args...),
-			Env:     append([]string(nil), req.Env...),
-			Source:  source,
-		})
-	}
-	if env.CommandPolicy != nil {
-		return env.CommandPolicy.AllowCommand(ctx, req)
-	}
-	return fmt.Errorf("command denied: no framework command policy configured")
-}
-
-func (c *frameworkPolicyContext) authorizeFileWrite(ctx context.Context, env agentenv.AgentContext, path string) error {
-	if c != nil && c.permissionManager != nil {
-		return c.permissionManager.CheckFileAccess(ctx, c.agentID, permissions.FileSystemWrite, path)
-	}
-	if scope := c.fileScopePolicy(env); scope != nil {
-		return scope.Check(permissions.FileSystemWrite, path)
-	}
-	return fmt.Errorf("write denied: no file scope configured")
-}
-
-func workspaceRoot(env agentenv.AgentContext) string {
-	if env.IndexManager != nil {
-		if root := strings.TrimSpace(env.IndexManager.WorkspacePath()); root != "" {
-			return root
-		}
-	}
-	return "."
-}
-
-func (c *frameworkPolicyContext) fileScopePolicy(env agentenv.AgentContext) *permissions.FileScopePolicy {
-	if c != nil && c.sandboxScope != nil {
-		return c.sandboxScope
-	}
-	return env.FileScope
-}
-
-func (c *frameworkPolicyContext) resolveWorkspacePath(env agentenv.AgentContext, candidate string) (string, error) {
+// resolveCandidatePath resolves a relative or absolute path against a workspace
+// root. Returns empty string on empty input.
+func resolveCandidatePath(candidate, workspace string) string {
 	candidate = strings.TrimSpace(candidate)
 	if candidate == "" {
-		return "", fmt.Errorf("path is required")
+		return ""
 	}
-	root := workspaceRoot(env)
-	resolved := candidate
-	if !filepath.IsAbs(resolved) {
-		resolved = filepath.Join(root, resolved)
+	if filepath.IsAbs(candidate) {
+		return filepath.Clean(candidate)
 	}
-	resolved = filepath.Clean(resolved)
-	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(permissions.FileSystemRead, resolved); err != nil {
-			return "", err
-		}
-	}
-	return resolved, nil
+	return filepath.Clean(filepath.Join(workspace, candidate))
 }
-
-func (c *frameworkPolicyContext) readWorkspaceFile(env agentenv.AgentContext, candidate string) ([]byte, string, error) {
-	resolved, err := c.resolveWorkspacePath(env, candidate)
-	if err != nil {
-		return nil, "", err
-	}
-	content, err := os.ReadFile(resolved)
-	if err != nil {
-		return nil, "", err
-	}
-	return content, resolved, nil
-}
-
-func (c *frameworkPolicyContext) writeWorkspaceFile(env agentenv.AgentContext, candidate string, content []byte, perm os.FileMode) (string, error) {
-	resolved, err := c.resolveWorkspacePath(env, candidate)
-	if err != nil {
-		return "", err
-	}
-	if scope := c.fileScopePolicy(env); scope != nil {
-		if err := scope.Check(permissions.FileSystemWrite, resolved); err != nil {
-			return "", err
-		}
-	}
-	if err := os.WriteFile(resolved, content, perm); err != nil {
-		return "", err
-	}
-	return resolved, nil
-}
-
 func floatArg(args map[string]interface{}, key string, defaultValue float64) (float64, bool) {
 	val, ok := args[key]
 	if !ok || val == nil {
@@ -462,14 +343,10 @@ func coveragePackagesToInterfaces(packages []coveragePackageRecord) []interface{
 	return out
 }
 
-func nodeSourcePath(env agentenv.AgentContext, node *frameworkast.Node) string {
+func nodePathFromStore(store EdgeStore, node *frameworkast.Node, _ string) string {
 	if node == nil {
 		return ""
 	}
-	if env.IndexManager == nil {
-		return strings.TrimSpace(node.FileID)
-	}
-	store := env.IndexManager.Store()
 	if store == nil {
 		return strings.TrimSpace(node.FileID)
 	}

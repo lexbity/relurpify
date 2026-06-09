@@ -19,10 +19,11 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	const capabilityID = "euclo:cap.resume_route"
 
 	missingCaps := registry.NewRegistry()
-	missingGraph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(missingCaps)),
-		orchestrate.WithCapabilityRegistry(missingCaps),
-	)
+	missingDeps := rootGraphDeps(missingCaps)
+	missingGraph, err := orchestrate.NewRootGraph(missingDeps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-resume", "session-resume")
 	seedTask(env, "add a cache to the handler", "resume.go")
@@ -56,10 +57,11 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 
 	handler := &countingCapabilityHandler{id: capabilityID}
 	resolvedCaps := capabilityRegistryWithHandler(t, handler)
-	resolvedGraph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(resolvedCaps)),
-		orchestrate.WithCapabilityRegistry(resolvedCaps),
-	)
+	resolvedDeps := rootGraphDeps(resolvedCaps)
+	resolvedGraph, err := orchestrate.NewRootGraph(resolvedDeps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	secondTelemetry := &recordingTelemetry{}
 	if err := resolvedGraph.Execute(telemetry.WithTelemetry(context.Background(), secondTelemetry), env); err != nil {

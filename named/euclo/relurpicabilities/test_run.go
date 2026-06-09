@@ -12,20 +12,18 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
 // It executes test commands and parses output to determine pass/fail status.
 type TestRunHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	cmd CommandDeps
 }
 
 // NewTestRunHandler creates a new test run handler.
-func NewTestRunHandler(env agentenv.AgentContext) *TestRunHandler {
-	return &TestRunHandler{env: env}
+func NewTestRunHandler(cmd CommandDeps) *TestRunHandler {
+	return &TestRunHandler{cmd: cmd}
 }
 
 // Descriptor returns the capability descriptor for the test run handler.
@@ -108,36 +106,31 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[s
 
 	workdir, _ := stringArg(args, "workdir")
 	if workdir != "" {
-		resolvedWorkdir, err := h.resolveWorkspacePath(h.env, workdir)
-		if err != nil {
-			return failResult(fmt.Sprintf("workdir resolution failed: %v", err)), err
+		resolved := resolveCandidatePath(workdir, h.cmd.Workspace)
+		if resolved == "" {
+			return failResult(fmt.Sprintf("workdir resolution failed: %s", workdir)), nil
 		}
-		workdir = resolvedWorkdir
+		workdir = resolved
 	}
 	timeoutSec, _ := intArg(args, "timeout", 300)
 
-	// Check for CommandRunner
-	if h.env.CommandRunner == nil {
-		return failResult("CommandRunner not available in environment"), nil
-	}
-
-	if err := h.authorizeCommand(ctx, h.env, sandbox.CommandRequest{
-		Workdir: workdir,
-		Args:    strings.Fields(command),
-		Timeout: time.Duration(timeoutSec) * time.Second,
-	}, "euclo test run"); err != nil {
-		return failResult(fmt.Sprintf("test command denied: %v", err)), err
-	}
-
-	// Build command request
 	req := sandbox.CommandRequest{
 		Workdir: workdir,
 		Args:    strings.Fields(command),
 		Timeout: time.Duration(timeoutSec) * time.Second,
 	}
 
-	// Execute command
-	res, err := h.env.CommandRunner.Run(ctx, req)
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
+			return failResult(fmt.Sprintf("test command denied: %v", err)), err
+		}
+	}
+
+	if h.cmd.Runner == nil {
+		return failResult("CommandRunner not available in environment"), nil
+	}
+
+	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,

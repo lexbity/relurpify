@@ -78,6 +78,7 @@ func (t *Trigger) RequestBackground(ctx context.Context, req Request) (*Job, err
 
 func toCompilationRequest(req Request) contextports.CompilationRequest {
 	return contextports.CompilationRequest{
+		BaseContext:  req.Query.Text,
 		BudgetTokens: req.MaxTokens,
 		Mode:         string(req.Mode),
 	}

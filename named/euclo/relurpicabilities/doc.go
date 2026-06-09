@@ -1,19 +1,13 @@
 // Package relurpicabilities implements Euclo's relurpic capability handlers.
 //
-// Relurpic capabilities are Euclo-owned capabilities with opinionated execution
-// behavior that may compose cognition paradigms, ordinary capabilities, and
-// workflow-like reasoning.
+// Each handler is constructed with explicit family-specific dependency contracts
+// (CommandDeps, IndexDeps, WorkspaceFiles+IndexRefresher, SymbolQuerier,
+// model.LanguageModel) instead of agentenv.AgentContext. Registration uses
+// RegistrationDeps{Registry, Declared}.
 //
-// This package contains the concrete implementations of Euclo's capability
-// handlers, which are registered with the capability registry during agent
-// initialization.
-//
-// Capability families implemented:
-// - verification: test_run, coverage_check
-// - code_understanding: ast_query, symbol_trace, call_graph
-// - regression_localization: blame_trace, bisect
-// - review_synthesis: code_review, diff_summary
-// - architecture: layer_check, boundary_report
-// - refactor_patch: targeted_refactor, rename_symbol
-// - migration_support: api_compat
+// Capability families:
+// - command: test_run, diff_summary, bisect, api_compat, coverage_check, blame_trace
+// - index read: ast_query, symbol_trace, call_graph, layer_check, boundary_report
+// - workspace mutation: targeted_refactor, rename_symbol
+// - model synthesis: code_review
 package relurpicabilities

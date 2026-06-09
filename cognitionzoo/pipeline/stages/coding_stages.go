@@ -1,0 +1,485 @@
+package stages
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
+)
+
+// ExploreStage identifies the most relevant files and next tools for a task.
+type ExploreStage struct {
+	Task     *execution.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+}
+
+func (s *ExploreStage) Name() string { return "explore" }
+func (s *ExploreStage) AllowedToolNames() []string {
+	return []string{
+		"file_list",
+		"file_read",
+		"file_search",
+		"search_grep",
+		"search_semantic",
+		"query_ast",
+		"lsp_get_definition",
+		"lsp_get_references",
+		"lsp_search_symbols",
+		"lsp_document_symbols",
+		"lsp_get_hover",
+		"lsp_get_diagnostics",
+	}
+}
+func (s *ExploreStage) Contract() pipeline.ContractDescriptor {
+	return pipeline.ContractDescriptor{
+		Name: "file-selection",
+		Metadata: pipeline.ContractMetadata{
+			InputKey:      "pipeline.input",
+			OutputKey:     "pipeline.explore",
+			SchemaVersion: "v1",
+			AllowTools:    true,
+			RetryPolicy: pipeline.RetryPolicy{
+				MaxAttempts:            1,
+				RetryOnDecodeError:     true,
+				RetryOnValidationError: true,
+			},
+		},
+	}
+}
+func (s *ExploreStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
+	return buildStagePrompt("explore", s.Task, ctx, "Exploration focus", map[string]any{
+		"task_instruction": taskInstruction(s.Task),
+	}, s.AllowedToolNames(), `{
+  "relevant_files":[{"path":"...","reason":"..."}],
+  "tool_suggestions":["..."],
+  "summary":"..."
+}`), nil
+}
+func (s *ExploreStage) Decode(resp *model.LLMResponse) (any, error) {
+	var out FileSelection
+	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+func (s *ExploreStage) Validate(output any) error {
+	selection, ok := output.(FileSelection)
+	if !ok {
+		return fmt.Errorf("expected FileSelection output")
+	}
+	if len(selection.RelevantFiles) == 0 && len(selection.ToolSuggestions) == 0 {
+		return fmt.Errorf("at least one relevant file or tool suggestion required")
+	}
+	return nil
+}
+func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
+	selection := output.(FileSelection)
+	ctx.SetWorkingValueWithClass("pipeline.explore", selection, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.explore.files", filePaths(selection), contextdata.MemoryClassTask)
+	return nil
+}
+
+// AnalyzeStage converts explored context into a structured issue list.
+type AnalyzeStage struct {
+	Task     *execution.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+}
+
+func (s *AnalyzeStage) Name() string { return "analyze" }
+func (s *AnalyzeStage) AllowedToolNames() []string {
+	return []string{
+		"file_read",
+		"file_search",
+		"search_grep",
+		"search_semantic",
+		"query_ast",
+		"lsp_get_diagnostics",
+		"lsp_get_definition",
+		"lsp_get_references",
+	}
+}
+func (s *AnalyzeStage) Contract() pipeline.ContractDescriptor {
+	return pipeline.ContractDescriptor{
+		Name: "issue-list",
+		Metadata: pipeline.ContractMetadata{
+			InputKey:      "pipeline.explore",
+			OutputKey:     "pipeline.analyze",
+			SchemaVersion: "v1",
+			AllowTools:    true,
+			RetryPolicy: pipeline.RetryPolicy{
+				MaxAttempts:            1,
+				RetryOnValidationError: true,
+			},
+		},
+	}
+}
+func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
+	raw, _ := ctx.GetWorkingValue("pipeline.explore")
+	return buildStagePrompt("analyze", s.Task, ctx, "Explore output", map[string]any{
+		"explore_output": raw,
+		"instructions":   "You MUST return a concrete issue summary for the failing task. If the bug is unclear, call file_read or diagnostics/search tools before returning JSON. Identify the real failing issue from the code and tests, not a hypothetical one.",
+	}, s.AllowedToolNames(), `{
+  "issues":[{"id":"...","severity":"low|medium|high","title":"...","description":"...","file":"...","line":0}],
+  "summary":"..."
+}`), nil
+}
+func (s *AnalyzeStage) Decode(resp *model.LLMResponse) (any, error) {
+	var out IssueList
+	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+func (s *AnalyzeStage) Validate(output any) error {
+	issues, ok := output.(IssueList)
+	if !ok {
+		return fmt.Errorf("expected IssueList output")
+	}
+	if strings.TrimSpace(issues.Summary) == "" {
+		return fmt.Errorf("summary required")
+	}
+	return nil
+}
+func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValueWithClass("pipeline.analyze", output, contextdata.MemoryClassTask)
+	return nil
+}
+
+// PlanStage turns issues into an ordered fix plan.
+type PlanStage struct {
+	Task     *execution.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+}
+
+func (s *PlanStage) Name() string { return "plan" }
+func (s *PlanStage) Contract() pipeline.ContractDescriptor {
+	return pipeline.ContractDescriptor{
+		Name: "fix-plan",
+		Metadata: pipeline.ContractMetadata{
+			InputKey:      "pipeline.analyze",
+			OutputKey:     "pipeline.plan",
+			SchemaVersion: "v1",
+			AllowTools:    false,
+		},
+	}
+}
+func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
+	raw, _ := ctx.GetWorkingValue("pipeline.analyze")
+	return buildStagePrompt("plan", s.Task, ctx, "Issue list", raw, nil, `{
+  "strategy":"...",
+  "steps":[{"id":"...","title":"...","description":"...","files":["..."]}],
+  "risks":["..."]
+}`), nil
+}
+func (s *PlanStage) Decode(resp *model.LLMResponse) (any, error) {
+	var out FixPlan
+	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+func (s *PlanStage) Validate(output any) error {
+	plan, ok := output.(FixPlan)
+	if !ok {
+		return fmt.Errorf("expected FixPlan output")
+	}
+	if strings.TrimSpace(plan.Strategy) == "" {
+		return fmt.Errorf("strategy required")
+	}
+	if len(plan.Steps) == 0 {
+		return fmt.Errorf("at least one plan step required")
+	}
+	return nil
+}
+func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValueWithClass("pipeline.plan", output, contextdata.MemoryClassTask)
+	return nil
+}
+
+// CodeStage proposes concrete edits derived from the fix plan.
+type CodeStage struct {
+	Task     *execution.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+}
+
+func (s *CodeStage) Name() string { return "code" }
+func (s *CodeStage) AllowedToolNames() []string {
+	return []string{
+		"file_read",
+	}
+}
+func (s *CodeStage) Contract() pipeline.ContractDescriptor {
+	return pipeline.ContractDescriptor{
+		Name: "edit-plan",
+		Metadata: pipeline.ContractMetadata{
+			InputKey:      "pipeline.plan",
+			OutputKey:     "pipeline.code",
+			SchemaVersion: "v1",
+			AllowTools:    true,
+		},
+	}
+}
+func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
+	raw, _ := ctx.GetWorkingValue("pipeline.plan")
+	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
+		"fix_plan":     raw,
+		"instructions": "Return requested edit intents only. Do not mutate files in this stage. For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
+	}, s.AllowedToolNames(), `{
+  "edits":[{"path":"...","action":"create|update|delete","content":"...","summary":"..."}],
+  "summary":"..."
+}`), nil
+}
+func (s *CodeStage) Decode(resp *model.LLMResponse) (any, error) {
+	var out EditPlan
+	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+func (s *CodeStage) Validate(output any) error {
+	plan, ok := output.(EditPlan)
+	if !ok {
+		return fmt.Errorf("expected EditPlan output")
+	}
+	if len(plan.Edits) == 0 {
+		return fmt.Errorf("at least one edit required")
+	}
+	if strings.TrimSpace(plan.Summary) == "" {
+		return fmt.Errorf("summary required")
+	}
+	for _, edit := range plan.Edits {
+		if strings.TrimSpace(edit.Path) == "" {
+			return fmt.Errorf("edit path required")
+		}
+		switch strings.TrimSpace(edit.Action) {
+		case "create", "update":
+			if strings.TrimSpace(edit.Content) == "" {
+				return fmt.Errorf("edit content required for %s", strings.TrimSpace(edit.Action))
+			}
+		case "delete":
+		default:
+			return fmt.Errorf("invalid edit action")
+		}
+	}
+	return nil
+}
+func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
+	plan := output.(EditPlan)
+	// Coding stages now persist requested edits as an artifact-like intent only.
+	// Mutation must happen through an admitted capability path outside stage Apply.
+	ctx.SetWorkingValueWithClass("pipeline.code", plan, contextdata.MemoryClassTask)
+	ctx.SetWorkingValueWithClass("pipeline.code.intent_only", true, contextdata.MemoryClassTask)
+	return nil
+}
+
+// VerifyStage summarizes the verification outcome for the planned edits.
+type VerifyStage struct {
+	Task     *execution.Task
+	PromptID string
+	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+}
+
+func (s *VerifyStage) Name() string { return "verify" }
+func (s *VerifyStage) AllowedToolNames() []string {
+	return []string{
+		"file_read",
+		"exec_run_tests",
+		"exec_run_linter",
+		"exec_run_build",
+		"cli_go",
+		"cli_cargo",
+		"cli_python",
+		"cli_node",
+		"go_test",
+		"go_build",
+		"rust_cargo_test",
+		"rust_cargo_check",
+		"node_npm_test",
+		"node_syntax_check",
+		"python_pytest",
+		"python_unittest",
+		"python_compile_check",
+	}
+}
+
+func (s *VerifyStage) RequiresToolExecution(task *execution.Task, state *contextdata.Envelope, tools []ports.Tool) bool {
+	if task == nil || len(tools) == 0 {
+		return false
+	}
+	instruction := strings.ToLower(task.Instruction)
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		if strings.Contains(instruction, strings.ToLower(tool.Name())) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *VerifyStage) Contract() pipeline.ContractDescriptor {
+	return pipeline.ContractDescriptor{
+		Name: "verification-report",
+		Metadata: pipeline.ContractMetadata{
+			InputKey:      "pipeline.code",
+			OutputKey:     "pipeline.verify",
+			SchemaVersion: "v1",
+			AllowTools:    true,
+			RetryPolicy: pipeline.RetryPolicy{
+				MaxAttempts:            1,
+				RetryOnDecodeError:     true,
+				RetryOnValidationError: true,
+			},
+		},
+	}
+}
+func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
+	// Check for registry-based resolution first
+	if s.PromptID != "" && s.Registry != nil {
+		// Type assert to prompt.Registry interface
+		if registry, ok := s.Registry.(interface {
+			Resolve(id string, ctx interface{}) (string, error)
+		}); ok {
+			// Build runtime context for pipeline
+			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
+			if resolved, err := registry.Resolve(s.PromptID, rctx); err == nil {
+				return resolved, nil
+			}
+			// Fall through to existing logic on error
+		}
+	}
+
+	// Existing imperative build logic
+	raw, _ := ctx.GetWorkingValue("pipeline.code")
+	if raw == nil {
+		raw, _ = ctx.GetWorkingValue("pipeline.explore")
+	}
+	return buildStagePrompt("verify", s.Task, ctx, "Verification target", map[string]any{
+		"target":       raw,
+		"instructions": "If the task asks you to run a command or verify with a specific tool, you MUST call that verification tool before returning JSON. Do not report a passing check unless you actually invoked the tool in this stage.",
+	}, s.AllowedToolNames(), `{
+  "status":"pass|fail|needs_manual_verification",
+  "summary":"...",
+  "checks":[{"name":"...","command":"...","status":"pass|fail|skipped","details":"..."}],
+  "remaining_issues":["..."]
+}`), nil
+}
+func (s *VerifyStage) Decode(resp *model.LLMResponse) (any, error) {
+	var out VerificationReport
+	if err := json.Unmarshal([]byte(extractJSON(resp.Text)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+func (s *VerifyStage) Validate(output any) error {
+	report, ok := output.(VerificationReport)
+	if !ok {
+		return fmt.Errorf("expected VerificationReport output")
+	}
+	switch strings.TrimSpace(report.Status) {
+	case "pass", "fail", "needs_manual_verification":
+	default:
+		return fmt.Errorf("invalid verification status")
+	}
+	if strings.TrimSpace(report.Summary) == "" {
+		return fmt.Errorf("summary required")
+	}
+	return nil
+}
+func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
+	ctx.SetWorkingValueWithClass("pipeline.verify", output, contextdata.MemoryClassTask)
+	return nil
+}
+
+// buildPipelineRuntimeContext creates a prompt.RuntimeContext for pipeline stages.
+func buildPipelineRuntimeContext(env *contextdata.Envelope, task *execution.Task, paradigm string) interface{} {
+	// Return a map that matches the expected RuntimeContext structure
+	// Using interface{} to avoid import cycles with framework/prompt
+	return map[string]interface{}{
+		"Variables": map[string]string{
+			"instruction": taskInstruction(task),
+		},
+		"State":        map[string]interface{}{},
+		"Envelope":     env,
+		"Paradigm":     paradigm,
+		"ConsumerID":   "pipeline",
+		"Task":         task,
+		"Tools":        []interface{}{}, // Tools not available at build time
+		"Capabilities": []interface{}{}, // Capabilities not available at build time
+		"AgentSpec":    nil,             // AgentSpec not available at build time
+	}
+}

@@ -1,101 +1,20 @@
 package tui
 
 import (
-	"os"
 	"testing"
 )
 
-func TestReduceMotionDefaultNotReduced(t *testing.T) {
-	// Clean environment for this test.
-	restore := preserveEnv("CI", "GITHUB_ACTIONS", "SSH_TTY", "SSH_CONNECTION", "TERM", "RELPURIFY_REDUCE_MOTION")
-	defer restore()
-	os.Unsetenv("CI")
-	os.Unsetenv("GITHUB_ACTIONS")
-	os.Unsetenv("SSH_TTY")
-	os.Unsetenv("SSH_CONNECTION")
-	os.Setenv("TERM", "xterm-256color")
-
-	r := NewReduceMotion()
-	// On a real TTY with xterm-256color and no CI env, we expect non-reduced.
-	// The TTY detection depends on stdout being a char device, which may be
-	// true or false in test runners. We just verify it doesn't crash.
-	_ = r
-}
-
-func TestReduceMotionCIEnv(t *testing.T) {
-	restore := preserveEnv("CI", "GITHUB_ACTIONS")
-	defer restore()
-	os.Setenv("CI", "true")
-	os.Unsetenv("GITHUB_ACTIONS")
-
-	r := NewReduceMotion()
+func TestReduceMotionReduced(t *testing.T) {
+	r := NewReduceMotion(true)
 	if !r.Reduced() {
-		t.Error("expected reduced when CI=true")
+		t.Error("expected reduced")
 	}
 }
 
-func TestReduceMotionGitHubActions(t *testing.T) {
-	restore := preserveEnv("GITHUB_ACTIONS", "CI")
-	defer restore()
-	os.Setenv("GITHUB_ACTIONS", "true")
-	os.Unsetenv("CI")
-
-	r := NewReduceMotion()
-	if !r.Reduced() {
-		t.Error("expected reduced when GITHUB_ACTIONS=true")
-	}
-}
-
-func TestReduceMotionExplicitEnv(t *testing.T) {
-	restore := preserveEnv("RELPURIFY_REDUCE_MOTION", "CI")
-	defer restore()
-	os.Setenv("RELPURIFY_REDUCE_MOTION", "1")
-	os.Unsetenv("CI")
-
-	r := NewReduceMotion()
-	if !r.Reduced() {
-		t.Error("expected reduced when RELPURIFY_REDUCE_MOTION is set")
-	}
-}
-
-func TestReduceMotionDumbTerm(t *testing.T) {
-	restore := preserveEnv("TERM", "CI", "SSH_TTY", "SSH_CONNECTION")
-	defer restore()
-	os.Setenv("TERM", "dumb")
-	os.Unsetenv("CI")
-	os.Unsetenv("SSH_TTY")
-	os.Unsetenv("SSH_CONNECTION")
-
-	r := NewReduceMotion()
-	if !r.Reduced() {
-		t.Error("expected reduced for TERM=dumb")
-	}
-}
-
-func TestReduceMotionEmptyTerm(t *testing.T) {
-	restore := preserveEnv("TERM", "CI", "SSH_TTY", "SSH_CONNECTION")
-	defer restore()
-	os.Setenv("TERM", "")
-	os.Unsetenv("CI")
-	os.Unsetenv("SSH_TTY")
-	os.Unsetenv("SSH_CONNECTION")
-
-	r := NewReduceMotion()
-	if !r.Reduced() {
-		t.Error("expected reduced for empty TERM")
-	}
-}
-
-func TestReduceMotionSSH(t *testing.T) {
-	restore := preserveEnv("SSH_TTY", "SSH_CONNECTION", "CI")
-	defer restore()
-	os.Setenv("SSH_TTY", "/dev/pts/0")
-	os.Unsetenv("CI")
-	os.Unsetenv("SSH_CONNECTION")
-
-	r := NewReduceMotion()
-	if !r.Reduced() {
-		t.Error("expected reduced when SSH_TTY is set")
+func TestReduceMotionNotReduced(t *testing.T) {
+	r := NewReduceMotion(false)
+	if r.Reduced() {
+		t.Error("expected not reduced")
 	}
 }
 

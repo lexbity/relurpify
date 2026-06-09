@@ -18,23 +18,50 @@ var nreg = &nativeRegistry{
 }
 
 // RegisterNative registers a go_native tool constructor under the given key.
-// The key is normalized via NormalizeToolName. Panics on duplicate or empty key.
+// The key is normalized via NormalizeToolName. It is intended for init()-time
+// use. For explicit construction at package level, use DefaultNativeConstructors
+// or NativeConstructorSet instead. Panics on duplicate or empty key.
 func RegisterNative(key string, ctor NativeToolConstructor) {
+	if err := registerNative(key, ctor); err != nil {
+		panic(fmt.Sprintf("ports.RegisterNative: %v", err))
+	}
+}
+
+// RegisterNativeNoPanic registers a native tool constructor and returns an error
+// instead of panicking on duplicates. This is the safer alternative for use
+// outside init().
+func RegisterNativeNoPanic(key string, ctor NativeToolConstructor) error {
+	return registerNative(key, ctor)
+}
+
+func registerNative(key string, ctor NativeToolConstructor) error {
 	norm := normalizeToolName(key)
 	if norm == "" {
-		panic(fmt.Sprintf("ports.RegisterNative: empty key %q", key))
+		return fmt.Errorf("empty key %q", key)
 	}
 	if ctor == nil {
-		panic(fmt.Sprintf("ports.RegisterNative: nil constructor for key %q", key))
+		return fmt.Errorf("nil constructor for key %q", key)
 	}
-
 	nreg.mu.Lock()
 	defer nreg.mu.Unlock()
-
 	if _, dup := nreg.ctor[norm]; dup {
-		panic(fmt.Sprintf("ports.RegisterNative: duplicate key %q", norm))
+		return fmt.Errorf("duplicate key %q", norm)
 	}
 	nreg.ctor[norm] = ctor
+	return nil
+}
+
+// DefaultNativeConstructors returns a snapshot of all currently registered
+// native tool constructors as an explicit map. Callers can copy or filter the
+// returned map without holding the registry lock.
+func DefaultNativeConstructors() map[string]NativeToolConstructor {
+	nreg.mu.RLock()
+	defer nreg.mu.RUnlock()
+	out := make(map[string]NativeToolConstructor, len(nreg.ctor))
+	for k, v := range nreg.ctor {
+		out[k] = v
+	}
+	return out
 }
 
 // LookupNative retrieves a previously registered constructor by normalized key.

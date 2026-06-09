@@ -11,19 +11,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
 type CoverageCheckHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	cmd CommandDeps
 }
 
 // NewCoverageCheckHandler creates a new coverage check handler.
-func NewCoverageCheckHandler(env agentenv.AgentContext) *CoverageCheckHandler {
-	return &CoverageCheckHandler{env: env}
+func NewCoverageCheckHandler(cmd CommandDeps) *CoverageCheckHandler {
+	return &CoverageCheckHandler{cmd: cmd}
 }
 
 // Descriptor returns the capability descriptor for the coverage check handler.
@@ -103,10 +101,6 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 
 // Invoke runs go test -cover and returns per-package coverage results.
 func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	if h.env.CommandRunner == nil {
-		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
-	}
-
 	pkg, _ := stringArg(args, "package")
 	if pkg == "" {
 		pkg = "./..."
@@ -118,15 +112,21 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args
 
 	req := sandbox.CommandRequest{
 		Args:    []string{"go", "test", "-cover", pkg},
-		Workdir: workspaceRoot(h.env),
+		Workdir: h.cmd.Workspace,
 		Timeout: 5 * time.Minute,
 	}
 
-	if err := h.authorizeCommand(ctx, h.env, req, "euclo coverage check"); err != nil {
-		return failResult(fmt.Sprintf("coverage command denied: %v", err)), err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
+			return failResult(fmt.Sprintf("coverage command denied: %v", err)), err
+		}
 	}
 
-	res, err := h.env.CommandRunner.Run(ctx, req)
+	if h.cmd.Runner == nil {
+		return failResult("CommandRunner not available in environment"), fmt.Errorf("command runner not available")
+	}
+
+	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
 		return nil, err
 	}

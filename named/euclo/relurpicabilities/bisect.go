@@ -12,21 +12,20 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
 // BisectHandler implements the git bisect capability.
 type BisectHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	cmd   CommandDeps
+	model model.LanguageModel
 }
 
 // NewBisectHandler creates a new bisect handler.
-func NewBisectHandler(env agentenv.AgentContext) *BisectHandler {
-	return &BisectHandler{env: env}
+func NewBisectHandler(cmd CommandDeps, m model.LanguageModel) *BisectHandler {
+	return &BisectHandler{cmd: cmd, model: m}
 }
 
 // Descriptor returns the capability descriptor for the bisect handler.
@@ -94,7 +93,6 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) descrip
 
 // Invoke executes git bisect to find the culprit commit.
 func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	// Extract arguments
 	goodRef, ok := stringArg(args, "good_ref")
 	if !ok || goodRef == "" {
 		return failResult("good_ref argument is required and must be non-empty"), nil
@@ -112,12 +110,7 @@ func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[st
 
 	maxSteps, _ := intArg(args, "max_steps", 30)
 
-	// Check for CommandRunner
-	if h.env.CommandRunner == nil {
-		return failResult("CommandRunner not available in environment"), nil
-	}
-
-	if h.env.Model != nil {
+	if h.model != nil {
 		if result, err := h.runReactiveBisect(ctx, goodRef, badRef, testCommand, maxSteps); err == nil {
 			return result, nil
 		}
@@ -127,7 +120,7 @@ func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[st
 }
 
 func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.ToolResult, error) {
-	workdir := workspacePath(h.env)
+	workdir := h.cmd.Workspace
 	if err := h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "start"}); err != nil {
 		return failResult(fmt.Sprintf("failed to start bisect: %v", err)), nil
 	}
@@ -191,7 +184,7 @@ func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, 
 	// deterministic fallback, but lets the model decide which action to take
 	// next. If the model path fails to produce a valid plan, the caller falls
 	// back to the deterministic loop.
-	workdir := workspacePath(h.env)
+	workdir := h.cmd.Workspace
 	state := bisectSessionState{
 		GoodRef:     goodRef,
 		BadRef:      badRef,
@@ -327,7 +320,7 @@ type bisectSessionState struct {
 }
 
 func (h *BisectHandler) nextBisectDecision(ctx context.Context, state bisectSessionState) (bisectDecision, error) {
-	if h.env.Model == nil {
+	if h.model == nil {
 		return bisectDecision{}, nil
 	}
 	prompt := fmt.Sprintf(`You are orchestrating git bisect.
@@ -344,8 +337,7 @@ Current state:
 Return JSON only:
 {"thought":"...","tool":"run_test|mark_good|mark_bad|check_result|reset|complete","arguments":{},"complete":bool,"summary":"..."}`,
 		state.GoodRef, state.BadRef, state.TestCommand, state.StepsTaken, state.MaxSteps, state.LastTestPassed, state.CulpritCommit, state.Found)
-	resp, err := h.env.Model.Generate(ctx, prompt, &model.LLMOptions{
-		Model:       configuredModelName(h.env.Config),
+	resp, err := h.model.Generate(ctx, prompt, &model.LLMOptions{
 		Temperature: 0,
 		MaxTokens:   256,
 	})
@@ -366,10 +358,15 @@ func (h *BisectHandler) runBisectCommand(ctx context.Context, workdir string, ar
 
 func (h *BisectHandler) runBisectCommandOutput(ctx context.Context, workdir string, args []string) (string, error) {
 	req := sandbox.CommandRequest{Args: args, Workdir: workdir}
-	if err := h.authorizeCommand(ctx, h.env, req, "euclo bisect"); err != nil {
-		return "", err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
+			return "", err
+		}
 	}
-	res, err := h.env.CommandRunner.Run(ctx, req)
+	if h.cmd.Runner == nil {
+		return "", fmt.Errorf("CommandRunner not available")
+	}
+	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -395,10 +392,12 @@ func (h *BisectHandler) runTestCommand(ctx context.Context, workdir, testCommand
 		Args:    []string{"sh", "-c", testCommand},
 		Workdir: workdir,
 	}
-	if err := h.authorizeCommand(ctx, h.env, req, "euclo bisect"); err != nil {
-		return "", "", err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
+			return "", "", err
+		}
 	}
-	res, err := h.env.CommandRunner.Run(ctx, req)
+	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
 		return "", "", err
 	}
@@ -430,11 +429,4 @@ func parseBisectCulprit(output string) (string, bool) {
 	return "", false
 }
 
-func workspacePath(env agentenv.AgentContext) string {
-	if env.IndexManager != nil {
-		if path := strings.TrimSpace(env.IndexManager.WorkspacePath()); path != "" {
-			return path
-		}
-	}
-	return "."
-}
+

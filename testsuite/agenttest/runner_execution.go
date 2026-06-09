@@ -96,7 +96,7 @@ func resolveExplicitOrDefaultTapePath(suite *Suite, recording RecordingSpec, lay
 	if strings.TrimSpace(recording.Tape) != "" {
 		resolved := suite.ResolvePath(recording.Tape)
 		tapePath := resolveAgainstWorkspace(targetWorkspace, resolved, recording.Tape)
-		tapePath = mapTargetPathToWorkspace(tapePath, targetWorkspace, workspace)
+		tapePath = mapTargetPathIntoWorkspace(tapePath, targetWorkspace, workspace)
 		checked, err := ensurePathWithin(workspace, tapePath)
 		if err != nil {
 			return "", err

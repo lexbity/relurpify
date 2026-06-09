@@ -17,10 +17,11 @@ import (
 
 func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 	caps := newCapabilityRegistry(t)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-clarification", "session-clarification")
 	seedTask(env, "help me with this")
@@ -77,11 +78,12 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	broker := authorization.NewHITLBroker(5 * time.Second)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithHITLBroker(broker),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	deps.HITLBroker = broker
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-interaction", "session-interaction")
 	seedTask(env, "implement and review the handler", "mixed.go")

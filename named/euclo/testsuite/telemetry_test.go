@@ -13,10 +13,11 @@ import (
 
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-	)
+	deps := rootGraphDeps(caps)
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-telemetry", "session-telemetry")
 	seedTask(env, "add a cache to the handler")

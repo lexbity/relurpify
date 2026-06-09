@@ -12,16 +12,15 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type BoundaryReportHandler struct {
-	env agentenv.AgentContext
+	deps IndexDeps
 }
 
-func NewBoundaryReportHandler(env agentenv.AgentContext) *BoundaryReportHandler {
-	return &BoundaryReportHandler{env: env}
+func NewBoundaryReportHandler(deps IndexDeps) *BoundaryReportHandler {
+	return &BoundaryReportHandler{deps: deps}
 }
 
 func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
@@ -58,23 +57,18 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env ports.State)
 }
 
 func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
+	if h.deps.Store == nil {
+		return failResult("index service not available"), fmt.Errorf("index service not available")
 	}
 	layer, _ := stringArg(args, "layer")
 	if strings.TrimSpace(layer) == "" {
 		layer = "all"
 	}
-	store := h.env.IndexManager.Store()
-	if store == nil {
-		return failResult("index store not available"), fmt.Errorf("index store not available")
-	}
-	edges, err := store.GetEdgesByType(frameworkast.EdgeTypeImports)
+	edges, err := h.deps.Store.GetEdgesByType(frameworkast.EdgeTypeImports)
 	if err != nil {
 		return failResult(fmt.Sprintf("failed to load import edges: %v", err)), err
 	}
 
-	workspace := workspaceRoot(h.env)
 	dependencyCounts := make(map[string]int)
 	violations := make([]interface{}, 0)
 	checked := 0
@@ -83,15 +77,15 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, arg
 		if edge == nil {
 			continue
 		}
-		sourceNode, _ := store.GetNode(edge.SourceID)
-		targetNode, _ := store.GetNode(edge.TargetID)
-		importerPath := nodeSourcePath(h.env, sourceNode)
-		importeePath := nodeSourcePath(h.env, targetNode)
+		sourceNode, _ := h.deps.Store.GetNode(edge.SourceID)
+		targetNode, _ := h.deps.Store.GetNode(edge.TargetID)
+		importerPath := nodePathFromStore(h.deps.Store, sourceNode, h.deps.Workspace)
+		importeePath := nodePathFromStore(h.deps.Store, targetNode, h.deps.Workspace)
 		if importerPath == "" || importeePath == "" {
 			continue
 		}
-		importerLayer := packageLayerForPath(workspace, importerPath)
-		importeeLayer := packageLayerForPath(workspace, importeePath)
+		importerLayer := packageLayerForPath(h.deps.Workspace, importerPath)
+		importeeLayer := packageLayerForPath(h.deps.Workspace, importeePath)
 		if importerLayer == "" || importeeLayer == "" {
 			continue
 		}

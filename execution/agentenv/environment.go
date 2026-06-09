@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
@@ -55,7 +54,7 @@ type AgentContext struct {
 	Registry *registry.CapabilityRegistry
 	// PermissionManager is the single implementation of the permission manager interface.
 	// Kept as concrete type for direct access to permission enforcement methods.
-	PermissionManager *fauthorization.PermissionManager
+	PermissionManager PermissionManager
 
 	// Code intelligence
 	// IndexManager is the single implementation of the AST index manager interface.

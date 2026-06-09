@@ -12,23 +12,27 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
-	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
+	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // CodeReviewHandler implements the code review capability via an LLM sub-agent.
 type CodeReviewHandler struct {
-	env agentenv.AgentContext
+	gen    model.LanguageModel
+	reg    *registry.CapabilityRegistry
+	config *execution.Config
 }
 
 // NewCodeReviewHandler creates a new code review handler.
-func NewCodeReviewHandler(env agentenv.AgentContext) *CodeReviewHandler {
-	return &CodeReviewHandler{env: env}
+func NewCodeReviewHandler(gen model.LanguageModel, reg *registry.CapabilityRegistry, config *execution.Config) *CodeReviewHandler {
+	return &CodeReviewHandler{gen: gen, reg: reg, config: config}
 }
 
 // Descriptor returns the capability descriptor for the code review handler.
@@ -241,8 +245,8 @@ func buildReflectionReviewTask(focus, contextText string) *execution.Task {
 }
 
 func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contextdata.Envelope, focus, contextText string) ([]map[string]interface{}, string, error) {
-	if h.env.Model == nil {
-		return nil, "", fmt.Errorf("LLM model not available in environment")
+	if h.gen == nil {
+		return nil, "", fmt.Errorf("model not available")
 	}
 
 	scopedEnv := env
@@ -256,11 +260,16 @@ func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contex
 	contextdata.SetTyped(scopedEnv, "code_review.context", contextText)
 
 	task := buildReflectionReviewTask(focus, contextText)
-	runtimeEnv := h.env
-	if runtimeEnv.Config == nil {
-		runtimeEnv.Config = &execution.Config{}
+	cfg := h.config
+	if cfg == nil {
+		cfg = &execution.Config{}
 	}
-	agent := reflectionagent.New(&runtimeEnv, reactpkg.New(&runtimeEnv))
+	deps := &paradigm.Deps{
+		Model:    h.gen,
+		Config:   cfg,
+		Registry: h.reg,
+	}
+	agent := reflectionagent.New(deps, reactpkg.New(deps))
 	if agent == nil {
 		return nil, "", fmt.Errorf("reflection agent could not be constructed")
 	}
@@ -446,12 +455,4 @@ func focusCategory(focus string) string {
 	}
 }
 
-func configuredModelName(cfg *execution.Config) string {
-	if cfg != nil {
-		if name := strings.TrimSpace(cfg.Model); name != "" {
-			return name
-		}
-		return strings.TrimSpace(cfg.InferenceModel)
-	}
-	return ""
-}
+

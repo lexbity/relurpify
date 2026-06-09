@@ -11,18 +11,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
 // openEnvForTest calls OpenWorkspace with ScopeEmbeddedAgent and extracts the
-// environment. It replaces the deleted BuildAgentContext for tests
+// environment. It replaces the deleted broad context builder for tests
 // that exercise the embedded-agent bootstrap path.
 func openEnvForTest(ctx context.Context, cfg WorkspaceConfig, securityBundle *cfgsecurity.Bundle, regFuncs AgentRegistrationFuncs) (*AgentContext, error) {
 	cfg.SecurityBundle = securityBundle
 	cfg.Scope = ScopeEmbeddedAgent
-	ws, err := OpenWorkspace(ctx, cfg, llm.ProviderSecrets{}, regFuncs)
+	ws, err := OpenWorkspace(ctx, cfg, regFuncs)
 	if err != nil {
 		return nil, err
 	}
@@ -37,18 +36,6 @@ func (f *fakeRunner) Run(_ context.Context, _ sandbox.CommandRequest) (*ports.Co
 }
 
 var _ sandbox.CommandRunner = (*fakeRunner)(nil)
-
-// TestMain installs a fake command runner for all tests so they don't require
-// a real sandbox backend (runsc/docker) on the host.
-func TestMain(m *testing.M) {
-	old := buildRunnerForInput
-	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *sandbox.CommandRunnerConfig, error) {
-		return &fakeRunner{}, &sandbox.CommandRunnerConfig{Workspace: "/tmp/test"}, nil
-	}
-	code := m.Run()
-	buildRunnerForInput = old
-	os.Exit(code)
-}
 
 func TestWorkspaceConfig(t *testing.T) {
 	cfg := WorkspaceConfig{

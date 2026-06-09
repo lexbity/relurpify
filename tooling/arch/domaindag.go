@@ -15,18 +15,18 @@ var DomainDAG = domainDAG()
 func domainDAG() map[string]map[string]bool {
 	d := map[string][]string{
 		"app": {
-			"named", "agents", "ayenitd", "execution",
+			"named", "cognitionzoo", "ayenitd", "execution",
 			"context", "capability", "governance",
 			"model", "jobs", "telemetry", "userconfig",
 			"platform", "testsuite", "tooling",
 		},
 		"named": {
-			"agents", "ayenitd", "execution",
+			"cognitionzoo", "ayenitd", "execution",
 			"context", "capability", "governance",
 			"model", "jobs", "telemetry", "userconfig",
 			"platform", "testsuite", "tooling",
 		},
-		"agents": {
+		"cognitionzoo": {
 			"ayenitd", "execution",
 			"context", "capability", "governance",
 			"model", "jobs", "telemetry", "userconfig",

@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"testing"
 
-	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -23,7 +23,7 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 
 	funcs := reg.AgentRegistrationFuncs()
 
-	env := agentenv.AgentContext{}
+	env := agentenv.AgentContext{Registry: registry.NewRegistry()}
 	if err := funcs.RegisterCapabilities(env); err != nil {
 		t.Fatalf("RegisterCapabilities returned error: %v", err)
 	}
@@ -53,22 +53,18 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 
 func TestDefaultCapabilityRegistrarNilRegistry(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	if err := reg.RegisterAll(agentenv.AgentContext{}); err == nil {
+	if err := reg.RegisterAll(nil); err == nil {
 		t.Fatal("expected nil registry to fail")
 	}
 }
 
 func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
 	var reg defaultCapabilityRegistrar
-	env := agentenv.AgentContext{
-		Registry: regpkg.NewRegistry(),
-	}
-
-	if err := reg.RegisterAll(env); err != nil {
+	r := registry.NewRegistry()
+	if err := reg.RegisterAll(r); err != nil {
 		t.Fatalf("RegisterAll returned error: %v", err)
 	}
-
-	if got := len(env.Registry.AllCapabilitySnapshots()); got == 0 {
+	if got := len(r.AllCapabilitySnapshots()); got == 0 {
 		t.Fatal("expected capability registration to populate the registry")
 	}
 }
@@ -76,19 +72,18 @@ func TestDefaultCapabilityRegistrarRegistersCapabilities(t *testing.T) {
 func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 	var reg defaultPromptRegistrar
 	registry := &countingPromptRegistry{seen: make(map[string]bool)}
-	env := agentenv.AgentContext{PromptRegistry: registry}
 
-	if err := reg.RegisterAll(env); err != nil {
+	if err := reg.RegisterAll(registry); err != nil {
 		t.Fatalf("first RegisterAll returned error: %v", err)
 	}
-	if got := registry.count(); got != 19 {
-		t.Fatalf("expected 19 prompt providers, got %d", got)
+	if got := registry.count(); got != 18 {
+		t.Fatalf("expected 18 prompt providers, got %d", got)
 	}
 
-	if err := reg.RegisterAll(env); err != nil {
+	if err := reg.RegisterAll(registry); err != nil {
 		t.Fatalf("second RegisterAll returned error: %v", err)
 	}
-	if got := registry.count(); got != 19 {
+	if got := registry.count(); got != 18 {
 		t.Fatalf("expected duplicate registration to be skipped, got %d providers", got)
 	}
 }
@@ -115,7 +110,7 @@ type stubCapabilityRegistrar struct {
 	called bool
 }
 
-func (s *stubCapabilityRegistrar) RegisterAll(env agentenv.AgentContext) error {
+func (s *stubCapabilityRegistrar) RegisterAll(reg *registry.CapabilityRegistry) error {
 	s.called = true
 	return nil
 }
@@ -124,7 +119,7 @@ type stubPromptRegistrar struct {
 	called bool
 }
 
-func (s *stubPromptRegistrar) RegisterAll(env agentenv.AgentContext) error {
+func (s *stubPromptRegistrar) RegisterAll(registry prompt.Registry) error {
 	s.called = true
 	return nil
 }

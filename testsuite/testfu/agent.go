@@ -12,7 +12,6 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
@@ -28,21 +27,26 @@ type Agent struct {
 	Runner    suiteRunner
 }
 
-func New(env agentenv.AgentContext, opts ...Option) *Agent {
+type Deps struct {
+	Config   *execution.Config
+	Registry *registry.CapabilityRegistry
+}
+
+func New(deps Deps, opts ...Option) *Agent {
 	agent := &Agent{}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(agent)
 		}
 	}
-	_ = agent.InitializeEnvironment(env)
+	_ = agent.InitializeDeps(deps)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.AgentContext) error {
-	a.Config = env.Config
+func (a *Agent) InitializeDeps(deps Deps) error {
+	a.Config = deps.Config
 	if a.Tools == nil {
-		a.Tools = env.Registry
+		a.Tools = deps.Registry
 	}
 	if a.Workspace == "" {
 		a.Workspace = workspaceFromContext(nil)
@@ -51,7 +55,7 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentContext) error {
 		a.Runner = &agenttestpkg.Runner{}
 	}
 	a.registerTools()
-	return a.Initialize(env.Config)
+	return a.Initialize(deps.Config)
 }
 
 func (a *Agent) Initialize(cfg *execution.Config) error {

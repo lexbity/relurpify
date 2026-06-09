@@ -16,16 +16,21 @@ const ModulePath = "codeburg.org/lexbit/relurpify"
 // TopLevelDomains lists the canonical top-level domain directories.
 // Packages outside these are in "framework/", "platform/", "testsuite/", etc.
 var TopLevelDomains = []string{
-	"agents",
 	"app",
 	"ayenitd",
+	"capability",
+	"cognitionzoo",
 	"context",
+	"execution",
 	"framework",
 	"governance",
+	"jobs",
+	"model",
 	"named",
 	"platform",
 	"testsuite",
 	"tooling",
+	"userconfig",
 }
 
 // GoPackage represents a single Go package from `go list -json`.

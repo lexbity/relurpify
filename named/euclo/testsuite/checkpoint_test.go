@@ -135,12 +135,13 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCheckpointRepository(repo),
-		orchestrate.WithPersistenceWriter(writer),
-	)
+	deps := rootGraphDeps(caps)
+	deps.Checkpoints = repo
+	deps.Persistence = writer
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-checkpoint", "session-checkpoint")
 	seedTask(env, "add a cache to the handler", "checkpoint.go")

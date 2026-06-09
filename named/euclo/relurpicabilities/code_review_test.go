@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -61,7 +60,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 			}
 		},
 	}
-	handler := NewCodeReviewHandler(agentenv.AgentContext{Model: model})
+	handler := NewCodeReviewHandler(model, nil, nil)
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "todo: remove stub")
@@ -93,9 +92,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 }
 
 func TestCodeReviewHandlerModelErrorFallsBack(t *testing.T) {
-	handler := NewCodeReviewHandler(agentenv.AgentContext{
-		Model: &mockReviewModel{err: errors.New("model unavailable")},
-	})
+	handler := NewCodeReviewHandler(&mockReviewModel{err: errors.New("model unavailable")}, nil, nil)
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "TODO: refactor this stub")

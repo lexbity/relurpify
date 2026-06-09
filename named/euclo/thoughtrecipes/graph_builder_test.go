@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
@@ -63,7 +63,7 @@ func TestBuildThoughtRecipeGraphWiresLinearParallelAndConditionalSections(t *tes
 		}},
 	}
 
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}
@@ -120,7 +120,7 @@ route:
 	if err != nil {
 		t.Fatalf("LowerDocument failed: %v", err)
 	}
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}
@@ -180,7 +180,7 @@ pipeline:
 	if err != nil {
 		t.Fatalf("LowerDocument failed: %v", err)
 	}
-	graph, err := BuildThoughtRecipeGraph(plan, agentenv.AgentContext{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}

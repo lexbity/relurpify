@@ -11,22 +11,21 @@ import (
 	"time"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	blackboardagent "codeburg.org/lexbit/relurpify/agents/blackboard"
-	chaineragent "codeburg.org/lexbit/relurpify/agents/chainer"
-	goalconagent "codeburg.org/lexbit/relurpify/agents/goalcon"
-	htnagent "codeburg.org/lexbit/relurpify/agents/htn"
-	paradigm "codeburg.org/lexbit/relurpify/agents/paradigm"
-	pipelineagent "codeburg.org/lexbit/relurpify/agents/pipeline"
-	planneragent "codeburg.org/lexbit/relurpify/agents/planner"
-	reactagent "codeburg.org/lexbit/relurpify/agents/react"
-	reflectionagent "codeburg.org/lexbit/relurpify/agents/reflection"
-	rewooagent "codeburg.org/lexbit/relurpify/agents/rewoo"
+	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
+	chaineragent "codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
+	goalconagent "codeburg.org/lexbit/relurpify/cognitionzoo/goalcon"
+	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	pipelineagent "codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
+	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
+	reactagent "codeburg.org/lexbit/relurpify/cognitionzoo/react"
+	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
+	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -43,18 +42,18 @@ const (
 )
 
 // ThoughtRecipeStepNode executes a compiled thoughtrecipe step by delegating to the matching
-// /agents constructor for the step's paradigm.
+// cognitionzoo constructor for the step's paradigm.
 type ThoughtRecipeStepNode struct {
 	id   string
-	env  agentenv.AgentContext
+	deps *paradigm.Deps
 	step ExecutionStep
 }
 
 // NewThoughtRecipeStepNode creates a new agent-backed thoughtrecipe step node.
-func NewThoughtRecipeStepNode(id string, env agentenv.AgentContext, step ExecutionStep) *ThoughtRecipeStepNode {
+func NewThoughtRecipeStepNode(id string, deps *paradigm.Deps, step ExecutionStep) *ThoughtRecipeStepNode {
 	return &ThoughtRecipeStepNode{
 		id:   id,
-		env:  env,
+		deps: deps,
 		step: step,
 	}
 }
@@ -293,7 +292,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	n.writeStepMetadata(env)
 	writeCapabilityMetadata(env, n.step.ID, n.step.CapabilityID)
 
-	reg := n.env.Registry
+	reg := n.deps.Registry
 	if reg == nil {
 		return nil, fmt.Errorf("thoughtrecipe step %q: capability_id requires a registry", n.id)
 	}
@@ -324,9 +323,9 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 		data["error"] = err.Error()
 	}
 
-	if n.env.IngestOutputs && n.env.OutputIngester != nil {
+	if n.deps.IngestOutputs && n.deps.OutputIngester != nil {
 		if payload, marshalErr := json.Marshal(data); marshalErr == nil {
-			knowledge.IngestToolResultAsync(contextdata.WithEnvelope(ctx, env), n.env.OutputIngester, n.step.CapabilityID, payload)
+			knowledge.IngestToolResultAsync(contextdata.WithEnvelope(ctx, env), n.deps.OutputIngester, n.step.CapabilityID, payload)
 		}
 	}
 
@@ -357,7 +356,7 @@ func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*execution
 
 	var instruction string
 	if n.step.PromptID != "" {
-		if n.env.PromptRegistry == nil {
+		if n.deps.PromptRegistry == nil {
 			return nil, fmt.Errorf("thoughtrecipe step %q: prompt_id requires a registry", n.step.ID)
 		}
 		var err error
@@ -543,7 +542,7 @@ func (n *ThoughtRecipeStepNode) writeDelegationCaptures(parent, child *contextda
 
 // resolveFromRegistry resolves the prompt from the registry using the PromptID.
 func (n *ThoughtRecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (string, error) {
-	if n.env.PromptRegistry == nil {
+	if n.deps.PromptRegistry == nil {
 		return "", fmt.Errorf("no prompt registry available")
 	}
 
@@ -551,7 +550,7 @@ func (n *ThoughtRecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (
 	rctx := n.buildRuntimeContext(env)
 
 	// Resolve the prompt from registry
-	return n.env.PromptRegistry.Resolve(n.step.PromptID, rctx)
+	return n.deps.PromptRegistry.Resolve(n.step.PromptID, rctx)
 }
 
 // buildRuntimeContext creates a prompt.RuntimeContext for thoughtrecipe step resolution.
@@ -581,9 +580,9 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 		if snapshot := scopedRegistry.CaptureExecutionCatalogSnapshot(); snapshot != nil {
 			runtime.Capabilities = snapshot.InspectableCapabilities()
 		}
-	} else if n.env.Registry != nil {
-		runtime.Tools = n.env.Registry.ModelCallableTools()
-		runtime.Capabilities = n.env.Registry.AllCapabilities()
+	} else if n.deps.Registry != nil {
+		runtime.Tools = n.deps.Registry.ModelCallableTools()
+		runtime.Capabilities = n.deps.Registry.AllCapabilities()
 	}
 	runtime.AgentSpec = nil
 	return runtime
@@ -828,38 +827,38 @@ func (n *ThoughtRecipeStepNode) buildCapabilityArgs(env *contextdata.Envelope) m
 }
 
 func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor, error) {
-	scopedEnv := n.env
+	deps := n.deps
 	if scopedRegistry := n.scopedRegistry(); scopedRegistry != nil {
-		scopedEnv = scopedEnv.WithRegistry(scopedRegistry)
+		deps = depsWithRegistry(deps, scopedRegistry)
 	}
 
 	switch strings.ToLower(strings.TrimSpace(n.step.Paradigm)) {
 	case "react":
-		return reactagent.New(&scopedEnv, n.streamOptions()...), nil
+		return reactagent.New(deps, n.streamOptions()...), nil
 	case "planner":
-		return planneragent.New(&scopedEnv), nil
+		return planneragent.New(deps), nil
 	case "htn":
-		primitive := reactagent.New(&scopedEnv, n.streamOptions()...)
-		return htnagent.New(&scopedEnv, htnagent.NewMethodLibrary(), append([]paradigm.Option{
+		primitive := reactagent.New(deps, n.streamOptions()...)
+		return htnagent.New(deps, htnagent.NewMethodLibrary(), append([]htnagent.Option{
 			htnagent.WithPrimitiveExec(primitive),
 		}, n.streamOptionsHTN()...)...), nil
 	case "reflection":
-		delegate := reactagent.New(&scopedEnv, n.streamOptions()...)
-		return reflectionagent.New(&scopedEnv, delegate), nil
+		delegate := reactagent.New(deps, n.streamOptions()...)
+		return reflectionagent.New(deps, delegate), nil
 	case "blackboard":
-		return blackboardagent.New(&scopedEnv, n.streamOptionsBlackboard()...), nil
+		return blackboardagent.New(deps, n.streamOptionsBlackboard()...), nil
 	case "chainer":
-		return chaineragent.New(&scopedEnv, n.streamOptionsChainer()...), nil
+		return chaineragent.New(deps, n.streamOptionsChainer()...), nil
 	case "pipeline":
-		return pipelineagent.New(&scopedEnv, n.streamOptionsPipeline()...), nil
+		return pipelineagent.New(deps, n.streamOptionsPipeline()...), nil
 	case "rewoo":
-		agent := rewooagent.New(&scopedEnv)
+		agent := rewooagent.New(deps)
 		agent.Options = n.rewooOptions()
 		return agent, nil
 	case "goalcon":
-		agent := goalconagent.New(&scopedEnv, goalconagent.DefaultOperatorRegistry(), n.streamOptionsGoalCon()...)
+		agent := goalconagent.New(deps, goalconagent.DefaultOperatorRegistry(), n.streamOptionsGoalCon()...)
 		if agent != nil && agent.PlanExecutor == nil {
-			agent.PlanExecutor = reactagent.New(&scopedEnv, n.streamOptions()...)
+			agent.PlanExecutor = reactagent.New(deps, n.streamOptions()...)
 		}
 		return agent, nil
 	default:
@@ -868,18 +867,18 @@ func (n *ThoughtRecipeStepNode) buildAgent(task *execution.Task) (agentgraph.Wor
 }
 
 func (n *ThoughtRecipeStepNode) scopedRegistry() *registry.CapabilityRegistry {
-	if n == nil || n.env.Registry == nil {
+	if n == nil || n.deps == nil || n.deps.Registry == nil {
 		return nil
 	}
 	allowed := n.effectiveToolAllowlist()
 	if len(allowed) == 0 {
 		return nil
 	}
-	return n.env.Registry.WithAllowlist(allowed)
+	return n.deps.Registry.WithAllowlist(allowed)
 }
 
 func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
-	if n == nil || n.env.Registry == nil {
+	if n == nil || n.deps == nil || n.deps.Registry == nil {
 		return nil
 	}
 	if len(n.step.EffectiveToolNames) == 0 {
@@ -892,7 +891,7 @@ func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
 		if name == "" {
 			continue
 		}
-		desc, ok := n.env.Registry.GetCapability(name)
+		desc, ok := n.deps.Registry.GetCapability(name)
 		if !ok {
 			continue
 		}
@@ -911,8 +910,8 @@ func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
 	return allowed
 }
 
-func (n *ThoughtRecipeStepNode) streamOptions() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptions() []reactagent.Option {
+	opts := make([]reactagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, reactagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -927,8 +926,8 @@ func (n *ThoughtRecipeStepNode) streamOptions() []paradigm.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsHTN() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsHTN() []htnagent.Option {
+	opts := make([]htnagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, htnagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -943,8 +942,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsHTN() []paradigm.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []blackboardagent.Option {
+	opts := make([]blackboardagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, blackboardagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -959,8 +958,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsBlackboard() []paradigm.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsChainer() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsChainer() []chaineragent.Option {
+	opts := make([]chaineragent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, chaineragent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -975,8 +974,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsChainer() []paradigm.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []pipelineagent.Option {
+	opts := make([]pipelineagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, pipelineagent.WithContextStreamMode(contextstream.Mode(mode)))
@@ -991,8 +990,8 @@ func (n *ThoughtRecipeStepNode) streamOptionsPipeline() []paradigm.Option {
 	return opts
 }
 
-func (n *ThoughtRecipeStepNode) streamOptionsGoalCon() []paradigm.Option {
-	opts := make([]paradigm.Option, 0, 3)
+func (n *ThoughtRecipeStepNode) streamOptionsGoalCon() []goalconagent.Option {
+	opts := make([]goalconagent.Option, 0, 3)
 	if n.step.Stream != nil {
 		if mode := strings.TrimSpace(n.step.Stream.Mode); mode != "" {
 			opts = append(opts, goalconagent.WithContextStreamMode(contextstream.Mode(mode)))

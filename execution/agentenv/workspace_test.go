@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -55,13 +54,6 @@ func TestSetupTelemetryRejectsInvalidLogDir(t *testing.T) {
 // succeeds with spec-only input (no ManifestSnapshot) and produces a fully
 // policy-wired environment equivalent to the snapshot path.
 func TestBootstrapAgentRuntimeSpecOnly(t *testing.T) {
-	// Install fake runner so we don't need a real sandbox.
-	old := buildRunnerForInput
-	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *sandbox.CommandRunnerConfig, error) {
-		return &fakeRunner{}, &sandbox.CommandRunnerConfig{Workspace: "/tmp/test"}, nil
-	}
-	t.Cleanup(func() { buildRunnerForInput = old })
-
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)
@@ -118,12 +110,6 @@ func TestBootstrapAgentRuntimeSpecOnly(t *testing.T) {
 // TestBootstrapAgentRuntimeSnapshotStillWins asserts that when both
 // ManifestSnapshot and AgentSpec are supplied, the manifest is authoritative.
 func TestBootstrapAgentRuntimeSnapshotStillWins(t *testing.T) {
-	old := buildRunnerForInput
-	buildRunnerForInput = func(_ SecuredRuntimeInput) (sandbox.CommandRunner, *sandbox.CommandRunnerConfig, error) {
-		return &fakeRunner{}, &sandbox.CommandRunnerConfig{Workspace: "/tmp/test"}, nil
-	}
-	t.Cleanup(func() { buildRunnerForInput = old })
-
 	ctx := context.Background()
 	workspace := t.TempDir()
 	writeSecurityPolicyFixtures(t, workspace)

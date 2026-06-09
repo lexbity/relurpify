@@ -9,13 +9,34 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
+func testGraphDeps(t *testing.T) RootGraphDeps {
+	t.Helper()
+	reg := testGraphCapabilityRegistry(t)
+	return RootGraphDeps{
+		DispatchCapabilities: reg,
+		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		Paradigm: &paradigm.Deps{
+			Registry:      reg,
+			Config:        &execution.Config{Name: "test", Model: "stub"},
+			WorkingMemory: memory.NewWorkingMemoryStore(),
+		},
+	}
+}
+
 func TestRootGraphExecute(t *testing.T) {
-	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
+	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	state.SetRouteSelection(env, &euclotypes.RouteSelection{
@@ -23,39 +44,47 @@ func TestRootGraphExecute(t *testing.T) {
 		CapabilityID: "euclo:cap.ast_query",
 	})
 
-	err := graph.Execute(context.Background(), env)
+	err = rootGraph.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	// Verify that execution completed
 	if !state.GetExecutionCompleted(env) {
 		t.Error("Expected execution.completed in envelope")
 	}
 
-	// Verify outcome was classified
 	category, ok := state.GetOutcomeCategory(env)
 	if !ok {
 		t.Error("Expected outcome.category in envelope")
 	}
-
 	if category == "" {
 		t.Error("Expected non-empty outcome.category")
 	}
 }
 
 func TestRootGraphValidate(t *testing.T) {
-	graph := NewRootGraph()
-	if graph == nil || graph.Graph() == nil {
+	deps := RootGraphDeps{
+		DispatchCapabilities: registry.NewRegistry(),
+		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		Paradigm:             &paradigm.Deps{},
+	}
+	rootGraph, err := NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
+	if rootGraph == nil || rootGraph.Graph() == nil {
 		t.Fatal("expected graph to be initialized")
 	}
-	if err := graph.Graph().Validate(); err != nil {
+	if err := rootGraph.Graph().Validate(); err != nil {
 		t.Fatalf("expected graph validation to succeed: %v", err)
 	}
 }
 
 func TestRootGraphThoughtRecipeRoute(t *testing.T) {
-	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
+	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	state.SetRouteSelection(env, &euclotypes.RouteSelection{
@@ -63,24 +92,22 @@ func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 		CapabilityID: "euclo:cap.ast_query",
 	})
 
-	err := graph.Execute(context.Background(), env)
+	err = rootGraph.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	// Verify execution path was taken (stub defaults to capability)
 	kind := state.GetExecutionKind(env)
 	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
-
-	if kind == "" {
-		t.Error("Expected non-empty execution.kind")
-	}
 }
 
 func TestRootGraphCapabilityRoute(t *testing.T) {
-	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
+	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	state.SetRouteSelection(env, &euclotypes.RouteSelection{
@@ -88,24 +115,25 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 		CapabilityID: "euclo:cap.ast_query",
 	})
 
-	err := graph.Execute(context.Background(), env)
+	err = rootGraph.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	// Verify capability execution path was taken
 	kind := state.GetExecutionKind(env)
 	if kind == "" {
 		t.Error("Expected execution.kind in envelope")
 	}
-
 	if kind != "capability" {
 		t.Errorf("Expected execution.kind capability, got %v", kind)
 	}
 }
 
 func TestRootGraphPolicyDecision(t *testing.T) {
-	graph := NewRootGraph(WithCapabilityRegistry(testGraphCapabilityRegistry(t)))
+	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	state.SetRouteSelection(env, &euclotypes.RouteSelection{
@@ -113,19 +141,28 @@ func TestRootGraphPolicyDecision(t *testing.T) {
 		CapabilityID: "euclo:cap.ast_query",
 	})
 
-	err := graph.Execute(context.Background(), env)
+	err = rootGraph.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	// Verify policy decision was made
 	decision, ok := state.GetPolicyDecision(env)
 	if !ok {
 		t.Error("Expected policy.mutation_permitted in envelope")
 	}
-
 	if decision == nil {
 		t.Error("Expected non-nil policy.mutation_permitted")
+	}
+}
+
+func TestRootGraphReturnsErrorOnNilParadigmDeps(t *testing.T) {
+	deps := RootGraphDeps{
+		DispatchCapabilities: registry.NewRegistry(),
+		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+	}
+	_, err := NewRootGraph(deps)
+	if err == nil {
+		t.Fatal("expected error for nil paradigm deps")
 	}
 }
 

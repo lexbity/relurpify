@@ -4,7 +4,7 @@ package agentenv
 // OpenWorkspace. Security and capability assembly are always unconditional;
 // only the listed layers can be subtracted via a non-full scope.
 //
-// A zero-value WorkspaceScope defaults to ScopeFull for backward compatibility
+// A zero-value WorkspaceScope defaults to ScopeFull
 // when Scope is not set on WorkspaceConfig (see zeroScopeDefaultsToFull).
 type WorkspaceScope struct {
 	LLMBackend     bool // build inference backend + instrumented model

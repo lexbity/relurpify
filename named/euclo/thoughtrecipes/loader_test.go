@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
@@ -280,20 +279,6 @@ run reviewer:
 }
 
 func TestThoughtRecipeLoaderValidatesPromptImportsWithRepositoryPromptRegistry(t *testing.T) {
-	repoRoot := filepath.Join("..", "..", "..")
-	promptRegistry, err := agentenv.BuildPromptRegistry(repoRoot, nil)
-	if err != nil {
-		t.Fatalf("BuildPromptRegistry: %v", err)
-	}
-	for _, id := range []string{
-		"named.euclo.code.explore",
-		"named.euclo.intent.clarify.question.v1",
-	} {
-		if cfg, ok := promptRegistry.Get(id); !ok || cfg == nil {
-			t.Fatalf("expected repository prompt %q to be registered", id)
-		}
-	}
-
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
 	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
@@ -320,6 +305,9 @@ ask user:
 		t.Fatalf("write prompt import thoughtrecipe: %v", err)
 	}
 
+	promptRegistry := prompttest.New().
+		With("named.euclo.code.explore", "Explore.").
+		With("named.euclo.intent.clarify.question.v1", "Clarify?")
 	result, err := NewLoader().WithPromptRegistry(promptRegistry).LoadWorkspace(root)
 	if err != nil {
 		t.Fatalf("LoadWorkspace returned error: %v", err)

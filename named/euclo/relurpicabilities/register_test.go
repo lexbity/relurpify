@@ -8,8 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
@@ -51,34 +49,46 @@ func (t availabilityTool) Permissions() ports.ToolPermissions {
 func (t availabilityTool) Tags() []string { return []string{"test"} }
 
 func TestRegisterAllNilRegistryErrors(t *testing.T) {
-	env := agentenv.AgentContext{
+	err := RegisterAll(RegistrationDeps{
 		Registry: nil,
-	}
-
-	err := RegisterAll(env, declaredRelurpicIDs)
+		Declared: declaredRelurpicIDs,
+	})
 	if err == nil {
 		t.Fatal("expected error when registry is nil, got nil")
 	}
-
 	if err.Error() != "capability registry is nil" {
 		t.Fatalf("expected 'capability registry is nil' error, got: %v", err)
 	}
 }
 
-func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: []string{
-					"euclo:cap.test_run",
-					"euclo:cap.does_not_exist",
-				}},
-			},
-		},
+func TestRegisterAllEmptyDeclaredErrors(t *testing.T) {
+	err := RegisterAll(RegistrationDeps{
 		Registry: registry.NewRegistry(),
+		Declared: nil,
+	})
+	if err == nil {
+		t.Fatal("expected error when declared is nil, got nil")
 	}
+	if !strings.Contains(err.Error(), "capabilities.relurpic required") {
+		t.Fatalf("expected 'capabilities.relurpic required' error, got: %v", err)
+	}
+}
 
-	err := RegisterAll(env, []string{"euclo:cap.test_run", "euclo:cap.does_not_exist"})
+func TestRegisterAllEmptyDeclaredSliceErrors(t *testing.T) {
+	err := RegisterAll(RegistrationDeps{
+		Registry: registry.NewRegistry(),
+		Declared: []string{},
+	})
+	if err == nil {
+		t.Fatal("expected error when declared is empty")
+	}
+}
+
+func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
+	err := RegisterAll(RegistrationDeps{
+		Registry: registry.NewRegistry(),
+		Declared: []string{"euclo:cap.test_run", "euclo:cap.does_not_exist"},
+	})
 	if err == nil {
 		t.Fatal("expected unknown declaration to fail")
 	}
@@ -87,17 +97,47 @@ func TestRegisterAllRejectsUnknownDeclaration(t *testing.T) {
 	}
 }
 
-func TestRegisterAllValidRegistryNoError(t *testing.T) {
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
-			},
-		},
-		Registry: registry.NewRegistry(),
+func TestRegisterAllSkipsDuplicateDeclared(t *testing.T) {
+	reg := registry.NewRegistry()
+	err := RegisterAll(RegistrationDeps{
+		Registry: reg,
+		Declared: append(declaredRelurpicIDs, declaredRelurpicIDs...), // duplicate declared
+	})
+	if err != nil {
+		t.Fatalf("expected duplicate declared to be idempotent, got: %v", err)
 	}
+	// Verify all capabilities are registered once
+	for _, id := range declaredRelurpicIDs {
+		if !reg.HasCapability(id) {
+			t.Fatalf("expected capability %s to be registered", id)
+		}
+	}
+}
 
-	err := RegisterAll(env, declaredRelurpicIDs)
+func TestRegisterAllAlreadyRegisteredIsIdempotent(t *testing.T) {
+	reg := registry.NewRegistry()
+	deps := RegistrationDeps{
+		Registry: reg,
+		Declared: declaredRelurpicIDs,
+	}
+	if err := RegisterAll(deps); err != nil {
+		t.Fatalf("first register: %v", err)
+	}
+	count := len(reg.AllCapabilitySnapshots())
+	// Register again - should be idempotent
+	if err := RegisterAll(deps); err != nil {
+		t.Fatalf("second register: %v", err)
+	}
+	if got := len(reg.AllCapabilitySnapshots()); got != count {
+		t.Fatalf("expected %d capabilities after re-registration, got %d", count, got)
+	}
+}
+
+func TestRegisterAllValidRegistryNoError(t *testing.T) {
+	err := RegisterAll(RegistrationDeps{
+		Registry: registry.NewRegistry(),
+		Declared: declaredRelurpicIDs,
+	})
 	if err != nil {
 		t.Fatalf("expected no error with valid registry, got: %v", err)
 	}
@@ -105,15 +145,10 @@ func TestRegisterAllValidRegistryNoError(t *testing.T) {
 
 func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 	reg := registry.NewRegistry()
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
-			},
-		},
+	if err := RegisterAll(RegistrationDeps{
 		Registry: reg,
-	}
-	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
+		Declared: declaredRelurpicIDs,
+	}); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 
@@ -151,15 +186,10 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
 
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
-			},
-		},
+	if err := RegisterAll(RegistrationDeps{
 		Registry: reg,
-	}
-	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
+		Declared: declaredRelurpicIDs,
+	}); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 
@@ -193,15 +223,10 @@ func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
 	reg := registry.NewRegistry()
 	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
 
-	env := agentenv.AgentContext{
-		Config: &execution.Config{
-			AgentSpec: &agentspec.AgentRuntimeSpec{
-				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, declaredRelurpicIDs...)},
-			},
-		},
+	if err := RegisterAll(RegistrationDeps{
 		Registry: reg,
-	}
-	if err := RegisterAll(env, declaredRelurpicIDs); err != nil {
+		Declared: declaredRelurpicIDs,
+	}); err != nil {
 		t.Fatalf("register all: %v", err)
 	}
 

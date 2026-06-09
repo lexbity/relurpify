@@ -10,19 +10,29 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // BlameTraceHandler implements the git blame capability.
 type BlameTraceHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	cmd       CommandDeps
+	resolver  symbolResolver
+}
+
+// symbolResolver resolves a symbol name to a line range. nil means unavailable.
+type symbolResolver interface {
+	QuerySymbol(name string) ([]symbolQueryResult, error)
+}
+
+// symbolQueryResult captures the line-range fields blame_trace needs.
+type symbolQueryResult struct {
+	StartLine int
+	EndLine   int
 }
 
 // NewBlameTraceHandler creates a new blame trace handler.
-func NewBlameTraceHandler(env agentenv.AgentContext) *BlameTraceHandler {
-	return &BlameTraceHandler{env: env}
+func NewBlameTraceHandler(cmd CommandDeps, resolver symbolResolver) *BlameTraceHandler {
+	return &BlameTraceHandler{cmd: cmd, resolver: resolver}
 }
 
 // Descriptor returns the capability descriptor for the blame trace handler.
@@ -88,23 +98,16 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 
 // Invoke executes git blame and returns parsed blame entries.
 func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	// Extract arguments
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {
 		return failResult("file argument is required and must be non-empty"), nil
 	}
 
-	// Check for CommandRunner
-	if h.env.CommandRunner == nil {
-		return failResult("CommandRunner not available in environment"), nil
+	resolvedFile := resolveCandidatePath(file, h.cmd.Workspace)
+	if resolvedFile == "" {
+		return failResult(fmt.Sprintf("file resolution failed: %s", file)), nil
 	}
 
-	resolvedFile, err := h.resolveWorkspacePath(h.env, file)
-	if err != nil {
-		return failResult(fmt.Sprintf("file resolution failed: %v", err)), err
-	}
-
-	// Determine line range
 	var lineRange string
 	if lines, ok := args["lines"].([]interface{}); ok && len(lines) == 2 {
 		start, _ := intArg(args, "lines", 0)
@@ -121,20 +124,18 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 		}
 	}
 
-	// If symbol is provided, resolve to line range using IndexManager
 	if symbol, ok := stringArg(args, "symbol"); ok && symbol != "" {
-		if h.env.IndexManager != nil {
-			nodes, err := h.env.IndexManager.QuerySymbol(symbol)
+		if h.resolver != nil {
+			nodes, err := h.resolver.QuerySymbol(symbol)
 			if err == nil && len(nodes) > 0 {
-				node := nodes[0]
-				if node.StartLine > 0 && node.EndLine > 0 {
-					lineRange = fmt.Sprintf("-L%d,%d", node.StartLine, node.EndLine)
+				first := nodes[0]
+				if first.StartLine > 0 && first.EndLine > 0 {
+					lineRange = fmt.Sprintf("-L%d,%d", first.StartLine, first.EndLine)
 				}
 			}
 		}
 	}
 
-	// Build git blame command
 	cmdArgs := []string{"git", "blame", "--porcelain"}
 	if lineRange != "" {
 		cmdArgs = append(cmdArgs, lineRange)
@@ -143,15 +144,20 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 
 	req := sandbox.CommandRequest{
 		Args:    cmdArgs,
-		Workdir: h.env.IndexManager.WorkspacePath(),
+		Workdir: h.cmd.Workspace,
 	}
-	if err := h.authorizeCommand(ctx, h.env, req, "euclo blame trace"); err != nil {
-		return failResult(fmt.Sprintf("blame command denied: %v", err)), err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
+			return failResult(fmt.Sprintf("blame command denied: %v", err)), err
+		}
 	}
 	req.Args[len(req.Args)-1] = resolvedFile
 
-	// Execute command
-	res, err := h.env.CommandRunner.Run(ctx, req)
+	if h.cmd.Runner == nil {
+		return failResult("CommandRunner not available in environment"), nil
+	}
+
+	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,

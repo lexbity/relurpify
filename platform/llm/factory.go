@@ -2,6 +2,7 @@ package llm
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -39,6 +40,32 @@ func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
 	}
 	return factory(cfg, secrets)
+}
+
+// RegisteredProviders returns the list of provider names that have been
+// registered (via init() or explicit RegisterProvider calls).
+func RegisteredProviders() []string {
+	providerFactoriesMu.RLock()
+	defer providerFactoriesMu.RUnlock()
+	out := make([]string, 0, len(providerFactories))
+	for name := range providerFactories {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// DefaultProviders returns a copy of the currently registered provider
+// factories as an explicit map. Callers can select from the map and pass
+// the selected entries to New or any other construction path.
+func DefaultProviders() map[string]providerFactory {
+	providerFactoriesMu.RLock()
+	defer providerFactoriesMu.RUnlock()
+	out := make(map[string]providerFactory, len(providerFactories))
+	for name, factory := range providerFactories {
+		out[name] = factory
+	}
+	return out
 }
 
 func applyProviderDefaults(cfg *ProviderConfig) {

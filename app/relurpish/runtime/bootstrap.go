@@ -14,9 +14,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
@@ -40,10 +38,10 @@ type AgentBootstrapOptions struct {
 	ManifestSnapshot    *config.AgentManifestSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
 	ProfileResolution   modelselect.ProfileResolution
-	PermissionManager   *fauthorization.PermissionManager
+	PermissionManager   agentenv.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               model.LanguageModel
-	Backend             llm.ManagedBackend
+	Backend             agentenv.ModelBackend
 	InferenceModel      string
 	Telemetry           telemetry.Telemetry
 	SkipASTIndex        bool
@@ -61,11 +59,11 @@ type BootstrappedAgentRuntime struct {
 	Memory               *memory.WorkingMemoryStore
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
-	Backend              llm.ManagedBackend
+	Backend              agentenv.ModelBackend
 	Environment          agentenv.AgentContext
 	CapabilityAdmissions []registry.AdmissionResult
 	Contract             *config.EffectiveAgentContract
-	CompiledPolicy       *fauthorization.CompiledPolicyBundle
+	CompiledPolicy       *agentenv.CompiledPolicy
 }
 
 // BootstrapAgentRuntime delegates to agentenv.BootstrapAgentRuntime and then
@@ -98,8 +96,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if err != nil {
 		return nil, err
 	}
-	_ = llm.ApplyProfile(boot.Backend, opts.ProfileResolution.Profile)
-	_ = llm.ApplyProfile(boot.Environment.Model, opts.ProfileResolution.Profile)
 
 	return &BootstrappedAgentRuntime{
 		Registry:             boot.Registry,

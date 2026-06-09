@@ -1,24 +1,17 @@
 package tui
 
-import (
-	"os"
-
-	"github.com/muesli/termenv"
-)
-
 // ReduceMotion holds the cached result of motion-preference detection.
 // Query it via Reduced() before deciding whether to skip animations.
 type ReduceMotion struct {
 	reduced bool
 }
 
-// NewReduceMotion auto-detects whether animations should be disabled by
-// checking OS environment variables and terminal capabilities. It returns a
-// cached detector safe for concurrent reads.
-func NewReduceMotion() *ReduceMotion {
-	r := &ReduceMotion{}
-	r.detect()
-	return r
+// NewReduceMotion creates a ReduceMotion with the given motion preference.
+// Callers should detect motion preference (e.g. from config, env vars) and
+// pass the result here. The detection must happen in the app init path, not
+// in this constructor, so config-read paths stay centralized.
+func NewReduceMotion(reduced bool) *ReduceMotion {
+	return &ReduceMotion{reduced: reduced}
 }
 
 // Reduced returns true when animations should be skipped.
@@ -27,58 +20,6 @@ func (r *ReduceMotion) Reduced() bool {
 		return false
 	}
 	return r.reduced
-}
-
-// detect populates the reduced flag based on heuristics.
-func (r *ReduceMotion) detect() {
-	if r == nil {
-		return
-	}
-
-	// 1. Explicit env var opt-out.
-	if v := os.Getenv("RELPURIFY_REDUCE_MOTION"); v != "" {
-		r.reduced = true
-		return
-	}
-
-	// 2. CI environments — always reduce.
-	if v := os.Getenv("CI"); v != "" {
-		r.reduced = true
-		return
-	}
-	if v := os.Getenv("GITHUB_ACTIONS"); v != "" {
-		r.reduced = true
-		return
-	}
-
-	// 3. Non-interactive / pipe — no terminal to animate on.
-	stat, _ := os.Stdout.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		r.reduced = true
-		return
-	}
-
-	// 4. SSH or remote session — local motion may not render smoothly.
-	if v := os.Getenv("SSH_TTY"); v != "" {
-		r.reduced = true
-		return
-	}
-	if v := os.Getenv("SSH_CONNECTION"); v != "" {
-		r.reduced = true
-		return
-	}
-
-	// 5. Dumb terminal or very limited colour support.
-	profile := termenv.EnvColorProfile()
-	if profile == termenv.Ascii {
-		r.reduced = true
-		return
-	}
-	term := os.Getenv("TERM")
-	if term == "dumb" || term == "" {
-		r.reduced = true
-		return
-	}
 }
 
 // Collapse returns the final frame of an animation. For an animation

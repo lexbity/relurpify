@@ -2,62 +2,101 @@ package relurpicabilities
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/handler"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/capability/handler"
 )
+
+// RegistrationDeps is the dependency contract for RegisterAll.
+type RegistrationDeps struct {
+	Registry *registry.CapabilityRegistry
+	Declared []string
+}
 
 type relurpicCapabilityBlueprint struct {
 	ID            string
 	RequiredTools []string
-	NewHandler    func(agentenv.AgentContext) handler.InvocableCapabilityHandler
+	NewHandler    func(RegistrationDeps) handler.InvocableCapabilityHandler
+}
+
+// workspaceFileSystem implements WorkspaceFiles using the OS filesystem.
+type workspaceFileSystem struct {
+	workspace string
+}
+
+func (w *workspaceFileSystem) Resolve(candidate string) (string, string, error) {
+	return resolveCandidatePath(candidate, w.workspace), resolveCandidatePath(candidate, w.workspace), nil
+}
+
+func (w *workspaceFileSystem) Read(candidate string) ([]byte, string, error) {
+	resolved := resolveCandidatePath(candidate, w.workspace)
+	if resolved == "" {
+		return nil, "", fmt.Errorf("path resolution failed: %s", candidate)
+	}
+	content, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, resolved, nil
+}
+
+func (w *workspaceFileSystem) Write(candidate string, content []byte, perm os.FileMode) (string, error) {
+	resolved := resolveCandidatePath(candidate, w.workspace)
+	if resolved == "" {
+		return "", fmt.Errorf("path resolution failed: %s", candidate)
+	}
+	if err := os.WriteFile(resolved, content, perm); err != nil {
+		return "", err
+	}
+	return resolved, nil
 }
 
 var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
-	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewTestRunHandler(env)
+	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewTestRunHandler(CommandDeps{})
 	}},
-	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewASTQueryHandler(env)
+	{ID: "euclo:cap.ast_query", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewASTQueryHandler(nil)
 	}},
-	{ID: "euclo:cap.symbol_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewSymbolTraceHandler(env)
+	{ID: "euclo:cap.symbol_trace", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewSymbolTraceHandler(nil)
 	}},
-	{ID: "euclo:cap.call_graph", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewCallGraphHandler(env)
+	{ID: "euclo:cap.call_graph", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewCallGraphHandler(IndexDeps{})
 	}},
-	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewBlameTraceHandler(env)
+	{ID: "euclo:cap.blame_trace", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewBlameTraceHandler(CommandDeps{}, nil)
 	}},
-	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewBisectHandler(env)
+	{ID: "euclo:cap.bisect", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewBisectHandler(CommandDeps{}, nil)
 	}},
-	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewCodeReviewHandler(env)
+	{ID: "euclo:cap.code_review", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewCodeReviewHandler(nil, deps.Registry, nil)
 	}},
-	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewDiffSummaryHandler(env)
+	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewDiffSummaryHandler(CommandDeps{}, nil)
 	}},
-	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewLayerCheckHandler(env)
+	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewLayerCheckHandler(IndexDeps{})
 	}},
-	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewTargetedRefactorHandler(env)
+	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewTargetedRefactorHandler(nil, nil, nil, nil, nil)
 	}},
-	{ID: "euclo:cap.rename_symbol", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewRenameSymbolHandler(env)
+	{ID: "euclo:cap.rename_symbol", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewRenameSymbolHandler(nil, nil, nil, nil)
 	}},
-	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewAPICompatHandler(env)
+	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewAPICompatHandler(CommandDeps{})
 	}},
-	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewBoundaryReportHandler(env)
+	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewBoundaryReportHandler(IndexDeps{})
 	}},
-	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(env agentenv.AgentContext) handler.InvocableCapabilityHandler {
-		return NewCoverageCheckHandler(env)
+	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
+		return NewCoverageCheckHandler(CommandDeps{})
 	}},
 }
 
@@ -71,39 +110,33 @@ func AllCapabilityIDs() []string {
 	return ids
 }
 
-// RegisterAll registers only the Euclo relurpic capability handlers declared
-// by the active agent spec.
-func RegisterAll(env agentenv.AgentContext, declared []string) error {
-	if env.Registry == nil {
+// RegisterAll registers relurpic capability handlers declared in deps.Declared.
+// It is idempotent: already-registered capabilities are skipped without error.
+// Unknown declared IDs cause a failure.
+func RegisterAll(deps RegistrationDeps) error {
+	if deps.Registry == nil {
 		return fmt.Errorf("capability registry is nil")
 	}
-	if len(declared) == 0 {
+	if len(deps.Declared) == 0 {
 		return fmt.Errorf("capabilities.relurpic required")
 	}
 
-	declaredSet := make(map[string]struct{}, len(declared))
-	for _, id := range declared {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			return fmt.Errorf("capabilities.relurpic contains empty capability id")
-		}
-		declaredSet[id] = struct{}{}
-	}
+	declaredSet := normalizeDeclared(deps.Declared)
 
 	seen := make(map[string]struct{}, len(declaredSet))
 	for _, blueprint := range eucloRelurpicCapabilityBlueprints {
 		if _, ok := declaredSet[blueprint.ID]; !ok {
 			continue
 		}
-		if env.Registry.HasCapability(blueprint.ID) {
+		if deps.Registry.HasCapability(blueprint.ID) {
 			seen[blueprint.ID] = struct{}{}
 			continue
 		}
-		handler := blueprint.NewHandler(env)
+		handler := blueprint.NewHandler(deps)
 		if handler == nil {
 			return fmt.Errorf("relurpic capability %s handler is nil", blueprint.ID)
 		}
-		if err := registerRelurpicCapability(env.Registry, relurpicCapabilitySpec{
+		if err := registerRelurpicCapability(deps.Registry, relurpicCapabilitySpec{
 			Handler:       handler,
 			RequiredTools: blueprint.RequiredTools,
 		}); err != nil {
@@ -124,4 +157,17 @@ func RegisterAll(env agentenv.AgentContext, declared []string) error {
 	}
 
 	return nil
+}
+
+// normalizeDeclared deduplicates and validates declared capability IDs.
+func normalizeDeclared(ids []string) map[string]struct{} {
+	seen := make(map[string]struct{}, len(ids))
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		seen[id] = struct{}{}
+	}
+	return seen
 }

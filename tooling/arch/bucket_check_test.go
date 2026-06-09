@@ -51,13 +51,13 @@ func TestCheckBuckets_typeOnlyBucket(t *testing.T) {
 		},
 		emptyPkg("codeburg.org/lexbit/relurpify/framework/a"),
 		emptyPkg("codeburg.org/lexbit/relurpify/app/b"),
-		emptyPkg("codeburg.org/lexbit/relurpify/agentsc"),
+		emptyPkg("codeburg.org/lexbit/relurpify/cognitionzoo/c"),
 	}
 	reverse := map[string][]string{
 		"codeburg.org/lexbit/relurpify/framework/types": {
 			"codeburg.org/lexbit/relurpify/framework/a",
 			"codeburg.org/lexbit/relurpify/app/b",
-			"codeburg.org/lexbit/relurpify/agentsc",
+			"codeburg.org/lexbit/relurpify/cognitionzoo/c",
 		},
 	}
 	// With threshold=2, 3 domains *but* the package has GoFiles that likely contain funcs

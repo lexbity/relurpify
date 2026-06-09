@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -23,7 +23,7 @@ import (
 // ThoughtRecipeExecutorNode executes a resolved thought thoughtrecipe through the thoughtrecipe compiler.
 type ThoughtRecipeExecutorNode struct {
 	id                string
-	env               agentenv.AgentContext
+	deps              *paradigm.Deps
 	registry          *thoughtrecipepkg.ThoughtRecipeRegistry
 	ingestionPipeline *frameworkingestion.Pipeline
 }
@@ -44,10 +44,10 @@ func (n *ThoughtRecipeExecutorNode) WithThoughtRecipeRegistry(reg *thoughtrecipe
 	return n
 }
 
-// WithAgentContext seeds the workspace environment used for subgraph execution.
-func (n *ThoughtRecipeExecutorNode) WithAgentContext(env agentenv.AgentContext) *ThoughtRecipeExecutorNode {
+// WithParadigmDeps seeds the dependencies used for thoughtrecipe subgraph execution.
+func (n *ThoughtRecipeExecutorNode) WithParadigmDeps(deps *paradigm.Deps) *ThoughtRecipeExecutorNode {
 	if n != nil {
-		n.env = env
+		n.deps = deps
 	}
 	return n
 }
@@ -103,7 +103,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 
 	emitParallelFanouts(ctx, env, plan)
 
-	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.env, n.ingestionPipeline)
+	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.deps, n.ingestionPipeline)
 	if err != nil {
 		return &execution.Result{
 			NodeID:  n.id,
@@ -133,7 +133,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 					Data:    execution.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID),
 				}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", nextThoughtRecipeID)
 			}
-			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.env, n.ingestionPipeline)
+			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.deps, n.ingestionPipeline)
 			if nextErr != nil {
 				return &execution.Result{
 					NodeID:  n.id,

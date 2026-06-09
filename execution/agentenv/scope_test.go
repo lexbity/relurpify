@@ -29,7 +29,7 @@ func TestScopeFullBuildsAllLayers(t *testing.T) {
 }
 
 // TestZeroScopeDefaultsToFull asserts that a zero-valued WorkspaceScope is
-// promoted to ScopeFull by OpenWorkspace, preserving backward compatibility
+// promoted to ScopeFull by OpenWorkspace
 // for callers that do not set cfg.Scope.
 func TestZeroScopeDefaultsToFull(t *testing.T) {
 	zero := WorkspaceScope{}

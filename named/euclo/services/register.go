@@ -1,7 +1,11 @@
 package services
 
 import (
+	"fmt"
+
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -39,11 +43,14 @@ func (r *Registration) AgentRegistrationFuncs() agentenv.AgentRegistrationFuncs 
 }
 
 func (r *Registration) registerCapabilities(env agentenv.AgentContext) error {
-	return r.capabilityRegistrar.RegisterAll(env)
+	if env.Registry == nil {
+		return fmt.Errorf("capability registry is nil")
+	}
+	return r.capabilityRegistrar.RegisterAll(env.Registry)
 }
 
 func (r *Registration) registerPromptProviders(env agentenv.AgentContext) error {
-	return r.promptRegistrar.RegisterAll(env)
+	return r.promptRegistrar.RegisterAll(env.PromptRegistry)
 }
 
 func (r *Registration) loadThoughtRecipes() (interface{}, error) {
@@ -75,13 +82,14 @@ func WithThoughtRecipeLoader(rl ThoughtRecipeLoader) Option {
 }
 
 // CapabilityRegistrar abstracts capability registration.
+// Implementations receive the concrete registry and register their capability handlers.
 type CapabilityRegistrar interface {
-	RegisterAll(env agentenv.AgentContext) error
+	RegisterAll(reg *registry.CapabilityRegistry) error
 }
 
 // PromptRegistrar abstracts prompt provider registration.
 type PromptRegistrar interface {
-	RegisterAll(env agentenv.AgentContext) error
+	RegisterAll(registry prompt.Registry) error
 }
 
 // ThoughtRecipeLoader abstracts thoughtrecipe loading.

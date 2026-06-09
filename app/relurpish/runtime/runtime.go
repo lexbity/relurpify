@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/app/envcomposition"
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	agents "codeburg.org/lexbit/relurpify/agents"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/cognitionzoo"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -31,7 +33,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/named/euclo"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -58,6 +59,8 @@ type Runtime struct {
 	Delegations     *fauthorization.DelegationManager
 	WorkspaceConfig config.RuntimeWorkspaceConfig
 	secrets         config.Secrets
+	registration    *fauthorization.AgentRegistration
+	modelBackend    llm.ManagedBackend
 
 	hitlCancel func()
 
@@ -69,7 +72,7 @@ type Runtime struct {
 	delegationBG         *backgroundDelegationProvider
 }
 
-// AgentWorkspace returns the framework/agentenv Workspace for this Runtime.
+// AgentWorkspace returns the execution workspace for this Runtime.
 func (r *Runtime) AgentWorkspace() *agentenv.Workspace {
 	return r.Workspace
 }
@@ -156,8 +159,8 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		// Missing config file is not an error — workspace may not be initialized yet.
 	}
 
-	// Delegate all workspace initialization to framework/agentenv.OpenWorkspace().
-	// app/relurpish does not build its own workspace environment.
+	// App-level environment composition starts here. agentenv consumes the
+	// resulting products while the old environment object is being dissolved.
 	manifestSnapshot, err := config.LoadAgentManifestSnapshot(cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
@@ -168,6 +171,100 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
+	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
+		ManifestPath:     cfg.ManifestPath,
+		ManifestSnapshot: manifestSnapshot,
+		SecurityBundle:   &securityBundle,
+		ConfigPath:       cfg.ConfigPath,
+		Backend:          cfg.SandboxBackend,
+		BackendFactory:   envcomposition.NewSandboxBackendFactory(),
+		AuditLimit:       cfg.AuditLimit,
+		BaseFS:           cfg.Workspace,
+		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
+		HITLTimeout:      cfg.HITLTimeout,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose authorization registration: %w", err)
+	}
+	var securityRuntime *agentenv.RuntimeSecurity
+	var capabilityProduct *agentenv.CapabilityProduct
+	var knowledgeProduct *agentenv.KnowledgeProduct
+	var modelProduct *envcomposition.ModelRuntime
+	if manifestSnapshot != nil && manifestSnapshot.Manifest != nil {
+		agentSpec := manifestSnapshot.Manifest.Spec.Agent
+		securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
+			Context:           ctx,
+			Workspace:         cfg.Workspace,
+			SandboxBackend:    cfg.SandboxBackend,
+			AgentID:           registration.ID,
+			AgentSpec:         agentSpec,
+			SecurityBundle:    &securityBundle,
+			Manifest:          manifestSnapshot.Manifest,
+			PermissionManager: registration.Permissions,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compose security runtime: %w", err)
+		}
+		securityRuntime = &agentenv.RuntimeSecurity{
+			Runner:        securityProduct.Runner,
+			PolicyEngine:  securityProduct.PolicyEngine,
+			CommandPolicy: securityProduct.CommandPolicy,
+			Permissions:   securityProduct.Permissions,
+			RunnerConfig:  securityProduct.RunnerConfig,
+		}
+		capProduct, err := envcomposition.BuildCapabilityRuntime(cfg.Workspace, securityProduct.Runner, envcomposition.CapabilityRuntimeOptions{
+			Context:           ctx,
+			AgentID:           registration.ID,
+			PermissionManager: registration.Permissions,
+			AgentSpec:         agentSpec,
+			ProtectedPaths:    securityBundle.Sandbox.ProtectedPaths,
+			InferenceEndpoint: cfg.InferenceEndpoint,
+			InferenceModel:    cfg.InferenceModel,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compose capability runtime: %w", err)
+		}
+		capabilityProduct = &agentenv.CapabilityProduct{
+			Registry:     capProduct.Registry,
+			IndexManager: capProduct.IndexManager,
+			SearchEngine: capProduct.SearchEngine,
+		}
+		knowledgeRuntime, err := envcomposition.BuildKnowledgeRuntime(envcomposition.KnowledgeRuntimeInput{
+			GraphDB:  capProduct.IndexManager.GraphDB,
+			Index:    capProduct.IndexManager,
+			Manifest: manifestSnapshot.Manifest,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compose knowledge runtime: %w", err)
+		}
+		knowledgeProduct = &agentenv.KnowledgeProduct{
+			KnowledgeStore:  knowledgeRuntime.KnowledgeStore,
+			KnowledgeEvents: knowledgeRuntime.KnowledgeEvents,
+			Retriever:       knowledgeRuntime.Retriever,
+			Compiler:        knowledgeRuntime.Compiler,
+			StreamTrigger:   knowledgeRuntime.StreamTrigger,
+		}
+		modelProduct, err = envcomposition.BuildModelRuntime(envcomposition.ModelRuntimeInput{
+			Provider:          cfg.InferenceProvider,
+			Endpoint:          cfg.InferenceEndpoint,
+			ModelName:         cfg.InferenceModel,
+			NativeToolCalling: cfg.InferenceNativeToolCalling,
+			Secrets:           llm.ProviderSecrets{APIKey: secrets.LLMAPIKey},
+			Profile:           profileResolution.Profile,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compose model runtime: %w", err)
+		}
+	}
+	registrationView := &agentenv.Registration{
+		ID:               registration.ID,
+		Manifest:         registration.Manifest,
+		ManifestSnapshot: registration.ManifestSnapshot,
+		Permissions:      registration.Permissions,
+		Policy:           registration.Policy,
+		Audit:            registration.Audit,
+		HITL:             registration.HITL,
+	}
 	ws, err := agentenv.OpenWorkspace(ctx, agentenv.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		ManifestPath:               cfg.ManifestPath,
@@ -192,17 +289,24 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		ManifestSnapshot:           manifestSnapshot,
 		ProfileResolution:          profileResolution,
 		SecurityBundle:             &securityBundle,
-		Scope:                      agentenv.ScopeFull,
+		Registration:               registrationView,
+		SecurityRuntime:            securityRuntime,
+		CapabilityProduct:          capabilityProduct,
+		KnowledgeProduct:           knowledgeProduct,
+		ModelProduct: &agentenv.ModelProduct{
+			Backend:      modelProduct.Backend,
+			ModelFactory: modelProduct.ModelFactory,
+		},
+		Scope: agentenv.ScopeFull,
 		EventLogFactory: func(path string) (event.Log, error) {
 			return persistence.NewSQLiteEventLog(path)
 		},
-	}, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, euclo.GetRegistrationFuncs())
+	}, envcomposition.AgentRegistrationFuncs())
 	if err != nil {
 		return nil, err
 	}
 
 	env := ws.Environment
-	registration := ws.Registration
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
@@ -222,7 +326,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 
 	// Extend telemetry with an event log sink. The event log is now created
-	// by framework/agentenv via EventLogFactory, so we just need to wire it into
+	// by execution/agentenv via EventLogFactory, so we just need to wire it into
 	// the telemetry chain.
 	var eventTelemetry telemetry.EventTelemetry
 	if cfg.EventsPath != "" && registration != nil {
@@ -290,6 +394,8 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		Delegations:          fauthorization.NewDelegationManager(),
 		interactionEnvelopes: make(map[string]*contextdata.Envelope),
 		secrets:              secrets,
+		registration:         registration,
+		modelBackend:         modelProduct.Backend,
 	}
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)
@@ -308,7 +414,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
-	agent := instantiateAgent(cfg, env)
+	agent := instantiateAgent(cfg, paradigmDepsFromAgentContext(env))
 	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
@@ -317,7 +423,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 
 	rt.Agent = agent
-	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, rt.Workspace); err != nil {
+	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, rt.Workspace, registration); err != nil {
 		_ = rt.Close()
 		return nil, fmt.Errorf("register workspace services: %w", err)
 	}
@@ -417,7 +523,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config.EffectiveAgentContract, compiledPolicy *fauthorization.CompiledPolicyBundle) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config.EffectiveAgentContract, compiledPolicy *agentenv.CompiledPolicy) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -440,13 +546,13 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		AgentSpec:         effectiveContract.AgentSpec,
 		Telemetry:         r.Workspace.Telemetry,
 	}
-	agent := instantiateAgent(cfg, agentenv.AgentContext{
-		Model:        r.Model,
-		Registry:     r.Tools,
-		IndexManager: r.IndexManager,
-		SearchEngine: r.SearchEngine,
+	agent := instantiateAgent(cfg, &paradigm.Deps{
+		Model:         r.Model,
+		Registry:      r.Tools,
+		IndexManager:  r.IndexManager,
+		SearchEngine:  r.SearchEngine,
 		WorkingMemory: r.Memory,
-		Config:       agentCfg,
+		Config:        agentCfg,
 	})
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
@@ -464,9 +570,9 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, env agentenv.AgentContext) agentgraph.WorkflowExecutor {
+func instantiateAgent(cfg Config, deps *paradigm.Deps) agentgraph.WorkflowExecutor {
 	paths := config.New(cfg.Workspace)
-	builder := agents.NewAgentBuilder().WithEnvironment(&env)
+	builder := agents.NewAgentBuilder().WithDeps(deps)
 	switch cfg.AgentLabel() {
 	case "planner":
 		agent, _ := builder.Build("planner")
@@ -483,14 +589,37 @@ func instantiateAgent(cfg Config, env agentenv.AgentContext) agentgraph.Workflow
 	}
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *fauthorization.CompiledPolicyBundle, error) {
+func paradigmDepsFromAgentContext(env agentenv.AgentContext) *paradigm.Deps {
+	return &paradigm.Deps{
+		Config:         env.Config,
+		Model:          env.Model,
+		Registry:       env.Registry,
+		WorkingMemory:  env.WorkingMemory,
+		IndexManager:   env.IndexManager,
+		SearchEngine:   env.SearchEngine,
+		StreamTrigger:  env.StreamTrigger,
+		OutputIngester: env.OutputIngester,
+		IngestOutputs:  env.IngestOutputs,
+		PromptRegistry: env.PromptRegistry,
+		AgentLifecycle: env.AgentLifecycle,
+	}
+}
+
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *agentenv.CompiledPolicy, error) {
 	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.Manifest, config.ResolveOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	compiledPolicy, err := fauthorization.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, nil, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("compile effective policy: %w", err)
+	if effectiveContract.AgentID == "" {
+		return nil, nil, fmt.Errorf("agent id required")
+	}
+	if effectiveContract.AgentSpec == nil {
+		return nil, nil, fmt.Errorf("agent spec required")
+	}
+	compiledPolicy := &agentenv.CompiledPolicy{
+		AgentID: effectiveContract.AgentID,
+		Spec:    effectiveContract.AgentSpec,
+		Engine:  r.Workspace.PolicyEngine,
 	}
 	return effectiveContract, compiledPolicy, nil
 }
@@ -732,10 +861,10 @@ func (r *Runtime) ServerRunning() bool {
 
 // PendingHITL exposes outstanding permission requests.
 func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
-	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
+	if r.registration == nil || r.registration.HITL == nil {
 		return nil
 	}
-	return r.Workspace.Registration.HITL.PendingRequests()
+	return r.registration.HITL.PendingRequests()
 }
 
 func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *config.AgentManifestSnapshot) {
@@ -761,17 +890,17 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).
 // The returned cancel function can be called to unsubscribe.
 func (r *Runtime) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
-	if r == nil || r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
+	if r == nil || r.registration == nil || r.registration.HITL == nil {
 		ch := make(chan fauthorization.HITLEvent)
 		close(ch)
 		return ch, func() {}
 	}
-	return r.Workspace.Registration.HITL.Subscribe(32)
+	return r.registration.HITL.Subscribe(32)
 }
 
 // ApproveHITL approves a pending request with the supplied scope.
 func (r *Runtime) ApproveHITL(requestID, approver string, scope policy.GrantScope, duration time.Duration) error {
-	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
+	if r.registration == nil || r.registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
 	if scope == "" {
@@ -788,13 +917,13 @@ func (r *Runtime) ApproveHITL(requestID, approver string, scope policy.GrantScop
 		Scope:      scope,
 		ExpiresAt:  expiresAt,
 	}
-	return r.Workspace.Registration.HITL.Approve(decision)
+	return r.registration.HITL.Approve(decision)
 }
 
 // DenyHITL rejects a pending request.
 func (r *Runtime) DenyHITL(requestID, reason string) error {
-	if r.Workspace.Registration == nil || r.Workspace.Registration.HITL == nil {
+	if r.registration == nil || r.registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
-	return r.Workspace.Registration.HITL.Deny(requestID, reason)
+	return r.registration.HITL.Deny(requestID, reason)
 }

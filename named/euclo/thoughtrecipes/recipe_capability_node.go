@@ -9,9 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
@@ -23,17 +23,17 @@ type RecipeCapabilityNode struct {
 	id           string
 	capabilityID string
 	plan         *ExecutionPlan
-	env          agentenv.AgentContext
+	deps         *paradigm.Deps
 }
 
 // NewRecipeCapabilityNode creates a node that registers the given execution
 // plan as a session capability identified by capabilityID.
-func NewRecipeCapabilityNode(id, capabilityID string, plan *ExecutionPlan, env agentenv.AgentContext) *RecipeCapabilityNode {
+func NewRecipeCapabilityNode(id, capabilityID string, plan *ExecutionPlan, deps *paradigm.Deps) *RecipeCapabilityNode {
 	return &RecipeCapabilityNode{
 		id:           id,
 		capabilityID: capabilityID,
 		plan:         plan,
-		env:          env,
+		deps:         deps,
 	}
 }
 
@@ -51,7 +51,7 @@ func (n *RecipeCapabilityNode) Execute(ctx context.Context, env *contextdata.Env
 	if n.capabilityID == "" {
 		return &execution.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: capability id is required", n.id)
 	}
-	handler := newRecipeCapabilityHandler(n.capabilityID, n.plan, n.env)
+	handler := newRecipeCapabilityHandler(n.capabilityID, n.plan, n.deps)
 	if err := registry.RegisterSessionCapability(env.State(), n.capabilityID, handler); err != nil {
 		return &execution.Result{NodeID: n.id, Success: false}, fmt.Errorf("recipe capability node %s: register session capability: %w", n.id, err)
 	}
@@ -64,14 +64,14 @@ func (n *RecipeCapabilityNode) Execute(ctx context.Context, env *contextdata.Env
 type recipeCapabilityHandler struct {
 	capabilityID string
 	plan         *ExecutionPlan
-	env          agentenv.AgentContext
+	deps         *paradigm.Deps
 }
 
-func newRecipeCapabilityHandler(capabilityID string, plan *ExecutionPlan, env agentenv.AgentContext) *recipeCapabilityHandler {
+func newRecipeCapabilityHandler(capabilityID string, plan *ExecutionPlan, deps *paradigm.Deps) *recipeCapabilityHandler {
 	return &recipeCapabilityHandler{
 		capabilityID: capabilityID,
 		plan:         plan,
-		env:          env,
+		deps:         deps,
 	}
 }
 
@@ -95,7 +95,7 @@ func (h *recipeCapabilityHandler) Invoke(ctx context.Context, st ports.State, ar
 	if h.plan == nil {
 		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)
 	}
-	graph, err := BuildThoughtRecipeGraph(h.plan, h.env, nil)
+	graph, err := BuildThoughtRecipeGraph(h.plan, h.deps, nil)
 	if err != nil {
 		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: build graph: %w", h.capabilityID, err)
 	}

@@ -1,4 +1,4 @@
-package tools_native_test
+package native_test
 
 import (
 	"sort"

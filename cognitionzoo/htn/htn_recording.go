@@ -1,0 +1,138 @@
+package htn
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"codeburg.org/lexbit/relurpify/cognitionzoo/plan"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+)
+
+// recordingPrimitiveAgent wraps a primitive executor and persists step outcomes
+// to the runtime and workflow memory stores after each execution.
+type recordingPrimitiveAgent struct {
+	delegate   plan.WorkflowExecutor
+	workflow   any
+	workflowID string
+	runID      string
+}
+
+func (a *recordingPrimitiveAgent) BranchExecutor() (plan.WorkflowExecutor, error) {
+	if a == nil {
+		return &recordingPrimitiveAgent{}, nil
+	}
+	branch := &recordingPrimitiveAgent{
+		workflow:   a.workflow,
+		workflowID: a.workflowID,
+		runID:      a.runID,
+	}
+	if provider, ok := a.delegate.(plan.BranchExecutorProvider); ok {
+		exec, err := provider.BranchExecutor()
+		if err != nil {
+			return nil, err
+		}
+		branch.delegate = exec
+		return branch, nil
+	}
+	branch.delegate = a.delegate
+	return branch, nil
+}
+
+func (a *recordingPrimitiveAgent) Initialize(_ *execution.Config) error { return nil }
+
+func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
+
+func (a *recordingPrimitiveAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
+	return nil, nil
+}
+
+func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
+	if a == nil || a.delegate == nil {
+		return &execution.Result{Success: true}, nil
+	}
+	result, err := a.delegate.Execute(ctx, task, state)
+	a.persistStep(ctx, task, result, err)
+	return result, err
+}
+
+func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *execution.Task, result *execution.Result, execErr error) {
+	stepID, _ := htnStepMetadata(task)
+	if stepID == "" {
+		return
+	}
+	summary := htnResultSummary(result, execErr)
+	now := time.Now().UTC()
+	if wf, ok := a.workflow.(interface {
+		AppendEvent(context.Context, agentlifecycle.WorkflowEventRecord) error
+	}); ok && strings.TrimSpace(a.workflowID) != "" {
+		eventType := "step_completed"
+		if execErr != nil {
+			eventType = "step_failed"
+		}
+		_ = wf.AppendEvent(ctx, agentlifecycle.WorkflowEventRecord{
+			EventID:    fmt.Sprintf("htn_event_%d", now.UnixNano()),
+			WorkflowID: a.workflowID,
+			RunID:      a.runID,
+			EventType:  eventType,
+			Payload: map[string]any{
+				"step_id": stepID,
+				"summary": summary,
+				"agent":   "htn",
+			},
+			CreatedAt: now,
+		})
+	}
+}
+
+// htnStepMetadata extracts the step ID and trimmed description from the task context.
+func htnStepMetadata(task *execution.Task) (string, string) {
+	if task == nil || task.Context == nil {
+		return "", ""
+	}
+	raw, ok := task.Context["current_step"]
+	if !ok {
+		return "", ""
+	}
+	switch step := raw.(type) {
+	case plan.PlanStep:
+		return step.ID, strings.TrimSpace(step.Description)
+	case *plan.PlanStep:
+		if step == nil {
+			return "", ""
+		}
+		return step.ID, strings.TrimSpace(step.Description)
+	default:
+		return "", ""
+	}
+}
+
+// htnResultSummary produces a human-readable summary from a step result or error.
+func htnResultSummary(result *execution.Result, execErr error) string {
+	if execErr != nil {
+		return execErr.Error()
+	}
+	if result == nil {
+		return "step completed"
+	}
+	fields := execution.ResultFields(result.Data)
+	if text := strings.TrimSpace(fmt.Sprint(fields["text"])); text != "" && text != "<nil>" {
+		return text
+	}
+	if len(fields) == 0 {
+		return "step completed"
+	}
+	return fmt.Sprint(fields)
+}
+
+// htnStatus returns a status string for metadata based on whether execution failed.
+func htnStatus(execErr error) string {
+	if execErr != nil {
+		return "failed"
+	}
+	return "completed"
+}

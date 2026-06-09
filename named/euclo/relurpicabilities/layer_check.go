@@ -11,18 +11,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
 type LayerCheckHandler struct {
-	env agentenv.AgentContext
+	deps IndexDeps
 }
 
 // NewLayerCheckHandler creates a new layer check handler.
-func NewLayerCheckHandler(env agentenv.AgentContext) *LayerCheckHandler {
-	return &LayerCheckHandler{env: env}
+func NewLayerCheckHandler(deps IndexDeps) *LayerCheckHandler {
+	return &LayerCheckHandler{deps: deps}
 }
 
 // Descriptor returns the capability descriptor for the layer check handler.
@@ -105,8 +104,8 @@ var layerRules = []layerRule{
 
 // Invoke scans the import graph and returns any boundary violations.
 func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), nil
+	if h.deps.Searcher == nil {
+		return failResult("index service not available"), nil
 	}
 
 	layer, _ := stringArg(args, "layer")
@@ -114,7 +113,6 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 		layer = "all"
 	}
 
-	// Select applicable rules
 	var applicable []layerRule
 	for _, rule := range layerRules {
 		if layer == "all" || rule.layer == layer {
@@ -122,7 +120,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 		}
 	}
 
-	allNodes, err := h.env.IndexManager.SearchNodes(ast.NodeQuery{Categories: []ast.Category{ast.CategoryCode}})
+	allNodes, err := h.deps.Searcher.SearchNodes(ast.NodeQuery{Categories: []ast.Category{ast.CategoryCode}})
 	if err != nil {
 		return failResult("failed to search nodes: " + err.Error()), nil
 	}
@@ -142,9 +140,12 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 		if query == "" {
 			continue
 		}
-		depGraph, err := h.env.IndexManager.GetDependencyGraph(query)
+		if h.deps.Grapher == nil {
+			continue
+		}
+		depGraph, err := h.deps.Grapher.GetDependencyGraph(query)
 		if err != nil {
-			continue // Skip nodes that can't be queried
+			continue
 		}
 		importerPath := stripModulePrefix(depGraph.Root.FileID)
 		if importerPath == "" {

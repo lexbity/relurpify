@@ -11,12 +11,12 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/model"
 	ecap "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
@@ -74,7 +74,7 @@ func TestThoughtRecipeExecutionNodeExecute(t *testing.T) {
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithAgentContext(agentenv.AgentContext{
+	node.WithParadigmDeps(&paradigm.Deps{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
@@ -115,7 +115,7 @@ func TestThoughtRecipeExecutionNodeRejectsUncompiledThoughtRecipeEntries(t *test
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithAgentContext(agentenv.AgentContext{
+	node.WithParadigmDeps(&paradigm.Deps{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
@@ -172,7 +172,7 @@ func TestThoughtRecipeExecutionNodeWritesToEnvelope(t *testing.T) {
 		RouteKind:       "thoughtrecipe",
 		ThoughtRecipeID: "fix-bug",
 	})
-	node.WithAgentContext(agentenv.AgentContext{
+	node.WithParadigmDeps(&paradigm.Deps{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
@@ -253,7 +253,7 @@ func TestThoughtRecipeExecutionNodeFollowsClarificationHandoff(t *testing.T) {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
-	node.WithAgentContext(agentenv.AgentContext{
+	node.WithParadigmDeps(&paradigm.Deps{
 		Model:         stubThoughtRecipeModel{},
 		Registry:      regpkg.NewRegistry(),
 		WorkingMemory: memory.NewWorkingMemoryStore(),
@@ -444,7 +444,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	t.Helper()
 	recipeRegistry, plan := compileThoughtRecipeFromSource(t, source, toolReg, capReg)
 	model := &recordingThoughtRecipeModel{nativeToolCalling: nativeToolCalling}
-	env := agentenv.AgentContext{
+	deps := &paradigm.Deps{
 		Model:    model,
 		Registry: runtimeReg,
 		Config:   &execution.Config{Model: "test-model", NativeToolCalling: nativeToolCalling},
@@ -457,7 +457,7 @@ func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, too
 	})
 
 	node := NewThoughtRecipeExecutorNode("thoughtrecipe-exec").
-		WithAgentContext(env).
+		WithParadigmDeps(deps).
 		WithThoughtRecipeRegistry(recipeRegistry)
 
 	if _, err := node.Execute(context.Background(), taskEnv); err != nil {

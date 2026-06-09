@@ -1,9 +1,7 @@
 package services
 
 import (
-	"fmt"
-
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
@@ -30,9 +28,9 @@ var eucloCapabilities = []string{
 // defaultCapabilityRegistrar implements CapabilityRegistrar using Euclo's relurpic capabilities.
 type defaultCapabilityRegistrar struct{}
 
-func (r *defaultCapabilityRegistrar) RegisterAll(env agentenv.AgentContext) error {
-	if env.Registry == nil {
-		return fmt.Errorf("capability registry is nil")
-	}
-	return relurpicabilities.RegisterAll(env, eucloCapabilities)
+func (r *defaultCapabilityRegistrar) RegisterAll(reg *registry.CapabilityRegistry) error {
+	return relurpicabilities.RegisterAll(relurpicabilities.RegistrationDeps{
+		Registry: reg,
+		Declared: eucloCapabilities,
+	})
 }

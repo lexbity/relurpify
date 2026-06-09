@@ -7,13 +7,15 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
+func testCmdDeps(runner CommandRuntime, policy CommandPolicy) CommandDeps {
+	return CommandDeps{Runner: runner, Policy: policy}
+}
+
 func TestTestRunHandlerDescriptor(t *testing.T) {
-	wsEnv := agentenv.AgentContext{}
-	handler := NewTestRunHandler(wsEnv)
+	handler := NewTestRunHandler(CommandDeps{})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -38,11 +40,10 @@ func TestTestRunHandlerPassingTest(t *testing.T) {
 		Stdout: "PASS: TestFoo\nPASS: TestBar\nok\tcodeburg.org/lexbit/relurpify\t0.002s",
 	})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewTestRunHandler(wsEnv)
+	handler := NewTestRunHandler(CommandDeps{
+		Runner: mockRunner,
+		Policy: allowCommandPolicy(),
+	})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -74,11 +75,10 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 		Stderr: "FAIL\tcodeburg.org/lexbit/relurpify\t0.002s",
 	})
 
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewTestRunHandler(wsEnv)
+	handler := NewTestRunHandler(CommandDeps{
+		Runner: mockRunner,
+		Policy: allowCommandPolicy(),
+	})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -113,11 +113,9 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 }
 
 func TestTestRunHandlerNilRunner(t *testing.T) {
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: nil,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewTestRunHandler(wsEnv)
+	handler := NewTestRunHandler(CommandDeps{
+		Runner: nil,
+	})
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
@@ -144,15 +142,11 @@ func TestTestRunHandlerNilRunner(t *testing.T) {
 }
 
 func TestTestRunHandlerCommandDenied(t *testing.T) {
-	mockRunner := testsupport.FakeRunner(testsupport.FakeResponse{
-		Err: errors.New("command denied by policy"),
+	handler := NewTestRunHandler(CommandDeps{
+		Runner: testsupport.FakeRunner(testsupport.FakeResponse{
+			Err: errors.New("command denied by policy"),
+		}),
 	})
-
-	wsEnv := agentenv.AgentContext{
-		CommandRunner: mockRunner,
-		CommandPolicy: allowCommandPolicy(),
-	}
-	handler := NewTestRunHandler(wsEnv)
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")

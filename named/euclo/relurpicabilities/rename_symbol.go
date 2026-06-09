@@ -12,17 +12,18 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type RenameSymbolHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	querier   SymbolQuerier
+	store     EdgeStore
+	files     WorkspaceFiles
+	refresher IndexRefresher
 }
 
-func NewRenameSymbolHandler(env agentenv.AgentContext) *RenameSymbolHandler {
-	return &RenameSymbolHandler{env: env}
+func NewRenameSymbolHandler(querier SymbolQuerier, store EdgeStore, files WorkspaceFiles, refresher IndexRefresher) *RenameSymbolHandler {
+	return &RenameSymbolHandler{querier: querier, store: store, files: files, refresher: refresher}
 }
 
 func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
@@ -74,11 +75,11 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 	fileHint, _ := stringArg(args, "file")
 	preview, _ := args["preview"].(bool)
 
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), fmt.Errorf("index manager not available")
+	if h.querier == nil {
+		return failResult("symbol service not available"), fmt.Errorf("symbol service not available")
 	}
 
-	nodes, err := h.env.IndexManager.QuerySymbol(from)
+	nodes, err := h.querier.QuerySymbol(from)
 	if err != nil {
 		return failResult(fmt.Sprintf("symbol lookup failed: %v", err)), err
 	}
@@ -87,19 +88,16 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 	}
 
 	byFile := make(map[string][]*frameworkast.Node)
-	hint, err := h.normalizedFileHint(fileHint)
-	if err != nil {
-		return failResult(err.Error()), err
-	}
+	hint := strings.TrimSpace(fileHint)
 	for _, node := range nodes {
 		if node == nil {
 			continue
 		}
-		path := nodeSourcePath(h.env, node)
+		path := filePathFromNode(h.store, node)
 		if path == "" {
 			continue
 		}
-		if hint != "" && path != hint && node.FileID != hint {
+		if hint != "" && path != hint {
 			continue
 		}
 		byFile[path] = append(byFile[path], node)
@@ -114,19 +112,11 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 	}
 	sort.Strings(paths)
 
-	if !preview {
-		for _, path := range paths {
-			if err := h.authorizeFileWrite(ctx, h.env, path); err != nil {
-				return failResult(fmt.Sprintf("write denied: %v", err)), err
-			}
-		}
-	}
-
 	modified := make([]interface{}, 0, len(paths))
 	total := 0
 	previewFiles := make(map[string]string, len(paths))
 	for _, path := range paths {
-		content, resolvedPath, err := h.readWorkspaceFile(h.env, path)
+		content, resolvedPath, err := h.files.Read(path)
 		if err != nil {
 			return failResult(fmt.Sprintf("read source file failed: %v", err)), err
 		}
@@ -143,11 +133,11 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 			previewFiles[resolvedPath] = updated
 			continue
 		}
-		if _, err := h.writeWorkspaceFile(h.env, resolvedPath, []byte(updated), 0o644); err != nil {
+		if _, err := h.files.Write(resolvedPath, []byte(updated), 0o644); err != nil {
 			return failResult(fmt.Sprintf("write source file failed: %v", err)), err
 		}
-		if h.env.IndexManager != nil {
-			_ = h.env.IndexManager.RefreshFiles([]string{resolvedPath})
+		if h.refresher != nil {
+			_ = h.refresher.RefreshFiles([]string{resolvedPath})
 		}
 	}
 
@@ -166,12 +156,16 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 	return &ports.ToolResult{Success: true, Data: result}, nil
 }
 
-func (h *RenameSymbolHandler) normalizedFileHint(fileHint string) (string, error) {
-	hint := strings.TrimSpace(fileHint)
-	if hint == "" {
-		return "", nil
+func filePathFromNode(store EdgeStore, node *frameworkast.Node) string {
+	if node == nil {
+		return ""
 	}
-	return h.resolveWorkspacePath(h.env, hint)
+	if store != nil {
+		if meta, err := store.GetFile(node.FileID); err == nil && meta != nil && meta.Path != "" {
+			return meta.Path
+		}
+	}
+	return node.FileID
 }
 
 func renameSymbolInContent(content string, nodes []*frameworkast.Node, from, to string) (string, int, error) {

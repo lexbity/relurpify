@@ -14,22 +14,23 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // DiffSummaryHandler implements the diff summary capability.
 type DiffSummaryHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	cmd   CommandDeps
+	model model.LanguageModel
 }
 
 // NewDiffSummaryHandler creates a new diff summary handler.
-func NewDiffSummaryHandler(env agentenv.AgentContext) *DiffSummaryHandler {
-	return &DiffSummaryHandler{env: env}
+func NewDiffSummaryHandler(cmd CommandDeps, m model.LanguageModel) *DiffSummaryHandler {
+	return &DiffSummaryHandler{cmd: cmd, model: m}
 }
 
 // Descriptor returns the capability descriptor for the diff summary handler.
@@ -102,10 +103,6 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) de
 
 // Invoke runs git diff and returns a structured summary.
 func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
-	if h.env.CommandRunner == nil {
-		return failResult("CommandRunner not available in environment"), nil
-	}
-
 	baseRef, _ := stringArg(args, "base_ref")
 	if baseRef == "" {
 		baseRef = "HEAD~1"
@@ -115,18 +112,14 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 		headRef = "HEAD"
 	}
 	scope, _ := stringArg(args, "scope")
-	if normalized, err := h.normalizedScope(scope); err != nil {
+	if normalized, err := normalizedDiffScope(scope, h.cmd.Workspace); err != nil {
 		return failResult(fmt.Sprintf("scope resolution failed: %v", err)), err
 	} else {
 		scope = normalized
 	}
 
-	workdir := ""
-	if h.env.IndexManager != nil {
-		workdir = h.env.IndexManager.WorkspacePath()
-	}
+	workdir := h.cmd.Workspace
 
-	// Run git diff --stat to get file list and line counts
 	statArgs := []string{"git", "diff", "--stat", baseRef, headRef}
 	if scope != "" {
 		statArgs = append(statArgs, "--", scope)
@@ -136,10 +129,15 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 		Workdir: workdir,
 		Timeout: 30 * time.Second,
 	}
-	if err := h.authorizeCommand(ctx, h.env, statReq, "euclo diff summary"); err != nil {
-		return failResult(fmt.Sprintf("diff command denied: %v", err)), err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, statReq); err != nil {
+			return failResult(fmt.Sprintf("diff command denied: %v", err)), err
+		}
 	}
-	statRes, err := h.env.CommandRunner.Run(ctx, statReq)
+	if h.cmd.Runner == nil {
+		return failResult("CommandRunner not available in environment"), nil
+	}
+	statRes, err := h.cmd.Runner.Run(ctx, statReq)
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
@@ -154,7 +152,6 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 		statOut = statRes.Stderr
 	}
 
-	// Run git diff --name-only to get changed files
 	nameArgs := []string{"git", "diff", "--name-only", baseRef, headRef}
 	if scope != "" {
 		nameArgs = append(nameArgs, "--", scope)
@@ -164,10 +161,15 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 		Workdir: workdir,
 		Timeout: 30 * time.Second,
 	}
-	if err := h.authorizeCommand(ctx, h.env, nameReq, "euclo diff summary"); err != nil {
-		return failResult(fmt.Sprintf("diff command denied: %v", err)), err
+	if h.cmd.Policy != nil {
+		if err := h.cmd.Policy.AllowCommand(ctx, nameReq); err != nil {
+			return failResult(fmt.Sprintf("diff command denied: %v", err)), err
+		}
 	}
-	nameRes, err := h.env.CommandRunner.Run(ctx, nameReq)
+	if h.cmd.Runner == nil {
+		return failResult("CommandRunner not available in environment"), nil
+	}
+	nameRes, err := h.cmd.Runner.Run(ctx, nameReq)
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
@@ -190,7 +192,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 	riskAreas := identifyRiskAreas(changedFiles)
 	summary := truncate(statOut, 4096)
 
-	if h.env.Model != nil {
+	if h.model != nil {
 		if agentSummary, err := h.runReactSummary(ctx, baseRef, headRef, scope, statOut, changedFiles, additions, deletions, riskAreas); err == nil && strings.TrimSpace(agentSummary) != "" {
 			summary = agentSummary
 		}
@@ -210,11 +212,9 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 }
 
 func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]interface{}) (string, error) {
-	runtimeEnv := h.env
-	if runtimeEnv.Config == nil {
-		runtimeEnv.Config = &execution.Config{}
-	}
-	agent := reactpkg.New(&runtimeEnv)
+	agent := reactpkg.New(&paradigm.Deps{
+		Model: h.model,
+	})
 	if agent == nil {
 		return "", fmt.Errorf("react agent could not be constructed")
 	}
@@ -264,17 +264,16 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 	return "", nil
 }
 
-func (h *DiffSummaryHandler) normalizedScope(scope string) (string, error) {
+func normalizedDiffScope(scope, workspace string) (string, error) {
 	scope = strings.TrimSpace(scope)
 	if scope == "" {
 		return "", nil
 	}
-	resolved, err := h.resolveWorkspacePath(h.env, scope)
-	if err != nil {
-		return "", err
+	resolved := resolveCandidatePath(scope, workspace)
+	if resolved == "" {
+		return "", fmt.Errorf("scope resolution failed: %s", scope)
 	}
-	root := workspacePath(h.env)
-	rel, err := filepath.Rel(root, resolved)
+	rel, err := filepath.Rel(workspace, resolved)
 	if err != nil {
 		return "", err
 	}

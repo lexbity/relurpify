@@ -139,6 +139,9 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 		return fmt.Errorf("runtime unavailable")
 	}
 	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.Policy != nil {
+		if r.registration == nil || r.registration.Permissions == nil {
+			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
+		}
 		metadata := map[string]string{
 			"provider_id":   desc.ID,
 			"provider_kind": string(desc.Kind),
@@ -156,7 +159,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 			TrustClass:     string(desc.TrustBaseline),
 		}, fauthorization.ApprovalRequest{
 			AgentID: r.AgentWorkspace().Registration.ID,
-			Manager: r.AgentWorkspace().Registration.Permissions,
+			Manager: r.registration.Permissions,
 			Permission: permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
@@ -193,7 +196,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 	case agentspec.AgentPermissionDeny:
 		return fmt.Errorf("provider %s activation denied by policy", desc.ID)
 	case agentspec.AgentPermissionAsk:
-		if r.AgentWorkspace().Registration == nil || r.AgentWorkspace().Registration.Permissions == nil {
+		if r.registration == nil || r.registration.Permissions == nil {
 			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
 		}
 		metadata := map[string]string{
@@ -203,7 +206,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		return r.AgentWorkspace().Registration.Permissions.RequireApproval(ctx, r.AgentWorkspace().Registration.ID, permissions.PermissionDescriptor{
+		return r.registration.Permissions.RequireApproval(ctx, r.registration.ID, permissions.PermissionDescriptor{
 			Type:         permissions.PermissionTypeCapability,
 			Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 			Resource:     desc.ID,

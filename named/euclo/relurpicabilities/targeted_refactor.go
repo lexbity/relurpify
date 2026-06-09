@@ -11,22 +11,24 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TargetedRefactorHandler implements the targeted refactor capability.
 type TargetedRefactorHandler struct {
-	env agentenv.AgentContext
-	frameworkPolicyContext
+	querier   SymbolQuerier
+	store     EdgeStore
+	files     WorkspaceFiles
+	refresher IndexRefresher
+	gen       model.LanguageModel
 }
 
 // NewTargetedRefactorHandler creates a new targeted refactor handler.
-func NewTargetedRefactorHandler(env agentenv.AgentContext) *TargetedRefactorHandler {
-	return &TargetedRefactorHandler{env: env}
+func NewTargetedRefactorHandler(querier SymbolQuerier, store EdgeStore, files WorkspaceFiles, refresher IndexRefresher, gen model.LanguageModel) *TargetedRefactorHandler {
+	return &TargetedRefactorHandler{querier: querier, store: store, files: files, refresher: refresher, gen: gen}
 }
 
 // Descriptor returns the capability descriptor for the targeted refactor handler.
@@ -122,11 +124,11 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 	replacement, _ := stringArg(args, "replacement")
 	preview, _ := args["preview"].(bool)
 
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), nil
+	if h.querier == nil {
+		return failResult("symbol service not available"), nil
 	}
 
-	nodes, err := h.env.IndexManager.QuerySymbol(symbol)
+	nodes, err := h.querier.QuerySymbol(symbol)
 	if err != nil {
 		return failResult(fmt.Sprintf("symbol lookup failed: %v", err)), nil
 	}
@@ -144,13 +146,13 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 		return failResult(err.Error()), nil
 	}
 
-	content, resolvedSourcePath, err := h.readWorkspaceFile(h.env, sourcePath)
+	content, resolvedSourcePath, err := h.files.Read(sourcePath)
 	if err != nil {
 		return failResult(fmt.Sprintf("read source file failed: %v", err)), nil
 	}
 
 	if replacement == "" {
-		if h.env.Model == nil {
+		if h.gen == nil {
 			return failResult("replacement text required when no model is available"), nil
 		}
 		replacement, err = h.generateReplacement(ctx, target, resolvedSourcePath, original, transformation)
@@ -182,14 +184,11 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 		return &ports.ToolResult{Success: true, Data: result}, nil
 	}
 
-	if err := h.authorizeFileWrite(ctx, h.env, resolvedSourcePath); err != nil {
-		return failResult(fmt.Sprintf("write denied: %v", err)), err
-	}
-	if _, err := h.writeWorkspaceFile(h.env, resolvedSourcePath, []byte(newContent), 0o644); err != nil {
+	if _, err := h.files.Write(resolvedSourcePath, []byte(newContent), 0o644); err != nil {
 		return failResult(fmt.Sprintf("write source file failed: %v", err)), err
 	}
-	if h.env.IndexManager != nil {
-		_ = h.env.IndexManager.RefreshFiles([]string{resolvedSourcePath})
+	if h.refresher != nil {
+		_ = h.refresher.RefreshFiles([]string{resolvedSourcePath})
 	}
 	result["applied"] = true
 	return &ports.ToolResult{Success: true, Data: result}, nil
@@ -259,17 +258,13 @@ func (h *TargetedRefactorHandler) selectTargetNode(nodes []*ast.Node, fileHint s
 }
 
 func (h *TargetedRefactorHandler) resolveFileID(fileHint string) (string, bool) {
-	if h.env.IndexManager == nil || fileHint == "" {
+	if h.store == nil || fileHint == "" {
 		return "", false
 	}
-	store := h.env.IndexManager.Store()
-	if store == nil {
-		return "", false
-	}
-	if meta, err := store.GetFileByPath(fileHint); err == nil && meta != nil {
+	if meta, err := h.store.GetFileByPath(fileHint); err == nil && meta != nil {
 		return meta.ID, true
 	}
-	if meta, err := store.GetFile(fileHint); err == nil && meta != nil {
+	if meta, err := h.store.GetFile(fileHint); err == nil && meta != nil {
 		return meta.ID, true
 	}
 	return "", false
@@ -279,36 +274,39 @@ func (h *TargetedRefactorHandler) resolveTargetSource(target *ast.Node, fileHint
 	if target == nil {
 		return "", "", fmt.Errorf("target node is required")
 	}
-	store := h.env.IndexManager.Store()
-	if store != nil {
-		if meta, err := store.GetFile(target.FileID); err == nil && meta != nil && meta.Path != "" {
-			if fileContent, resolvedPath, err := h.readWorkspaceFile(h.env, meta.Path); err == nil {
-				if selected, err := extractLines(string(fileContent), target.StartLine, target.EndLine); err == nil {
+	// Resolve FileID to a filesystem path through the store
+	if h.store != nil {
+		if meta, err := h.store.GetFile(target.FileID); err == nil && meta != nil && meta.Path != "" {
+			content, resolvedPath, err := h.files.Read(meta.Path)
+			if err == nil {
+				selected, err := extractLines(string(content), target.StartLine, target.EndLine)
+				if err == nil {
 					return resolvedPath, selected, nil
 				}
 			}
-			// Fall through to using the hint if the stored path is unavailable.
 		}
 	}
 	if fileHint != "" {
-		if fileContent, resolvedPath, err := h.readWorkspaceFile(h.env, fileHint); err == nil {
-			if selected, err := extractLines(string(fileContent), target.StartLine, target.EndLine); err == nil {
+		content, resolvedPath, err := h.files.Read(fileHint)
+		if err == nil {
+			selected, err := extractLines(string(content), target.StartLine, target.EndLine)
+			if err == nil {
 				return resolvedPath, selected, nil
 			}
 		}
 	}
-	if target.FileID != "" {
-		if fileContent, resolvedPath, err := h.readWorkspaceFile(h.env, target.FileID); err == nil {
-			if selected, err := extractLines(string(fileContent), target.StartLine, target.EndLine); err == nil {
-				return resolvedPath, selected, nil
-			}
+	content, resolvedPath, err := h.files.Read(target.FileID)
+	if err == nil {
+		selected, err := extractLines(string(content), target.StartLine, target.EndLine)
+		if err == nil {
+			return resolvedPath, selected, nil
 		}
 	}
 	return "", "", fmt.Errorf("unable to resolve source path for symbol %q", target.Name)
 }
 
 func (h *TargetedRefactorHandler) generateReplacement(ctx context.Context, target *ast.Node, sourcePath, original, transformation string) (string, error) {
-	if h.env.Model == nil {
+	if h.gen == nil {
 		return "", fmt.Errorf("model unavailable")
 	}
 	prompt := fmt.Sprintf(`You are editing a single symbol block in %s.
@@ -324,8 +322,7 @@ Return ONLY valid JSON with this shape:
 {"replacement":"full replacement block text","summary":"short explanation"}
 Do not include markdown fences. Do not edit outside the selected block.`,
 		sourcePath, target.Name, target.Type, target.StartLine, target.EndLine, transformation, original)
-	resp, err := h.env.Model.Generate(ctx, prompt, &model.LLMOptions{
-		Model:       configuredModelName(h.env.Config),
+	resp, err := h.gen.Generate(ctx, prompt, &model.LLMOptions{
 		Temperature: 0,
 		MaxTokens:   800,
 	})

@@ -9,7 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/named/euclo"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -170,7 +169,7 @@ capability:
 				},
 			},
 		},
-	}, llm.ProviderSecrets{}, euclo.GetRegistrationFuncs())
+	}, euclo.GetRegistrationFuncs())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -36,8 +36,8 @@ func TestAllowedDomainImport_downward(t *testing.T) {
 		{"capability", "governance", true},
 		{"governance", "model", true},
 		{"app", "named", true},
-		{"named", "agents", true},
-		{"agents", "execution", true},
+		{"named", "cognitionzoo", true},
+		{"cognitionzoo", "execution", true},
 	}
 	for _, tt := range tests {
 		got := AllowedDomainImport(tt.src, tt.dst)

@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -19,10 +20,10 @@ import (
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/model"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -238,15 +239,30 @@ func assertEventOrder(t *testing.T, got []telemetry.EventType, want []telemetry.
 	}
 }
 
-func workspaceEnv(reg *registry.CapabilityRegistry) agentenv.AgentContext {
-	return agentenv.AgentContext{Registry: reg}
+// rootGraphDeps builds RootGraphDeps from a capability registry with a
+// thoughtrecipe capability registry and a bare paradigm.Deps containing
+// only the registry.
+func rootGraphDeps(reg *registry.CapabilityRegistry) orchestrate.RootGraphDeps {
+	return orchestrate.RootGraphDeps{
+		DispatchCapabilities: reg,
+		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		Paradigm: &paradigm.Deps{
+			Registry: reg,
+		},
+	}
 }
 
-func workspaceEnvWithModel(reg *registry.CapabilityRegistry, model model.LanguageModel) agentenv.AgentContext {
-	return agentenv.AgentContext{
-		Registry: reg,
-		Model:    model,
-		Config:   &execution.Config{Name: "testsuite", Model: "stub"},
+// rootGraphDepsWithModel builds RootGraphDeps from a registry and model,
+// including a paradigm.Deps with Model and Config populated.
+func rootGraphDepsWithModel(reg *registry.CapabilityRegistry, m model.LanguageModel) orchestrate.RootGraphDeps {
+	return orchestrate.RootGraphDeps{
+		DispatchCapabilities: reg,
+		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		Paradigm: &paradigm.Deps{
+			Model:    m,
+			Registry: reg,
+			Config:   &execution.Config{Name: "testsuite", Model: "stub"},
+		},
 	}
 }
 

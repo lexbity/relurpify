@@ -16,10 +16,11 @@ func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {
 
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-	)
+	deps := rootGraphDeps(caps)
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-capability", "session-capability")
 	seedTask(env, "add a cache to the handler", "handler.go")

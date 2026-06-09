@@ -20,12 +20,13 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithCheckpointRepository(repo),
-		orchestrate.WithPersistenceWriter(writer),
-	)
+	deps := rootGraphDeps(caps)
+	deps.Checkpoints = repo
+	deps.Persistence = writer
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	task := &execution.Task{
 		ID:          "task-resume-checkpoint",
@@ -95,13 +96,14 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	})
 	repo := &checkpointArtifactRepo{}
 	writer := newPersistenceWriter(t)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-		orchestrate.WithCheckpointRepository(repo),
-		orchestrate.WithPersistenceWriter(writer),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	deps.ThoughtRecipes = thoughtrecipes
+	deps.Checkpoints = repo
+	deps.Persistence = writer
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	task := &execution.Task{
 		ID:          "task-resume-thoughtrecipe",

@@ -66,7 +66,7 @@ func uniqueStrings(in []string) []string {
 	return out
 }
 
-func mapTargetPathToWorkspace(absPath, targetWorkspace, workspace string) string {
+func mapTargetPathIntoWorkspace(absPath, targetWorkspace, workspace string) string {
 	if absPath == "" || targetWorkspace == "" || workspace == "" {
 		return absPath
 	}

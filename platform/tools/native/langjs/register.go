@@ -5,17 +5,17 @@ import (
 	platformjs "codeburg.org/lexbit/relurpify/platform/lang/js"
 )
 
+func Constructors() map[string]ports.NativeToolConstructor {
+	return map[string]ports.NativeToolConstructor{
+		"node_workspace_detect": func(basePath string) ports.Tool { return &platformjs.NodeWorkspaceDetectTool{BasePath: basePath} },
+		"node_project_metadata": func(basePath string) ports.Tool { return &platformjs.NodeProjectMetadataTool{BasePath: basePath} },
+		"node_npm_test":         func(basePath string) ports.Tool { return platformjs.NewNodeNPMTestTool(basePath) },
+		"node_syntax_check":     func(basePath string) ports.Tool { return platformjs.NewNodeSyntaxCheckTool(basePath) },
+	}
+}
+
 func init() {
-	ports.RegisterNative("node_workspace_detect", func(basePath string) ports.Tool {
-		return &platformjs.NodeWorkspaceDetectTool{BasePath: basePath}
-	})
-	ports.RegisterNative("node_project_metadata", func(basePath string) ports.Tool {
-		return &platformjs.NodeProjectMetadataTool{BasePath: basePath}
-	})
-	ports.RegisterNative("node_npm_test", func(basePath string) ports.Tool {
-		return platformjs.NewNodeNPMTestTool(basePath)
-	})
-	ports.RegisterNative("node_syntax_check", func(basePath string) ports.Tool {
-		return platformjs.NewNodeSyntaxCheckTool(basePath)
-	})
+	for k, v := range Constructors() {
+		ports.RegisterNative(k, v)
+	}
 }

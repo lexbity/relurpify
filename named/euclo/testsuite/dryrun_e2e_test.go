@@ -53,10 +53,11 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-	)
+	deps := rootGraphDeps(caps)
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-dryrun", "session-dryrun")
 	seedTask(env, "add a cache to the handler", "dryrun.go")
@@ -97,11 +98,12 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 		Name:     "review",
 		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnv(caps)),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-	)
+	deps := rootGraphDeps(caps)
+	deps.ThoughtRecipes = thoughtrecipes
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-dryrun-thoughtrecipe", "session-dryrun-thoughtrecipe")
 	seedTask(env, "review the auth package", "review.go")

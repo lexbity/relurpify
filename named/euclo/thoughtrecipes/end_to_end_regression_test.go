@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 )
 
@@ -86,7 +86,8 @@ ask user:
 		t.Fatalf("step count = %d, want 2", got)
 	}
 
-	runNode := NewThoughtRecipeStepNode("review_flow.run", agentenv.AgentContext{PromptRegistry: promptRegistry}, plan.Steps[0])
+	deps := &paradigm.Deps{PromptRegistry: promptRegistry}
+	runNode := NewThoughtRecipeStepNode("review_flow.run", deps, plan.Steps[0])
 	runEnv := contextdata.NewEnvelope("task-review-flow", "")
 	runTask, err := runNode.buildTask(runEnv)
 	if err != nil {
@@ -99,7 +100,7 @@ ask user:
 		t.Fatalf("run prompt_id = %#v, want named.euclo.code.explore", got)
 	}
 
-	askNode := NewThoughtRecipeStepNode("review_flow.ask", agentenv.AgentContext{PromptRegistry: promptRegistry}, plan.Steps[1])
+	askNode := NewThoughtRecipeStepNode("review_flow.ask", deps, plan.Steps[1])
 	askTask, err := askNode.buildTask(contextdata.NewEnvelope("task-review-flow", ""))
 	if err != nil {
 		t.Fatalf("buildTask(ask): %v", err)

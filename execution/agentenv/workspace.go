@@ -11,26 +11,17 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/context/contextstream"
-	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
-	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/context/persistence/artifactstore"
-	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -44,8 +35,8 @@ import (
 // be used to cleanly stop and re-start services without rebuilding stores.
 type Workspace struct {
 	Environment       AgentContext
-	Registration      *fauthorization.AgentRegistration
-	Backend           llm.ManagedBackend
+	Registration      *Registration
+	Backend           ModelBackend
 	ProfileResolution modelselect.ProfileResolution
 
 	// Internals held for Close()/Restart()
@@ -55,8 +46,8 @@ type Workspace struct {
 	// Derived fields for callers that need them
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	EffectiveContract    *config.EffectiveAgentContract
-	CompiledPolicy       *fauthorization.CompiledPolicyBundle
-	PolicyEngine         fauthorization.PolicyEngine
+	CompiledPolicy       *CompiledPolicy
+	PolicyEngine         regpkg.PolicyEngine
 	CapabilityAdmissions []regpkg.AdmissionResult
 
 	// Observability
@@ -172,11 +163,12 @@ type AgentBootstrapOptions struct {
 	ManifestSnapshot     *config.AgentManifestSnapshot
 	SecurityBundle       *cfgsecurity.Bundle
 	ProfileResolution    modelselect.ProfileResolution
-	PermissionManager    *fauthorization.PermissionManager
+	PermissionManager    PermissionManager
 	Runner               fsandbox.CommandRunner
+	CommandPolicy        fsandbox.CommandPolicy
 	SandboxBackend       string
 	Model                model.LanguageModel
-	Backend              llm.ManagedBackend
+	Backend              ModelBackend
 	InferenceModel       string
 	Telemetry            telemetry.Telemetry
 	SkipASTIndex         bool
@@ -187,23 +179,28 @@ type AgentBootstrapOptions struct {
 	AgentLifecycle       agentlifecycle.Repository
 	CapabilityAdmissions []regpkg.AdmissionResult
 	Contract             *config.EffectiveAgentContract
-	CompiledPolicy       *fauthorization.CompiledPolicyBundle
-	PolicyEngine         fauthorization.PolicyEngine
+	CompiledPolicy       *CompiledPolicy
+	PolicyEngine         regpkg.PolicyEngine
+	// Pre-built capability product. App composition is responsible for building
+	// the capability runtime; agentenv only consumes it.
+	CapabilityRegistry     *regpkg.CapabilityRegistry
+	CapabilityIndexManager *ast.IndexManager
+	CapabilitySearchEngine *search.SearchEngine
 }
 
 // BootstrappedAgentRuntime contains the results of bootstrapping an agent runtime.
 type BootstrappedAgentRuntime struct {
 	AgentSpec            *agentspec.AgentRuntimeSpec
 	AgentConfig          *execution.Config
-	Backend              llm.ManagedBackend
+	Backend              ModelBackend
 	Environment          AgentContext
 	Registry             *regpkg.CapabilityRegistry
 	IndexManager         *ast.IndexManager
 	SearchEngine         *search.SearchEngine
 	CapabilityAdmissions []regpkg.AdmissionResult
 	Contract             *config.EffectiveAgentContract
-	CompiledPolicy       *fauthorization.CompiledPolicyBundle
-	PolicyEngine         fauthorization.PolicyEngine
+	CompiledPolicy       *CompiledPolicy
+	PolicyEngine         regpkg.PolicyEngine
 }
 
 // BootstrapAgentRuntime bootstraps the agent runtime including resolving the
@@ -224,8 +221,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.ManifestSnapshot.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
-	// opts.Runner may be nil — buildSecuredRuntime will build one from scratch
-	// using SecurityBundle and SandboxBackend when no ExistingRunner is set.
 	if opts.SecurityBundle == nil {
 		return nil, fmt.Errorf("security bundle required")
 	}
@@ -249,36 +244,20 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		resolvedModel = agentSpec.Model.Name
 	}
 
-	manifest := opts.ManifestSnapshot.Manifest
-	sr, err := buildSecuredRuntime(opts.Context, SecuredRuntimeInput{
-		Context:           opts.Context,
-		Workspace:         workspace,
-		SandboxBackend:    opts.SandboxBackend,
-		AgentID:           opts.AgentID,
-		AgentSpec:         agentSpec,
-		PermissionManager: opts.PermissionManager,
-		SecurityBundle:    opts.SecurityBundle,
-		ExistingRunner:    opts.Runner,
-		Manifest:          manifest,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("build secured runtime: %w", err)
+	authRunner, ok := opts.Runner.(*fsandbox.AuthorizedRunner)
+	if !ok || authRunner == nil {
+		return nil, fmt.Errorf("authorized command runner required")
+	}
+	if opts.PolicyEngine == nil {
+		return nil, fmt.Errorf("policy engine required")
 	}
 
-	capabilities, err := BuildBuiltinCapabilityBundle(workspace, sr.Runner, CapabilityRegistryOptions{
-		Context:           opts.Context,
-		AgentID:           opts.AgentID,
-		PermissionManager: opts.PermissionManager,
-		AgentSpec:         agentSpec,
-		ProtectedPaths:    append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...),
-		SkipASTIndex:      opts.SkipASTIndex,
-	})
-	if err != nil {
-		return nil, err
+	if opts.CapabilityRegistry == nil {
+		return nil, fmt.Errorf("app-composed capability runtime required")
 	}
-	registry := capabilities.Registry
-	indexManager := capabilities.IndexManager
-	searchEngine := capabilities.SearchEngine
+	registry := opts.CapabilityRegistry
+	indexManager := opts.CapabilityIndexManager
+	searchEngine := opts.CapabilitySearchEngine
 	if opts.Telemetry != nil {
 		registry.UseTelemetry(opts.Telemetry)
 	}
@@ -288,11 +267,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.ProfileResolution.Profile != nil {
 		registry.SetModelProfile(opts.ProfileResolution.Profile)
 	}
-	compiledPolicy, err := fauthorization.BuildFromContract(effectiveContract, sr.PolicyEngine, nil)
+	compiledPolicy, err := buildCompiledPolicy(effectiveContract, opts.PolicyEngine, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build compiled policy: %w", err)
 	}
-	registry.SetPolicyEngine(sr.PolicyEngine)
+	registry.SetPolicyEngine(opts.PolicyEngine)
 
 	maxIterations := opts.MaxIterations
 	if maxIterations <= 0 {
@@ -328,9 +307,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	env := AgentContext{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
-		CommandRunner:                 sr.Runner,
+		CommandRunner:                 authRunner,
 		JobSubmitter:                  jobs.NoopSubmitter{},
-		CommandPolicy:                 sr.CommandPolicy,
+		CommandPolicy:                 opts.CommandPolicy,
 		FileScope:                     fileScope,
 		Registry:                      registry,
 		PermissionManager:             opts.PermissionManager,
@@ -358,20 +337,32 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		CapabilityAdmissions: admissionResults,
 		Contract:             effectiveContract,
 		CompiledPolicy:       compiledPolicy,
-		PolicyEngine:         sr.PolicyEngine,
+		PolicyEngine:         opts.PolicyEngine,
 	}, nil
 }
 
-// OpenWorkspace is the single composition root for all Relurpify entry
-// points. It initializes a complete workspace session: platform checks,
-// store opening, capability registration, agent registration, background
-// indexing, and (depending on scope) LLM backend, knowledge, services,
-// and telemetry. app/relurpish, app/dev-agent-cli, and integration tests
-// all call OpenWorkspace.
-//
-// There is exactly one composition root. There is no second function that
-// builds a AgentContext. BuildAgentContext was deleted in
-// Phase 6; its callers were migrated to OpenWorkspace.
+func buildCompiledPolicy(contract *config.EffectiveAgentContract, engine regpkg.PolicyEngine, rules []policy.PolicyRule) (*CompiledPolicy, error) {
+	if contract == nil {
+		return nil, fmt.Errorf("effective agent contract required")
+	}
+	if contract.AgentID == "" {
+		return nil, fmt.Errorf("agent id required")
+	}
+	if contract.AgentSpec == nil {
+		return nil, fmt.Errorf("agent spec required")
+	}
+	return &CompiledPolicy{
+		AgentID: contract.AgentID,
+		Spec:    contract.AgentSpec,
+		Rules:   rules,
+		Engine:  engine,
+	}, nil
+}
+
+// OpenWorkspace consumes app-composed registration/security products and opens
+// the execution workspace. It initializes platform checks, stores, capability
+// registration, background indexing, and (depending on scope) LLM backend,
+// knowledge, services, and telemetry.
 //
 // Feature assembly is governed by cfg.Scope. Security and capability
 // assembly are unconditional; LLM backend, knowledge, services, and
@@ -382,8 +373,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 // Builder taxonomy (design decision 8):
 //
 //	OpenWorkspace         — session lifecycle (this function)
-//	BootstrapAgentRuntime  — secured runtime assembly
-//	buildSecuredRuntime    — security foundation (unexported)
+//	BootstrapAgentRuntime  — agent runtime assembly
 //	Build*                 — single leaf components (capabilities, prompts)
 //
 // Scope mechanism (design decision 9):
@@ -391,7 +381,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 //	cfg.Scope is a WorkspaceScope field, not a positional parameter.
 //	ScopeFull = every optional layer.
 //	ScopeEmbeddedAgent = security + capabilities only.
-func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
+func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, regFuncs AgentRegistrationFuncs) (*Workspace, error) {
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -471,13 +461,12 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	}
 
 	// Phase B: LLM Backend (gated by Scope.LLMBackend)
-	var backend llm.ManagedBackend
+	var backend ModelBackend
 	if cfg.Scope.LLMBackend {
-		var beErr error
-		backend, beErr = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
-		if beErr != nil {
-			return nil, fmt.Errorf("build inference backend: %w", beErr)
+		if cfg.ModelProduct == nil || cfg.ModelProduct.Backend == nil {
+			return nil, fmt.Errorf("app-composed model runtime required")
 		}
+		backend = cfg.ModelProduct.Backend
 	}
 
 	// Phase C: Log and Telemetry Setup (logger always on; JSON sink gated by
@@ -500,45 +489,31 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	// Phase D: KnowledgeStore initialization deferred until after BootstrapAgentRuntime
 	// where the graphdb.Engine is available from IndexManager.
 
-	// Phase E: Agent Registration + Authorization
+	// Phase E: App-composed registration + security products
 	// For embedded scope, synthesize a minimal manifest snapshot if none provided.
 	if cfg.ManifestSnapshot == nil && cfg.AgentSpec != nil {
 		cfg.ManifestSnapshot = synthesizeManifestSnapshot(cfg.AgentName, cfg.AgentSpec)
 	}
-	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
-		ManifestPath:     cfg.ManifestPath,
-		ManifestSnapshot: cfg.ManifestSnapshot,
-		SecurityBundle:   cfg.SecurityBundle,
-		ConfigPath:       cfg.ConfigPath,
-		Backend:          cfg.SandboxBackend,
-		BackendFactory:   newSandboxBackendFactory(),
-		AuditLimit:       cfg.AuditLimit,
-		BaseFS:           cfg.Workspace,
-		StateDir:         cfg.StateDir,
-		HITLTimeout:      cfg.HITLTimeout,
-	})
-	if err != nil {
+	registration := cfg.Registration
+	if registration == nil {
 		logFile.Close()
-		return nil, fmt.Errorf("sandbox registration failed: %w", err)
+		return nil, fmt.Errorf("app-composed registration required")
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
-	// Build CommandRunnerConfig from manifest
-	var runnerConfig *sandbox.CommandRunnerConfig
-	if registration.Manifest != nil {
-		runnerConfig = &sandbox.CommandRunnerConfig{
-			Image:           registration.Manifest.Spec.Image,
-			RunAsUser:       registration.Manifest.Spec.Security.RunAsUser,
-			ReadOnlyRoot:    registration.Manifest.Spec.Security.ReadOnlyRoot,
-			NoNewPrivileges: registration.Manifest.Spec.Security.NoNewPrivileges,
-			Workspace:       cfg.Workspace,
-		}
-	}
-	runner, err := fsandbox.NewCommandRunner(runnerConfig, &reverseSandboxRuntimeAdapter{inner: registration.Runtime})
-	if err != nil {
+	if cfg.SecurityRuntime == nil {
 		logFile.Close()
-		return nil, err
+		return nil, fmt.Errorf("app-composed security runtime required")
 	}
+	if cfg.SecurityRuntime.Runner == nil {
+		logFile.Close()
+		return nil, fmt.Errorf("security runtime missing runner")
+	}
+	if cfg.SecurityRuntime.PolicyEngine == nil {
+		logFile.Close()
+		return nil, fmt.Errorf("security runtime missing policy engine")
+	}
+	runner := cfg.SecurityRuntime.Runner
 
 	// Resolve model from manifest if not overridden in manifest.
 	inferenceModel := cfg.InferenceModel
@@ -552,8 +527,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	var logLLM bool
 	profileResolution := cfg.ProfileResolution
 	if cfg.Scope.LLMBackend && backend != nil {
-		_ = llm.ApplyProfile(backend, profileResolution.Profile)
-
 		logLLM = cfg.DebugLLM
 		if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
 			if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
@@ -561,8 +534,11 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 			}
 		}
 		backend.SetDebugLogging(logLLM)
-		model = llm.NewInstrumentedModel(backend.Model(), llmTelemetryAdapter{inner: tel}, logLLM)
-		_ = llm.ApplyProfile(model, profileResolution.Profile)
+		if cfg.ModelProduct.ModelFactory != nil {
+			model = cfg.ModelProduct.ModelFactory(tel, logLLM)
+		} else {
+			model = backend.Model()
+		}
 	}
 
 	// Wire permission event logger if event telemetry is available.
@@ -577,7 +553,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 	}
 
 	// Phase G: Bootstrap Agent Runtime
-	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
+	bootstrapOpts := AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
@@ -587,6 +563,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		ProfileResolution:   profileResolution,
 		PermissionManager:   registration.Permissions,
 		Runner:              runner,
+		CommandPolicy:       cfg.SecurityRuntime.CommandPolicy,
 		Model:               model,
 		Backend:             backend,
 		InferenceModel:      inferenceModel,
@@ -596,7 +573,14 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		AllowedCapabilities: cfg.AllowedCapabilities,
 		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
-	})
+		PolicyEngine:        cfg.SecurityRuntime.PolicyEngine,
+	}
+	if cfg.CapabilityProduct != nil {
+		bootstrapOpts.CapabilityRegistry = cfg.CapabilityProduct.Registry
+		bootstrapOpts.CapabilityIndexManager = cfg.CapabilityProduct.IndexManager
+		bootstrapOpts.CapabilitySearchEngine = cfg.CapabilityProduct.SearchEngine
+	}
+	boot, err := BootstrapAgentRuntime(cfg.Workspace, bootstrapOpts)
 	if err != nil {
 		logFile.Close()
 		return nil, err
@@ -638,37 +622,23 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 		env.Scheduler = scheduler
 		sm = NewServiceManager()
 		sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
-			Source: "framework/agentenv/workspace.go",
-			Owner:  "framework",
+			Source: "execution/agentenv/workspace.go",
+			Owner:  "execution",
 			Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
 		})
 		env.ServiceManager = sm
 	}
 
-	if cfg.Scope.Knowledge && env.IndexManager != nil && env.IndexManager.GraphDB != nil {
-		bkcEvents := &knowledge.EventBus{}
-		knowledgeStore, err := openKnowledgeStore(env.IndexManager.GraphDB)
-		if err != nil {
+	if cfg.Scope.Knowledge {
+		if cfg.KnowledgeProduct == nil {
 			logFile.Close()
-			return nil, fmt.Errorf("open knowledge store: %w", err)
+			return nil, fmt.Errorf("app-composed knowledge runtime required")
 		}
-		env.KnowledgeStore = knowledgeStore
-		env.KnowledgeEvents = bkcEvents
-
-		policyBundle, err := execctx.Compile(registration.Manifest, execctx.DefaultContextPolicy())
-		if err != nil {
-			logFile.Close()
-			return nil, fmt.Errorf("compile context policy: %w", err)
-		}
-		rankerRegistry := retrieval.NewRankerRegistry()
-		rankerRegistry.Register(&retrieval.KeywordRanker{K1: 1.2, B: 0.75})
-		rankerRegistry.Register(&retrieval.RecencyRanker{HalfLifeHours: 24.0})
-		rankerRegistry.Register(&retrieval.ASTProximityRanker{Index: env.IndexManager})
-		rankerRegistry.Register(&retrieval.TrustRanker{})
-		retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(toPolicyBundlePort(policyBundle))
-		env.Retriever = retriever
-		env.Compiler = compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
-		env.StreamTrigger = contextstream.NewTrigger(&compilerTriggerAdapter{inner: env.Compiler})
+		env.KnowledgeStore = cfg.KnowledgeProduct.KnowledgeStore
+		env.KnowledgeEvents = cfg.KnowledgeProduct.KnowledgeEvents
+		env.Retriever = cfg.KnowledgeProduct.Retriever
+		env.Compiler = cfg.KnowledgeProduct.Compiler
+		env.StreamTrigger = cfg.KnowledgeProduct.StreamTrigger
 	}
 
 	ws := &Workspace{
@@ -711,23 +681,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.Provide
 
 	logger.Printf("agentenv: workspace opened successfully")
 	return ws, nil
-}
-
-type llmTelemetryAdapter struct {
-	inner telemetry.Telemetry
-}
-
-func (a llmTelemetryAdapter) Emit(event telemetry.Event) {
-	if a.inner == nil {
-		return
-	}
-	a.inner.Emit(telemetry.Event{
-		Type:      telemetry.EventType(event.Type),
-		TaskID:    event.TaskID,
-		Message:   event.Message,
-		Timestamp: event.Timestamp,
-		Metadata:  event.Metadata,
-	})
 }
 
 func validateConfig(cfg WorkspaceConfig) error {
@@ -795,72 +748,4 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	}
 
 	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
-}
-
-// compilerTriggerAdapter adapts *compiler.Compiler to implement contextstream.CompilerInvoker.
-type compilerTriggerAdapter struct {
-	inner *compiler.Compiler
-}
-
-func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.CompilationRequest) (*contextports.CompilationResult, error) {
-	query := retrieval.RetrievalQuery{
-		Text: req.BaseContext,
-	}
-	innerReq := compiler.CompilationRequest{
-		Query:     query,
-		MaxTokens: req.BudgetTokens,
-	}
-	result, _, err := a.inner.Compile(ctx, innerReq)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, nil
-	}
-	streamedRefs := make([]string, 0, len(result.StreamedRefs))
-	for _, ref := range result.StreamedRefs {
-		streamedRefs = append(streamedRefs, string(ref.ChunkID))
-	}
-	skipped := make([]string, 0, len(result.SkippedStaleChunks))
-	for _, id := range result.SkippedStaleChunks {
-		skipped = append(skipped, string(id))
-	}
-	subs := make([]contextports.SummarySubstitution, 0, len(result.Substitutions))
-	for _, s := range result.Substitutions {
-		subs = append(subs, contextports.SummarySubstitution{
-			Original: string(s.OriginalChunkID),
-			Replaced: string(s.SummaryChunkID),
-			ChunkID:  string(s.OriginalChunkID),
-		})
-	}
-	return &contextports.CompilationResult{
-		ShortfallTokens:    result.ShortfallTokens,
-		StreamedRefs:       streamedRefs,
-		SkippedStaleChunks: skipped,
-		Substitutions:      subs,
-		Record: contextports.CompilationRecord{
-			FinalTokens:    result.TotalTokens,
-			OriginalBudget: req.BudgetTokens,
-		},
-	}, nil
-}
-
-// toPolicyBundlePort converts an execution/context ContextPolicyBundle to a context/ports PolicyBundle.
-func toPolicyBundlePort(bundle *execctx.ContextPolicyBundle) *contextports.PolicyBundle {
-	if bundle == nil {
-		return nil
-	}
-	return &contextports.PolicyBundle{
-		DefaultTrustClass:   string(bundle.DefaultTrustClass),
-		MaxTokensPerWindow:  bundle.Quota.MaxTokensPerWindow,
-		DegradedChunkPolicy: string(bundle.DegradedChunkPolicy),
-	}
-}
-
-// openKnowledgeStore opens the knowledge store with the given graphdb engine.
-func openKnowledgeStore(engine *graphdb.Engine) (*knowledge.ChunkStore, error) {
-	if engine == nil {
-		return nil, fmt.Errorf("graphdb engine required")
-	}
-	return &knowledge.ChunkStore{Graph: engine}, nil
 }

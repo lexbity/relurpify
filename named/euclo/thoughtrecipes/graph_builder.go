@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	frameworkingestion "codeburg.org/lexbit/relurpify/context/knowledge/ingestion"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -20,7 +20,7 @@ import (
 //
 // The graph preserves the linear thoughtrecipe steps and also materializes parallel and
 // conditional groups using the primitives available in framework/agentgraph.
-func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
+func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
 	_ = ingestionPipeline // retained for future plumbing; step nodes currently own ingestion.
 
 	if plan == nil {
@@ -31,7 +31,7 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ing
 	sections := make([]graphSection, 0, 1+len(plan.Parallel)+len(plan.Conditional))
 
 	if len(plan.Steps) > 0 {
-		section, err := buildLinearSection(graph, env, plan.Steps)
+		section, err := buildLinearSection(graph, deps, plan.Steps)
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +39,7 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ing
 	}
 
 	for _, group := range plan.Parallel {
-		section, err := buildParallelSection(graph, env, group)
+		section, err := buildParallelSection(graph, deps, group)
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +47,7 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ing
 	}
 
 	for _, group := range plan.Conditional {
-		section, err := buildConditionalSection(graph, env, group)
+		section, err := buildConditionalSection(graph, deps, group)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +55,7 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, env agentenv.AgentContext, ing
 	}
 
 	for _, group := range plan.Routes {
-		section, err := buildRouteSection(graph, env, group)
+		section, err := buildRouteSection(graph, deps, group)
 		if err != nil {
 			return nil, err
 		}
@@ -107,10 +107,10 @@ type stepArtifacts struct {
 	fallback string
 }
 
-func buildLinearSection(graph *agentgraph.Graph, env agentenv.AgentContext, steps []ExecutionStep) (graphSection, error) {
+func buildLinearSection(graph *agentgraph.Graph, deps *paradigm.Deps, steps []ExecutionStep) (graphSection, error) {
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
-		artifact, err := addExecutionStep(graph, env, step)
+		artifact, err := addExecutionStep(graph, deps, step)
 		if err != nil {
 			return graphSection{}, err
 		}
@@ -133,7 +133,7 @@ func buildLinearSection(graph *agentgraph.Graph, env agentenv.AgentContext, step
 	}, nil
 }
 
-func buildParallelSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledParallelGroup) (graphSection, error) {
+func buildParallelSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledParallelGroup) (graphSection, error) {
 	groupID := scopedGroupNodeID(group.Group.ID, "parallel")
 	if err := graph.AddNode(newThoughtRecipeStageNode(groupID, agentgraph.NodeTypeSystem, "parallel", map[string]any{
 		"group_id": group.Group.ID,
@@ -143,7 +143,7 @@ func buildParallelSection(graph *agentgraph.Graph, env agentenv.AgentContext, gr
 	}
 
 	for _, step := range group.Steps {
-		artifact, err := addExecutionStep(graph, env, ExecutionStep{
+		artifact, err := addExecutionStep(graph, deps, ExecutionStep{
 			ID:                  step.Step.ID,
 			Type:                step.Type,
 			Paradigm:            executionParadigmForStep(*step.Step),
@@ -175,7 +175,7 @@ func buildParallelSection(graph *agentgraph.Graph, env agentenv.AgentContext, gr
 	}, nil
 }
 
-func buildConditionalSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledConditionalGroup) (graphSection, error) {
+func buildConditionalSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledConditionalGroup) (graphSection, error) {
 	condID := scopedGroupNodeID(group.Group.ID, "conditional")
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
@@ -191,11 +191,11 @@ func buildConditionalSection(graph *agentgraph.Graph, env agentenv.AgentContext,
 		return graphSection{}, err
 	}
 
-	ifEntry, err := buildBranchSequence(graph, env, group.IfSteps, joinID)
+	ifEntry, err := buildBranchSequence(graph, deps, group.IfSteps, joinID)
 	if err != nil {
 		return graphSection{}, err
 	}
-	elseEntry, err := buildBranchSequence(graph, env, group.ElseSteps, joinID)
+	elseEntry, err := buildBranchSequence(graph, deps, group.ElseSteps, joinID)
 	if err != nil {
 		return graphSection{}, err
 	}
@@ -218,7 +218,7 @@ func buildConditionalSection(graph *agentgraph.Graph, env agentenv.AgentContext,
 	}, nil
 }
 
-func buildRouteSection(graph *agentgraph.Graph, env agentenv.AgentContext, group CompiledRouteGroup) (graphSection, error) {
+func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledRouteGroup) (graphSection, error) {
 	routeID := scopedGroupNodeID(group.Group.ID, "route")
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
@@ -236,7 +236,7 @@ func buildRouteSection(graph *agentgraph.Graph, env agentenv.AgentContext, group
 	nextEntry := joinID
 	for i := len(group.Branches) - 1; i >= 0; i-- {
 		branch := group.Branches[i]
-		bodyEntry, err := buildExecutionSequence(graph, env, branch.Steps, joinID)
+		bodyEntry, err := buildExecutionSequence(graph, deps, branch.Steps, joinID)
 		if err != nil {
 			return graphSection{}, err
 		}
@@ -281,7 +281,7 @@ func buildRouteSection(graph *agentgraph.Graph, env agentenv.AgentContext, group
 	}, nil
 }
 
-func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.AgentContext, steps []ExecutionStep, continuation string) (string, error) {
+func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []ExecutionStep, continuation string) (string, error) {
 	if len(steps) == 0 {
 		if strings.TrimSpace(continuation) != "" {
 			return continuation, nil
@@ -291,7 +291,7 @@ func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.AgentContext, 
 
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
-		artifact, err := addExecutionStep(graph, env, step)
+		artifact, err := addExecutionStep(graph, deps, step)
 		if err != nil {
 			return "", err
 		}
@@ -310,7 +310,7 @@ func buildExecutionSequence(graph *agentgraph.Graph, env agentenv.AgentContext, 
 	return artifacts[0].entry, nil
 }
 
-func buildBranchSequence(graph *agentgraph.Graph, env agentenv.AgentContext, steps []CompiledStep, continuation string) (string, error) {
+func buildBranchSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []CompiledStep, continuation string) (string, error) {
 	if len(steps) == 0 {
 		if strings.TrimSpace(continuation) != "" {
 			return continuation, nil
@@ -338,7 +338,7 @@ func buildBranchSequence(graph *agentgraph.Graph, env agentenv.AgentContext, ste
 			ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
 			Step:                *step.Step,
 		}
-		artifact, err := addExecutionStep(graph, env, execStep)
+		artifact, err := addExecutionStep(graph, deps, execStep)
 		if err != nil {
 			return "", err
 		}
@@ -401,9 +401,9 @@ func inheritExecutionStepScope(step, parent ExecutionStep) ExecutionStep {
 	return step
 }
 
-func addExecutionStep(graph *agentgraph.Graph, env agentenv.AgentContext, step ExecutionStep) (stepArtifacts, error) {
+func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
 	if strings.EqualFold(strings.TrimSpace(step.Type), "pipeline") {
-		return addPipelineStep(graph, env, step)
+		return addPipelineStep(graph, deps, step)
 	}
 
 	entry := ""
@@ -476,7 +476,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.AgentContext, step E
 	}
 
 	execNodeID := step.ID + ".execute"
-	if err := graph.AddNode(NewThoughtRecipeStepNode(execNodeID, env, step)); err != nil {
+	if err := graph.AddNode(NewThoughtRecipeStepNode(execNodeID, deps, step)); err != nil {
 		return stepArtifacts{}, err
 	}
 	if entry == "" {
@@ -490,7 +490,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.AgentContext, step E
 	if step.Fallback != nil {
 		fallbackID = step.ID + ".fallback"
 		fallbackStep := executionStepFromAgent(fallbackID, step.Fallback, step)
-		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, env, fallbackStep)); err != nil {
+		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, deps, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
 		if err := graph.AddEdge(execNodeID, fallbackID, func(result *execution.Result, env *contextdata.Envelope) bool {
@@ -508,7 +508,7 @@ func addExecutionStep(graph *agentgraph.Graph, env agentenv.AgentContext, step E
 	}, nil
 }
 
-func addPipelineStep(graph *agentgraph.Graph, env agentenv.AgentContext, step ExecutionStep) (stepArtifacts, error) {
+func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
 	entry := step.ID + ".pipeline"
 	joinID := step.ID + ".join"
 	if err := graph.AddNode(newThoughtRecipeStageNode(entry, agentgraph.NodeTypeSystem, "pipeline", map[string]any{
@@ -542,7 +542,7 @@ func addPipelineStep(graph *agentgraph.Graph, env agentenv.AgentContext, step Ex
 		})); err != nil {
 			return stepArtifacts{}, err
 		}
-		bodyEntry, err := buildExecutionSequence(graph, env, stage.Steps, nextEntry)
+		bodyEntry, err := buildExecutionSequence(graph, deps, stage.Steps, nextEntry)
 		if err != nil {
 			return stepArtifacts{}, err
 		}

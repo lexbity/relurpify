@@ -24,11 +24,12 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 		Name:     "review",
 		Metadata: surface.ThoughtRecipeMetadata{Name: "review"},
 	})
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	deps.ThoughtRecipes = thoughtrecipes
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-thoughtrecipe", "session-thoughtrecipe")
 	seedTask(env, "review the auth package", "review.go")
@@ -72,11 +73,12 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 
 	// Wire a telemetry spy to capture emitted events.
 	telemetrySpy := &captureTelemetry{}
-	graph := orchestrate.NewRootGraph(
-		orchestrate.WithAgentContext(workspaceEnvWithModel(caps, stubLanguageModel{})),
-		orchestrate.WithCapabilityRegistry(caps),
-		orchestrate.WithThoughtRecipeRegistry(thoughtrecipes),
-	)
+	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
+	deps.ThoughtRecipes = thoughtrecipes
+	graph, err := orchestrate.NewRootGraph(deps)
+	if err != nil {
+		t.Fatalf("NewRootGraph failed: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-lifecycle", "session-lifecycle")
 	seedTask(env, "review the auth package", "review.go")

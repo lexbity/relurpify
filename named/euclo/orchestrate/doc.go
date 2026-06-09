@@ -1,5 +1,5 @@
-// Package orchestrate provides dispatcher and route fork.
+// Package orchestrate provides the Euclo root graph built on execution/agentgraph,
+// dispatcher for route resolution, and route fork for execution branching.
 //
-// The dispatcher resolves the classified envelope into a concrete
-// execution route and forks to the correct subgraph.
+// RootGraph must be constructed from explicit RootGraphDeps via NewRootGraph.
 package orchestrate

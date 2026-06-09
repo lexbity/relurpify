@@ -11,18 +11,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/execution/agentenv"
 	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
 type ASTQueryHandler struct {
-	env agentenv.AgentContext
+	searcher NodeSearcher
 }
 
 // NewASTQueryHandler creates a new AST query handler.
-func NewASTQueryHandler(env agentenv.AgentContext) *ASTQueryHandler {
-	return &ASTQueryHandler{env: env}
+func NewASTQueryHandler(searcher NodeSearcher) *ASTQueryHandler {
+	return &ASTQueryHandler{searcher: searcher}
 }
 
 // Descriptor returns the capability descriptor for the AST query handler.
@@ -104,18 +103,15 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 
 	limit, _ := intArg(args, "limit", 20)
 
-	// Check for IndexManager
-	if h.env.IndexManager == nil {
-		return failResult("IndexManager not available in environment"), nil
+	if h.searcher == nil {
+		return failResult("query service not available"), nil
 	}
 
-	// Build node query
 	nodeQuery := ast.NodeQuery{
 		NamePattern: query,
 		Limit:       limit,
 	}
 
-	// Add type filters if provided
 	if types, ok := args["types"].([]interface{}); ok {
 		for _, t := range types {
 			if typeStr, ok := t.(string); ok {
@@ -124,7 +120,6 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 		}
 	}
 
-	// Add language filters if provided
 	if languages, ok := args["languages"].([]interface{}); ok {
 		for _, lang := range languages {
 			if langStr, ok := lang.(string); ok {
@@ -133,10 +128,9 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 		}
 	}
 
-	// Execute query
-	nodes, err := h.env.IndexManager.SearchNodes(nodeQuery)
+	nodes, err := h.searcher.SearchNodes(nodeQuery)
 	if err != nil {
-		return failResult(fmt.Sprintf("query failed: %v", err)), nil
+		return failResult(fmt.Sprintf("euclo:cap.ast_query query failed: %v", err)), nil
 	}
 
 	// Convert nodes to match entries

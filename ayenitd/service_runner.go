@@ -7,19 +7,20 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/execution/agentenv"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 )
 
 // RegisterWorkspaceServices registers workspace-owned services with the shared
 // workspace service manager. The services remain owned by the workspace; this
 // package only wires the lifecycle wiring required by relurpish.
-func RegisterWorkspaceServices(_ context.Context, cfg WorkspaceConfig, ws *agentenv.Workspace) error {
+func RegisterWorkspaceServices(_ context.Context, cfg WorkspaceConfig, ws *agentenv.Workspace, registration *fauthorization.AgentRegistration) error {
 	if ws == nil {
 		return fmt.Errorf("workspace unavailable")
 	}
 	if ws.ServiceManager == nil {
 		return fmt.Errorf("service manager unavailable")
 	}
-	if err := registerBrowserWorkspaceService(WorkspaceConfig{Workspace: strings.TrimSpace(cfg.Workspace)}, ws.Registration, ws.Environment.Registry, ws.ServiceManager, ws.Telemetry); err != nil {
+	if err := registerBrowserWorkspaceService(WorkspaceConfig{Workspace: strings.TrimSpace(cfg.Workspace)}, registration, ws.Environment.Registry, ws.ServiceManager, ws.Telemetry); err != nil {
 		return err
 	}
 	return nil
