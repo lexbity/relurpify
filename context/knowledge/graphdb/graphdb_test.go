@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"os"
@@ -161,22 +162,49 @@ func TestImpactSetFindPathNeighborsAndSubgraph(t *testing.T) {
 	require.NoError(t, engine.Link("b", "c", "calls", "", 1, nil))
 	require.NoError(t, engine.Link("a", "d", "imports", "", 1, nil))
 
-	impact := engine.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 3)
-	require.ElementsMatch(t, []string{"b", "c"}, impact.Affected)
-	require.Equal(t, []string{"a"}, impact.ByDepth[0])
-	require.Equal(t, []string{"b"}, impact.ByDepth[1])
-	require.Equal(t, []string{"c"}, impact.ByDepth[2])
-
-	path, err := engine.FindPath("a", "c", []EdgeKind{"calls"}, 3)
+	// ImpactSet via SubgraphPage
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  3,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"a", "b", "c"}, path.Path)
-	noPath, err := engine.FindPath("d", "c", []EdgeKind{"calls"}, 2)
-	require.NoError(t, err)
-	require.Nil(t, noPath)
+	var affected []string
+	for _, elem := range page.Items {
+		if elem.Node.ID != "" && elem.Node.ID != "a" {
+			affected = append(affected, elem.Node.ID)
+		}
+	}
+	require.ElementsMatch(t, []string{"b", "c"}, affected)
 
 	require.Equal(t, []string{"b", "d"}, engine.Neighbors("a", DirectionOut))
 
-	nodes, edges := engine.Subgraph(GraphQuery{RootIDs: []string{"a"}, Direction: DirectionOut, MaxDepth: 2})
+	// Subgraph via SubgraphPage
+	page2, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			Direction: DirectionOut,
+			MaxDepth:  2,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	var nodes []NodeRecord
+	var edges []EdgeRecord
+	for _, elem := range page2.Items {
+		if elem.Node.ID != "" {
+			nodes = append(nodes, elem.Node)
+		}
+		if elem.Edge.SourceID != "" {
+			edges = append(edges, elem.Edge)
+		}
+	}
 	require.Len(t, nodes, 4)
 	require.Len(t, edges, 3)
 }

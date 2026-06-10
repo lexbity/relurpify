@@ -82,16 +82,14 @@ func (e *Engine) DeleteNodes(ids []string) error {
 }
 
 // getNodeMaybe loads a node from cache or, in LRU mode, from the backend.
-// Returns nil when the node is not found. Unlike GetNode it avoids cloning
-// when the caller only needs a read-only reference and is called under
-// store.mu.RLock (traversal paths).
+// Returns nil when the node is not found.  Must be called under store.mu
+// read-lock (safe because it never writes to the store).
 func (e *Engine) getNodeMaybe(id string) *NodeRecord {
 	if e.store.nodes != nil {
 		if n := activeNode(e.store.nodes[id]); n != nil {
 			return n
 		}
 	}
-	// In LRU mode the warm-cache may not have this node; fetch from backend.
 	if e.bk != nil && e.store.lruMaxCapacity > 0 {
 		rec, err := e.bk.getNodeRecord(id)
 		if err != nil || rec == nil || rec.DeletedAt != 0 {
@@ -100,6 +98,11 @@ func (e *Engine) getNodeMaybe(id string) *NodeRecord {
 		return rec
 	}
 	return nil
+}
+
+// getNodeMaybeInRLock is an alias for getNodeMaybe.
+func (e *Engine) getNodeMaybeInRLock(id string) *NodeRecord {
+	return e.getNodeMaybe(id)
 }
 
 // GetNode returns a node by ID.  When the node is not in the in-memory
@@ -133,7 +136,9 @@ func (e *Engine) GetNode(id string) (NodeRecord, bool) {
 	return NodeRecord{}, false
 }
 
-// ListNodes returns active nodes of the given kind.
+// ListNodes returns active nodes of the given kind. In LRU mode the
+// result reflects only nodes currently in the cache — use
+// ListNodesByLabel or ListNodesByLabelPrefix for indexed access.
 func (e *Engine) ListNodes(kind NodeKind) []NodeRecord {
 	e.store.mu.RLock()
 	defer e.store.mu.RUnlock()
@@ -157,7 +162,7 @@ func (e *Engine) ListNodesByLabel(kind NodeKind, label string) []NodeRecord {
 	ids := e.store.labels.Lookup(label)
 	out := make([]NodeRecord, 0, len(ids))
 	for _, id := range ids {
-		node := e.store.nodes[id]
+		node := e.getNodeMaybeInRLock(id)
 		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
@@ -176,7 +181,7 @@ func (e *Engine) ListNodesByLabelPrefix(kind NodeKind, labelPrefix string) []Nod
 	ids := e.store.labels.LookupPrefix(labelPrefix)
 	out := make([]NodeRecord, 0, len(ids))
 	for _, id := range ids {
-		node := e.store.nodes[id]
+		node := e.getNodeMaybeInRLock(id)
 		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
@@ -195,7 +200,7 @@ func (e *Engine) NodesBySource(sourceID string) []NodeRecord {
 	nodeIDs := e.store.bySource[sourceID]
 	out := make([]NodeRecord, 0, len(nodeIDs))
 	for nodeID := range nodeIDs {
-		node := e.store.nodes[nodeID]
+		node := e.getNodeMaybeInRLock(nodeID)
 		if node == nil || node.DeletedAt != 0 || node.SourceID != sourceID {
 			continue
 		}

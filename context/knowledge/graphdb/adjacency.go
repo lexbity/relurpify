@@ -13,13 +13,19 @@ type adjacencyStore struct {
 	reverse  map[string][]EdgeRecord
 	labels   *LabelIndex
 
-	// lruMaxCapacity limits the number of nodes kept in RAM. 0 means
-	// unbounded (legacy full-hydration behaviour).
 	lruMaxCapacity int
-	// lruAccessOrder tracks node IDs from oldest-access to newest-access.
-	// When len(nodes) exceeds lruMaxCapacity the oldest entries are
-	// evicted. Only used when lruMaxCapacity > 0.
-	lruAccessOrder []string
+
+	// O(1) LRU: lruMap stores linked-list nodes keyed by node ID;
+	// lruHead/lruTail anchor the doubly-linked access-order list.
+	lruMap  map[string]*lruEntry
+	lruHead *lruEntry
+	lruTail *lruEntry
+}
+
+type lruEntry struct {
+	id   string
+	prev *lruEntry
+	next *lruEntry
 }
 
 func newAdjacencyStore() *adjacencyStore {
@@ -32,37 +38,70 @@ func newAdjacencyStore() *adjacencyStore {
 	}
 }
 
-// lruTouch records a node access. Must be called with mu write-locked.
+// lruTouch moves id to the front (most recently used). O(1).
 func (s *adjacencyStore) lruTouch(id string) {
 	if s.lruMaxCapacity <= 0 {
 		return
 	}
-	// Move id to end (most recently used).
-	for i, v := range s.lruAccessOrder {
-		if v == id {
-			s.lruAccessOrder = append(s.lruAccessOrder[:i], s.lruAccessOrder[i+1:]...)
-			break
-		}
+	if s.lruMap == nil {
+		s.lruMap = make(map[string]*lruEntry)
 	}
-	s.lruAccessOrder = append(s.lruAccessOrder, id)
+	entry := s.lruMap[id]
+	if entry == nil {
+		entry = &lruEntry{id: id}
+		s.lruMap[id] = entry
+	}
+	// Detach from current position.
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	}
+	if entry.next != nil {
+		entry.next.prev = entry.prev
+	}
+	if s.lruHead == entry {
+		s.lruHead = entry.next
+	}
+	if s.lruTail == entry {
+		s.lruTail = entry.prev
+	}
+	// Move to front (most recently used).
+	entry.prev = nil
+	entry.next = s.lruHead
+	if s.lruHead != nil {
+		s.lruHead.prev = entry
+	}
+	s.lruHead = entry
+	if s.lruTail == nil {
+		s.lruTail = entry
+	}
 }
 
-// lruEvict removes excess entries from the in-memory cache when the
-// working set exceeds lruMaxCapacity. Must be called with mu write-locked.
+// lruEvict removes the least-recently-used entries until the working set
+// is within lruMaxCapacity. O(evicted).
 func (s *adjacencyStore) lruEvict() {
 	if s.lruMaxCapacity <= 0 {
 		return
 	}
-	for len(s.nodes) > s.lruMaxCapacity && len(s.lruAccessOrder) > 0 {
-		oldest := s.lruAccessOrder[0]
-		s.lruAccessOrder = s.lruAccessOrder[1:]
-		if n, ok := s.nodes[oldest]; ok && n != nil {
-			if n.SourceID != "" {
-				s.removeNodeSourceIndex(n.ID, n.SourceID)
-			}
-			s.removeNodeLabels(*n)
+	for len(s.nodes) > s.lruMaxCapacity && s.lruTail != nil {
+		oldest := s.lruTail
+		s.lruTail = oldest.prev
+		if s.lruTail != nil {
+			s.lruTail.next = nil
 		}
-		delete(s.nodes, oldest)
+		if s.lruHead == oldest {
+			s.lruHead = nil
+		}
+		delete(s.lruMap, oldest.id)
+		delete(s.nodes, oldest.id)
+		// Edge eviction happens lazily — forward/reverse maps are
+		// populated on demand from the backend via preloadEdges.
+		delete(s.forward, oldest.id)
+		delete(s.reverse, oldest.id)
+		// Label/source indexes are authoritative and built for all
+		// nodes at boot.  They must NOT be touched on eviction —
+		// removing entries would corrupt the index, causing silent
+		// missing results in ListNodesByLabel/NodesBySource after
+		// cache churn.
 	}
 }
 

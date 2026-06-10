@@ -219,6 +219,139 @@ func TestCursor_FrontierStateAcrossPages(t *testing.T) {
 	}
 }
 
+func TestLRU_IndexIntegrity_ListNodesByLabel(t *testing.T) {
+	// Critical: under LRU, label/source indexes must be built from Badger
+	// at boot and remain complete even when individual nodes are evicted.
+	dir := t.TempDir()
+	opts := DefaultOptions(dir)
+	opts.LRUCapacity = 3 // small cache forces eviction
+
+	pop, err := Open(opts)
+	require.NoError(t, err)
+	for i := 0; i < 10; i++ {
+		require.NoError(t, pop.UpsertNode(NodeRecord{
+			ID:     "label-node-" + string(rune('0'+i)),
+			Kind:   "test",
+			Labels: []string{"group:a"},
+		}))
+	}
+	require.NoError(t, pop.Close())
+
+	engine, err := Open(opts)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// ListNodesByLabel must return ALL 10 nodes even though the LRU cache
+	// only holds 3. The label index is built during load() regardless of
+	// LRU mode.
+	nodes := engine.ListNodesByLabel("test", "group:a")
+	if len(nodes) != 10 {
+		t.Errorf("expected 10 nodes from ListNodesByLabel under LRU, got %d", len(nodes))
+	}
+	// NodesBySource should also work (indexes built at boot).
+	nodesBySrc := engine.NodesBySource("source-x")
+	if nodesBySrc == nil {
+		// No nodes with source-x — this is fine, just check no error.
+	}
+}
+
+func TestLRU_IndexIntegrity_AfterChurn(t *testing.T) {
+	// Regression: lruEvict must NOT remove label/source index entries.
+	// After GetNode churn that exceeds LRU capacity, ListNodesByLabel
+	// must still return all nodes.
+	dir := t.TempDir()
+	opts := DefaultOptions(dir)
+	opts.LRUCapacity = 3
+
+	pop, err := Open(opts)
+	require.NoError(t, err)
+	for i := 0; i < 10; i++ {
+		require.NoError(t, pop.UpsertNode(NodeRecord{
+			ID:     "churn-node-" + string(rune('0'+i)),
+			Kind:   "test",
+			Labels: []string{"group:b"},
+		}))
+	}
+	require.NoError(t, pop.Close())
+
+	engine, err := Open(opts)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// Hit 5 distinct nodes via GetNode — with cap=3 the first 2+ are evicted.
+	for i := 0; i < 5; i++ {
+		_, ok := engine.GetNode("churn-node-" + string(rune('0'+i)))
+		require.True(t, ok)
+	}
+
+	// Label index must still report all 10 nodes.
+	nodes := engine.ListNodesByLabel("test", "group:b")
+	if len(nodes) != 10 {
+		t.Errorf("expected 10 nodes from ListNodesByLabel after churn, got %d", len(nodes))
+	}
+}
+
+func TestLRU_IndexIntegrity_NodesBySource(t *testing.T) {
+	dir := t.TempDir()
+	opts := DefaultOptions(dir)
+	opts.LRUCapacity = 3
+
+	pop, err := Open(opts)
+	require.NoError(t, err)
+	for i := 0; i < 10; i++ {
+		require.NoError(t, pop.UpsertNode(NodeRecord{
+			ID:       "src-node-" + string(rune('0'+i)),
+			Kind:     "test",
+			SourceID: "source-main",
+		}))
+	}
+	require.NoError(t, pop.Close())
+
+	engine, err := Open(opts)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	nodes := engine.NodesBySource("source-main")
+	if len(nodes) != 10 {
+		t.Errorf("expected 10 nodes from NodesBySource under LRU, got %d", len(nodes))
+	}
+}
+
+func TestNFR4_Strict_BootMemory(t *testing.T) {
+	// NFR-4: Engine boot with LRU capacity must hold ≤ LRUCapacity nodes
+	// in RAM, not O(total graph). Edges are lazy-loaded under LRU.
+	dir := t.TempDir()
+	opts := DefaultOptions(dir)
+	opts.LRUCapacity = 10
+
+	pop, err := Open(opts)
+	require.NoError(t, err)
+	for i := 0; i < 500; i++ {
+		require.NoError(t, pop.UpsertNode(NodeRecord{ID: "n-" + string(rune('0'+i%100)), Kind: "test"}))
+	}
+	for i := 1; i < 500; i++ {
+		require.NoError(t, pop.Link("n-0", "n-"+string(rune('0'+i%100)), "edge", "", 1, nil))
+	}
+	require.NoError(t, pop.Close())
+
+	engine, err := Open(opts)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	engine.store.mu.RLock()
+	ramNodes := len(engine.store.nodes)
+	ramEdges := len(engine.store.forward)
+	engine.store.mu.RUnlock()
+
+	if ramNodes > 10 {
+		t.Errorf("NFR-4: expected ≤ 10 nodes in RAM after LRU boot, got %d", ramNodes)
+	}
+	// Edges should also be bounded under LRU.
+	if ramEdges > 10 {
+		t.Errorf("NFR-4: expected ≤ 10 edge entries in RAM after LRU boot, got %d", ramEdges)
+	}
+}
+
 func TestCursor_NoReTraversal(t *testing.T) {
 	// Verify that across pages, no node is emitted more than once.
 	dir := t.TempDir()

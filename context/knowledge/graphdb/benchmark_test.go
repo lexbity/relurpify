@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -62,14 +63,26 @@ func BenchmarkImpactSetWideGraph(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		result := engine.ImpactSet([]string{"root"}, []EdgeKind{"calls"}, 5)
-		if len(result.Affected) == 0 {
+		page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"root"},
+				EdgeKinds: []EdgeKind{"calls"},
+				MaxDepth:  5,
+				Direction: DirectionOut,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(page.Items) == 0 {
 			b.Fatal("expected affected nodes")
 		}
 	}
 }
 
-func BenchmarkFindPathLinearGraph(b *testing.B) {
+func BenchmarkSubgraphPageLinearGraph(b *testing.B) {
 	engine := newBenchmarkEngine()
 	const nodeCount = 2048
 	for i := 0; i < nodeCount; i++ {
@@ -87,30 +100,47 @@ func BenchmarkFindPathLinearGraph(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		path, err := engine.FindPath("n-0000", fmt.Sprintf("n-%04d", nodeCount-1), []EdgeKind{"calls"}, nodeCount)
+		page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"n-0000"},
+				EdgeKinds: []EdgeKind{"calls"},
+				Direction: DirectionOut,
+				MaxDepth:  nodeCount,
+				Limit:     nodeCount,
+			},
+			PageSize: nodeCount,
+		})
 		if err != nil {
 			b.Fatal(err)
 		}
-		if path == nil || len(path.Path) != nodeCount {
-			b.Fatalf("unexpected path length: got %d want %d", len(path.Path), nodeCount)
+		if len(page.Items) == 0 {
+			b.Fatal("expected subgraph items")
 		}
 	}
 }
 
-func BenchmarkFindPathBranchingGraph(b *testing.B) {
+func BenchmarkSubgraphPageBranchingGraph(b *testing.B) {
 	engine := newBenchmarkEngine()
 	buildBranchingGraph(engine, "root", 6, 4)
-	targetID := "root-0-3-1-3-2-3-3-3-4-3-5-3"
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		path, err := engine.FindPath("root", targetID, []EdgeKind{"calls"}, 6)
+		page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"root"},
+				EdgeKinds: []EdgeKind{"calls"},
+				Direction: DirectionOut,
+				MaxDepth:  6,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
 		if err != nil {
 			b.Fatal(err)
 		}
-		if path == nil || len(path.Path) == 0 {
-			b.Fatal("expected path")
+		if len(page.Items) == 0 {
+			b.Fatal("expected subgraph items")
 		}
 	}
 }
@@ -122,13 +152,20 @@ func BenchmarkSubgraphBranchingGraph(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nodes, edges := engine.Subgraph(GraphQuery{
-			RootIDs:   []string{"root"},
-			Direction: DirectionOut,
-			MaxDepth:  4,
-			EdgeKinds: []EdgeKind{"calls"},
+		page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"root"},
+				Direction: DirectionOut,
+				MaxDepth:  4,
+				EdgeKinds: []EdgeKind{"calls"},
+				Limit:     10000,
+			},
+			PageSize: 10000,
 		})
-		if len(nodes) == 0 || len(edges) == 0 {
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(page.Items) == 0 {
 			b.Fatal("expected non-empty subgraph")
 		}
 	}

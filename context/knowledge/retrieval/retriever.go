@@ -2,8 +2,6 @@ package retrieval
 
 import (
 	"context"
-	"math"
-	"sort"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -35,7 +33,7 @@ func (r *Retriever) WithPolicy(policy *contextports.PolicyBundle) *Retriever {
 // Retrieve performs scatter-gather retrieval.
 func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*RetrievalResult, error) {
 	if r.registry == nil || r.store == nil {
-		traversal := r.traversalCandidates(query)
+		traversal := r.traversalCandidates(ctx, query)
 		if len(traversal) == 0 {
 			return &RetrievalResult{
 				Query:      query,
@@ -50,7 +48,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 		}, nil
 	}
 
-	traversal := r.traversalCandidates(query)
+	traversal := r.traversalCandidates(ctx, query)
 	admitted := r.Admitted()
 	if len(admitted) == 0 && len(traversal) == 0 {
 		return &RetrievalResult{
@@ -93,7 +91,12 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 	}, nil
 }
 
-func (r *Retriever) traversalCandidates(query RetrievalQuery) []knowledge.ChunkID {
+const (
+	traversalPageSize    = 512
+	defaultMaxCandidates = 500
+)
+
+func (r *Retriever) traversalCandidates(ctx context.Context, query RetrievalQuery) []knowledge.ChunkID {
 	spec := query.Traversal
 	if r == nil || r.store == nil || r.store.Graph == nil || spec == nil {
 		return nil
@@ -129,60 +132,46 @@ func (r *Retriever) traversalCandidates(query RetrievalQuery) []knowledge.ChunkI
 		}
 	}
 
-	page, _ := r.store.Graph.SubgraphPage(context.Background(), graphdb.GraphPageQuery{
-		GraphQuery: graphdb.GraphQuery{
-			RootIDs:   anchorIDs,
-			EdgeKinds: edgeKinds,
-			Direction: direction,
-			MaxDepth:  spec.MaxDepth,
-			Limit:     math.MaxInt32,
-		},
-		PageSize: math.MaxInt32,
-	})
-	nodes := make([]graphdb.NodeRecord, 0, len(page.Items))
-	for _, elem := range page.Items {
-		if elem.Node.ID != "" {
-			nodes = append(nodes, elem.Node)
-		}
+	// Resolve candidate budget by precedence: per-query > policy > floor.
+	budget := spec.MaxCandidates
+	if budget <= 0 && r.policy != nil {
+		budget = r.policy.MaxTraversalCandidates
 	}
-	if len(nodes) == 0 {
-		return nil
+	if budget <= 0 {
+		budget = defaultMaxCandidates
 	}
 
-	type scoredNode struct {
-		id        knowledge.ChunkID
-		updatedAt int64
-		seenIndex int
-	}
-	out := make([]scoredNode, 0, len(nodes))
-	seen := make(map[knowledge.ChunkID]struct{}, len(nodes))
-	for idx, node := range nodes {
-		if node.Kind != knowledge.ChunkNodeKind || node.ID == "" {
-			continue
-		}
-		id := knowledge.ChunkID(node.ID)
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, scoredNode{id: id, updatedAt: node.UpdatedAt, seenIndex: idx})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	if spec.PreferLatest {
-		sort.SliceStable(out, func(i, j int) bool {
-			if out[i].updatedAt == out[j].updatedAt {
-				return out[i].seenIndex < out[j].seenIndex
-			}
-			return out[i].updatedAt > out[j].updatedAt
+	keep := newBoundedTopK(budget, spec.PreferLatest)
+	var token graphdb.PageToken
+	for {
+		page, err := r.store.Graph.SubgraphPage(ctx, graphdb.GraphPageQuery{
+			GraphQuery: graphdb.GraphQuery{
+				RootIDs:   anchorIDs,
+				EdgeKinds: edgeKinds,
+				Direction: direction,
+				MaxDepth:  spec.MaxDepth,
+				Limit:     budget,
+			},
+			PageSize: traversalPageSize,
+			After:    token,
 		})
+		if err != nil {
+			return nil
+		}
+		for _, el := range page.Items {
+			if el.Node.Kind == knowledge.ChunkNodeKind && el.Node.ID != "" {
+				keep.offer(knowledge.ChunkID(el.Node.ID), el.Node.UpdatedAt)
+			}
+		}
+		if page.Next == "" {
+			break
+		}
+		if !spec.PreferLatest && keep.full() {
+			break
+		}
+		token = page.Next
 	}
-	ids := make([]knowledge.ChunkID, 0, len(out))
-	for _, item := range out {
-		ids = append(ids, item.id)
-	}
-	return ids
+	return keep.ids()
 }
 
 func rankedChunksFromIDs(ids []knowledge.ChunkID, source string) []RankedChunk {

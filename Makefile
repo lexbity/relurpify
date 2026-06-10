@@ -10,6 +10,7 @@ lint-arch:
 	go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
 	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
 	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=classification; \
+	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
 	exit $$EXIT_CODE
 
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.

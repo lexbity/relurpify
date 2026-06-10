@@ -17,7 +17,7 @@ type ExceptionsFile struct {
 
 func main() {
 	mode := flag.String("mode", "warn", "enforcement mode: warn or enforce")
-	check := flag.String("check", "all", "check to run: all, direction, cycles, nobucket, governance-orch, classification, principal")
+	check := flag.String("check", "all", "check to run: all, direction, cycles, nobucket, governance-orch, classification, principal, context-ports")
 	flag.Parse()
 
 	root, _ := os.Getwd()
@@ -74,6 +74,15 @@ func main() {
 			hadFailure = true
 		}
 		exitResults = append(exitResults, arch.Result{Name: "principal-context-write", Violations: vios})
+	}
+
+	if *check == "all" || *check == "context-ports" {
+		vios := arch.CheckContextPortsNoInternalImports(pkgs)
+		fmt.Print(arch.Report("context-ports", vios))
+		if len(vios) > 0 {
+			hadFailure = true
+		}
+		exitResults = append(exitResults, arch.Result{Name: "context-ports", Violations: vios})
 	}
 
 	if *check == "all" || *check == "classification" {

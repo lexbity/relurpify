@@ -49,56 +49,57 @@ func newBadgerBackend(opts BadgerOptions) (*badgerBackend, error) {
 // ────────────────────────────────────────────────────────────────────
 
 func (b *badgerBackend) load(_ context.Context, store *adjacencyStore) error {
-	// When LRU is active, skip full hydration — reads lazy-load on
-	// cache miss (NFR-4). We still need the store's labels for
-	// ListNodesByLabel and the index must be built from Badger.
-	hydrateNodes := store.lruMaxCapacity <= 0
+	// Under LRU we skip node/edge body hydration and build only the
+	// label and source indexes (they're small ID lists, far smaller
+	// than node bodies).  Reads lazy-load from Badger on cache miss.
+	hydrateBodies := store.lruMaxCapacity <= 0
 
 	return b.db.View(func(txn *badger.Txn) error {
-		if hydrateNodes {
-			// ── Nodes ──
-			nit := txn.NewIterator(badger.DefaultIteratorOptions)
-			nodePrefix := keyPrefix(famNode)
-			for nit.Seek(nodePrefix); nit.ValidForPrefix(nodePrefix); nit.Next() {
-				item := nit.Item()
-				if err := item.Value(func(val []byte) error {
-					var node NodeRecord
-					if err := json.Unmarshal(val, &node); err != nil {
-						return err
-					}
+		// ── Nodes ──
+		nit := txn.NewIterator(badger.DefaultIteratorOptions)
+		nodePrefix := keyPrefix(famNode)
+		for nit.Seek(nodePrefix); nit.ValidForPrefix(nodePrefix); nit.Next() {
+			item := nit.Item()
+			if err := item.Value(func(val []byte) error {
+				var node NodeRecord
+				if err := json.Unmarshal(val, &node); err != nil {
+					return err
+				}
+				if hydrateBodies {
 					n := node
 					store.nodes[node.ID] = &n
-					store.addNodeSourceIndex(node)
-					store.addNodeLabels(node)
-					return nil
-				}); err != nil {
-					nit.Close()
-					return err
 				}
-			}
-			nit.Close()
-		}
-
-		// ── Edges (outgoing) — always hydrate for fast traversal.
-		// Edge count is bounded by node count and rarely causes OOM.
-		eit := txn.NewIterator(badger.DefaultIteratorOptions)
-		edgePrefix := keyPrefix(famEdgeOut)
-		for eit.Seek(edgePrefix); eit.ValidForPrefix(edgePrefix); eit.Next() {
-			item := eit.Item()
-			if err := item.Value(func(val []byte) error {
-				var edge EdgeRecord
-				if err := json.Unmarshal(val, &edge); err != nil {
-					return err
-				}
-				store.forward[edge.SourceID] = append(store.forward[edge.SourceID], cloneEdge(edge))
-				store.reverse[edge.TargetID] = append(store.reverse[edge.TargetID], cloneEdge(edge))
+				store.addNodeSourceIndex(node)
+				store.addNodeLabels(node)
 				return nil
 			}); err != nil {
-				eit.Close()
+				nit.Close()
 				return err
 			}
 		}
-		eit.Close()
+		nit.Close()
+
+		// ── Edges (outgoing) — hydrate only when not under LRU.
+		if hydrateBodies {
+			eit := txn.NewIterator(badger.DefaultIteratorOptions)
+			edgePrefix := keyPrefix(famEdgeOut)
+			for eit.Seek(edgePrefix); eit.ValidForPrefix(edgePrefix); eit.Next() {
+				item := eit.Item()
+				if err := item.Value(func(val []byte) error {
+					var edge EdgeRecord
+					if err := json.Unmarshal(val, &edge); err != nil {
+						return err
+					}
+					store.forward[edge.SourceID] = append(store.forward[edge.SourceID], cloneEdge(edge))
+					store.reverse[edge.TargetID] = append(store.reverse[edge.TargetID], cloneEdge(edge))
+					return nil
+				}); err != nil {
+					eit.Close()
+					return err
+				}
+			}
+			eit.Close()
+		}
 
 		return nil
 	})

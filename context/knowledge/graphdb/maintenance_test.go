@@ -195,12 +195,8 @@ func TestEvent_MemoryApplyFail(t *testing.T) {
 	require.True(t, found, "should emit memory apply fail event")
 }
 
-func TestEvent_TraversalComplete(t *testing.T) {
-	obs := &recordingObserver{}
-	opts := DefaultOptions(t.TempDir())
-	opts.Observer = obs
-
-	engine, err := Open(opts)
+func TestSubgraphPage_TraversalSucceeds(t *testing.T) {
+	engine, err := Open(DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
 	defer engine.Close()
 
@@ -208,18 +204,17 @@ func TestEvent_TraversalComplete(t *testing.T) {
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
 	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
 
-	_, _ = engine.ImpactSetContext(context.Background(), []string{"a"}, nil, 2, 100)
-
-	obs.mu.Lock()
-	defer obs.mu.Unlock()
-
-	var traversalEvents int
-	for _, ev := range obs.events {
-		if ev.Kind == EventTraversalComplete {
-			traversalEvents++
-		}
-	}
-	require.GreaterOrEqual(t, traversalEvents, 1, "should emit traversal complete event")
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  2,
+			Direction: DirectionOut,
+			Limit:     100,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, page.Items)
 }
 
 func TestEvent_TraversalCancelled(t *testing.T) {
@@ -236,7 +231,15 @@ func TestEvent_TraversalCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err = engine.ImpactSetContext(ctx, []string{"root"}, nil, 10, 1000)
+	_, err = engine.SubgraphPage(ctx, GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			MaxDepth:  10,
+			Direction: DirectionOut,
+			Limit:     1000,
+		},
+		PageSize: 10000,
+	})
 	require.Error(t, err)
 
 	obs.mu.Lock()

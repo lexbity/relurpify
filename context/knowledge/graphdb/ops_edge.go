@@ -85,17 +85,47 @@ func (e *Engine) Unlink(sourceID, targetID string, kind EdgeKind, hard bool) err
 	return nil
 }
 
-// GetOutEdges returns active outgoing edges.
+// preloadEdges ensures edges for the given node are in memory.
+// Must be called OUTSIDE any store.mu lock.
+func (e *Engine) preloadEdges(nodeID string) {
+	if e.bk == nil || e.store.lruMaxCapacity <= 0 {
+		return
+	}
+	if _, ok := e.store.forward[nodeID]; ok {
+		return
+	}
+	edges, err := e.bk.edgesBySource(nodeID)
+	if err != nil || len(edges) == 0 {
+		e.store.mu.Lock()
+		e.store.forward[nodeID] = nil // mark as loaded (empty)
+		e.store.mu.Unlock()
+		return
+	}
+	e.store.mu.Lock()
+	e.store.forward[nodeID] = edges
+	for _, edge := range edges {
+		e.store.reverse[edge.TargetID] = append(e.store.reverse[edge.TargetID], edge)
+	}
+	e.store.mu.Unlock()
+}
+
+// GetOutEdges returns active outgoing edges, transparently lazy-loading
+// from the backend under LRU.  Shared seam — every edge reader funnels
+// through here (including Neighbors).
 func (e *Engine) GetOutEdges(nodeID string, kinds ...EdgeKind) []EdgeRecord {
+	e.preloadEdges(nodeID)
 	e.store.mu.RLock()
 	defer e.store.mu.RUnlock()
 	return filterEdges(e.store.forward[nodeID], kinds)
 }
 
-// GetInEdges returns active incoming edges.
+// GetInEdges returns active incoming edges, transparently lazy-loading
+// from the backend under LRU.
 func (e *Engine) GetInEdges(nodeID string, kinds ...EdgeKind) []EdgeRecord {
+	e.preloadEdges(nodeID)
 	e.store.mu.RLock()
 	defer e.store.mu.RUnlock()
+	// Reverse index is built by preloadEdges from the forward scan.
 	return filterEdges(e.store.reverse[nodeID], kinds)
 }
 

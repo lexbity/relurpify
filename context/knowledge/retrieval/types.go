@@ -105,6 +105,7 @@ type TraversalSpec struct {
 	Direction    TraversalDirection
 	MaxDepth     int
 	PreferLatest bool
+	MaxCandidates int  // 0 ⇒ fall back to policy / default
 }
 
 // RetrievalResult contains the retrieved chunks and metadata.

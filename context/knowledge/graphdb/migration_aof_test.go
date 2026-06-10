@@ -278,8 +278,25 @@ func TestMigrateAOFToBadger_LoadAndQuery(t *testing.T) {
 	require.Len(t, store.forward["b"], 1)
 	require.Len(t, store.reverse["c"], 1)
 
-	result := (&Engine{store: store}).ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 5)
-	require.ElementsMatch(t, []string{"b", "c"}, result.Affected)
+	eng := &Engine{store: store}
+	page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  5,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	var affected []string
+	for _, elem := range page.Items {
+		if elem.Node.ID != "" && elem.Node.ID != "a" {
+			affected = append(affected, elem.Node.ID)
+		}
+	}
+	require.ElementsMatch(t, []string{"b", "c"}, affected)
 }
 
 func TestMigrateAOFToBadger_MigrationStateWritten(t *testing.T) {

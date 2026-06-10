@@ -390,6 +390,169 @@ func (s *sleepRanker) Rank(ctx context.Context, query RetrievalQuery, store *kno
 	return append([]knowledge.ChunkID(nil), s.results...), nil
 }
 
+func TestTraversalCandidates_BoundUnderLRU(t *testing.T) {
+	// Under LRU with tight capacity and a wide subgraph, the bounded
+	// traversal must page correctly and stay within budget.
+	opts := graphdb.DefaultOptions(t.TempDir())
+	opts.LRUCapacity = 3
+	engine, err := graphdb.Open(opts)
+	if err != nil {
+		t.Fatalf("open graphdb: %v", err)
+	}
+	defer engine.Close()
+	store := &knowledge.ChunkStore{Graph: engine}
+
+	// Ingest enough chunks that paging is required.
+	for i := 0; i < 20; i++ {
+		_, err := store.Save(knowledge.KnowledgeChunk{
+			ID: knowledge.ChunkID("lru-chunk-" + string(rune('a'+i))),
+		})
+		if err != nil {
+			t.Fatalf("save chunk %d: %v", i, err)
+		}
+		if i == 0 {
+			continue
+		}
+		if _, err := store.SaveEdge(knowledge.ChunkEdge{FromChunk: "lru-chunk-a", ToChunk: knowledge.ChunkID("lru-chunk-" + string(rune('a'+i))), Kind: knowledge.EdgeKindRequiresContext, Weight: 1}); err != nil {
+			t.Fatalf("save edge %d: %v", i, err)
+		}
+	}
+
+	retriever := NewRetriever(nil, store).WithPolicy(&contextports.PolicyBundle{MaxTraversalCandidates: 5})
+	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs: []string{"lru-chunk-a"},
+			EdgeKinds: []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction: TraversalDirectionOut,
+			MaxDepth:  1,
+		},
+	})
+	if len(ids) > 5 {
+		t.Errorf("expected ≤ 5 candidates under policy budget, got %d", len(ids))
+	}
+	if len(ids) == 0 {
+		t.Error("expected at least some candidates (paging should have worked)")
+	}
+}
+
+func TestTraversalCandidates_Precedence(t *testing.T) {
+	// Per-query MaxCandidates overrides policy MaxTraversalCandidates.
+	store := newRetrievalTestStore(t)
+	_, err := store.Save(knowledge.KnowledgeChunk{ID: "prec-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		_, err := store.Save(knowledge.KnowledgeChunk{ID: knowledge.ChunkID("prec-child-" + string(rune('0'+i)))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.SaveEdge(knowledge.ChunkEdge{FromChunk: "prec-a", ToChunk: knowledge.ChunkID("prec-child-" + string(rune('0'+i))), Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	}
+
+	retriever := NewRetriever(nil, store).WithPolicy(&contextports.PolicyBundle{MaxTraversalCandidates: 100})
+
+	// Query with explicit MaxCandidates=3 should return ≤ 3, not 100.
+	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs:    []string{"prec-a"},
+			EdgeKinds:    []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction:    TraversalDirectionOut,
+			MaxDepth:     1,
+			MaxCandidates: 3,
+		},
+	})
+	if len(ids) > 3 {
+		t.Errorf("expected ≤ 3 with MaxCandidates=3, got %d", len(ids))
+	}
+	if len(ids) == 0 {
+		t.Error("expected at least 1 candidate")
+	}
+
+	// Query without explicit MaxCandidates falls back to policy=100.
+	ids2 := retriever.traversalCandidates(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs: []string{"prec-a"},
+			EdgeKinds: []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction: TraversalDirectionOut,
+			MaxDepth:  1,
+		},
+	})
+	if len(ids2) > 100 {
+		t.Errorf("expected ≤ 100 with policy, got %d", len(ids2))
+	}
+}
+
+func TestTraversalCandidates_Parity(t *testing.T) {
+	// For a small in-budget subgraph, returned IDs match pre-change
+	// behavior (same set in discovery order).
+	store := newRetrievalTestStore(t)
+	chunks := []string{"a", "b", "c"}
+	for _, id := range chunks {
+		store.Save(knowledge.KnowledgeChunk{ID: knowledge.ChunkID(id)})
+	}
+	store.SaveEdge(knowledge.ChunkEdge{FromChunk: "a", ToChunk: "b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	store.SaveEdge(knowledge.ChunkEdge{FromChunk: "b", ToChunk: "c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+
+	retriever := NewRetriever(nil, store)
+	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs: []string{"a"},
+			EdgeKinds: []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction: TraversalDirectionOut,
+			MaxDepth:  2,
+		},
+	})
+
+	// Expect: a, b, c (discovery order from BFS).
+	if len(ids) != 3 {
+		t.Fatalf("expected 3 candidates, got %d: %v", len(ids), ids)
+	}
+	if ids[0] != "a" || ids[1] != "b" || ids[2] != "c" {
+		t.Errorf("expected [a b c], got %v", ids)
+	}
+}
+
+func TestTraversalCandidates_PreferLatestRegime(t *testing.T) {
+	// With PreferLatest, the K kept must be the K most recent, not the
+	// K shallowest.  Insert chunks with varied freshness across depths.
+	store := newRetrievalTestStore(t)
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}})
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}})
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}})
+	// Link them so BFS finds all three.
+	store.SaveEdge(knowledge.ChunkEdge{FromChunk: "latest-old", ToChunk: "latest-mid", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	store.SaveEdge(knowledge.ChunkEdge{FromChunk: "latest-mid", ToChunk: "latest-new", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+
+	// Manually set UpdatedAt timestamps by re-saving with different times.
+	// PreferLatest sorts by UpdatedAt descending.
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-2 * time.Hour)}})
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-1 * time.Hour)}})
+	store.Save(knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now()}})
+
+	retriever := NewRetriever(nil, store)
+	budget := 2
+	_ = budget
+	// With PreferLatest and budget=2, we should get [latest-new, latest-mid].
+	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
+		Traversal: &TraversalSpec{
+			AnchorIDs:    []string{"latest-old"},
+			EdgeKinds:    []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction:    TraversalDirectionOut,
+			MaxDepth:     2,
+			PreferLatest: true,
+			MaxCandidates: 2,
+		},
+	})
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 candidates with budget=2, got %d: %v", len(ids), ids)
+	}
+	// The 2 most recent should be latest-new and latest-mid.
+	if ids[0] != "latest-new" && ids[0] != "latest-mid" {
+		t.Errorf("expected most recent first, got %s", ids[0])
+	}
+}
+
 func newRetrievalTestStore(t *testing.T) *knowledge.ChunkStore {
 	t.Helper()
 	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))

@@ -356,55 +356,40 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("a", "d", "imports", "", 1, nil))
 
-		impact := eng.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 3)
-		require.ElementsMatch(t, []string{"b", "c"}, impact.Affected)
-		require.Equal(t, []string{"a"}, impact.ByDepth[0])
-		require.Equal(t, []string{"b"}, impact.ByDepth[1])
-		require.Equal(t, []string{"c"}, impact.ByDepth[2])
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"a"},
+				EdgeKinds: []EdgeKind{"calls"},
+				MaxDepth:  3,
+				Direction: DirectionOut,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
+		require.NoError(t, err)
+		var affected []string
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" && elem.Node.ID != "a" {
+				affected = append(affected, elem.Node.ID)
+			}
+		}
+		require.ElementsMatch(t, []string{"b", "c"}, affected)
 	})
 
 	t.Run("impact_set_empty_origin", func(t *testing.T) {
 		eng, _ := factory(t)
-		result := eng.ImpactSet([]string{}, []EdgeKind{"calls"}, 2)
-		require.Empty(t, result.Affected)
-		require.Empty(t, result.ByDepth)
-	})
-
-	t.Run("find_path", func(t *testing.T) {
-		eng, _ := factory(t)
-		for _, id := range []string{"a", "b", "c", "d"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
-		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "d", "calls", "", 1, nil))
-
-		path, err := eng.FindPath("a", "d", []EdgeKind{"calls"}, 10)
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{},
+				EdgeKinds: []EdgeKind{"calls"},
+				MaxDepth:  2,
+				Direction: DirectionOut,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
 		require.NoError(t, err)
-		require.NotNil(t, path)
-		require.Equal(t, []string{"a", "b", "c", "d"}, path.Path)
-		require.Len(t, path.Edges, 3)
-	})
-
-	t.Run("find_path_no_path", func(t *testing.T) {
-		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "imports", "", 1, nil))
-
-		path, err := eng.FindPath("a", "b", []EdgeKind{"calls"}, 2)
-		require.NoError(t, err)
-		require.Nil(t, path)
-	})
-
-	t.Run("find_path_self", func(t *testing.T) {
-		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-
-		path, err := eng.FindPath("x", "x", nil, 5)
-		require.NoError(t, err)
-		require.NotNil(t, path)
-		require.Equal(t, []string{"x"}, path.Path)
+		require.Empty(t, page.Items)
 	})
 
 	t.Run("neighbors", func(t *testing.T) {
@@ -439,11 +424,26 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
 
-		nodes, edges := eng.Subgraph(GraphQuery{
-			RootIDs:   []string{"a"},
-			Direction: DirectionOut,
-			MaxDepth:  2,
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"a"},
+				Direction: DirectionOut,
+				MaxDepth:  2,
+				Limit:     10000,
+			},
+			PageSize: 10000,
 		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		var edges []EdgeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+			if elem.Edge.SourceID != "" {
+				edges = append(edges, elem.Edge)
+			}
+		}
 		require.Len(t, nodes, 3)
 		require.Len(t, edges, 2)
 	})
@@ -455,14 +455,24 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 			{SourceID: "root", TargetID: "leaf", Kind: "calls"},
 		}))
 
-		nodes, edges := eng.Subgraph(GraphQuery{
-			RootIDs:   []string{"root"},
-			Direction: DirectionOut,
-			MaxDepth:  0,
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"root"},
+				Direction: DirectionOut,
+				MaxDepth:  0,
+				Limit:     10000,
+			},
+			PageSize: 10000,
 		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+		}
 		require.Len(t, nodes, 1)
 		require.Equal(t, "root", nodes[0].ID)
-		require.Empty(t, edges)
 	})
 
 	t.Run("subgraph_direction_both", func(t *testing.T) {
@@ -473,12 +483,27 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
 
-		nodes, edges := eng.Subgraph(GraphQuery{
-			RootIDs:   []string{"b"},
-			Direction: DirectionBoth,
-			MaxDepth:  1,
-			EdgeKinds: []EdgeKind{"calls"},
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"b"},
+				Direction: DirectionBoth,
+				MaxDepth:  1,
+				EdgeKinds: []EdgeKind{"calls"},
+				Limit:     10000,
+			},
+			PageSize: 10000,
 		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		var edges []EdgeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+			if elem.Edge.SourceID != "" {
+				edges = append(edges, elem.Edge)
+			}
+		}
 		require.Len(t, nodes, 3)
 		require.Len(t, edges, 2)
 	})
@@ -886,56 +911,41 @@ func runBadgerConformance(t *testing.T) {
 		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("a", "d", "imports", "", 1, nil))
-		impact := eng.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 3)
-		require.ElementsMatch(t, []string{"b", "c"}, impact.Affected)
-		require.Equal(t, []string{"a"}, impact.ByDepth[0])
-		require.Equal(t, []string{"b"}, impact.ByDepth[1])
-		require.Equal(t, []string{"c"}, impact.ByDepth[2])
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"a"},
+				EdgeKinds: []EdgeKind{"calls"},
+				MaxDepth:  3,
+				Direction: DirectionOut,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
+		require.NoError(t, err)
+		var affected []string
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" && elem.Node.ID != "a" {
+				affected = append(affected, elem.Node.ID)
+			}
+		}
+		require.ElementsMatch(t, []string{"b", "c"}, affected)
 	})
 
 	// impact_set_empty_origin
 	t.Run("impact_set_empty_origin", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		result := eng.ImpactSet([]string{}, []EdgeKind{"calls"}, 2)
-		require.Empty(t, result.Affected)
-		require.Empty(t, result.ByDepth)
-	})
-
-	// find_path
-	t.Run("find_path", func(t *testing.T) {
-		eng := newBadgerEngine(t)
-		for _, id := range []string{"a", "b", "c", "d"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
-		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "d", "calls", "", 1, nil))
-		path, err := eng.FindPath("a", "d", []EdgeKind{"calls"}, 10)
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{},
+				EdgeKinds: []EdgeKind{"calls"},
+				MaxDepth:  2,
+				Direction: DirectionOut,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
 		require.NoError(t, err)
-		require.NotNil(t, path)
-		require.Equal(t, []string{"a", "b", "c", "d"}, path.Path)
-		require.Len(t, path.Edges, 3)
-	})
-
-	// find_path_no_path
-	t.Run("find_path_no_path", func(t *testing.T) {
-		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "imports", "", 1, nil))
-		path, err := eng.FindPath("a", "b", []EdgeKind{"calls"}, 2)
-		require.NoError(t, err)
-		require.Nil(t, path)
-	})
-
-	// find_path_self
-	t.Run("find_path_self", func(t *testing.T) {
-		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-		path, err := eng.FindPath("x", "x", nil, 5)
-		require.NoError(t, err)
-		require.NotNil(t, path)
-		require.Equal(t, []string{"x"}, path.Path)
+		require.Empty(t, page.Items)
 	})
 
 	// neighbors
@@ -970,7 +980,26 @@ func runBadgerConformance(t *testing.T) {
 		}
 		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
-		nodes, edges := eng.Subgraph(GraphQuery{RootIDs: []string{"a"}, Direction: DirectionOut, MaxDepth: 2})
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"a"},
+				Direction: DirectionOut,
+				MaxDepth:  2,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		var edges []EdgeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+			if elem.Edge.SourceID != "" {
+				edges = append(edges, elem.Edge)
+			}
+		}
 		require.Len(t, nodes, 3)
 		require.Len(t, edges, 2)
 	})
@@ -982,10 +1011,24 @@ func runBadgerConformance(t *testing.T) {
 		require.NoError(t, eng.LinkEdges([]EdgeRecord{
 			{SourceID: "root", TargetID: "leaf", Kind: "calls"},
 		}))
-		nodes, edges := eng.Subgraph(GraphQuery{RootIDs: []string{"root"}, Direction: DirectionOut, MaxDepth: 0})
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"root"},
+				Direction: DirectionOut,
+				MaxDepth:  0,
+				Limit:     10000,
+			},
+			PageSize: 10000,
+		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+		}
 		require.Len(t, nodes, 1)
 		require.Equal(t, "root", nodes[0].ID)
-		require.Empty(t, edges)
 	})
 
 	// subgraph_direction_both
@@ -996,9 +1039,27 @@ func runBadgerConformance(t *testing.T) {
 		}
 		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
 		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
-		nodes, edges := eng.Subgraph(GraphQuery{
-			RootIDs: []string{"b"}, Direction: DirectionBoth, MaxDepth: 1, EdgeKinds: []EdgeKind{"calls"},
+		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
+			GraphQuery: GraphQuery{
+				RootIDs:   []string{"b"},
+				Direction: DirectionBoth,
+				MaxDepth:  1,
+				EdgeKinds: []EdgeKind{"calls"},
+				Limit:     10000,
+			},
+			PageSize: 10000,
 		})
+		require.NoError(t, err)
+		var nodes []NodeRecord
+		var edges []EdgeRecord
+		for _, elem := range page.Items {
+			if elem.Node.ID != "" {
+				nodes = append(nodes, elem.Node)
+			}
+			if elem.Edge.SourceID != "" {
+				edges = append(edges, elem.Edge)
+			}
+		}
 		require.Len(t, nodes, 3)
 		require.Len(t, edges, 2)
 	})

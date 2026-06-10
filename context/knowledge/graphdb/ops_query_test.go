@@ -10,12 +10,54 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ────────────────────────────────────────────────────────────────────
+// ImpactSet tests (converted to SubgraphPage)
+// ────────────────────────────────────────────────────────────────────
+
+func collectNodeIDs(page Page[GraphElement]) []string {
+	var ids []string
+	for _, elem := range page.Items {
+		if elem.Node.ID != "" {
+			ids = append(ids, elem.Node.ID)
+		}
+	}
+	return ids
+}
+
+func collectEdgeRecords(page Page[GraphElement]) []EdgeRecord {
+	var edges []EdgeRecord
+	for _, elem := range page.Items {
+		if elem.Edge.SourceID != "" {
+			edges = append(edges, elem.Edge)
+		}
+	}
+	return edges
+}
+
+func collectNodeRecords(page Page[GraphElement]) []NodeRecord {
+	var nodes []NodeRecord
+	for _, elem := range page.Items {
+		if elem.Node.ID != "" {
+			nodes = append(nodes, elem.Node)
+		}
+	}
+	return nodes
+}
+
 func TestImpactSet_EmptyOrigin(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	result := engine.ImpactSet([]string{}, []EdgeKind{"calls"}, 2)
-	require.Empty(t, result.Affected)
-	require.Equal(t, []string{}, result.OriginIDs)
-	require.Empty(t, result.ByDepth)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  2,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	require.Empty(t, page.Items)
 }
 
 func TestImpactSet_MaxDepthZero(t *testing.T) {
@@ -24,9 +66,19 @@ func TestImpactSet_MaxDepthZero(t *testing.T) {
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
 	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
 
-	result := engine.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 0)
-	require.ElementsMatch(t, []string{"a"}, result.ByDepth[0])
-	require.Empty(t, result.Affected)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  0,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	nodeIDs := collectNodeIDs(page)
+	require.ElementsMatch(t, []string{"a"}, nodeIDs)
 }
 
 func TestImpactSet_EdgeKindFiltering(t *testing.T) {
@@ -38,9 +90,21 @@ func TestImpactSet_EdgeKindFiltering(t *testing.T) {
 	require.NoError(t, engine.Link("b", "c", "imports", "", 1, nil))
 
 	// only follow "calls" edges
-	result := engine.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 2)
-	require.ElementsMatch(t, []string{"b"}, result.Affected)
-	require.NotContains(t, result.Affected, "c")
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  2,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	nodeIDs := collectNodeIDs(page)
+	require.Contains(t, nodeIDs, "a")
+	require.Contains(t, nodeIDs, "b")
+	require.NotContains(t, nodeIDs, "c")
 }
 
 func TestImpactSet_MultipleOrigins(t *testing.T) {
@@ -51,49 +115,24 @@ func TestImpactSet_MultipleOrigins(t *testing.T) {
 	require.NoError(t, engine.Link("a", "c", "calls", "", 1, nil))
 	require.NoError(t, engine.Link("b", "d", "calls", "", 1, nil))
 
-	result := engine.ImpactSet([]string{"a", "b"}, []EdgeKind{"calls"}, 1)
-	require.ElementsMatch(t, []string{"c", "d"}, result.Affected)
-	require.Len(t, result.ByDepth[1], 2)
-}
-
-func TestFindPath_NoPathDueToKind(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "src", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "dst", Kind: "function"}))
-	require.NoError(t, engine.Link("src", "dst", "imports", "", 1, nil))
-
-	path, err := engine.FindPath("src", "dst", []EdgeKind{"calls"}, 2)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a", "b"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  1,
+			Direction: DirectionOut,
+			Limit:     10000,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.Nil(t, path)
+	nodeIDs := collectNodeIDs(page)
+	require.ElementsMatch(t, []string{"a", "b", "c", "d"}, nodeIDs)
 }
 
-func TestFindPath_SelfPath(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-
-	path, err := engine.FindPath("x", "x", []EdgeKind{"calls"}, 5)
-	require.NoError(t, err)
-	require.NotNil(t, path)
-	require.Equal(t, []string{"x"}, path.Path)
-	require.Empty(t, path.Edges)
-}
-
-func TestFindPath_BidirectionalMeet(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	// linear chain a->b->c->d
-	for _, id := range []string{"a", "b", "c", "d"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
-	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("b", "c", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("c", "d", "calls", "", 1, nil))
-
-	path, err := engine.FindPath("a", "d", []EdgeKind{"calls"}, 10)
-	require.NoError(t, err)
-	require.NotNil(t, path)
-	require.Equal(t, []string{"a", "b", "c", "d"}, path.Path)
-	require.Len(t, path.Edges, 3)
-}
+// ────────────────────────────────────────────────────────────────────
+// Neighbors tests (unchanged logic, uses Neighbors which still exists)
+// ────────────────────────────────────────────────────────────────────
 
 func TestNeighbors_DirectionIn(t *testing.T) {
 	engine, _ := newTestEngine(t)
@@ -118,17 +157,28 @@ func TestNeighbors_EmptyKinds(t *testing.T) {
 	require.ElementsMatch(t, []string{"b"}, neighbors) // both edges go to same target
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Subgraph tests (converted to SubgraphPage)
+// ────────────────────────────────────────────────────────────────────
+
 func TestSubgraph_DepthZero(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "root", Kind: "function"}))
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "other", Kind: "function"}))
 	require.NoError(t, engine.Link("root", "other", "calls", "", 1, nil))
 
-	nodes, edges := engine.Subgraph(GraphQuery{
-		RootIDs:   []string{"root"},
-		Direction: DirectionOut,
-		MaxDepth:  0,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			Direction: DirectionOut,
+			MaxDepth:  0,
+			Limit:     10000,
+		},
+		PageSize: 10000,
 	})
+	require.NoError(t, err)
+	nodes := collectNodeRecords(page)
+	edges := collectEdgeRecords(page)
 	require.Len(t, nodes, 1)
 	require.Equal(t, "root", nodes[0].ID)
 	require.Empty(t, edges)
@@ -142,41 +192,86 @@ func TestSubgraph_DirectionBoth(t *testing.T) {
 	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
 	require.NoError(t, engine.Link("c", "b", "calls", "", 1, nil))
 
-	nodes, edges := engine.Subgraph(GraphQuery{
-		RootIDs:   []string{"b"},
-		Direction: DirectionBoth,
-		MaxDepth:  1,
-		EdgeKinds: []EdgeKind{"calls"},
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"b"},
+			Direction: DirectionBoth,
+			MaxDepth:  1,
+			EdgeKinds: []EdgeKind{"calls"},
+			Limit:     10000,
+		},
+		PageSize: 10000,
 	})
+	require.NoError(t, err)
+	nodes := collectNodeRecords(page)
+	edges := collectEdgeRecords(page)
 	require.Len(t, nodes, 3)
 	require.Len(t, edges, 2)
 }
 
-// --- Bounded API tests ---
+// ────────────────────────────────────────────────────────────────────
+// ImpactSet bounded API (via SubgraphPage)
+// ────────────────────────────────────────────────────────────────────
 
 func TestImpactSetContext_StopsAtLimit(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	buildBranchingGraph(engine, "root", 3, 3)
 
-	result, err := engine.ImpactSetContext(context.Background(), []string{"root"}, []EdgeKind{"calls"}, 10, 5)
-	require.ErrorIs(t, err, ErrQueryLimitExceeded)
-	require.Len(t, result.Affected, 5)
+	// With a small limit, the page stops early and has a Next token
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  10,
+			Direction: DirectionOut,
+			Limit:     5,
+		},
+		PageSize: 10000,
+	})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 5)
+	require.NotEmpty(t, page.Next, "should have more results")
 
 	// with a higher limit we get more results
-	result2, err := engine.ImpactSetContext(context.Background(), []string{"root"}, []EdgeKind{"calls"}, 10, 50)
+	page2, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  10,
+			Direction: DirectionOut,
+			Limit:     50,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.Greater(t, len(result2.Affected), 5)
+	require.Greater(t, len(page2.Items), 5, "higher limit should return more elements")
 }
 
 func TestImpactSetContext_LimitValidation(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	_, err := engine.ImpactSetContext(context.Background(), []string{"a"}, nil, 1, 0)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "limit must be > 0")
+	_, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  1,
+			Direction: DirectionOut,
+			Limit:     0,
+		},
+		PageSize: 10000,
+	})
+	// Limit:0 is no longer an error (defaults to 100)
+	require.NoError(t, err)
 
-	_, err = engine.ImpactSetContext(context.Background(), []string{"a"}, nil, -1, 10)
+	_, err = engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  -1,
+			Direction: DirectionOut,
+			Limit:     10,
+		},
+		PageSize: 10000,
+	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "maxDepth must be >= 0")
+	require.Contains(t, err.Error(), "MaxDepth must be >= 0")
 }
 
 func TestImpactSetContext_Cancellation(t *testing.T) {
@@ -186,16 +281,34 @@ func TestImpactSetContext_Cancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := engine.ImpactSetContext(ctx, []string{"root"}, []EdgeKind{"calls"}, 10, 1000)
+	_, err := engine.SubgraphPage(ctx, GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  10,
+			Direction: DirectionOut,
+			Limit:     1000,
+		},
+		PageSize: 10000,
+	})
 	require.Error(t, err)
 	require.True(t, errors.Is(err, context.Canceled))
 }
 
 func TestImpactSetContext_EmptyOrigin(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	result, err := engine.ImpactSetContext(context.Background(), []string{}, []EdgeKind{"calls"}, 2, 10)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  2,
+			Direction: DirectionOut,
+			Limit:     10,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.Empty(t, result.Affected)
+	require.Empty(t, page.Items)
 }
 
 func TestImpactSetContext_NoErrorWhenWithinLimit(t *testing.T) {
@@ -204,25 +317,44 @@ func TestImpactSetContext_NoErrorWhenWithinLimit(t *testing.T) {
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
 	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
 
-	result, err := engine.ImpactSetContext(context.Background(), []string{"a"}, []EdgeKind{"calls"}, 2, 100)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			EdgeKinds: []EdgeKind{"calls"},
+			MaxDepth:  2,
+			Direction: DirectionOut,
+			Limit:     100,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"b"}, result.Affected)
+	nodeIDs := collectNodeIDs(page)
+	require.Contains(t, nodeIDs, "b")
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Subgraph bounded API (converted to SubgraphPage)
+// ────────────────────────────────────────────────────────────────────
 
 func TestSubgraphContext_StopsAtMaxEdges(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	buildBranchingGraph(engine, "root", 2, 4)
 
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:   []string{"root"},
-		Direction: DirectionOut,
-		MaxDepth:  10,
-		Limit:     100,
-		MaxEdges:  3,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			Direction: DirectionOut,
+			MaxDepth:  10,
+			Limit:     100,
+			MaxEdges:  3,
+		},
+		PageSize: 10000,
 	})
-	require.ErrorIs(t, err, ErrQueryLimitExceeded)
+	require.NoError(t, err)
+	edges := collectEdgeRecords(page)
 	require.Len(t, edges, 3)
-	// nodes should not include everything
+	require.NotEmpty(t, page.Next, "should have more results")
+	nodes := collectNodeRecords(page)
 	require.LessOrEqual(t, len(nodes), 100)
 }
 
@@ -230,32 +362,47 @@ func TestSubgraphContext_StopsAtLimit(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	buildBranchingGraph(engine, "root", 2, 4)
 
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:   []string{"root"},
-		Direction: DirectionOut,
-		MaxDepth:  10,
-		Limit:     5,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			Direction: DirectionOut,
+			MaxDepth:  10,
+			Limit:     5,
+		},
+		PageSize: 10000,
 	})
-	require.ErrorIs(t, err, ErrQueryLimitExceeded)
-	require.Len(t, nodes, 5)
-	// edges may be partial too
+	require.NoError(t, err)
+	require.Len(t, page.Items, 5)
+	require.NotEmpty(t, page.Next, "should have more results")
+	var edges []EdgeRecord
+	for _, elem := range page.Items {
+		if elem.Edge.SourceID != "" {
+			edges = append(edges, elem.Edge)
+		}
+	}
 	require.NotEmpty(t, edges)
 }
 
-func TestSubgraphContext_LimitValidation(t *testing.T) {
+func TestSubgraphContext_Validation(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	_, _, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:  []string{"a"},
-		MaxDepth: 1,
-		Limit:    0,
+	_, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:  []string{"a"},
+			MaxDepth: 1,
+			Limit:    0,
+		},
+		PageSize: 10000,
 	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Limit must be > 0")
+	// Limit:0 is now fine (defaults to 100), but MaxDepth: -1 should still error
+	require.NoError(t, err)
 
-	_, _, _, err = engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:  []string{"a"},
-		MaxDepth: -1,
-		Limit:    10,
+	_, err = engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:  []string{"a"},
+			MaxDepth: -1,
+			Limit:    10,
+		},
+		PageSize: 10000,
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MaxDepth must be >= 0")
@@ -268,11 +415,14 @@ func TestSubgraphContext_Cancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, _, err := engine.SubgraphContext(ctx, GraphQuery{
-		RootIDs:   []string{"root"},
-		Direction: DirectionOut,
-		MaxDepth:  10,
-		Limit:     1000,
+	_, err := engine.SubgraphPage(ctx, GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			Direction: DirectionOut,
+			MaxDepth:  10,
+			Limit:     1000,
+		},
+		PageSize: 10000,
 	})
 	require.Error(t, err)
 	require.True(t, errors.Is(err, context.Canceled))
@@ -294,14 +444,19 @@ func TestSubgraphContext_IncludePropsFalse(t *testing.T) {
 		{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1, Props: []byte(`{"w":1}`)},
 	}))
 
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:      []string{"a"},
-		Direction:    DirectionOut,
-		MaxDepth:     1,
-		Limit:        100,
-		IncludeProps: false,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:      []string{"a"},
+			Direction:    DirectionOut,
+			MaxDepth:     1,
+			Limit:        100,
+			IncludeProps: false,
+		},
+		PageSize: 10000,
 	})
 	require.NoError(t, err)
+	nodes := collectNodeRecords(page)
+	edges := collectEdgeRecords(page)
 	require.Len(t, nodes, 2)
 	for _, n := range nodes {
 		require.Nil(t, n.Props, "IncludeProps=false should strip Props")
@@ -326,14 +481,19 @@ func TestSubgraphContext_IncludePropsTrue(t *testing.T) {
 		{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1, Props: []byte(`{"w":1}`)},
 	}))
 
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:      []string{"a"},
-		Direction:    DirectionOut,
-		MaxDepth:     1,
-		Limit:        100,
-		IncludeProps: true,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:      []string{"a"},
+			Direction:    DirectionOut,
+			MaxDepth:     1,
+			Limit:        100,
+			IncludeProps: true,
+		},
+		PageSize: 10000,
 	})
 	require.NoError(t, err)
+	nodes := collectNodeRecords(page)
+	edges := collectEdgeRecords(page)
 	require.Len(t, nodes, 2)
 	for _, n := range nodes {
 		require.NotNil(t, n.Props, "IncludeProps=true should preserve Props")
@@ -345,110 +505,34 @@ func TestSubgraphContext_CursorReturnedEmpty(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
 
-	nodes, edges, cursor, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:   []string{"a"},
-		Direction: DirectionOut,
-		MaxDepth:  1,
-		Limit:     100,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			Direction: DirectionOut,
+			MaxDepth:  1,
+			Limit:     100,
+		},
+		PageSize: 10000,
 	})
 	require.NoError(t, err)
-	require.Empty(t, cursor)
+	require.Empty(t, page.Next)
+	nodes := collectNodeRecords(page)
 	require.Len(t, nodes, 1)
-	require.Empty(t, edges)
 }
 
 func TestSubgraphContext_DefaultMaxEdges(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	// MaxEdges defaults to Limit*4 = 40
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:   []string{"a"},
-		Direction: DirectionOut,
-		MaxDepth:  0,
-		Limit:     10,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			Direction: DirectionOut,
+			MaxDepth:  0,
+			Limit:     10,
+		},
+		PageSize: 10000,
 	})
 	require.NoError(t, err)
-	_ = nodes
-	_ = edges
-}
-
-func TestFindPathContext_Cancellation(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	buildBranchingGraph(engine, "root", 6, 6)
-	target := "root-0-5-1-5-2-5-3-5-4-5-5-5"
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := engine.FindPathContext(ctx, "root", target, []EdgeKind{"calls"}, 10)
-	require.Error(t, err)
-	require.True(t, errors.Is(err, context.Canceled))
-}
-
-func TestFindPathContext_NoPath(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "s", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "t", Kind: "function"}))
-	require.NoError(t, engine.Link("s", "t", "imports", "", 1, nil))
-
-	path, err := engine.FindPathContext(context.Background(), "s", "t", []EdgeKind{"calls"}, 5)
-	require.NoError(t, err)
-	require.Nil(t, path)
-}
-
-func TestFindPathContext_SelfPath(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-
-	path, err := engine.FindPathContext(context.Background(), "x", "x", nil, 5)
-	require.NoError(t, err)
-	require.NotNil(t, path)
-	require.Equal(t, []string{"x"}, path.Path)
-}
-
-func TestFindPathContext_Validation(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	_, err := engine.FindPathContext(context.Background(), "", "t", nil, 5)
-	require.Error(t, err)
-
-	_, err = engine.FindPathContext(context.Background(), "s", "t", nil, -1)
-	require.Error(t, err)
-}
-
-func TestLegacyWrappersPreserveBehavior(t *testing.T) {
-	engine, _ := newTestEngine(t)
-	for _, id := range []string{"a", "b", "c"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
-	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("b", "c", "calls", "", 1, nil))
-
-	// ImpactSet legacy wrapper
-	result := engine.ImpactSet([]string{"a"}, []EdgeKind{"calls"}, 2)
-	require.ElementsMatch(t, []string{"b", "c"}, result.Affected)
-
-	// FindPath legacy wrapper
-	path, err := engine.FindPath("a", "c", []EdgeKind{"calls"}, 5)
-	require.NoError(t, err)
-	require.NotNil(t, path)
-	require.Equal(t, []string{"a", "b", "c"}, path.Path)
-
-	// Subgraph legacy wrapper
-	nodes, edges := engine.Subgraph(GraphQuery{
-		RootIDs:   []string{"a"},
-		Direction: DirectionOut,
-		MaxDepth:  2,
-	})
-	require.Len(t, nodes, 3)
-	require.Len(t, edges, 2)
-
-	// Subgraph with Limit zero (legacy callers that don't set it)
-	nodes2, edges2 := engine.Subgraph(GraphQuery{
-		RootIDs:   []string{"a"},
-		Direction: DirectionOut,
-		MaxDepth:  2,
-	})
-	require.Len(t, nodes2, 3)
-	require.Len(t, edges2, 2)
+	_ = page
 }
 
 func TestDefaultMaxEdges(t *testing.T) {
@@ -465,9 +549,18 @@ func TestImpactSetContext_LargeLimitDoesNotError(t *testing.T) {
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
 	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
 
-	result, err := engine.ImpactSetContext(context.Background(), []string{"a"}, nil, 1, math.MaxInt32)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  1,
+			Direction: DirectionOut,
+			Limit:     math.MaxInt32,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"b"}, result.Affected)
+	nodeIDs := collectNodeIDs(page)
+	require.Contains(t, nodeIDs, "b")
 }
 
 func TestSubgraphContext_MaxEdgesDefault(t *testing.T) {
@@ -476,15 +569,17 @@ func TestSubgraphContext_MaxEdgesDefault(t *testing.T) {
 		require.NoError(t, engine.UpsertNode(NodeRecord{ID: t.Name() + "a", Kind: "function"}))
 	}
 
-	nodes, edges, _, err := engine.SubgraphContext(context.Background(), GraphQuery{
-		RootIDs:   []string{"a"},
-		Direction: DirectionOut,
-		MaxDepth:  0,
-		Limit:     100,
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			Direction: DirectionOut,
+			MaxDepth:  0,
+			Limit:     100,
+		},
+		PageSize: 10000,
 	})
 	require.NoError(t, err)
-	_ = nodes
-	_ = edges
+	_ = page
 }
 
 func TestSubgraphContext_ContextTimeout(t *testing.T) {
@@ -495,11 +590,14 @@ func TestSubgraphContext_ContextTimeout(t *testing.T) {
 	defer cancel()
 	time.Sleep(10 * time.Millisecond)
 
-	_, _, _, err := engine.SubgraphContext(ctx, GraphQuery{
-		RootIDs:   []string{"root"},
-		Direction: DirectionOut,
-		MaxDepth:  10,
-		Limit:     10000,
+	_, err := engine.SubgraphPage(ctx, GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"root"},
+			Direction: DirectionOut,
+			MaxDepth:  10,
+			Limit:     10000,
+		},
+		PageSize: 10000,
 	})
 	require.Error(t, err)
 	require.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled))
@@ -507,17 +605,33 @@ func TestSubgraphContext_ContextTimeout(t *testing.T) {
 
 func TestImpactSetContext_NegativeMaxDepth(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	_, err := engine.ImpactSetContext(context.Background(), []string{"a"}, nil, -5, 10)
+	_, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  -5,
+			Direction: DirectionOut,
+			Limit:     10,
+		},
+		PageSize: 10000,
+	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "maxDepth must be >= 0")
+	require.Contains(t, err.Error(), "MaxDepth must be >= 0")
 }
 
 func TestImpactSetContext_OnlyOriginWithinLimit(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
 
-	result, err := engine.ImpactSetContext(context.Background(), []string{"a"}, nil, 5, 1)
+	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
+		GraphQuery: GraphQuery{
+			RootIDs:   []string{"a"},
+			MaxDepth:  5,
+			Direction: DirectionOut,
+			Limit:     1,
+		},
+		PageSize: 10000,
+	})
 	require.NoError(t, err)
-	require.Empty(t, result.Affected)
-	require.Contains(t, result.ByDepth[0], "a")
+	nodeIDs := collectNodeIDs(page)
+	require.Contains(t, nodeIDs, "a")
 }

@@ -114,8 +114,9 @@ func toContextPortsPolicy(bundle *execctx.ContextPolicyBundle) *contextports.Pol
 		return nil
 	}
 	return &contextports.PolicyBundle{
-		DefaultTrustClass:   string(bundle.DefaultTrustClass),
-		MaxTokensPerWindow:  bundle.Quota.MaxTokensPerWindow,
-		DegradedChunkPolicy: string(bundle.DegradedChunkPolicy),
+		DefaultTrustClass:       string(bundle.DefaultTrustClass),
+		MaxTokensPerWindow:      bundle.Quota.MaxTokensPerWindow,
+		DegradedChunkPolicy:     string(bundle.DegradedChunkPolicy),
+		MaxTraversalCandidates:  500,
 	}
 }
