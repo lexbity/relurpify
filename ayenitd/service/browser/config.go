@@ -24,15 +24,16 @@ type BrowserServiceConfig struct {
 	DefaultBackend    string
 	AllowedBackends   []string
 	Telemetry         telemetry.Telemetry
-	SessionFactory    func(context.Context, browserSessionConfig) (*platformbrowser.Session, error)
+	SessionFactory    func(context.Context, BrowserSessionConfig) (*platformbrowser.Session, error)
 }
 
-type browserSessionConfig struct {
-	backendName  string
-	manager      *fauthorization.PermissionManager
-	agentID      string
-	maxTokens    int
-	registration *fauthorization.AgentRegistration
-	service      *BrowserService
-	paths        browserSessionPaths
+// BrowserSessionConfig configures a single browser session runtime.
+type BrowserSessionConfig struct {
+	BackendName  string
+	Manager      *fauthorization.PermissionManager
+	AgentID      string
+	MaxTokens    int
+	Registration *fauthorization.AgentRegistration
+	LaunchRoot   string
+	Policy       sandbox.CommandPolicy
 }

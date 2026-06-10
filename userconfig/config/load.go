@@ -43,9 +43,10 @@ type ModelConfig struct {
 
 // LoadOptions controls the configuration loader inputs.
 type LoadOptions struct {
-	WorkspaceRoot string
-	EnvOverrides  []string
-	CLIFlags      FlagSet
+	WorkspaceRoot         string
+	EnvOverrides          []string
+	CLIFlags              FlagSet
+	SubprocessToolFactory func(ports.ToolManifest) ports.Tool
 }
 
 var varRegex = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)(?::-([^}]+))?\}`)
@@ -236,7 +237,7 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("load tools: %w", err)
 	}
-	toolRegistry, err := BuildRegistry(toolManifests, securityBundle.LocalTool, nil)
+	toolRegistry, err := BuildRegistry(toolManifests, securityBundle.LocalTool, nil, opts.SubprocessToolFactory)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build tool registry: %w", err)
 	}

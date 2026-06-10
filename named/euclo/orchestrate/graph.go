@@ -27,18 +27,18 @@ import (
 // RootGraphDeps is the explicit dependency contract for graph execution.
 // It replaces agentenv.AgentContext as the construction input to RootGraph.
 type RootGraphDeps struct {
-	Workspace           string
+	Workspace            string
 	DispatchCapabilities *registry.CapabilityRegistry
-	ThoughtRecipes      *thoughtrecipepkg.ThoughtRecipeRegistry
-	Families            *families.KeywordFamilyRegistry
-	Paradigm            *paradigm.Deps
-	StreamTrigger       *contextstream.Trigger
-	MaxStreamTokens     int
-	DefaultStreamMode   contextstream.Mode
-	PermissionManager   policy.PermissionManager
-	HITLBroker          policy.HITLBroker
-	Checkpoints         agentlifecycle.Repository
-	Persistence         *persistence.Writer
+	ThoughtRecipes       *thoughtrecipepkg.ThoughtRecipeRegistry
+	Families             *families.KeywordFamilyRegistry
+	Paradigm             *paradigm.Deps
+	StreamTrigger        *contextstream.Trigger
+	MaxStreamTokens      int
+	DefaultStreamMode    contextstream.Mode
+	PermissionManager    policy.PermissionManager
+	HITLBroker           policy.HITLBroker
+	Checkpoints          agentlifecycle.Repository
+	Persistence          *persistence.Writer
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -73,18 +73,18 @@ func NewRootGraph(deps RootGraphDeps) (*RootGraph, error) {
 
 	g := agentgraph.NewGraph()
 	nodes, err := buildNodes(buildNodeInput{
-		capReg:                 capReg,
-		thoughtReg:             thoughtReg,
-		paradigmDeps:           paradigmDeps,
-		famReg:                 famReg,
-		maxTokens:              maxTokens,
-		streamMode:             streamMode,
-		streamTrigger:          deps.StreamTrigger,
-		workspace:              deps.Workspace,
-		permissionManager:      deps.PermissionManager,
-		hitlBroker:             hitl,
-		checkpointRepository:   deps.Checkpoints,
-		persistenceWriter:      deps.Persistence,
+		capReg:               capReg,
+		thoughtReg:           thoughtReg,
+		paradigmDeps:         paradigmDeps,
+		famReg:               famReg,
+		maxTokens:            maxTokens,
+		streamMode:           streamMode,
+		streamTrigger:        deps.StreamTrigger,
+		workspace:            deps.Workspace,
+		permissionManager:    deps.PermissionManager,
+		hitlBroker:           hitl,
+		checkpointRepository: deps.Checkpoints,
+		persistenceWriter:    deps.Persistence,
 	})
 	if err != nil {
 		return nil, err

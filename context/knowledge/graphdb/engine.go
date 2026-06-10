@@ -601,4 +601,3 @@ func (e *Engine) IsClosed() bool {
 		return false
 	}
 }
-

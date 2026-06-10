@@ -62,7 +62,6 @@ func WithCapabilityDeps(deps CapabilityDeps) Option {
 	}
 }
 
-
 // WithPromptRegistrar sets a custom prompt registrar.
 func WithPromptRegistrar(pr PromptRegistrar) Option {
 	return func(r *Registration) {

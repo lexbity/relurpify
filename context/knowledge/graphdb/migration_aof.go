@@ -16,17 +16,17 @@ import (
 // ────────────────────────────────────────────────────────────────────
 
 const (
-	migrationName              = "aof_to_badger"
-	migrationStatusInProgress  = "in_progress"
-	migrationStatusCompleted   = "completed"
-	migrationChunkSize         = 500
+	migrationName             = "aof_to_badger"
+	migrationStatusInProgress = "in_progress"
+	migrationStatusCompleted  = "completed"
+	migrationChunkSize        = 500
 )
 
 type migrationState struct {
-	Status       string    `json:"status"`
-	SourceAOF    string    `json:"source_aof,omitempty"`
-	SourceSnap   string    `json:"source_snap,omitempty"`
-	CompletedAt  time.Time `json:"completed_at,omitempty"`
+	Status      string    `json:"status"`
+	SourceAOF   string    `json:"source_aof,omitempty"`
+	SourceSnap  string    `json:"source_snap,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
 }
 
 func readMigrationState(txn *badger.Txn) (*migrationState, error) {

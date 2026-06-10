@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -75,6 +76,7 @@ func CheckBuckets(pkgs []GoPackage, reverse map[string][]string, threshold int, 
 		for d := range domainSet {
 			domainList = append(domainList, d)
 		}
+		sort.Strings(domainList)
 		violation := fmt.Sprintf("bucket: %s imported by %d domains (%s)", importPath, domainCount, strings.Join(domainList, ", "))
 		if !allowlist.Contains("bucket", violation) {
 			violations = append(violations, violation)

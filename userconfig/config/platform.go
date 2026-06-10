@@ -31,7 +31,7 @@ func LoadPlatformConfig(workspace string) (*PlatformConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry, err := BuildRegistry(manifests, policy, nil)
+	registry, err := BuildRegistry(manifests, policy, nil, nil)
 	if err != nil {
 		return nil, err
 	}

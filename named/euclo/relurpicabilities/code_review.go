@@ -454,5 +454,3 @@ func focusCategory(focus string) string {
 		return "all"
 	}
 }
-
-

@@ -8,12 +8,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"github.com/stretchr/testify/require"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
+	"github.com/stretchr/testify/require"
 )
 
 type phase12RecordingRunner struct {
@@ -33,7 +33,6 @@ func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandReq
 		StderrBytes: int64(len(r.stderr)),
 	}, nil
 }
-
 
 func TestPhase12Descriptors(t *testing.T) {
 	tests := []struct {

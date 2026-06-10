@@ -5,8 +5,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 var testRelurpicCapabilities = []string{

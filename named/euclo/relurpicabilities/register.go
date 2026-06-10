@@ -76,7 +76,6 @@ func workspaceFilesFromRegistration(deps RegistrationDeps) WorkspaceFiles {
 	return &workspaceFileSystem{workspace: deps.Workspace}
 }
 
-
 type relurpicCapabilityBlueprint struct {
 	ID            string
 	RequiredTools []string

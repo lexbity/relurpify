@@ -53,6 +53,11 @@ type Store interface {
 	Close() error
 }
 
+type sessionGCState struct {
+	Size    int64
+	ModTime time.Time
+}
+
 // DiskStore implements Store on the local filesystem.
 type DiskStore struct {
 	rootDir string
@@ -60,7 +65,7 @@ type DiskStore struct {
 	mu      sync.Mutex
 
 	// Tracked for GC.
-	sessions map[string]int64 // session → total bytes
+	sessions map[string]*sessionGCState // session → metadata
 	total    int64
 }
 
@@ -73,11 +78,60 @@ func NewDiskStore(workspace string, maxSize int64) (*DiskStore, error) {
 	if maxSize <= 0 {
 		maxSize = 512 * 1024 * 1024 // 512 MiB default
 	}
-	return &DiskStore{
+	s := &DiskStore{
 		rootDir:  rootDir,
 		maxSize:  maxSize,
-		sessions: make(map[string]int64),
-	}, nil
+		sessions: make(map[string]*sessionGCState),
+	}
+	if err := s.scan(); err != nil {
+		return nil, fmt.Errorf("scan existing artifacts: %w", err)
+	}
+	return s, nil
+}
+
+// scan walks rootDir on startup to populate sessions and total with actual file sizes.
+func (s *DiskStore) scan() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entries, err := os.ReadDir(s.rootDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		session := entry.Name()
+		sessionDir := filepath.Join(s.rootDir, session)
+		var sessionSize int64
+		err = filepath.Walk(sessionDir, func(path string, walkInfo os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !walkInfo.IsDir() {
+				sessionSize += walkInfo.Size()
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		s.sessions[session] = &sessionGCState{
+			Size:    sessionSize,
+			ModTime: info.ModTime(),
+		}
+		s.total += sessionSize
+	}
+	return nil
 }
 
 // sessionDir returns the directory for a given session.
@@ -158,9 +212,15 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 		return "", fmt.Errorf("write metadata: %w", err)
 	}
 
-	// Track size for GC.
+	// Track size and mod time for GC.
 	s.mu.Lock()
-	s.sessions[session] += written
+	state := s.sessions[session]
+	if state == nil {
+		state = &sessionGCState{}
+		s.sessions[session] = state
+	}
+	state.Size += written
+	state.ModTime = time.Now()
 	s.total += written
 	s.mu.Unlock()
 
@@ -208,8 +268,8 @@ func (s *DiskStore) GC(_ context.Context, session string) error {
 
 	// Recalculate total.
 	s.total = 0
-	for _, size := range s.sessions {
-		s.total += size
+	for _, state := range s.sessions {
+		s.total += state.Size
 	}
 
 	return nil

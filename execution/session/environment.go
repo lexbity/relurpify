@@ -104,7 +104,4 @@ type agentEnv struct {
 	// ArtifactStore provides durable per-session storage for large tool output.
 	// Created by OpenWorkspace; GC'd at session end or when size cap is exceeded.
 	ArtifactStore artifactstore.Store
-
 }
-
-

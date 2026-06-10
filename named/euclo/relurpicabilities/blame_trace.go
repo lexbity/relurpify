@@ -15,8 +15,8 @@ import (
 
 // BlameTraceHandler implements the git blame capability.
 type BlameTraceHandler struct {
-	cmd       CommandDeps
-	resolver  symbolResolver
+	cmd      CommandDeps
+	resolver symbolResolver
 }
 
 // symbolResolver resolves a symbol name to a line range. nil means unavailable.

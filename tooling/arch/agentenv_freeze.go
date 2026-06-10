@@ -86,6 +86,3 @@ func AllowedAgentenvImportersReport(forward map[string][]string) []string {
 	sort.Strings(lines)
 	return lines
 }
-
-
-

@@ -84,6 +84,12 @@ func TestGCAgeRemovesOldSessions(t *testing.T) {
 	past := time.Now().Add(-2 * time.Hour)
 	require.NoError(t, os.Chtimes(oldDir, past, past))
 
+	store.mu.Lock()
+	if oldSess, ok := store.sessions["old"]; ok {
+		oldSess.ModTime = past
+	}
+	store.mu.Unlock()
+
 	// GC with 1 hour max age should remove "old".
 	result, err := store.GCAge(ctx, 1*time.Hour)
 	require.NoError(t, err)
@@ -112,6 +118,16 @@ func TestEvictOldest(t *testing.T) {
 	// Put a small artifact.
 	_, err = store.Put(ctx, "text", map[string]string{"session": "small"}, strings.NewReader("small"))
 	require.NoError(t, err)
+
+	// Ensure deterministic ordering for tests.
+	store.mu.Lock()
+	if largeSess, ok := store.sessions["large"]; ok {
+		largeSess.ModTime = time.Now().Add(-1 * time.Hour)
+	}
+	if smallSess, ok := store.sessions["small"]; ok {
+		smallSess.ModTime = time.Now()
+	}
+	store.mu.Unlock()
 
 	// Evict to 100 KiB target — "large" should be removed first (it's older).
 	result, err := store.EvictOldest(ctx, 100*1024)

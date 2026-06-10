@@ -244,7 +244,7 @@ func TestDuplicateToolNamesRejected(t *testing.T) {
 			TrustClass: "builtin_trusted",
 		},
 	}
-	_, err := config.BuildRegistry([]*toolcapabilities.ToolManifest{def1, def2}, nil, nil)
+	_, err := config.BuildRegistry([]*toolcapabilities.ToolManifest{def1, def2}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for duplicate tool name, got nil")
 	}

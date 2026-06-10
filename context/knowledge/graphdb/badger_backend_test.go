@@ -24,10 +24,10 @@ func newBadgerTestEngine(t *testing.T) (*Engine, Options) {
 	require.NoError(t, err)
 
 	engine := &Engine{
-		opts:    opts,
-		store:   newAdjacencyStore(),
-		bk:      bb,
-		stopCh:  make(chan struct{}),
+		opts:   opts,
+		store:  newAdjacencyStore(),
+		bk:     bb,
+		stopCh: make(chan struct{}),
 	}
 	engine.lastSave.Store(time.Now().UnixNano())
 	engine.wg.Add(1)

@@ -125,9 +125,7 @@ func (e *ManifestPolicyEngine) providerFallbackDecision(req policy.PolicyRequest
 	case "builtin", "agent-runtime":
 		return policy.PolicyDecisionAllow("provider kind trusted by default")
 	}
-	if req.ProviderOrigin == "remote" ||
-		req.ProviderKind == "mcp-client" ||
-		req.ProviderKind == "mcp-server" {
+	if req.ProviderOrigin == "remote" {
 		return policy.PolicyDecisionRequireApproval(nil)
 	}
 	return policy.PolicyDecisionAllow("provider allowed by default")

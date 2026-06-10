@@ -49,4 +49,3 @@ func newTestIndexManager(t *testing.T) (*IndexManager, string) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 1})
 	return manager, tmpDir
 }
-

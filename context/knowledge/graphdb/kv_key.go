@@ -88,8 +88,8 @@ func keyPrefix(segments ...string) []byte {
 // Meta keys
 // ────────────────────────────────────────────────────────────────────
 
-func keySchemaVersion() []byte   { return encodeKey(famMeta, "schema_version") }
-func keyBackendID() []byte       { return encodeKey(famMeta, "backend_id") }
+func keySchemaVersion() []byte { return encodeKey(famMeta, "schema_version") }
+func keyBackendID() []byte     { return encodeKey(famMeta, "backend_id") }
 
 func keyMigration(name string) []byte {
 	return encodeKey(famMeta, "migration", name)

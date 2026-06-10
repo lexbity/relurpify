@@ -7,7 +7,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
 // ToolRegistry stores the loaded tool manifests plus the resolved runtime
@@ -64,6 +63,7 @@ func BuildRegistry(
 	defs []*ports.ToolManifest,
 	policy map[string]agentspec.ToolPolicy,
 	implementations map[string]ports.Tool,
+	subprocessToolFactory func(ports.ToolManifest) ports.Tool,
 ) (*ToolRegistry, error) {
 	manifestByName := make(map[string]ports.ToolManifest, len(defs))
 	ordered := make([]string, 0, len(defs))
@@ -119,8 +119,8 @@ func BuildRegistry(
 			// Go-native tools are defined by their manifests; runtime registration
 			// happens in the packages that own the implementations.
 		case ports.ToolBackendSubprocess:
-			if !ok {
-				tool = subprocess.NewTool(manifest, nil)
+			if !ok && subprocessToolFactory != nil {
+				tool = subprocessToolFactory(manifest)
 			}
 		case ports.ToolBackendComposite:
 			// Composite tools are resolved at runtime via the composition

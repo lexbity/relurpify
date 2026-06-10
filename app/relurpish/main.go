@@ -16,8 +16,16 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
+
+func init() {
+	cfg.SubprocessToolFactory = func(m ports.ToolManifest) ports.Tool {
+		return subprocess.NewTool(m, nil)
+	}
+}
 
 var (
 	cfg          = runtimesvc.DefaultConfig()

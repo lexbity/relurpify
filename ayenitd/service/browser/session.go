@@ -20,9 +20,9 @@ import (
 type browserSessionHandle struct {
 	mu          sync.Mutex
 	session     *platformbrowser.Session
-	cfg         browserSessionConfig
+	cfg         BrowserSessionConfig
 	paths       browserSessionPaths
-	factory     func(context.Context, browserSessionConfig) (*platformbrowser.Session, error)
+	factory     func(context.Context, BrowserSessionConfig) (*platformbrowser.Session, error)
 	telemetry   telemetry.Telemetry
 	taskID      string
 	workflowID  string
@@ -40,15 +40,19 @@ type browserSessionHandle struct {
 
 func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
 	backendName := s.resolveBackend(args)
-	cfg := browserSessionConfig{
-		backendName:  backendName,
-		manager:      s.permissionManager,
-		agentID:      s.agentID(),
-		maxTokens:    s.maxTokens(),
-		registration: s.registration,
-		service:      s,
+	cfg := BrowserSessionConfig{
+		BackendName:  backendName,
+		Manager:      s.permissionManager,
+		AgentID:      s.agentID(),
+		MaxTokens:    s.maxTokens(),
+		Registration: s.registration,
+		LaunchRoot:   s.paths.launchRoot,
+		Policy:       s.commandPolicy,
 	}
-	factory := s.sessionFactoryOrDefault()
+	factory := s.sessionFactory
+	if factory == nil {
+		return nil, fmt.Errorf("session factory not configured")
+	}
 	session, err := factory(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -74,7 +78,6 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 		return nil, err
 	}
 	handle.paths = sessionPaths
-	handle.cfg.paths = sessionPaths
 	s.trackSession(sessionID, handle)
 	if err := s.recordSessionActivity(sessionID, "open"); err != nil {
 		_ = handle.Close()

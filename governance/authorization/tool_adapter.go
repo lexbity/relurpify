@@ -14,8 +14,8 @@ type portsToolAdapter struct {
 	t ports.Tool
 }
 
-func (a *portsToolAdapter) Name() string                        { return a.t.Name() }
-func (a *portsToolAdapter) Tags() []string                       { return a.t.Tags() }
+func (a *portsToolAdapter) Name() string   { return a.t.Name() }
+func (a *portsToolAdapter) Tags() []string { return a.t.Tags() }
 func (a *portsToolAdapter) Permissions() ToolPermissions {
 	return ToolPermissions{
 		Permissions: a.t.Permissions().Permissions,

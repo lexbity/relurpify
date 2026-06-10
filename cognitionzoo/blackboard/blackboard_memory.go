@@ -19,12 +19,6 @@ type blackboardScopedMemoryRetriever struct {
 	memoryClass relurpctx.MemoryClass
 }
 
-// RetrievalServiceProvider is a placeholder interface for retrieval services.
-// This interface is temporarily stubbed out as the retrieval package is being rebuilt.
-type blackboardRetrievalServiceProvider interface {
-	// RetrievalService() retrieval.RetrieverService
-}
-
 func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]relurpctx.MemoryRecordEnvelope, error) {
 	publication, err := r.RetrievePublication(ctx, query, limit)
 	if err != nil || publication == nil {

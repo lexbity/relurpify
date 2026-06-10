@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dgraph-io/badger/v4"
 	"codeburg.org/lexbit/relurpify/jobs"
+	"github.com/dgraph-io/badger/v4"
 )
 
 type config struct {

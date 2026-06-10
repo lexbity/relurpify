@@ -44,6 +44,7 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		DefaultBackend:    browserDefaultBackend(spec),
 		AllowedBackends:   browserAllowedBackends(spec),
 		Telemetry:         tel,
+		SessionFactory:    newBrowserSession,
 	})
 	if sm != nil {
 		sm.RegisterService("browser", browserService)

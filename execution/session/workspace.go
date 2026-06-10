@@ -320,23 +320,23 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	wm := memory.NewWorkingMemoryStore()
 
 	env := agentEnv{
-		Config:                        agentCfg,
-		Model:                         opts.Model,
-		CommandRunner:                 authRunner,
-		JobSubmitter:                  jobs.NoopSubmitter{},
-		CommandPolicy:                 opts.CommandPolicy,
-		FileScope:                     fileScope,
-		Registry:                      registry,
-		PermissionManager:             opts.PermissionManager,
-		IndexManager:                  indexManager,
-		SearchEngine:                  searchEngine,
-		WorkingMemory:                 wm,
-		KnowledgeStore:                nil, // Will be populated in Open
-		Retriever:                     nil, // Will be populated in Open
-		Compiler:                      nil, // Will be populated in Open
-		EventLog:                      nil,
-		Scheduler:                     nil,
-		ServiceManager:                nil,
+		Config:            agentCfg,
+		Model:             opts.Model,
+		CommandRunner:     authRunner,
+		JobSubmitter:      jobs.NoopSubmitter{},
+		CommandPolicy:     opts.CommandPolicy,
+		FileScope:         fileScope,
+		Registry:          registry,
+		PermissionManager: opts.PermissionManager,
+		IndexManager:      indexManager,
+		SearchEngine:      searchEngine,
+		WorkingMemory:     wm,
+		KnowledgeStore:    nil, // Will be populated in Open
+		Retriever:         nil, // Will be populated in Open
+		Compiler:          nil, // Will be populated in Open
+		EventLog:          nil,
+		Scheduler:         nil,
+		ServiceManager:    nil,
 	}
 
 	return &BootstrappedAgentRuntime{

@@ -1,4 +1,4 @@
-package browser
+package ayenitd
 
 import (
 	"context"
@@ -14,10 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
@@ -37,16 +36,16 @@ type sandboxedBrowserBackend struct {
 	containerID     string
 	runtimeBinary   string
 	launchDir       string
-	cfg             browserSessionConfig
+	cfg             browsersvc.BrowserSessionConfig
 }
 
-func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platformbrowser.Session, error) {
+func newBrowserSession(ctx context.Context, cfg browsersvc.BrowserSessionConfig) (*platformbrowser.Session, error) {
 	sandboxed, err := newSandboxedBrowserBackend(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	switch strings.ToLower(strings.TrimSpace(cfg.backendName)) {
-	case "", defaultBrowserBackend:
+	switch strings.ToLower(strings.TrimSpace(cfg.BackendName)) {
+	case "", "cdp":
 		backend, err := cdp.New(ctx, cdp.Config{
 			Headless:     true,
 			WebSocketURL: sandboxed.cdpWebSocketURL,
@@ -56,15 +55,15 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			_ = sandboxed.close()
 			return nil, err
 		}
-		maxTokens := cfg.maxTokens
+		maxTokens := cfg.MaxTokens
 		if maxTokens <= 0 {
 			maxTokens = 8192
 		}
 		return platformbrowser.NewSession(platformbrowser.SessionConfig{
 			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
-			BackendName:       defaultBrowserBackend,
-			PermissionManager: cfg.manager,
-			AgentID:           cfg.agentID,
+			BackendName:       "cdp",
+			PermissionManager: cfg.Manager,
+			AgentID:           cfg.AgentID,
 			Budget:            newBudgetManager(maxTokens),
 		})
 	case "webdriver":
@@ -81,8 +80,8 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 		return platformbrowser.NewSession(platformbrowser.SessionConfig{
 			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
 			BackendName:       "webdriver",
-			PermissionManager: cfg.manager,
-			AgentID:           cfg.agentID,
+			PermissionManager: cfg.Manager,
+			AgentID:           cfg.AgentID,
 			Budget:            newBudgetManager(8192),
 		})
 	case "bidi":
@@ -99,39 +98,36 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 		return platformbrowser.NewSession(platformbrowser.SessionConfig{
 			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
 			BackendName:       "bidi",
-			PermissionManager: cfg.manager,
-			AgentID:           cfg.agentID,
+			PermissionManager: cfg.Manager,
+			AgentID:           cfg.AgentID,
 			Budget:            newBudgetManager(8192),
 		})
 	default:
 		return nil, &platformbrowser.Error{
 			Code:      platformbrowser.ErrUnsupportedOperation,
-			Backend:   strings.ToLower(strings.TrimSpace(cfg.backendName)),
+			Backend:   strings.ToLower(strings.TrimSpace(cfg.BackendName)),
 			Operation: "open",
 			Err:       fmt.Errorf("unsupported browser backend"),
 		}
 	}
 }
 
-func newSandboxedBrowserBackend(ctx context.Context, cfg browserSessionConfig) (*sandboxedBrowserBackend, error) {
-	if cfg.registration == nil || cfg.registration.Runtime == nil || cfg.registration.Manifest == nil {
+func newSandboxedBrowserBackend(ctx context.Context, cfg browsersvc.BrowserSessionConfig) (*sandboxedBrowserBackend, error) {
+	if cfg.Registration == nil || cfg.Registration.Runtime == nil || cfg.Registration.Manifest == nil {
 		return nil, fmt.Errorf("sandboxed browser runtime unavailable")
 	}
-	backendName := strings.ToLower(strings.TrimSpace(cfg.backendName))
+	backendName := strings.ToLower(strings.TrimSpace(cfg.BackendName))
 	if backendName == "" {
-		backendName = defaultBrowserBackend
+		backendName = "cdp"
 	}
 	switch backendName {
-	case defaultBrowserBackend:
+	case "cdp":
 		hostPort, err := reservePort()
 		if err != nil {
 			return nil, err
 		}
-		if cfg.service == nil {
-			return nil, fmt.Errorf("browser service unavailable")
-		}
-		launchDirRoot := cfg.service.paths.launchRoot
-		launchDir, err := os.MkdirTemp(launchDirRoot, defaultBrowserBackend+"-")
+		launchDirRoot := cfg.LaunchRoot
+		launchDir, err := os.MkdirTemp(launchDirRoot, "cdp-")
 		if err != nil {
 			return nil, fmt.Errorf("create browser launch dir: %w", err)
 		}
@@ -221,9 +217,9 @@ func (b *sandboxedBrowserBackend) close() error {
 	return err
 }
 
-func browserContainerRuntime(cfg browserSessionConfig) string {
-	if cfg.registration != nil && cfg.registration.Runtime != nil {
-		runtimeBinary := cfg.registration.Runtime.RunConfig().ContainerRuntime
+func browserContainerRuntime(cfg browsersvc.BrowserSessionConfig) string {
+	if cfg.Registration != nil && cfg.Registration.Runtime != nil {
+		runtimeBinary := cfg.Registration.Runtime.RunConfig().ContainerRuntime
 		if runtimeBinary != "" {
 			return runtimeBinary
 		}
@@ -231,8 +227,8 @@ func browserContainerRuntime(cfg browserSessionConfig) string {
 	return "docker"
 }
 
-func runSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, hostPort, containerPort int, command []string) (string, error) {
-	rtCfg := cfg.registration.Runtime.RunConfig()
+func runSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSessionConfig, hostPort, containerPort int, command []string) (string, error) {
+	rtCfg := cfg.Registration.Runtime.RunConfig()
 	runtimeBinary := browserContainerRuntime(cfg)
 	runtimeName := strings.TrimSpace(rtCfg.RunscPath)
 	if runtimeName == "" {
@@ -250,22 +246,22 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, h
 		"--tmpfs", "/tmp:exec,mode=1777",
 		"--tmpfs", "/var/tmp:exec,mode=1777",
 	}
-	if user := cfg.registration.Manifest.Spec.Security.RunAsUser; user > 0 {
+	if user := cfg.Registration.Manifest.Spec.Security.RunAsUser; user > 0 {
 		args = append(args, "-u", strconv.Itoa(user))
 	}
-	if cfg.registration.Manifest.Spec.Security.ReadOnlyRoot {
+	if cfg.Registration.Manifest.Spec.Security.ReadOnlyRoot {
 		args = append(args, "--read-only")
 	}
-	if cfg.registration.Manifest.Spec.Security.NoNewPrivileges {
+	if cfg.Registration.Manifest.Spec.Security.NoNewPrivileges {
 		args = append(args, "--security-opt", "no-new-privileges")
 	}
 	if rtCfg.SeccompProfile != "" {
 		args = append(args, "--security-opt", "seccomp="+rtCfg.SeccompProfile)
 	}
-	if rtCfg.NetworkIsolation && len(cfg.registration.Manifest.Spec.Permissions.Network) == 0 {
+	if rtCfg.NetworkIsolation && len(cfg.Registration.Manifest.Spec.Permissions.Network) == 0 {
 		args = append(args, "--network", "none")
 	}
-	image := strings.TrimSpace(cfg.registration.Manifest.Spec.Image)
+	image := strings.TrimSpace(cfg.Registration.Manifest.Spec.Image)
 	if image == "" {
 		image = "ghcr.io/relurpify/runtime:latest"
 	}
@@ -283,7 +279,7 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, h
 	return strings.TrimSpace(string(output)), nil
 }
 
-func removeSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, containerID string) error {
+func removeSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSessionConfig, containerID string) error {
 	if strings.TrimSpace(containerID) == "" {
 		return nil
 	}
@@ -294,8 +290,8 @@ func removeSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig
 	return cmd.Run()
 }
 
-func allowBrowserCommand(ctx context.Context, cfg browserSessionConfig, binary string, args []string) error {
-	policy := browserCommandPolicyFromConfig(cfg)
+func allowBrowserCommand(ctx context.Context, cfg browsersvc.BrowserSessionConfig, binary string, args []string) error {
+	policy := browserLaunchPolicy(cfg)
 	if policy == nil {
 		return nil
 	}
@@ -304,45 +300,8 @@ func allowBrowserCommand(ctx context.Context, cfg browserSessionConfig, binary s
 	})
 }
 
-func browserLaunchPolicy(cfg browserSessionConfig) sandbox.CommandPolicy {
-	return browserCommandPolicyFromConfig(cfg)
-}
-
-func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPolicy {
-	if cfg.service != nil && cfg.service.commandPolicy != nil {
-		return cfg.service.commandPolicy
-	}
-	if cfg.registration == nil || cfg.registration.Permissions == nil {
-		return nil
-	}
-	var spec *agentspec.AgentRuntimeSpec
-	if cfg.service != nil {
-		spec = cfg.service.agentSpec
-	}
-	if spec == nil && cfg.registration != nil && cfg.registration.Manifest != nil {
-		spec = cfg.registration.Manifest.Spec.Agent
-	}
-	var bashCfg *fauthorization.BashConfig
-	if spec != nil {
-		bashCfg = &fauthorization.BashConfig{
-			AllowPatterns: spec.Bash.AllowPatterns,
-			DenyPatterns:  spec.Bash.DenyPatterns,
-			Default:       string(spec.Bash.Default),
-		}
-	}
-	authPolicy := fauthorization.NewCommandAuthorizationPolicy(cfg.registration.Permissions, cfg.registration.ID, bashCfg, "browser")
-	return commandPolicyAdapter{authPolicy: authPolicy}
-}
-
-type commandPolicyAdapter struct {
-	authPolicy *fauthorization.CommandAuthorizationPolicy
-}
-
-func (a commandPolicyAdapter) AllowCommand(ctx context.Context, req ports.CommandRequest) error {
-	if a.authPolicy == nil {
-		return nil
-	}
-	return a.authPolicy.CheckCommand(ctx, req.Args, req.Env)
+func browserLaunchPolicy(cfg browsersvc.BrowserSessionConfig) sandbox.CommandPolicy {
+	return cfg.Policy
 }
 
 type budgetManagerAdapter struct {

@@ -2,13 +2,13 @@ package ast
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	platformlsp "codeburg.org/lexbit/relurpify/platform/lsp"
 )
 
 // DocumentSymbolToolProvider wraps the lsp_document_symbols tool so AST
@@ -65,36 +65,28 @@ func AttachASTSymbolProvider(manager *IndexManager, registry *registry.Capabilit
 	manager.UseSymbolProvider(provider)
 }
 
-func castSymbolInformation(raw interface{}) ([]platformlsp.SymbolInformation, error) {
+type rawSymbolInfo struct {
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Location string `json:"location"`
+}
+
+func castSymbolInformation(raw interface{}) ([]rawSymbolInfo, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("empty symbol payload")
 	}
-	if list, ok := raw.([]platformlsp.SymbolInformation); ok {
-		return list, nil
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal raw symbols: %w", err)
 	}
-	// When the tool result crosses package boundaries the slice may decay to []interface{}.
-	items, ok := raw.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected symbol payload type %T", raw)
+	var list []rawSymbolInfo
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal raw symbols: %w", err)
 	}
-	result := make([]platformlsp.SymbolInformation, 0, len(items))
-	for _, item := range items {
-		if sym, ok := item.(platformlsp.SymbolInformation); ok {
-			result = append(result, sym)
-			continue
-		}
-		if m, ok := item.(map[string]interface{}); ok {
-			result = append(result, platformlsp.SymbolInformation{
-				Name:     fmt.Sprint(m["name"]),
-				Kind:     fmt.Sprint(m["kind"]),
-				Location: fmt.Sprint(m["location"]),
-			})
-		}
-	}
-	return result, nil
+	return list, nil
 }
 
-func convertSymbolInformation(input []platformlsp.SymbolInformation) []DocumentSymbol {
+func convertSymbolInformation(input []rawSymbolInfo) []DocumentSymbol {
 	result := make([]DocumentSymbol, 0, len(input))
 	for _, sym := range input {
 		line := extractLine(sym.Location)

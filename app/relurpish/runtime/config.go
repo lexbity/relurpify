@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -40,6 +41,7 @@ type Config struct {
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 	Editor                     string
+	SubprocessToolFactory      func(ports.ToolManifest) ports.Tool
 }
 
 // DefaultConfig infers sensible defaults based on the current working

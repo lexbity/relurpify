@@ -59,7 +59,7 @@ type BrowserService struct {
 	allowedBackends map[string]struct{}
 	paths           browserPaths
 
-	sessionFactory func(context.Context, browserSessionConfig) (*platformbrowser.Session, error)
+	sessionFactory func(context.Context, BrowserSessionConfig) (*platformbrowser.Session, error)
 	sessions       map[string]*browserSessionHandle
 	started        bool
 	stopped        bool
@@ -68,6 +68,9 @@ type BrowserService struct {
 
 // New creates a browser service from the supplied workspace manifest.
 func New(cfg BrowserServiceConfig) *BrowserService {
+	if cfg.SessionFactory == nil {
+		panic("browser: SessionFactory is required")
+	}
 	allowed := make(map[string]struct{}, len(cfg.AllowedBackends))
 	for _, backend := range cfg.AllowedBackends {
 		if trimmed := strings.TrimSpace(strings.ToLower(backend)); trimmed != "" {
@@ -148,13 +151,6 @@ func (s *BrowserService) Stop() error {
 		}
 	}
 	return errors.Join(errs...)
-}
-
-func (s *BrowserService) sessionFactoryOrDefault() func(context.Context, browserSessionConfig) (*platformbrowser.Session, error) {
-	if s != nil && s.sessionFactory != nil {
-		return s.sessionFactory
-	}
-	return newBrowserSession
 }
 
 func (s *BrowserService) backendAllowed(backend string) bool {

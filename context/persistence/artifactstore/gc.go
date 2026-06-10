@@ -23,42 +23,44 @@ func (s *DiskStore) GCAge(ctx context.Context, maxAge time.Duration) (*GCResult,
 		return &GCResult{}, nil
 	}
 
-	entries, err := os.ReadDir(s.rootDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &GCResult{}, nil
-		}
-		return nil, fmt.Errorf("read artifact root: %w", err)
-	}
-
+	s.mu.Lock()
 	now := time.Now()
 	result := &GCResult{}
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("stat %s: %v", entry.Name(), err))
-			continue
-		}
-		if now.Sub(info.ModTime()) > maxAge {
-			sessionDir := filepath.Join(s.rootDir, entry.Name())
-			var size int64
-			filepath.Walk(sessionDir, func(path string, fi os.FileInfo, err error) error {
-				if err == nil && !fi.IsDir() {
-					size += fi.Size()
-				}
-				return nil
+	type victimInfo struct {
+		name string
+		size int64
+	}
+	var victims []victimInfo
+
+	for name, state := range s.sessions {
+		if now.Sub(state.ModTime) > maxAge {
+			victims = append(victims, victimInfo{
+				name: name,
+				size: state.Size,
 			})
-			if err := os.RemoveAll(sessionDir); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("remove %s: %v", entry.Name(), err))
-				continue
-			}
-			result.SessionsRemoved++
-			result.BytesFreed += size
 		}
+	}
+	s.mu.Unlock()
+
+	for _, victim := range victims {
+		s.mu.Lock()
+		state, exists := s.sessions[victim.name]
+		if !exists {
+			s.mu.Unlock()
+			continue
+		}
+		delete(s.sessions, victim.name)
+		s.total -= state.Size
+		s.mu.Unlock()
+
+		sessionDir := filepath.Join(s.rootDir, victim.name)
+		if err := os.RemoveAll(sessionDir); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("remove %s: %v", victim.name, err))
+			continue
+		}
+		result.SessionsRemoved++
+		result.BytesFreed += state.Size
 	}
 
 	return result, nil
@@ -69,18 +71,9 @@ func (s *DiskStore) GCAge(ctx context.Context, maxAge time.Duration) (*GCResult,
 func (s *DiskStore) EvictOldest(ctx context.Context, targetBytes int64) (*GCResult, error) {
 	s.mu.Lock()
 	total := s.total
-	s.mu.Unlock()
-
 	if total <= targetBytes {
+		s.mu.Unlock()
 		return &GCResult{}, nil
-	}
-
-	entries, err := os.ReadDir(s.rootDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &GCResult{}, nil
-		}
-		return nil, fmt.Errorf("read artifact root: %w", err)
 	}
 
 	type sessionInfo struct {
@@ -90,28 +83,14 @@ func (s *DiskStore) EvictOldest(ctx context.Context, targetBytes int64) (*GCResu
 	}
 
 	var sessions []sessionInfo
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		sessionDir := filepath.Join(s.rootDir, entry.Name())
-		var size int64
-		filepath.Walk(sessionDir, func(path string, fi os.FileInfo, err error) error {
-			if err == nil && !fi.IsDir() {
-				size += fi.Size()
-			}
-			return nil
-		})
+	for name, state := range s.sessions {
 		sessions = append(sessions, sessionInfo{
-			name: entry.Name(),
-			size: size,
-			mod:  info.ModTime(),
+			name: name,
+			size: state.Size,
+			mod:  state.ModTime,
 		})
 	}
+	s.mu.Unlock()
 
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].mod.Before(sessions[j].mod)
@@ -125,8 +104,13 @@ func (s *DiskStore) EvictOldest(ctx context.Context, targetBytes int64) (*GCResu
 			break
 		}
 		s.mu.Lock()
+		state, exists := s.sessions[sess.name]
+		if !exists {
+			s.mu.Unlock()
+			continue
+		}
 		delete(s.sessions, sess.name)
-		s.total -= sess.size
+		s.total -= state.Size
 		s.mu.Unlock()
 
 		sessionDir := filepath.Join(s.rootDir, sess.name)
@@ -135,8 +119,8 @@ func (s *DiskStore) EvictOldest(ctx context.Context, targetBytes int64) (*GCResu
 			continue
 		}
 		result.SessionsRemoved++
-		result.BytesFreed += sess.size
-		needToFree -= sess.size
+		result.BytesFreed += state.Size
+		needToFree -= state.Size
 	}
 
 	return result, nil

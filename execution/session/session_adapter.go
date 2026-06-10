@@ -110,8 +110,8 @@ func (c *knowledgeController) Ingest(ctx context.Context, req IngestRequest) (In
 		return IngestResult{}, ErrKnowledgeUnavailable
 	}
 	saved, err := c.env.KnowledgeStore.Save(knowledge.KnowledgeChunk{
-		ID:    knowledge.ChunkID(contentHash(req.Content)),
-		Body:  knowledge.ChunkBody{Raw: req.Content},
+		ID:           knowledge.ChunkID(contentHash(req.Content)),
+		Body:         knowledge.ChunkBody{Raw: req.Content},
 		SourceOrigin: knowledge.SourceOriginTool,
 	})
 	if err != nil {

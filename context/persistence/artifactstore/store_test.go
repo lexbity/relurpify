@@ -170,3 +170,39 @@ func TestDiskStoreDirectoryStructure(t *testing.T) {
 	_, err = os.Stat(metaPath)
 	require.NoError(t, err, "meta file should exist")
 }
+
+func TestScanOnBoot(t *testing.T) {
+	workspace := t.TempDir()
+
+	// Create first store instance and write artifacts.
+	store1, err := NewDiskStore(workspace, 0)
+	require.NoError(t, err)
+
+	_, err = store1.Put(context.Background(), "text", map[string]string{"session": "session-1"}, strings.NewReader("data1"))
+	require.NoError(t, err)
+
+	_, err = store1.Put(context.Background(), "text", map[string]string{"session": "session-2"}, strings.NewReader("data22"))
+	require.NoError(t, err)
+
+	err = store1.Close()
+	require.NoError(t, err)
+
+	// Recreate store using the same workspace directory.
+	store2, err := NewDiskStore(workspace, 0)
+	require.NoError(t, err)
+	defer store2.Close()
+
+	// Verify that the total size and session sizes are parsed on boot.
+	require.Greater(t, store2.TotalBytes(), int64(0))
+	require.Contains(t, store2.sessions, "session-1")
+	require.Contains(t, store2.sessions, "session-2")
+	require.Greater(t, store2.sessions["session-1"].Size, int64(5))
+	require.Greater(t, store2.sessions["session-2"].Size, int64(6))
+
+	// Total bytes should match the sum of sessions.
+	var expectedTotal int64
+	for _, state := range store2.sessions {
+		expectedTotal += state.Size
+	}
+	require.Equal(t, expectedTotal, store2.TotalBytes())
+}

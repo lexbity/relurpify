@@ -428,5 +428,3 @@ func parseBisectCulprit(output string) (string, bool) {
 	}
 	return "", false
 }
-
-

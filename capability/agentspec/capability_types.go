@@ -179,8 +179,6 @@ type ProviderKind string
 const (
 	ProviderKindBuiltin      ProviderKind = "builtin"
 	ProviderKindPlugin       ProviderKind = "plugin"
-	ProviderKindMCPClient    ProviderKind = "mcp-client"
-	ProviderKindMCPServer    ProviderKind = "mcp-server"
 	ProviderKindAgentRuntime ProviderKind = "agent-runtime"
 	ProviderKindLSP          ProviderKind = "lsp"
 	ProviderKindNodeDevice   ProviderKind = "node-device"

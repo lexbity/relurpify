@@ -127,8 +127,9 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)
 	}
 	loadedConfig, _, err := config.Load(config.LoadOptions{
-		WorkspaceRoot: cfg.Workspace,
-		EnvOverrides:  cfg.EnvOverrides,
+		WorkspaceRoot:         cfg.Workspace,
+		EnvOverrides:          cfg.EnvOverrides,
+		SubprocessToolFactory: cfg.SubprocessToolFactory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("load workspace config bundle: %w", err)

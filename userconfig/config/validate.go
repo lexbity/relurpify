@@ -81,7 +81,7 @@ func ValidateWorkspaceTree(workspace string) *ValidationReport {
 		report.Add("relurpify_cfg/tools", "", "", err.Error())
 	} else if policy, err := security.LoadLocalToolPolicy("", absWorkspace, StrictDecode); err != nil {
 		report.Add("relurpify_cfg/security/localtool.policy.yaml", "", "", err.Error())
-	} else if _, err := BuildRegistry(manifests, policy, nil); err != nil {
+	} else if _, err := BuildRegistry(manifests, policy, nil, nil); err != nil {
 		report.Add("relurpify_cfg/tools", "", "", err.Error())
 	}
 
