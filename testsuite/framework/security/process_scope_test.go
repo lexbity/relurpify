@@ -284,7 +284,7 @@ func TestExecutionDeniedError(t *testing.T) {
 		}
 
 		unwrapped := err.Unwrap()
-		if unwrapped != cause {
+		if !errors.Is(unwrapped, cause) {
 			t.Errorf("unwrapped error should match cause, got %v", unwrapped)
 		}
 	})

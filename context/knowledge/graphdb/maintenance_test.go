@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"testing"
 
@@ -80,7 +79,7 @@ func TestBadgerBackend_Backup(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, bb.backup(context.Background(), &buf))
-	require.Greater(t, buf.Len(), 0, "backup should produce output")
+	require.Positive(t, buf.Len(), "backup should produce output")
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -316,5 +315,5 @@ func TestEvent_MigrationKinds(t *testing.T) {
 
 func TestBackup_ErrBackupUnsupported(t *testing.T) {
 	require.Error(t, ErrBackupUnsupported)
-	require.True(t, strings.Contains(ErrBackupUnsupported.Error(), "backup not supported"))
+	require.Contains(t, ErrBackupUnsupported.Error(), "backup not supported")
 }

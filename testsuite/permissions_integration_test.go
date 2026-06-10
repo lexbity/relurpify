@@ -66,7 +66,7 @@ func (t *permissionedTool) Category() string    { return "integration" }
 func (t *permissionedTool) Parameters() []ports.ToolParameter {
 	return nil
 }
-func (t *permissionedTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *permissionedTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t.manager != nil {
 		if t.path != "" {
 			if err := t.manager.CheckFileAccess(ctx, t.agent, permissions.FileSystemRead, t.path); err != nil {

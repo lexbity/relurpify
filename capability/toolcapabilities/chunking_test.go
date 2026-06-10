@@ -13,7 +13,7 @@ import (
 func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
+		Data:    map[string]any{"stdout": `{"key":"value"}`},
 	}
 	returns := ports.ToolManifestReturns{}
 	blocks := ChunkToolResult(result, returns, capresult.ContentProvenance{})
@@ -25,7 +25,7 @@ func TestChunkToolResultNoChunkingReturnsWhole(t *testing.T) {
 func TestChunkToolResultNonJSONFallback(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": "plain text"},
+		Data:    map[string]any{"stdout": "plain text"},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -40,7 +40,7 @@ func TestChunkToolResultNonJSONFallback(t *testing.T) {
 func TestChunkPerItemFromArray(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `[{"path":"a.go","line":1},{"path":"b.go","line":2}]`},
+		Data:    map[string]any{"stdout": `[{"path":"a.go","line":1},{"path":"b.go","line":2}]`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -54,7 +54,7 @@ func TestChunkPerItemFromArray(t *testing.T) {
 	for i, block := range blocks {
 		sb, ok := block.(capresult.StructuredContentBlock)
 		require.True(t, ok, "block %d should be StructuredContentBlock", i)
-		data, ok := sb.Data.(map[string]interface{})
+		data, ok := sb.Data.(map[string]any)
 		require.True(t, ok)
 		require.Contains(t, data, "stdout")
 		require.Contains(t, data, "ref_path")
@@ -65,7 +65,7 @@ func TestChunkPerItemFromArray(t *testing.T) {
 func TestChunkPerItemFromObjectWithMatches(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `{"matches":[{"path":"a.go","line":1},{"path":"b.go","line":2}]}`},
+		Data:    map[string]any{"stdout": `{"matches":[{"path":"a.go","line":1},{"path":"b.go","line":2}]}`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -81,7 +81,7 @@ func TestChunkPerItemFromObjectWithMatches(t *testing.T) {
 func TestChunkPerItemWithItemPath(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `{"data":{"items":[{"id":1},{"id":2},{"id":3}]}}`},
+		Data:    map[string]any{"stdout": `{"data":{"items":[{"id":1},{"id":2},{"id":3}]}}`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -97,7 +97,7 @@ func TestChunkPerItemWithItemPath(t *testing.T) {
 func TestChunkPerField(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `{"name":"test","version":1,"active":true}`},
+		Data:    map[string]any{"stdout": `{"name":"test","version":1,"active":true}`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -110,7 +110,7 @@ func TestChunkPerField(t *testing.T) {
 	for _, block := range blocks {
 		sb, ok := block.(capresult.StructuredContentBlock)
 		require.True(t, ok)
-		data, ok := sb.Data.(map[string]interface{})
+		data, ok := sb.Data.(map[string]any)
 		require.True(t, ok)
 		require.Len(t, data, 1)
 	}
@@ -119,7 +119,7 @@ func TestChunkPerField(t *testing.T) {
 func TestChunkWholeReturnsSingleBlock(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `[1,2,3]`},
+		Data:    map[string]any{"stdout": `[1,2,3]`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -134,7 +134,7 @@ func TestChunkWholeReturnsSingleBlock(t *testing.T) {
 func TestChunkMalformedJSONFallback(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": `{invalid json`},
+		Data:    map[string]any{"stdout": `{invalid json`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -149,7 +149,7 @@ func TestChunkMalformedJSONFallback(t *testing.T) {
 func TestChunkEmptyStdoutFallback(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": ""},
+		Data:    map[string]any{"stdout": ""},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -165,7 +165,7 @@ func TestChunkResultPreservesErrorBlock(t *testing.T) {
 	result := &ports.ToolResult{
 		Success: false,
 		Error:   "something failed",
-		Data:    map[string]interface{}{"stdout": `{"key":"value"}`},
+		Data:    map[string]any{"stdout": `{"key":"value"}`},
 	}
 	returns := ports.ToolManifestReturns{
 		Type: "json",
@@ -206,11 +206,11 @@ func TestNewCapabilityResultEnvelopeWithBlocks(t *testing.T) {
 	}
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": "data"},
+		Data:    map[string]any{"stdout": "data"},
 	}
 	precomputed := []capresult.ContentBlock{
-		capresult.StructuredContentBlock{Data: map[string]interface{}{"chunk": 1}},
-		capresult.StructuredContentBlock{Data: map[string]interface{}{"chunk": 2}},
+		capresult.StructuredContentBlock{Data: map[string]any{"chunk": 1}},
+		capresult.StructuredContentBlock{Data: map[string]any{"chunk": 2}},
 	}
 	envelope := capresult.NewCapabilityResultEnvelopeWithBlocks(desc, result, capresult.ContentDispositionRaw, nil, nil, precomputed)
 	require.NotNil(t, envelope)
@@ -224,7 +224,7 @@ func TestEnvelopeWithoutBlocksDefaults(t *testing.T) {
 	}
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"stdout": "hello"},
+		Data:    map[string]any{"stdout": "hello"},
 	}
 	envelope := capresult.NewCapabilityResultEnvelope(desc, result, capresult.ContentDispositionRaw, nil, nil)
 	require.NotNil(t, envelope)

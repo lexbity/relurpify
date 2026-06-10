@@ -3,6 +3,7 @@ package ollama
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,9 +31,9 @@ type Client struct {
 }
 
 type toolFunction struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
 }
 
 type toolDef struct {
@@ -93,7 +94,7 @@ func NewClient(endpoint, model, apiKey string) *Client {
 
 // Generate implements single prompt completion.
 func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":  c.model(options),
 		"prompt": prompt,
 		"stream": false,
@@ -104,7 +105,7 @@ func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOption
 
 // GenerateStream returns a simple streaming channel.
 func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":  c.model(options),
 		"prompt": prompt,
 		"stream": true,
@@ -137,7 +138,7 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLM
 
 // Chat implements chat style conversation.
 func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":    c.model(options),
 		"messages": convertMessages(messages),
 		"stream":   false,
@@ -151,7 +152,7 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []
 	if !c.nativeToolCallingEnabled() {
 		return c.Chat(ctx, messages, options)
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":    c.model(options),
 		"tools":    convertLLMToolSpecs(tools),
 		"stream":   false,
@@ -245,11 +246,11 @@ func (c *Client) model(options *LLMOptions) string {
 	return "codellama"
 }
 
-func (c *Client) applyOptions(payload map[string]interface{}, options *LLMOptions) {
+func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
 	if options == nil {
 		return
 	}
-	opts := map[string]interface{}{}
+	opts := map[string]any{}
 	if options.Temperature != 0 {
 		opts["temperature"] = options.Temperature
 	}
@@ -287,7 +288,7 @@ func (c *Client) ollamaAPIEndpoint() string {
 	return strings.TrimRight(parsed.String(), "/")
 }
 
-func (c *Client) doRequest(ctx context.Context, apiPath string, payload interface{}) (*LLMResponse, error) {
+func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*LLMResponse, error) {
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -320,7 +321,7 @@ func (c *Client) doRequest(ctx context.Context, apiPath string, payload interfac
 	return c.decodeLLMResponse(bytes.NewReader(responseBody), promptTokens)
 }
 
-func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]interface{}, callback func(string)) (*LLMResponse, error) {
+func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]any, callback func(string)) (*LLMResponse, error) {
 	payload["stream"] = true
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
@@ -387,10 +388,10 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	return result, nil
 }
 
-func convertMessages(messages []Message) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(messages))
+func convertMessages(messages []Message) []map[string]any {
+	out := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
-		m := map[string]interface{}{
+		m := map[string]any{
 			"role":    msg.Role,
 			"content": msg.Content,
 		}
@@ -404,17 +405,17 @@ func convertMessages(messages []Message) []map[string]interface{} {
 			m["tool_call_id"] = msg.ToolCallID
 		}
 		if len(msg.ToolCalls) > 0 {
-			calls := make([]map[string]interface{}, 0, len(msg.ToolCalls))
+			calls := make([]map[string]any, 0, len(msg.ToolCalls))
 			for _, call := range msg.ToolCalls {
-				fn := map[string]interface{}{
+				fn := map[string]any{
 					"name": call.Name,
 				}
 				if len(call.Args) > 0 {
 					fn["arguments"] = call.Args
 				} else {
-					fn["arguments"] = map[string]interface{}{}
+					fn["arguments"] = map[string]any{}
 				}
-				entry := map[string]interface{}{
+				entry := map[string]any{
 					"type":     "function",
 					"function": fn,
 				}
@@ -445,15 +446,15 @@ func convertLLMToolSpecs(specs []LLMToolSpec) []toolDef {
 	return res
 }
 
-func schemaToOllamaParameters(schema *Schema) map[string]interface{} {
-	props := make(map[string]interface{})
+func schemaToOllamaParameters(schema *Schema) map[string]any {
+	props := make(map[string]any)
 	var required []string
 	if schema != nil && schema.Type == "object" {
 		for name, prop := range schema.Properties {
 			if prop == nil {
 				continue
 			}
-			p := map[string]interface{}{
+			p := map[string]any{
 				"type":        prop.Type,
 				"description": prop.Description,
 			}
@@ -464,7 +465,7 @@ func schemaToOllamaParameters(schema *Schema) map[string]interface{} {
 		}
 		required = append(required, schema.Required...)
 	}
-	parameters := map[string]interface{}{
+	parameters := map[string]any{
 		"type":       "object",
 		"properties": props,
 	}
@@ -480,9 +481,9 @@ func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*LLMRespon
 		return nil, err
 	}
 	resp := &LLMResponse{
-		Text:         firstNonEmpty(raw.Text, raw.Response),
+		Text:         cmp.Or(raw.Text, raw.Response),
 		FinishReason: raw.DoneReason,
-		Usage:        normalizeUsage(raw, promptTokens, firstNonEmpty(raw.Text, raw.Response)),
+		Usage:        normalizeUsage(raw, promptTokens, cmp.Or(raw.Text, raw.Response)),
 	}
 	if resp.Text == "" && raw.Message != nil {
 		resp.Text = raw.Message.Content
@@ -516,34 +517,25 @@ func (c *Client) parseToolCalls(calls []ollamaToolCall) []model.ToolCall {
 	return results
 }
 
-func (c *Client) parseArguments(raw json.RawMessage) map[string]interface{} {
+func (c *Client) parseArguments(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal(raw, &obj); err == nil {
 		return obj
 	}
 	if c.profile != nil && c.profile.ToolCalling.DoubleEncodedArgs {
 		var str string
 		if err := json.Unmarshal(raw, &str); err == nil {
-			var nested map[string]interface{}
+			var nested map[string]any
 			if err := json.Unmarshal([]byte(str), &nested); err == nil {
 				return nested
 			}
-			return map[string]interface{}{"value": str}
+			return map[string]any{"value": str}
 		}
 	}
-	return map[string]interface{}{"_raw": string(raw)}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return map[string]any{"_raw": string(raw)}
 }
 
 func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) telemetry.TokenUsageReport {
@@ -579,9 +571,9 @@ func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) t
 	return estimateUsage(promptTokens, responseText)
 }
 
-func estimatePromptTokensFromPayload(payload interface{}) int {
+func estimatePromptTokensFromPayload(payload any) int {
 	switch p := payload.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		if prompt, ok := p["prompt"].(string); ok && prompt != "" {
 			return telemetry.EstimateTokens(prompt)
 		}
@@ -593,7 +585,7 @@ func estimatePromptTokensFromPayload(payload interface{}) int {
 
 func estimatePromptTokensFromMessages(value any) int {
 	switch msgs := value.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
@@ -604,7 +596,7 @@ func estimatePromptTokensFromMessages(value any) int {
 	case []any:
 		total := 0
 		for _, item := range msgs {
-			msg, ok := item.(map[string]interface{})
+			msg, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -643,7 +635,7 @@ func (c *Client) logResponse(path string, resp []byte) {
 	c.logf("response %s payload: %s", path, truncate(string(resp), 2048))
 }
 
-func (c *Client) logf(format string, args ...interface{}) {
+func (c *Client) logf(format string, args ...any) {
 	if !c.Debug {
 		return
 	}

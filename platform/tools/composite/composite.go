@@ -66,7 +66,7 @@ func (t *invalidTool) Parameters() []ports.ToolParameter    { return nil }
 func (t *invalidTool) Tags() []string                       { return nil }
 func (t *invalidTool) Permissions() ports.ToolPermissions   { return ports.ToolPermissions{} }
 func (t *invalidTool) IsAvailable(ctx context.Context) bool { return false }
-func (t *invalidTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *invalidTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: false, Error: t.err.Error()}, nil
 }
 
@@ -105,7 +105,7 @@ func (t *compositeTool) Tags() []string {
 	return append([]string(nil), t.manifest.Capability.RiskClass...)
 }
 
-func (t *compositeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *compositeTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t.resolve == nil {
 		return &ports.ToolResult{Success: false, Error: "composite tool resolver unavailable"}, nil
 	}

@@ -7,16 +7,16 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 type CapabilitySource struct {
-	ProviderID string                   `json:"provider_id,omitempty"`
+	ProviderID string                         `json:"provider_id,omitempty"`
 	Scope      classification.CapabilityScope `json:"scope,omitempty"`
-	SessionID  string                   `json:"session_id,omitempty"`
+	SessionID  string                         `json:"session_id,omitempty"`
 }
 
 type AvailabilitySpec struct {
@@ -67,7 +67,7 @@ type CapabilityDescriptor struct {
 	Tags            []string                          `json:"tags,omitempty"`
 	Source          CapabilitySource                  `json:"source,omitempty"`
 	TrustClass      agentspec.TrustClass              `json:"trust_class,omitempty"`
-	EffectClasses   []classification.EffectClass `json:"effect_classes,omitempty"`
+	EffectClasses   []classification.EffectClass      `json:"effect_classes,omitempty"`
 	SessionAffinity string                            `json:"session_affinity,omitempty"`
 	InputSchema     *schemacoerce.Schema              `json:"input_schema,omitempty"`
 	OutputSchema    *schemacoerce.Schema              `json:"output_schema,omitempty"`
@@ -140,13 +140,13 @@ func ToolDescriptor(ctx context.Context, tool ports.Tool) CapabilityDescriptor {
 		if desc.InputSchema == nil {
 			desc.InputSchema = ToolInputSchema(tool)
 		}
-		if desc.Availability.Available == false && desc.Availability.Reason == "" && tool.IsAvailable(ctx) {
+		if !desc.Availability.Available && desc.Availability.Reason == "" && tool.IsAvailable(ctx) {
 			desc.Availability.Available = true
 		}
 		if desc.TrustClass == "" {
 			desc.TrustClass = ToolTrustClass(tool)
 		}
-			if len(desc.EffectClasses) == 0 {
+		if len(desc.EffectClasses) == 0 {
 			desc.EffectClasses = ToolEffectClasses(tool)
 		}
 		if desc.Source.Scope == "" {
@@ -603,5 +603,3 @@ func effectClassSetToSlice(set map[classification.EffectClass]struct{}) []classi
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
-
-

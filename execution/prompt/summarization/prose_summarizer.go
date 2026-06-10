@@ -108,7 +108,7 @@ func (s *ProseSummarizer) buildPrompt(content string, targetBudget int) string {
 	sb.WriteString("Please summarize the following content")
 
 	if targetBudget > 0 {
-		sb.WriteString(fmt.Sprintf(" in approximately %d tokens", targetBudget))
+		fmt.Fprintf(&sb, " in approximately %d tokens", targetBudget)
 	}
 
 	sb.WriteString(".\n\n")

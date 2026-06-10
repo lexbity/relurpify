@@ -343,9 +343,10 @@ func (o *notificationPromptOverlay) Render(width, height int) string {
 	}
 	_ = height
 	title := "Notification"
-	if o.item.Kind == NotifKindRestore {
+	switch o.item.Kind {
+	case NotifKindRestore:
 		title = "Restore Session"
-	} else if o.item.Kind == NotifKindDeferred {
+	case NotifKindDeferred:
 		title = "Deferred Review"
 	}
 	lines := []string{

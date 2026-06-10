@@ -1,6 +1,7 @@
 package euclotui
 
 import (
+	"cmp"
 	"fmt"
 	"sort"
 	"strconv"
@@ -412,15 +413,15 @@ func (r *EucloEventRouter) applyDiffEvent(ev ExecutionEvent) {
 			File:         hunk.File,
 			Summary:      hunk.Summary,
 			Body:         hunk.Body,
-			StepID:       firstNonEmpty(hunk.StepID, ev.StepID),
-			Origin:       firstNonEmpty(hunk.Origin, string(ev.Type)),
+			StepID:       cmp.Or(hunk.StepID, ev.StepID),
+			Origin:       cmp.Or(hunk.Origin, string(ev.Type)),
 			LinesAdded:   hunk.LinesAdded,
 			LinesRemoved: hunk.LinesRemoved,
 		}
 		if strings.Contains(strings.ToLower(string(ev.Type)), "fail") {
 			projection.VerificationFailed = true
 		}
-		if failure := firstNonEmpty(
+		if failure := cmp.Or(
 			stringPayload(ev.Payload, "verification_log"),
 			stringPayload(ev.Payload, "compiler_log"),
 			stringPayload(ev.Payload, "verification_output"),
@@ -429,7 +430,7 @@ func (r *EucloEventRouter) applyDiffEvent(ev ExecutionEvent) {
 			projection.VerificationFailed = true
 			projection.VerificationLog = failure
 		}
-		if deferred := firstNonEmpty(
+		if deferred := cmp.Or(
 			stringPayload(ev.Payload, "deferred_markdown"),
 			stringPayload(ev.Payload, "deferred_file"),
 			stringPayload(ev.Payload, "deferred_path"),
@@ -604,15 +605,6 @@ func sortedScoreKeys(scores map[string]float64) []string {
 	return keys
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func stringPayload(payload map[string]any, key string) string {
 	if len(payload) == 0 {
 		return ""
@@ -630,7 +622,7 @@ func (r *EucloEventRouter) ensureDiffStepProjection(stepID, origin string) *Diff
 	if r.diff.Steps == nil {
 		r.diff.Steps = make(map[string]*DiffStepProjection)
 	}
-	stepID = firstNonEmpty(stepID, "unscoped-step")
+	stepID = cmp.Or(stepID, "unscoped-step")
 	step := r.diff.Steps[stepID]
 	if step == nil {
 		step = &DiffStepProjection{

@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -92,7 +92,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 }
 
 // Invoke executes the AST query and returns matching nodes.
-func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
 	// Extract arguments
 	query, ok := stringArg(args, "query")
@@ -111,7 +111,7 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 		Limit:       limit,
 	}
 
-	if types, ok := args["types"].([]interface{}); ok {
+	if types, ok := args["types"].([]any); ok {
 		for _, t := range types {
 			if typeStr, ok := t.(string); ok {
 				nodeQuery.Types = append(nodeQuery.Types, ast.NodeType(typeStr))
@@ -119,7 +119,7 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 		}
 	}
 
-	if languages, ok := args["languages"].([]interface{}); ok {
+	if languages, ok := args["languages"].([]any); ok {
 		for _, lang := range languages {
 			if langStr, ok := lang.(string); ok {
 				nodeQuery.Languages = append(nodeQuery.Languages, langStr)
@@ -140,7 +140,7 @@ func (h *ASTQueryHandler) Invoke(ctx context.Context, st ports.State, args map[s
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":     true,
 			"matches":     matches,
 			"total_found": len(nodes),

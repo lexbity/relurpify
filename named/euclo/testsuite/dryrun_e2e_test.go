@@ -34,7 +34,7 @@ func (h *countingCapabilityHandler) Descriptor(context.Context, ports.State) des
 	}
 }
 
-func (h *countingCapabilityHandler) Invoke(context.Context, ports.State, map[string]interface{}) (*ports.ToolResult, error) {
+func (h *countingCapabilityHandler) Invoke(context.Context, ports.State, map[string]any) (*ports.ToolResult, error) {
 	h.mu.Lock()
 	h.count++
 	h.mu.Unlock()

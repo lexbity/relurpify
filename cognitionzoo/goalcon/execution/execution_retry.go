@@ -7,6 +7,7 @@ import (
 
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 )
 
 // RetryExecutor wraps StepExecutor with retry logic and backoff.
@@ -82,7 +83,7 @@ func (re *RetryExecutor) ExecuteWithRetry(
 	})
 
 	// Retry loop
-	calculator := NewBackoffCalculator(policy)
+	calculator := retry.NewBackoffCalculator(*policy)
 	retryCount := 0
 
 	for !finalResult.Success && retryCount < policy.MaxAttempts {
@@ -97,7 +98,7 @@ func (re *RetryExecutor) ExecuteWithRetry(
 		retryCount++
 
 		// Apply backoff with context cancellation support
-		if !re.applyBackoff(ctx, backoff) {
+		if !retry.Sleep(ctx, backoff) {
 			// Context cancelled during backoff
 			finalResult.Error = ctx.Err()
 			break
@@ -121,16 +122,6 @@ func (re *RetryExecutor) ExecuteWithRetry(
 	}
 
 	return finalResult
-}
-
-// applyBackoff sleeps for the specified duration, respecting context cancellation.
-func (re *RetryExecutor) applyBackoff(ctx context.Context, backoff time.Duration) bool {
-	select {
-	case <-time.After(backoff):
-		return true // Sleep completed normally
-	case <-ctx.Done():
-		return false // Context cancelled
-	}
 }
 
 // recordRetryHistory records retry attempts to audit trail (if available).
@@ -159,7 +150,7 @@ func (re *RetryExecutor) recordRetryHistory(
 				attempt.BackoffDuration,
 			)
 		} else {
-			summary += fmt.Sprintf("Initial attempt")
+			summary += "Initial attempt"
 		}
 		if attempt.Error != nil {
 			summary += fmt.Sprintf(" (error: %v)", attempt.Error)

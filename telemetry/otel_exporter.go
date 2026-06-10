@@ -103,7 +103,7 @@ func (e *ToolSpanExporter) spanAttrsFromEvent(event Event) SpanAttributes {
 	attrs := SpanAttributes{}
 
 	if raw, ok := event.Metadata["span_attrs"]; ok {
-		if m, ok := raw.(map[string]interface{}); ok {
+		if m, ok := raw.(map[string]any); ok {
 			for k, v := range m {
 				attrs[k] = fmt.Sprint(v)
 			}
@@ -133,7 +133,7 @@ func (e *ToolSpanExporter) spanAttrsFromEvent(event Event) SpanAttributes {
 	// Extra attributes from allowlist
 	if len(e.attrs) > 0 {
 		if argsRaw, ok := event.Metadata["args"]; ok {
-			if argsMap, ok := argsRaw.(map[string]interface{}); ok {
+			if argsMap, ok := argsRaw.(map[string]any); ok {
 				for k, v := range argsMap {
 					if _, allowed := e.attrs[k]; allowed {
 						attrs["param."+k] = fmt.Sprint(v)
@@ -204,7 +204,7 @@ func spanStatus(event Event) string {
 	return "ok"
 }
 
-func stringField(m map[string]interface{}, key string) string {
+func stringField(m map[string]any, key string) string {
 	if m == nil {
 		return ""
 	}

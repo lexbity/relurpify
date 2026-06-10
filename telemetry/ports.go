@@ -29,7 +29,7 @@ type SnapshotObserver interface {
 
 // ResponseIngester indexes LLM responses into the knowledge graph.
 type ResponseIngester interface {
-	IngestLLMResponse(ctx context.Context, resp interface{}) error
+	IngestLLMResponse(ctx context.Context, resp any) error
 }
 
 // TokenUsage records token consumption for a model invocation.

@@ -25,7 +25,7 @@ import (
 
 type stubCapabilityHandler struct {
 	id   string
-	args map[string]interface{}
+	args map[string]any
 }
 
 func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
@@ -40,16 +40,16 @@ func (h *stubCapabilityHandler) Descriptor(ctx context.Context, env ports.State)
 	}
 }
 
-func (h *stubCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *stubCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.args = args
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"answer": "ok",
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"source": "stub",
 		},
 	}, nil
@@ -94,7 +94,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 		t.Fatalf("expected capability_id in result, got %v", got)
 	}
 	outputValue, ok := execution.ResultField(result.Data, "output")
-	output, ok := outputValue.(map[string]interface{})
+	output, ok := outputValue.(map[string]any)
 	if !ok {
 		t.Fatalf("expected output map, got %T", outputValue)
 	}

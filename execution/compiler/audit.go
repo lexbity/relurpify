@@ -56,7 +56,7 @@ func (a *CompilationAuditor) LoadCompilationRecord(ctx context.Context, compilat
 		var record CompilationRecord
 		var content any
 		if chunk.Body.Fields != nil {
-			content, _ = chunk.Body.Fields["content"]
+			content = chunk.Body.Fields["content"]
 		}
 		if content == nil {
 			content = chunk.Body.Raw

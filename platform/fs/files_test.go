@@ -15,19 +15,19 @@ func TestReadWriteListFileTools(t *testing.T) {
 	ctx := context.Background()
 
 	writeTool := &WriteFileTool{BasePath: dir, Backup: true}
-	_, err := writeTool.Execute(ctx, map[string]interface{}{
+	_, err := writeTool.Execute(ctx, map[string]any{
 		"path":    "hello.txt",
 		"content": "hi relurpify",
 	})
 	assert.NoError(t, err)
 
 	readTool := &ReadFileTool{BasePath: dir}
-	readRes, err := readTool.Execute(ctx, map[string]interface{}{"path": "hello.txt"})
+	readRes, err := readTool.Execute(ctx, map[string]any{"path": "hello.txt"})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi relurpify", readRes.Data["content"])
 
 	listTool := &ListFilesTool{BasePath: dir}
-	listRes, err := listTool.Execute(ctx, map[string]interface{}{
+	listRes, err := listTool.Execute(ctx, map[string]any{
 		"directory": ".",
 		"pattern":   "*.txt",
 	})
@@ -47,13 +47,13 @@ func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
 
 	readTool := &ReadFileTool{BasePath: dir}
 	readTool.SetSandboxScope(scope)
-	_, err := readTool.Execute(context.Background(), map[string]interface{}{"path": protected})
+	_, err := readTool.Execute(context.Background(), map[string]any{"path": protected})
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrFileScopeProtectedPath)
 
 	writeTool := &WriteFileTool{BasePath: dir}
 	writeTool.SetSandboxScope(scope)
-	_, err = writeTool.Execute(context.Background(), map[string]interface{}{
+	_, err = writeTool.Execute(context.Background(), map[string]any{
 		"path":    protected,
 		"content": "mutate",
 	})
@@ -67,14 +67,14 @@ func TestSearchInFilesTool(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("package main\n// TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory": ".",
 		"pattern":   "TODO",
 	})
 	assert.NoError(t, err)
 	bytes, err := json.Marshal(res.Data["matches"])
 	assert.NoError(t, err)
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.NotEmpty(t, decoded)
 }
@@ -85,13 +85,13 @@ func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("#include <stdio.h>\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"pattern": "#include",
 	})
 	assert.NoError(t, err)
 	bytes, err := json.Marshal(res.Data["matches"])
 	assert.NoError(t, err)
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.NotEmpty(t, decoded)
 }
@@ -103,7 +103,7 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	assert.NoError(t, os.WriteFile(target, []byte("pub fn demo() {}\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory": ".",
 		"pattern":   "**/*.rs",
 	})
@@ -118,7 +118,7 @@ func TestListFilesToolDefaultsDirectory(t *testing.T) {
 	assert.NoError(t, os.WriteFile(target, []byte("# docs\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"pattern": "*.md",
 	})
 	assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	assert.NoError(t, os.WriteFile(generated, []byte("fn generated() {}\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory": ".",
 		"pattern":   "**/*.rs",
 	})
@@ -156,14 +156,14 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	assert.NoError(t, os.WriteFile(generated, []byte("// TODO: generated\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory": ".",
 		"pattern":   "TODO",
 	})
 	assert.NoError(t, err)
 	bytes, err := json.Marshal(res.Data["matches"])
 	assert.NoError(t, err)
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.Len(t, decoded, 1)
 	assert.Equal(t, source, decoded[0]["file"])
@@ -175,14 +175,14 @@ func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory": ".",
 		"pattern":   "todo",
 	})
 	assert.NoError(t, err)
 	bytes, err := json.Marshal(res.Data["matches"])
 	assert.NoError(t, err)
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.Len(t, decoded, 1)
 	assert.Equal(t, file, decoded[0]["file"])
@@ -194,7 +194,7 @@ func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]any{
 		"directory":      ".",
 		"pattern":        "todo",
 		"case_sensitive": true,
@@ -202,7 +202,7 @@ func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 	assert.NoError(t, err)
 	bytes, err := json.Marshal(res.Data["matches"])
 	assert.NoError(t, err)
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
-	assert.Len(t, decoded, 0)
+	assert.Empty(t, decoded)
 }

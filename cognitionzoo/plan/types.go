@@ -31,7 +31,7 @@ type PlanStep struct {
 	Verification string
 	Files        []string
 	Tool         string
-	Params       map[string]interface{}
+	Params       map[string]any
 }
 
 // PlanExecutionOptions configures how plan steps are executed.

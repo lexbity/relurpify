@@ -55,14 +55,14 @@ func (t *integrationFileTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *integrationFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *integrationFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"status":  "ok",
 			"content": string(data),
 		},
@@ -137,7 +137,7 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *contextdata.Envelope) 
 type toolExecNode struct {
 	name string
 	tool ports.Tool
-	args map[string]interface{}
+	args map[string]any
 }
 
 func (n *toolExecNode) ID() string { return n.name }
@@ -155,7 +155,7 @@ func (n *toolExecNode) Execute(ctx context.Context, state *contextdata.Envelope)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	if res != nil && res.Data != nil {
 		for k, v := range res.Data {
 			data[k] = v

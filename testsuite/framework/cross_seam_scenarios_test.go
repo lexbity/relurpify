@@ -258,14 +258,14 @@ func (t *mockFileTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *mockFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *mockFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"content": string(data),
 		},
 	}, nil

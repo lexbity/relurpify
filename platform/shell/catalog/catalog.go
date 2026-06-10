@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -378,7 +379,7 @@ func validateField(issues *[]SchemaIssue, path string, field ToolSchemaField) {
 		return
 	}
 	if len(field.Enum) > 0 && field.Default != nil {
-		if !containsString(field.Enum, fmt.Sprint(field.Default)) {
+		if !slices.Contains(field.Enum, fmt.Sprint(field.Default)) {
 			*issues = append(*issues, SchemaIssue{Path: path + ".default", Message: "default not present in enum"})
 		}
 	}
@@ -395,15 +396,6 @@ func validateField(issues *[]SchemaIssue, path string, field ToolSchemaField) {
 			validateField(issues, path+".properties."+name, nested)
 		}
 	}
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
 
 func normalizeNames(values []string) []string {

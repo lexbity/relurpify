@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -43,7 +44,7 @@ func ResolveModelRef(ref ModelRef, workspaceDefault ModelRef, providers []*Resol
 		return nil, fmt.Errorf("provider %q not found; available: [%s]", resolvedProvider, strings.Join(providerNames(providers), ", "))
 	}
 
-	if len(provider.AvailableModels) > 0 && !containsString(provider.AvailableModels, resolvedName) {
+	if len(provider.AvailableModels) > 0 && !slices.Contains(provider.AvailableModels, resolvedName) {
 		return nil, fmt.Errorf("model %q not listed in provider %q.available_models; available: [%s]", resolvedName, provider.Name, strings.Join(provider.AvailableModels, ", "))
 	}
 
@@ -77,15 +78,6 @@ func providerNames(providers []*ResolvedProvider) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
 
 // ProviderRequiresAuth reports whether a provider kind requires an API key.

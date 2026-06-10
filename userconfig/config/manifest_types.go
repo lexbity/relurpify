@@ -428,7 +428,7 @@ func (m *ManifestSpec) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-func (m ManifestSpec) MarshalYAML() (interface{}, error) {
+func (m ManifestSpec) MarshalYAML() (any, error) {
 	type out struct {
 		Image   string                      `yaml:"image,omitempty"`
 		Runtime string                      `yaml:"runtime,omitempty"`

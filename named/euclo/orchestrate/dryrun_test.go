@@ -31,11 +31,11 @@ func (h *dryRunCountingHandler) Descriptor(ctx context.Context, env ports.State)
 	}
 }
 
-func (h *dryRunCountingHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *dryRunCountingHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	h.mu.Lock()
 	h.invocations++
 	h.mu.Unlock()
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"ok": true}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"ok": true}}, nil
 }
 
 func (h *dryRunCountingHandler) count() int {

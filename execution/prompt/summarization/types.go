@@ -61,7 +61,7 @@ func ComputeCoverageHash(chunks []knowledge.KnowledgeChunk) string {
 	h := sha256.New()
 	for _, chunk := range chunks {
 		h.Write([]byte(string(chunk.ID)))
-		h.Write([]byte(fmt.Sprintf("%d", chunk.Version)))
+		fmt.Fprintf(h, "%d", chunk.Version)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)[:16])
 }

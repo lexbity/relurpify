@@ -141,7 +141,7 @@ func (h instrumentCapabilityHandler) Availability(ctx context.Context, env ports
 	return descriptor.AvailabilitySpec{Available: true}
 }
 
-func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	invocable, ok := h.handler.(handler.InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
@@ -150,7 +150,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 	if desc.ID == "" {
 		desc = h.Descriptor(ctx, env)
 	}
-	var workingData map[string]interface{}
+	var workingData map[string]any
 	if env != nil {
 		workingData = env.Snapshot()
 	}
@@ -194,7 +194,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 	}
 	if result != nil {
 		if result.Metadata == nil {
-			result.Metadata = map[string]interface{}{}
+			result.Metadata = map[string]any{}
 		}
 		result.Metadata["capability_descriptor"] = desc
 		if approvalBinding != nil {
@@ -206,7 +206,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env ports.State, args map[string]interface{}) (*handler.PromptRenderResult, error) {
+func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env ports.State, args map[string]any) (*handler.PromptRenderResult, error) {
 	promptHandler, ok := h.handler.(handler.PromptCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("prompt handler unavailable")
@@ -307,7 +307,7 @@ func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc des
 }
 
 // Execute authorizes the wrapped tool before delegating to the original implementation.
-func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	desc := descriptor.ToolDescriptor(ctx, t.Tool)
 	approvalBinding := capresult.ApprovalBindingFromCapability(desc, nil, args)
 	approvalMetadata := map[string]string(nil)
@@ -315,17 +315,17 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
 	stateSnapshot := t.runtimeState()
-	if err := ValidateAndCoerce(args, desc.InputSchema, t.Tool.Parameters()); err != nil {
-		return nil, fmt.Errorf("tool %s blocked: input schema invalid: %w", t.Tool.Name(), err)
+	if err := ValidateAndCoerce(args, desc.InputSchema, t.Parameters()); err != nil {
+		return nil, fmt.Errorf("tool %s blocked: input schema invalid: %w", t.Name(), err)
 	}
 	if err := enforceDescriptorExecutionPolicies(ctx, desc, stateSnapshot, approvalMetadata); err != nil {
-		return nil, normalizeToolExecutionPolicyError(t.Tool.Name(), err)
+		return nil, normalizeToolExecutionPolicyError(t.Name(), err)
 	}
 	if stateSnapshot.manager != nil {
 		if err := stateSnapshot.manager.AuthorizeTool(ctx, stateSnapshot.agentID, t.Tool, args); err != nil {
 			var denied *permissions.PermissionDeniedError
 			if errors.As(err, &denied) {
-				return nil, fmt.Errorf("tool %s blocked: %w", t.Tool.Name(), err)
+				return nil, fmt.Errorf("tool %s blocked: %w", t.Name(), err)
 			}
 			return nil, err
 		}
@@ -338,8 +338,8 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 	traceCtx, _ := fwtelemetry.TraceContextFromContext(ctx)
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
-		meta := map[string]interface{}{
-			"tool":       t.Tool.Name(),
+		meta := map[string]any{
+			"tool":       t.Name(),
 			"agent_id":   stateSnapshot.agentID,
 			"args":       summarizeArgs(args),
 			"span_attrs": spanAttrs,
@@ -351,7 +351,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
 			Type:      fwtelemetry.EventToolCall,
 			Timestamp: time.Now().UTC(),
-			Message:   fmt.Sprintf("tool %s invoked", t.Tool.Name()),
+			Message:   fmt.Sprintf("tool %s invoked", t.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
 		})
 	}
@@ -359,7 +359,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 	result, err := t.Tool.Execute(ctx, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
 		if schemaErr := ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
-			err = fmt.Errorf("tool %s blocked: output schema invalid: %w", t.Tool.Name(), schemaErr)
+			err = fmt.Errorf("tool %s blocked: output schema invalid: %w", t.Name(), schemaErr)
 			result.Success = false
 			result.Error = err.Error()
 		}
@@ -377,7 +377,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 	}
 	if result != nil {
 		if result.Metadata == nil {
-			result.Metadata = map[string]interface{}{}
+			result.Metadata = map[string]any{}
 		}
 		result.Metadata["capability_descriptor"] = desc
 		if approvalBinding != nil {
@@ -388,13 +388,13 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 	if err != nil {
 		var denied *permissions.PermissionDeniedError
 		if errors.As(err, &denied) {
-			err = fmt.Errorf("tool %s blocked: %w", t.Tool.Name(), err)
+			err = fmt.Errorf("tool %s blocked: %w", t.Name(), err)
 		}
 	}
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
-		metadata := map[string]interface{}{
-			"tool":       t.Tool.Name(),
+		metadata := map[string]any{
+			"tool":       t.Name(),
 			"agent_id":   stateSnapshot.agentID,
 			"span_attrs": spanAttrs,
 		}
@@ -418,7 +418,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interfac
 		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
 			Type:      fwtelemetry.EventToolResult,
 			Timestamp: time.Now().UTC(),
-			Message:   fmt.Sprintf("tool %s completed", t.Tool.Name()),
+			Message:   fmt.Sprintf("tool %s completed", t.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, metadata),
 		})
 	}
@@ -432,7 +432,7 @@ func normalizeToolExecutionPolicyError(name string, err error) error {
 	return fmt.Errorf("tool %s blocked: %s", name, strings.TrimPrefix(err.Error(), "capability tool:"+name+" blocked: "))
 }
 
-func redactTelemetryMetadata(controller *runtime.RuntimeSafetyController, metadata map[string]interface{}) map[string]interface{} {
+func redactTelemetryMetadata(controller *runtime.RuntimeSafetyController, metadata map[string]any) map[string]any {
 	if metadata == nil {
 		return nil
 	}
@@ -449,7 +449,7 @@ func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, 
 	if telemetry == nil || desc.ID == "" {
 		return
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"security_event": event,
 		"capability_id":  desc.ID,
 		"capability":     desc.Name,
@@ -497,7 +497,7 @@ func (h legacyToolHandler) Descriptor(ctx context.Context, env ports.State) desc
 	return descriptor.ToolDescriptor(ctx, unwrapTool(h.tool))
 }
 
-func (h legacyToolHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h legacyToolHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	if h.tool == nil {
 		return nil, fmt.Errorf("tool handler unavailable")
 	}
@@ -514,7 +514,7 @@ func (h legacyToolHandler) Availability(ctx context.Context, env ports.State) de
 	return descriptor.AvailabilitySpec{Available: true}
 }
 
-func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, args map[string]interface{}) {
+func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, args map[string]any) {
 	if telemetry == nil {
 		return
 	}
@@ -522,7 +522,7 @@ func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc des
 		Type:      fwtelemetry.EventCapabilityCall,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
-		Metadata: redactTelemetryMetadata(nil, map[string]interface{}{
+		Metadata: redactTelemetryMetadata(nil, map[string]any{
 			"capability_id":  desc.ID,
 			"capability":     desc.Name,
 			"kind":           string(desc.Kind),
@@ -537,7 +537,7 @@ func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descrip
 	if telemetry == nil {
 		return
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"capability_id":  desc.ID,
 		"capability":     desc.Name,
 		"kind":           string(desc.Kind),
@@ -566,7 +566,7 @@ func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc d
 	if telemetry == nil {
 		return
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"capability_id":  desc.ID,
 		"capability":     desc.Name,
 		"kind":           string(desc.Kind),
@@ -592,7 +592,7 @@ func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc
 	if telemetry == nil {
 		return
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"capability_id":  desc.ID,
 		"capability":     desc.Name,
 		"kind":           string(desc.Kind),
@@ -614,7 +614,7 @@ func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc
 	})
 }
 
-func summarizeArgs(args map[string]interface{}) interface{} {
+func summarizeArgs(args map[string]any) any {
 	if len(args) == 0 {
 		return nil
 	}
@@ -623,8 +623,8 @@ func summarizeArgs(args map[string]interface{}) interface{} {
 
 // buildSpanAttrs extracts span-compatible attributes from the capability
 // descriptor and the tool implementation.
-func buildSpanAttrs(desc descriptor.CapabilityDescriptor, tool ports.Tool) map[string]interface{} {
-	attrs := map[string]interface{}{
+func buildSpanAttrs(desc descriptor.CapabilityDescriptor, tool ports.Tool) map[string]any {
+	attrs := map[string]any{
 		"tool.name":   tool.Name(),
 		"tool.family": tool.Category(),
 	}

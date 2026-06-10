@@ -17,11 +17,11 @@ func (t scopedRewooTool) Name() string                      { return t.name }
 func (t scopedRewooTool) Description() string               { return t.name }
 func (t scopedRewooTool) Category() string                  { return "test" }
 func (t scopedRewooTool) Parameters() []ports.ToolParameter { return nil }
-func (t scopedRewooTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t scopedRewooTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"name": t.name,
 			"args": args,
 		},

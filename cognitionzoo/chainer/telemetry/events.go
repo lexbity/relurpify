@@ -82,7 +82,7 @@ func LinkFinishEvent(taskID, linkName string, stepIndex int, outputKey, response
 		LinkName:     linkName,
 		ChainStep:    stepIndex,
 		OutputKey:    outputKey,
-		ResponseText: truncateResponse(response, 500),
+		ResponseText: truncate(response, 500),
 	}
 }
 
@@ -107,7 +107,7 @@ func ParsingFailureEvent(taskID, linkName string, stepIndex int, response, errMs
 		TaskID:       taskID,
 		LinkName:     linkName,
 		ChainStep:    stepIndex,
-		ResponseText: truncateResponse(response, 500),
+		ResponseText: truncate(response, 500),
 		ErrorMessage: errMsg,
 	}
 }
@@ -148,10 +148,13 @@ func ResumeEvent(taskID string, resumedFromStepIndex int) *ChainerEvent {
 	}
 }
 
-// Helper: truncate long responses to max length
-func truncateResponse(text string, maxLen int) string {
-	if len(text) <= maxLen {
+func truncate(text string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxLen {
 		return text
 	}
-	return text[:maxLen] + "..."
+	return string(runes[:maxLen]) + "…"
 }

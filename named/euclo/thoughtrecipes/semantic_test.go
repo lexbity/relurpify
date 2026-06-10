@@ -22,7 +22,7 @@ func (t semanticTestTool) Name() string                      { return t.name }
 func (t semanticTestTool) Description() string               { return t.name }
 func (t semanticTestTool) Category() string                  { return "test" }
 func (t semanticTestTool) Parameters() []ports.ToolParameter { return nil }
-func (t semanticTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t semanticTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 func (t semanticTestTool) IsAvailable(ctx context.Context) bool { return t.available }

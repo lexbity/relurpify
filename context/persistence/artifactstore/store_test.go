@@ -75,7 +75,7 @@ func TestLargeStreaming(t *testing.T) {
 
 	read, err := io.ReadAll(rc)
 	require.NoError(t, err)
-	require.Equal(t, size, len(read))
+	require.Len(t, read, size)
 	require.Equal(t, int64(size), meta.Size)
 }
 
@@ -193,7 +193,7 @@ func TestScanOnBoot(t *testing.T) {
 	defer store2.Close()
 
 	// Verify that the total size and session sizes are parsed on boot.
-	require.Greater(t, store2.TotalBytes(), int64(0))
+	require.Positive(t, store2.TotalBytes())
 	require.Contains(t, store2.sessions, "session-1")
 	require.Contains(t, store2.sessions, "session-2")
 	require.Greater(t, store2.sessions["session-1"].Size, int64(5))

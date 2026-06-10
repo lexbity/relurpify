@@ -11,6 +11,6 @@ import "context"
 // and accessed via type assertion where needed (e.g., registry.UsePermissionManager).
 type PermissionManager interface {
 	CheckFileAccess(context.Context, string, FileSystemAction, string) error
-	SetEventLogger(func(context.Context, PermissionDescriptor, string, string, map[string]interface{}))
+	SetEventLogger(func(context.Context, PermissionDescriptor, string, string, map[string]any))
 	DefaultPolicy() string
 }

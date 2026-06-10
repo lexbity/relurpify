@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/safety"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -182,21 +182,21 @@ type CapabilityExposurePolicy struct {
 
 // CapabilitySelector matches capabilities by identity and explicit metadata instead of raw tool tags.
 type CapabilitySelector struct {
-	ID                          string                      `yaml:"id,omitempty" json:"id,omitempty"`
-	Name                        string                      `yaml:"name,omitempty" json:"name,omitempty"`
-	Kind                        CapabilityKind              `yaml:"kind,omitempty" json:"kind,omitempty"`
-	RuntimeFamilies             []CapabilityRuntimeFamily   `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
-	Tags                        []string                    `yaml:"tags,omitempty" json:"tags,omitempty"`
-	ExcludeTags                 []string                    `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
-	SourceScopes                []classification.CapabilityScope  `yaml:"source_scopes,omitempty" json:"source_scopes,omitempty"`
-	TrustClasses                []TrustClass                `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
-	RiskClasses                 []risk.RiskClass        `yaml:"risk_classes,omitempty" json:"risk_classes,omitempty"`
-	EffectClasses               []classification.EffectClass      `yaml:"effect_classes,omitempty" json:"effect_classes,omitempty"`
-	CoordinationRoles           []CoordinationRole          `yaml:"coordination_roles,omitempty" json:"coordination_roles,omitempty"`
-	CoordinationTaskTypes       []string                    `yaml:"coordination_task_types,omitempty" json:"coordination_task_types,omitempty"`
-	CoordinationExecutionModes  []CoordinationExecutionMode `yaml:"coordination_execution_modes,omitempty" json:"coordination_execution_modes,omitempty"`
-	CoordinationLongRunning     EnabledState                `yaml:"coordination_long_running,omitempty" json:"coordination_long_running,omitempty"`
-	CoordinationDirectInsertion EnabledState                `yaml:"coordination_direct_insertion,omitempty" json:"coordination_direct_insertion,omitempty"`
+	ID                          string                           `yaml:"id,omitempty" json:"id,omitempty"`
+	Name                        string                           `yaml:"name,omitempty" json:"name,omitempty"`
+	Kind                        CapabilityKind                   `yaml:"kind,omitempty" json:"kind,omitempty"`
+	RuntimeFamilies             []CapabilityRuntimeFamily        `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
+	Tags                        []string                         `yaml:"tags,omitempty" json:"tags,omitempty"`
+	ExcludeTags                 []string                         `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
+	SourceScopes                []classification.CapabilityScope `yaml:"source_scopes,omitempty" json:"source_scopes,omitempty"`
+	TrustClasses                []TrustClass                     `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
+	RiskClasses                 []risk.RiskClass                 `yaml:"risk_classes,omitempty" json:"risk_classes,omitempty"`
+	EffectClasses               []classification.EffectClass     `yaml:"effect_classes,omitempty" json:"effect_classes,omitempty"`
+	CoordinationRoles           []CoordinationRole               `yaml:"coordination_roles,omitempty" json:"coordination_roles,omitempty"`
+	CoordinationTaskTypes       []string                         `yaml:"coordination_task_types,omitempty" json:"coordination_task_types,omitempty"`
+	CoordinationExecutionModes  []CoordinationExecutionMode      `yaml:"coordination_execution_modes,omitempty" json:"coordination_execution_modes,omitempty"`
+	CoordinationLongRunning     EnabledState                     `yaml:"coordination_long_running,omitempty" json:"coordination_long_running,omitempty"`
+	CoordinationDirectInsertion EnabledState                     `yaml:"coordination_direct_insertion,omitempty" json:"coordination_direct_insertion,omitempty"`
 }
 
 // ProviderPolicy configures activation defaults and trust metadata for provider-backed capabilities.

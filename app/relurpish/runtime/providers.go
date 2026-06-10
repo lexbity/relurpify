@@ -128,7 +128,7 @@ func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider
 	r.providersMu.Lock()
 	r.providers = append(r.providers, runtimeProviderRecord{provider: provider, desc: providerDescriptor(provider)})
 	r.providersMu.Unlock()
-	r.emitProviderLifecycleEvent(providerDescriptor(provider).ID, "", "provider_admitted", "", map[string]interface{}{
+	r.emitProviderLifecycleEvent(providerDescriptor(provider).ID, "", "provider_admitted", "", map[string]any{
 		"provider_kind": string(providerDescriptor(provider).Kind),
 	})
 	return nil
@@ -234,11 +234,11 @@ func (r *Runtime) QuarantineProvider(ctx context.Context, providerID, reason str
 	}
 	record, ok := r.removeProviderRecord(providerID)
 	if !ok {
-		r.emitProviderLifecycleEvent(providerID, "", "provider_quarantined", reason, map[string]interface{}{})
+		r.emitProviderLifecycleEvent(providerID, "", "provider_quarantined", reason, map[string]any{})
 		return nil
 	}
 	err := record.provider.Close()
-	r.emitProviderLifecycleEvent(providerID, "", "provider_quarantined", reason, map[string]interface{}{
+	r.emitProviderLifecycleEvent(providerID, "", "provider_quarantined", reason, map[string]any{
 		"provider_kind": string(record.desc.Kind),
 	})
 	return err
@@ -269,7 +269,7 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 		err := managed.CloseSession(ctx, sessionID)
 		switch {
 		case err == nil:
-			r.emitProviderLifecycleEvent(record.desc.ID, sessionID, "session_revoked", reason, map[string]interface{}{
+			r.emitProviderLifecycleEvent(record.desc.ID, sessionID, "session_revoked", reason, map[string]any{
 				"provider_kind": string(record.desc.Kind),
 			})
 			return nil
@@ -325,12 +325,12 @@ func providerDescriptor(runtimeProvider RuntimeProvider) provider.ProviderDescri
 	return provider.ProviderDescriptor{}
 }
 
-func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]interface{}) {
+func (r *Runtime) emitProviderLifecycleEvent(providerID, sessionID, event, reason string, metadata map[string]any) {
 	if r == nil || r.AgentWorkspace().Telemetry == nil {
 		return
 	}
 	if metadata == nil {
-		metadata = make(map[string]interface{})
+		metadata = make(map[string]any)
 	}
 	metadata["provider_event"] = event
 	if providerID != "" {

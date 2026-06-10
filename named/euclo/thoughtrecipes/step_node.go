@@ -387,7 +387,7 @@ func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*execution
 		ID:          n.id,
 		Type:        n.step.Paradigm,
 		Instruction: instruction,
-		Data:        make(map[string]interface{}),
+		Data:        make(map[string]any),
 		Context:     data,
 		Metadata:    n.stepMetadata(),
 	}
@@ -588,8 +588,8 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 	return runtime
 }
 
-func (n *ThoughtRecipeStepNode) stepMetadata() map[string]interface{} {
-	metadata := map[string]interface{}{
+func (n *ThoughtRecipeStepNode) stepMetadata() map[string]any {
+	metadata := map[string]any{
 		"execution_step_id":   n.step.ID,
 		"execution_step_type": n.step.Type,
 		"execution_paradigm":  n.step.Paradigm,

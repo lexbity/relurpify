@@ -361,7 +361,7 @@ func enqueuePlannedActions(bb *Blackboard, result *ports.ToolResult, source stri
 	for idx, raw := range steps {
 		step, ok := raw.(map[string]any)
 		if !ok {
-			if converted, ok := raw.(map[string]interface{}); ok {
+			if converted, ok := raw.(map[string]any); ok {
 				step = make(map[string]any, len(converted))
 				for key, value := range converted {
 					step[key] = value
@@ -614,7 +614,7 @@ func addFindingsAsIssues(bb *Blackboard, result *ports.ToolResult, source string
 	for idx, raw := range findings {
 		finding, ok := raw.(map[string]any)
 		if !ok {
-			if converted, ok := raw.(map[string]interface{}); ok {
+			if converted, ok := raw.(map[string]any); ok {
 				finding = make(map[string]any, len(converted))
 				for key, value := range converted {
 					finding[key] = value

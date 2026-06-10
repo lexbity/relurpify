@@ -10,7 +10,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func verificationSummaryFromSuccess(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryFromSuccess(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -41,7 +41,7 @@ func verificationSummaryFromSuccess(agent *ReActAgent, task *execution.Task, sta
 	return "", false
 }
 
-func verificationSummaryWithoutEdits(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func verificationSummaryWithoutEdits(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if taskNeedsEditing(task) || hasFailure(lastMap) || !taskRequiresVerification(task) {
 		return "", false
 	}
@@ -65,7 +65,7 @@ func verificationSummaryWithoutEdits(agent *ReActAgent, task *execution.Task, st
 	return "", false
 }
 
-func completionSummaryFromState(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func completionSummaryFromState(agent *ReActAgent, task *execution.Task, state *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if summary, ok := verificationSummaryFromSuccess(agent, task, state, lastMap); ok {
 		return summary, true
 	}
@@ -169,7 +169,7 @@ func latestReadOnlyFileSummary(observations []ToolObservation) (string, bool) {
 	return "", false
 }
 
-func editSummaryFromSuccess(task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func editSummaryFromSuccess(task *execution.Task, state *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if !taskNeedsEditing(task) || hasFailure(lastMap) || !hasEditObservation(state) {
 		return "", false
 	}
@@ -193,7 +193,7 @@ func editSummaryFromSuccess(task *execution.Task, state *contextdata.Envelope, l
 	return "", false
 }
 
-func readOnlySummaryFromState(task *execution.Task, state *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func readOnlySummaryFromState(task *execution.Task, state *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if task == nil || taskNeedsEditing(task) || hasFailure(lastMap) {
 		return "", false
 	}

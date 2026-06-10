@@ -190,12 +190,8 @@ func ComparePerformanceBaseline(actual CaseReport, baseline *PerformanceBaseline
 		})
 	}
 	// NEW: Latency comparison (Phase 5)
-	for _, warning := range compareLatencyPerformance(actual.Name, actual.ToolLatencies, baseline.ToolLatencies) {
-		warnings = append(warnings, warning)
-	}
-	for _, warning := range compareFrameworkPerformance(actual.Name, actual.FrameworkPerf, baseline.Framework) {
-		warnings = append(warnings, warning)
-	}
+	warnings = append(warnings, compareLatencyPerformance(actual.Name, actual.ToolLatencies, baseline.ToolLatencies)...)
+	warnings = append(warnings, compareFrameworkPerformance(actual.Name, actual.FrameworkPerf, baseline.Framework)...)
 	return warnings
 }
 

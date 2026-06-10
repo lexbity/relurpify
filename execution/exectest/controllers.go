@@ -79,7 +79,7 @@ func (c *FakeCapabilityController) Invoke(ctx context.Context, req session.Capab
 	if c.InvokeFunc != nil {
 		return c.InvokeFunc(ctx, req)
 	}
-	return session.CapabilityInvokeResult{Output: map[string]interface{}{"result": "ok"}}, nil
+	return session.CapabilityInvokeResult{Output: map[string]any{"result": "ok"}}, nil
 }
 
 var _ session.CapabilityController = (*FakeCapabilityController)(nil)

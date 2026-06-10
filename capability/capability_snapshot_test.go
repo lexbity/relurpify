@@ -22,7 +22,7 @@ func (t *availabilityToggleTool) Name() string                      { return t.n
 func (t *availabilityToggleTool) Description() string               { return t.name }
 func (t *availabilityToggleTool) Category() string                  { return "test" }
 func (t *availabilityToggleTool) Parameters() []ports.ToolParameter { return nil }
-func (t *availabilityToggleTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *availabilityToggleTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = args
 	return &ports.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil

@@ -227,7 +227,7 @@ func rootHandleHelp(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	var b strings.Builder
 	b.WriteString("Available commands:\n\n")
 	for _, cmd := range rootCommandRegistry.All() {
-		b.WriteString(fmt.Sprintf("  %s - %s\n", cmd.Usage, cmd.Description))
+		fmt.Fprintf(&b, "  %s - %s\n", cmd.Usage, cmd.Description)
 	}
 	m.addSystemMessage(b.String())
 	return m, nil
@@ -475,9 +475,9 @@ func rootHandleContext(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	var b strings.Builder
 	b.WriteString("Files in context:\n\n")
 	for _, f := range m.sharedCtx.Files {
-		b.WriteString(fmt.Sprintf("  • %s\n", f))
+		fmt.Fprintf(&b, "  • %s\n", f)
 	}
-	b.WriteString(fmt.Sprintf("\nTokens: %d / %d", m.sharedCtx.UsedTokens, m.sharedCtx.MaxTokens))
+	fmt.Fprintf(&b, "\nTokens: %d / %d", m.sharedCtx.UsedTokens, m.sharedCtx.MaxTokens)
 	m.addSystemMessage(b.String())
 	return m, nil
 }
@@ -562,7 +562,7 @@ func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			if c.Expanded {
 				state = "expanded"
 			}
-			b.WriteString(fmt.Sprintf("  %d) %s (%s)\n", i+1, c.Path, state))
+			fmt.Fprintf(&b, "  %d) %s (%s)\n", i+1, c.Path, state)
 		}
 		m.addSystemMessage(b.String())
 		return m, nil
@@ -592,7 +592,7 @@ func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		var b strings.Builder
 		b.WriteString("Multiple diffs matched:\n\n")
 		for _, i := range matches {
-			b.WriteString(fmt.Sprintf("  %d) %s\n", i+1, changes[i].Path))
+			fmt.Fprintf(&b, "  %d) %s\n", i+1, changes[i].Path)
 		}
 		m.addSystemMessage(b.String())
 	} else {
@@ -646,7 +646,7 @@ func rootHandleHITL(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	var b strings.Builder
 	b.WriteString("Pending approvals:\n")
 	for _, req := range pending {
-		b.WriteString(fmt.Sprintf(" - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification))
+		fmt.Fprintf(&b, " - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification)
 	}
 	m.addSystemMessage(b.String())
 	return m, nil
@@ -765,12 +765,12 @@ func rootHandleWorkflows(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	var b strings.Builder
 	b.WriteString("Persisted workflows:\n")
 	for _, workflow := range workflows {
-		b.WriteString(fmt.Sprintf(" - %s status=%s", workflow.WorkflowID, workflow.Status))
+		fmt.Fprintf(&b, " - %s status=%s", workflow.WorkflowID, workflow.Status)
 		if workflow.CursorStepID != "" {
-			b.WriteString(fmt.Sprintf(" cursor=%s", workflow.CursorStepID))
+			fmt.Fprintf(&b, " cursor=%s", workflow.CursorStepID)
 		}
 		if !workflow.UpdatedAt.IsZero() {
-			b.WriteString(fmt.Sprintf(" updated=%s", workflow.UpdatedAt.Format("2006-01-02 15:04:05")))
+			fmt.Fprintf(&b, " updated=%s", workflow.UpdatedAt.Format("2006-01-02 15:04:05"))
 		}
 		b.WriteByte('\n')
 	}
@@ -793,22 +793,22 @@ func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Workflow %s\n", details.Workflow.WorkflowID))
-	b.WriteString(fmt.Sprintf("Status: %s\n", details.Workflow.Status))
+	fmt.Fprintf(&b, "Workflow %s\n", details.Workflow.WorkflowID)
+	fmt.Fprintf(&b, "Status: %s\n", details.Workflow.Status)
 	if details.Workflow.CursorStepID != "" {
-		b.WriteString(fmt.Sprintf("Cursor: %s\n", details.Workflow.CursorStepID))
+		fmt.Fprintf(&b, "Cursor: %s\n", details.Workflow.CursorStepID)
 	}
-	b.WriteString(fmt.Sprintf("Instruction: %s\n", details.Workflow.Instruction))
+	fmt.Fprintf(&b, "Instruction: %s\n", details.Workflow.Instruction)
 	if len(details.Steps) > 0 {
 		b.WriteString("\nSteps:\n")
 		for _, step := range details.Steps {
-			b.WriteString(fmt.Sprintf(" - %s status=%s: %s\n", step.StepID, step.Status, step.Description))
+			fmt.Fprintf(&b, " - %s status=%s: %s\n", step.StepID, step.Status, step.Description)
 		}
 	}
 	if len(details.Events) > 0 {
 		b.WriteString("\nRecent events:\n")
 		for _, event := range details.Events {
-			b.WriteString(fmt.Sprintf(" - %s step=%s %s\n", event.EventType, event.StepID, event.Message))
+			fmt.Fprintf(&b, " - %s step=%s %s\n", event.EventType, event.StepID, event.Message)
 		}
 	}
 	if len(details.Delegations) > 0 {
@@ -818,12 +818,12 @@ func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			if target == "" {
 				target = delegation.TargetProviderID
 			}
-			b.WriteString(fmt.Sprintf(" - %s state=%s target=%s", delegation.DelegationID, delegation.State, target))
+			fmt.Fprintf(&b, " - %s state=%s target=%s", delegation.DelegationID, delegation.State, target)
 			if delegation.TargetSessionID != "" {
-				b.WriteString(fmt.Sprintf(" session=%s", delegation.TargetSessionID))
+				fmt.Fprintf(&b, " session=%s", delegation.TargetSessionID)
 			}
 			if delegation.InsertionAction != "" {
-				b.WriteString(fmt.Sprintf(" insertion=%s", delegation.InsertionAction))
+				fmt.Fprintf(&b, " insertion=%s", delegation.InsertionAction)
 			}
 			b.WriteByte('\n')
 		}
@@ -831,7 +831,7 @@ func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if len(details.LinkedResources) > 0 {
 		b.WriteString("\nLinked resources:\n")
 		for _, ref := range details.LinkedResources {
-			b.WriteString(fmt.Sprintf(" - %s\n", ref))
+			fmt.Fprintf(&b, " - %s\n", ref)
 		}
 	}
 	m.addSystemMessage(b.String())
@@ -932,7 +932,7 @@ func pendingHITLSummaryCmd(svc HITLServiceIface) tea.Cmd {
 		var b strings.Builder
 		b.WriteString("Pending approvals:\n")
 		for _, req := range pending {
-			b.WriteString(fmt.Sprintf(" - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification))
+			fmt.Fprintf(&b, " - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification)
 		}
 		return chatSystemMsg{Text: b.String()}
 	}

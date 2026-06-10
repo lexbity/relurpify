@@ -76,7 +76,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			EndLine:   idx + 1,
 			CreatedAt: now,
 			UpdatedAt: now,
-			Attributes: map[string]interface{}{
+			Attributes: map[string]any{
 				"level": level,
 			},
 		}
@@ -101,7 +101,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			Name:      fmt.Sprintf("Code Block %d", i+1),
 			CreatedAt: now,
 			UpdatedAt: now,
-			Attributes: map[string]interface{}{
+			Attributes: map[string]any{
 				"language": lang,
 				"content":  body,
 			},
@@ -124,7 +124,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			Name:      link[1],
 			CreatedAt: now,
 			UpdatedAt: now,
-			Attributes: map[string]interface{}{
+			Attributes: map[string]any{
 				"url": link[2],
 			},
 		}

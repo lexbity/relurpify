@@ -107,7 +107,7 @@ func TestExitCodeSurfaced(t *testing.T) {
 	// The exit code is now surfaced via CommandResult.ExitCode and propagated
 	// to ToolResult.Data["exit_code"]. This test uses the contracts-level
 	// helpers to verify the field exists and round-trips correctly.
-	if _, ok := interface{}(ports.CommandResult{}).(struct{ ExitCode int }); ok {
+	if _, ok := any(ports.CommandResult{}).(struct{ ExitCode int }); ok {
 		// Compile-time check passes — ExitCode field exists.
 	}
 }

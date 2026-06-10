@@ -202,7 +202,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"query": "TestFunction",
 	}
 
@@ -215,7 +215,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 		t.Errorf("result.Success = false, want true")
 	}
 
-	matches, ok := result.Data["matches"].([]map[string]interface{})
+	matches, ok := result.Data["matches"].([]map[string]any)
 	if !ok {
 		t.Fatal("result.Data[\"matches\"] is not a []map[string]interface{}")
 	}
@@ -232,7 +232,7 @@ func TestASTQueryHandlerEmptyQueryErrors(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"query": "",
 	}
 
@@ -277,7 +277,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"query": "TestFunction",
 		"limit": 20,
 	}
@@ -291,7 +291,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 		t.Errorf("result.Success = false, want true")
 	}
 
-	matches, ok := result.Data["matches"].([]map[string]interface{})
+	matches, ok := result.Data["matches"].([]map[string]any)
 	if !ok {
 		t.Fatal("result.Data[\"matches\"] is not a []map[string]interface{}")
 	}
@@ -322,7 +322,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"query": "TestFunction",
 	}
 
@@ -386,7 +386,7 @@ func TestSymbolTraceHandlerCallees(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"symbol": "MainFunction",
 	}
 
@@ -411,7 +411,7 @@ func TestSymbolTraceHandlerSymbolNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"symbol": "NonExistentFunction",
 	}
 
@@ -494,7 +494,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"entry_point": "MainFunction",
 	}
 
@@ -507,7 +507,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 		t.Errorf("result.Success = false, want true")
 	}
 
-	nodesOut, ok := result.Data["nodes"].([]map[string]interface{})
+	nodesOut, ok := result.Data["nodes"].([]map[string]any)
 	if !ok {
 		t.Fatal("result.Data[\"nodes\"] is not a []map[string]interface{}")
 	}
@@ -524,7 +524,7 @@ func TestCallGraphHandlerEntryPointNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"entry_point": "NonExistentFunction",
 	}
 
@@ -568,7 +568,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"entry_point": "MainFunction",
 	}
 
@@ -624,7 +624,7 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file": "test.go",
 	}
 
@@ -637,7 +637,7 @@ func TestBlameTraceHandlerParsesOutput(t *testing.T) {
 		t.Errorf("result.Success = false, want true")
 	}
 
-	entries, ok := result.Data["entries"].([]map[string]interface{})
+	entries, ok := result.Data["entries"].([]map[string]any)
 	if !ok {
 		t.Fatal("result.Data[\"entries\"] is not a []map[string]interface{}")
 	}
@@ -667,9 +667,9 @@ func TestBlameTraceHandlerLineRange(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file":  "test.go",
-		"lines": []interface{}{10, 20},
+		"lines": []any{10, 20},
 	}
 
 	_, err := handler.Invoke(ctx, envelope.State(), args)
@@ -699,7 +699,7 @@ func TestBlameTraceHandlerCommandDenied(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file": "test.go",
 	}
 
@@ -756,7 +756,7 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"file":   "test.go",
 		"symbol": "TestFunction",
 	}
@@ -809,7 +809,7 @@ func TestBisectHandlerMissingArgs(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		// Missing good_ref
 		"bad_ref":      "bad123",
 		"test_command": "go test ./...",
@@ -854,7 +854,7 @@ func TestBisectHandlerStepLimit(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"good_ref":     "good123",
 		"bad_ref":      "bad123",
 		"test_command": "go test ./...",
@@ -897,7 +897,7 @@ func TestBisectHandlerCulpritExtracted(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"good_ref":     "good123",
 		"bad_ref":      "bad123",
 		"test_command": "go test ./...",
@@ -948,7 +948,7 @@ func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"focus": "all",
 	}
 
@@ -961,7 +961,7 @@ func TestCodeReviewHandlerNoContextReturnsEmpty(t *testing.T) {
 		t.Errorf("result.Success = false, want true")
 	}
 
-	findings, ok := result.Data["findings"].([]interface{})
+	findings, ok := result.Data["findings"].([]any)
 	if !ok {
 		t.Fatal("result.Data[\"findings\"] is not a []interface{}")
 	}
@@ -1020,7 +1020,7 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"base_ref": "HEAD~1",
 		"head_ref": "HEAD",
 	}
@@ -1072,7 +1072,7 @@ func TestLayerCheckHandlerCleanWorkspace(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"layer": "all",
 	}
 
@@ -1093,7 +1093,7 @@ func TestLayerCheckHandlerCleanWorkspace(t *testing.T) {
 		t.Errorf("passed = false, want true for clean workspace")
 	}
 
-	violations, ok := result.Data["violations"].([]interface{})
+	violations, ok := result.Data["violations"].([]any)
 	if !ok {
 		t.Fatal("result.Data[\"violations\"] is not a []interface{}")
 	}
@@ -1110,7 +1110,7 @@ func TestLayerCheckHandlerLayerFilter(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"layer": "framework",
 	}
 

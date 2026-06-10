@@ -9,9 +9,9 @@ import (
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	ports "codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -56,7 +56,7 @@ func (r *DelegationRegistry) CoordinationTargets(selectors ...governanceports.Ca
 	return out
 }
 
-func (r *DelegationRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (any, error) {
+func (r *DelegationRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (any, error) {
 	if r.inner == nil {
 		return nil, nil
 	}

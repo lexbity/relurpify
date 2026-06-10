@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
@@ -96,7 +96,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descri
 }
 
 // Invoke executes the test command and returns parsed results.
-func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	// Extract arguments
 	command, ok := stringArg(args, "command")
 	if !ok {
@@ -133,7 +133,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[s
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success":      false,
 				"passed":       false,
 				"exit_code":    -1,
@@ -159,7 +159,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[s
 
 	return &ports.ToolResult{
 		Success: res.ExitCode == 0,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":      res.ExitCode == 0,
 			"passed":       passed,
 			"exit_code":    res.ExitCode,

@@ -1,5 +1,4 @@
-# Phase 1 (updated P3): 9 known domain-direction violations (the "wrong-direction" edges from §1.1 cycles).
-# Phase 3 retired the capability↔model edge (model→capability removed).
+# Phase 1: 1 remaining domain-direction violation (P15 retired in Slice 8).
 # Each exception lists the importing domain (src_domain), the imported domain (dst_domain),
 # and the phase that retires it. In warn mode these are suppressed; enforce mode reports them.
 # Domains not listed: testsuite, tooling (unrestricted).
@@ -10,28 +9,4 @@ direction_violations:
   - src_domain: context
     dst_domain: execution
     phase: P11
-  # 2. platform ↔ capability — minority: capability→platform
-  - src_domain: capability
-    dst_domain: platform
-    phase: P7
-  # 3. execution ↔ capability — minority: capability→execution
-  - src_domain: capability
-    dst_domain: execution
-    phase: P12
-  # 5. platform ↔ governance — minority: governance→platform
-  - src_domain: governance
-    dst_domain: platform
-    phase: P8
-  # 6. context ↔ capability — minority: capability→context
-  - src_domain: capability
-    dst_domain: context
-    phase: P10
-  # 7. context ↔ governance — minority: governance→context
-  - src_domain: governance
-    dst_domain: context
-    phase: P13
-  # 9. governance ↔ userconfig — minority: userconfig→governance
-  - src_domain: userconfig
-    dst_domain: governance
-    phase: P15
 

@@ -11,10 +11,24 @@ import (
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
+// toolAdapter wraps ports.Tool to satisfy authorization.Tool inline; the
+// exported adapter function was retired from governance in Slice 6.
+type toolAdapter struct {
+	inner ports.Tool
+}
+
+func (a *toolAdapter) Name() string   { return a.inner.Name() }
+func (a *toolAdapter) Tags() []string { return a.inner.Tags() }
+func (a *toolAdapter) Permissions() ToolPermissions {
+	return ToolPermissions{
+		Permissions: a.inner.Permissions().Permissions,
+	}
+}
+
 // AuthorizeTool ensures the tool requirements fit the declared permissions.
 // Undeclared permissions are handled according to the configured defaultPolicy:
 // Ask (default) routes to HITL, Allow proceeds, Deny returns an error.
-func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]interface{}) error {
+func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]any) error {
 	if m == nil || tool == nil {
 		return errors.New("permission manager or tool missing")
 	}
@@ -24,7 +38,7 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 		if !ok2 {
 			return errors.New("tool does not implement authorization.Tool or ports.Tool")
 		}
-		t = ToolFromPorts(pt)
+		t = &toolAdapter{inner: pt}
 	}
 	if m.toolAllowedByTaskGrant(ctx, t) {
 		desc := permissions.PermissionDescriptor{
@@ -32,8 +46,8 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 			Action:   fmt.Sprintf("tool:%s", t.Name()),
 			Resource: agentID,
 		}
-		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]interface{}{"tags": t.Tags()})
-		m.emitPolicyDecision(ctx, desc, "allow", "task grant matched tool tags", map[string]interface{}{"tags": t.Tags()})
+		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
+		m.emitPolicyDecision(ctx, desc, "allow", "task grant matched tool tags", map[string]any{"tags": t.Tags()})
 		return nil
 	}
 	requirements := t.Permissions()
@@ -48,7 +62,7 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 				Type:     permissions.PermissionTypeHITL,
 				Action:   fmt.Sprintf("tool:%s", t.Name()),
 				Resource: agentID,
-			}, "deny", "tool exceeds declared permissions", map[string]interface{}{"undeclared": undeclared})
+			}, "deny", "tool exceeds declared permissions", map[string]any{"undeclared": undeclared})
 			return fmt.Errorf("tool %s exceeds agent permissions: %s", t.Name(), strings.Join(undeclared, "; "))
 		default: // "ask"
 			m.emitPolicyDecision(ctx, permissions.PermissionDescriptor{
@@ -56,7 +70,7 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 				Action:       fmt.Sprintf("tool:%s", t.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
-			}, "require_approval", "undeclared permissions require approval", map[string]interface{}{"undeclared": undeclared})
+			}, "require_approval", "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
 			if err := m.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", t.Name()),

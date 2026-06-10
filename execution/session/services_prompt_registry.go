@@ -63,7 +63,7 @@ func (a promptTelemetryAdapter) EmitPromptResolved(e prompt.ResolvedEvent) {
 		Type:    telemetry.EventType("prompt.resolved"),
 		TaskID:  e.ID,
 		Message: fmt.Sprintf("prompt %s resolved: %d chars, %d blocks", e.ID, e.OutputLength, e.BlocksIncluded),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"paradigm":        e.Paradigm,
 			"blocks_included": e.BlocksIncluded,
 			"blocks_excluded": e.BlocksExcluded,
@@ -82,7 +82,7 @@ func (a promptTelemetryAdapter) EmitPromptResolveFailed(e prompt.ResolveFailedEv
 		Type:    telemetry.EventType("prompt.resolve_failed"),
 		TaskID:  e.ID,
 		Message: fmt.Sprintf("prompt %s resolve failed: %s", e.ID, e.Error),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"paradigm":    e.Paradigm,
 			"error":       e.Error,
 			"duration_ms": e.DurationMs,
@@ -98,7 +98,7 @@ func (a promptTelemetryAdapter) EmitPromptContextMissing(e prompt.ContextMissing
 		Type:    telemetry.EventType("prompt.context_missing"),
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s: %s", e.PromptID, e.BlockID, e.Message),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"block_id": e.BlockID,
 			"key":      e.Key,
 		},
@@ -113,7 +113,7 @@ func (a promptTelemetryAdapter) EmitPromptValidationIssue(e prompt.ValidationIss
 		Type:    telemetry.EventType("prompt.validation_issue"),
 		TaskID:  e.Issue.PromptID,
 		Message: e.Issue.Error(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"severity": e.Issue.Severity.String(),
 			"block_id": e.Issue.BlockID,
 		},
@@ -128,7 +128,7 @@ func (a promptTelemetryAdapter) EmitPromptProviderFailed(e prompt.ProviderFailed
 		Type:    telemetry.EventType("prompt.provider_failed"),
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s provider %s failed: %s", e.PromptID, e.BlockID, e.ProviderName, e.Error),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"block_id":      e.BlockID,
 			"provider_name": e.ProviderName,
 			"error":         e.Error,

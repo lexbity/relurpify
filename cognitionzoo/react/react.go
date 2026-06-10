@@ -83,7 +83,7 @@ func (a *ReActAgent) Execute(ctx context.Context, task *execution.Task, env *con
 }
 
 // debugf is a helper for debug logging when telemetry is available.
-func (a *ReActAgent) debugf(format string, args ...interface{}) {
+func (a *ReActAgent) debugf(format string, args ...any) {
 	_ = format
 	_ = args
 }

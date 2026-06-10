@@ -17,7 +17,7 @@ type ExceptionsFile struct {
 
 func main() {
 	mode := flag.String("mode", "warn", "enforcement mode: warn or enforce")
-	check := flag.String("check", "all", "check to run: all, direction, cycles, nobucket, governance-orch, classification, principal, context-ports")
+	check := flag.String("check", "all", "check to run: all, direction, cycles, nobucket, governance-orch, principal, context-ports")
 	flag.Parse()
 
 	root, _ := os.Getwd()
@@ -83,22 +83,6 @@ func main() {
 			hadFailure = true
 		}
 		exitResults = append(exitResults, arch.Result{Name: "context-ports", Violations: vios})
-	}
-
-	if *check == "all" || *check == "classification" {
-		vios := arch.CheckClassificationOwnership(pkgs)
-		fmt.Print(arch.Report("classification-ownership", vios))
-		if len(vios) > 0 {
-			hadFailure = true
-		}
-		exitResults = append(exitResults, arch.Result{Name: "classification-ownership", Violations: vios})
-
-		vios2 := arch.CheckGovernanceRiskImports(pkgs)
-		fmt.Print(arch.Report("governance-risk-imports", vios2))
-		if len(vios2) > 0 {
-			hadFailure = true
-		}
-		exitResults = append(exitResults, arch.Result{Name: "governance-risk-imports", Violations: vios2})
 	}
 
 	if !hadFailure {

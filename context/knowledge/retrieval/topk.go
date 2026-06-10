@@ -33,10 +33,10 @@ type recencyItem struct {
 	updatedAt int64
 }
 
-func (h recencyMinHeap) Len() int            { return len(h) }
-func (h recencyMinHeap) Less(i, j int) bool  { return h[i].updatedAt < h[j].updatedAt }
-func (h recencyMinHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *recencyMinHeap) Push(x any)         { *h = append(*h, x.(recencyItem)) }
+func (h recencyMinHeap) Len() int           { return len(h) }
+func (h recencyMinHeap) Less(i, j int) bool { return h[i].updatedAt < h[j].updatedAt }
+func (h recencyMinHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *recencyMinHeap) Push(x any)        { *h = append(*h, x.(recencyItem)) }
 func (h *recencyMinHeap) Pop() any {
 	old := *h
 	n := len(old)

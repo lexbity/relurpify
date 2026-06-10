@@ -181,10 +181,12 @@ func testManifest() *config.AgentManifest {
 		Spec: config.ManifestSpec{
 			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
-			Permissions: permissions.PermissionSet{
-				FileSystem: []permissions.FileSystemPermission{
-					{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-					{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+			Policy: &config.ManifestPolicySpec{
+				Permissions: permissions.PermissionSet{
+					FileSystem: []permissions.FileSystemPermission{
+						{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+						{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+					},
 				},
 			},
 			Agent: &agentspec.AgentRuntimeSpec{

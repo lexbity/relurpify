@@ -16,9 +16,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
@@ -118,11 +118,11 @@ func browserInputSchema() *schemacoerce.Schema {
 	}
 }
 
-func (h *browserCapability) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *browserCapability) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	return h.Execute(ctx, contextdata.EnvelopeFromState(env), args)
 }
 
-func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelope, args map[string]any) (*ports.ToolResult, error) {
 	action := canonicalBrowserAction(fmt.Sprint(args["action"]))
 	if err := h.authorizeAction(ctx, action, env, args); err != nil {
 		return nil, err
@@ -222,7 +222,7 @@ func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelo
 		if err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID, "result": result}), nil
+		return success(map[string]any{"session_id": sessionID, "result": result}), nil
 	case browserActionScreenshot:
 		session, sessionID, err := h.service.lookupSession(env, args)
 		if err != nil {
@@ -232,7 +232,7 @@ func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelo
 		if err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{
+		return success(map[string]any{
 			"session_id": sessionID,
 			"png_base64": base64.StdEncoding.EncodeToString(data),
 			"size_bytes": len(data),
@@ -255,7 +255,7 @@ func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelo
 		if err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID, "url": currentURL}), nil
+		return success(map[string]any{"session_id": sessionID, "url": currentURL}), nil
 	case browserActionClose:
 		return h.service.close(env, args)
 	default:
@@ -263,7 +263,7 @@ func (h *browserCapability) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 }
 
-func (h *browserCapability) authorizeAction(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}) error {
+func (h *browserCapability) authorizeAction(ctx context.Context, action string, env *contextdata.Envelope, args map[string]any) error {
 	if action == "" {
 		return fmt.Errorf("browser action required")
 	}
@@ -316,7 +316,7 @@ func (h *browserCapability) authorizeAction(ctx context.Context, action string, 
 	}
 }
 
-func waitConditionFromArgs(args map[string]interface{}) platformbrowser.WaitCondition {
+func waitConditionFromArgs(args map[string]any) platformbrowser.WaitCondition {
 	switch {
 	case strings.TrimSpace(fmt.Sprint(args["selector"])) != "" && strings.TrimSpace(fmt.Sprint(args["text"])) != "":
 		return platformbrowser.WaitCondition{
@@ -339,7 +339,7 @@ func waitConditionFromArgs(args map[string]interface{}) platformbrowser.WaitCond
 	}
 }
 
-func timeoutFromArgs(args map[string]interface{}) time.Duration {
+func timeoutFromArgs(args map[string]any) time.Duration {
 	raw := strings.TrimSpace(fmt.Sprint(args["timeout_ms"]))
 	if raw == "" || raw == "<nil>" {
 		return 10 * time.Second
@@ -351,7 +351,7 @@ func timeoutFromArgs(args map[string]interface{}) time.Duration {
 	return time.Duration(value) * time.Millisecond
 }
 
-func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[string]interface{}) error {
+func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[string]any) error {
 	if s == nil || s.permissionManager == nil {
 		return fmt.Errorf("browser navigation requires permission manager")
 	}
@@ -388,7 +388,7 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 	return nil
 }
 
-func (s *BrowserService) requireActionApproval(ctx context.Context, action string, env *contextdata.Envelope, args map[string]interface{}, risk govpolicy.RiskLevel) error {
+func (s *BrowserService) requireActionApproval(ctx context.Context, action string, env *contextdata.Envelope, args map[string]any, risk govpolicy.RiskLevel) error {
 	if s == nil || s.permissionManager == nil {
 		return fmt.Errorf("browser action %s requires approval but permission manager missing", action)
 	}

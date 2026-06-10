@@ -60,7 +60,7 @@ func asDoomLoopError(err error, target **DoomLoopError) bool {
 		return false
 	}
 	var dle *DoomLoopError
-	if as, ok := err.(interface{ As(interface{}) bool }); ok {
+	if as, ok := err.(interface{ As(any) bool }); ok {
 		if as.As(&dle) {
 			*target = dle
 			return true

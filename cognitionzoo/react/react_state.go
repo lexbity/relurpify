@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -16,13 +16,13 @@ import (
 
 // ToolObservation records a single tool execution result within the ReAct loop.
 type ToolObservation struct {
-	Tool      string                 `json:"tool"`
-	Phase     string                 `json:"phase"`
-	Summary   string                 `json:"summary"`
-	Args      map[string]interface{} `json:"args,omitempty"`
-	Data      map[string]interface{} `json:"data,omitempty"`
-	Success   bool                   `json:"success"`
-	Timestamp time.Time              `json:"timestamp"`
+	Tool      string         `json:"tool"`
+	Phase     string         `json:"phase"`
+	Summary   string         `json:"summary"`
+	Args      map[string]any `json:"args,omitempty"`
+	Data      map[string]any `json:"data,omitempty"`
+	Success   bool           `json:"success"`
+	Timestamp time.Time      `json:"timestamp"`
 }
 
 func mirrorReactFinalOutputReference(env *contextdata.Envelope) {
@@ -135,14 +135,14 @@ func compactReactLastToolResultState(env *contextdata.Envelope) {
 	if !ok {
 		return
 	}
-	payload, ok := raw.(map[string]interface{})
+	payload, ok := raw.(map[string]any)
 	if !ok {
 		return
 	}
 	env.SetWorkingValueWithClass("react.last_tool_result", compactReactLastToolResult(payload), contextdata.MemoryClassTask)
 }
 
-func compactReactLastToolResult(payload map[string]interface{}) map[string]any {
+func compactReactLastToolResult(payload map[string]any) map[string]any {
 	keys := make([]string, 0, len(payload))
 	for key := range payload {
 		keys = append(keys, key)

@@ -1,15 +1,14 @@
 .PHONY: test-unit test-integ test-scenario test-all
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
-.PHONY: lint-layering lint-invariants lint-all lint-arch
+.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
 
 # Architecture invariant gates (GP-9). Replaces the shelved scripts/boundaryaudit.
 # governance-no-orch and no-bucket are now in enforce mode (Slice 7).
-# classification-ownership remains in warn mode — violations tracked in Q1.
+# classification-ownership was deleted in Slice 4 -- EffectClass/CapabilityScope live in governance/classification.
 lint-arch:
 	go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
 	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
-	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=classification; \
 	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
 	exit $$EXIT_CODE
 
@@ -31,16 +30,13 @@ no-bucket:
 governance-no-orch:
 	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch
 
-# Classification-ownership: flags capability → governance risk-vocab imports (Q1).
-classification:
-	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=classification
-
 # Exception-count gate: fails CI if exceptions.yaml gains net-new entries.
-# Current baseline: 7 direction violations (P7, P8, P10, P11, P12, P13, P15).
+# Current baseline: 1 direction violation (P11).
 # P6 and P14 were retired by Slices 1 and 3 respectively.
+# P7/P8/P10/P12 were retired by Slice 1; P13 by Slice 3; P15 by Slice 8.
 exception-count:
 	@count=$$(rg -c 'src_domain:' tooling/arch/exceptions.yaml 2>/dev/null || echo 0); \
-	baseline=7; \
+	baseline=1; \
 	if [ "$$count" -gt "$$baseline" ]; then \
 		echo "[FAIL] exception-count: exceptions.yaml has $$count entries (baseline $$baseline) — net-new exceptions require extending the spec"; \
 		exit 1; \
@@ -54,6 +50,16 @@ no-dead:
 
 
 lint-all: lint-layering lint-invariants lint-framework-boundaries lint-no-host-exec lint-config-boundary
+
+# Standard Go linters (golangci-lint, config: .golangci.yaml). Not yet gating:
+# the tree currently has a large backlog (~7.9k issues), so CI runs this with
+# continue-on-error until the high-signal buckets are driven down.
+lint-go:
+	golangci-lint run ./...
+
+# Apply all auto-fixable findings (gofmt, goimports, unconvert, many revive, etc.).
+lint-go-fix:
+	golangci-lint run --fix ./...
 
 lint-config:
 	go run ./app/relurplint --check all

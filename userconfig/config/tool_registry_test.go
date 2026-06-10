@@ -142,7 +142,7 @@ func TestGenerateSubprocessTool_ParameterSubstitution(t *testing.T) {
 	}
 	runner := &recordingRunner{}
 	tool := subprocess.NewTool(*def, runner)
-	result, err := tool.Execute(context.Background(), map[string]interface{}{"value": "hello"})
+	result, err := tool.Execute(context.Background(), map[string]any{"value": "hello"})
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, []string{"echo", "hello"}, runner.request.Args)
@@ -168,7 +168,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 	t.Run("non-zero exit code surfaces in Data", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: 1, stderr: "error occurred"}
 		tool := subprocess.NewTool(*def, runner)
-		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		result, err := tool.Execute(context.Background(), map[string]any{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		code, ok := result.Data["exit_code"]
@@ -179,7 +179,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 	t.Run("zero exit code surfaces exit_code=0", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: 0, stdout: "ok"}
 		tool := subprocess.NewTool(*def, runner)
-		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		result, err := tool.Execute(context.Background(), map[string]any{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		code, ok := result.Data["exit_code"]
@@ -190,7 +190,7 @@ func TestGenerateSubprocessTool_ExitCodeInData(t *testing.T) {
 	t.Run("torn-down process has exit_code=-1", func(t *testing.T) {
 		runner := &recordingRunner{exitCode: -1}
 		tool := subprocess.NewTool(*def, runner)
-		result, err := tool.Execute(context.Background(), map[string]interface{}{})
+		result, err := tool.Execute(context.Background(), map[string]any{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		code, ok := result.Data["exit_code"]
@@ -222,7 +222,7 @@ func TestGenerateSubprocessTool_NoShellInjection(t *testing.T) {
 	malicious := "hello; rm -rf /"
 	runner := &recordingRunner{}
 	tool := subprocess.NewTool(*def, runner)
-	_, err := tool.Execute(context.Background(), map[string]interface{}{"value": malicious})
+	_, err := tool.Execute(context.Background(), map[string]any{"value": malicious})
 	require.NoError(t, err)
 	require.Len(t, runner.request.Args, 2)
 	require.Equal(t, malicious, runner.request.Args[1])
@@ -249,7 +249,7 @@ func TestGenerateSubprocessTool_PlatformVariant(t *testing.T) {
 	}
 	runner := &recordingRunner{}
 	tool := subprocess.NewTool(*def, runner)
-	_, err := tool.Execute(context.Background(), map[string]interface{}{})
+	_, err := tool.Execute(context.Background(), map[string]any{})
 	require.NoError(t, err)
 	require.Equal(t, []string{"variant"}, runner.request.Args)
 }

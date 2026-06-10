@@ -107,7 +107,7 @@ func (e EventTelemetry) mapEventType(ev Event) string {
 	}
 }
 
-func metadataValue(metadata map[string]interface{}, key string) (string, bool) {
+func metadataValue(metadata map[string]any, key string) (string, bool) {
 	if metadata == nil {
 		return "", false
 	}

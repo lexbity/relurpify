@@ -1,6 +1,8 @@
 package persistence
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -155,10 +157,11 @@ func TestSchemaMetadataValidate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errMsg != "" {
-				if _, ok := err.(*ValidationError); !ok {
+				validationError := &ValidationError{}
+				if errors.As(err, &validationError) {
 					t.Errorf("Error should be ValidationError, got %T", err)
 				}
-				if !contains(err.Error(), tt.errMsg) {
+				if !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Error message should contain %q, got %q", tt.errMsg, err.Error())
 				}
 			}
@@ -191,17 +194,4 @@ func TestCurrentSchemaVersions(t *testing.T) {
 			t.Errorf("CurrentSchemaVersions should contain kind %q", kind)
 		}
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

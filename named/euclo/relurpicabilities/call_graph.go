@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
@@ -89,7 +89,7 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) desc
 }
 
 // Invoke executes the call graph traversal and returns structured nodes and edges.
-func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
 	// Extract arguments
 	entryPoint, ok := stringArg(args, "entry_point")
@@ -152,7 +152,7 @@ func (h *CallGraphHandler) Invoke(ctx context.Context, st ports.State, args map[
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":     true,
 			"entry_point": entryPoint,
 			"nodes":       nodes,

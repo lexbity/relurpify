@@ -352,7 +352,7 @@ func successfulCoordinationProgress(desc descriptor.CapabilityDescriptor, result
 	return false
 }
 
-func extractStringFromMap(m map[string]interface{}, key string) (string, bool) {
+func extractStringFromMap(m map[string]any, key string) (string, bool) {
 	if len(m) == 0 {
 		return "", false
 	}

@@ -41,7 +41,7 @@ type Tool interface {
 	Description() string
 	Category() string
 	Parameters() []ToolParameter
-	Execute(ctx context.Context, args map[string]interface{}) (*ToolResult, error)
+	Execute(ctx context.Context, args map[string]any) (*ToolResult, error)
 	IsAvailable(ctx context.Context) bool
 	Permissions() ToolPermissions
 	Tags() []string
@@ -50,7 +50,7 @@ type Tool interface {
 // StreamingTool extends Tool with streaming execution.
 type StreamingTool interface {
 	Tool
-	ExecuteStream(ctx context.Context, args map[string]interface{}) (<-chan ToolChunk, error)
+	ExecuteStream(ctx context.Context, args map[string]any) (<-chan ToolChunk, error)
 }
 
 // RevertibleTool extends Tool with rollback support.
@@ -63,7 +63,7 @@ type RevertibleTool interface {
 type RollbackToken struct {
 	InvocationID string
 	ToolName     string
-	Args         map[string]interface{}
+	Args         map[string]any
 	Result       *ToolResult
 }
 
@@ -73,23 +73,23 @@ type ToolParameter struct {
 	Type        ToolParameterType `json:"type" yaml:"type"`
 	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
 	Required    bool              `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     interface{}       `json:"default,omitempty" yaml:"default,omitempty"`
+	Default     any               `json:"default,omitempty" yaml:"default,omitempty"`
 }
 
 // ToolResult is the result of executing a tool.
 type ToolResult struct {
-	Success  bool                   `json:"success"`
-	Data     map[string]interface{} `json:"data,omitempty"`
-	Error    string                 `json:"error,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Success  bool           `json:"success"`
+	Data     map[string]any `json:"data,omitempty"`
+	Error    string         `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // ToolChunk is a streaming chunk from a streaming tool.
 type ToolChunk struct {
-	Data   map[string]interface{} `json:"data,omitempty"`
-	Error  string                 `json:"error,omitempty"`
-	Done   bool                   `json:"done"`
-	SeqNum int                    `json:"seq_num"`
+	Data   map[string]any `json:"data,omitempty"`
+	Error  string         `json:"error,omitempty"`
+	Done   bool           `json:"done"`
+	SeqNum int            `json:"seq_num"`
 }
 
 // ToolPermissions describes the permissions a tool requires.
@@ -153,8 +153,8 @@ type Schema struct {
 	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
 	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
 	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     interface{}        `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []interface{}      `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
+	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
 	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
 	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`

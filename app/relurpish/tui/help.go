@@ -50,7 +50,7 @@ func (h HelpOverlay) content() string {
 	b.WriteString("Help\n\n")
 	b.WriteString("Commands\n")
 	for _, cmd := range cmds {
-		b.WriteString(fmt.Sprintf("  %-22s %s\n", cmd.Usage, cmd.Description))
+		fmt.Fprintf(&b, "  %-22s %s\n", cmd.Usage, cmd.Description)
 	}
 	b.WriteString("\nNavigation\n")
 	b.WriteString("  1-6                   switch tabs\n")

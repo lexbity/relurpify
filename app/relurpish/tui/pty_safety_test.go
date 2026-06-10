@@ -19,7 +19,7 @@ func TestPTYSafePassesThroughError(t *testing.T) {
 	got := PTYSafe(func() error {
 		return want
 	})
-	if got != want {
+	if !errors.Is(got, want) {
 		t.Fatalf("expected %v, got %v", want, got)
 	}
 }

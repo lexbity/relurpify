@@ -37,11 +37,11 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	decisionVal, _ := env.GetWorkingValue("react.decision")
 	decision, _ := decisionVal.(decisionPayload)
 	lastRes, _ := env.GetWorkingValue("react.last_tool_result")
-	lastMap, _ := lastRes.(map[string]interface{})
+	lastMap, _ := lastRes.(map[string]any)
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		env.SetWorkingValueWithClass("react.done", true, contextdata.MemoryClassTask)
 		env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
-		env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
+		env.SetWorkingValueWithClass("react.final_output", map[string]any{
 			"summary": summary,
 			"result":  lastMap,
 		}, contextdata.MemoryClassTask)
@@ -57,13 +57,13 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		return result, nil
 	}
 	var diagnostic strings.Builder
-	diagnostic.WriteString(fmt.Sprintf("Iteration %d observation.\n", iter))
+	fmt.Fprintf(&diagnostic, "Iteration %d observation.\n", iter)
 	if decision.Thought != "" {
 		diagnostic.WriteString("Thought: " + decision.Thought + "\n")
 	}
 	if len(lastMap) > 0 {
 		diagnostic.WriteString("Tool Result: ")
-		diagnostic.WriteString(fmt.Sprint(lastMap))
+		fmt.Fprint(&diagnostic, lastMap)
 		diagnostic.WriteRune('\n')
 	}
 	n.advancePhase(env, decision, lastMap)
@@ -138,7 +138,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			summary = synthetic
 			env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 		}
-		env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
+		env.SetWorkingValueWithClass("react.final_output", map[string]any{
 			"summary": summary,
 			"result":  lastMap,
 		}, contextdata.MemoryClassTask)
@@ -159,12 +159,12 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 // applyCompletionSummary records a completion outcome in state and returns a
 // terminal Result. Use this for branches where the observe loop should stop
 // immediately after detecting a conclusive outcome.
-func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, summary string, lastMap map[string]interface{}, diagnostic *strings.Builder) *execution.Result {
+func (n *reactObserveNode) applyCompletionSummary(env *contextdata.Envelope, summary string, lastMap map[string]any, diagnostic *strings.Builder) *execution.Result {
 	diagnostic.WriteString("Conclusion: " + summary + "\n")
 	env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("react.done", true, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
+	env.SetWorkingValueWithClass("react.final_output", map[string]any{
 		"summary": summary,
 		"result":  lastMap,
 	}, contextdata.MemoryClassTask)
@@ -189,7 +189,7 @@ func setSynthesizedConclusion(env *contextdata.Envelope, summary string, diagnos
 	env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 }
 
-func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, lastMap map[string]interface{}) bool {
+func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, lastMap map[string]any) bool {
 	if env == nil || taskNeedsEditing(n.task) || !hasFailure(lastMap) {
 		return false
 	}
@@ -223,7 +223,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 	return false
 }
 
-func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision decisionPayload, lastMap map[string]interface{}) {
+func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision decisionPayload, lastMap map[string]any) {
 	if env == nil {
 		return
 	}
@@ -263,7 +263,7 @@ func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision deci
 	}
 }
 
-func shouldEnterEditPhase(task *execution.Task, observations []ToolObservation, lastTool string, lastMap map[string]interface{}) bool {
+func shouldEnterEditPhase(task *execution.Task, observations []ToolObservation, lastTool string, lastMap map[string]any) bool {
 	if !taskNeedsEditing(task) {
 		return false
 	}
@@ -283,15 +283,15 @@ func shouldEnterEditPhase(task *execution.Task, observations []ToolObservation, 
 		strings.Contains(lastTool, "grep")
 }
 
-func hasFailure(lastMap map[string]interface{}) bool {
+func hasFailure(lastMap map[string]any) bool {
 	return valueIndicatesFailure(lastMap)
 }
 
-func valueIndicatesFailure(value interface{}) bool {
+func valueIndicatesFailure(value any) bool {
 	switch v := value.(type) {
 	case nil:
 		return false
-	case map[string]interface{}:
+	case map[string]any:
 		if success, ok := v["success"].(bool); ok && !success {
 			return true
 		}
@@ -308,7 +308,7 @@ func valueIndicatesFailure(value interface{}) bool {
 			}
 		}
 		return false
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if valueIndicatesFailure(item) {
 				return true
@@ -350,7 +350,7 @@ func hasFailureFromState(env *contextdata.Envelope) bool {
 		return false
 	}
 	raw, _ := env.GetWorkingValue("react.last_tool_result")
-	lastMap, _ := raw.(map[string]interface{})
+	lastMap, _ := raw.(map[string]any)
 	return hasFailure(lastMap)
 }
 
@@ -470,7 +470,7 @@ func hasEditObservation(env *contextdata.Envelope) bool {
 	return false
 }
 
-func repeatedFailureAnalysis(task *execution.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func repeatedFailureAnalysis(task *execution.Task, env *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if taskNeedsEditing(task) || !hasFailure(lastMap) {
 		return "", false
 	}
@@ -489,7 +489,7 @@ func repeatedFailureAnalysis(task *execution.Task, env *contextdata.Envelope, la
 	return fmt.Sprintf("%s failed repeatedly: %s", last.Tool, reason), true
 }
 
-func analysisSummaryFromFailure(task *execution.Task, env *contextdata.Envelope, lastMap map[string]interface{}) (string, bool) {
+func analysisSummaryFromFailure(task *execution.Task, env *contextdata.Envelope, lastMap map[string]any) (string, bool) {
 	if taskNeedsEditing(task) || !hasFailure(lastMap) {
 		return "", false
 	}
@@ -509,7 +509,7 @@ func analysisSummaryFromFailure(task *execution.Task, env *contextdata.Envelope,
 }
 
 func failureAnalysisReason(observation ToolObservation) string {
-	for _, raw := range []interface{}{
+	for _, raw := range []any{
 		observation.Data["stderr"],
 		observation.Data["stdout"],
 		observation.Data["error"],

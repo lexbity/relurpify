@@ -10,16 +10,16 @@ type Task struct {
 	ID          string
 	Type        string
 	Instruction string
-	Data        map[string]interface{}
-	Context     map[string]interface{}
-	Metadata    map[string]interface{}
+	Data        map[string]any
+	Context     map[string]any
+	Metadata    map[string]any
 }
 
 type Result struct {
 	Success  bool
 	Data     ResultPayload
 	Error    string
-	Metadata map[string]interface{}
+	Metadata map[string]any
 	NodeID   string
 }
 

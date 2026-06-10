@@ -212,7 +212,7 @@ func TestGraphNodeRecordWithInvalidMarshal(t *testing.T) {
 		IsExported: true,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
-		Attributes: map[string]interface{}{
+		Attributes: map[string]any{
 			"invalid": make(chan int), // channels can't be marshaled
 		},
 	}

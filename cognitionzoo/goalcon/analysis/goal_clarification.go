@@ -249,7 +249,7 @@ func (session *ClarificationSession) PersistToMemory(
 	defer session.mu.Unlock()
 
 	// Build memory entry
-	data := map[string]interface{}{
+	data := map[string]any{
 		"session_id":      session.ID,
 		"goal":            session.Goal.Description,
 		"ambiguity_score": session.AmbiguityScore.OverallScore,
@@ -282,13 +282,13 @@ func (session *ClarificationSession) FormatSessionSummary() string {
 	defer session.mu.Unlock()
 
 	summary := fmt.Sprintf("Goal Clarification Session %s\n", session.ID)
-	summary += fmt.Sprintf("=====================================\n")
+	summary += "=====================================\n"
 	summary += fmt.Sprintf("Original Goal: %s\n", session.Goal.Description)
 	summary += fmt.Sprintf("Ambiguity Score: %.0f%%\n", session.AmbiguityScore.OverallScore*100)
 	summary += fmt.Sprintf("Total Ambiguities Found: %d\n", len(session.AmbiguityScore.Indicators))
 
 	if len(session.Choices) > 0 {
-		summary += fmt.Sprintf("\nClarifications Made:\n")
+		summary += "\nClarifications Made:\n"
 		for i, choice := range session.Choices {
 			summary += fmt.Sprintf("  %d. %s\n", i+1, choice.ChosenSuggestion)
 			if choice.AlternativeText != "" {

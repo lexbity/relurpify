@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -96,7 +96,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 }
 
 // Invoke executes git blame and returns parsed blame entries.
-func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	file, ok := stringArg(args, "file")
 	if !ok || file == "" {
 		return failResult("file argument is required and must be non-empty"), nil
@@ -108,7 +108,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 	}
 
 	var lineRange string
-	if lines, ok := args["lines"].([]interface{}); ok && len(lines) == 2 {
+	if lines, ok := args["lines"].([]any); ok && len(lines) == 2 {
 		start, _ := intArg(args, "lines", 0)
 		end := 0
 		if len(lines) > 1 {
@@ -160,7 +160,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success": false,
 				"error":   err.Error(),
 				"stderr":  "",
@@ -170,7 +170,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 	if res.ExitCode != 0 {
 		return &ports.ToolResult{
 			Success: false,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success": false,
 				"error":   fmt.Sprintf("exit code %d: %s", res.ExitCode, res.Stderr),
 				"stderr":  truncate(res.Stderr, 10000),
@@ -183,7 +183,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success": true,
 			"file":    resolvedFile,
 			"entries": entries,

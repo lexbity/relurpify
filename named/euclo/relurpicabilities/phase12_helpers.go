@@ -26,7 +26,7 @@ func resolveCandidatePath(candidate, workspace string) string {
 	}
 	return filepath.Clean(filepath.Join(workspace, candidate))
 }
-func floatArg(args map[string]interface{}, key string, defaultValue float64) (float64, bool) {
+func floatArg(args map[string]any, key string, defaultValue float64) (float64, bool) {
 	val, ok := args[key]
 	if !ok || val == nil {
 		return defaultValue, false
@@ -318,10 +318,10 @@ func compareAPISignatures(base, head map[string]apiSignatureRecord) ([]apiChange
 	return breaking, compatible
 }
 
-func changeRecordSlice(records []apiChangeRecord) []interface{} {
-	out := make([]interface{}, 0, len(records))
+func changeRecordSlice(records []apiChangeRecord) []any {
+	out := make([]any, 0, len(records))
 	for _, record := range records {
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"file":           record.File,
 			"symbol":         record.Symbol,
 			"base_signature": record.BaseSignature,
@@ -332,10 +332,10 @@ func changeRecordSlice(records []apiChangeRecord) []interface{} {
 	return out
 }
 
-func coveragePackagesToInterfaces(packages []coveragePackageRecord) []interface{} {
-	out := make([]interface{}, 0, len(packages))
+func coveragePackagesToInterfaces(packages []coveragePackageRecord) []any {
+	out := make([]any, 0, len(packages))
 	for _, pkg := range packages {
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"package":  pkg.Package,
 			"coverage": pkg.Coverage,
 		})

@@ -7,8 +7,8 @@ no stubs
 no os.Getenv outside userconfig/cfgload
 no direct file loading outside userconfig/cfgload
 
-# Package homes (taxonomy split, Slice 1+)
-# EffectClass, CapabilityScope → capability/classification
+# Package homes (taxonomy split, Slice 1+; relocated Slice 4)
+# EffectClass, CapabilityScope → governance/classification (vocab relocated from capability)
 # RiskClass → governance/risk (risk is a governance judgment, not a self-declared fact)
 # governance/risk.Classify(effects, scope) is the sole risk producer; applies scope floor
 # Old governance/taxonomy is DELETED — do not import it
@@ -28,7 +28,6 @@ no direct file loading outside userconfig/cfgload
 # Enforcement status (Slice 7+)
 # governance-no-orch: ENFORCE mode (governance→execution forbidden)
 # no-bucket: ENFORCE mode (type-only pkgs imported by 3+ domains flagged; domain vocab exempt)
-# classification-ownership: WARN mode (capability→governance risk-vocab still being retired)
-# exception-count: CI fails if exceptions.yaml gains net-new entries (baseline: 7)
+# exception-count: CI fails if exceptions.yaml gains net-new entries (baseline: 1)
 
 

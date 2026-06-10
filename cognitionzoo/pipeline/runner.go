@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	frameworktools "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
@@ -94,6 +95,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 
 	maxRetries := contract.Metadata.RetryPolicy.MaxAttempts
 	stageTools := resolveStageTools(ctx, env, stage, r.Options.Tools)
+	backoffCalc := retry.NewBackoffCalculator(retry.DefaultPolicy())
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		result.RetryAttempt = attempt
 
@@ -122,6 +124,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			})
 			if attempt < maxRetries {
 				result.Transition = StageTransition{Kind: TransitionRetry, Reason: err.Error()}
+				retry.Sleep(ctx, backoffCalc.NextBackoff())
 				continue
 			}
 			result.Transition = StageTransition{Kind: TransitionStop, Reason: err.Error()}
@@ -138,6 +141,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			})
 			if contract.Metadata.RetryPolicy.RetryOnDecodeError && attempt < maxRetries {
 				result.Transition = StageTransition{Kind: TransitionRetry, Reason: err.Error()}
+				retry.Sleep(ctx, backoffCalc.NextBackoff())
 				continue
 			}
 			result.Transition = StageTransition{Kind: TransitionStop, Reason: err.Error()}
@@ -154,6 +158,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			})
 			if contract.Metadata.RetryPolicy.RetryOnValidationError && attempt < maxRetries {
 				result.Transition = StageTransition{Kind: TransitionRetry, Reason: err.Error()}
+				retry.Sleep(ctx, backoffCalc.NextBackoff())
 				continue
 			}
 			result.Transition = StageTransition{Kind: TransitionStop, Reason: err.Error()}

@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // RecipeCapabilityNode is a graph node that registers a compiled thought recipe
@@ -90,7 +90,7 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env ports.Stat
 	}
 }
 
-func (h *recipeCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *recipeCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
 	if h.plan == nil {
 		return &ports.ToolResult{Success: false}, fmt.Errorf("recipe capability %s: execution plan is nil", h.capabilityID)

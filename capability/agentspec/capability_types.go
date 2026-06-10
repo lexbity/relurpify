@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -27,9 +27,9 @@ const (
 )
 
 type CapabilitySource struct {
-	ProviderID string                   `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
+	ProviderID string                         `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
 	Scope      classification.CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
-	SessionID  string                   `json:"session_id,omitempty" yaml:"session_id,omitempty"`
+	SessionID  string                         `json:"session_id,omitempty" yaml:"session_id,omitempty"`
 }
 
 type CoordinationTargetMetadata struct {
@@ -44,20 +44,20 @@ type CoordinationTargetMetadata struct {
 }
 
 type CapabilityDescriptor struct {
-	ID            string                      `json:"id" yaml:"id"`
-	Kind          CapabilityKind              `json:"kind" yaml:"kind"`
-	RuntimeFamily CapabilityRuntimeFamily     `json:"runtime_family,omitempty" yaml:"runtime_family,omitempty"`
-	Name          string                      `json:"name" yaml:"name"`
-	Version       string                      `json:"version,omitempty" yaml:"version,omitempty"`
-	Description   string                      `json:"description,omitempty" yaml:"description,omitempty"`
-	Category      string                      `json:"category,omitempty" yaml:"category,omitempty"`
-	Tags          []string                    `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Source        CapabilitySource            `json:"source,omitempty" yaml:"source,omitempty"`
-	TrustClass    TrustClass                  `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	RiskClasses   []risk.RiskClass        `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
-	EffectClasses []classification.EffectClass      `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	Coordination  *CoordinationTargetMetadata `json:"coordination,omitempty" yaml:"coordination,omitempty"`
-	Annotations   map[string]any              `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	ID            string                       `json:"id" yaml:"id"`
+	Kind          CapabilityKind               `json:"kind" yaml:"kind"`
+	RuntimeFamily CapabilityRuntimeFamily      `json:"runtime_family,omitempty" yaml:"runtime_family,omitempty"`
+	Name          string                       `json:"name" yaml:"name"`
+	Version       string                       `json:"version,omitempty" yaml:"version,omitempty"`
+	Description   string                       `json:"description,omitempty" yaml:"description,omitempty"`
+	Category      string                       `json:"category,omitempty" yaml:"category,omitempty"`
+	Tags          []string                     `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Source        CapabilitySource             `json:"source,omitempty" yaml:"source,omitempty"`
+	TrustClass    TrustClass                   `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
+	RiskClasses   []risk.RiskClass             `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	EffectClasses []classification.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	Coordination  *CoordinationTargetMetadata  `json:"coordination,omitempty" yaml:"coordination,omitempty"`
+	Annotations   map[string]any               `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 }
 
 type TrustClass string

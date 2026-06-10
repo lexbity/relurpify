@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
@@ -131,8 +132,10 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecuto
 	}
 
 	var stepErr error
+	backoffCalc := retry.NewBackoffCalculator(retry.DefaultPolicy())
 	for attempt := 0; attempt <= maxRecovery; attempt++ {
 		if attempt > 0 {
+			retry.Sleep(ctx, backoffCalc.NextBackoff())
 			if p.Options.Recover != nil && stepErr != nil {
 				if recovery, err := p.Options.Recover(ctx, step, stepTask, state, stepErr); err == nil && recovery != nil {
 					applyStepRecovery(stepTask, state, step, recovery)
@@ -286,8 +289,8 @@ func defaultBuildStepTask(task *execution.Task, plan *Plan, step PlanStep) *exec
 		ID:          taskID,
 		Type:        string(taskType),
 		Instruction: instruction,
-		Metadata: func() map[string]interface{} {
-			m := make(map[string]interface{}, len(metadata))
+		Metadata: func() map[string]any {
+			m := make(map[string]any, len(metadata))
 			for k, v := range metadata {
 				m[k] = v
 			}

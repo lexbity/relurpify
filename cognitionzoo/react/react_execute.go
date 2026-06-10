@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
@@ -18,11 +18,11 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *execution.
 			a.debugf("explicit retrieval follow-up failed: %v", followErr)
 		}
 		rawLast, _ := env.GetWorkingValue("react.last_tool_result")
-		lastMap, _ := rawLast.(map[string]interface{})
+		lastMap, _ := rawLast.(map[string]any)
 		if summary, ok := completionSummaryFromState(a, task, env, lastMap); ok {
 			env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
 			env.SetWorkingValueWithClass("react.synthetic_summary", summary, contextdata.MemoryClassTask)
-			env.SetWorkingValueWithClass("react.final_output", map[string]interface{}{
+			env.SetWorkingValueWithClass("react.final_output", map[string]any{
 				"summary": summary,
 				"result":  lastMap,
 			}, contextdata.MemoryClassTask)
@@ -76,7 +76,7 @@ func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task
 		return nil
 	}
 	rawLast, _ := env.GetWorkingValue("react.last_tool_result")
-	lastMap, _ := rawLast.(map[string]interface{})
+	lastMap, _ := rawLast.(map[string]any)
 	path := firstSearchResultPath(lastMap["results"])
 	if path == "" {
 		return nil

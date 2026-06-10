@@ -324,10 +324,10 @@ func (gd *GoalDecomposer) FormatDecompositionReport(decomp *GoalDecomposition) s
 	var sb strings.Builder
 	sb.WriteString("Goal Decomposition Report\n")
 	sb.WriteString("=========================\n\n")
-	sb.WriteString(fmt.Sprintf("Original Goal: %s\n", decomp.OriginalGoal.Description))
-	sb.WriteString(fmt.Sprintf("Strategy: %s\n", decomp.Strategy))
-	sb.WriteString(fmt.Sprintf("Number of Sub-Goals: %d\n", len(decomp.SubGoals)))
-	sb.WriteString(fmt.Sprintf("Rationale: %s\n\n", decomp.Rationale))
+	fmt.Fprintf(&sb, "Original Goal: %s\n", decomp.OriginalGoal.Description)
+	fmt.Fprintf(&sb, "Strategy: %s\n", decomp.Strategy)
+	fmt.Fprintf(&sb, "Number of Sub-Goals: %d\n", len(decomp.SubGoals))
+	fmt.Fprintf(&sb, "Rationale: %s\n\n", decomp.Rationale)
 
 	sb.WriteString("Sub-Goals (in execution order):\n")
 	for i, sgID := range decomp.ExecutionOrder {
@@ -342,13 +342,13 @@ func (gd *GoalDecomposer) FormatDecompositionReport(decomp *GoalDecomposition) s
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, sg.Description))
-		sb.WriteString(fmt.Sprintf("     Importance: %.0f%%\n", sg.Importance*100))
+		fmt.Fprintf(&sb, "  %d. %s\n", i+1, sg.Description)
+		fmt.Fprintf(&sb, "     Importance: %.0f%%\n", sg.Importance*100)
 		if len(sg.Predicates) > 0 {
-			sb.WriteString(fmt.Sprintf("     Predicates: %v\n", sg.Predicates))
+			fmt.Fprintf(&sb, "     Predicates: %v\n", sg.Predicates)
 		}
 		if len(sg.Dependencies) > 0 {
-			sb.WriteString(fmt.Sprintf("     Depends on: %v\n", len(sg.Dependencies)))
+			fmt.Fprintf(&sb, "     Depends on: %v\n", len(sg.Dependencies))
 		}
 	}
 

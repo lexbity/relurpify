@@ -562,10 +562,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 
 	// Wire permission event logger if event telemetry is available.
 	if et, ok := tel.(interface {
-		EmitPermissionEvent(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]interface{})
+		EmitPermissionEvent(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any)
 	}); ok {
 		if registration.Permissions != nil {
-			registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+			registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
 				et.EmitPermissionEvent(ctx, desc, effect, reason, fields)
 			})
 		}

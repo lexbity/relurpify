@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -29,7 +30,7 @@ func (t *RustWorkspaceDetectTool) Parameters() []ports.ToolParameter {
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -56,7 +57,7 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]i
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"path":               resolved,
 			"manifest_path":      manifestPath,
 			"crate_root":         filepath.Dir(manifestPath),
@@ -96,7 +97,7 @@ func (t *RustCargoTestTool) Parameters() []ports.ToolParameter {
 func (t *RustCargoTestTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -123,7 +124,7 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interfa
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary := summarizeRustCargoTest(stdout, stderr, runResult.Success)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"summary":       summary.Summary,
 		"passed":        summary.Passed,
 		"failed":        summary.Failed,
@@ -171,7 +172,7 @@ func (t *RustCargoCheckTool) Parameters() []ports.ToolParameter {
 func (t *RustCargoCheckTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -198,7 +199,7 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interf
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
 			"warning_count": summary.WarningCount,
@@ -240,7 +241,7 @@ func (t *RustCargoMetadataTool) Parameters() []ports.ToolParameter {
 func (t *RustCargoMetadataTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -258,7 +259,7 @@ func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]int
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary, parsed := parseRustCargoMetadata(stdout)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"summary": summary,
 		"stdout":  stdout,
 		"stderr":  stderr,
@@ -334,9 +335,9 @@ func summarizeRustCargoTest(stdout, stderr string, success bool) rustCargoSummar
 		summary.Summary = fmt.Sprintf("cargo test failed: %s", summary.FirstFailure)
 		return summary
 	}
-	line := firstNonEmptyLine(stderr)
+	line := lang.FirstNonEmptyLine(stderr)
 	if line == "" {
-		line = firstNonEmptyLine(stdout)
+		line = lang.FirstNonEmptyLine(stdout)
 	}
 	if line != "" {
 		summary.Summary = "cargo test failed: " + line
@@ -374,9 +375,9 @@ func summarizeRustCargoCheck(stdout, stderr string, success bool) rustCargoCheck
 		summary.Summary = "cargo check failed: " + summary.FirstMessage
 		return summary
 	}
-	line := firstNonEmptyLine(stderr)
+	line := lang.FirstNonEmptyLine(stderr)
 	if line == "" {
-		line = firstNonEmptyLine(stdout)
+		line = lang.FirstNonEmptyLine(stdout)
 	}
 	if line != "" {
 		summary.Summary = "cargo check failed: " + line
@@ -384,7 +385,7 @@ func summarizeRustCargoCheck(stdout, stderr string, success bool) rustCargoCheck
 	return summary
 }
 
-func parseRustCargoMetadata(stdout string) (string, map[string]interface{}) {
+func parseRustCargoMetadata(stdout string) (string, map[string]any) {
 	type cargoPackage struct {
 		Name         string `json:"name"`
 		ManifestPath string `json:"manifest_path"`
@@ -395,7 +396,7 @@ func parseRustCargoMetadata(stdout string) (string, map[string]interface{}) {
 	}
 	var payload cargoMetadata
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		return "cargo metadata completed", map[string]interface{}{}
+		return "cargo metadata completed", map[string]any{}
 	}
 	packageNames := make([]string, 0, len(payload.Packages))
 	manifestPaths := make([]string, 0, len(payload.Packages))
@@ -407,7 +408,7 @@ func parseRustCargoMetadata(stdout string) (string, map[string]interface{}) {
 	if payload.WorkspaceRoot != "" {
 		summary += " workspace=" + payload.WorkspaceRoot
 	}
-	return summary, map[string]interface{}{
+	return summary, map[string]any{
 		"workspace_root": payload.WorkspaceRoot,
 		"package_names":  packageNames,
 		"manifest_paths": manifestPaths,
@@ -451,16 +452,6 @@ func atoiSafe(value string) int {
 	return total
 }
 
-func firstNonEmptyLine(text string) string {
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
-func toStringSliceValue(value interface{}) ([]string, error) {
+func toStringSliceValue(value any) ([]string, error) {
 	return registry.NormalizeStringSlice(value)
 }

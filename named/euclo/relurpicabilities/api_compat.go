@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 type APICompatHandler struct {
@@ -59,7 +59,7 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) desc
 	}
 }
 
-func (h *APICompatHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *APICompatHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	baseRef, ok := stringArg(args, "base_ref")
 	if !ok || strings.TrimSpace(baseRef) == "" {
 		return failResult("base_ref argument is required"), fmt.Errorf("base_ref argument is required")
@@ -122,7 +122,7 @@ func (h *APICompatHandler) Invoke(ctx context.Context, env ports.State, args map
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":    true,
 			"breaking":   changeRecordSlice(breaking),
 			"compatible": changeRecordSlice(compatible),

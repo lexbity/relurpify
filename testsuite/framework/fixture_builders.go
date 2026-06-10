@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -384,7 +384,7 @@ func MinimalEnvelope() *EnvelopeBuilder {
 // AuditRecordBuilder builds deterministic audit record fixtures.
 type AuditRecordBuilder struct {
 	record policy.AuditRecord
-	meta   map[string]interface{}
+	meta   map[string]any
 }
 
 // NewAuditRecordBuilder creates a new audit record builder.
@@ -398,7 +398,7 @@ func NewAuditRecordBuilder() *AuditRecordBuilder {
 			Result:      "granted",
 			Correlation: "test-correlation",
 		},
-		meta: make(map[string]interface{}),
+		meta: make(map[string]any),
 	}
 }
 
@@ -433,9 +433,9 @@ func (b *AuditRecordBuilder) WithResult(result string) *AuditRecordBuilder {
 }
 
 // WithMetadata sets a metadata key/value on the audit record.
-func (b *AuditRecordBuilder) WithMetadata(key string, value interface{}) *AuditRecordBuilder {
+func (b *AuditRecordBuilder) WithMetadata(key string, value any) *AuditRecordBuilder {
 	if b.meta == nil {
-		b.meta = make(map[string]interface{})
+		b.meta = make(map[string]any)
 	}
 	b.meta[key] = value
 	return b
@@ -454,7 +454,7 @@ func (b *AuditRecordBuilder) Build() policy.AuditRecord {
 	}
 	out := b.record
 	if len(b.meta) > 0 {
-		out.Metadata = make(map[string]interface{}, len(b.meta))
+		out.Metadata = make(map[string]any, len(b.meta))
 		for key, value := range b.meta {
 			out.Metadata[key] = value
 		}
@@ -677,11 +677,11 @@ func cloneRateLimit(v *policy.RateLimit) *policy.RateLimit {
 	return &cloned
 }
 
-func cloneInterfaceMap(values map[string]interface{}) map[string]interface{} {
+func cloneInterfaceMap(values map[string]any) map[string]any {
 	if len(values) == 0 {
 		return nil
 	}
-	cloned := make(map[string]interface{}, len(values))
+	cloned := make(map[string]any, len(values))
 	for key, value := range values {
 		cloned[key] = value
 	}

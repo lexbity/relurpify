@@ -44,7 +44,7 @@ func TestExpandCommandWithPlaceholders(t *testing.T) {
 				Args: []string{"${message}"},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"message": "hello",
 	})
 	require.NoError(t, err)
@@ -70,8 +70,8 @@ func TestExpandCommandWithRawArgs(t *testing.T) {
 			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
-	}, map[string]interface{}{
-		"args": []interface{}{"hello", "world"},
+	}, map[string]any{
+		"args": []any{"hello", "world"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"echo", "hello", "world"}, cmd)
@@ -84,8 +84,8 @@ func TestExpandCommandRawArgsFlagGuard(t *testing.T) {
 			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			// allow_flags defaults to false
 		},
-	}, map[string]interface{}{
-		"args": []interface{}{"--version"},
+	}, map[string]any{
+		"args": []any{"--version"},
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "flag injection")
@@ -98,8 +98,8 @@ func TestExpandCommandRawArgsFlagAllowed(t *testing.T) {
 			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
-	}, map[string]interface{}{
-		"args": []interface{}{"--verbose"},
+	}, map[string]any{
+		"args": []any{"--verbose"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"echo", "--verbose"}, cmd)
@@ -135,7 +135,7 @@ func TestTypedFlagEqualsStyle(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"output_path": "result.json",
 	})
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestTypedFlagEqualsStyleDefaults(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"output_path": "result.json",
 	})
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestTypedFlagSeparateStyle(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"output_path": "result.json",
 	})
 	require.NoError(t, err)
@@ -199,8 +199,8 @@ func TestTypedFlagRepeatEquals(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
-		"patterns": []interface{}{"*.go", "*.rs"},
+	}, map[string]any{
+		"patterns": []any{"*.go", "*.rs"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"rg", "--glob=*.go", "--glob=*.rs"}, cmd)
@@ -221,8 +221,8 @@ func TestTypedFlagRepeatSeparate(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
-		"patterns": []interface{}{"*.go", "*.rs"},
+	}, map[string]any{
+		"patterns": []any{"*.go", "*.rs"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"rg", "--glob", "*.go", "--glob", "*.rs"}, cmd)
@@ -243,7 +243,7 @@ func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"pat": "a=b;c d",
 	})
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestBooleanFlagTrue(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"color": true,
 	})
 	require.NoError(t, err)
@@ -290,7 +290,7 @@ func TestBooleanFlagFalse(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"color": false,
 	})
 	require.NoError(t, err)
@@ -329,7 +329,7 @@ func TestBooleanFlagOnlyWhenTrue(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"verbose": true,
 	})
 	require.NoError(t, err)
@@ -349,7 +349,7 @@ func TestBooleanFlagOnlyWhenTrueFalse(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"verbose": false,
 	})
 	require.NoError(t, err)
@@ -375,7 +375,7 @@ func TestTypedAndBooleanFlagsCombined(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"output_path": "out.json",
 		"hidden":      true,
 	})
@@ -405,10 +405,10 @@ func TestExpandCommandAllComponents(t *testing.T) {
 			DefaultArgs: []string{"--no-ignore"},
 			Sandbox:     &ports.ToolManifestSandbox{AllowFlags: true},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"pattern": "func",
-		"globs":   []interface{}{"*.go", "*.rs"},
-		"args":    []interface{}{"--follow"},
+		"globs":   []any{"*.go", "*.rs"},
+		"args":    []any{"--follow"},
 	})
 	require.NoError(t, err)
 	// Order: base + flags(glob) + positional(pattern) + default_args + raw
@@ -494,7 +494,7 @@ func TestAdversarialValuesStaySingleTokens(t *testing.T) {
 						Args: []string{"${x}"},
 					},
 				},
-			}, map[string]interface{}{
+			}, map[string]any{
 				"x": val,
 			})
 			require.NoError(t, err)
@@ -536,7 +536,7 @@ func TestBoolFlagNonBoolValueError(t *testing.T) {
 				},
 			},
 		},
-	}, map[string]interface{}{
+	}, map[string]any{
 		"verbose": "not-a-bool",
 	})
 	require.Error(t, err)

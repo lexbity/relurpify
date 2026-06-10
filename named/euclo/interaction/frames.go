@@ -254,14 +254,7 @@ func selectionOptionsFromSlots(slots []ActionSlot) []SelectionOption {
 	}
 	out := make([]SelectionOption, 0, len(slots))
 	for _, slot := range slots {
-		out = append(out, SelectionOption{
-			ID:       slot.ID,
-			Label:    slot.Label,
-			Shortcut: slot.Shortcut,
-			Action:   slot.Action,
-			Risk:     slot.Risk,
-			Default:  slot.Default,
-		})
+		out = append(out, SelectionOption(slot))
 	}
 	return out
 }

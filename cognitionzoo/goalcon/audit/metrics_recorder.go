@@ -295,8 +295,8 @@ func (r *MetricsRecorder) EstimateOperatorQuality(operatorName string) float64 {
 }
 
 // ComparatorByQuality returns a comparator function for sorting operators by estimated quality.
-func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 interface{}) bool {
-	return func(op1, op2 interface{}) bool {
+func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 any) bool {
+	return func(op1, op2 any) bool {
 		// Simple comparator placeholder - can be customized based on operator type
 		return false
 	}

@@ -90,7 +90,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	if useToolCalling {
 		appendAssistantMessage(env, resp)
 	}
-	env.AddInteraction(map[string]interface{}{
+	env.AddInteraction(map[string]any{
 		"role":    "assistant",
 		"content": resp.Text,
 		"node":    n.id,
@@ -289,10 +289,10 @@ func extractContextFiles(task *execution.Task) []contextFilePayload {
 		return nil
 	}
 	switch v := raw.(type) {
-	case []interface{}:
+	case []any:
 		out := make([]contextFilePayload, 0, len(v))
 		for _, item := range v {
-			m, ok := item.(map[string]interface{})
+			m, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -301,7 +301,7 @@ func extractContextFiles(task *execution.Task) []contextFilePayload {
 			summary, _ := m["summary"].(string)
 			truncated, _ := m["truncated"].(bool)
 			var reference *agentgraph.ContextReference
-			if rawRef, ok := m["reference"].(map[string]interface{}); ok {
+			if rawRef, ok := m["reference"].(map[string]any); ok {
 				reference = &agentgraph.ContextReference{
 					Kind:    agentgraph.ContextReferenceKind(strings.TrimSpace(fmt.Sprint(rawRef["kind"]))),
 					ID:      strings.TrimSpace(fmt.Sprint(rawRef["id"])),

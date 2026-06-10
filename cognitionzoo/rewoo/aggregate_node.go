@@ -14,7 +14,7 @@ import (
 type AggregateNode struct {
 	id     string
 	Plan   *RewooPlan
-	Debugf func(string, ...interface{})
+	Debugf func(string, ...any)
 }
 
 // NewAggregateNode creates a new aggregate node.

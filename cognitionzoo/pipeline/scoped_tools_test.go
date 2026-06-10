@@ -50,10 +50,10 @@ func (t scopedPipelineTool) Name() string                      { return t.name }
 func (t scopedPipelineTool) Description() string               { return t.name }
 func (t scopedPipelineTool) Category() string                  { return "test" }
 func (t scopedPipelineTool) Parameters() []ports.ToolParameter { return nil }
-func (t scopedPipelineTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t scopedPipelineTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = args
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
 }
 func (t scopedPipelineTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx

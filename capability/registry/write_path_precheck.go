@@ -7,7 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // InvocationPrecheck is checked after policy evaluation and before invocation.

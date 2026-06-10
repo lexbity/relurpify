@@ -140,7 +140,7 @@ func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req policy.Poli
 		Action:   permissionActionForRequest(req),
 		Resource: permissionResourceForRequest(req),
 	}
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"target": string(req.Target),
 	}
 	if decision.Rule != nil {

@@ -9,14 +9,14 @@ import (
 
 // decisionPayload models the JSON output of the think step.
 type decisionPayload struct {
-	Thought   string                 `json:"thought"`
-	Action    string                 `json:"action"`
-	Tool      string                 `json:"tool"`
-	Arguments map[string]interface{} `json:"arguments"`
-	Complete  bool                   `json:"complete"`
-	Reason    string                 `json:"reason"`
-	Summary   string                 `json:"summary"`
-	Timestamp time.Time              `json:"timestamp"`
+	Thought   string         `json:"thought"`
+	Action    string         `json:"action"`
+	Tool      string         `json:"tool"`
+	Arguments map[string]any `json:"arguments"`
+	Complete  bool           `json:"complete"`
+	Reason    string         `json:"reason"`
+	Summary   string         `json:"summary"`
+	Timestamp time.Time      `json:"timestamp"`
 }
 
 // parseDecision extracts the model's JSON payload (or falls back to the raw
@@ -30,7 +30,7 @@ func parseDecision(raw string) (decisionPayload, error) {
 		payload.Timestamp = time.Now().UTC()
 		return payload, nil
 	}
-	var generic map[string]interface{}
+	var generic map[string]any
 	if err := json.Unmarshal([]byte(snippet), &generic); err != nil {
 		return payload, err
 	}
@@ -51,7 +51,7 @@ func parseDecision(raw string) (decisionPayload, error) {
 		payload.Arguments = normalizeArguments(args)
 	}
 	if payload.Arguments == nil {
-		payload.Arguments = map[string]interface{}{}
+		payload.Arguments = map[string]any{}
 	}
 	if complete, ok := generic["complete"].(bool); ok {
 		payload.Complete = complete
@@ -79,18 +79,18 @@ func parseDecision(raw string) (decisionPayload, error) {
 
 // normalizeArguments coerces stringified JSON arguments into maps so tools
 // always receive structured input.
-func normalizeArguments(value interface{}) map[string]interface{} {
+func normalizeArguments(value any) map[string]any {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return v
 	case string:
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := json.Unmarshal([]byte(v), &obj); err == nil {
 			return obj
 		}
-		return map[string]interface{}{"value": v}
+		return map[string]any{"value": v}
 	default:
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
 }
 

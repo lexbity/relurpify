@@ -52,7 +52,7 @@ func (t *discoveryTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *discoveryTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *discoveryTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t == nil || t.engine == nil {
 		return &ports.ToolResult{Success: false, Error: "query engine missing"}, nil
 	}
@@ -66,12 +66,12 @@ func (t *discoveryTool) Execute(ctx context.Context, args map[string]interface{}
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"normalized_query": result.NormalizedQuery,
 			"family_summary":   result.FamilySummary,
 			"matches":          discoveryMatchesToData(result.Matches),
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"query_type": "discovery",
 			"count":      len(result.Matches),
 		},
@@ -104,7 +104,7 @@ func (t *instantiationTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *instantiationTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *instantiationTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t == nil || t.engine == nil {
 		return &ports.ToolResult{Success: false, Error: "query engine missing"}, nil
 	}
@@ -118,14 +118,14 @@ func (t *instantiationTool) Execute(ctx context.Context, args map[string]interfa
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"normalized_query": result.NormalizedQuery,
 			"tool":             discoveryMatchToData(result.Match),
 			"preset":           presetToData(result.Preset),
 			"request":          requestToData(result.Request),
 			"structured_args":  cloneMap(result.StructuredArgs),
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"query_type": "instantiation",
 			"tool_name":  result.Match.Entry.Name,
 		},
@@ -140,19 +140,19 @@ func (t *instantiationTool) Permissions() ports.ToolPermissions {
 }
 func (t *instantiationTool) Tags() []string { return []string{toolcapabilities.TagReadOnly, "search"} }
 
-func discoveryMatchesToData(matches []DiscoveryMatch) []map[string]interface{} {
+func discoveryMatchesToData(matches []DiscoveryMatch) []map[string]any {
 	if len(matches) == 0 {
 		return nil
 	}
-	out := make([]map[string]interface{}, 0, len(matches))
+	out := make([]map[string]any, 0, len(matches))
 	for _, match := range matches {
 		out = append(out, discoveryMatchToData(match))
 	}
 	return out
 }
 
-func discoveryMatchToData(match DiscoveryMatch) map[string]interface{} {
-	return map[string]interface{}{
+func discoveryMatchToData(match DiscoveryMatch) map[string]any {
+	return map[string]any{
 		"name":              match.Entry.Name,
 		"aliases":           append([]string(nil), match.Entry.Aliases...),
 		"family":            match.Entry.Family,
@@ -169,8 +169,8 @@ func discoveryMatchToData(match DiscoveryMatch) map[string]interface{} {
 	}
 }
 
-func presetToData(p toolcapabilities.CommandPreset) map[string]interface{} {
-	return map[string]interface{}{
+func presetToData(p toolcapabilities.CommandPreset) map[string]any {
+	return map[string]any{
 		"name":         p.Name,
 		"command":      p.Command,
 		"default_args": append([]string(nil), p.DefaultArgs...),
@@ -183,8 +183,8 @@ func presetToData(p toolcapabilities.CommandPreset) map[string]interface{} {
 	}
 }
 
-func requestToData(req ports.CommandRequest) map[string]interface{} {
-	return map[string]interface{}{
+func requestToData(req ports.CommandRequest) map[string]any {
+	return map[string]any{
 		"workdir": req.Workdir,
 		"args":    append([]string(nil), req.Args...),
 		"input":   req.Input,

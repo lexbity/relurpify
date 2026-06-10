@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -65,7 +65,7 @@ func convertSchema(src *schemacoerce.Schema) *model.Schema {
 		Properties:  make(map[string]*model.Schema, len(src.Properties)),
 		Required:    append([]string(nil), src.Required...),
 		Default:     src.Default,
-		Enum:        append([]interface{}(nil), src.Enum...),
+		Enum:        append([]any(nil), src.Enum...),
 		Title:       src.Title,
 		Description: src.Description,
 		Format:      src.Format,

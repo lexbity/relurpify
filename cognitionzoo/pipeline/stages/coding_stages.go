@@ -16,7 +16,7 @@ import (
 type ExploreStage struct {
 	Task     *execution.Task
 	PromptID string
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *ExploreStage) Name() string { return "explore" }
@@ -57,7 +57,7 @@ func (s *ExploreStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	if s.PromptID != "" && s.Registry != nil {
 		// Type assert to prompt.Registry interface
 		if registry, ok := s.Registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for pipeline
 			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
@@ -105,7 +105,7 @@ func (s *ExploreStage) Apply(ctx *contextdata.Envelope, output any) error {
 type AnalyzeStage struct {
 	Task     *execution.Task
 	PromptID string
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *AnalyzeStage) Name() string { return "analyze" }
@@ -141,7 +141,7 @@ func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	if s.PromptID != "" && s.Registry != nil {
 		// Type assert to prompt.Registry interface
 		if registry, ok := s.Registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for pipeline
 			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
@@ -188,7 +188,7 @@ func (s *AnalyzeStage) Apply(ctx *contextdata.Envelope, output any) error {
 type PlanStage struct {
 	Task     *execution.Task
 	PromptID string
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *PlanStage) Name() string { return "plan" }
@@ -208,7 +208,7 @@ func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	if s.PromptID != "" && s.Registry != nil {
 		// Type assert to prompt.Registry interface
 		if registry, ok := s.Registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for pipeline
 			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
@@ -256,7 +256,7 @@ func (s *PlanStage) Apply(ctx *contextdata.Envelope, output any) error {
 type CodeStage struct {
 	Task     *execution.Task
 	PromptID string
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *CodeStage) Name() string { return "code" }
@@ -281,7 +281,7 @@ func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	if s.PromptID != "" && s.Registry != nil {
 		// Type assert to prompt.Registry interface
 		if registry, ok := s.Registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for pipeline
 			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
@@ -349,7 +349,7 @@ func (s *CodeStage) Apply(ctx *contextdata.Envelope, output any) error {
 type VerifyStage struct {
 	Task     *execution.Task
 	PromptID string
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 func (s *VerifyStage) Name() string { return "verify" }
@@ -412,7 +412,7 @@ func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	if s.PromptID != "" && s.Registry != nil {
 		// Type assert to prompt.Registry interface
 		if registry, ok := s.Registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for pipeline
 			rctx := buildPipelineRuntimeContext(ctx, s.Task, "pipeline")
@@ -466,20 +466,20 @@ func (s *VerifyStage) Apply(ctx *contextdata.Envelope, output any) error {
 }
 
 // buildPipelineRuntimeContext creates a prompt.RuntimeContext for pipeline stages.
-func buildPipelineRuntimeContext(env *contextdata.Envelope, task *execution.Task, paradigm string) interface{} {
+func buildPipelineRuntimeContext(env *contextdata.Envelope, task *execution.Task, paradigm string) any {
 	// Return a map that matches the expected RuntimeContext structure
 	// Using interface{} to avoid import cycles with framework/prompt
-	return map[string]interface{}{
+	return map[string]any{
 		"Variables": map[string]string{
 			"instruction": taskInstruction(task),
 		},
-		"State":        map[string]interface{}{},
+		"State":        map[string]any{},
 		"Envelope":     env,
 		"Paradigm":     paradigm,
 		"ConsumerID":   "pipeline",
 		"Task":         task,
-		"Tools":        []interface{}{}, // Tools not available at build time
-		"Capabilities": []interface{}{}, // Capabilities not available at build time
-		"AgentSpec":    nil,             // AgentSpec not available at build time
+		"Tools":        []any{},
+		"Capabilities": []any{},
+		"AgentSpec":    nil, // AgentSpec not available at build time
 	}
 }

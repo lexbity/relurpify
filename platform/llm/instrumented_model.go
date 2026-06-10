@@ -29,22 +29,22 @@ func NewInstrumentedModel(inner LanguageModel, telemetry Telemetry, debug bool) 
 }
 
 func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
-	m.emitPrompt(ctx, "generate", map[string]interface{}{
+	m.emitPrompt(ctx, "generate", map[string]any{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
 		"prompt_preview": clip(prompt, 1024),
-	}, m.Debug, map[string]interface{}{"prompt": clip(prompt, 8192)})
+	}, m.Debug, map[string]any{"prompt": clip(prompt, 8192)})
 	resp, err := m.Inner.Generate(ctx, prompt, options)
 	m.emitResponse(ctx, "generate", resp, err)
 	return resp, err
 }
 
 func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
-	m.emitPrompt(ctx, "generate_stream", map[string]interface{}{
+	m.emitPrompt(ctx, "generate_stream", map[string]any{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
 		"prompt_preview": clip(prompt, 1024),
-	}, m.Debug, map[string]interface{}{"prompt": clip(prompt, 8192)})
+	}, m.Debug, map[string]any{"prompt": clip(prompt, 8192)})
 	ch, err := m.Inner.GenerateStream(ctx, prompt, options)
 	// For stream, we only emit that a stream started; callers can still see tool calls/results via other telemetry.
 	if err != nil {
@@ -116,19 +116,19 @@ func (m *InstrumentedModel) UsesNativeToolCalling() bool {
 }
 
 type chatMetaPayload struct {
-	base  map[string]interface{}
-	debug map[string]interface{}
+	base  map[string]any
+	debug map[string]any
 }
 
 func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chatMetaPayload {
 	var roles []string
-	preview := make([]map[string]interface{}, 0, min(len(messages), 20))
+	preview := make([]map[string]any, 0, min(len(messages), 20))
 	for i, msg := range messages {
 		if i >= 20 {
 			break
 		}
 		roles = append(roles, msg.Role)
-		preview = append(preview, map[string]interface{}{
+		preview = append(preview, map[string]any{
 			"role":    msg.Role,
 			"name":    msg.Name,
 			"content": clip(msg.Content, 512),
@@ -138,7 +138,7 @@ func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chat
 	for _, t := range tools {
 		toolNames = append(toolNames, t.Name)
 	}
-	base := map[string]interface{}{
+	base := map[string]any{
 		"model":            modelFromOptions(options),
 		"message_count":    len(messages),
 		"roles":            roles,
@@ -146,11 +146,11 @@ func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chat
 		"tool_count":       len(tools),
 		"tool_names":       toolNames,
 	}
-	debug := map[string]interface{}{}
+	debug := map[string]any{}
 	if len(messages) > 0 {
-		full := make([]map[string]interface{}, 0, len(messages))
+		full := make([]map[string]any, 0, len(messages))
 		for _, msg := range messages {
-			full = append(full, map[string]interface{}{
+			full = append(full, map[string]any{
 				"role":    msg.Role,
 				"name":    msg.Name,
 				"content": clip(msg.Content, 8192),
@@ -164,12 +164,12 @@ func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chat
 	return chatMetaPayload{base: base, debug: debug}
 }
 
-func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base map[string]interface{}, debug bool, debugFields map[string]interface{}) {
+func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base map[string]any, debug bool, debugFields map[string]any) {
 	if m == nil || m.Telemetry == nil {
 		return
 	}
 	taskID, taskMeta := taskInfo(ctx)
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"kind": kind,
 	}
 	for k, v := range base {
@@ -200,7 +200,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 		obs.RecordTokenUsage(resp.Usage)
 		if snapshot, ok := obs.ConsumeResetNotice(); ok && m.Telemetry != nil {
 			taskID, taskMeta := taskInfo(ctx)
-			metadata := map[string]interface{}{
+			metadata := map[string]any{
 				"budget_snapshot": snapshot,
 			}
 			for k, v := range taskMeta {
@@ -233,7 +233,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 		return
 	}
 	taskID, taskMeta := taskInfo(ctx)
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"kind": kind,
 	}
 	for k, v := range taskMeta {
@@ -267,7 +267,7 @@ func modelFromOptions(options *LLMOptions) string {
 	return ""
 }
 
-func taskInfo(ctx context.Context) (string, map[string]interface{}) {
+func taskInfo(ctx context.Context) (string, map[string]any) {
 	// Task context extraction requires framework/core.TaskContextFrom
 	// For now, return empty values to break the import cycle
 	return "", nil
@@ -282,11 +282,4 @@ func clip(s string, max int) string {
 		return s
 	}
 	return s[:max] + "...(truncated)"
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

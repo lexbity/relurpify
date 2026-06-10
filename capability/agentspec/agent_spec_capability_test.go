@@ -3,7 +3,7 @@ package agentspec
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	"github.com/stretchr/testify/require"
 )

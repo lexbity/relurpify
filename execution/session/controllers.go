@@ -77,11 +77,11 @@ type CapabilitySummary struct {
 
 type CapabilityInvokeRequest struct {
 	CapabilityID string
-	Input        map[string]interface{}
+	Input        map[string]any
 }
 
 type CapabilityInvokeResult struct {
-	Output map[string]interface{}
+	Output map[string]any
 }
 
 // NamedAgentController provides catalog and session opening for named
@@ -106,6 +106,4 @@ type NamedAgentSession struct {
 }
 
 // TelemetryView provides read-only access to session telemetry.
-type TelemetryView interface {
-	// Observability methods added as domain extraction progresses.
-}
+type TelemetryView any

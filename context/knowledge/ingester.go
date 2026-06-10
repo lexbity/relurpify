@@ -65,7 +65,7 @@ func (ing *OutputIngester) WithJobSubmitter(s jobs.Submitter) *OutputIngester {
 
 // IngestLLMResponse implements telemetry.ResponseIngester.
 // The returned chunk is discarded; callers needing the chunk use IngestLLMResponseFull.
-func (ing *OutputIngester) IngestLLMResponse(ctx context.Context, resp interface{}) error {
+func (ing *OutputIngester) IngestLLMResponse(ctx context.Context, resp any) error {
 	if resp == nil {
 		return nil
 	}

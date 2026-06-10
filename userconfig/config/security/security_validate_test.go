@@ -3,7 +3,6 @@ package security
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,6 +58,6 @@ rules:
 		"load local tool policy",
 		"load workspace ingestion policy",
 	} {
-		require.True(t, strings.Contains(errText, want), "missing %s in %q", want, errText)
+		require.Contains(t, errText, want, "missing %s in %q", want, errText)
 	}
 }

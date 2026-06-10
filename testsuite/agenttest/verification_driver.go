@@ -139,11 +139,7 @@ func convertPreparedVerificationSteps(steps []PreparedVerificationStep) []Verify
 	}
 	out := make([]VerifyStepSpec, 0, len(steps))
 	for _, step := range steps {
-		out = append(out, VerifyStepSpec{
-			Tool:              step.Tool,
-			Args:              step.Args,
-			ContinueOnFailure: step.ContinueOnFailure,
-		})
+		out = append(out, VerifyStepSpec(step))
 	}
 	return out
 }

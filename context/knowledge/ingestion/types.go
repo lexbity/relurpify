@@ -25,7 +25,7 @@ type RawIngestion struct {
 type TypedIngestion struct {
 	Content           []byte          // Raw content
 	ContentType       string          // e.g., "go", "python", "markdown", "text"
-	StructuredRepr    interface{}     // AST or structured representation
+	StructuredRepr    any             // AST or structured representation
 	ChunkBoundaries   []ChunkBoundary // Where to split content into chunks
 	Metadata          map[string]any  // Preliminary metadata
 	SourcePrincipal   identity.SubjectRef

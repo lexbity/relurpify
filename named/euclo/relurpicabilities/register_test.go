@@ -39,7 +39,7 @@ func (t availabilityTool) Category() string    { return "test" }
 func (t availabilityTool) Parameters() []ports.ToolParameter {
 	return nil
 }
-func (t availabilityTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t availabilityTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 func (t availabilityTool) IsAvailable(ctx context.Context) bool { return t.available }

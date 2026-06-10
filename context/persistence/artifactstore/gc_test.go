@@ -94,7 +94,7 @@ func TestGCAgeRemovesOldSessions(t *testing.T) {
 	result, err := store.GCAge(ctx, 1*time.Hour)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.SessionsRemoved)
-	require.Greater(t, result.BytesFreed, int64(0))
+	require.Positive(t, result.BytesFreed)
 
 	// "new" session should remain.
 	newDir := filepath.Join(workspace, ".relurpify_state", "artifacts", "new")

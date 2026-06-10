@@ -3,7 +3,6 @@ package authorization
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
@@ -15,7 +14,7 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 		if pattern == "" {
 			continue
 		}
-		if search.MatchGlob(pattern, target) {
+		if matchGlob(pattern, target) {
 			return permissions.AgentPermissionDeny, pattern
 		}
 	}
@@ -24,7 +23,7 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 		if pattern == "" {
 			continue
 		}
-		if search.MatchGlob(pattern, target) {
+		if matchGlob(pattern, target) {
 			return permissions.AgentPermissionAllow, pattern
 		}
 	}

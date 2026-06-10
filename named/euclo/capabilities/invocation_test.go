@@ -9,12 +9,12 @@ import (
 )
 
 type mockRegistry struct {
-	args map[string]interface{}
+	args map[string]any
 }
 
-func (m *mockRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*ports.ToolResult, error) {
+func (m *mockRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	m.args = args
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{}}, nil
 }
 
 func TestInvokeCapability_ExtractsArgsFromTask(t *testing.T) {

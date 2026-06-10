@@ -59,7 +59,7 @@ func TestRunToolTestSuccess(t *testing.T) {
 		Path:   "inline_test",
 		Tool:   "cli_echo",
 		Stdout: "hello",
-		Args:   map[string]interface{}{"args": []interface{}{"hello"}},
+		Args:   map[string]any{"args": []any{"hello"}},
 		Expect: ToolTestExpect{
 			StdoutContains: []string{"hello"},
 		},
@@ -103,7 +103,7 @@ func TestRunToolTestFlagInjection(t *testing.T) {
 		Path:   "inline_flag_test",
 		Tool:   "cli_sed",
 		Stdout: "transformed",
-		Args:   map[string]interface{}{"args": []interface{}{"s/foo/bar/", "--flags-allowed"}},
+		Args:   map[string]any{"args": []any{"s/foo/bar/", "--flags-allowed"}},
 		Expect: ToolTestExpect{
 			StdoutContains: []string{"transformed"},
 		},
@@ -117,7 +117,7 @@ func TestRunToolTestNetworkEgressBlocked(t *testing.T) {
 		Path:   "inline_egress_test",
 		Tool:   "cli_curl",
 		Stdout: "should not be reached",
-		Args:   map[string]interface{}{"args": []interface{}{"http://127.0.0.1:8080/"}},
+		Args:   map[string]any{"args": []any{"http://127.0.0.1:8080/"}},
 		Expect: ToolTestExpect{
 			Success:       boolPtr(false),
 			ErrorContains: []string{"denied"},

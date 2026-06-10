@@ -85,5 +85,3 @@ type mutationBatch struct {
 func singleOpBatch(name string, op any) mutationBatch {
 	return mutationBatch{opName: name, op: op}
 }
-
-

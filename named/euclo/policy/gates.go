@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -145,7 +146,7 @@ func (n *GateNode) policyContextFromEnvelope(env *contextdata.Envelope) *PolicyC
 		FamilyID:             getString(env, "euclo.family_selection"),
 		EditPermitted:        getBool(env, "euclo.task_envelope.edit_permitted"),
 		RequiresVerification: getBool(env, policyVerificationKey),
-		RiskLevel:            firstNonEmpty(getString(env, "euclo.policy.risk_level"), "low"),
+		RiskLevel:            cmp.Or(getString(env, "euclo.policy.risk_level"), "low"),
 		WorkspaceScopes:      getStringSlice(env, "euclo.workspace_scopes"),
 	}
 }
@@ -280,13 +281,4 @@ func getStringSlice(env *contextdata.Envelope, key string) []string {
 		return nil
 	}
 	return append([]string(nil), v...)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

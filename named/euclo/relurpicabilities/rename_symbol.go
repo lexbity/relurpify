@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 type RenameSymbolHandler struct {
@@ -62,7 +62,7 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) d
 	}
 }
 
-func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	from, ok := stringArg(args, "from")
 	if !ok || strings.TrimSpace(from) == "" {
 		return failResult("from argument is required"), fmt.Errorf("from argument is required")
@@ -111,7 +111,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 	}
 	sort.Strings(paths)
 
-	modified := make([]interface{}, 0, len(paths))
+	modified := make([]any, 0, len(paths))
 	total := 0
 	previewFiles := make(map[string]string, len(paths))
 	for _, path := range paths {
@@ -124,7 +124,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 			return failResult(err.Error()), err
 		}
 		total += replacements
-		modified = append(modified, map[string]interface{}{
+		modified = append(modified, map[string]any{
 			"file":         resolvedPath,
 			"replacements": replacements,
 		})
@@ -140,7 +140,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"success":        true,
 		"from":           from,
 		"to":             to,

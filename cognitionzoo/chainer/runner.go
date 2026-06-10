@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
@@ -14,7 +15,7 @@ import (
 type chainRunner struct {
 	Model    model.LanguageModel
 	Options  model.LLMOptions
-	Registry interface{} // prompt.Registry - using interface{} to avoid import cycle
+	Registry any // prompt.Registry - using interface{} to avoid import cycle
 }
 
 // FilterState returns only the requested state keys.
@@ -36,7 +37,7 @@ func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
 }
 
 // RunChain executes a chain against state using isolated prompts.
-func RunChain(ctx context.Context, model model.LanguageModel, task *execution.Task, chain *Chain, env *contextdata.Envelope, registry interface{}) error {
+func RunChain(ctx context.Context, model model.LanguageModel, task *execution.Task, chain *Chain, env *contextdata.Envelope, registry any) error {
 	runner := &chainRunner{
 		Model:    model,
 		Registry: registry,
@@ -65,6 +66,7 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 			maxRetries = 1
 		}
 		userPrompt := taskInstruction(task)
+		backoffCalc := retry.NewBackoffCalculator(retry.DefaultPolicy())
 		for {
 			resp, err := r.Model.Chat(ctx, []model.Message{
 				{Role: "system", Content: systemPrompt},
@@ -76,7 +78,7 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 			parsed, parseErr := parseLinkResponse(link, resp.Text)
 			if parseErr == nil {
 				env.SetWorkingValueWithClass(link.OutputKey, parsed, contextdata.MemoryClassTask)
-				env.AddInteraction(map[string]interface{}{
+				env.AddInteraction(map[string]any{
 					"role":    "assistant",
 					"content": resp.Text,
 					"link":    link.Name,
@@ -86,6 +88,7 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 			if linkFailurePolicy(link) == FailurePolicyRetry && retries < maxRetries {
 				retries++
 				userPrompt = taskInstruction(task) + "\nPrevious response could not be parsed: " + parseErr.Error() + "\nReturn a corrected response."
+				retry.Sleep(ctx, backoffCalc.NextBackoff())
 				continue
 			}
 			return fmt.Errorf("%w: %s", ErrLinkParseFailure, parseErr.Error())
@@ -135,12 +138,12 @@ func taskInstruction(task *execution.Task) string {
 }
 
 // resolveSystemPrompt returns the system prompt for a link, checking PromptID first.
-func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envelope, registry interface{}) (string, error) {
+func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envelope, registry any) (string, error) {
 	// Check for registry-based resolution first
 	if link.PromptID != "" && registry != nil {
 		// Type assert to prompt.Registry interface
 		if reg, ok := registry.(interface {
-			Resolve(id string, ctx interface{}) (string, error)
+			Resolve(id string, ctx any) (string, error)
 		}); ok {
 			// Build runtime context for chainer
 			rctx := buildChainerRuntimeContext(task, env)
@@ -157,20 +160,20 @@ func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envel
 }
 
 // buildChainerRuntimeContext creates a prompt.RuntimeContext for chainer links.
-func buildChainerRuntimeContext(task *execution.Task, env *contextdata.Envelope) interface{} {
+func buildChainerRuntimeContext(task *execution.Task, env *contextdata.Envelope) any {
 	// Return a map that matches the expected RuntimeContext structure
 	// Using interface{} to avoid import cycles with framework/prompt
-	return map[string]interface{}{
+	return map[string]any{
 		"Variables": map[string]string{
 			"instruction": taskInstruction(task),
 		},
-		"State":        map[string]interface{}{},
+		"State":        map[string]any{},
 		"Envelope":     env,
 		"Paradigm":     "chainer",
 		"ConsumerID":   "chainer",
 		"Task":         task,
-		"Tools":        []interface{}{}, // Tools not available at build time
-		"Capabilities": []interface{}{}, // Capabilities not available at build time
-		"AgentSpec":    nil,             // AgentSpec not available at build time
+		"Tools":        []any{},
+		"Capabilities": []any{},
+		"AgentSpec":    nil, // AgentSpec not available at build time
 	}
 }

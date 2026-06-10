@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
@@ -84,7 +84,7 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) de
 }
 
 // Invoke executes the symbol trace and returns call graph information.
-func (h *SymbolTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *SymbolTraceHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	// Extract arguments
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
@@ -101,7 +101,7 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env ports.State, args m
 	}
 
 	// Convert root node to map
-	rootMap := map[string]interface{}{
+	rootMap := map[string]any{
 		"id":          callGraph.Root.ID,
 		"name":        callGraph.Root.Name,
 		"type":        string(callGraph.Root.Type),
@@ -129,7 +129,7 @@ func (h *SymbolTraceHandler) Invoke(ctx context.Context, env ports.State, args m
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success": true,
 			"symbol":  symbol,
 			"root":    rootMap,

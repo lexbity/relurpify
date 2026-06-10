@@ -393,7 +393,7 @@ func (p *SessionPane) viewFiles() string {
 				style = p.th.Warning()
 				icon = "●"
 			}
-			b.WriteString(fmt.Sprintf("%s  %s\n", style.Render(icon), style.Render(task.Description)))
+			fmt.Fprintf(&b, "%s  %s\n", style.Render(icon), style.Render(task.Description))
 		}
 		b.WriteString("\n")
 	}
@@ -437,7 +437,7 @@ func (p *SessionPane) viewChanges() string {
 				style = p.th.Warning()
 				icon = "●"
 			}
-			b.WriteString(fmt.Sprintf("%s  %s\n", style.Render(icon), style.Render(task.Description)))
+			fmt.Fprintf(&b, "%s  %s\n", style.Render(icon), style.Render(task.Description))
 		}
 		b.WriteString("\n")
 	}

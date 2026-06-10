@@ -19,7 +19,7 @@ func TestTelemetryEventEmission(t *testing.T) {
 			TaskID:    "task-1",
 			Message:   "agent started",
 			Timestamp: time.Now().UTC(),
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"status": "running",
 			},
 		}
@@ -88,7 +88,7 @@ func TestTelemetryEventEmission(t *testing.T) {
 			TaskID:    "task-1",
 			Message:   "tool called",
 			Timestamp: time.Now().UTC(),
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"tool_name": "read_file",
 				"file_path": "/test/file.txt",
 				"status":    "success",
@@ -299,7 +299,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata:  map[string]interface{}{"status": "success"},
+				Metadata:  map[string]any{"status": "success"},
 			},
 			{
 				Type:      telemetry.EventToolCall,
@@ -307,7 +307,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata:  map[string]interface{}{"status": "failed"},
+				Metadata:  map[string]any{"status": "failed"},
 			},
 			{
 				Type:      telemetry.EventToolCall,
@@ -315,7 +315,7 @@ func TestTelemetryEventFiltering(t *testing.T) {
 				TaskID:    "task-1",
 				Message:   "call",
 				Timestamp: time.Now().UTC(),
-				Metadata:  map[string]interface{}{"status": "success"},
+				Metadata:  map[string]any{"status": "success"},
 			},
 		}
 

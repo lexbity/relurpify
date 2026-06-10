@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 func (d CapabilityDescriptor) CapabilityID() string         { return d.ID }
@@ -16,8 +16,8 @@ func (d CapabilityDescriptor) CapabilityRuntimeFamily() string {
 	return string(d.RuntimeFamily)
 }
 func (d CapabilityDescriptor) SourceScope() classification.CapabilityScope { return scope(d) }
-func (d CapabilityDescriptor) SourceProviderID() string              { return sourceProviderID(d) }
-func (d CapabilityDescriptor) SourceSessionID() string               { return sourceSessionID(d) }
+func (d CapabilityDescriptor) SourceProviderID() string                    { return sourceProviderID(d) }
+func (d CapabilityDescriptor) SourceSessionID() string                     { return sourceSessionID(d) }
 
 func (d CapabilityDescriptor) CoordinationTaskTypes() []string { return coordinationTaskTypes(d) }
 func (d CapabilityDescriptor) CoordinationExecutionModes() []string {
@@ -46,8 +46,8 @@ func longRunning(d CapabilityDescriptor) int32 {
 }
 
 func scope(d CapabilityDescriptor) classification.CapabilityScope { return d.Source.Scope }
-func sourceProviderID(d CapabilityDescriptor) string        { return d.Source.ProviderID }
-func sourceSessionID(d CapabilityDescriptor) string         { return d.Source.SessionID }
+func sourceProviderID(d CapabilityDescriptor) string              { return d.Source.ProviderID }
+func sourceSessionID(d CapabilityDescriptor) string               { return d.Source.SessionID }
 
 func coordinationTaskTypes(d CapabilityDescriptor) []string {
 	if d.Coordination != nil {

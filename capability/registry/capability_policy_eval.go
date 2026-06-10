@@ -8,7 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 

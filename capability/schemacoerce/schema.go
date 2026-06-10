@@ -6,8 +6,8 @@ type Schema struct {
 	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
 	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
 	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     interface{}        `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []interface{}      `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
+	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
 	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
 	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
@@ -15,14 +15,14 @@ type Schema struct {
 
 // ValidateAndCoerce validates and coerces a value against a schema.
 // It returns the coerced value or an error if validation fails.
-func ValidateAndCoerce(schema *Schema, value interface{}) (interface{}, error) {
+func ValidateAndCoerce(schema *Schema, value any) (any, error) {
 	if schema == nil {
 		return value, nil
 	}
 	return coerce(schema, value)
 }
 
-func coerce(schema *Schema, value interface{}) (interface{}, error) {
+func coerce(schema *Schema, value any) (any, error) {
 	if value == nil {
 		if len(schema.Required) > 0 {
 			return nil, &ValidationError{Message: "value is required"}

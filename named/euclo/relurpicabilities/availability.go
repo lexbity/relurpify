@@ -30,7 +30,7 @@ func (h availabilityWrappedInvocableHandler) Descriptor(ctx context.Context, env
 	return descriptor.NormalizeCapabilityDescriptor(h.descriptor)
 }
 
-func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h availabilityWrappedInvocableHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	if h.handler == nil {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 // stringArg extracts a string argument from args map.
-func stringArg(args map[string]interface{}, key string) (string, bool) {
+func stringArg(args map[string]any, key string) (string, bool) {
 	val, ok := args[key]
 	if !ok {
 		return "", false
@@ -22,7 +22,7 @@ func stringArg(args map[string]interface{}, key string) (string, bool) {
 }
 
 // intArg extracts an integer argument from args map with a default value.
-func intArg(args map[string]interface{}, key string, defaultValue int) (int, bool) {
+func intArg(args map[string]any, key string, defaultValue int) (int, bool) {
 	val, ok := args[key]
 	if !ok {
 		return defaultValue, false
@@ -41,7 +41,7 @@ func intArg(args map[string]interface{}, key string, defaultValue int) (int, boo
 func failResult(message string) *ports.ToolResult {
 	return &ports.ToolResult{
 		Success: false,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success": false,
 			"error":   message,
 		},
@@ -138,10 +138,10 @@ func filterNodes(nodes []*ast.Node, types []ast.NodeType, languages []string) []
 }
 
 // nodesToMatchEntries converts AST nodes to match entry maps for output.
-func nodesToMatchEntries(nodes []*ast.Node) []map[string]interface{} {
-	matches := make([]map[string]interface{}, 0, len(nodes))
+func nodesToMatchEntries(nodes []*ast.Node) []map[string]any {
+	matches := make([]map[string]any, 0, len(nodes))
 	for _, node := range nodes {
-		entry := map[string]interface{}{
+		entry := map[string]any{
 			"id":          node.ID,
 			"name":        node.Name,
 			"type":        string(node.Type),
@@ -162,11 +162,11 @@ func nodesToMatchEntries(nodes []*ast.Node) []map[string]interface{} {
 }
 
 // traceEntries converts call graph nodes to trace entry maps.
-func traceEntries(callees, callers []*ast.Node) []map[string]interface{} {
-	entries := make([]map[string]interface{}, 0, len(callees)+len(callers))
+func traceEntries(callees, callers []*ast.Node) []map[string]any {
+	entries := make([]map[string]any, 0, len(callees)+len(callers))
 
 	for _, node := range callees {
-		entry := map[string]interface{}{
+		entry := map[string]any{
 			"id":         node.ID,
 			"name":       node.Name,
 			"type":       string(node.Type),
@@ -178,7 +178,7 @@ func traceEntries(callees, callers []*ast.Node) []map[string]interface{} {
 	}
 
 	for _, node := range callers {
-		entry := map[string]interface{}{
+		entry := map[string]any{
 			"id":         node.ID,
 			"name":       node.Name,
 			"type":       string(node.Type),
@@ -220,8 +220,8 @@ func writeRetrievalReferences(env *contextdata.Envelope, query string, nodes []*
 }
 
 // graphNodeEntry converts an AST node to a graph node entry map.
-func graphNodeEntry(node *ast.Node) map[string]interface{} {
-	return map[string]interface{}{
+func graphNodeEntry(node *ast.Node) map[string]any {
+	return map[string]any{
 		"id":          node.ID,
 		"name":        node.Name,
 		"type":        string(node.Type),
@@ -236,8 +236,8 @@ func graphNodeEntry(node *ast.Node) map[string]interface{} {
 }
 
 // graphEdgeEntry converts an AST edge to a graph edge entry map.
-func graphEdgeEntry(edge *ast.Edge) map[string]interface{} {
-	return map[string]interface{}{
+func graphEdgeEntry(edge *ast.Edge) map[string]any {
+	return map[string]any{
 		"id":         edge.ID,
 		"source_id":  edge.SourceID,
 		"target_id":  edge.TargetID,
@@ -247,15 +247,15 @@ func graphEdgeEntry(edge *ast.Edge) map[string]interface{} {
 }
 
 // callGraphToNodesEdges converts a call graph and node set to structured nodes and edges.
-func callGraphToNodesEdges(callGraph *ast.CallGraph, nodeSet map[string]*ast.Node, depth int) ([]map[string]interface{}, []map[string]interface{}) {
+func callGraphToNodesEdges(callGraph *ast.CallGraph, nodeSet map[string]*ast.Node, depth int) ([]map[string]any, []map[string]any) {
 	// Convert nodes to entries
-	nodes := make([]map[string]interface{}, 0, len(nodeSet))
+	nodes := make([]map[string]any, 0, len(nodeSet))
 	for _, node := range nodeSet {
 		nodes = append(nodes, graphNodeEntry(node))
 	}
 
 	// Build edges from call graph
-	edges := make([]map[string]interface{}, 0)
+	edges := make([]map[string]any, 0)
 	edgeID := 0
 
 	// Add callee edges
@@ -266,7 +266,7 @@ func callGraphToNodesEdges(callGraph *ast.CallGraph, nodeSet map[string]*ast.Nod
 				SourceID:   callGraph.Root.ID,
 				TargetID:   callee.ID,
 				Type:       ast.EdgeTypeCalls,
-				Attributes: map[string]interface{}{},
+				Attributes: map[string]any{},
 			}
 			edges = append(edges, graphEdgeEntry(edge))
 			edgeID++
@@ -281,7 +281,7 @@ func callGraphToNodesEdges(callGraph *ast.CallGraph, nodeSet map[string]*ast.Nod
 				SourceID:   caller.ID,
 				TargetID:   callGraph.Root.ID,
 				Type:       ast.EdgeTypeCalls,
-				Attributes: map[string]interface{}{},
+				Attributes: map[string]any{},
 			}
 			edges = append(edges, graphEdgeEntry(edge))
 			edgeID++
@@ -292,10 +292,10 @@ func callGraphToNodesEdges(callGraph *ast.CallGraph, nodeSet map[string]*ast.Nod
 }
 
 // parsePorcelainBlame parses git blame --porcelain output into structured entries.
-func parsePorcelainBlame(output string) []map[string]interface{} {
+func parsePorcelainBlame(output string) []map[string]any {
 	lines := strings.Split(output, "\n")
-	var entries []map[string]interface{}
-	var currentEntry map[string]interface{}
+	var entries []map[string]any
+	var currentEntry map[string]any
 
 	for _, line := range lines {
 		if line == "" {
@@ -309,7 +309,7 @@ func parsePorcelainBlame(output string) []map[string]interface{} {
 				entries = append(entries, currentEntry)
 			}
 			parts := strings.Fields(line)
-			currentEntry = map[string]interface{}{
+			currentEntry = map[string]any{
 				"commit":  parts[0],
 				"line":    parts[1],
 				"author":  "",

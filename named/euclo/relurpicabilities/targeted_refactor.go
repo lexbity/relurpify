@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -110,7 +110,7 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.Stat
 }
 
 // Invoke locates the target symbol and applies the transformation.
-func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	symbol, ok := stringArg(args, "symbol")
 	if !ok || symbol == "" {
 		return failResult("symbol argument is required"), nil
@@ -165,7 +165,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 		return failResult(err.Error()), nil
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"success":        true,
 		"file":           resolvedSourcePath,
 		"symbol":         symbol,

@@ -187,7 +187,7 @@ func (testGraphCapability) Descriptor(context.Context, ports.State) descriptor.C
 	}
 }
 
-func (testGraphCapability) Invoke(context.Context, ports.State, map[string]interface{}) (*ports.ToolResult, error) {
+func (testGraphCapability) Invoke(context.Context, ports.State, map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{
 		Success: true,
 		Data:    map[string]any{"executed": true},

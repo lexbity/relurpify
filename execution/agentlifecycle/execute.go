@@ -13,9 +13,9 @@ import (
 
 // ExecuteConfig holds the dependencies for ExecuteAgent.
 type ExecuteConfig struct {
-	AgentID         string
-	AgentExecutor   execution.AgentExecutor
-	Enforcer        authorization.Enforcer
+	AgentID       string
+	AgentExecutor execution.AgentExecutor
+	Enforcer      authorization.Enforcer
 }
 
 // ExecuteAgent runs an agent under governance authorization.

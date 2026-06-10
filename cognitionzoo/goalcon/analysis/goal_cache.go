@@ -1,44 +1,52 @@
 package analysis
 
 import (
+	"container/list"
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/types"
 )
 
-// GoalCache is a simple LRU-like cache for goal classifications.
-// It avoids re-classifying identical task instructions.
+type goalCacheEntry struct {
+	instruction string
+	goal        *types.GoalCondition
+	element     *list.Element
+}
+
 type GoalCache struct {
 	mu      sync.RWMutex
-	cache   map[string]*types.GoalCondition
+	ll      *list.List
+	cache   map[string]*goalCacheEntry
 	maxSize int
 }
 
-// NewGoalCache creates a new cache with a maximum size.
 func NewGoalCache(maxSize int) *GoalCache {
 	if maxSize <= 0 {
-		maxSize = 256 // default
+		maxSize = 256
 	}
 	return &GoalCache{
-		cache:   make(map[string]*types.GoalCondition),
+		ll:      list.New(),
+		cache:   make(map[string]*goalCacheEntry, maxSize),
 		maxSize: maxSize,
 	}
 }
 
-// Get retrieves a cached goal, or nil if not found.
 func (c *GoalCache) Get(instruction string) *types.GoalCondition {
 	if c == nil {
 		return nil
 	}
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if goal, ok := c.cache[instruction]; ok {
-		return goal
+	if entry, ok := c.cache[instruction]; ok {
+		c.mu.RUnlock()
+		c.mu.Lock()
+		c.ll.MoveToFront(entry.element)
+		c.mu.Unlock()
+		return entry.goal
 	}
+	c.mu.RUnlock()
 	return nil
 }
 
-// Set stores a goal in the cache.
 func (c *GoalCache) Set(instruction string, goal *types.GoalCondition) {
 	if c == nil || goal == nil {
 		return
@@ -46,25 +54,41 @@ func (c *GoalCache) Set(instruction string, goal *types.GoalCondition) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Simple size management: clear if at capacity
-	if len(c.cache) >= c.maxSize && c.cache[instruction] == nil {
-		c.cache = make(map[string]*types.GoalCondition)
+	if entry, ok := c.cache[instruction]; ok {
+		entry.goal = goal
+		c.ll.MoveToFront(entry.element)
+		return
 	}
 
-	c.cache[instruction] = goal
+	if len(c.cache) >= c.maxSize {
+		c.evictLocked()
+	}
+
+	entry := &goalCacheEntry{instruction: instruction, goal: goal}
+	entry.element = c.ll.PushFront(entry)
+	c.cache[instruction] = entry
 }
 
-// Clear empties the cache.
+func (c *GoalCache) evictLocked() {
+	back := c.ll.Back()
+	if back == nil {
+		return
+	}
+	entry := back.Value.(*goalCacheEntry)
+	c.ll.Remove(back)
+	delete(c.cache, entry.instruction)
+}
+
 func (c *GoalCache) Clear() {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cache = make(map[string]*types.GoalCondition)
+	c.ll = list.New()
+	c.cache = make(map[string]*goalCacheEntry)
 }
 
-// Size returns the number of cached entries.
 func (c *GoalCache) Size() int {
 	if c == nil {
 		return 0

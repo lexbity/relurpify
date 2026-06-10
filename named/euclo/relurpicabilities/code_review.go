@@ -19,7 +19,7 @@ import (
 	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -90,7 +90,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) des
 }
 
 // Invoke reviews code from the envelope's user files or retrieval context.
-func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
 	focus, _ := stringArg(args, "focus")
 	if focus == "" {
@@ -100,9 +100,9 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map
 	if !hasReviewContext(env) {
 		return &ports.ToolResult{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success":    true,
-				"findings":   []interface{}{},
+				"findings":   []any{},
 				"summary":    "no context to review",
 				"focus":      focus,
 				"file_count": 0,
@@ -114,9 +114,9 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map
 	if fileCount == 0 && strings.TrimSpace(contextText) == "" {
 		return &ports.ToolResult{
 			Success: true,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success":    true,
-				"findings":   []interface{}{},
+				"findings":   []any{},
 				"summary":    "no context to review",
 				"focus":      focus,
 				"file_count": 0,
@@ -143,7 +143,7 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":    true,
 			"findings":   findingsToInterfaces(findings),
 			"summary":    summary,
@@ -229,21 +229,21 @@ func buildReflectionReviewTask(focus, contextText string) *execution.Task {
 			focus,
 			contextText,
 		),
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"focus":       focus,
 			"context":     contextText,
 			"capability":  "euclo:cap.code_review",
 			"paradigm":    "reflection",
 			"review_mode": true,
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"capability_id": "euclo:cap.code_review",
 			"focus":         focus,
 		},
 	}
 }
 
-func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contextdata.Envelope, focus, contextText string) ([]map[string]interface{}, string, error) {
+func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contextdata.Envelope, focus, contextText string) ([]map[string]any, string, error) {
 	if h.gen == nil {
 		return nil, "", fmt.Errorf("model not available")
 	}
@@ -296,15 +296,15 @@ func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contex
 	return findings, summary, nil
 }
 
-func parseCodeReviewResponse(raw string) ([]map[string]interface{}, string, bool) {
+func parseCodeReviewResponse(raw string) ([]map[string]any, string, bool) {
 	var payload codeReviewPayload
 	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &payload); err != nil {
 		return nil, "", false
 	}
 
-	findings := make([]map[string]interface{}, 0, len(payload.Findings))
+	findings := make([]map[string]any, 0, len(payload.Findings))
 	for _, finding := range payload.Findings {
-		findings = append(findings, map[string]interface{}{
+		findings = append(findings, map[string]any{
 			"file":        finding.File,
 			"line":        finding.Line,
 			"severity":    normalizeReviewSeverity(finding.Severity),
@@ -316,7 +316,7 @@ func parseCodeReviewResponse(raw string) ([]map[string]interface{}, string, bool
 	return findings, strings.TrimSpace(payload.Summary), true
 }
 
-func extractReflectionReview(env *contextdata.Envelope) ([]map[string]interface{}, string, bool) {
+func extractReflectionReview(env *contextdata.Envelope) ([]map[string]any, string, bool) {
 	if review, ok := contextdata.GetTyped[any](env, "reflection.review"); ok {
 		if findings, summary, ok := decodeReflectionReview(review); ok {
 			return findings, summary, true
@@ -332,7 +332,7 @@ func extractReflectionReview(env *contextdata.Envelope) ([]map[string]interface{
 	return nil, "", false
 }
 
-func decodeReflectionReview(review any) ([]map[string]interface{}, string, bool) {
+func decodeReflectionReview(review any) ([]map[string]any, string, bool) {
 	if review == nil {
 		return nil, "", false
 	}
@@ -344,9 +344,9 @@ func decodeReflectionReview(review any) ([]map[string]interface{}, string, bool)
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, "", false
 	}
-	findings := make([]map[string]interface{}, 0, len(payload.Issues))
+	findings := make([]map[string]any, 0, len(payload.Issues))
 	for _, issue := range payload.Issues {
-		findings = append(findings, map[string]interface{}{
+		findings = append(findings, map[string]any{
 			"file":        "",
 			"line":        0,
 			"severity":    normalizeReviewSeverity(issue.Severity),
@@ -362,12 +362,12 @@ func decodeReflectionReview(review any) ([]map[string]interface{}, string, bool)
 	return findings, summary, true
 }
 
-func heuristicReviewFindings(contextText, focus string) []map[string]interface{} {
+func heuristicReviewFindings(contextText, focus string) []map[string]any {
 	lower := strings.ToLower(contextText)
-	var findings []map[string]interface{}
+	var findings []map[string]any
 
 	addFinding := func(severity, category, description, suggestion string) {
-		findings = append(findings, map[string]interface{}{
+		findings = append(findings, map[string]any{
 			"file":        "",
 			"line":        0,
 			"severity":    severity,
@@ -390,7 +390,7 @@ func heuristicReviewFindings(contextText, focus string) []map[string]interface{}
 	return findings
 }
 
-func writeCodeReviewReferences(env *contextdata.Envelope, findings []map[string]interface{}) {
+func writeCodeReviewReferences(env *contextdata.Envelope, findings []map[string]any) {
 	for i, finding := range findings {
 		file, _ := finding["file"].(string)
 		if strings.TrimSpace(file) == "" {
@@ -426,8 +426,8 @@ func intValue(v any) int {
 	}
 }
 
-func findingsToInterfaces(findings []map[string]interface{}) []interface{} {
-	out := make([]interface{}, 0, len(findings))
+func findingsToInterfaces(findings []map[string]any) []any {
+	out := make([]any, 0, len(findings))
 	for _, finding := range findings {
 		out = append(out, finding)
 	}

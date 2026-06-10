@@ -151,7 +151,7 @@ func AssertTelemetryEventCount(t *testing.T, env *TestEnvironment, eventType tel
 }
 
 // AssertTelemetryEventMetadata verifies that a telemetry event has specific metadata.
-func AssertTelemetryEventMetadata(t *testing.T, env *TestEnvironment, eventType telemetry.EventType, key string, expectedValue interface{}) {
+func AssertTelemetryEventMetadata(t *testing.T, env *TestEnvironment, eventType telemetry.EventType, key string, expectedValue any) {
 	t.Helper()
 
 	events := env.TelemetrySink.Events()

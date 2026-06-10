@@ -22,15 +22,15 @@ const (
 
 // AuditRecord captures a single trace event.
 type AuditRecord struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	AgentID     string                 `json:"agent_id"`
-	Action      string                 `json:"action"`
-	Type        string                 `json:"type"`
-	Permission  string                 `json:"permission"`
-	Result      string                 `json:"result"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	User        string                 `json:"user,omitempty"`
-	Correlation string                 `json:"correlation_id,omitempty"`
+	Timestamp   time.Time      `json:"timestamp"`
+	AgentID     string         `json:"agent_id"`
+	Action      string         `json:"action"`
+	Type        string         `json:"type"`
+	Permission  string         `json:"permission"`
+	Result      string         `json:"result"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	User        string         `json:"user,omitempty"`
+	Correlation string         `json:"correlation_id,omitempty"`
 }
 
 // AuditLogger defines the logging backend.

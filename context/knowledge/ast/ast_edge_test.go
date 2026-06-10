@@ -322,7 +322,7 @@ func Hello() {}
 
 	err = manager.IndexWorkspaceContext(ctx)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, context.Canceled))
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIndexManagerGetCallGraphWithMultipleResults(t *testing.T) {
@@ -386,7 +386,7 @@ func Hello() {}
 
 	err = manager.runWorkspaceIndex(ctx)
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, context.Canceled))
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIndexManagerIndexFilesParallelError(t *testing.T) {

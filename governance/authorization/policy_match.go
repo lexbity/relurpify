@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 

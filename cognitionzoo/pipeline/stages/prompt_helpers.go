@@ -12,7 +12,7 @@ import (
 
 // StatePayload retrieves workflow retrieval payload from state.
 // This replaces the workflowutil.StatePayload stub.
-func StatePayload(state interface{}, key string) []byte {
+func StatePayload(state any, key string) []byte {
 	if state == nil {
 		return nil
 	}
@@ -137,7 +137,7 @@ func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
 		if text == "" || text == "<nil>" {
 			text = "reference only"
 		}
-		line := fmt.Sprintf("%d. %s", i+1, truncatePromptText(text, 240))
+		line := fmt.Sprintf("%d. %s", i+1, truncate(text, 240))
 		if ref := workflowRetrievalReference(result); ref != "" {
 			line += "\n   Reference: " + ref
 		}
@@ -209,12 +209,16 @@ func workflowRetrievalReference(result map[string]any) string {
 	)
 }
 
-func truncatePromptText(value string, limit int) string {
+func truncate(value string, limit int) string {
 	value = strings.TrimSpace(value)
-	if limit <= 0 || len(value) <= limit {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
 		return value
 	}
-	return strings.TrimSpace(value[:limit]) + "..."
+	return string(runes[:limit]) + "…"
 }
 
 func firstPromptValue(values ...string) string {

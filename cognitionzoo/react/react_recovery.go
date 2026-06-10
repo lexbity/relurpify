@@ -11,7 +11,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Envelope, task *execution.Task, lastMap map[string]interface{}) map[string]interface{} {
+func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Envelope, task *execution.Task, lastMap map[string]any) map[string]any {
 	if agent == nil || agent.Tools == nil {
 		return nil
 	}
@@ -22,7 +22,7 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Enve
 	switch toolName {
 	case "file_read":
 		if path := primaryFailurePath(env, lastMap); path != "" {
-			return map[string]interface{}{"path": path}
+			return map[string]any{"path": path}
 		}
 		return nil
 	case "search_grep", "file_search":
@@ -30,18 +30,18 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Enve
 		if pattern == "" {
 			return nil
 		}
-		return map[string]interface{}{
+		return map[string]any{
 			"directory": primaryFailureDirectory(env, lastMap),
 			"pattern":   pattern,
 		}
 	case "query_ast":
 		if symbol := inferFailureSymbol(lastMap); symbol != "" {
-			return map[string]interface{}{"action": "get_signature", "symbol": symbol}
+			return map[string]any{"action": "get_signature", "symbol": symbol}
 		}
-		return map[string]interface{}{"action": "list_symbols", "category": "function"}
+		return map[string]any{"action": "list_symbols", "category": "function"}
 	}
 
-	args := make(map[string]interface{})
+	args := make(map[string]any)
 	params := tool.Parameters()
 	required := map[string]bool{}
 	for _, param := range params {
@@ -78,7 +78,7 @@ func recoveryProbeArgs(agent *ReActAgent, toolName string, env *contextdata.Enve
 	return args
 }
 
-func failureSignature(lastMap map[string]interface{}) string {
+func failureSignature(lastMap map[string]any) string {
 	return strings.TrimSpace(fmt.Sprint(lastMap))
 }
 
@@ -117,7 +117,7 @@ func recordRecoveryProbeUsage(env *contextdata.Envelope, signature, toolName str
 	env.SetWorkingValueWithClass("react.recovery_probes", store, contextdata.MemoryClassTask)
 }
 
-func primaryFailureDirectory(env *contextdata.Envelope, lastMap map[string]interface{}) string {
+func primaryFailureDirectory(env *contextdata.Envelope, lastMap map[string]any) string {
 	if task := envGetString(env, "react.failure_workdir"); task != "" {
 		return task
 	}
@@ -131,7 +131,7 @@ func primaryFailureDirectory(env *contextdata.Envelope, lastMap map[string]inter
 	return "."
 }
 
-func primaryFailurePath(env *contextdata.Envelope, lastMap map[string]interface{}) string {
+func primaryFailurePath(env *contextdata.Envelope, lastMap map[string]any) string {
 	if env != nil {
 		if path := strings.TrimSpace(envGetString(env, "react.failure_path")); path != "" {
 			return path
@@ -144,7 +144,7 @@ func primaryFailurePath(env *contextdata.Envelope, lastMap map[string]interface{
 	return ""
 }
 
-func primaryFailureSearchPattern(lastMap map[string]interface{}) string {
+func primaryFailureSearchPattern(lastMap map[string]any) string {
 	text := strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(lastMap)))
 	if text == "" {
 		return ""
@@ -154,7 +154,7 @@ func primaryFailureSearchPattern(lastMap map[string]interface{}) string {
 
 var rustSymbolPattern = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_:]*)`)
 
-func inferFailureSymbol(lastMap map[string]interface{}) string {
+func inferFailureSymbol(lastMap map[string]any) string {
 	text := fmt.Sprint(lastMap)
 	matches := rustSymbolPattern.FindAllString(text, -1)
 	for _, match := range matches {

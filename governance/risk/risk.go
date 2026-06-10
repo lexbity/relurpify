@@ -13,7 +13,7 @@
 // only read-only is still treated as at least sessioned/untrusted).
 package risk
 
-import "codeburg.org/lexbit/relurpify/capability/classification"
+import "codeburg.org/lexbit/relurpify/governance/classification"
 
 // RiskClass classifies the risk of a capability.
 type RiskClass string

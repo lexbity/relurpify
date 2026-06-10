@@ -98,7 +98,7 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 		toolResult := &ports.ToolResult{
 			Success: runResult.Success,
 			Error:   runResult.Error,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"stdout": runResult.Stdout,
 				"stderr": runResult.Stderr,
 			},
@@ -116,11 +116,11 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 	}
 }
 
-func normalizeVerifyArgs(args map[string]any) map[string]interface{} {
+func normalizeVerifyArgs(args map[string]any) map[string]any {
 	if len(args) == 0 {
 		return nil
 	}
-	out := make(map[string]interface{}, len(args))
+	out := make(map[string]any, len(args))
 	for key, value := range args {
 		out[key] = value
 	}

@@ -68,7 +68,7 @@ func RequireResultSuccess(tb testing.TB, result *execution.Result) {
 	}
 }
 
-func RequireContextKey(tb testing.TB, state *contextdata.Envelope, key string, want interface{}) {
+func RequireContextKey(tb testing.TB, state *contextdata.Envelope, key string, want any) {
 	tb.Helper()
 	if state == nil {
 		tb.Fatalf("context unavailable")

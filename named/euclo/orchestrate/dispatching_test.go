@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -321,7 +322,8 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 
 	result, err := Dispatch(context.Background(), env, req, reg, nil)
 	if err != nil {
-		if _, ok := err.(*RouteResolutionError); !ok {
+		routeResolutionError := &RouteResolutionError{}
+		if errors.As(err, &routeResolutionError) {
 			t.Fatalf("expected RouteResolutionError, got %T", err)
 		}
 	} else {
@@ -346,7 +348,8 @@ func TestDispatch_AllUnavailable_HardFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected hard failure when no route is available")
 	}
-	if _, ok := err.(*RouteResolutionError); !ok {
+	routeResolutionError := &RouteResolutionError{}
+	if errors.As(err, &routeResolutionError) {
 		t.Fatalf("expected RouteResolutionError, got %T", err)
 	}
 }

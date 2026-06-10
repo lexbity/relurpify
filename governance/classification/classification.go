@@ -1,13 +1,8 @@
-// Package classification defines the self-declared facts about a capability:
-// what effects it has and what scope it operates in.
-//
-// Per Q1: EffectClass and CapabilityScope are owned by capability (the tool
-// knows what it does and where it comes from). RiskClass — a governance
-// judgment — lives in governance/risk.
-//
-// This is a pure vocabulary package: types and consts only, zero exported
-// functions. It is not a cross-domain bucket — it is the public vocabulary
-// of the capability domain.
+// Package classification defines self-declared effect and scope facts for
+// capabilities. EffectClass and CapabilityScope are pure vocabulary (types
+// and consts only, zero exported functions). They live in governance so that
+// governance/risk.Classify (the sole risk producer) does not import capability.
+// Capability declarers import them via the legal capability→governance edge.
 package classification
 
 // EffectClass classifies the effect of a capability.

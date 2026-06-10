@@ -22,7 +22,7 @@ type ToolTestCase struct {
 	Tool string `yaml:"tool"`
 
 	// Args are the invocation arguments (map[string]interface{}).
-	Args map[string]interface{} `yaml:"args,omitempty"`
+	Args map[string]any `yaml:"args,omitempty"`
 
 	// Stdin is optional standard input for the tool.
 	Stdin string `yaml:"stdin,omitempty"`

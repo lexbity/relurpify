@@ -63,7 +63,7 @@ type CapabilityRuntimeOptions struct {
 type PermissionManager interface {
 	regpkg.PermissionManagerHandle
 	CheckFileAccess(context.Context, string, permissions.FileSystemAction, string) error
-	SetEventLogger(func(context.Context, permissions.PermissionDescriptor, string, string, map[string]interface{}))
+	SetEventLogger(func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any))
 	DefaultPolicy() string
 }
 

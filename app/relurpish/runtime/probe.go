@@ -317,7 +317,7 @@ func inspectContainerd(ctx context.Context, policy sandbox.CommandPolicy) Sandbo
 
 // dockerSupportsRunsc parses the docker runtime map looking for runsc entries.
 func dockerSupportsRunsc(payload string) bool {
-	var runtimes map[string]map[string]interface{}
+	var runtimes map[string]map[string]any
 	if err := json.Unmarshal([]byte(payload), &runtimes); err != nil {
 		return strings.Contains(payload, "runsc")
 	}

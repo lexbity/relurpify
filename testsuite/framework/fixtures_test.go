@@ -381,7 +381,7 @@ func TestAuditRecordFixtureBuilder(t *testing.T) {
 			WithCorrelation("custom-correlation")
 		record := builder.Build()
 
-		AssertNormalizedAuditRecordsEqual(t, []policy.AuditRecord{record}, []policy.AuditRecord{{AgentID: "custom-agent", Action: "custom_action", Type: "custom_type", Permission: "custom_permission", Result: "custom_result", Metadata: map[string]interface{}{"source": "fixture"}, Correlation: "custom-correlation"}})
+		AssertNormalizedAuditRecordsEqual(t, []policy.AuditRecord{record}, []policy.AuditRecord{{AgentID: "custom-agent", Action: "custom_action", Type: "custom_type", Permission: "custom_permission", Result: "custom_result", Metadata: map[string]any{"source": "fixture"}, Correlation: "custom-correlation"}})
 	})
 }
 
@@ -477,8 +477,8 @@ func TestNormalizationHelpers(t *testing.T) {
 
 	t.Run("audit and telemetry normalization", func(t *testing.T) {
 		timestamp := policy.AuditRecord{}.Timestamp
-		audit := []policy.AuditRecord{{AgentID: "agent", Action: "action", Type: "type", Permission: "permission", Result: "granted", Timestamp: timestamp, Metadata: map[string]interface{}{"reason": "fixture"}}}
-		telemetry := []telemetry.Event{{Type: telemetry.EventNodeFinish, TaskID: "task", NodeID: "node", Message: "msg", Timestamp: timestamp, Metadata: map[string]interface{}{"source": "fixture"}}}
+		audit := []policy.AuditRecord{{AgentID: "agent", Action: "action", Type: "type", Permission: "permission", Result: "granted", Timestamp: timestamp, Metadata: map[string]any{"reason": "fixture"}}}
+		telemetry := []telemetry.Event{{Type: telemetry.EventNodeFinish, TaskID: "task", NodeID: "node", Message: "msg", Timestamp: timestamp, Metadata: map[string]any{"source": "fixture"}}}
 
 		normalizedAudit := NormalizeAuditRecords(audit)
 		normalizedTelemetry := NormalizeTelemetryEvents(telemetry)

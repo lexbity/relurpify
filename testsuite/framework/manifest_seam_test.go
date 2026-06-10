@@ -41,10 +41,7 @@ func TestManifestResolution(t *testing.T) {
 
 		AssertNormalizedFileSystemPermissionsEqual(t, loaded.Spec.Permissions.FileSystem, []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "${workspace}/**"}})
 
-		resolved, err := config.ResolveEffectivePermissions(env.WorkspacePath, loaded)
-		if err != nil {
-			t.Fatalf("resolve effective permissions failed: %v", err)
-		}
+		resolved := permissions.ResolveEffective(nil, &loaded.Spec.Permissions)
 		AssertNormalizedFileSystemPermissionsEqual(t, resolved.FileSystem, []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "${workspace}/**"}})
 	})
 
@@ -141,10 +138,7 @@ func TestManifestPermissionPropagation(t *testing.T) {
 			t.Fatalf("failed to load manifest: %v", err)
 		}
 
-		resolved, err := config.ResolveEffectivePermissions(env.WorkspacePath, loaded)
-		if err != nil {
-			t.Fatalf("resolve effective permissions failed: %v", err)
-		}
+		resolved := permissions.ResolveEffective(nil, &loaded.Spec.Permissions)
 
 		manager, err := authorization.NewPermissionManager(env.WorkspacePath, &resolved, env.AuditSink, nil)
 		if err != nil {

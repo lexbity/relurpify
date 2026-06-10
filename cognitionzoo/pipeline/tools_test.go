@@ -43,7 +43,7 @@ func TestPipelineToolWithoutInvokerReturnsHardError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when invoker is nil, got nil")
 	}
-	if !contains(err.Error(), "capability invoker required") {
+	if !strings.Contains(err.Error(), "capability invoker required") {
 		t.Fatalf("expected error about capability invoker, got: %v", err)
 	}
 	if len(observations) != 0 {
@@ -96,7 +96,7 @@ func TestPipelineToolWithInvokerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !contains(err.Error(), "invoker error") {
+	if !strings.Contains(err.Error(), "invoker error") {
 		t.Fatalf("expected 'invoker error', got: %v", err)
 	}
 	if len(observations) != 0 {
@@ -117,7 +117,7 @@ func TestPipelineToolUnknownNameReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown tool, got nil")
 	}
-	if !contains(err.Error(), "not allowed") {
+	if !strings.Contains(err.Error(), "not allowed") {
 		t.Fatalf("expected 'not allowed' error, got: %v", err)
 	}
 	if len(observations) != 0 {
@@ -144,7 +144,7 @@ func (f *fakeTool) Name() string                      { return f.name }
 func (f *fakeTool) Description() string               { return "fake tool for testing" }
 func (f *fakeTool) Category() string                  { return "test" }
 func (f *fakeTool) Parameters() []ports.ToolParameter { return nil }
-func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (f *fakeTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
@@ -156,7 +156,3 @@ func (f *fakeTool) Permissions() ports.ToolPermissions {
 	}}
 }
 func (f *fakeTool) Tags() []string { return nil }
-
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
-}

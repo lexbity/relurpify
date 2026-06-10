@@ -1,6 +1,9 @@
 package arch
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCheckForbiddenImports(t *testing.T) {
 	pkgs := []GoPackage{
@@ -36,17 +39,8 @@ func TestCheckForbiddenImports(t *testing.T) {
 	}
 	// the legitimate package and the look-alike must not be flagged
 	for _, v := range got {
-		if contains(v, "framework/authorization") || contains(v, "coreutil") || contains(v, "typesafe") {
+		if strings.Contains(v, "framework/authorization") || strings.Contains(v, "coreutil") || strings.Contains(v, "typesafe") {
 			t.Errorf("unexpected violation: %s", v)
 		}
 	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

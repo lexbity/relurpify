@@ -110,7 +110,7 @@ func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy sandbox.CommandPol
 		logCh:       make(chan string, 256),
 	}
 
-	handler := jsonrpc2.HandlerWithError(func(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) (interface{}, error) {
+	handler := jsonrpc2.HandlerWithError(func(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) (any, error) {
 		if req.Notif && req.Method == "textDocument/publishDiagnostics" {
 			var params protocol.PublishDiagnosticsParams
 			if err := json.Unmarshal(*req.Params, &params); err != nil {

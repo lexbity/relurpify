@@ -133,7 +133,7 @@ func TestDirtyMemory_MutationRejectedAfterFailedApply(t *testing.T) {
 
 	// The commit should have succeeded (persisted to backend) but the apply
 	// failed, so the engine should be dirty.
-	require.NotNil(t, engine.dirtyErr, "dirtyErr must be set after failed apply")
+	require.Error(t, engine.dirtyErr, "dirtyErr must be set after failed apply")
 
 	// Further mutations are rejected.
 	err = engine.UpsertNode(NodeRecord{ID: "z", Kind: "function"})

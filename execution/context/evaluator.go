@@ -37,7 +37,7 @@ func (e *Evaluator) AdmitTrustClass(trustClass agentspec.TrustClass) (bool, stri
 }
 
 // AdmitChunk checks whether a knowledge chunk is permitted under current policy.
-func (e *Evaluator) AdmitChunk(chunk interface{}) (bool, string) {
+func (e *Evaluator) AdmitChunk(chunk any) (bool, string) {
 	return true, ""
 }
 
@@ -65,7 +65,7 @@ func (e *Evaluator) ConsumeQuota(principal identity.SubjectRef, chunks int, toke
 
 // ResetQuota clears all quota counters.
 func (e *Evaluator) ResetQuota() {
-	e.quotaCounters.Range(func(key, value interface{}) bool {
+	e.quotaCounters.Range(func(key, value any) bool {
 		e.quotaCounters.Delete(key)
 		return true
 	})
@@ -169,7 +169,7 @@ func (qc *quotaCounter) consume(chunks, tokens, maxChunks, maxTokens int) bool {
 
 // Compile compiles a context policy from the agent manifest and defaults.
 // This is the entry point that replaces contextpolicy.Compile.
-func Compile(manifest interface{}, defaults *ContextPolicyBundle) (*ContextPolicyBundle, error) {
+func Compile(manifest any, defaults *ContextPolicyBundle) (*ContextPolicyBundle, error) {
 	if defaults == nil {
 		defaults = DefaultContextPolicy()
 	}
@@ -205,8 +205,8 @@ func DefaultContextPolicy() *ContextPolicyBundle {
 
 // NewLoggerFunc is a helper to create a *log.Logger that satisfies
 // the compiler's logging interface.  This avoids importing "log" in this package.
-func NewLoggerFunc(prefix string) func(string, ...interface{}) {
-	return func(format string, args ...interface{}) {
+func NewLoggerFunc(prefix string) func(string, ...any) {
+	return func(format string, args ...any) {
 		msg := fmt.Sprintf(format, args...)
 		fmt.Println(strings.TrimSpace(prefix + " " + msg))
 	}

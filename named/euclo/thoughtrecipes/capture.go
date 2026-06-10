@@ -13,9 +13,7 @@ func LowerCaptureBindings(block *CaptureBlock) []CaptureBinding {
 		return nil
 	}
 	out := make([]CaptureBinding, 0, len(block.Bindings))
-	for _, binding := range block.Bindings {
-		out = append(out, binding)
-	}
+	out = append(out, block.Bindings...)
 	return out
 }
 

@@ -339,8 +339,8 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			}
 			// Re-wire the permission event logger with full event log support.
 			if registration.Permissions != nil {
-				registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
-					payload := map[string]interface{}{
+				registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
+					payload := map[string]any{
 						"permission_type": desc.Type,
 						"action":          desc.Action,
 						"resource":        desc.Resource,
@@ -871,7 +871,7 @@ func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 	if eventLog == nil || snapshot == nil {
 		return
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"manifest_path": snapshot.SourcePath,
 		"fingerprint":   hex.EncodeToString(snapshot.Fingerprint[:]),
 		"warnings":      append([]string(nil), snapshot.Warnings...),

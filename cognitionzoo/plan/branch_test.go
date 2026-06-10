@@ -20,7 +20,7 @@ func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error)
 	return &conflictingIsolatedExecutor{shared: e.shared}, nil
 }
 func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
-	stepVal, _ := task.Context["current_step"]
+	stepVal := task.Context["current_step"]
 	step, _ := stepVal.(PlanStep)
 	env.SetWorkingValueWithClass("shared.conflict", step.ID, contextdata.MemoryClassTask)
 	return &Result{Success: true}, nil

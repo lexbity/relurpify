@@ -29,7 +29,7 @@ func (f *fullFeaturesTool) Parameters() []ports.ToolParameter {
 		{Name: "bool_param", Type: ports.ToolParamBoolean, Description: "A boolean", Required: false},
 	}
 }
-func (f *fullFeaturesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (f *fullFeaturesTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 func (f *fullFeaturesTool) IsAvailable(ctx context.Context) bool { return true }
@@ -45,11 +45,11 @@ func TestOllamaSchemaTopLevelStringPreserved(t *testing.T) {
 	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
-	props, ok := ollamaParams["properties"].(map[string]interface{})
+	props, ok := ollamaParams["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("expected properties map")
 	}
-	strProp, ok := props["str_param"].(map[string]interface{})
+	strProp, ok := props["str_param"].(map[string]any)
 	if !ok {
 		t.Fatal("expected str_param property")
 	}
@@ -66,11 +66,11 @@ func TestOllamaSchemaIntegerPreserved(t *testing.T) {
 	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
-	props, ok := ollamaParams["properties"].(map[string]interface{})
+	props, ok := ollamaParams["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("expected properties map")
 	}
-	intProp, ok := props["int_param"].(map[string]interface{})
+	intProp, ok := props["int_param"].(map[string]any)
 	if !ok {
 		t.Fatal("expected int_param property")
 	}
@@ -100,11 +100,11 @@ func TestOllamaSchemaBooleanPreserved(t *testing.T) {
 	spec := ports.LLMToolSpecFromTool(tool)
 	ollamaParams := schemaToOllamaParameters(spec.InputSchema)
 
-	props, ok := ollamaParams["properties"].(map[string]interface{})
+	props, ok := ollamaParams["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("expected properties map")
 	}
-	boolProp, ok := props["bool_param"].(map[string]interface{})
+	boolProp, ok := props["bool_param"].(map[string]any)
 	if !ok {
 		t.Fatal("expected bool_param property")
 	}

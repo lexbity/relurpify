@@ -53,7 +53,7 @@ func (t *subprocessTool) Tags() []string {
 // platform variants, and placeholder substitution), then delegates to the
 // shared Run function which applies all guards (egress, cargo isolation,
 // sandbox constraints) and returns a structured envelope.
-func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{}) (res *ports.ToolResult, err error) {
+func (t *subprocessTool) Execute(ctx context.Context, args map[string]any) (res *ports.ToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("subprocess tool %q panic recovered: %v", t.manifest.Name, r)
@@ -92,7 +92,7 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, fmt.Errorf("subprocess execution failed: %w", runErr)
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"stdout":     result.Stdout,
 		"stderr":     result.Stderr,
 		"exit_code":  result.ExitCode,
@@ -123,7 +123,7 @@ func hasDestructiveRisk(classes []string) bool {
 	return false
 }
 
-func stringArg(args map[string]interface{}, name string) string {
+func stringArg(args map[string]any, name string) string {
 	if args == nil {
 		return ""
 	}

@@ -100,7 +100,7 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State
 	}
 }
 
-func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
 	_ = ctx
 	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
@@ -336,7 +336,7 @@ func ambiguityFromValue(value any) (bool, float64, bool) {
 		return false, 0, false
 	}
 	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return false, 0, false
 		}
@@ -399,7 +399,7 @@ func confidenceFromAny(value any) float64 {
 	}
 }
 
-func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]interface{}) string {
+func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]any) string {
 	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
 		return thoughtrecipeID
 	}
@@ -521,7 +521,7 @@ func stateCandidateFamiliesFromEnvelope(env *contextdata.Envelope) []string {
 	return familiesOut
 }
 
-func stringArg(args map[string]interface{}, key string) string {
+func stringArg(args map[string]any, key string) string {
 	if len(args) == 0 {
 		return ""
 	}
@@ -558,7 +558,7 @@ func clarificationThoughtRecipeForFamily(family string) string {
 	}
 }
 
-func buildGroundingFromState(state *intentcontext.ClarificationState, args map[string]interface{}) (map[string]any, []retrieval.AnchorRef, []string) {
+func buildGroundingFromState(state *intentcontext.ClarificationState, args map[string]any) (map[string]any, []retrieval.AnchorRef, []string) {
 	grounding := map[string]any{
 		"grounded_anchor_ids": []string{},
 	}

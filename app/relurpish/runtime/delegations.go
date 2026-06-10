@@ -9,7 +9,6 @@ import (
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -29,7 +28,6 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request policy.Delegati
 	}
 	opts.Registry = registry.NewDelegationRegistry(r.Tools)
 	opts.AgentSpec = r.AgentWorkspace().AgentSpec
-	opts.State = firstDelegationContext(opts.State)
 	if shouldUseBackgroundDelegation(request) {
 		runner, err := r.ensureBackgroundDelegationProvider(ctx)
 		if err != nil {
@@ -74,15 +72,6 @@ func (r *Runtime) PersistDelegations(ctx context.Context, repo governanceports.D
 		return fmt.Errorf("runtime delegations unavailable")
 	}
 	return r.Delegations.PersistDelegations(ctx, repo, workflowID, runID)
-}
-
-func firstDelegationContext(values ...*contextdata.Envelope) *contextdata.Envelope {
-	for _, value := range values {
-		if value != nil {
-			return value
-		}
-	}
-	return nil
 }
 
 func (r *Runtime) ensureBackgroundDelegationProvider(ctx context.Context) (*backgroundDelegationProvider, error) {
@@ -139,7 +128,7 @@ func (r *Runtime) emitDelegationTelemetry(snapshot policy.DelegationSnapshot) {
 	case policy.DelegationStateCancelled:
 		eventType = telemetry.EventDelegationCancel
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"delegation_id":        snapshot.Request.ID,
 		"workflow_id":          snapshot.Request.WorkflowID,
 		"task_id":              snapshot.Request.TaskID,
@@ -178,7 +167,7 @@ func (r *Runtime) logDelegationAudit(snapshot policy.DelegationSnapshot) {
 	if snapshot.Result != nil && snapshot.Result.Success {
 		result = "success"
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"delegation_id":        snapshot.Request.ID,
 		"workflow_id":          snapshot.Request.WorkflowID,
 		"task_id":              snapshot.Request.TaskID,

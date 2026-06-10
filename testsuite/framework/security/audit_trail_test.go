@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -226,7 +227,7 @@ func TestCommandPolicyAuditCorrelation(t *testing.T) {
 		}
 
 		unwrapped := wrapperErr.Unwrap()
-		if unwrapped != cause {
+		if !errors.Is(unwrapped, cause) {
 			t.Error("cause should be preserved for audit correlation")
 		}
 	})

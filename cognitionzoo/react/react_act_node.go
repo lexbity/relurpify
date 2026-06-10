@@ -9,14 +9,14 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	capruntime "codeburg.org/lexbit/relurpify/capability/runtime"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -65,7 +65,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 			if len(calls) == 0 {
 				env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 			} else {
-				results := make(map[string]interface{})
+				results := make(map[string]any)
 				envelopes := make(map[string]*capresult.CapabilityResultEnvelope)
 				toolErrors := make([]string, 0)
 				overallSuccess := true
@@ -112,7 +112,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						n.recordObservation(env, call, res, envelope)
 						n.latchVerificationSuccess(env, call.Name, res)
 						n.refreshIndexesAfterMutation(call, res)
-						results[callID] = map[string]interface{}{
+						results[callID] = map[string]any{
 							"success": res.Success,
 							"data":    res.Data,
 							"error":   res.Error,
@@ -157,7 +157,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	decision := val.(decisionPayload)
 	toolName := strings.TrimSpace(decision.Tool)
 	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
-		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: true}
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
@@ -165,21 +165,21 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	if !n.capabilityAllowed(toolName, activeTools) || !n.agent.Tools.HasCapability(toolName) {
 		lower := strings.ToLower(toolName)
 		if lower == "" || strings.Contains(lower, "none") {
-			env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{}, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{}, contextdata.MemoryClassTask)
 			result := &execution.Result{NodeID: n.id, Success: true}
 			env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 			return result, nil
 		}
 		// Feed error back to the LLM so it can retry with a valid tool name.
 		errMsg := fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", toolName)
-		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{"error": errMsg}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	if !n.agent.Tools.CapabilityAvailable(ctx, env.State(), toolName) {
 		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
-		env.SetWorkingValueWithClass("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{"error": errMsg}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
@@ -291,7 +291,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	envelope := capresult.NewCapabilityResultEnvelope(desc, res, capresult.ContentDispositionRaw, snapshot, approval)
 	envelope = capresult.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
 	if n != nil && n.agent != nil && n.agent.Config != nil && n.agent.Config.Telemetry != nil {
-		metadata := map[string]interface{}{
+		metadata := map[string]any{
 			"security_event": "insertion_decision",
 			"capability_id":  envelope.Descriptor.ID,
 			"capability":     envelope.Descriptor.Name,
@@ -316,7 +316,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	}
 	if res != nil {
 		if res.Metadata == nil {
-			res.Metadata = map[string]interface{}{}
+			res.Metadata = map[string]any{}
 		}
 		res.Metadata["insertion_decision"] = envelope.Insertion
 	}

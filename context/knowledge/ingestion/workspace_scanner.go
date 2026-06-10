@@ -28,8 +28,8 @@ type SkillIngestionSource struct {
 type WorkspaceScanner struct {
 	Store         *knowledge.ChunkStore
 	Events        EventLog
-	Policy        interface{} // *contextports.PolicyBundle (avoid import cycle)
-	Evaluator     interface{} // contextports.PolicyEvaluator
+	Policy        any // *contextports.PolicyBundle (avoid import cycle)
+	Evaluator     any // contextports.PolicyEvaluator
 	Concurrency   int
 	IncludeGlobs  []string
 	ExcludeGlobs  []string
@@ -317,7 +317,7 @@ func (s *WorkspaceScanner) AddScanner(scanner Scanner) {
 }
 
 // SetPolicy sets the context policy for the workspace scanner.
-func (s *WorkspaceScanner) SetPolicy(policy interface{}) {
+func (s *WorkspaceScanner) SetPolicy(policy any) {
 	s.Policy = policy
 }
 

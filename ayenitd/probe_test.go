@@ -77,7 +77,7 @@ func TestProbeWorkspace_WorkspaceNotFound(t *testing.T) {
 }
 
 func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
-	f, err := os.CreateTemp("", "ayenitd-probe-*.txt")
+	f, err := os.CreateTemp(t.TempDir(), "ayenitd-probe-*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}

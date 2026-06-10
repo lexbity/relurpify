@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	"codeburg.org/lexbit/relurpify/context/contextdata"

@@ -93,7 +93,7 @@ func (p *backgroundDelegationProvider) HealthSnapshot(context.Context) (provider
 	defer p.mu.Unlock()
 	return provider.ProviderHealthSnapshot{
 		Status: "ok",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"active_sessions": len(p.sessions),
 		},
 	}, nil
@@ -148,7 +148,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 				CreatedAt:      now,
 				LastActivityAt: now,
 				Health:         "running",
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"delegation_id":      request.ID,
 					"target_capability":  target.CapabilityID(),
 					"target_public_name": target.CapabilityName(),
@@ -185,9 +185,9 @@ func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context,
 	defer close(session.results)
 	state := opts.State
 	if state == nil {
-		state = contextdata.NewEnvelope(request.ID, sessionID)
+		state = contextdata.NewEnvelopeState(contextdata.NewEnvelope(request.ID, sessionID))
 	}
-	result, err := p.runtime.Tools.InvokeCapability(ctx, state.State(), target.CapabilityID(), args)
+	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.CapabilityID(), args)
 	status := "completed"
 	if err != nil {
 		status = "failed"
@@ -237,7 +237,7 @@ func cloneProviderSessionSnapshot(snapshot provider.ProviderSessionSnapshot) pro
 		out.Session.CapabilityIDs = append([]string(nil), snapshot.Session.CapabilityIDs...)
 	}
 	if snapshot.Session.Metadata != nil {
-		out.Session.Metadata = map[string]interface{}{}
+		out.Session.Metadata = map[string]any{}
 		for key, value := range snapshot.Session.Metadata {
 			out.Session.Metadata[key] = value
 		}

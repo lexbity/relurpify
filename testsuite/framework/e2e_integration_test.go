@@ -70,7 +70,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		TaskID:    "task-1",
 		Message:   "agent started",
 		Timestamp: time.Now().UTC(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"agent_id": "test-agent",
 			"status":   "running",
 		},
@@ -98,7 +98,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		TaskID:    "task-1",
 		Message:   "tool called",
 		Timestamp: time.Now().UTC(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool_name": "e2e-tool",
 			"status":    "success",
 		},
@@ -137,7 +137,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		TaskID:    "task-1",
 		Message:   "agent finished",
 		Timestamp: time.Now().UTC(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"agent_id": "test-agent",
 			"status":   "completed",
 		},

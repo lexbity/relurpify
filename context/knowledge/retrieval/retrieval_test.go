@@ -455,10 +455,10 @@ func TestTraversalCandidates_Precedence(t *testing.T) {
 	// Query with explicit MaxCandidates=3 should return ≤ 3, not 100.
 	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
 		Traversal: &TraversalSpec{
-			AnchorIDs:    []string{"prec-a"},
-			EdgeKinds:    []string{string(knowledge.EdgeKindRequiresContext)},
-			Direction:    TraversalDirectionOut,
-			MaxDepth:     1,
+			AnchorIDs:     []string{"prec-a"},
+			EdgeKinds:     []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction:     TraversalDirectionOut,
+			MaxDepth:      1,
 			MaxCandidates: 3,
 		},
 	})
@@ -536,11 +536,11 @@ func TestTraversalCandidates_PreferLatestRegime(t *testing.T) {
 	// With PreferLatest and budget=2, we should get [latest-new, latest-mid].
 	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
 		Traversal: &TraversalSpec{
-			AnchorIDs:    []string{"latest-old"},
-			EdgeKinds:    []string{string(knowledge.EdgeKindRequiresContext)},
-			Direction:    TraversalDirectionOut,
-			MaxDepth:     2,
-			PreferLatest: true,
+			AnchorIDs:     []string{"latest-old"},
+			EdgeKinds:     []string{string(knowledge.EdgeKindRequiresContext)},
+			Direction:     TraversalDirectionOut,
+			MaxDepth:      2,
+			PreferLatest:  true,
 			MaxCandidates: 2,
 		},
 	})

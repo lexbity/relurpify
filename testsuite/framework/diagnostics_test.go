@@ -287,7 +287,7 @@ func TestAssertionHelperClarity(t *testing.T) {
 		TaskID:    "test-task",
 		Message:   "test message",
 		Timestamp: time.Now().UTC(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"NodeID": "test-node",
 		},
 	})

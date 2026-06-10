@@ -271,13 +271,13 @@ func hasKeyNormalized(args map[string]any, key string) bool {
 	return false
 }
 
-func normalizeStringSlice(value interface{}) ([]string, error) {
+func normalizeStringSlice(value any) ([]string, error) {
 	switch typed := value.(type) {
 	case nil:
 		return nil, nil
 	case []string:
 		return append([]string(nil), typed...), nil
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(typed))
 		for _, entry := range typed {
 			out = append(out, fmt.Sprint(entry))

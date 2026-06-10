@@ -129,7 +129,7 @@ func TestFakeCapabilityController_Invoke(t *testing.T) {
 	c := &FakeCapabilityController{}
 	result, err := c.Invoke(context.Background(), session.CapabilityInvokeRequest{
 		CapabilityID: "cap:test",
-		Input:        map[string]interface{}{"key": "value"},
+		Input:        map[string]any{"key": "value"},
 	})
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)

@@ -127,7 +127,7 @@ func (gp *GoParser) buildFunctionNode(decl *goast.FuncDecl, fileID, parentID str
 		EndLine:    gp.fset.Position(decl.End()).Line,
 		CreatedAt:  now,
 		UpdatedAt:  now,
-		Attributes: map[string]interface{}{},
+		Attributes: map[string]any{},
 	}
 	if decl.Recv != nil && len(decl.Recv.List) > 0 {
 		node.Type = NodeTypeMethod
@@ -188,7 +188,7 @@ func (gp *GoParser) buildGenDeclNodes(decl *goast.GenDecl, fileID, parentID stri
 				EndLine:    gp.fset.Position(typed.End()).Line,
 				CreatedAt:  now,
 				UpdatedAt:  now,
-				Attributes: map[string]interface{}{},
+				Attributes: map[string]any{},
 			}
 			switch typed.Type.(type) {
 			case *goast.StructType:
@@ -260,6 +260,6 @@ func formatField(field *goast.Field) string {
 		builder.WriteString(strings.Join(names, ", "))
 		builder.WriteString(" ")
 	}
-	builder.WriteString(fmt.Sprintf("%s", field.Type))
+	fmt.Fprintf(&builder, "%s", field.Type)
 	return builder.String()
 }

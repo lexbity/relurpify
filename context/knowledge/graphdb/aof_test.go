@@ -147,5 +147,5 @@ func TestAOFWriter_SyncModes(t *testing.T) {
 	// file should exist
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	require.Greater(t, info.Size(), int64(0))
+	require.Positive(t, info.Size())
 }

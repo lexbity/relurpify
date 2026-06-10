@@ -70,7 +70,7 @@ func (t *traceTestTool) Permissions() ports.ToolPermissions {
 	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
 }
 func (t *traceTestTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *traceTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *traceTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 
@@ -79,9 +79,9 @@ type traceCaptureRegistry struct {
 	lastCtx context.Context
 }
 
-func (r *traceCaptureRegistry) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error) {
+func (r *traceCaptureRegistry) InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	r.lastCtx = ctx
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "ok"}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"stdout": "ok"}}, nil
 }
 
 func (r *traceCaptureRegistry) CapturePolicySnapshot() *capresult.PolicySnapshot { return nil }

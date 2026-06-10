@@ -65,7 +65,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "todo: remove stub")
 
-	result, err := handler.Invoke(context.Background(), env.State(), map[string]interface{}{"focus": "style"})
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{"focus": "style"})
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 		t.Fatalf("result.Success = false")
 	}
 
-	findings, ok := result.Data["findings"].([]interface{})
+	findings, ok := result.Data["findings"].([]any)
 	if !ok {
 		t.Fatalf("findings has unexpected type %T", result.Data["findings"])
 	}
@@ -97,7 +97,7 @@ func TestCodeReviewHandlerModelErrorFallsBack(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	contextdata.SetTyped(env, "code", "TODO: refactor this stub")
 
-	result, err := handler.Invoke(context.Background(), env.State(), map[string]interface{}{"focus": "all"})
+	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{"focus": "all"})
 	if err != nil {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestCodeReviewHandlerModelErrorFallsBack(t *testing.T) {
 		t.Fatalf("result.Success = false")
 	}
 
-	findings, ok := result.Data["findings"].([]interface{})
+	findings, ok := result.Data["findings"].([]any)
 	if !ok {
 		t.Fatalf("findings has unexpected type %T", result.Data["findings"])
 	}

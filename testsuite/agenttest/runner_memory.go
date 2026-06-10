@@ -134,20 +134,13 @@ func collectMemoryOutcome(ctx context.Context, workspace string, store *memory.W
 
 func diffMemoryOutcome(before, after MemoryOutcomeReport) MemoryOutcomeReport {
 	out := MemoryOutcomeReport{
-		DeclarativeRecordsCreated: maxInt(after.DeclarativeRecordsCreated-before.DeclarativeRecordsCreated, 0),
-		ProceduralRecordsCreated:  maxInt(after.ProceduralRecordsCreated-before.ProceduralRecordsCreated, 0),
-		MemoryRecordsCreated:      maxInt(after.MemoryRecordsCreated-before.MemoryRecordsCreated, 0),
-		WorkflowRowsCreated:       maxInt(after.WorkflowRowsCreated-before.WorkflowRowsCreated, 0),
+		DeclarativeRecordsCreated: max(after.DeclarativeRecordsCreated-before.DeclarativeRecordsCreated, 0),
+		ProceduralRecordsCreated:  max(after.ProceduralRecordsCreated-before.ProceduralRecordsCreated, 0),
+		MemoryRecordsCreated:      max(after.MemoryRecordsCreated-before.MemoryRecordsCreated, 0),
+		WorkflowRowsCreated:       max(after.WorkflowRowsCreated-before.WorkflowRowsCreated, 0),
 	}
 	out.WorkflowStateUpdated = out.WorkflowRowsCreated > 0
 	return out
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func firstWorkflowRunID(runs []WorkflowRunSeedSpec) string {

@@ -174,7 +174,11 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build saved manifest: %v", err)
 	}
-	if clone.Spec.Policy == nil || len(clone.Spec.Policy.Permissions.FileSystem) == 0 || !clone.Spec.Policy.Permissions.FileSystem[0].HITLRequired {
+	if clone.Spec.Policy == nil {
+		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Spec.Policy)
+	}
+	ps := &clone.Spec.Policy.Permissions
+	if len(ps.FileSystem) == 0 || !ps.FileSystem[0].HITLRequired {
 		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Spec.Policy)
 	}
 

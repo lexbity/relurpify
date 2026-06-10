@@ -3,7 +3,7 @@ package risk
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 func TestClassify_readOnlyDefaults(t *testing.T) {

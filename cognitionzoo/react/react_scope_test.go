@@ -76,10 +76,10 @@ func (t scopeAwareReactTool) Name() string                      { return t.name 
 func (t scopeAwareReactTool) Description() string               { return t.name }
 func (t scopeAwareReactTool) Category() string                  { return "test" }
 func (t scopeAwareReactTool) Parameters() []ports.ToolParameter { return nil }
-func (t scopeAwareReactTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t scopeAwareReactTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = args
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"name": t.name}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
 }
 func (t scopeAwareReactTool) IsAvailable(ctx context.Context) bool {
 	_ = ctx

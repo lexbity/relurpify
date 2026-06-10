@@ -31,12 +31,12 @@ type ResourceReadResult struct {
 
 type InvocableCapabilityHandler interface {
 	CapabilityHandler
-	Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error)
+	Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error)
 }
 
 type PromptCapabilityHandler interface {
 	CapabilityHandler
-	RenderPrompt(ctx context.Context, env ports.State, args map[string]interface{}) (*PromptRenderResult, error)
+	RenderPrompt(ctx context.Context, env ports.State, args map[string]any) (*PromptRenderResult, error)
 }
 
 type ResourceCapabilityHandler interface {
@@ -58,5 +58,5 @@ type BackgroundInvocationHandle struct {
 
 type BackgroundCapabilityHandler interface {
 	CapabilityHandler
-	InvokeBackground(ctx context.Context, env ports.State, args map[string]interface{}) (*BackgroundInvocationHandle, error)
+	InvokeBackground(ctx context.Context, env ports.State, args map[string]any) (*BackgroundInvocationHandle, error)
 }

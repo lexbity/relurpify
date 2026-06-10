@@ -33,7 +33,7 @@ func TestCapabilitiesAndHelpers(t *testing.T) {
 	}, backend.Capabilities())
 
 	var nilErr *protocolError
-	require.Equal(t, "", nilErr.Error())
+	require.Empty(t, nilErr.Error())
 	require.True(t, isInvalidSession(&protocolError{code: "invalid session id"}))
 	require.False(t, isInvalidSession(&protocolError{code: "unexpected"}))
 	require.Equal(t, []string{"a", "b", "c"}, splitRunes("abc"))

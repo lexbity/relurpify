@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -172,7 +171,7 @@ func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {
 	}
 	// With default=Ask and no HITL provider, undeclared permissions must
 	// return an error (not silent allow).
-	tool := &testTool{name: "test_tool"}
+	tool := &testAuthTool{name: "test_tool"}
 	err = m.AuthorizeTool(context.Background(), "agent-1", tool, nil)
 	if err == nil {
 		t.Fatal("expected error for undeclared tool permission with no HITL provider, got nil")
@@ -196,21 +195,14 @@ func testPermissionManager(t *testing.T) *PermissionManager {
 	return m
 }
 
-// testTool implements ports.Tool for testing.
-type testTool struct {
+// testAuthTool implements authorization.Tool for testing.
+type testAuthTool struct {
 	name string
 }
 
-func (t *testTool) Name() string                      { return t.name }
-func (t *testTool) Description() string               { return "test tool" }
-func (t *testTool) Category() string                  { return "test" }
-func (t *testTool) Parameters() []ports.ToolParameter { return nil }
-func (t *testTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
-	return &ports.ToolResult{Success: true}, nil
-}
-func (t *testTool) IsAvailable(ctx context.Context) bool { return true }
-func (t *testTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{
+func (t *testAuthTool) Name() string { return t.name }
+func (t *testAuthTool) Permissions() ToolPermissions {
+	return ToolPermissions{
 		Permissions: &permissions.PermissionSet{
 			Executables: []permissions.ExecutablePermission{
 				{Binary: "some-binary"},
@@ -218,4 +210,4 @@ func (t *testTool) Permissions() ports.ToolPermissions {
 		},
 	}
 }
-func (t *testTool) Tags() []string { return nil }
+func (t *testAuthTool) Tags() []string { return nil }

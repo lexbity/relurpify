@@ -20,9 +20,9 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -977,7 +977,7 @@ func dedupeLowerPreserveOrder(values []string) []string {
 	return out
 }
 
-func summarizeMetadata(metadata map[string]interface{}) []string {
+func summarizeMetadata(metadata map[string]any) []string {
 	if len(metadata) == 0 {
 		return nil
 	}

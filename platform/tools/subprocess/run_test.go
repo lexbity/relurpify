@@ -32,7 +32,7 @@ func TestRunBasicOutput(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, "hello", result.Stdout)
-	require.Equal(t, "", result.Stderr)
+	require.Empty(t, result.Stderr)
 	require.Equal(t, 0, result.ExitCode)
 }
 

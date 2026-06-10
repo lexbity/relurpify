@@ -86,7 +86,7 @@ func (h *testCapabilityHandler) Descriptor(context.Context, ports.State) descrip
 	return h.descriptor
 }
 
-func (h *testCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *testCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	if h != nil && h.invoke != nil {
 		return h.invoke(ctx, contextdata.EnvelopeFromState(st), args)
 	}

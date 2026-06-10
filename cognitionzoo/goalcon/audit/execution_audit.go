@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/result"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -24,9 +24,9 @@ type AuditEntry struct {
 	CapabilityName string    `json:"capability_name" yaml:"capability_name"`
 
 	// Classification
-	TrustClass    agentspec.TrustClass   `json:"trust_class" yaml:"trust_class"`
+	TrustClass    agentspec.TrustClass         `json:"trust_class" yaml:"trust_class"`
 	EffectClasses []classification.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	RiskClasses   []risk.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	RiskClasses   []risk.RiskClass             `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
 
 	// Execution
 	InputSummary  string `json:"input_summary,omitempty" yaml:"input_summary,omitempty"`
@@ -344,10 +344,13 @@ func (t *CapabilityAuditTrail) summaryLocked() AuditSummary {
 	return summary
 }
 
-// truncate returns the first n characters of a string
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	if n <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return string(runes[:n]) + "…"
 }

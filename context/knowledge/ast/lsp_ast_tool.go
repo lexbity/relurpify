@@ -37,7 +37,7 @@ func (t *ASTTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *ASTTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t.manager == nil {
 		return nil, fmt.Errorf("ast index unavailable")
 	}
@@ -82,7 +82,7 @@ func (t *ASTTool) waitUntilReady(ctx context.Context, timeout time.Duration) err
 	return nil
 }
 
-func (t *ASTTool) querySymbol(args map[string]interface{}) (*Node, error) {
+func (t *ASTTool) querySymbol(args map[string]any) (*Node, error) {
 	symbol := fmt.Sprint(args["symbol"])
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol parameter required")
@@ -97,7 +97,7 @@ func (t *ASTTool) querySymbol(args map[string]interface{}) (*Node, error) {
 	return nodes[0], nil
 }
 
-func (t *ASTTool) handleList(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleList(args map[string]any) (*ports.ToolResult, error) {
 	query := NodeQuery{Limit: 100}
 	if nodeType := fmt.Sprint(args["type"]); nodeType != "" {
 		query.Types = []NodeType{NodeType(nodeType)}
@@ -112,18 +112,18 @@ func (t *ASTTool) handleList(args map[string]interface{}) (*ports.ToolResult, er
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"symbols": summarizeNodes(nodes),
 		"count":   len(nodes),
 	}), nil
 }
 
-func (t *ASTTool) handleSignature(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleSignature(args map[string]any) (*ports.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"name":       node.Name,
 		"type":       node.Type,
 		"signature":  node.Signature,
@@ -134,7 +134,7 @@ func (t *ASTTool) handleSignature(args map[string]interface{}) (*ports.ToolResul
 	}), nil
 }
 
-func (t *ASTTool) handleCallers(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleCallers(args map[string]any) (*ports.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -143,13 +143,13 @@ func (t *ASTTool) handleCallers(args map[string]interface{}) (*ports.ToolResult,
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"symbol":  node.Name,
 		"callers": summarizeNodes(callers),
 	}), nil
 }
 
-func (t *ASTTool) handleCallees(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleCallees(args map[string]any) (*ports.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -158,13 +158,13 @@ func (t *ASTTool) handleCallees(args map[string]interface{}) (*ports.ToolResult,
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"symbol":  node.Name,
 		"callees": summarizeNodes(callees),
 	}), nil
 }
 
-func (t *ASTTool) handleImports(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleImports(args map[string]any) (*ports.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -173,13 +173,13 @@ func (t *ASTTool) handleImports(args map[string]interface{}) (*ports.ToolResult,
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"symbol":  node.Name,
 		"imports": summarizeNodes(imports),
 	}), nil
 }
 
-func (t *ASTTool) handleDependencies(args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ASTTool) handleDependencies(args map[string]any) (*ports.ToolResult, error) {
 	symbol := fmt.Sprint(args["symbol"])
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol parameter required")
@@ -188,7 +188,7 @@ func (t *ASTTool) handleDependencies(args map[string]interface{}) (*ports.ToolRe
 	if err != nil {
 		return nil, err
 	}
-	return successResult(map[string]interface{}{
+	return successResult(map[string]any{
 		"symbol":       symbol,
 		"dependencies": summarizeNodes(graph.Dependencies),
 		"dependents":   summarizeNodes(graph.Dependents),
@@ -208,20 +208,20 @@ func (t *ASTTool) Tags() []string {
 	return []string{toolcapabilities.TagReadOnly, "ast", "symbol", "recovery"}
 }
 
-func successResult(data map[string]interface{}) *ports.ToolResult {
+func successResult(data map[string]any) *ports.ToolResult {
 	return &ports.ToolResult{
 		Success: true,
 		Data:    data,
 	}
 }
 
-func summarizeNodes(nodes []*Node) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0, len(nodes))
+func summarizeNodes(nodes []*Node) []map[string]any {
+	result := make([]map[string]any, 0, len(nodes))
 	for _, node := range nodes {
 		if node == nil {
 			continue
 		}
-		result = append(result, map[string]interface{}{
+		result = append(result, map[string]any{
 			"id":        node.ID,
 			"name":      node.Name,
 			"type":      node.Type,

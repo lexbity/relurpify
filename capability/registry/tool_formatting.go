@@ -20,8 +20,8 @@ func RenderToolsToPrompt(tools []ports.Tool) string {
 	b.WriteString("You have access to the following tools. To call a tool, return a JSON object with 'tool' (name) and 'arguments' (map).\n\n")
 
 	for _, tool := range tools {
-		b.WriteString(fmt.Sprintf("## %s\n", tool.Name()))
-		b.WriteString(fmt.Sprintf("%s\n", tool.Description()))
+		fmt.Fprintf(&b, "## %s\n", tool.Name())
+		fmt.Fprintf(&b, "%s\n", tool.Description())
 		b.WriteString("Arguments:\n")
 		params := tool.Parameters()
 		if len(params) == 0 {
@@ -32,7 +32,7 @@ func RenderToolsToPrompt(tools []ports.Tool) string {
 				if param.Required {
 					req = "required"
 				}
-				b.WriteString(fmt.Sprintf("  - %s (%s, %s): %s\n", param.Name, param.Type, req, param.Description))
+				fmt.Fprintf(&b, "  - %s (%s, %s): %s\n", param.Name, param.Type, req, param.Description)
 			}
 		}
 		b.WriteString("\n")
@@ -120,12 +120,12 @@ func extractTopLevelJSONObjects(text string) []string {
 
 func tryParseSingleToolCall(jsonText string) (model.ToolCall, bool) {
 	var raw struct {
-		Tool       string                 `json:"tool"`
-		Name       string                 `json:"name"`      // alias for 'tool'
-		ToolName   string                 `json:"tool_name"` // alias for 'tool'
-		Arguments  map[string]interface{} `json:"arguments"`
-		Args       map[string]interface{} `json:"args"`       // alias for 'arguments'
-		Parameters map[string]interface{} `json:"parameters"` // alias for 'arguments'
+		Tool       string         `json:"tool"`
+		Name       string         `json:"name"`      // alias for 'tool'
+		ToolName   string         `json:"tool_name"` // alias for 'tool'
+		Arguments  map[string]any `json:"arguments"`
+		Args       map[string]any `json:"args"`       // alias for 'arguments'
+		Parameters map[string]any `json:"parameters"` // alias for 'arguments'
 	}
 
 	if err := json.Unmarshal([]byte(jsonText), &raw); err != nil {
@@ -158,7 +158,7 @@ func tryParseSingleToolCall(jsonText string) (model.ToolCall, bool) {
 		args = raw.Parameters
 	}
 	if args == nil {
-		args = make(map[string]interface{})
+		args = make(map[string]any)
 	}
 	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
 		if _, exists := args["path"]; !exists {

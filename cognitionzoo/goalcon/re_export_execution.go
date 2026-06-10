@@ -2,6 +2,7 @@ package goalcon
 
 import (
 	"codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/execution"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 )
 
 // Re-exports from execution package for backward compatibility
@@ -13,7 +14,7 @@ type FailureContext = execution.FailureContext
 type FailureCategory = execution.FailureCategory
 type RecoveryStrategy = execution.RecoveryStrategy
 type RetryPolicy = execution.RetryPolicy
-type BackoffCalculator = execution.BackoffCalculator
+type BackoffCalculator = retry.BackoffCalculator
 type OperatorRetryPolicies = execution.OperatorRetryPolicies
 type RetryExecutor = execution.RetryExecutor
 type ExecutionAttempt = execution.ExecutionAttempt
@@ -26,12 +27,12 @@ type ExecutionEvent = execution.ExecutionEvent
 var (
 	NewStepExecutor                 = execution.NewStepExecutor
 	NewFailureDetector              = execution.NewFailureDetector
-	DefaultRetryPolicy              = execution.DefaultRetryPolicy
+	DefaultRetryPolicy              = func() *retry.Policy { p := retry.DefaultPolicy(); return &p }
 	PolicyForOperator               = execution.PolicyForOperator
 	ComputeRetryMetrics             = execution.ComputeRetryMetrics
 	GetRetryableCategoriesForReplan = execution.GetRetryableCategoriesForReplan
 	IsRetryableAfterMaxAttempts     = execution.IsRetryableAfterMaxAttempts
-	NewBackoffCalculator            = execution.NewBackoffCalculator
+	NewBackoffCalculator            = retry.NewBackoffCalculator
 	NewRetryExecutor                = execution.NewRetryExecutor
 	NewExecutionTrace               = execution.NewExecutionTrace
 )

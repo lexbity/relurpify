@@ -298,7 +298,7 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 		Type:     permissions.PermissionTypeFilesystem,
 		Action:   string(action),
 		Resource: clean,
-	}, "granted", map[string]interface{}{
+	}, "granted", map[string]any{
 		"pattern": perm.Path,
 	})
 	return nil

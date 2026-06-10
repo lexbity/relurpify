@@ -23,8 +23,8 @@ func TestCargoIsolationNotAppliedToNonCargoTool(t *testing.T) {
 		SourcePath: t.TempDir(),
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":              []interface{}{"hello"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":              []any{"hello"},
 		"working_directory": ".",
 	})
 	require.NoError(t, err)
@@ -50,8 +50,8 @@ func TestCargoIsolationStandaloneCrateNotIsolated(t *testing.T) {
 		SourcePath: base,
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":              []interface{}{"test"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":              []any{"test"},
 		"working_directory": crateDir,
 	})
 	require.NoError(t, err)
@@ -84,8 +84,8 @@ func TestCargoIsolationNestedWorkspaceIsolated(t *testing.T) {
 		SourcePath: base,
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":              []interface{}{"test"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":              []any{"test"},
 		"working_directory": crateDir,
 	})
 	require.NoError(t, err)
@@ -123,8 +123,8 @@ func TestCargoIsolationNotAppliedForNonIsolatedSubcommands(t *testing.T) {
 	}, runner)
 
 	// "fmt" is not in the isolation list
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":              []interface{}{"fmt"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":              []any{"fmt"},
 		"working_directory": crateDir,
 	})
 	require.NoError(t, err)
@@ -212,9 +212,9 @@ func TestCargoSubcommandExtraction(t *testing.T) {
 	require.Equal(t, "build", cargoSubcommand([]string{"cargo", "build", "--release"}))
 	require.Equal(t, "check", cargoSubcommand([]string{"cargo", "check"}))
 	require.Equal(t, "metadata", cargoSubcommand([]string{"cargo", "metadata", "--no-deps"}))
-	require.Equal(t, "", cargoSubcommand([]string{"cargo", "fmt"}))
-	require.Equal(t, "", cargoSubcommand([]string{"cargo"}))
-	require.Equal(t, "", cargoSubcommand([]string{}))
+	require.Empty(t, cargoSubcommand([]string{"cargo", "fmt"}))
+	require.Empty(t, cargoSubcommand([]string{"cargo"}))
+	require.Empty(t, cargoSubcommand([]string{}))
 }
 
 func TestCargoCopyDirSkipsGitTargetAndBak(t *testing.T) {

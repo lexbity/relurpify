@@ -65,7 +65,7 @@ type WorkflowArtifactRecord struct {
 type ArtifactStorageKind string
 
 const (
-	ArtifactStorageInline  ArtifactStorageKind = "inline"
+	ArtifactStorageInline   ArtifactStorageKind = "inline"
 	ArtifactStorageExternal ArtifactStorageKind = "external"
 )
 

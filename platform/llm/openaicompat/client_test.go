@@ -208,7 +208,7 @@ func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.Usage.Estimated)
 	require.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
-	require.Greater(t, resp.Usage.TotalTokens, 0)
+	require.Positive(t, resp.Usage.TotalTokens)
 }
 
 func TestListModels(t *testing.T) {

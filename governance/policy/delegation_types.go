@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 	"time"
@@ -174,9 +175,9 @@ func NewDelegationResult(request DelegationRequest, targetCapabilityID, provider
 	now := time.Now().UTC()
 	result := &DelegationResult{
 		DelegationID:       strings.TrimSpace(request.ID),
-		TargetCapabilityID: strings.TrimSpace(firstNonEmpty(targetCapabilityID, request.TargetCapabilityID)),
-		ProviderID:         strings.TrimSpace(firstNonEmpty(providerID, request.TargetProviderID)),
-		SessionID:          strings.TrimSpace(firstNonEmpty(sessionID, request.TargetSessionID)),
+		TargetCapabilityID: strings.TrimSpace(cmp.Or(targetCapabilityID, request.TargetCapabilityID)),
+		ProviderID:         strings.TrimSpace(cmp.Or(providerID, request.TargetProviderID)),
+		SessionID:          strings.TrimSpace(cmp.Or(sessionID, request.TargetSessionID)),
 		State:              state,
 		Success:            success,
 		Data:               cloneMap(data),
@@ -201,7 +202,7 @@ func ApplyDelegationInsertionDecision(result *DelegationResult, decision any) *D
 
 func ApprovalBindingFromDelegation(request DelegationRequest, result *DelegationResult) *ApprovalBinding {
 	binding := &ApprovalBinding{
-		CapabilityID: firstNonEmpty(request.TargetCapabilityID, delegationTargetCapability(result)),
+		CapabilityID: cmp.Or(request.TargetCapabilityID, delegationTargetCapability(result)),
 		TaskID:       strings.TrimSpace(request.TaskID),
 		WorkflowID:   strings.TrimSpace(request.WorkflowID),
 	}
@@ -216,15 +217,6 @@ func delegationTargetCapability(result *DelegationResult) string {
 		return ""
 	}
 	return strings.TrimSpace(result.TargetCapabilityID)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 func cloneMap(input map[string]any) map[string]any {

@@ -10,7 +10,7 @@ import (
 
 // capabilityInvoker matches the framework capability registry invocation contract.
 type capabilityInvoker interface {
-	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
+	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error)
 }
 
 // InvokeCapability invokes a capability through the capability registry.

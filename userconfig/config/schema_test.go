@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,14 +26,14 @@ func TestSplitSchemaDocumentRejectsMissingSchema(t *testing.T) {
 	_, _, err := SplitSchemaDocument("tool.yaml", []byte("name: read_file\n"))
 	var schemaErr *SchemaError
 	require.ErrorAs(t, err, &schemaErr)
-	require.True(t, errors.Is(err, ErrMissingSchemaDeclaration))
+	require.ErrorIs(t, err, ErrMissingSchemaDeclaration)
 }
 
 func TestSplitSchemaDocumentRejectsInvalidSchemaLine(t *testing.T) {
 	_, _, err := SplitSchemaDocument("tool.yaml", []byte("kind: tool\n"))
 	var schemaErr *SchemaError
 	require.ErrorAs(t, err, &schemaErr)
-	require.True(t, errors.Is(err, ErrMissingSchemaDeclaration))
+	require.ErrorIs(t, err, ErrMissingSchemaDeclaration)
 }
 
 func TestSchemaRegistryRejectsUnknownAndUnsupported(t *testing.T) {

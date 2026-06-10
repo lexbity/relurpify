@@ -221,25 +221,29 @@ func summarizeMemoryEntry(value any) (summary string, text string) {
 		return s, s
 	case []string:
 		joined := strings.Join(typed, ", ")
-		return truncateMemorySummary(joined), joined
+		return truncate(joined, 240), joined
 	case []any:
 		joined := fmt.Sprint(typed)
-		return truncateMemorySummary(joined), joined
+		return truncate(joined, 240), joined
 	case map[string]any:
 		joined := fmt.Sprint(typed)
-		return truncateMemorySummary(joined), joined
+		return truncate(joined, 240), joined
 	default:
 		joined := fmt.Sprint(value)
-		return truncateMemorySummary(joined), joined
+		return truncate(joined, 240), joined
 	}
 }
 
-func truncateMemorySummary(value string) string {
+func truncate(value string, max int) string {
 	value = strings.TrimSpace(value)
-	if len(value) <= 240 {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= max {
 		return value
 	}
-	return value[:240] + "...(truncated)"
+	return string(runes[:max]) + "…"
 }
 
 func publishPersistenceCandidates(state *contextdata.Envelope, bb *Blackboard, controller ControllerState, metrics Metrics) {

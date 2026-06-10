@@ -44,7 +44,7 @@ func (NopExporter) ExportSpan(name string, attrs SpanAttributes, spanCtx SpanCon
 // Attributes included: tool.name, tool.family, capability.trust_class,
 // capability.effect_class, exit_code, stdout_bytes, artifact_ref, elapsed.
 // Param values are included only if listed in extraAttrs.
-func ToolSpanAttrs(name, family, trustClass string, effectClasses []string, exitCode int, stdoutBytes int64, artifactRef, elapsed string, args map[string]interface{}, extraAttrs []string) SpanAttributes {
+func ToolSpanAttrs(name, family, trustClass string, effectClasses []string, exitCode int, stdoutBytes int64, artifactRef, elapsed string, args map[string]any, extraAttrs []string) SpanAttributes {
 	attrs := SpanAttributes{
 		"tool.name":   name,
 		"tool.family": family,

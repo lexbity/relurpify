@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -37,7 +39,7 @@ func (t *PythonWorkspaceDetectTool) Parameters() []ports.ToolParameter {
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -68,7 +70,7 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"path":          resolved,
 			"project_root":  projectRoot,
 			"manifest_path": manifestPath,
@@ -99,7 +101,7 @@ func (t *PythonProjectMetadataTool) Parameters() []ports.ToolParameter {
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -137,7 +139,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":              summary,
 			"project_root":         projectRoot,
 			"manifest_path":        manifestPath,
@@ -147,7 +149,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 			"dependency_files":     dependencyFiles,
 			"preferred_test_tool":  testTool,
 			"has_pytest_config":    pythonHasPytestConfig(files, markers),
-			"has_requirements_txt": containsString(markers, "requirements.txt"),
+			"has_requirements_txt": slices.Contains(markers, "requirements.txt"),
 		},
 	}, nil
 }
@@ -181,7 +183,7 @@ func (t *PythonPytestTool) Parameters() []ports.ToolParameter {
 	}
 }
 func (t *PythonPytestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
-func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -209,7 +211,7 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interfac
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
 			"failed":        summary.Failed,
@@ -253,7 +255,7 @@ func (t *PythonUnittestTool) Parameters() []ports.ToolParameter {
 	}
 }
 func (t *PythonUnittestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
-func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -284,7 +286,7 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interf
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
 			"failed":        summary.Failed,
@@ -329,7 +331,7 @@ func (t *PythonCompileCheckTool) Parameters() []ports.ToolParameter {
 func (t *PythonCompileCheckTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -358,7 +360,7 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]in
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
 			"first_message": summary.FirstMessage,
@@ -429,9 +431,9 @@ func summarizePythonPytest(stdout, stderr string, success bool) pythonTestSummar
 		summary.Summary = fmt.Sprintf("pytest passed: %d passed, %d failed, %d errors", summary.Passed, summary.Failed, summary.Errors)
 		return summary
 	}
-	line := firstNonEmptyLine(stderr)
+	line := lang.FirstNonEmptyLine(stderr)
 	if line == "" {
-		line = firstNonEmptyLine(stdout)
+		line = lang.FirstNonEmptyLine(stdout)
 	}
 	if summary.FirstFailure != "" {
 		summary.Summary = "pytest failed: " + summary.FirstFailure
@@ -474,9 +476,9 @@ func summarizePythonUnittest(stdout, stderr string, success bool) pythonTestSumm
 		summary.Summary = fmt.Sprintf("unittest passed: %d passed, %d failed, %d errors", summary.Passed, summary.Failed, summary.Errors)
 		return summary
 	}
-	line := firstNonEmptyLine(stderr)
+	line := lang.FirstNonEmptyLine(stderr)
 	if line == "" {
-		line = firstNonEmptyLine(stdout)
+		line = lang.FirstNonEmptyLine(stdout)
 	}
 	if summary.FirstFailure != "" {
 		summary.Summary = "unittest failed: " + summary.FirstFailure
@@ -503,10 +505,10 @@ func summarizePythonCompileCheck(stdout, stderr string, success bool) pythonComp
 		return summary
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stderr)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stderr)
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stdout)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stdout)
 	}
 	if summary.FirstMessage != "" {
 		summary.Summary = "compile check failed: " + summary.FirstMessage
@@ -569,7 +571,7 @@ func inferPythonTestTool(files map[string]string, markers []string) string {
 }
 
 func pythonHasPytestConfig(files map[string]string, markers []string) bool {
-	if containsString(markers, "pytest.ini") {
+	if slices.Contains(markers, "pytest.ini") {
 		return true
 	}
 	if content := files["pyproject.toml"]; strings.Contains(content, "[tool.pytest") {
@@ -598,13 +600,4 @@ func firstCapture(pattern *regexp.Regexp, text string) string {
 		return ""
 	}
 	return strings.TrimSpace(match[1])
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

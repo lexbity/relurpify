@@ -37,7 +37,7 @@ func TestUpsertNode_UpdateExisting(t *testing.T) {
 	// CreatedAt should remain from first insertion
 	require.NotZero(t, retrieved.CreatedAt)
 	require.NotZero(t, retrieved.UpdatedAt)
-	require.True(t, retrieved.UpdatedAt >= retrieved.CreatedAt)
+	require.GreaterOrEqual(t, retrieved.UpdatedAt, retrieved.CreatedAt)
 }
 
 func TestUpsertNodes_Batch(t *testing.T) {

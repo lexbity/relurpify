@@ -116,7 +116,7 @@ func MaterializePlanGraph(
 	registry *capability.CapabilityRegistry,
 	permissionChecker permissions.CapabilityChecker,
 	options RewooOptions,
-	debugf func(string, ...interface{}),
+	debugf func(string, ...any),
 ) error {
 	if plan == nil || len(plan.Steps) == 0 {
 		// No steps: wire plan directly to aggregate

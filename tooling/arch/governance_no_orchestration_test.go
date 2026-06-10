@@ -2,6 +2,7 @@ package arch
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,7 +36,7 @@ func TestCheckGovernanceNoOrchestration_violation(t *testing.T) {
 	if len(vios) != 1 {
 		t.Fatalf("expected 1 violation, got %d: %v", len(vios), vios)
 	}
-	if !contains(vios[0], "governance/authorization") || !contains(vios[0], "execution/agentlifecycle") {
+	if !strings.Contains(vios[0], "governance/authorization") || !strings.Contains(vios[0], "execution/agentlifecycle") {
 		t.Errorf("violation should mention both packages, got: %s", vios[0])
 	}
 }

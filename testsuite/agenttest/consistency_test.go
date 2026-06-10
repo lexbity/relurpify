@@ -4,6 +4,7 @@
 package agenttest
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -176,7 +177,7 @@ func TestFormatConsistencyReport(t *testing.T) {
 	}
 
 	for _, expected := range expectedStrings {
-		if !containsString(formatted, expected) {
+		if !strings.Contains(formatted, expected) {
 			t.Errorf("Expected report to contain %q", expected)
 		}
 	}
@@ -206,21 +207,10 @@ func TestFormatConsistencyReport_Interpretations(t *testing.T) {
 			DeterminismScore: tt.score,
 		}
 		formatted := FormatConsistencyReport(report)
-		if !containsString(formatted, tt.expectedKeyword) {
+		if !strings.Contains(formatted, tt.expectedKeyword) {
 			t.Errorf("Expected report for score %f to contain %q", tt.score, tt.expectedKeyword)
 		}
 	}
 }
 
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || findSubstr(s, substr))
-}
 
-func findSubstr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

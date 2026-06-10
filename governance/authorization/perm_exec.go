@@ -57,7 +57,7 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 		Type:     permissions.PermissionTypeExecutable,
 		Action:   fmt.Sprintf("exec:%s", binary),
 		Resource: binary,
-	}, "granted", map[string]interface{}{
+	}, "granted", map[string]any{
 		"args": args,
 		"env":  env,
 	})

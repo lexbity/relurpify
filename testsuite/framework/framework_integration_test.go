@@ -117,10 +117,10 @@ func (s *smokeTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (s *smokeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (s *smokeTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"result": "smoke",
 		},
 	}, nil

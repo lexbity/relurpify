@@ -444,7 +444,7 @@ func renderThinkingBlock(th *theme.Theme, steps []ThinkingStep, expanded bool, s
 		if !step.EndTime.IsZero() {
 			dur = th.Dim().Render(fmt.Sprintf(" (%s)", formatDur(step.EndTime.Sub(step.StartTime))))
 		}
-		b.WriteString(fmt.Sprintf("%s %s %s%s\n", th.Dim().Render(prefix), icon, step.Description, dur))
+		fmt.Fprintf(&b, "%s %s %s%s\n", th.Dim().Render(prefix), icon, step.Description, dur)
 		for _, d := range step.Details {
 			sub := "│ "
 			if isLast {
@@ -503,7 +503,7 @@ func renderPlanBlock(th *theme.Theme, plan *TaskPlan, expanded bool, spinnerView
 		if t.Status == TaskCompleted && !t.EndTime.IsZero() {
 			dur = th.Dim().Render(fmt.Sprintf(" (%s)", formatDur(t.EndTime.Sub(t.StartTime))))
 		}
-		b.WriteString(fmt.Sprintf("%s %s%s\n", icon, style.Render(t.Description), dur))
+		fmt.Fprintf(&b, "%s %s%s\n", icon, style.Render(t.Description), dur)
 	}
 	return b.String()
 }

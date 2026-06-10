@@ -8,7 +8,7 @@ import (
 
 func TestSchemaValidationErrorFormatting(t *testing.T) {
 	var nilErr *SchemaValidationError
-	require.Equal(t, "", nilErr.Error())
+	require.Empty(t, nilErr.Error())
 	require.Equal(t, "schema validation failed", (&SchemaValidationError{}).Error())
 	require.Equal(t, "missing", (&SchemaValidationError{Issues: []SchemaIssue{{Message: "missing"}}}).Error())
 	require.Equal(t, "schema.type: missing type", (&SchemaValidationError{Issues: []SchemaIssue{{Path: "schema.type", Message: "missing type"}}}).Error())

@@ -12,7 +12,7 @@ type StreamTokenMsg struct {
 	RunID     string
 	Token     string
 	TokenType TokenType
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 }
 
 // TokenType enumerates the supported streaming categories.

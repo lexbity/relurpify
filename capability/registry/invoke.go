@@ -16,7 +16,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
@@ -24,7 +24,7 @@ import (
 )
 
 // InvokeCapability executes an invocable capability by capability ID or public name.
-func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*ports.ToolResult, error) {
+func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -82,7 +82,7 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 	if err == nil && result != nil && result.Success {
 		if tok := r.storeRollbackTokenLocked(idOrName, args, result); tok != "" {
 			if result.Metadata == nil {
-				result.Metadata = make(map[string]interface{})
+				result.Metadata = make(map[string]any)
 			}
 			result.Metadata["rollback_token"] = tok
 		}
@@ -99,7 +99,7 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 // The handler is responsible for building the jobs.JobSpec and calling
 // env.JobSubmitter.Submit from inside InvokeBackground. The registry provides
 // only lookup, admission, and postchecks — it does not own the JobSpec shape.
-func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*handler.BackgroundInvocationHandle, error) {
+func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*handler.BackgroundInvocationHandle, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -202,7 +202,7 @@ func recoverToolPanic(fn func() (*ports.ToolResult, error)) (res *ports.ToolResu
 	return fn()
 }
 
-func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*capabilityEntry, error) {
 	entry, err := r.capabilityEntry(idOrName)
 	if err != nil {
 		return nil, err

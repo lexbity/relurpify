@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/runtime"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
@@ -23,7 +21,7 @@ var ErrDelegationNotFound = errors.New("delegation not found")
 type DelegationCapabilityRegistry interface {
 	GetCoordinationTarget(idOrName string) (governanceports.DescriptorView, bool)
 	CoordinationTargets(selectors ...governanceports.CapabilitySelectorView) []governanceports.DescriptorView
-	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]interface{}) (any, error)
+	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (any, error)
 	CapturePolicySnapshot() *policy.PolicySnapshot
 	EffectiveCoordination(spec governanceports.SpecView) governanceports.CoordinationSpecView
 	BuildDelegationResult(request policy.DelegationRequest, target governanceports.DescriptorView, result any, invokeErr error, snapshot *policy.PolicySnapshot, spec governanceports.SpecView, callerTrust string) *policy.DelegationResult
@@ -50,7 +48,7 @@ type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
 	AgentSpec        governanceports.SpecView
-	State            *contextdata.Envelope
+	State            ports.State
 	LifecycleRepo    governanceports.DelegationRepository
 	WorkflowRunID    string
 	WorkflowStepID   string
@@ -169,7 +167,7 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	if err != nil {
 		return nil, err
 	}
-	result, invokeErr := opts.Registry.InvokeCapability(ctx, effectiveDelegationState(opts.State).State(), target.CapabilityID(), args)
+	result, invokeErr := opts.Registry.InvokeCapability(ctx, opts.State, target.CapabilityID(), args)
 	delegationResult := opts.Registry.BuildDelegationResult(request, target, result, invokeErr, policySnapshot, opts.AgentSpec, opts.CallerTrust)
 	completed, completeErr := m.CompleteDelegation(started.Request.ID, delegationResult)
 	if completeErr != nil {
@@ -432,9 +430,7 @@ func resolveDelegationTarget(request policy.DelegationRequest, registry Delegati
 		return target, nil
 	}
 	selectors := make([]governanceports.CapabilitySelectorView, 0, len(coordination.DelegationTargetSelectors))
-	for _, selector := range coordination.DelegationTargetSelectors {
-		selectors = append(selectors, selector)
-	}
+	selectors = append(selectors, coordination.DelegationTargetSelectors...)
 	candidates := registry.CoordinationTargets(selectors...)
 	for _, candidate := range candidates {
 		if !delegationSelectorMatchesTaskType(request.TaskType, candidate) {
@@ -593,12 +589,8 @@ func firstRecoverability(values ...policy.RecoverabilityMode) policy.Recoverabil
 	return ""
 }
 
-func effectiveDelegationState(env *contextdata.Envelope) *contextdata.Envelope {
-	if env != nil {
-		return env
-	}
-	// Return a new empty envelope if none provided
-	return contextdata.NewEnvelope("default", "default")
+func effectiveDelegationState(state ports.State) ports.State {
+	return state
 }
 
 func delegationRequestedRole(request policy.DelegationRequest) string {
@@ -702,7 +694,7 @@ func normalizeArgumentMap(value any) map[string]any {
 	if typed, ok := value.(map[string]any); ok {
 		return typed
 	}
-	if typed, ok := value.(map[string]interface{}); ok {
+	if typed, ok := value.(map[string]any); ok {
 		return typed
 	}
 	return map[string]any{}
@@ -839,7 +831,7 @@ func marshalDelegationArtifact(snapshot policy.DelegationSnapshot) string {
 		"state":   snapshot.State,
 		"result":  snapshot.Result,
 	}
-	data, err := json.Marshal(runtime.RedactAny(payload))
+	data, err := json.Marshal(redactAny(payload))
 	if err != nil {
 		return "{}"
 	}

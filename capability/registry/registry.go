@@ -204,7 +204,7 @@ func (r *CapabilityRegistry) rewrapLegacyEntryLocked(entry *capabilityEntry) {
 	if r == nil || entry == nil || entry.legacyTool == nil {
 		return
 	}
-	var inner ports.Tool = entry.legacyTool
+	var inner = entry.legacyTool
 	if instrumented, ok := entry.legacyTool.(*instrumentedTool); ok {
 		inner = instrumented.Tool
 	}

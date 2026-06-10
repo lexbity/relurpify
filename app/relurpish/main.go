@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -234,9 +235,9 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 		fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
 	}
 	fmt.Fprintln(w, "Inference backend:")
-	fmt.Fprintf(w, "  provider: %s\n", firstNonEmpty(report.Inference.Provider, "unknown"))
-	fmt.Fprintf(w, "  endpoint: %s\n", firstNonEmpty(report.Inference.Endpoint, "-"))
-	fmt.Fprintf(w, "  state: %s\n", firstNonEmpty(string(report.Inference.State), "unknown"))
+	fmt.Fprintf(w, "  provider: %s\n", cmp.Or(report.Inference.Provider, "unknown"))
+	fmt.Fprintf(w, "  endpoint: %s\n", cmp.Or(report.Inference.Endpoint, "-"))
+	fmt.Fprintf(w, "  state: %s\n", cmp.Or(string(report.Inference.State), "unknown"))
 	if len(report.Inference.Models) > 0 {
 		fmt.Fprintf(w, "  models: %s\n", strings.Join(report.Inference.Models, ", "))
 	} else {
@@ -300,13 +301,4 @@ func yesNo(v bool) string {
 		return "yes"
 	}
 	return "no"
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }

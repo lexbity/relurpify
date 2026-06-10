@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // DelegationTarget is the policy-relevant view of a delegation target.

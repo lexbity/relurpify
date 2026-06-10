@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -298,7 +299,7 @@ func queryMatches(n *Node, q NodeQuery) bool {
 		}
 	}
 	if len(q.Languages) > 0 {
-		if !containsString(q.Languages, n.Language) {
+		if !slices.Contains(q.Languages, n.Language) {
 			return false
 		}
 	}
@@ -308,7 +309,7 @@ func queryMatches(n *Node, q NodeQuery) bool {
 		}
 	}
 	if len(q.FileIDs) > 0 {
-		if !containsString(q.FileIDs, n.FileID) {
+		if !slices.Contains(q.FileIDs, n.FileID) {
 			return false
 		}
 	}
@@ -825,15 +826,6 @@ func containsNodeType(slice []NodeType, val NodeType) bool {
 }
 
 func containsCategory(slice []Category, val Category) bool {
-	for _, s := range slice {
-		if s == val {
-			return true
-		}
-	}
-	return false
-}
-
-func containsString(slice []string, val string) bool {
 	for _, s := range slice {
 		if s == val {
 			return true

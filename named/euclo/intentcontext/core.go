@@ -236,9 +236,7 @@ func (c *IntentCore) BuildProjectionPlan(ctx context.Context, env *contextdata.E
 		PlanID:       StableID(state.TaskID, state.SessionID, "projection_plan", fmt.Sprint(state.StateVersion), state.CurrentTurnID),
 		StateVersion: state.StateVersion,
 	}
-	for _, intent := range state.PendingProjection {
-		plan.Intents = append(plan.Intents, intent)
-	}
+	plan.Intents = append(plan.Intents, state.PendingProjection...)
 	if len(plan.Intents) == 0 {
 		for _, relation := range state.PendingRelationIntents {
 			intent := ProjectionIntent{

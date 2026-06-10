@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
@@ -18,20 +18,22 @@ func CapabilityDescriptorView(d CapabilityDescriptor) governanceports.Descriptor
 	return &DescriptorViewAdapter{D: d}
 }
 
-func (a *DescriptorViewAdapter) CapabilityID() string                  { return a.D.ID }
-func (a *DescriptorViewAdapter) CapabilityName() string                { return a.D.Name }
-func (a *DescriptorViewAdapter) CapabilityKind() string                { return string(a.D.Kind) }
-func (a *DescriptorViewAdapter) RuntimeFamily() string                 { return string(a.D.RuntimeFamily) }
-func (a *DescriptorViewAdapter) Description() string                   { return a.D.Description }
-func (a *DescriptorViewAdapter) Version() string                       { return a.D.Version }
-func (a *DescriptorViewAdapter) Category() string                      { return a.D.Category }
-func (a *DescriptorViewAdapter) Tags() []string                        { return a.D.Tags }
-func (a *DescriptorViewAdapter) TrustClass() string                    { return string(a.D.TrustClass) }
-func (a *DescriptorViewAdapter) RiskClasses() []risk.RiskClass               { return nil }
-func (a *DescriptorViewAdapter) EffectClasses() []classification.EffectClass { return a.D.EffectClasses }
-func (a *DescriptorViewAdapter) SourceProviderID() string              { return a.D.Source.ProviderID }
-func (a *DescriptorViewAdapter) SourceScope() string                   { return string(a.D.Source.Scope) }
-func (a *DescriptorViewAdapter) SourceSessionID() string               { return a.D.Source.SessionID }
+func (a *DescriptorViewAdapter) CapabilityID() string          { return a.D.ID }
+func (a *DescriptorViewAdapter) CapabilityName() string        { return a.D.Name }
+func (a *DescriptorViewAdapter) CapabilityKind() string        { return string(a.D.Kind) }
+func (a *DescriptorViewAdapter) RuntimeFamily() string         { return string(a.D.RuntimeFamily) }
+func (a *DescriptorViewAdapter) Description() string           { return a.D.Description }
+func (a *DescriptorViewAdapter) Version() string               { return a.D.Version }
+func (a *DescriptorViewAdapter) Category() string              { return a.D.Category }
+func (a *DescriptorViewAdapter) Tags() []string                { return a.D.Tags }
+func (a *DescriptorViewAdapter) TrustClass() string            { return string(a.D.TrustClass) }
+func (a *DescriptorViewAdapter) RiskClasses() []risk.RiskClass { return nil }
+func (a *DescriptorViewAdapter) EffectClasses() []classification.EffectClass {
+	return a.D.EffectClasses
+}
+func (a *DescriptorViewAdapter) SourceProviderID() string { return a.D.Source.ProviderID }
+func (a *DescriptorViewAdapter) SourceScope() string      { return string(a.D.Source.Scope) }
+func (a *DescriptorViewAdapter) SourceSessionID() string  { return a.D.Source.SessionID }
 
 func (a *DescriptorViewAdapter) CoordinationRole() string {
 	if a.D.Coordination != nil {

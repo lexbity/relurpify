@@ -468,7 +468,7 @@ func (m *RootModel) switchActiveAgent(agentName string) error {
 }
 
 func (m *RootModel) availableAgents() []string {
-	seen := map[string]struct{}{"none": struct{}{}}
+	seen := map[string]struct{}{"none": {}}
 	if m.startupLocked {
 		return []string{"none"}
 	}

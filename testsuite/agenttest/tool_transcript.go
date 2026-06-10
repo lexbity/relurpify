@@ -80,7 +80,7 @@ func BuildToolTranscript(events []telemetry.Event) *ToolTranscriptArtifact {
 	return &ToolTranscriptArtifact{Entries: entries}
 }
 
-func cloneAnyMap(raw map[string]interface{}) map[string]any {
+func cloneAnyMap(raw map[string]any) map[string]any {
 	if len(raw) == 0 {
 		return nil
 	}

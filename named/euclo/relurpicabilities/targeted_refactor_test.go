@@ -33,7 +33,7 @@ func TestTargetedRefactorPreviewUsesExplicitReplacement(t *testing.T) {
 	querier, estore, files, refresher, path := newTargetedRefactorTestDeps(t)
 	handler := NewTargetedRefactorHandler(querier, estore, files, refresher, nil)
 
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"symbol":         "Hello",
 		"transformation": "rename the greeting helper body",
 		"replacement":    "func Hello() string {\n\treturn \"goodbye\"\n}",
@@ -59,7 +59,7 @@ func TestTargetedRefactorWritesReplacementAndRefreshesIndex(t *testing.T) {
 	querier, estore, files, refresher, path := newTargetedRefactorTestDeps(t)
 	handler := NewTargetedRefactorHandler(querier, estore, files, refresher, nil)
 
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"symbol":         "Hello",
 		"transformation": "replace the helper body",
 		"replacement":    "func Hello() string {\n\treturn \"goodbye\"\n}",

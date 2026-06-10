@@ -30,7 +30,7 @@ func (t *GrepTool) ParamKeys() []string {
 	return SearchGrepParamKeys()
 }
 
-func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseSearchGrepParams(args)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*p
 	if err != nil {
 		return nil, err
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"matches": matches}}, nil
 }
 func (t *GrepTool) IsAvailable(ctx context.Context) bool { return true }
 
@@ -108,7 +108,7 @@ func (t *SimilarityTool) ParamKeys() []string {
 	return SearchFindSimilarParamKeys()
 }
 
-func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseSearchFindSimilarParams(args)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, err
 	}
 	sort.Slice(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"matches": matches}}, nil
 }
 func (t *SimilarityTool) IsAvailable(ctx context.Context) bool { return true }
 
@@ -176,14 +176,14 @@ func (t *SemanticSearchTool) ParamKeys() []string {
 	return SearchSemanticParamKeys()
 }
 
-func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseSearchSemanticParams(args)
 	if err != nil {
 		return nil, err
 	}
 	query := strings.ToLower(params.Query)
 	terms := semanticTerms(query)
-	var hits []map[string]interface{}
+	var hits []map[string]any
 	err = filepath.Walk(t.BasePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -204,7 +204,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interf
 		content := strings.ToLower(string(data))
 		score := semanticScore(terms, content)
 		if score > 0 {
-			hits = append(hits, map[string]interface{}{
+			hits = append(hits, map[string]any{
 				"file":    path,
 				"score":   score,
 				"snippet": summarize(string(data)),
@@ -220,7 +220,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interf
 		right, _ := hits[j]["score"].(float64)
 		return left > right
 	})
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"results": hits}}, nil
 }
 func (t *SemanticSearchTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -270,7 +270,7 @@ func shouldSkipSearchPath(path string) bool {
 
 func semanticTerms(query string) []string {
 	fields := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 	})
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(fields))

@@ -2,6 +2,7 @@ package arch
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,7 +32,7 @@ func TestCheckContextPortsNoInternalImports_violation(t *testing.T) {
 	if len(vios) != 1 {
 		t.Fatalf("expected 1 violation, got %d: %v", len(vios), vios)
 	}
-	if !contains(vios[0], "context/ports") {
+	if !strings.Contains(vios[0], "context/ports") {
 		t.Errorf("violation should mention context/ports, got: %s", vios[0])
 	}
 }

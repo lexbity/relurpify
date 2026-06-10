@@ -20,14 +20,14 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 	if logger != nil {
 		logger.Printf("[preflight] starting backend preflight for model=%q at=%s", model, startTime.Format(time.RFC3339))
 	}
-	emitPreflightEvent(telemetry, "preflight_start", model, map[string]interface{}{
+	emitPreflightEvent(telemetry, "preflight_start", model, map[string]any{
 		"start_time": startTime.Format(time.RFC3339),
 	})
 
 	// Check for context cancellation/deadline before starting
 	if err := ctx.Err(); err != nil {
 		duration := time.Since(startTime)
-		emitPreflightEvent(telemetry, "preflight_context_error", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_context_error", model, map[string]any{
 			"error":    err.Error(),
 			"duration": duration.Milliseconds(),
 		})
@@ -43,7 +43,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 	healthDuration := time.Since(healthStart)
 	if err != nil {
 		duration := time.Since(startTime)
-		emitPreflightEvent(telemetry, "preflight_health_failed", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_health_failed", model, map[string]any{
 			"error":           err.Error(),
 			"health_duration": healthDuration.Milliseconds(),
 			"total_duration":  duration.Milliseconds(),
@@ -52,7 +52,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 	}
 	if health == nil {
 		duration := time.Since(startTime)
-		emitPreflightEvent(telemetry, "preflight_health_nil", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_health_nil", model, map[string]any{
 			"health_duration": healthDuration.Milliseconds(),
 			"total_duration":  duration.Milliseconds(),
 		})
@@ -71,7 +71,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 	listDuration := time.Since(listStart)
 	if err != nil {
 		duration := time.Since(startTime)
-		emitPreflightEvent(telemetry, "preflight_list_failed", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_list_failed", model, map[string]any{
 			"error":          err.Error(),
 			"health_state":   health.State,
 			"list_duration":  listDuration.Milliseconds(),
@@ -87,7 +87,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 	model = strings.TrimSpace(model)
 	if model == "" {
 		duration := time.Since(startTime)
-		emitPreflightEvent(telemetry, "preflight_empty_model", "", map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_empty_model", "", map[string]any{
 			"total_duration": duration.Milliseconds(),
 		})
 		return nil, fmt.Errorf("model name is empty (check testsuite YAML configuration)")
@@ -115,7 +115,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 			// Pull the model
 			if err := pb.Pull(ctx, model); err != nil {
 				duration := time.Since(startTime)
-				emitPreflightEvent(telemetry, "preflight_pull_failed", model, map[string]interface{}{
+				emitPreflightEvent(telemetry, "preflight_pull_failed", model, map[string]any{
 					"error":          err.Error(),
 					"pull_duration":  time.Since(pullStart).Milliseconds(),
 					"total_duration": duration.Milliseconds(),
@@ -126,7 +126,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 			if logger != nil {
 				logger.Printf("[preflight] successfully pulled model %q in %v, refreshing model list...", model, time.Since(pullStart))
 			}
-			emitPreflightEvent(telemetry, "preflight_pull_success", model, map[string]interface{}{
+			emitPreflightEvent(telemetry, "preflight_pull_success", model, map[string]any{
 				"pull_duration": time.Since(pullStart).Milliseconds(),
 			})
 
@@ -159,7 +159,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 			logger.Printf("[preflight] warning: model warm-up failed/timed out: %v", err)
 		}
 
-		emitPreflightEvent(telemetry, "preflight_success", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_success", model, map[string]any{
 			"found_model":    matchedModel.Name,
 			"family":         matchedModel.Family,
 			"context_size":   matchedModel.ContextSize,
@@ -187,7 +187,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 		if logger != nil {
 			logger.Printf("[preflight] model list empty but backend healthy, soft-allowing model=%q duration=%v", model, duration)
 		}
-		emitPreflightEvent(telemetry, "preflight_soft_allow", model, map[string]interface{}{
+		emitPreflightEvent(telemetry, "preflight_soft_allow", model, map[string]any{
 			"health_state":   health.State,
 			"note":           "model list was empty but backend was healthy - proceeding",
 			"total_duration": duration.Milliseconds(),
@@ -218,7 +218,7 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 		availableModels = append(availableModels, m.Name)
 	}
 
-	emitPreflightEvent(telemetry, "preflight_model_not_found", model, map[string]interface{}{
+	emitPreflightEvent(telemetry, "preflight_model_not_found", model, map[string]any{
 		"available_count":  len(models),
 		"available_models": availableModels,
 		"health_state":     health.State,
@@ -229,12 +229,12 @@ func preflightCaseBackend(ctx context.Context, backend llm.ManagedBackend, model
 }
 
 // emitPreflightEvent emits a telemetry event for preflight operations if telemetry is available.
-func emitPreflightEvent(sink telemetry.Telemetry, eventType string, model string, metadata map[string]interface{}) {
+func emitPreflightEvent(sink telemetry.Telemetry, eventType string, model string, metadata map[string]any) {
 	if sink == nil {
 		return
 	}
 	if metadata == nil {
-		metadata = make(map[string]interface{})
+		metadata = make(map[string]any)
 	}
 	metadata["model"] = model
 	sink.Emit(telemetry.Event{
@@ -243,12 +243,4 @@ func emitPreflightEvent(sink telemetry.Telemetry, eventType string, model string
 		Message:   fmt.Sprintf("preflight %s: %s", eventType, model),
 		Metadata:  metadata,
 	})
-}
-
-// min returns the minimum of two integers.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

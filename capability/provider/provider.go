@@ -7,8 +7,8 @@ import (
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type ProviderDescriptor struct {
@@ -52,13 +52,13 @@ type ProviderSession struct {
 	CreatedAt      string                    `json:"created_at,omitempty"`
 	LastActivityAt string                    `json:"last_activity_at,omitempty"`
 	Health         string                    `json:"health,omitempty"`
-	Metadata       map[string]interface{}    `json:"metadata,omitempty"`
+	Metadata       map[string]any            `json:"metadata,omitempty"`
 }
 
 type ProviderHealthSnapshot struct {
-	Status   string                 `json:"status,omitempty"`
-	Message  string                 `json:"message,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Status   string         `json:"status,omitempty"`
+	Message  string         `json:"message,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 type ProviderSnapshot struct {
@@ -97,7 +97,7 @@ type Provider interface {
 }
 
 type ProviderRuntime interface {
-	State() map[string]interface{}
+	State() map[string]any
 }
 
 type ProviderSnapshotter interface {

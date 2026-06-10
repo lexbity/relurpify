@@ -85,13 +85,13 @@ func (a *ReflectionAgent) BuildGraph(task *execution.Task) (*graph.Graph, error)
 	}
 	if err := g.AddEdge(decision.ID(), run.ID(), func(res *execution.Result, env *contextdata.Envelope) bool {
 		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
-		return revise == true
+		return revise
 	}, false); err != nil {
 		return nil, err
 	}
 	if err := g.AddEdge(decision.ID(), done.ID(), func(res *execution.Result, env *contextdata.Envelope) bool {
 		revise, _ := contextdata.GetTyped[bool](env, "reflection.revise")
-		return revise != true
+		return !revise
 	}, false); err != nil {
 		return nil, err
 	}
@@ -347,7 +347,7 @@ func compactResultForReview(result *execution.Result) map[string]any {
 		"success": result.Success,
 	}
 	if strings.TrimSpace(result.Error) != "" {
-		data["error"] = truncateReflectionString(result.Error)
+		data["error"] = truncate(result.Error, reflectionMaxStringLen)
 	}
 	if fields := execution.ResultFields(result.Data); len(fields) > 0 {
 		data["data"] = compactReflectionValue(fields, 0)
@@ -364,25 +364,25 @@ const (
 
 func compactReflectionValue(value any, depth int) any {
 	if depth >= reflectionMaxDepth {
-		return truncateReflectionString(fmt.Sprint(value))
+		return truncate(fmt.Sprint(value), reflectionMaxStringLen)
 	}
 	switch typed := value.(type) {
 	case nil:
 		return nil
 	case string:
-		return truncateReflectionString(typed)
+		return truncate(typed, reflectionMaxStringLen)
 	case []string:
-		limit := reflectionMinInt(len(typed), reflectionMaxCollectionItems)
+		limit := min(len(typed), reflectionMaxCollectionItems)
 		out := make([]any, 0, limit+1)
 		for i := 0; i < limit; i++ {
-			out = append(out, truncateReflectionString(typed[i]))
+			out = append(out, truncate(typed[i], reflectionMaxStringLen))
 		}
 		if len(typed) > limit {
 			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
 		}
 		return out
 	case []any:
-		limit := reflectionMinInt(len(typed), reflectionMaxCollectionItems)
+		limit := min(len(typed), reflectionMaxCollectionItems)
 		out := make([]any, 0, limit+1)
 		for i := 0; i < limit; i++ {
 			out = append(out, compactReflectionValue(typed[i], depth+1))
@@ -394,8 +394,9 @@ func compactReflectionValue(value any, depth int) any {
 	case map[string]any:
 		return compactReflectionMap(typed, depth)
 	default:
-		return truncateReflectionString(fmt.Sprint(value))
+		return truncate(fmt.Sprint(value), reflectionMaxStringLen)
 	}
+
 }
 
 func compactReflectionMap(values map[string]any, depth int) map[string]any {
@@ -407,7 +408,7 @@ func compactReflectionMap(values map[string]any, depth int) map[string]any {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	limit := reflectionMinInt(len(keys), reflectionMaxMapItems)
+	limit := min(len(keys), reflectionMaxMapItems)
 	out := make(map[string]any, limit+1)
 	for _, key := range keys[:limit] {
 		out[key] = compactReflectionValue(values[key], depth+1)
@@ -418,19 +419,16 @@ func compactReflectionMap(values map[string]any, depth int) map[string]any {
 	return out
 }
 
-func truncateReflectionString(value string) string {
+func truncate(value string, max int) string {
 	value = strings.TrimSpace(value)
-	if len(value) <= reflectionMaxStringLen {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= max {
 		return value
 	}
-	return value[:reflectionMaxStringLen] + "...(truncated)"
-}
-
-func reflectionMinInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return string(runes[:max]) + "…"
 }
 
 func reflectionSeverityGuidance(weights map[string]float64) string {

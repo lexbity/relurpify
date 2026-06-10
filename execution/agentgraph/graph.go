@@ -247,7 +247,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execut
 			Type:      telemetry.EventGraphFinish,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"status": status,
 			},
 		})
@@ -331,7 +331,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			NodeID:    current,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"success": result.Success,
 			},
 		})
@@ -349,7 +349,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 	return lastResult, nil
 }
 
-func taskMetaValue(env *contextdata.Envelope, key string) interface{} {
+func taskMetaValue(env *contextdata.Envelope, key string) any {
 	if env == nil {
 		return nil
 	}
@@ -359,11 +359,11 @@ func taskMetaValue(env *contextdata.Envelope, key string) interface{} {
 	return nil
 }
 
-func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]interface{} {
+func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]any {
 	if env == nil {
 		return nil
 	}
-	meta := map[string]interface{}{}
+	meta := map[string]any{}
 	if v := taskMetaValue(env, "task.type"); v != nil {
 		meta["task_type"] = v
 	}
@@ -406,7 +406,7 @@ func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node N
 		results := make(chan parallelBranchResult, len(parallelEdges))
 		for _, edge := range parallelEdges {
 			wg.Add(1)
-			edge := edge
+
 			go func() {
 				defer wg.Done()
 				perfstats.IncBranchClone()
@@ -563,7 +563,7 @@ func (g *Graph) Validate() error {
 type ToolNode struct {
 	id        string
 	Tool      ports.Tool
-	Args      map[string]interface{}
+	Args      map[string]any
 	Registry  CapabilityInvoker
 	traceID   string // set by SetTraceID
 	spanCount int    // per-execution child span counter
@@ -591,13 +591,13 @@ func (n *ToolNode) nextTraceContext() ftelemetry.TraceContext {
 // CapabilityInvoker is the narrow registry contract ToolNode needs for
 // capability-routed execution without importing the concrete registry package.
 type CapabilityInvoker interface {
-	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ports.ToolResult, error)
+	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]any) (*ports.ToolResult, error)
 	CapturePolicySnapshot() *capresult.PolicySnapshot
 	GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool)
 }
 
 // NewToolNode constructs a tool node with a required capability invoker.
-func NewToolNode(id string, tool ports.Tool, args map[string]interface{}, registry CapabilityInvoker) *ToolNode {
+func NewToolNode(id string, tool ports.Tool, args map[string]any, registry CapabilityInvoker) *ToolNode {
 	if registry == nil {
 		panic("graph.NewToolNode requires a capability registry")
 	}
@@ -778,12 +778,12 @@ func resultFromToolExecution(nodeID string, res *ports.ToolResult) *execution.Re
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]interface{}) *capresult.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]any) *capresult.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}
 	if res.Metadata == nil {
-		res.Metadata = map[string]interface{}{}
+		res.Metadata = map[string]any{}
 	}
 	if res.Metadata["capability_envelope_created"] == true {
 		return nil

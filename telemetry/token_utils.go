@@ -5,7 +5,7 @@ import (
 )
 
 // estimateTokens performs a cheap heuristic conversion from characters to tokens.
-func estimateTokens(v interface{}) int {
+func estimateTokens(v any) int {
 	switch val := v.(type) {
 	case string:
 		return estimateTextTokens(val)
@@ -18,25 +18,18 @@ func estimateTextTokens(text string) int {
 	if text == "" {
 		return 0
 	}
-	return maxInt(1, int(math.Ceil(float64(len(text))/4.0)))
+	return max(1, int(math.Ceil(float64(len(text))/4.0)))
 }
 
 func estimateCodeTokens(code string) int {
 	if code == "" {
 		return 0
 	}
-	return maxInt(1, int(math.Ceil(float64(len(code))/2.5)))
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	return max(1, int(math.Ceil(float64(len(code))/2.5)))
 }
 
 // EstimateTokens exposes the internal token heuristic for external packages.
-func EstimateTokens(v interface{}) int {
+func EstimateTokens(v any) int {
 	return estimateTokens(v)
 }
 

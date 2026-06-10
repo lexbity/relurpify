@@ -133,19 +133,19 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 	b.WriteString("# Relurpish Session Export\n\n")
 	if payload.Session != nil {
 		b.WriteString("## Session\n")
-		b.WriteString(fmt.Sprintf("- ID: %s\n", payload.Session.ID))
-		b.WriteString(fmt.Sprintf("- Start: %s\n", payload.Session.StartTime.Format(time.RFC3339)))
-		b.WriteString(fmt.Sprintf("- Workspace: %s\n", payload.Session.Workspace))
-		b.WriteString(fmt.Sprintf("- Model: %s\n", payload.Session.Model))
-		b.WriteString(fmt.Sprintf("- Agent: %s\n", payload.Session.Agent))
+		fmt.Fprintf(&b, "- ID: %s\n", payload.Session.ID)
+		fmt.Fprintf(&b, "- Start: %s\n", payload.Session.StartTime.Format(time.RFC3339))
+		fmt.Fprintf(&b, "- Workspace: %s\n", payload.Session.Workspace)
+		fmt.Fprintf(&b, "- Model: %s\n", payload.Session.Model)
+		fmt.Fprintf(&b, "- Agent: %s\n", payload.Session.Agent)
 		if payload.Session.Mode != "" {
-			b.WriteString(fmt.Sprintf("- Mode: %s\n", payload.Session.Mode))
+			fmt.Fprintf(&b, "- Mode: %s\n", payload.Session.Mode)
 		}
 		if payload.Session.Strategy != "" {
-			b.WriteString(fmt.Sprintf("- Strategy: %s\n", payload.Session.Strategy))
+			fmt.Fprintf(&b, "- Strategy: %s\n", payload.Session.Strategy)
 		}
-		b.WriteString(fmt.Sprintf("- Tokens: %d\n", payload.Session.TotalTokens))
-		b.WriteString(fmt.Sprintf("- Duration: %s\n", payload.Session.TotalDuration))
+		fmt.Fprintf(&b, "- Tokens: %d\n", payload.Session.TotalTokens)
+		fmt.Fprintf(&b, "- Duration: %s\n", payload.Session.TotalDuration)
 		b.WriteString("\n")
 	}
 	if payload.Context != nil {
@@ -155,7 +155,7 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 		} else {
 			b.WriteString("- Files:\n")
 			for _, file := range payload.Context.Files {
-				b.WriteString(fmt.Sprintf("  - %s\n", file))
+				fmt.Fprintf(&b, "  - %s\n", file)
 			}
 			b.WriteString("\n")
 		}
@@ -166,7 +166,7 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 		b.WriteString("(no messages)\n")
 	} else {
 		for _, msg := range payload.Messages {
-			b.WriteString(fmt.Sprintf("### [%s] %s\n", msg.Timestamp.Format("15:04:05"), strings.ToUpper(string(msg.Role))))
+			fmt.Fprintf(&b, "### [%s] %s\n", msg.Timestamp.Format("15:04:05"), strings.ToUpper(string(msg.Role)))
 			if msg.Content.Text != "" {
 				b.WriteString(msg.Content.Text + "\n")
 			}
@@ -174,13 +174,13 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 				b.WriteString("\nPlan:\n")
 				for _, task := range msg.Content.Plan.Tasks {
 					status := string(task.Status)
-					b.WriteString(fmt.Sprintf("- [%s] %s\n", status, task.Description))
+					fmt.Fprintf(&b, "- [%s] %s\n", status, task.Description)
 				}
 			}
 			if len(msg.Content.Changes) > 0 {
 				b.WriteString("\nChanges:\n")
 				for _, change := range msg.Content.Changes {
-					b.WriteString(fmt.Sprintf("- %s (%s)\n", change.Path, change.Status))
+					fmt.Fprintf(&b, "- %s (%s)\n", change.Path, change.Status)
 				}
 			}
 			b.WriteString("\n")
@@ -189,14 +189,14 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 
 	b.WriteString("## Telemetry\n")
 	if payload.Telemetry.Path != "" {
-		b.WriteString(fmt.Sprintf("- Path: %s\n", payload.Telemetry.Path))
+		fmt.Fprintf(&b, "- Path: %s\n", payload.Telemetry.Path)
 	} else {
 		b.WriteString("- Path: (none)\n")
 	}
 	if payload.Telemetry.Error != "" {
-		b.WriteString(fmt.Sprintf("- Error: %s\n", payload.Telemetry.Error))
+		fmt.Fprintf(&b, "- Error: %s\n", payload.Telemetry.Error)
 	} else if len(payload.Telemetry.Events) > 0 {
-		b.WriteString(fmt.Sprintf("- Events: %d\n", len(payload.Telemetry.Events)))
+		fmt.Fprintf(&b, "- Events: %d\n", len(payload.Telemetry.Events))
 		if payload.Telemetry.Truncated {
 			b.WriteString("- Note: telemetry truncated\n")
 		}
@@ -204,7 +204,7 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 		b.WriteString("- Events: 0\n")
 	}
 	if payload.LogPath != "" {
-		b.WriteString(fmt.Sprintf("- Log Path: %s\n", payload.LogPath))
+		fmt.Fprintf(&b, "- Log Path: %s\n", payload.LogPath)
 	}
 
 	return os.WriteFile(path, []byte(b.String()), 0o644)

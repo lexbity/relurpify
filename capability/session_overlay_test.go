@@ -22,7 +22,7 @@ func (h *stubSessionHandler) Descriptor(_ context.Context, _ ports.State) descri
 	return descriptor.CapabilityDescriptor{ID: h.id}
 }
 
-func (h *stubSessionHandler) Invoke(_ context.Context, _ ports.State, _ map[string]interface{}) (*ports.ToolResult, error) {
+func (h *stubSessionHandler) Invoke(_ context.Context, _ ports.State, _ map[string]any) (*ports.ToolResult, error) {
 	h.called = true
 	return &ports.ToolResult{Success: true, Data: map[string]any{"source": "session"}}, nil
 }

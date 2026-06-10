@@ -273,7 +273,7 @@ func (sm *serviceManager) StopAll() error {
 	var errs []error
 	for id, s := range services {
 		if err := sm.stopService(id, s); err != nil {
-			errs = append(errs, fmt.Errorf("service %s stop error: %v", id, err))
+			errs = append(errs, fmt.Errorf("service %s stop error: %w", id, err))
 		}
 	}
 

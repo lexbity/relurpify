@@ -24,7 +24,7 @@ func TestCompositeToolName(t *testing.T) {
 }
 
 func TestCompositeToolSteps(t *testing.T) {
-	fdResult := &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "file1\nfile2"}}
+	fdResult := &ports.ToolResult{Success: true, Data: map[string]any{"stdout": "file1\nfile2"}}
 	resolver := func(name string) (ports.Tool, bool) {
 		if name == "cli_fd" {
 			return &fakeTool{name: "cli_fd", result: fdResult}, true
@@ -103,13 +103,13 @@ func TestCompositeAliasPropagation(t *testing.T) {
 		if name == "cli_fd" {
 			return &fakeTool{name: "cli_fd", result: &ports.ToolResult{
 				Success: true,
-				Data:    map[string]interface{}{"stdout": "src/main.go\nsrc/utils.go"},
+				Data:    map[string]any{"stdout": "src/main.go\nsrc/utils.go"},
 			}}, true
 		}
 		if name == "cli_rg" {
 			return &fakeTool{name: "cli_rg", result: &ports.ToolResult{
 				Success: true,
-				Data:    map[string]interface{}{"stdout": "match1\nmatch2"},
+				Data:    map[string]any{"stdout": "match1\nmatch2"},
 			}}, true
 		}
 		return nil, false
@@ -134,9 +134,9 @@ func TestCompositeAliasPropagation(t *testing.T) {
 }
 
 func TestCompositeThreeStepPipeline(t *testing.T) {
-	step1 := &fakeTool{name: "step1", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "a\nb\nc"}}}
-	step2 := &fakeTool{name: "step2", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "d\ne\nf"}}}
-	step3 := &fakeTool{name: "step3", result: &ports.ToolResult{Success: true, Data: map[string]interface{}{"stdout": "g"}}}
+	step1 := &fakeTool{name: "step1", result: &ports.ToolResult{Success: true, Data: map[string]any{"stdout": "a\nb\nc"}}}
+	step2 := &fakeTool{name: "step2", result: &ports.ToolResult{Success: true, Data: map[string]any{"stdout": "d\ne\nf"}}}
+	step3 := &fakeTool{name: "step3", result: &ports.ToolResult{Success: true, Data: map[string]any{"stdout": "g"}}}
 
 	resolver := func(name string) (ports.Tool, bool) {
 		switch name {
@@ -222,6 +222,6 @@ func (f *fakeTool) Permissions() ports.ToolPermissions {
 	return ports.ToolPermissions{}
 }
 func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
-func (f *fakeTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (f *fakeTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	return f.result, nil
 }

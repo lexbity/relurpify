@@ -6,7 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )

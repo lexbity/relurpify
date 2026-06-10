@@ -26,13 +26,13 @@ type GitCommandTool struct {
 
 // PermissionSetter allows tools to receive permission configuration.
 type PermissionSetter interface {
-	SetPermissionManager(manager interface{}, agentID string)
-	SetAgentSpec(spec interface{}, agentID string)
+	SetPermissionManager(manager any, agentID string)
+	SetAgentSpec(spec any, agentID string)
 }
 
-func (t *GitCommandTool) SetPermissionManager(manager interface{}, agentID string) {}
+func (t *GitCommandTool) SetPermissionManager(manager any, agentID string) {}
 
-func (t *GitCommandTool) SetAgentSpec(spec interface{}, agentID string) {}
+func (t *GitCommandTool) SetAgentSpec(spec any, agentID string) {}
 
 func (t *GitCommandTool) SetCommandRunner(runner ports.CommandRunner) {
 	t.Runner = runner
@@ -84,7 +84,7 @@ func (t *GitCommandTool) Parameters() []ports.ToolParameter {
 	}
 }
 
-func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GitCommandTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if !t.IsAvailable(ctx) {
 		return nil, fmt.Errorf("git repository not detected")
 	}
@@ -128,7 +128,7 @@ func (t *GitCommandTool) Execute(ctx context.Context, args map[string]interface{
 	}
 }
 
-func toInt(value interface{}) int {
+func toInt(value any) int {
 	switch typed := value.(type) {
 	case int:
 		return typed
@@ -169,11 +169,11 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*ports.Tool
 		if msg == "" {
 			msg = "exit code " + strconv.Itoa(res.ExitCode)
 		}
-		return &ports.ToolResult{Success: false, Data: map[string]interface{}{"exit_code": res.ExitCode, "stdout_ref": res.StdoutRef, "stderr_ref": res.StderrRef}, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
+		return &ports.ToolResult{Success: false, Data: map[string]any{"exit_code": res.ExitCode, "stdout_ref": res.StdoutRef, "stderr_ref": res.StderrRef}, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"output":     res.Stdout,
 			"stderr":     res.Stderr,
 			"exit_code":  res.ExitCode,

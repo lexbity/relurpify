@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -31,7 +32,7 @@ func (t *GoWorkspaceDetectTool) Category() string { return "go" }
 func (t *GoWorkspaceDetectTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -62,7 +63,7 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]int
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"path":           resolved,
 			"module_root":    moduleRoot,
 			"module_path":    modulePath,
@@ -99,7 +100,7 @@ func (t *GoModuleMetadataTool) Parameters() []ports.ToolParameter {
 func (t *GoModuleMetadataTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -115,7 +116,7 @@ func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]inte
 	stdout := runResult.Stdout
 	stderr := runResult.Stderr
 	summary, parsed := parseGoModuleMetadata(stdout)
-	data := map[string]interface{}{
+	data := map[string]any{
 		"summary": summary,
 		"stdout":  stdout,
 		"stderr":  stderr,
@@ -158,7 +159,7 @@ func (t *GoTestTool) Parameters() []ports.ToolParameter {
 	}
 }
 func (t *GoTestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
-func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GoTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -190,7 +191,7 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]interface{}) (
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
 			"failed":        summary.Failed,
@@ -233,7 +234,7 @@ func (t *GoBuildTool) Parameters() []ports.ToolParameter {
 	}
 }
 func (t *GoBuildTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
-func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *GoBuildTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -262,7 +263,7 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]interface{}) 
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
 			"first_message": summary.FirstMessage,
@@ -324,9 +325,9 @@ func summarizeGoTest(stdout, stderr string, success bool) goTestSummary {
 		summary.Summary = fmt.Sprintf("go test failed: %s", summary.FirstFailure)
 		return summary
 	}
-	line := firstNonEmptyLine(stderr)
+	line := lang.FirstNonEmptyLine(stderr)
 	if line == "" {
-		line = firstNonEmptyLine(stdout)
+		line = lang.FirstNonEmptyLine(stdout)
 	}
 	if line != "" {
 		summary.Summary = "go test failed: " + line
@@ -348,10 +349,10 @@ func summarizeGoBuild(stdout, stderr string, success bool) goBuildSummary {
 		return summary
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stderr)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stderr)
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stdout)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stdout)
 	}
 	if summary.FirstMessage != "" {
 		summary.Summary = "go build failed: " + summary.FirstMessage
@@ -390,7 +391,7 @@ func detectGoProject(startDir, basePath string) (string, string, string) {
 	return moduleRoot, modulePath, workspacePath
 }
 
-func parseGoModuleMetadata(stdout string) (string, map[string]interface{}) {
+func parseGoModuleMetadata(stdout string) (string, map[string]any) {
 	type goModule struct {
 		Path      string `json:"Path"`
 		Dir       string `json:"Dir"`
@@ -400,13 +401,13 @@ func parseGoModuleMetadata(stdout string) (string, map[string]interface{}) {
 	}
 	var payload goModule
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		return "go module metadata completed", map[string]interface{}{}
+		return "go module metadata completed", map[string]any{}
 	}
 	summary := fmt.Sprintf("go module %s", payload.Path)
 	if payload.GoVersion != "" {
 		summary += " go=" + payload.GoVersion
 	}
-	return summary, map[string]interface{}{
+	return summary, map[string]any{
 		"module_name": payload.Path,
 		"module_dir":  payload.Dir,
 		"go_mod":      payload.GoMod,

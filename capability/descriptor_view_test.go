@@ -3,14 +3,12 @@ package capability
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 func TestCapabilityDescriptorView_CompileTimeAssertion(t *testing.T) {
-	var _ governanceports.DescriptorView = descriptor.CapabilityDescriptorView(descriptor.CapabilityDescriptor{})
+	var _ = descriptor.CapabilityDescriptorView(descriptor.CapabilityDescriptor{})
 }
 
 func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {

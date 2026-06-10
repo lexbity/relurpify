@@ -9,15 +9,15 @@ import (
 
 // RecoveryScenario describes a failure scenario and recovery strategy.
 type RecoveryScenario struct {
-	ScenarioID      string                 // Unique identifier
-	FailureType     string                 // "execution_error", "step_failure", "synthesis_error", "process_crash"
-	StepsAttempted  []string               // Step IDs that were executed
-	FailedSteps     []string               // Step IDs that failed
-	FailureReason   string                 // Human-readable error description
-	SuggestedAction string                 // "retry", "replan", "synthesize_from_results", "resume_from_checkpoint"
-	CheckpointID    string                 // Checkpoint to resume from (if applicable)
-	RiskLevel       string                 // "low", "medium", "high"
-	Metadata        map[string]interface{} // Additional context
+	ScenarioID      string         // Unique identifier
+	FailureType     string         // "execution_error", "step_failure", "synthesis_error", "process_crash"
+	StepsAttempted  []string       // Step IDs that were executed
+	FailedSteps     []string       // Step IDs that failed
+	FailureReason   string         // Human-readable error description
+	SuggestedAction string         // "retry", "replan", "synthesize_from_results", "resume_from_checkpoint"
+	CheckpointID    string         // Checkpoint to resume from (if applicable)
+	RiskLevel       string         // "low", "medium", "high"
+	Metadata        map[string]any // Additional context
 }
 
 // DiagnosisResult represents the diagnosis of a workflow failure.
@@ -68,7 +68,7 @@ func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results
 			FailureReason:   fmt.Sprintf("%.0f%% of steps failed", failureRatio*100),
 			SuggestedAction: "retry",
 			RiskLevel:       "low",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"failed_count":  failedCount,
 				"total_count":   len(results),
 				"failure_ratio": failureRatio,
@@ -97,7 +97,7 @@ func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results
 			SuggestedAction: "replan",
 			CheckpointID:    checkpointID,
 			RiskLevel:       "medium",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"failed_count":   failedCount,
 				"total_count":    len(results),
 				"failure_ratio":  failureRatio,
@@ -118,7 +118,7 @@ func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results
 			FailureReason:   fmt.Sprintf("%.0f%% of steps failed, limited recovery possible", failureRatio*100),
 			SuggestedAction: "synthesize_from_results",
 			RiskLevel:       "high",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"failed_count":    failedCount,
 				"total_count":     len(results),
 				"failure_ratio":   failureRatio,
@@ -193,13 +193,14 @@ func analyzeErrorPatterns(results []RewooStepResult) map[string]int {
 	for _, result := range results {
 		if !result.Success && result.Error != "" {
 			// Simple categorization
-			if result.Error == "timeout" {
+			switch result.Error {
+			case "timeout":
 				patterns["timeout"]++
-			} else if result.Error == "tool_not_found" {
+			case "tool_not_found":
 				patterns["tool_not_found"]++
-			} else if result.Error == "permission_denied" {
+			case "permission_denied":
 				patterns["permission_denied"]++
-			} else {
+			default:
 				patterns["other"]++
 			}
 		}

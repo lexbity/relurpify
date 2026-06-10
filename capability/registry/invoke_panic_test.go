@@ -77,7 +77,7 @@ func TestPanicWithNilReturnDoesNotCrash(t *testing.T) {
 
 func TestRecoverToolPanicNoPanic(t *testing.T) {
 	result, err := recoverToolPanic(func() (*ports.ToolResult, error) {
-		return &ports.ToolResult{Success: true, Data: map[string]interface{}{"output": "ok"}}, nil
+		return &ports.ToolResult{Success: true, Data: map[string]any{"output": "ok"}}, nil
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -155,7 +155,7 @@ func TestRecordResultNilMetadataNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
 		descriptor.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
-		&ports.ToolResult{Success: true, Data: map[string]interface{}{"path": "/tmp/test"}, Metadata: nil},
+		&ports.ToolResult{Success: true, Data: map[string]any{"path": "/tmp/test"}, Metadata: nil},
 	)
 	if err != nil {
 		t.Fatalf("RecordResult with nil Metadata should not error: %v", err)

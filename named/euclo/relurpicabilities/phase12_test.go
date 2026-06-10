@@ -89,7 +89,7 @@ func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
 	require.NoError(t, manager.IndexFile(path))
 
 	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"symbol":         "Hello",
 		"transformation": "rename the greeting helper body",
 		"replacement":    "func Hello() string {\n\treturn \"new\"\n}",
@@ -115,7 +115,7 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	require.NoError(t, manager.IndexFile(path))
 
 	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"symbol":         "Hello",
 		"transformation": "rename the greeting helper body",
 		"replacement":    "func Hello() string {\n\treturn \"new\"\n}",
@@ -143,7 +143,7 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	require.NoError(t, manager.IndexFile(bPath))
 
 	handler := NewRenameSymbolHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager)
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"from": "Hello",
 		"to":   "World",
 	})
@@ -167,7 +167,7 @@ func TestCoverageCheckParsesOutput(t *testing.T) {
 		Policy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),
 	})
 
-	result, err := handler.Invoke(context.Background(), nil, map[string]interface{}{
+	result, err := handler.Invoke(context.Background(), nil, map[string]any{
 		"package":   "./...",
 		"threshold": 80.0,
 	})

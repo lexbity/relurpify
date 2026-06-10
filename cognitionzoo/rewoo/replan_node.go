@@ -17,7 +17,7 @@ type ReplanNode struct {
 	MaxReplanAttempts int
 	CurrentAttempt    int
 	ReplanThreshold   float64 // e.g. 0.5 = replan if 50%+ steps failed
-	Debugf            func(string, ...interface{})
+	Debugf            func(string, ...any)
 }
 
 // NewReplanNode creates a new replan decision node.

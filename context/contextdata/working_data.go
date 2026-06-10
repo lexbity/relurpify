@@ -69,7 +69,7 @@ func (e *Envelope) DeleteWorkingValue(key string) {
 
 	newRefs := make([]WorkingMemoryReference, 0, len(e.References.WorkingMemory))
 	for _, ref := range e.References.WorkingMemory {
-		if !(ref.TaskID == e.TaskID && ref.Key == key) {
+		if ref.TaskID != e.TaskID || ref.Key != key {
 			newRefs = append(newRefs, ref)
 		}
 	}

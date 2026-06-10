@@ -290,22 +290,22 @@ func RedactAny(input any) any {
 		return nil
 	}
 	switch typed := input.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return RedactMetadataMap(typed)
 	case map[string]string:
-		out := make(map[string]interface{}, len(typed))
+		out := make(map[string]any, len(typed))
 		for key, value := range typed {
 			out[key] = redactValue(key, value)
 		}
 		return out
-	case []interface{}:
-		out := make([]interface{}, 0, len(typed))
+	case []any:
+		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, RedactAny(item))
 		}
 		return out
 	case []string:
-		out := make([]interface{}, 0, len(typed))
+		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, redactValue("", item))
 		}
@@ -318,38 +318,38 @@ func RedactAny(input any) any {
 }
 
 // RedactMetadataMap redacts sensitive values from a metadata map.
-func RedactMetadataMap(input map[string]interface{}) map[string]interface{} {
+func RedactMetadataMap(input map[string]any) map[string]any {
 	if input == nil {
 		return nil
 	}
-	out := make(map[string]interface{}, len(input))
+	out := make(map[string]any, len(input))
 	for key, value := range input {
 		out[key] = redactValue(key, value)
 	}
 	return out
 }
 
-func redactValue(key string, value interface{}) interface{} {
+func redactValue(key string, value any) any {
 	if isSensitiveKey(key) {
 		return "[REDACTED]"
 	}
 	switch typed := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return RedactMetadataMap(typed)
 	case map[string]string:
-		out := make(map[string]interface{}, len(typed))
+		out := make(map[string]any, len(typed))
 		for k, v := range typed {
 			out[k] = redactValue(k, v)
 		}
 		return out
 	case []string:
-		out := make([]interface{}, 0, len(typed))
+		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, redactValue(key, item))
 		}
 		return out
-	case []interface{}:
-		out := make([]interface{}, 0, len(typed))
+	case []any:
+		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, redactValue(key, item))
 		}
@@ -389,7 +389,7 @@ func looksSensitiveValue(value string) bool {
 	return false
 }
 
-func estimatePayloadBytes(values ...interface{}) int {
+func estimatePayloadBytes(values ...any) int {
 	total := 0
 	for _, value := range values {
 		total += len(strings.TrimSpace(fmt.Sprint(value)))
@@ -397,7 +397,7 @@ func estimatePayloadBytes(values ...interface{}) int {
 	return total
 }
 
-func estimatePayloadTokens(values ...interface{}) int {
+func estimatePayloadTokens(values ...any) int {
 	return estimatePayloadBytes(values...) / 4
 }
 

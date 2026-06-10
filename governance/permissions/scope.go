@@ -127,10 +127,8 @@ func resolveExistingPrefix(p string) string {
 	}
 	var tail []string
 	current := filepath.Clean(p)
-	for {
-		if current == "" || current == "/" {
-			break
-		}
+	for current != "" && current != "/" {
+
 		if resolved, err := filepath.EvalSymlinks(current); err == nil {
 			for i := len(tail) - 1; i >= 0; i-- {
 				resolved = filepath.Join(resolved, tail[i])

@@ -100,12 +100,12 @@ const (
 
 // TraversalSpec requests graph-aware candidate generation.
 type TraversalSpec struct {
-	AnchorIDs    []string
-	EdgeKinds    []string
-	Direction    TraversalDirection
-	MaxDepth     int
-	PreferLatest bool
-	MaxCandidates int  // 0 ⇒ fall back to policy / default
+	AnchorIDs     []string
+	EdgeKinds     []string
+	Direction     TraversalDirection
+	MaxDepth      int
+	PreferLatest  bool
+	MaxCandidates int // 0 ⇒ fall back to policy / default
 }
 
 // RetrievalResult contains the retrieved chunks and metadata.

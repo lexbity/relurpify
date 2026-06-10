@@ -258,7 +258,7 @@ func (t *ExecutionTrace) ToDebugString() string {
 		return "No trace"
 	}
 
-	output := fmt.Sprintf("=== Execution Trace ===\n")
+	output := "=== Execution Trace ===\n"
 	output += fmt.Sprintf("Plan Goal: %s\n", t.PlanGoal)
 	output += fmt.Sprintf("Duration: %v\n", t.Duration())
 	output += fmt.Sprintf("Steps: %d executed (%d success, %d failures)\n\n",

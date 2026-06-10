@@ -372,7 +372,7 @@ func (t recordingThoughtRecipeTool) Name() string                      { return 
 func (t recordingThoughtRecipeTool) Description() string               { return t.name }
 func (t recordingThoughtRecipeTool) Category() string                  { return "test" }
 func (t recordingThoughtRecipeTool) Parameters() []ports.ToolParameter { return nil }
-func (t recordingThoughtRecipeTool) Execute(context.Context, map[string]interface{}) (*ports.ToolResult, error) {
+func (t recordingThoughtRecipeTool) Execute(context.Context, map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true, Data: map[string]any{"name": t.name}}, nil
 }
 func (t recordingThoughtRecipeTool) IsAvailable(context.Context) bool { return true }
@@ -396,7 +396,7 @@ func (h *recordingCapabilityHandler) Descriptor(context.Context, ports.State) de
 	}
 }
 
-func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	_ = env
 	h.called = true

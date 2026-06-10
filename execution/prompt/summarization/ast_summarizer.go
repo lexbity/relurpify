@@ -129,9 +129,10 @@ func (s *ASTSummarizer) summarizeGo(content string) string {
 		// Inside function body - track brace depth
 		if inFuncBody {
 			for _, ch := range line {
-				if ch == '{' {
+				switch ch {
+				case '{':
 					braceDepth++
-				} else if ch == '}' {
+				case '}':
 					braceDepth--
 				}
 			}
@@ -296,9 +297,10 @@ func (s *ASTSummarizer) summarizeRust(content string) string {
 		// Inside function body
 		if inFuncBody {
 			for _, ch := range line {
-				if ch == '{' {
+				switch ch {
+				case '{':
 					braceDepth++
-				} else if ch == '}' {
+				case '}':
 					braceDepth--
 				}
 			}
@@ -372,9 +374,10 @@ func (s *ASTSummarizer) summarizeJS(content string) string {
 		// Inside function body
 		if declStart >= 0 {
 			for _, ch := range line {
-				if ch == '{' {
+				switch ch {
+				case '{':
 					braceDepth++
-				} else if ch == '}' {
+				case '}':
 					braceDepth--
 				}
 			}

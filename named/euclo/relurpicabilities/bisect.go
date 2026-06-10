@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -91,7 +91,7 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) descrip
 }
 
 // Invoke executes git bisect to find the culprit commit.
-func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	goodRef, ok := stringArg(args, "good_ref")
 	if !ok || goodRef == "" {
 		return failResult("good_ref argument is required and must be non-empty"), nil
@@ -169,7 +169,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":        true,
 			"found":          found,
 			"culprit_commit": culpritCommit,
@@ -285,7 +285,7 @@ done:
 	_ = h.runBisectCommand(ctx, workdir, []string{"git", "bisect", "reset"})
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":        true,
 			"found":          state.Found,
 			"culprit_commit": state.CulpritCommit,
@@ -296,12 +296,12 @@ done:
 }
 
 type bisectDecision struct {
-	Thought   string                 `json:"thought"`
-	Tool      string                 `json:"tool"`
-	Arguments map[string]interface{} `json:"arguments"`
-	Complete  bool                   `json:"complete"`
-	Summary   string                 `json:"summary"`
-	Reason    string                 `json:"reason"`
+	Thought   string         `json:"thought"`
+	Tool      string         `json:"tool"`
+	Arguments map[string]any `json:"arguments"`
+	Complete  bool           `json:"complete"`
+	Summary   string         `json:"summary"`
+	Reason    string         `json:"reason"`
 }
 
 type bisectSessionState struct {

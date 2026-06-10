@@ -47,7 +47,7 @@ type Message struct {
 type ToolCall struct {
 	ID   string
 	Name string
-	Args map[string]interface{}
+	Args map[string]any
 }
 
 // TokenUsage records token consumption for a model invocation.
@@ -180,8 +180,8 @@ type Schema struct {
 	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
 	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
 	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     interface{}        `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []interface{}      `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
+	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
 	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
 	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`

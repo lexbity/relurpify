@@ -34,7 +34,7 @@ const (
 type TelemetryEvent struct {
 	Name      string
 	Timestamp int64
-	Data      map[string]interface{}
+	Data      map[string]any
 }
 
 // TelemetryContext holds telemetry context for a task execution.

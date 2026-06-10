@@ -150,9 +150,7 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 
 	edgeList := make([]EdgeRecord, 0)
 	for _, edges := range src.forward {
-		for _, edge := range edges {
-			edgeList = append(edgeList, edge)
-		}
+		edgeList = append(edgeList, edges...)
 	}
 	src.mu.RUnlock()
 

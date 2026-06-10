@@ -12,7 +12,7 @@ import (
 // ObjectRegistry stores non-serializable runtime objects behind string handles.
 type ObjectRegistry struct {
 	mu            sync.RWMutex
-	items         map[string]interface{}
+	items         map[string]any
 	scopes        map[string]map[string]struct{}
 	handleToScope map[string]string // reverse index: O(1) scope lookup on Remove
 }
@@ -24,14 +24,14 @@ type registryCloser interface {
 // NewObjectRegistry builds an empty registry.
 func NewObjectRegistry() *ObjectRegistry {
 	return &ObjectRegistry{
-		items:         make(map[string]interface{}),
+		items:         make(map[string]any),
 		scopes:        make(map[string]map[string]struct{}),
 		handleToScope: make(map[string]string),
 	}
 }
 
 // Register stores an object and returns its handle.
-func (r *ObjectRegistry) Register(value interface{}) string {
+func (r *ObjectRegistry) Register(value any) string {
 	if r == nil {
 		return ""
 	}
@@ -43,7 +43,7 @@ func (r *ObjectRegistry) Register(value interface{}) string {
 }
 
 // RegisterScoped stores an object and associates it with a scope for cleanup.
-func (r *ObjectRegistry) RegisterScoped(scope string, value interface{}) string {
+func (r *ObjectRegistry) RegisterScoped(scope string, value any) string {
 	if r == nil {
 		return ""
 	}
@@ -62,7 +62,7 @@ func (r *ObjectRegistry) RegisterScoped(scope string, value interface{}) string 
 }
 
 // Lookup resolves a handle to the stored object.
-func (r *ObjectRegistry) Lookup(handle string) (interface{}, bool) {
+func (r *ObjectRegistry) Lookup(handle string) (any, bool) {
 	if r == nil || handle == "" {
 		return nil, false
 	}
@@ -77,7 +77,7 @@ func (r *ObjectRegistry) Remove(handle string) {
 	if r == nil || handle == "" {
 		return
 	}
-	var value interface{}
+	var value any
 	r.mu.Lock()
 	value = r.items[handle]
 	delete(r.items, handle)
@@ -98,7 +98,7 @@ func (r *ObjectRegistry) ClearScope(scope string) {
 	if r == nil || scope == "" {
 		return
 	}
-	var values []interface{}
+	var values []any
 	r.mu.Lock()
 	handles := r.scopes[scope]
 	delete(r.scopes, scope)
@@ -118,12 +118,12 @@ func (r *ObjectRegistry) CloseAll() error {
 	if r == nil {
 		return nil
 	}
-	var values []interface{}
+	var values []any
 	r.mu.Lock()
 	for _, value := range r.items {
 		values = append(values, value)
 	}
-	r.items = make(map[string]interface{})
+	r.items = make(map[string]any)
 	r.scopes = make(map[string]map[string]struct{})
 	r.handleToScope = make(map[string]string)
 	r.mu.Unlock()
@@ -160,7 +160,7 @@ func (r *ObjectRegistry) Clone() *ObjectRegistry {
 	return clone
 }
 
-func closeRegistryValue(value interface{}) error {
+func closeRegistryValue(value any) error {
 	if value == nil {
 		return nil
 	}

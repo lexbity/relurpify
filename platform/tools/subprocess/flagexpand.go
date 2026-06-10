@@ -25,7 +25,7 @@ import (
 //  3. command.args (placeholder tokens)
 //  4. default_args
 //  5. raw args["args"] (flagged only if sandbox.allow_flags)
-func ExpandCommand(manifest ports.ToolManifest, args map[string]interface{}) ([]string, error) {
+func ExpandCommand(manifest ports.ToolManifest, args map[string]any) ([]string, error) {
 	execSpec := manifest.Execution
 	commandSpec := execSpec.Command
 
@@ -99,7 +99,7 @@ func ExpandCommand(manifest ports.ToolManifest, args map[string]interface{}) ([]
 // expandFlags emits argv tokens for every declared flag in deterministic
 // key order. Boolean flags are emitted when the matching parameter is true;
 // typed flags bind to the declared Param and are formatted per Style/Repeat.
-func expandFlags(flags map[string]ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandFlags(flags map[string]ports.ToolManifestFlag, args map[string]any) ([]string, error) {
 	if len(flags) == 0 {
 		return nil, nil
 	}
@@ -140,7 +140,7 @@ func expandFlags(flags map[string]ports.ToolManifestFlag, args map[string]interf
 	return result, nil
 }
 
-func expandBooleanFlag(key string, flag ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandBooleanFlag(key string, flag ports.ToolManifestFlag, args map[string]any) ([]string, error) {
 	val, exists := lookupArg(args, key)
 	if !exists || val == nil {
 		return nil, nil // not provided — skip
@@ -155,7 +155,7 @@ func expandBooleanFlag(key string, flag ports.ToolManifestFlag, args map[string]
 	return copyStrings(flag.WhenFalse), nil
 }
 
-func expandTypedFlag(key string, flag ports.ToolManifestFlag, args map[string]interface{}) ([]string, error) {
+func expandTypedFlag(key string, flag ports.ToolManifestFlag, args map[string]any) ([]string, error) {
 	val, exists := lookupArg(args, flag.Param)
 	if !exists || val == nil {
 		return nil, nil // not provided — skip
@@ -203,7 +203,7 @@ func expandTypedFlag(key string, flag ports.ToolManifestFlag, args map[string]in
 
 // --- token expansion helpers (moved from framework/cfgload) ---
 
-func expandToken(token string, args map[string]interface{}) ([]string, error) {
+func expandToken(token string, args map[string]any) ([]string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, nil
@@ -247,7 +247,7 @@ func placeholderName(token string) (string, bool) {
 	}
 }
 
-func lookupArg(args map[string]interface{}, name string) (interface{}, bool) {
+func lookupArg(args map[string]any, name string) (any, bool) {
 	if len(args) == 0 {
 		return nil, false
 	}
@@ -260,7 +260,7 @@ func lookupArg(args map[string]interface{}, name string) (interface{}, bool) {
 	return nil, false
 }
 
-func toStringSlice(val interface{}) ([]string, error) {
+func toStringSlice(val any) ([]string, error) {
 	switch v := val.(type) {
 	case []string:
 		return copyStrings(v), nil
@@ -282,7 +282,7 @@ func toStringSlice(val interface{}) ([]string, error) {
 	}
 }
 
-func toBool(val interface{}) (bool, error) {
+func toBool(val any) (bool, error) {
 	switch v := val.(type) {
 	case bool:
 		return v, nil

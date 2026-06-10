@@ -83,14 +83,14 @@ func CheckManifest(manifest toolcapabilities.ToolManifest) []string {
 
 	// Each expected risk must be declared.
 	for _, r := range expectedRisk {
-		if !contains(declaredRisk, r) {
+		if _, ok := declaredRisk[r]; !ok {
 			issues = append(issues, fmt.Sprintf("capability.risk_class missing %q (derived from tool config)", r))
 		}
 	}
 
 	// Each expected effect must be declared.
 	for _, e := range expectedEffect {
-		if !contains(declaredEffect, e) {
+		if _, ok := declaredEffect[e]; !ok {
 			issues = append(issues, fmt.Sprintf("capability.effect_class missing %q (derived from tool config)", e))
 		}
 	}
@@ -133,9 +133,4 @@ func setToSortedSlice(set map[string]struct{}) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func contains(set map[string]struct{}, key string) bool {
-	_, ok := set[key]
-	return ok
 }

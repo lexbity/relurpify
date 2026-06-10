@@ -1,6 +1,7 @@
 package js
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -36,7 +38,7 @@ func (t *NodeWorkspaceDetectTool) Category() string { return "node" }
 func (t *NodeWorkspaceDetectTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -71,7 +73,7 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]i
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"path":            resolved,
 			"project_root":    projectRoot,
 			"manifest_path":   manifestPath,
@@ -101,7 +103,7 @@ func (t *NodeProjectMetadataTool) Category() string { return "node" }
 func (t *NodeProjectMetadataTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *NodeProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *NodeProjectMetadataTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -153,7 +155,7 @@ func (t *NodeNPMTestTool) Parameters() []ports.ToolParameter {
 	}
 }
 func (t *NodeNPMTestTool) SetCommandRunner(r ports.CommandRunner) { t.runner = r }
-func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -180,7 +182,7 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]interface
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"passed":        summary.Passed,
 			"failed":        summary.Failed,
@@ -224,7 +226,7 @@ func (t *NodeSyntaxCheckTool) Parameters() []ports.ToolParameter {
 func (t *NodeSyntaxCheckTool) SetCommandRunner(r ports.CommandRunner) {
 	t.runner = r
 }
-func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -247,7 +249,7 @@ func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]inter
 	return &ports.ToolResult{
 		Success: runResult.Success,
 		Error:   runResult.Error,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"summary":       summary.Summary,
 			"error_count":   summary.ErrorCount,
 			"first_message": summary.FirstMessage,
@@ -315,9 +317,9 @@ func summarizeNodeNPMTest(stdout, stderr string, success bool) nodeTestSummary {
 		summary.FirstFailure = strings.TrimSpace(match[1])
 	}
 	if summary.FirstFailure == "" {
-		line := firstNonEmptyLine(stderr)
+		line := lang.FirstNonEmptyLine(stderr)
 		if line == "" {
-			line = firstNonEmptyLine(stdout)
+			line = lang.FirstNonEmptyLine(stdout)
 		}
 		summary.FirstFailure = line
 	}
@@ -344,10 +346,10 @@ func summarizeNodeSyntaxCheck(stdout, stderr string, success bool) nodeCheckSumm
 		}
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stderr)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stderr)
 	}
 	if summary.FirstMessage == "" {
-		summary.FirstMessage = firstNonEmptyLine(stdout)
+		summary.FirstMessage = lang.FirstNonEmptyLine(stdout)
 	}
 	if success {
 		summary.Summary = fmt.Sprintf("node syntax check passed: %d errors", summary.ErrorCount)
@@ -413,7 +415,7 @@ func inferNodePackageManager(markers []string) string {
 	}
 }
 
-func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string) (map[string]interface{}, error) {
+func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string) (map[string]any, error) {
 	type packageJSON struct {
 		Name         string            `json:"name"`
 		Type         string            `json:"type"`
@@ -423,7 +425,7 @@ func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string
 		Dependencies map[string]string `json:"dependencies"`
 		DevDeps      map[string]string `json:"devDependencies"`
 	}
-	result := map[string]interface{}{
+	result := map[string]any{
 		"project_root":    projectRoot,
 		"manifest_path":   manifestPath,
 		"marker_files":    markers,
@@ -453,7 +455,7 @@ func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string
 	result["project_name"] = pkg.Name
 	result["package_type"] = pkg.Type
 	result["private"] = pkg.Private
-	result["package_manager"] = firstNonEmpty(pkg.PackageMGR, inferNodePackageManager(markers))
+	result["package_manager"] = cmp.Or(pkg.PackageMGR, inferNodePackageManager(markers))
 	result["scripts"] = pkg.Scripts
 	result["script_names"] = scriptNames
 	result["has_test_script"] = hasScript(pkg.Scripts, "test")
@@ -494,14 +496,4 @@ func inferNodeTestRunner(text string) string {
 	default:
 		return "unknown"
 	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }

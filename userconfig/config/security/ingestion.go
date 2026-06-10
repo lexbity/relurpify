@@ -2,11 +2,7 @@ package security
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
-
-	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // WorkspaceIngestionPolicyPath returns the canonical workspace ingestion policy location.
@@ -15,35 +11,22 @@ func WorkspaceIngestionPolicyPath(workspace string) string {
 }
 
 type workspaceIngestionPolicyFile struct {
-	Rules []policy.PolicyRule `yaml:"rules,omitempty"`
+	Rules []PolicyRule `yaml:"rules,omitempty"`
 }
 
 // LoadWorkspaceIngestionPolicy loads and validates the workspace ingestion policy file.
-func LoadWorkspaceIngestionPolicy(path, workspace string, decode Decoder) ([]policy.PolicyRule, error) {
-	if strings.TrimSpace(workspace) == "" {
-		return nil, fmt.Errorf("workspace required")
-	}
-	if strings.TrimSpace(path) == "" {
-		path = WorkspaceIngestionPolicyPath(workspace)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read workspace ingestion policy %s: %w", path, err)
-	}
+func LoadWorkspaceIngestionPolicy(path, workspace string, decode Decoder) ([]PolicyRule, error) {
 	var file workspaceIngestionPolicyFile
-	if decode == nil {
-		return nil, fmt.Errorf("decoder required")
-	}
-	if _, err := decode(path, data, &file); err != nil {
+	if err := loadAndDecode(path, workspace, decode, WorkspaceIngestionPolicyPath, &file); err != nil {
 		return nil, err
 	}
 	if err := validatePolicyRules(file.Rules); err != nil {
 		return nil, err
 	}
-	return append([]policy.PolicyRule(nil), file.Rules...), nil
+	return append([]PolicyRule(nil), file.Rules...), nil
 }
 
-func validatePolicyRules(rules []policy.PolicyRule) error {
+func validatePolicyRules(rules []PolicyRule) error {
 	for i, rule := range rules {
 		if err := rule.Validate(); err != nil {
 			return fmt.Errorf("rules[%d] invalid: %w", i, err)

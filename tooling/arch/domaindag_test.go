@@ -256,7 +256,7 @@ func TestIsDomainVocabPackage_exempt(t *testing.T) {
 	dir := t.TempDir()
 	// Create capability/classification as a type-only package
 	mkDirAll(t, dir+"/capability/classification")
-	writeFile(t, dir+"/capability/classification/effects.go", "package classification\ntype EffectClass string\nconst (\n\tEffectClassReadOnly EffectClass = \"read-only\"\n)\ntype CapabilityScope string\nconst (\n\tCapabilityScopeBuiltin CapabilityScope = \"builtin\"\n)\n")
+	writeFile(t, dir+"/capability/classification/effects.go", "package classification\ntype EffectKind string\nconst (\n\tEffectKindReadOnly EffectKind = \"read-only\"\n)\ntype ScopeKind string\nconst (\n\tScopeKindBuiltin ScopeKind = \"builtin\"\n)\n")
 
 	pkg := GoPackage{
 		ImportPath: ModulePath + "/capability/classification",
@@ -307,7 +307,7 @@ func TestCheckNoBucket_exemptsDomainVocab(t *testing.T) {
 	dir := t.TempDir()
 	// Create capability/classification — type-only vocabulary
 	mkDirAll(t, dir+"/capability/classification")
-	writeFile(t, dir+"/capability/classification/types.go", "package classification\ntype EffectClass string\nconst (\n\tA EffectClass = \"a\"\n)\n")
+	writeFile(t, dir+"/capability/classification/types.go", "package classification\ntype EffectKind string\nconst (\n\tA EffectKind = \"a\"\n)\n")
 
 	pkgs := []GoPackage{
 		{

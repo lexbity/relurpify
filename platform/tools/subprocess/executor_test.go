@@ -55,13 +55,13 @@ func TestSubprocessToolExecuteReturnsStdoutStderrExitCode(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"."},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"."},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, "{}", result.Data["stdout"])
-	require.Equal(t, "", result.Data["stderr"])
+	require.Empty(t, result.Data["stderr"])
 	require.Equal(t, 0, result.Data["exit_code"])
 	require.Len(t, runner.requests, 1)
 	require.Equal(t, []string{"jq", "."}, runner.requests[0].Args)
@@ -78,7 +78,7 @@ func TestSubprocessToolExecuteWithStdin(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
+	result, err := tool.Execute(context.Background(), map[string]any{
 		"stdin": "hello",
 	})
 	require.NoError(t, err)
@@ -194,13 +194,13 @@ func TestFlagInjectionBlockedByDefault(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"--config=/etc/passwd"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"--config=/etc/passwd"},
 	})
 	require.NoError(t, err) // flag injection returns a structured result, not a Go error
 	require.False(t, result.Success)
 	require.Contains(t, result.Error, "flag injection")
-	require.Len(t, runner.requests, 0, "runner must not be called when flag injection is detected")
+	require.Empty(t, runner.requests, "runner must not be called when flag injection is detected")
 }
 
 func TestSingleDashArgBlockedByDefault(t *testing.T) {
@@ -214,8 +214,8 @@ func TestSingleDashArgBlockedByDefault(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"-n", "10"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"-n", "10"},
 	})
 	require.NoError(t, err)
 	require.False(t, result.Success)
@@ -234,8 +234,8 @@ func TestFlagInjectionAllowedWhenOptedIn(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"--verbose"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"--verbose"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -254,8 +254,8 @@ func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"src/main.go", "/tmp/dest"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"src/main.go", "/tmp/dest"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -275,8 +275,8 @@ func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"--", "-pattern"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"--", "-pattern"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -309,8 +309,8 @@ func TestParityCLIJQ(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":              []interface{}{"."},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":              []any{"."},
 		"working_directory": ".",
 	})
 	require.NoError(t, err)
@@ -342,8 +342,8 @@ func TestParityCLIRG(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"func"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"func"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -373,8 +373,8 @@ func TestParityCLISed(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args":  []interface{}{"s/foo/hello/"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args":  []any{"s/foo/hello/"},
 		"stdin": "foo world",
 	})
 	require.NoError(t, err)
@@ -405,8 +405,8 @@ func TestParityCLICurl(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"https://example.com"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"https://example.com"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -437,8 +437,8 @@ func TestParityCLIMkdir(t *testing.T) {
 		},
 	}, runner)
 
-	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"args": []interface{}{"/tmp/newdir"},
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"args": []any{"/tmp/newdir"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -633,7 +633,7 @@ func (r *exitCodeRunner) Run(_ context.Context, req ports.CommandRequest) (*port
 	}, nil
 }
 
-func ps(v interface{}) *permissions.PermissionSet {
+func ps(v any) *permissions.PermissionSet {
 	if v == nil {
 		return nil
 	}

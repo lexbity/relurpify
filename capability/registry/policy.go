@@ -39,7 +39,7 @@ func (r *CapabilityRegistry) SetGuidanceBroker(broker RecoveryGuidanceBroker) {
 	r.guidanceBroker = broker
 }
 
-func (r *CapabilityRegistry) runPrechecks(desc descriptor.CapabilityDescriptor, args map[string]interface{}) error {
+func (r *CapabilityRegistry) runPrechecks(desc descriptor.CapabilityDescriptor, args map[string]any) error {
 	r.mu.RLock()
 	prechecks := append([]InvocationPrecheck{}, r.prechecks...)
 	r.mu.RUnlock()

@@ -46,18 +46,18 @@ type HTNRunSummary struct {
 
 // OperatorOutcome captures results from executing a primitive step.
 type OperatorOutcome struct {
-	OperatorName string                 `json:"operator_name"`
-	StepID       string                 `json:"step_id"`
-	TaskType     execution.TaskType     `json:"task_type"`
-	Success      bool                   `json:"success"`
-	Duration     int                    `json:"duration_seconds"`
-	CostClass    string                 `json:"cost_class,omitempty"`
-	RetryClass   string                 `json:"retry_class,omitempty"`
-	Retried      bool                   `json:"retried"`
-	RetryCount   int                    `json:"retry_count"`
-	ErrorMessage string                 `json:"error_message,omitempty"`
-	OutputKeys   []string               `json:"output_keys,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	OperatorName string             `json:"operator_name"`
+	StepID       string             `json:"step_id"`
+	TaskType     execution.TaskType `json:"task_type"`
+	Success      bool               `json:"success"`
+	Duration     int                `json:"duration_seconds"`
+	CostClass    string             `json:"cost_class,omitempty"`
+	RetryClass   string             `json:"retry_class,omitempty"`
+	Retried      bool               `json:"retried"`
+	RetryCount   int                `json:"retry_count"`
+	ErrorMessage string             `json:"error_message,omitempty"`
+	OutputKeys   []string           `json:"output_keys,omitempty"`
+	Metadata     map[string]any     `json:"metadata,omitempty"`
 }
 
 // ExecutionMetrics captures quantitative measures of HTN execution.
@@ -186,8 +186,8 @@ func summarizeHTNRun(summary HTNRunSummary) string {
 	)
 }
 
-func summarizeHTNRunMetadata(summary HTNRunSummary) map[string]interface{} {
-	return map[string]interface{}{
+func summarizeHTNRunMetadata(summary HTNRunSummary) map[string]any {
+	return map[string]any{
 		"schema_version":     summary.SchemaVersion,
 		"task_type":          string(summary.TaskType),
 		"selected_method":    summary.SelectedMethod,
@@ -212,8 +212,8 @@ func summarizeExecutionMetrics(metrics ExecutionMetrics) string {
 	)
 }
 
-func metricsMetadata(metrics ExecutionMetrics) map[string]interface{} {
-	return map[string]interface{}{
+func metricsMetadata(metrics ExecutionMetrics) map[string]any {
+	return map[string]any{
 		"schema_version":     metrics.SchemaVersion,
 		"total_duration":     metrics.TotalDuration,
 		"decomposition_time": metrics.DecompositionTime,
@@ -245,8 +245,8 @@ func summarizeOperatorOutcome(outcome OperatorOutcome) string {
 	)
 }
 
-func operatorOutcomeMetadata(outcome OperatorOutcome) map[string]interface{} {
-	return map[string]interface{}{
+func operatorOutcomeMetadata(outcome OperatorOutcome) map[string]any {
+	return map[string]any{
 		"operator_name": outcome.OperatorName,
 		"step_id":       outcome.StepID,
 		"task_type":     string(outcome.TaskType),

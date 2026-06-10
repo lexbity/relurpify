@@ -167,7 +167,7 @@ func (t *testBudget) CanAddTokens(tokens int) bool { return tokens <= t.remainin
 
 func TestErrorHelpers(t *testing.T) {
 	var nilErr *Error
-	require.Equal(t, "", nilErr.Error())
+	require.Empty(t, nilErr.Error())
 	require.NoError(t, nilErr.Unwrap())
 
 	base := errors.New("boom")
@@ -266,7 +266,7 @@ func TestSessionWrappersAndErrorWrapping(t *testing.T) {
 
 	gotAX, err := session.GetAccessibilityTree(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "{\"role\":\"document\"}", gotAX)
+	require.JSONEq(t, "{\"role\":\"document\"}", gotAX)
 
 	result, err := session.ExecuteScript(context.Background(), "return 1")
 	require.NoError(t, err)
@@ -499,7 +499,7 @@ func TestNavigationAndParsingHelpers(t *testing.T) {
 }
 
 func TestHelperFunctions(t *testing.T) {
-	require.Equal(t, "", truncateToTokens("abc", 0))
+	require.Empty(t, truncateToTokens("abc", 0))
 	require.Equal(t, "abc", truncateToTokens("abc", 1))
 	require.Equal(t, "abcd", truncateToTokens("abcd", 1))
 	require.Equal(t, "abcd", truncateToTokens("abcd", 2))

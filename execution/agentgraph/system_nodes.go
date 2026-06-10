@@ -346,19 +346,19 @@ func boundedSummaryValue(value any, depth int) any {
 	case nil:
 		return nil
 	case string:
-		return truncateSummaryString(typed)
+		return truncateString(typed, summaryMaxStringLen)
 	case []string:
-		limit := minInt(len(typed), summaryMaxCollectionItems)
+		limit := min(len(typed), summaryMaxCollectionItems)
 		out := make([]any, 0, limit+1)
 		for i := 0; i < limit; i++ {
-			out = append(out, truncateSummaryString(typed[i]))
+			out = append(out, truncateString(typed[i], summaryMaxStringLen))
 		}
 		if len(typed) > limit {
 			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
 		}
 		return out
 	case []any:
-		limit := minInt(len(typed), summaryMaxCollectionItems)
+		limit := min(len(typed), summaryMaxCollectionItems)
 		out := make([]any, 0, limit+1)
 		for i := 0; i < limit; i++ {
 			out = append(out, boundedSummaryValue(typed[i], depth+1))
@@ -373,7 +373,7 @@ func boundedSummaryValue(value any, depth int) any {
 		return map[string]any{
 			"artifact_id": typed.ArtifactID,
 			"kind":        typed.Kind,
-			"summary":     truncateSummaryString(typed.Summary),
+			"summary":     truncateString(typed.Summary, summaryMaxStringLen),
 			"storage":     typed.StorageKind,
 		}
 	default:
@@ -396,7 +396,7 @@ func boundedSummaryReflectValue(value reflect.Value, depth int) any {
 	}
 	switch value.Kind() {
 	case reflect.Slice, reflect.Array:
-		limit := minInt(value.Len(), summaryMaxCollectionItems)
+		limit := min(value.Len(), summaryMaxCollectionItems)
 		out := make([]any, 0, limit+1)
 		for i := 0; i < limit; i++ {
 			out = append(out, boundedSummaryReflectValue(value.Index(i), depth+1))
@@ -415,7 +415,7 @@ func boundedSummaryReflectValue(value reflect.Value, depth int) any {
 			keyNames = append(keyNames, key.String())
 		}
 		sort.Strings(keyNames)
-		limit := minInt(len(keyNames), summaryMaxMapItems)
+		limit := min(len(keyNames), summaryMaxMapItems)
 		out := make(map[string]any, limit+1)
 		for _, key := range keyNames[:limit] {
 			out[key] = boundedSummaryReflectValue(value.MapIndex(reflect.ValueOf(key)), depth+1)
@@ -437,7 +437,7 @@ func boundedSummaryReflectValue(value reflect.Value, depth int) any {
 			fields[field.Name] = value.Field(i)
 		}
 		sort.Strings(fieldNames)
-		limit := minInt(len(fieldNames), summaryMaxMapItems)
+		limit := min(len(fieldNames), summaryMaxMapItems)
 		out := make(map[string]any, limit+1)
 		for _, name := range fieldNames[:limit] {
 			out[name] = boundedSummaryReflectValue(fields[name], depth+1)
@@ -470,7 +470,7 @@ func boundedSummaryMap(values map[string]any, depth int) map[string]any {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	limit := minInt(len(keys), summaryMaxMapItems)
+	limit := min(len(keys), summaryMaxMapItems)
 	out := make(map[string]any, limit+1)
 	for _, key := range keys[:limit] {
 		out[key] = boundedSummaryValue(values[key], depth+1)
@@ -482,22 +482,19 @@ func boundedSummaryMap(values map[string]any, depth int) map[string]any {
 }
 
 func summarizeLeafValue(value any) string {
-	return truncateSummaryString(fmt.Sprint(value))
+	return truncateString(fmt.Sprint(value), summaryMaxStringLen)
 }
 
-func truncateSummaryString(value string) string {
+func truncateString(value string, max int) string {
 	value = strings.TrimSpace(value)
-	if len(value) <= summaryMaxStringLen {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= max {
 		return value
 	}
-	return value[:summaryMaxStringLen] + "...(truncated)"
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return string(runes[:max]) + "…"
 }
 
 func emitSystemNodeEvent(sink telemetry.Telemetry, taskID, message string, metadata map[string]any) {

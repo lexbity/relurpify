@@ -14,9 +14,9 @@ func TestToolSpanExporterEmitsSpanOnToolResult(t *testing.T) {
 	exporter.Emit(Event{
 		Type:    EventToolResult,
 		Message: "tool cli_jq completed",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":         "cli_jq",
-			"span_attrs":   map[string]interface{}{"tool.name": "cli_jq", "tool.family": "text"},
+			"span_attrs":   map[string]any{"tool.name": "cli_jq", "tool.family": "text"},
 			"exit_code":    0,
 			"stdout_bytes": int64(42),
 			"duration_ms":  int64(150),
@@ -41,9 +41,9 @@ func TestToolSpanExporterEmitsSpanOnToolCall(t *testing.T) {
 	exporter.Emit(Event{
 		Type:    EventToolCall,
 		Message: "tool cli_rg invoked",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":       "cli_rg",
-			"span_attrs": map[string]interface{}{"tool.name": "cli_rg", "tool.family": "fileops"},
+			"span_attrs": map[string]any{"tool.name": "cli_rg", "tool.family": "fileops"},
 		},
 	})
 
@@ -68,9 +68,9 @@ func TestToolSpanExporterNopWhenNoSpanBackend(t *testing.T) {
 	exporter := NewToolSpanExporter(nil)
 	exporter.Emit(Event{
 		Type: EventToolResult,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":       "cli_echo",
-			"span_attrs": map[string]interface{}{},
+			"span_attrs": map[string]any{},
 		},
 	})
 	// No assertion needed — just verify no panic
@@ -82,11 +82,11 @@ func TestToolSpanExporterErrorStatus(t *testing.T) {
 
 	exporter.Emit(Event{
 		Type: EventToolResult,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":       "cli_fail",
 			"success":    false,
 			"tool_error": "exit code 1",
-			"span_attrs": map[string]interface{}{"tool.name": "cli_fail"},
+			"span_attrs": map[string]any{"tool.name": "cli_fail"},
 		},
 	})
 
@@ -104,10 +104,10 @@ func TestToolSpanExporterExtraAttributes(t *testing.T) {
 
 	exporter.Emit(Event{
 		Type: EventToolResult,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":       "cli_rg",
-			"span_attrs": map[string]interface{}{"tool.name": "cli_rg"},
-			"args": map[string]interface{}{
+			"span_attrs": map[string]any{"tool.name": "cli_rg"},
+			"args": map[string]any{
 				"pattern":  "func",
 				"secret":   "should-not-leak",
 				"password": "hunter2",
@@ -127,10 +127,10 @@ func TestToolSpanExporterDuration(t *testing.T) {
 
 	exporter.Emit(Event{
 		Type: EventToolResult,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":        "cli_echo",
 			"duration_ms": float64(2500),
-			"span_attrs":  map[string]interface{}{"tool.name": "cli_echo"},
+			"span_attrs":  map[string]any{"tool.name": "cli_echo"},
 		},
 	})
 
@@ -145,9 +145,9 @@ func TestInMemoryExporterRecordsMultipleSpans(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		exporter.Emit(Event{
 			Type: EventToolResult,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"tool":       "tool",
-				"span_attrs": map[string]interface{}{},
+				"span_attrs": map[string]any{},
 			},
 		})
 	}
@@ -161,13 +161,13 @@ func TestSpanContextPassedToExporter(t *testing.T) {
 
 	exporter.Emit(Event{
 		Type: EventToolResult,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool":            "cli_curl",
 			"trace_id":        "abc123",
 			"span_id":         "def456",
 			"parent_trace_id": "parent_abc",
 			"parent_span_id":  "parent_def",
-			"span_attrs":      map[string]interface{}{},
+			"span_attrs":      map[string]any{},
 		},
 	})
 
@@ -196,7 +196,7 @@ func TestToolSpanExporterForwardsToNextSink(t *testing.T) {
 		Type: EventGraphStart,
 	})
 
-	require.Len(t, mem.Spans, 0, "non-tool events don't create spans")
+	require.Empty(t, mem.Spans, "non-tool events don't create spans")
 	require.Len(t, next.events, 1, "all events are forwarded to next sink")
 	require.Equal(t, EventGraphStart, next.events[0].Type)
 }

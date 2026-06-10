@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/safety"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 type ContentDisposition string
@@ -34,14 +34,14 @@ type ContentBlockInsertion struct {
 }
 
 type ApprovalBinding struct {
-	CapabilityID   string                 `json:"capability_id,omitempty"`
-	CapabilityName string                 `json:"capability_name,omitempty"`
-	ProviderID     string                 `json:"provider_id,omitempty"`
-	SessionID      string                 `json:"session_id,omitempty"`
+	CapabilityID   string                       `json:"capability_id,omitempty"`
+	CapabilityName string                       `json:"capability_name,omitempty"`
+	ProviderID     string                       `json:"provider_id,omitempty"`
+	SessionID      string                       `json:"session_id,omitempty"`
 	EffectClasses  []classification.EffectClass `json:"effect_classes,omitempty"`
-	TargetResource string                 `json:"target_resource,omitempty"`
-	TaskID         string                 `json:"task_id,omitempty"`
-	WorkflowID     string                 `json:"workflow_id,omitempty"`
+	TargetResource string                       `json:"target_resource,omitempty"`
+	TaskID         string                       `json:"task_id,omitempty"`
+	WorkflowID     string                       `json:"workflow_id,omitempty"`
 }
 
 func (b ApprovalBinding) PermissionMetadata() map[string]string {
@@ -191,7 +191,7 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 	summary = strings.TrimSpace(summary)
 	result := &ports.ToolResult{
 		Success: true,
-		Data:    map[string]interface{}{"summary": summary},
+		Data:    map[string]any{"summary": summary},
 	}
 	if source.Result != nil {
 		result.Success = source.Result.Success
@@ -323,7 +323,7 @@ func moreRestrictiveInsertionDecision(base, candidate InsertionDecision) Inserti
 	return candidate
 }
 
-func ApprovalBindingFromCapability(descriptor descriptor.CapabilityDescriptor, state map[string]interface{}, args map[string]interface{}) *ApprovalBinding {
+func ApprovalBindingFromCapability(descriptor descriptor.CapabilityDescriptor, state map[string]any, args map[string]any) *ApprovalBinding {
 	targetResource := inferTargetResource(args)
 	taskID := ""
 	workflowID := ""
@@ -358,7 +358,7 @@ func ApprovalBindingFromCapability(descriptor descriptor.CapabilityDescriptor, s
 	return binding
 }
 
-func inferTargetResource(args map[string]interface{}) string {
+func inferTargetResource(args map[string]any) string {
 	if len(args) == 0 {
 		return ""
 	}
@@ -390,11 +390,11 @@ func InsertionRestrictiveness(action agentspec.InsertionAction) int {
 	}
 }
 
-func cloneInterfaceMap(input map[string]interface{}) map[string]interface{} {
+func cloneInterfaceMap(input map[string]any) map[string]any {
 	if input == nil {
 		return nil
 	}
-	out := make(map[string]interface{}, len(input))
+	out := make(map[string]any, len(input))
 	for k, v := range input {
 		out[k] = v
 	}

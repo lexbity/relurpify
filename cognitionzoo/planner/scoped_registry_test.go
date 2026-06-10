@@ -19,11 +19,11 @@ func (t scopedPlannerTool) Name() string                      { return t.name }
 func (t scopedPlannerTool) Description() string               { return t.name }
 func (t scopedPlannerTool) Category() string                  { return "test" }
 func (t scopedPlannerTool) Parameters() []ports.ToolParameter { return nil }
-func (t scopedPlannerTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t scopedPlannerTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	_ = ctx
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"name": t.name,
 			"args": args,
 		},
@@ -61,7 +61,7 @@ func TestPlannerExecuteNodeUsesScopedRegistryDirectly(t *testing.T) {
 		Steps: []pl.PlanStep{{
 			ID:   "step-1",
 			Tool: "scope_read",
-			Params: map[string]interface{}{
+			Params: map[string]any{
 				"path": "README.md",
 			},
 		}},

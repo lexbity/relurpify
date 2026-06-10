@@ -13,7 +13,7 @@ import (
 type CheckpointNode struct {
 	id     string
 	phase  string
-	Debugf func(string, ...interface{})
+	Debugf func(string, ...any)
 }
 
 // NewCheckpointNode creates a new checkpoint node.

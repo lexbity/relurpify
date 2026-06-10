@@ -165,8 +165,10 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 		Spec: config.ManifestSpec{
 			Image:   "ghcr.io/example/runtime:0.4.1",
 			Runtime: "gvisor",
-			Permissions: permissions.PermissionSet{
-				FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
+			Policy: &config.ManifestPolicySpec{
+				Permissions: permissions.PermissionSet{
+					FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
+				},
 			},
 		},
 	}

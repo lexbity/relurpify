@@ -15,13 +15,13 @@ import (
 
 // ToolResponseOverride configures synthetic tool responses for testing failure modes
 type ToolResponseOverride struct {
-	Tool        string                 `yaml:"tool"`
-	MatchArgs   map[string]interface{} `yaml:"match_args,omitempty"`
-	Response    *ports.ToolResult      `yaml:"response,omitempty"`
-	Error       string                 `yaml:"error,omitempty"`
-	FailureRate float64                `yaml:"failure_rate,omitempty"`
-	LatencyMs   int                    `yaml:"latency_ms,omitempty"`
-	CallCount   int                    `yaml:"call_count,omitempty"`
+	Tool        string            `yaml:"tool"`
+	MatchArgs   map[string]any    `yaml:"match_args,omitempty"`
+	Response    *ports.ToolResult `yaml:"response,omitempty"`
+	Error       string            `yaml:"error,omitempty"`
+	FailureRate float64           `yaml:"failure_rate,omitempty"`
+	LatencyMs   int               `yaml:"latency_ms,omitempty"`
+	CallCount   int               `yaml:"call_count,omitempty"`
 }
 
 // InjectionInterceptor wraps tool execution with override logic
@@ -77,7 +77,7 @@ func (i *InjectionInterceptor) IsAvailable(ctx context.Context) bool {
 }
 
 // Execute wraps the tool execution with injection logic
-func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -117,7 +117,7 @@ func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]inte
 }
 
 // matchesOverride checks if this call matches the override criteria
-func (i *InjectionInterceptor) matchesOverride(override ToolResponseOverride, args map[string]interface{}, callNum int) bool {
+func (i *InjectionInterceptor) matchesOverride(override ToolResponseOverride, args map[string]any, callNum int) bool {
 	// Check call count if specified (0 means all calls)
 	if override.CallCount > 0 && callNum != override.CallCount {
 		return false
@@ -144,7 +144,7 @@ func (i *InjectionInterceptor) createErrorResult(override ToolResponseOverride, 
 	return &ports.ToolResult{
 		Success: false,
 		Error:   msg,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"injected": true,
 			"tool":     i.base.Name(),
 		},

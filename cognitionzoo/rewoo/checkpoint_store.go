@@ -20,13 +20,13 @@ type CheckpointKey string
 
 // CheckpointMetadata contains information about a checkpoint.
 type CheckpointMetadata struct {
-	CheckpointID  string                 `json:"checkpoint_id"`
-	Phase         string                 `json:"phase"`
-	Attempt       int                    `json:"attempt"`
-	Timestamp     time.Time              `json:"timestamp"`
-	StepsExecuted []string               `json:"steps_executed"`
-	StateKeys     []string               `json:"state_keys"`
-	Metadata      map[string]interface{} `json:"metadata"`
+	CheckpointID  string         `json:"checkpoint_id"`
+	Phase         string         `json:"phase"`
+	Attempt       int            `json:"attempt"`
+	Timestamp     time.Time      `json:"timestamp"`
+	StepsExecuted []string       `json:"steps_executed"`
+	StateKeys     []string       `json:"state_keys"`
+	Metadata      map[string]any `json:"metadata"`
 }
 
 // RewooCheckpointStore persists execution state for recovery.
@@ -36,14 +36,14 @@ type RewooCheckpointStore struct {
 	lifecycleRepo agentlifecycle.Repository
 	checkpoints   map[string]*CheckpointMetadata // In-memory checkpoint storage
 	mu            sync.RWMutex
-	debugf        func(string, ...interface{})
+	debugf        func(string, ...any)
 }
 
 // NewRewooCheckpointStore creates a new checkpoint store.
 // Phase 7: Currently in-memory; can be extended to persistent storage in future phases.
-func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf func(string, ...interface{})) *RewooCheckpointStore {
+func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf func(string, ...any)) *RewooCheckpointStore {
 	if debugf == nil {
-		debugf = func(string, ...interface{}) {}
+		debugf = func(string, ...any) {}
 	}
 	return &RewooCheckpointStore{
 		lifecycleRepo: lifecycleRepo,
@@ -79,7 +79,7 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 		stateKeys = append(stateKeys, "rewoo.synthesis")
 	}
 
-	stateSnapshot := make(map[string]interface{})
+	stateSnapshot := make(map[string]any)
 	for _, key := range stateKeys {
 		if val, ok := env.GetWorkingValue(key); ok {
 			stateSnapshot[key] = val
@@ -97,7 +97,7 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 		Timestamp:     time.Now().UTC(),
 		StepsExecuted: stepsExecuted,
 		StateKeys:     stateKeys,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"state_snapshot": stateSnapshot,
 		},
 	}
@@ -160,7 +160,7 @@ func (s *RewooCheckpointStore) RestoreStateFromCheckpoint(ctx context.Context, e
 	}
 
 	// Extract snapshot from metadata
-	stateSnapshot, ok := checkpoint.Metadata["state_snapshot"].(map[string]interface{})
+	stateSnapshot, ok := checkpoint.Metadata["state_snapshot"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("checkpoint_restore: no state snapshot in checkpoint")
 	}

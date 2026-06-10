@@ -228,9 +228,9 @@ func serializeStreamResult(result *contextstream.Result) string {
 	}
 	if result.Compilation != nil {
 		b.WriteString("chunks:")
-		b.WriteString(fmt.Sprintf("%d", len(result.Compilation.StreamedRefs)))
+		fmt.Fprintf(&b, "%d", len(result.Compilation.StreamedRefs))
 		b.WriteString(" tokens:")
-		b.WriteString(fmt.Sprintf("%d", result.Compilation.Record.FinalTokens))
+		fmt.Fprintf(&b, "%d", result.Compilation.Record.FinalTokens)
 	}
 	return strings.TrimSpace(b.String())
 }

@@ -292,7 +292,7 @@ func TestImpactSetContext_Cancellation(t *testing.T) {
 		PageSize: 10000,
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, context.Canceled))
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestImpactSetContext_EmptyOrigin(t *testing.T) {
@@ -425,7 +425,7 @@ func TestSubgraphContext_Cancellation(t *testing.T) {
 		PageSize: 10000,
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, context.Canceled))
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestSubgraphContext_IncludePropsFalse(t *testing.T) {

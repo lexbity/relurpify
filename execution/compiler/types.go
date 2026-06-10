@@ -129,6 +129,8 @@ func (k CacheKey) String() string {
 }
 
 // CacheEntry stores a compiled result with its dependencies.
+// This is deliberately specialized (dependency-eviction) and not unified with
+// the LRU caches in governance/authorization or cognitionzoo/goalcon/analysis.
 type CacheEntry struct {
 	Key          CacheKey
 	Record       CompilationRecord

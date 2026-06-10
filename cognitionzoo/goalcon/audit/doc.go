@@ -2,4 +2,4 @@
 package audit
 
 // Forward declaration for ExecutionTrace to avoid circular import
-type ExecutionTrace interface{}
+type ExecutionTrace any

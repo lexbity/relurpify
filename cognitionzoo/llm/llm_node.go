@@ -107,7 +107,7 @@ func (n *LLMNode) Execute(ctx context.Context, state *contextdata.Envelope) (*ex
 	}
 
 	// Build result data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"text": resp.Text,
 	}
 	if n.CompilationTrigger != nil {

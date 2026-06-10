@@ -24,13 +24,13 @@ type Page[T any] struct {
 // ────────────────────────────────────────────────────────────────────
 
 type cursorState struct {
-	Queue          []stateEntry   `json:"q"`
-	Visited        map[string]int `json:"v"`
-	EdgeSet        map[string]int `json:"e"`
-	NodeSet        map[string]int `json:"n"`
-	EdgeCount      int            `json:"ec"`
-	ResumeNode     string         `json:"rn,omitempty"`
-	ResumeEdgeIdx  int            `json:"re,omitempty"`
+	Queue         []stateEntry   `json:"q"`
+	Visited       map[string]int `json:"v"`
+	EdgeSet       map[string]int `json:"e"`
+	NodeSet       map[string]int `json:"n"`
+	EdgeCount     int            `json:"ec"`
+	ResumeNode    string         `json:"rn,omitempty"`
+	ResumeEdgeIdx int            `json:"re,omitempty"`
 }
 
 type stateEntry struct {

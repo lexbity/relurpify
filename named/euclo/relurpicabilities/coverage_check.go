@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -99,7 +99,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 }
 
 // Invoke runs go test -cover and returns per-package coverage results.
-func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	pkg, _ := stringArg(args, "package")
 	if pkg == "" {
 		pkg = "./..."
@@ -146,7 +146,7 @@ func (h *CoverageCheckHandler) Invoke(ctx context.Context, env ports.State, args
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":        true,
 			"passed":         passed,
 			"packages":       coveragePackagesToInterfaces(packages),

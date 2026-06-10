@@ -166,7 +166,7 @@ func compactPlannerResultsStateInContext(env *contextdata.Envelope) {
 }
 
 func compactPlannerResultsState(raw any) map[string]any {
-	results, ok := raw.([]map[string]interface{})
+	results, ok := raw.([]map[string]any)
 	if !ok {
 		return nil
 	}
@@ -381,7 +381,7 @@ Use string step ids (UUID-safe).
 	if err != nil {
 		return nil, err
 	}
-	env.AddInteraction(map[string]interface{}{
+	env.AddInteraction(map[string]any{
 		"role":    "assistant",
 		"content": resp.Text,
 		"node":    n.id,
@@ -435,7 +435,7 @@ func formatPlannerWorkflowRetrieval(payload map[string]any) string {
 		if text == "" || text == "<nil>" {
 			text = "reference only"
 		}
-		line := fmt.Sprintf("%d. %s", i+1, truncatePlannerPromptText(text, 240))
+		line := fmt.Sprintf("%d. %s", i+1, truncate(text, 240))
 		if ref := plannerWorkflowReference(result); ref != "" {
 			line += "\n   Reference: " + ref
 		}
@@ -493,12 +493,16 @@ func plannerWorkflowReference(result map[string]any) string {
 	return ""
 }
 
-func truncatePlannerPromptText(value string, limit int) string {
+func truncate(value string, limit int) string {
 	value = strings.TrimSpace(value)
-	if limit <= 0 || len(value) <= limit {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
 		return value
 	}
-	return strings.TrimSpace(value[:limit]) + "..."
+	return string(runes[:limit]) + "…"
 }
 
 type plannerExecuteNode struct {
@@ -543,7 +547,7 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 		return nil, fmt.Errorf("plan not available")
 	}
 	plan, _ := value.(pl.Plan)
-	var stepResults []map[string]interface{}
+	var stepResults []map[string]any
 	var skippedTools []map[string]string
 	for _, step := range plan.Steps {
 		step.Params = resolvePlannerStepParams(env, step.Params)
@@ -592,7 +596,7 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 	})}, nil
 }
 
-func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolName string, params map[string]interface{}) map[string]interface{} {
+func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolName string, params map[string]any) map[string]any {
 	if len(params) == 0 {
 		return params
 	}
@@ -600,7 +604,7 @@ func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolNam
 	if !ok || tool == nil {
 		return params
 	}
-	normalized := make(map[string]interface{}, len(params))
+	normalized := make(map[string]any, len(params))
 	for key, value := range params {
 		normalized[key] = value
 	}
@@ -623,7 +627,7 @@ func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolNam
 	return normalized
 }
 
-func normalizePlannerParamValue(name, alias string, value interface{}) interface{} {
+func normalizePlannerParamValue(name, alias string, value any) any {
 	switch name {
 	case "path":
 		if path := plannerFirstStepPath(value); path != "" {
@@ -933,8 +937,8 @@ func plannerStepDescription(kind, toolName string) string {
 	}
 }
 
-func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[string]interface{}, bool) {
-	args := map[string]interface{}{}
+func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[string]any, bool) {
+	args := map[string]any{}
 	required := map[string]bool{}
 	for _, param := range tool.Parameters() {
 		name := strings.TrimSpace(param.Name)
@@ -968,7 +972,7 @@ func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[s
 		}
 	}
 	if len(args) == 0 {
-		return map[string]interface{}{}, true
+		return map[string]any{}, true
 	}
 	return args, true
 }
@@ -1114,23 +1118,23 @@ func repairPlannerStep(registry *capability.CapabilityRegistry, step pl.PlanStep
 		}
 		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path"); path != "" && registry.HasCapability("file_read") {
 			step.Tool = "file_read"
-			step.Params = map[string]interface{}{"path": path}
+			step.Params = map[string]any{"path": path}
 			return step, true, fmt.Sprintf("rewrote step %s from file_search to file_read using path", plannerStepID(step))
 		}
 		if dir := plannerStepParamString(step.Params, "directory", "path", "dir", "working_directory", "workdir", "cwd"); dir != "" && registry.HasCapability("file_list") {
 			step.Tool = "file_list"
-			step.Params = map[string]interface{}{"directory": dir}
+			step.Params = map[string]any{"directory": dir}
 			return step, true, fmt.Sprintf("rewrote step %s from file_search to file_list using directory", plannerStepID(step))
 		}
 	case "code_analysis":
 		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path"); path != "" && registry.HasCapability("file_read") {
 			step.Tool = "file_read"
-			step.Params = map[string]interface{}{"path": path}
+			step.Params = map[string]any{"path": path}
 			return step, true, fmt.Sprintf("rewrote step %s from code_analysis to file_read using path", plannerStepID(step))
 		}
 		if path := plannerFirstStepPath(step.Params["files"]); path != "" && registry.HasCapability("file_read") {
 			step.Tool = "file_read"
-			step.Params = map[string]interface{}{"path": path}
+			step.Params = map[string]any{"path": path}
 			return step, true, fmt.Sprintf("rewrote step %s from code_analysis to file_read using files", plannerStepID(step))
 		}
 	case "file_read":
@@ -1139,14 +1143,14 @@ func repairPlannerStep(registry *capability.CapabilityRegistry, step pl.PlanStep
 		}
 		if path := plannerStepParamString(step.Params, "file", "file_path", "target_path"); path != "" {
 			if step.Params == nil {
-				step.Params = map[string]interface{}{}
+				step.Params = map[string]any{}
 			}
 			step.Params["path"] = path
 			return step, true, fmt.Sprintf("normalized step %s file_read path alias", plannerStepID(step))
 		}
 		if path := plannerFirstStepPath(step.Params["files"]); path != "" {
 			if step.Params == nil {
-				step.Params = map[string]interface{}{}
+				step.Params = map[string]any{}
 			}
 			step.Params["path"] = path
 			return step, true, fmt.Sprintf("normalized step %s file_read files -> path", plannerStepID(step))
@@ -1155,7 +1159,7 @@ func repairPlannerStep(registry *capability.CapabilityRegistry, step pl.PlanStep
 	return step, false, ""
 }
 
-func plannerStepParamString(params map[string]interface{}, keys ...string) string {
+func plannerStepParamString(params map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if value := strings.TrimSpace(fmt.Sprint(params[key])); value != "" && value != "<nil>" {
 			return value
@@ -1164,7 +1168,7 @@ func plannerStepParamString(params map[string]interface{}, keys ...string) strin
 	return ""
 }
 
-func plannerFirstStepPath(raw interface{}) string {
+func plannerFirstStepPath(raw any) string {
 	switch typed := raw.(type) {
 	case string:
 		return strings.TrimSpace(typed)
@@ -1172,7 +1176,7 @@ func plannerFirstStepPath(raw interface{}) string {
 		if len(typed) > 0 {
 			return strings.TrimSpace(typed[0])
 		}
-	case []interface{}:
+	case []any:
 		if len(typed) > 0 {
 			return plannerFirstStepPath(typed[0])
 		}
@@ -1187,29 +1191,29 @@ func plannerFirstStepPath(raw interface{}) string {
 	return ""
 }
 
-func resolvePlannerStepParams(env *contextdata.Envelope, params map[string]interface{}) map[string]interface{} {
+func resolvePlannerStepParams(env *contextdata.Envelope, params map[string]any) map[string]any {
 	if len(params) == 0 {
 		return params
 	}
-	resolved := make(map[string]interface{}, len(params))
+	resolved := make(map[string]any, len(params))
 	for key, value := range params {
 		resolved[key] = resolvePlannerParamValue(env, value)
 	}
 	return resolved
 }
 
-func resolvePlannerParamValue(env *contextdata.Envelope, value interface{}) interface{} {
+func resolvePlannerParamValue(env *contextdata.Envelope, value any) any {
 	switch typed := value.(type) {
 	case string:
 		return resolvePlannerParamTemplate(env, typed)
-	case []interface{}:
-		out := make([]interface{}, 0, len(typed))
+	case []any:
+		out := make([]any, 0, len(typed))
 		for _, item := range typed {
 			out = append(out, resolvePlannerParamValue(env, item))
 		}
 		return compactPlannerResolvedValue(out)
-	case map[string]interface{}:
-		out := make(map[string]interface{}, len(typed))
+	case map[string]any:
+		out := make(map[string]any, len(typed))
 		for key, item := range typed {
 			out[key] = resolvePlannerParamValue(env, item)
 		}
@@ -1219,17 +1223,17 @@ func resolvePlannerParamValue(env *contextdata.Envelope, value interface{}) inte
 	}
 }
 
-func compactPlannerResolvedValue(value interface{}) interface{} {
-	items, ok := value.([]interface{})
+func compactPlannerResolvedValue(value any) any {
+	items, ok := value.([]any)
 	if !ok {
 		return value
 	}
 	if len(items) == 1 {
 		switch nested := items[0].(type) {
-		case []interface{}:
+		case []any:
 			return compactPlannerResolvedValue(nested)
 		case []string:
-			out := make([]interface{}, 0, len(nested))
+			out := make([]any, 0, len(nested))
 			for _, item := range nested {
 				out = append(out, item)
 			}
@@ -1239,7 +1243,7 @@ func compactPlannerResolvedValue(value interface{}) interface{} {
 	return items
 }
 
-func resolvePlannerParamTemplate(env *contextdata.Envelope, raw string) interface{} {
+func resolvePlannerParamTemplate(env *contextdata.Envelope, raw string) any {
 	text := strings.TrimSpace(raw)
 	if env == nil || text == "" {
 		return raw
@@ -1257,7 +1261,7 @@ func resolvePlannerParamTemplate(env *contextdata.Envelope, raw string) interfac
 	return raw
 }
 
-func resolvePlannerOutputReference(env *contextdata.Envelope, ref string) (interface{}, bool) {
+func resolvePlannerOutputReference(env *contextdata.Envelope, ref string) (any, bool) {
 	if env == nil {
 		return nil, false
 	}

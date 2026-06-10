@@ -33,7 +33,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 	if p == nil || p.tool == nil {
 		return nil, fmt.Errorf("document symbol tool unavailable")
 	}
-	res, err := p.tool.Execute(ctx, map[string]interface{}{"file": path})
+	res, err := p.tool.Execute(ctx, map[string]any{"file": path})
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ type rawSymbolInfo struct {
 	Location string `json:"location"`
 }
 
-func castSymbolInformation(raw interface{}) ([]rawSymbolInfo, error) {
+func castSymbolInformation(raw any) ([]rawSymbolInfo, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("empty symbol payload")
 	}

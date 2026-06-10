@@ -353,7 +353,7 @@ func (t *networkTestTool) Name() string                      { return t.name }
 func (t *networkTestTool) Description() string               { return t.description }
 func (t *networkTestTool) Category() string                  { return t.category }
 func (t *networkTestTool) Parameters() []ports.ToolParameter { return nil }
-func (t *networkTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *networkTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	// Check network permissions before execution
 	if t.manager != nil && len(t.networkPerms) > 0 {
 		for _, netPerm := range t.networkPerms {

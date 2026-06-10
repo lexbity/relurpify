@@ -243,7 +243,7 @@ func (fd *FailureDetector) ShouldRetry(fc *FailureContext, policy *RetryPolicy) 
 
 // SuggestAlternativeOperators recommends alternatives to a failed operator.
 // This method will be used in Phase 6+ to guide re-planning.
-func (fd *FailureDetector) SuggestAlternativeOperators(fc *FailureContext, registry interface{}) []interface{} {
+func (fd *FailureDetector) SuggestAlternativeOperators(fc *FailureContext, registry any) []any {
 	if fc == nil || registry == nil {
 		return nil
 	}

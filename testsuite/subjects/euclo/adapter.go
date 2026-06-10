@@ -172,7 +172,7 @@ func toStringAnyMap(raw any) map[string]any {
 	if typed, ok := raw.(map[string]any); ok {
 		return typed
 	}
-	if typed, ok := raw.(map[string]interface{}); ok {
+	if typed, ok := raw.(map[string]any); ok {
 		return typed
 	}
 	data, err := json.Marshal(raw)

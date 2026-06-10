@@ -318,7 +318,7 @@ func (t *testTool) Name() string                      { return t.name }
 func (t *testTool) Description() string               { return t.description }
 func (t *testTool) Category() string                  { return t.category }
 func (t *testTool) Parameters() []ports.ToolParameter { return nil }
-func (t *testTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *testTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	t.executed = true
 	return &ports.ToolResult{Success: true}, nil
 }
@@ -344,7 +344,7 @@ func (t *permissionedTestTool) Name() string                      { return t.nam
 func (t *permissionedTestTool) Description() string               { return t.description }
 func (t *permissionedTestTool) Category() string                  { return t.category }
 func (t *permissionedTestTool) Parameters() []ports.ToolParameter { return nil }
-func (t *permissionedTestTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *permissionedTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	// Check permissions before execution
 	if t.manager != nil {
 		testPath := t.basePath + "/test.txt"

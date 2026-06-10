@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -207,7 +206,7 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 // deny records an audit event and returns a structured error describing why an
 // action was blocked.
 func (m *PermissionManager) deny(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, reason string) error {
-	m.log(ctx, agentID, desc, "denied", map[string]interface{}{
+	m.log(ctx, agentID, desc, "denied", map[string]any{
 		"reason": reason,
 	})
 	m.emitPolicyDecision(ctx, desc, "deny", reason, nil)
@@ -217,7 +216,7 @@ func (m *PermissionManager) deny(ctx context.Context, agentID string, desc permi
 	}
 }
 
-func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
 	if m == nil {
 		return
 	}
@@ -260,7 +259,7 @@ func redactSensitivePath(path string) string {
 
 // log forwards permission decisions to the configured audit sink to provide a
 // tamper-evident trail of runtime behavior.
-func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]interface{}) {
+func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]any) {
 	if m.audit == nil {
 		return
 	}
@@ -271,7 +270,7 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc permis
 		Type:        string(desc.Type),
 		Permission:  redactSensitivePath(desc.Resource),
 		Result:      result,
-		Metadata:    runtime.RedactMetadataMap(fields),
+		Metadata:    redactMetadataMap(fields),
 		Correlation: agentID,
 	}
 	_ = m.audit.Log(ctx, record)

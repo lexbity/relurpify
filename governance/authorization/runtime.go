@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	permissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -70,16 +70,19 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if agentManifest == nil {
 		return nil, errors.New("manifest missing")
 	}
-	effectivePerms, err := config.ResolveEffectivePermissions(cfg.BaseFS, agentManifest)
-	if err != nil {
-		return nil, fmt.Errorf("resolve permissions: %w", err)
-	}
 	effectiveResources, err := config.ResolveEffectiveResources(cfg.BaseFS, agentManifest)
 	if err != nil {
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
-	agentManifest.Spec.Permissions = effectivePerms
 	agentManifest.Spec.Resources = effectiveResources
+
+	// Resolve effective permissions via governance/permissions
+	var defaultPerms *permissions.PermissionSet
+	if agentManifest.Spec.Defaults != nil {
+		defaultPerms = agentManifest.Spec.Defaults.Permissions
+	}
+	specPerms := &agentManifest.Spec.Permissions
+	effectivePerms := permissions.ResolveEffective(defaultPerms, specPerms)
 	image := cfg.Image
 	if image == "" && agentManifest != nil {
 		image = agentManifest.Spec.Image
@@ -94,12 +97,12 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := policy.NewInMemoryAuditLogger(cfg.AuditLimit)
 	var permManager *PermissionManager
-	if len(agentManifest.Spec.Permissions.FileSystem) > 0 ||
-		len(agentManifest.Spec.Permissions.Executables) > 0 ||
-		len(agentManifest.Spec.Permissions.Network) > 0 ||
-		len(agentManifest.Spec.Permissions.Capabilities) > 0 ||
-		len(agentManifest.Spec.Permissions.IPC) > 0 {
-		permManager, err = NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
+	if len(effectivePerms.FileSystem) > 0 ||
+		len(effectivePerms.Executables) > 0 ||
+		len(effectivePerms.Network) > 0 ||
+		len(effectivePerms.Capabilities) > 0 ||
+		len(effectivePerms.IPC) > 0 {
+		permManager, err = NewPermissionManager(cfg.BaseFS, &effectivePerms, audit, hitl)
 		if err != nil {
 			return nil, fmt.Errorf("permission manager init: %w", err)
 		}

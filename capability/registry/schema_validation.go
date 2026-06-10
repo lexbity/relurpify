@@ -134,7 +134,7 @@ func validateValueAgainstSchema(value any, schema *schemacoerce.Schema, path str
 	case "", "any":
 		return nil
 	case "object":
-		obj, ok := value.(map[string]interface{})
+		obj, ok := value.(map[string]any)
 		if !ok {
 			return fmt.Errorf("%s must be object", path)
 		}
@@ -154,7 +154,7 @@ func validateValueAgainstSchema(value any, schema *schemacoerce.Schema, path str
 		}
 		return nil
 	case "array":
-		items, ok := value.([]interface{})
+		items, ok := value.([]any)
 		if !ok {
 			return fmt.Errorf("%s must be array", path)
 		}

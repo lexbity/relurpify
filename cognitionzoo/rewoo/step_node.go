@@ -19,7 +19,7 @@ type StepNode struct {
 	PermissionChecker  permissions.CapabilityChecker
 	OnFailure          StepOnFailure
 	OnPermissionDenied StepOnFailure
-	Debugf             func(string, ...interface{})
+	Debugf             func(string, ...any)
 }
 
 // NewStepNode creates a new step execution node.

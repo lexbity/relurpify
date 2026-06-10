@@ -1,6 +1,7 @@
 package promptprovider
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -127,7 +128,7 @@ func TestThoughtRecipeStepContextProviderRendersClarificationState(t *testing.T)
 		intentcontext.ClarificationLastCheckpointIDKey,
 		intentcontext.ClarificationLastCheckpointSeqKey,
 	} {
-		if !containsString(metadata.ReadsKeys, key) {
+		if !slices.Contains(metadata.ReadsKeys, key) {
 			t.Fatalf("expected metadata to include read key %q, got %#v", key, metadata.ReadsKeys)
 		}
 	}
@@ -231,13 +232,4 @@ func TestThoughtRecipeStepContextProviderGolden(t *testing.T) {
 		WithStateValue(intentcontext.IntentInterpretationKey, interpretation).
 		WithVariable("question", "Which module should be updated?"))
 	assertGolden(t, "recipe_step_context", out.Content)
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }

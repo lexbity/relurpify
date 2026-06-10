@@ -5,6 +5,7 @@ package agenttest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -284,7 +285,7 @@ func TestCoverageReport(t *testing.T) {
 	}
 
 	for _, expected := range expectedSubstrings {
-		if !contains(report, expected) {
+		if !strings.Contains(report, expected) {
 			t.Errorf("Expected report to contain %q", expected)
 		}
 	}
@@ -292,7 +293,7 @@ func TestCoverageReport(t *testing.T) {
 
 func TestCoverageReport_Nil(t *testing.T) {
 	report := CoverageReport(nil)
-	if !contains(report, "nil") {
+	if !strings.Contains(report, "nil") {
 		t.Error("Expected nil coverage report to indicate nil")
 	}
 }
@@ -336,15 +337,4 @@ func (m *mockTool) Tags() []string                       { return nil }
 
 var _ ports.Tool = (*mockTool)(nil)
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsInternal(s, substr))
-}
 
-func containsInternal(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

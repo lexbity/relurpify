@@ -257,11 +257,11 @@ func (l *Lexer) beginLine() error {
 	spaces := 0
 	for {
 		r, _ := l.peek()
-		switch {
-		case r == ' ':
+		switch r {
+		case ' ':
 			spaces++
 			l.consume()
-		case r == '\t':
+		case '\t':
 			return fmt.Errorf("%s:%d:%d: tabs are not valid indentation", l.filename, l.line, l.column)
 		default:
 			goto done

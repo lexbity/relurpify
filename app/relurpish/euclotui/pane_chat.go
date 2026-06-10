@@ -16,7 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -503,7 +503,7 @@ func (p *ChatPane) ApplyPendingChanges(status tui.ChangeStatus) int {
 func (p *ChatPane) MutateMessages(fn func(msgs []tui.Message)) { p.feed.Mutate(fn) }
 func (p *ChatPane) AddFile(path string) tea.Cmd {
 	if p.context == nil {
-		return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Context error: context unavailable")} }
+		return func() tea.Msg { return tui.ChatSystemMsg{Text: "Context error: context unavailable"} }
 	}
 	if err := p.context.AddFile(path); err != nil {
 		return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Context error: %v", err)} }
@@ -687,7 +687,7 @@ func (p *ChatPane) runStream(ctx context.Context, run *tui.RunState, metadata ma
 	sendRunMsg(run, tui.StreamTokenMsg{
 		RunID:     run.ID,
 		TokenType: tui.TokenThinking,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"kind":        "start",
 			"stepType":    string(tui.StepAnalyzing),
 			"description": "Analyzing request",
@@ -1066,7 +1066,7 @@ func summarizeResult(res *execution.Result) string {
 	}
 	if fields := execution.ResultFields(res.Data); len(fields) > 0 {
 		b.WriteString("\nData: ")
-		b.WriteString(fmt.Sprintf("%v", fields))
+		fmt.Fprintf(&b, "%v", fields)
 	}
 	if strings.TrimSpace(res.Error) != "" {
 		b.WriteString("\nError: ")
@@ -1310,11 +1310,4 @@ func (p *ChatPane) SetAnimManager(m *tui.AnimationManager) {
 	if p.anim != nil && p.HasActiveRuns() {
 		p.registerSpinnerAnim()
 	}
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

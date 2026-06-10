@@ -22,7 +22,7 @@ import (
 type RuntimeSurfaces struct {
 	// TODO: Replace with agentlifecycle.Repository
 	// per the agentlifecycle workflow-store removal plan
-	Workflow interface{}
+	Workflow any
 }
 
 // RetrievalQuery defines parameters for retrieval operations.
@@ -33,7 +33,7 @@ type RetrievalQuery struct {
 // ResolveRuntimeSurfaces resolves runtime surfaces from a memory store.
 // TODO: Reimplement without WorkflowStateStore dependency
 // per the agentlifecycle workflow-store removal plan
-func ResolveRuntimeSurfaces(mem interface{}) RuntimeSurfaces {
+func ResolveRuntimeSurfaces(mem any) RuntimeSurfaces {
 	return RuntimeSurfaces{}
 }
 
@@ -41,7 +41,7 @@ func ResolveRuntimeSurfaces(mem interface{}) RuntimeSurfaces {
 // This replaces the workflowutil.Hydrate stub with a real implementation.
 // TODO: Reimplement without WorkflowStateStore dependency
 // per the agentlifecycle workflow-store removal plan
-func Hydrate(ctx context.Context, surface interface{}, workflowID string, query RetrievalQuery) (interface{}, error) {
+func Hydrate(ctx context.Context, surface any, workflowID string, query RetrievalQuery) (any, error) {
 	// Placeholder - retrieval to be reimplemented
 	// using agentlifecycle.Repository
 	return map[string]any{
@@ -63,7 +63,7 @@ func TaskPaths(task *execution.Task) []string {
 }
 
 // ApplyTaskRetrieval applies retrieval payload to task context.
-func ApplyTaskRetrieval(task *execution.Task, payload interface{}) *execution.Task {
+func ApplyTaskRetrieval(task *execution.Task, payload any) *execution.Task {
 	if task == nil || payload == nil {
 		return task
 	}
@@ -365,7 +365,7 @@ func (a *HTNAgent) afterStep(
 	result *pl.Result,
 	checkpointStore any,
 	stepIndexes map[string]int,
-	wfStore interface{},
+	wfStore any,
 	workflowID, runID string,
 	task *execution.Task,
 ) {

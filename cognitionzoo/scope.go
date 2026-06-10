@@ -64,7 +64,7 @@ func toolAllowed(tool ports.Tool, scope ToolScope) bool {
 	return true
 }
 
-func permissionSet(v interface{}) *permissions.PermissionSet {
+func permissionSet(v any) *permissions.PermissionSet {
 	if v == nil {
 		return nil
 	}

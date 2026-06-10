@@ -9,7 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/result"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
@@ -266,7 +266,7 @@ func clipSizeForDecision(decision capresult.InsertionDecision) int {
 	}
 }
 
-func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capresult.InsertionDecision) (string, map[string]interface{}) {
+func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capresult.InsertionDecision) (string, map[string]any) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}
@@ -281,7 +281,7 @@ func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capres
 		if reason == "" {
 			reason = trimToBudget(res.Error, maxClip)
 		}
-		return fmt.Sprintf("%s failed: %s", call.Name, reason), map[string]interface{}{
+		return fmt.Sprintf("%s failed: %s", call.Name, reason), map[string]any{
 			"error":  trimToBudget(res.Error, maxClip),
 			"stdout": stdout,
 			"stderr": stderr,
@@ -292,10 +292,10 @@ func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capres
 		path := fmt.Sprint(call.Args["path"])
 		content := fmt.Sprint(res.Data["content"])
 		snippet := trimToBudget(content, maxClip*3)
-		return fmt.Sprintf("Read %s", path), map[string]interface{}{"path": path, "snippet": snippet}
+		return fmt.Sprintf("Read %s", path), map[string]any{"path": path, "snippet": snippet}
 	case "file_list":
 		files := trimToBudget(fmt.Sprint(res.Data["files"]), maxClip)
-		return fmt.Sprintf("Listed files: %s", files), map[string]interface{}{"files": files}
+		return fmt.Sprintf("Listed files: %s", files), map[string]any{"files": files}
 	default:
 		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), maxClip)
 		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), maxClip)
@@ -304,13 +304,13 @@ func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capres
 			if summary == "" {
 				summary = trimToBudget(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), maxClip)
 			}
-			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"stdout": stdout, "stderr": stderr}
+			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]any{"stdout": stdout, "stderr": stderr}
 		}
 		if len(res.Data) > 0 {
 			summary := trimToBudget(fmt.Sprint(res.Data), maxClip)
-			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]interface{}{"summary": summary}
+			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]any{"summary": summary}
 		}
-		return fmt.Sprintf("%s completed", call.Name), map[string]interface{}{"summary": fmt.Sprintf("%s completed", call.Name)}
+		return fmt.Sprintf("%s completed", call.Name), map[string]any{"summary": fmt.Sprintf("%s completed", call.Name)}
 	}
 }
 
@@ -325,9 +325,9 @@ func firstMeaningfulLine(text string) string {
 	return ""
 }
 
-func finalOutputSummary(value interface{}) string {
+func finalOutputSummary(value any) string {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return strings.TrimSpace(fmt.Sprint(v["summary"]))
 	default:
 		return strings.TrimSpace(fmt.Sprint(value))

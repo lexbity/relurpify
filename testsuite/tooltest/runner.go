@@ -153,18 +153,18 @@ func assertResult(t *testing.T, result *ports.ToolResult, err error, expect Tool
 
 	// Artifact refs
 	if expect.HasStdoutRef {
-		if ref, _ := result.Data["stdout_ref"]; ref == nil || fmt.Sprint(ref) == "" {
+		if ref := result.Data["stdout_ref"]; ref == nil || fmt.Sprint(ref) == "" {
 			t.Error("expected stdout_ref to be non-empty")
 		}
 	}
 	if expect.HasStderrRef {
-		if ref, _ := result.Data["stderr_ref"]; ref == nil || fmt.Sprint(ref) == "" {
+		if ref := result.Data["stderr_ref"]; ref == nil || fmt.Sprint(ref) == "" {
 			t.Error("expected stderr_ref to be non-empty")
 		}
 	}
 }
 
-func stringField(m map[string]interface{}, key string) string {
+func stringField(m map[string]any, key string) string {
 	if m == nil {
 		return ""
 	}
@@ -180,9 +180,9 @@ func stringField(m map[string]interface{}, key string) string {
 
 func jsonType(v any) string {
 	switch v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return "object"
-	case []interface{}:
+	case []any:
 		return "array"
 	case string:
 		return "string"

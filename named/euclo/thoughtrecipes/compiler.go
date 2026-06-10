@@ -13,7 +13,7 @@ type CompiledNode struct {
 	ID           string
 	Type         string
 	Description  string
-	Config       map[string]interface{}
+	Config       map[string]any
 	Captures     map[string]string
 	Bindings     map[string]string
 	Dependencies []string

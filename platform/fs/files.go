@@ -71,7 +71,7 @@ func (t *ReadFileTool) ParamKeys() []string {
 	return FileReadParamKeys()
 }
 
-func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileReadParams(args)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{})
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"content": string(data),
 			"size":    info.Size(),
 			"mode":    info.Mode().String(),
@@ -157,7 +157,7 @@ func (t *WriteFileTool) ParamKeys() []string {
 	return FileWriteParamKeys()
 }
 
-func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileWriteParams(args)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}
 	if closeErr := f.Close(); closeErr != nil {
 		return nil, closeErr
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"path": path}}, nil
 }
 func (t *WriteFileTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -248,7 +248,7 @@ func (t *ListFilesTool) ParamKeys() []string {
 	return FileListParamKeys()
 }
 
-func (t *ListFilesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileListParams(args)
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return nil, err
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"files": files}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"files": files}}, nil
 }
 func (t *ListFilesTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -349,7 +349,7 @@ func (t *SearchInFilesTool) ParamKeys() []string {
 	return FileSearchParamKeys()
 }
 
-func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileSearchParams(args)
 	if err != nil {
 		return nil, err
@@ -428,7 +428,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]interfa
 	if err != nil {
 		return nil, err
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"matches": matches}}, nil
 }
 func (t *SearchInFilesTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -477,7 +477,7 @@ func (t *CreateFileTool) ParamKeys() []string {
 	return FileCreateParamKeys()
 }
 
-func (t *CreateFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *CreateFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileCreateParams(args)
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ func (t *CreateFileTool) Execute(ctx context.Context, args map[string]interface{
 	if err := os.WriteFile(path, []byte(params.Content), 0o644); err != nil {
 		return nil, err
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"path": path}}, nil
 }
 func (t *CreateFileTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -547,7 +547,7 @@ func (t *DeleteFileTool) ParamKeys() []string {
 	return FileDeleteParamKeys()
 }
 
-func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileDeleteParams(args)
 	if err != nil {
 		return nil, err
@@ -576,7 +576,7 @@ func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]interface{
 	if err := os.Rename(path, dest); err != nil {
 		return nil, err
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"path": dest}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"path": dest}}, nil
 }
 func (t *DeleteFileTool) IsAvailable(ctx context.Context) bool {
 	return true
@@ -682,7 +682,7 @@ func preparePath(base, path string) string {
 	return filepath.Join(base, path)
 }
 
-func toBool(value interface{}) bool {
+func toBool(value any) bool {
 	switch typed := value.(type) {
 	case bool:
 		return typed

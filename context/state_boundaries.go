@@ -111,7 +111,7 @@ func ValidateStateBoundaryPolicy(policy StateBoundaryPolicy) error {
 }
 
 // LintStateMap flags state payloads that violate a declared boundary policy.
-func LintStateMap(state map[string]interface{}, policy StateBoundaryPolicy) []StateBoundaryViolation {
+func LintStateMap(state map[string]any, policy StateBoundaryPolicy) []StateBoundaryViolation {
 	if len(state) == 0 {
 		return nil
 	}
@@ -208,7 +208,7 @@ func LintStateMap(state map[string]interface{}, policy StateBoundaryPolicy) []St
 	return violations
 }
 
-func classifyStateValue(key string, value interface{}) StateDataClass {
+func classifyStateValue(key string, value any) StateDataClass {
 	lowerKey := strings.ToLower(strings.TrimSpace(key))
 	switch {
 	case strings.Contains(lowerKey, "task"):
@@ -279,7 +279,7 @@ type MemoryRecordEnvelope struct {
 	Derivation  *DerivationChain `json:"derivation,omitempty"`
 }
 
-func estimateStateValueBytes(value interface{}) int {
+func estimateStateValueBytes(value any) int {
 	if value == nil {
 		return 0
 	}
@@ -290,13 +290,13 @@ func estimateStateValueBytes(value interface{}) int {
 	return len(data)
 }
 
-func inlineCollectionItems(value interface{}) int {
+func inlineCollectionItems(value any) int {
 	switch typed := value.(type) {
-	case []interface{}:
+	case []any:
 		return len(typed)
 	case []string:
 		return len(typed)
-	case []map[string]interface{}:
+	case []map[string]any:
 		return len(typed)
 	case []MemoryRecordEnvelope:
 		return len(typed)
@@ -304,8 +304,8 @@ func inlineCollectionItems(value interface{}) int {
 	return 0
 }
 
-func looksLikeArtifactReference(value interface{}) bool {
-	values, ok := value.(map[string]interface{})
+func looksLikeArtifactReference(value any) bool {
+	values, ok := value.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -315,8 +315,8 @@ func looksLikeArtifactReference(value interface{}) bool {
 	return hasArtifactID || hasRawRef || hasURI
 }
 
-func looksLikeMemoryReference(value interface{}) bool {
-	values, ok := value.(map[string]interface{})
+func looksLikeMemoryReference(value any) bool {
+	values, ok := value.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -325,9 +325,9 @@ func looksLikeMemoryReference(value interface{}) bool {
 	return hasClass || hasKey
 }
 
-func looksLikeTranscript(value interface{}) bool {
+func looksLikeTranscript(value any) bool {
 	switch typed := value.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if len(typed) == 0 {
 			return false
 		}
@@ -338,9 +338,9 @@ func looksLikeTranscript(value interface{}) bool {
 	return false
 }
 
-func looksLikeRetrievalDump(value interface{}) bool {
+func looksLikeRetrievalDump(value any) bool {
 	switch typed := value.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if len(typed) == 0 {
 			return false
 		}

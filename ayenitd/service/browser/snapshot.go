@@ -110,7 +110,7 @@ func (s *BrowserService) HealthSnapshot(context.Context) (provider.ProviderHealt
 	return provider.ProviderHealthSnapshot{
 		Status:  "healthy",
 		Message: "browser service active",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"active_sessions": count,
 			"path_roots":      paths.roots(),
 		},
@@ -208,10 +208,10 @@ func recordBrowserObservation(env *contextdata.Envelope, pageState *platformbrow
 	}
 	snapshots = append(snapshots, pageState)
 	env.SetWorkingValueWithClass(browserPageStateListKey, snapshots, contextdata.MemoryClassTask)
-	env.AddInteraction(map[string]interface{}{
+	env.AddInteraction(map[string]any{
 		"role": "observation",
 		"text": formatBrowserObservation(pageState),
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"kind": "browser_page_state",
 			"url":  pageState.URL,
 		},
@@ -233,8 +233,8 @@ func formatBrowserObservation(pageState *platformbrowser.PageState) string {
 	)
 }
 
-func withExtraction(sessionID string, extraction *platformbrowser.Extraction, key string) map[string]interface{} {
-	return map[string]interface{}{
+func withExtraction(sessionID string, extraction *platformbrowser.Extraction, key string) map[string]any {
+	return map[string]any{
 		"session_id":      sessionID,
 		key:               extraction.Content,
 		"truncated":       extraction.Truncated,
@@ -254,16 +254,16 @@ func browserTransportForBackend(backend string) string {
 	}
 }
 
-func success(data map[string]interface{}) *ports.ToolResult {
+func success(data map[string]any) *ports.ToolResult {
 	return &ports.ToolResult{Success: true, Data: data}
 }
 
-func emitBrowserTelemetry(sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]interface{}) {
+func emitBrowserTelemetry(sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]any) {
 	if sink == nil {
 		return
 	}
 	if metadata == nil {
-		metadata = make(map[string]interface{})
+		metadata = make(map[string]any)
 	}
 	if agentID != "" {
 		metadata["agent_id"] = agentID
@@ -297,7 +297,7 @@ func browserWorkflowID(env *contextdata.Envelope) string {
 	return strings.TrimSpace(env.SessionID)
 }
 
-func defaultSessionID(env *contextdata.Envelope, args map[string]interface{}) string {
+func defaultSessionID(env *contextdata.Envelope, args map[string]any) string {
 	sessionID := strings.TrimSpace(fmt.Sprint(args["session_id"]))
 	if sessionID != "" && sessionID != "<nil>" {
 		return sessionID

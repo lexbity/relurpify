@@ -151,7 +151,7 @@ func TestGenerateSyntheticRepo_Huge(t *testing.T) {
 	require.Equal(t, 40000, count)
 
 	// Verify memory is bounded (we don't load payload bytes)
-	require.Equal(t, 40000, len(engine.store.nodes))
+	require.Len(t, engine.store.nodes, 40000)
 
 	// Media query
 	docs := engine.QueryFileMetaByMedia("text/markdown")

@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -355,7 +356,7 @@ func TestJobWaitWithCancellation(t *testing.T) {
 	if err == nil {
 		t.Error("expected error from Wait with cancelled context")
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled error, got %v", err)
 	}
 }

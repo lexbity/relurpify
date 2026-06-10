@@ -4,21 +4,21 @@ import "time"
 
 // Node represents a structured unit extracted from a file.
 type Node struct {
-	ID         string                 `json:"id"`
-	ParentID   string                 `json:"parent_id"`
-	FileID     string                 `json:"file_id"`
-	Type       NodeType               `json:"type"`
-	Category   Category               `json:"category"`
-	Language   string                 `json:"language"`
-	StartLine  int                    `json:"start_line"`
-	EndLine    int                    `json:"end_line"`
-	StartCol   int                    `json:"start_col"`
-	EndCol     int                    `json:"end_col"`
-	Name       string                 `json:"name"`
-	Signature  string                 `json:"signature"`
-	DocString  string                 `json:"doc_string"`
-	Attributes map[string]interface{} `json:"attributes"`
-	IsExported bool                   `json:"is_exported"`
+	ID         string         `json:"id"`
+	ParentID   string         `json:"parent_id"`
+	FileID     string         `json:"file_id"`
+	Type       NodeType       `json:"type"`
+	Category   Category       `json:"category"`
+	Language   string         `json:"language"`
+	StartLine  int            `json:"start_line"`
+	EndLine    int            `json:"end_line"`
+	StartCol   int            `json:"start_col"`
+	EndCol     int            `json:"end_col"`
+	Name       string         `json:"name"`
+	Signature  string         `json:"signature"`
+	DocString  string         `json:"doc_string"`
+	Attributes map[string]any `json:"attributes"`
+	IsExported bool           `json:"is_exported"`
 	// IsDeprecated can be toggled by parsers that understand deprecation tags.
 	IsDeprecated bool      `json:"is_deprecated"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -83,11 +83,11 @@ const (
 
 // Edge represents a typed relationship between nodes.
 type Edge struct {
-	ID         string                 `json:"id"`
-	SourceID   string                 `json:"source_id"`
-	TargetID   string                 `json:"target_id"`
-	Type       EdgeType               `json:"type"`
-	Attributes map[string]interface{} `json:"attributes"`
+	ID         string         `json:"id"`
+	SourceID   string         `json:"source_id"`
+	TargetID   string         `json:"target_id"`
+	Type       EdgeType       `json:"type"`
+	Attributes map[string]any `json:"attributes"`
 }
 
 // EdgeType enumerates relationship classes.

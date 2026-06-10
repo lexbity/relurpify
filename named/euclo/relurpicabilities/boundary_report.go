@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 type BoundaryReportHandler struct {
@@ -55,7 +55,7 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env ports.State)
 	}
 }
 
-func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	if h.deps.Store == nil {
 		return failResult("index service not available"), fmt.Errorf("index service not available")
 	}
@@ -69,7 +69,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, arg
 	}
 
 	dependencyCounts := make(map[string]int)
-	violations := make([]interface{}, 0)
+	violations := make([]any, 0)
 	checked := 0
 
 	for _, edge := range edges {
@@ -95,7 +95,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, arg
 			if sourceNode != nil {
 				line = sourceNode.StartLine
 			}
-			violations = append(violations, map[string]interface{}{
+			violations = append(violations, map[string]any{
 				"importer": importerPath,
 				"importee": importeePath,
 				"rule":     boundaryRuleName(importerLayer, importeeLayer),
@@ -110,7 +110,7 @@ func (h *BoundaryReportHandler) Invoke(ctx context.Context, env ports.State, arg
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":           true,
 			"passed":            len(violations) == 0,
 			"layer":             layer,
@@ -145,12 +145,12 @@ func boundaryRuleName(importerLayer, importeeLayer string) string {
 	return "unknown boundary rule"
 }
 
-func buildBoundaryReportMarkdown(layer string, checked int, counts map[string]int, violations []interface{}) string {
+func buildBoundaryReportMarkdown(layer string, checked int, counts map[string]int, violations []any) string {
 	var b strings.Builder
 	b.WriteString("# Boundary Report\n\n")
-	b.WriteString(fmt.Sprintf("- Layer filter: `%s`\n", layer))
-	b.WriteString(fmt.Sprintf("- Import edges checked: %d\n", checked))
-	b.WriteString(fmt.Sprintf("- Violations: %d\n\n", len(violations)))
+	fmt.Fprintf(&b, "- Layer filter: `%s`\n", layer)
+	fmt.Fprintf(&b, "- Import edges checked: %d\n", checked)
+	fmt.Fprintf(&b, "- Violations: %d\n\n", len(violations))
 	b.WriteString("## Dependency Counts\n\n")
 	if len(counts) == 0 {
 		b.WriteString("No import edges matched the selected filter.\n\n")
@@ -163,7 +163,7 @@ func buildBoundaryReportMarkdown(layer string, checked int, counts map[string]in
 		b.WriteString("| Importer -> Importee | Count |\n")
 		b.WriteString("| --- | ---: |\n")
 		for _, key := range keys {
-			b.WriteString(fmt.Sprintf("| `%s` | %d |\n", key, counts[key]))
+			fmt.Fprintf(&b, "| `%s` | %d |\n", key, counts[key])
 		}
 		b.WriteString("\n")
 	}
@@ -175,9 +175,9 @@ func buildBoundaryReportMarkdown(layer string, checked int, counts map[string]in
 	b.WriteString("| Importer | Importee | Rule | File | Line |\n")
 	b.WriteString("| --- | --- | --- | --- | ---: |\n")
 	for _, raw := range violations {
-		entry, _ := raw.(map[string]interface{})
-		b.WriteString(fmt.Sprintf("| `%v` | `%v` | %v | `%v` | %v |\n",
-			entry["importer"], entry["importee"], entry["rule"], entry["file"], entry["line"]))
+		entry, _ := raw.(map[string]any)
+		fmt.Fprintf(&b, "| `%v` | `%v` | %v | `%v` | %v |\n",
+			entry["importer"], entry["importee"], entry["rule"], entry["file"], entry["line"])
 	}
 	return b.String()
 }

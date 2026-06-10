@@ -71,7 +71,7 @@ type PermissionManager struct {
 	grantClock       func() time.Time
 	netPolicy        []governanceports.SandboxNetworkRule
 	defaultPolicy    string // governs undeclared tool permissions; default is Ask
-	eventLogger      func(context.Context, permissions.PermissionDescriptor, string, string, map[string]interface{})
+	eventLogger      func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any)
 	runtimePolicyErr error
 	taskGrants       map[string]taskGrant
 	hitlRateLimits   map[string]*hitlRateBucket
@@ -122,7 +122,7 @@ func (m *PermissionManager) SetDefaultPolicy(level string) {
 }
 
 // SetEventLogger configures a callback for structured policy decision events.
-func (m *PermissionManager) SetEventLogger(logger func(context.Context, permissions.PermissionDescriptor, string, string, map[string]interface{})) {
+func (m *PermissionManager) SetEventLogger(logger func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.eventLogger = logger
@@ -187,6 +187,9 @@ func (m *PermissionManager) currentSandboxPolicyLocked() governanceports.Sandbox
 // matchGlob supports both filepath.Match and the '**' recursive glob pattern
 // so manifests can succinctly describe directories.
 func matchGlob(pattern, value string) bool {
+	if pattern == "" {
+		return false
+	}
 	if pattern == permissionMatchAll {
 		return true
 	}
@@ -213,8 +216,9 @@ func matchGlob(pattern, value string) bool {
 	return regex.MatchString(value)
 }
 
-// globToRegex converts '**' style globs into Go regular expressions so we can
-// cheaply support recursive directory matching.
+// globToRegex converts glob patterns into Go regular expressions, supporting
+// standard filepath.Match syntax plus '**' (doublestar) for recursive matching.
+// '**/' matches zero or more directory levels; '**' alone matches everything.
 func globToRegex(pattern string) string {
 	var b strings.Builder
 	b.WriteString("^")
@@ -228,8 +232,13 @@ func globToRegex(pattern string) string {
 				peek = string(runes[i+1])
 			}
 			if peek == "*" {
-				b.WriteString(".*")
-				i++
+				if i+2 < len(runes) && runes[i+2] == '/' {
+					b.WriteString("(?:.*/)?")
+					i += 2
+				} else {
+					b.WriteString(".*")
+					i++
+				}
 			} else {
 				b.WriteString("[^/]*")
 			}

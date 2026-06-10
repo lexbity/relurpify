@@ -693,7 +693,7 @@ func compilationDigest(record *CompilationRecord) string {
 		return hex.EncodeToString(h.Sum(nil))
 	}
 	h.Write([]byte(record.Request.Query.Text))
-	h.Write([]byte(fmt.Sprintf("%d", record.EventLogSeq)))
+	fmt.Fprintf(h, "%d", record.EventLogSeq)
 	for _, chunkID := range record.Dependencies {
 		h.Write([]byte(chunkID))
 	}

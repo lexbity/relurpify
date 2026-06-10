@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -72,7 +73,7 @@ func TestCreateDuplicate(t *testing.T) {
 	if err := s.Create(ctx, job); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
-	if err := s.Create(ctx, job); err != jobs.ErrExists {
+	if err := s.Create(ctx, job); !errors.Is(err, jobs.ErrExists) {
 		t.Fatalf("duplicate create: want ErrExists, got %v", err)
 	}
 }
@@ -115,7 +116,7 @@ func TestUpdateNotFound(t *testing.T) {
 		State:     jobs.StateQueued,
 		CreatedAt: time.Now().UTC(),
 	})
-	if err != jobs.ErrNotFound {
+	if !errors.Is(err, jobs.ErrNotFound) {
 		t.Fatalf("update nonexistent: want ErrNotFound, got %v", err)
 	}
 }
@@ -328,7 +329,7 @@ func TestLoadNotFound(t *testing.T) {
 	s, path := newStore(t)
 	defer closeStore(s, path)
 	_, err := s.Load(context.Background(), "nope")
-	if err != jobs.ErrNotFound {
+	if !errors.Is(err, jobs.ErrNotFound) {
 		t.Fatalf("load not found: want ErrNotFound, got %v", err)
 	}
 }
@@ -337,7 +338,7 @@ func TestCheckpointNotFound(t *testing.T) {
 	s, path := newStore(t)
 	defer closeStore(s, path)
 	_, err := s.LoadCheckpoint(context.Background(), "nonexistent")
-	if err != jobs.ErrCkptNotFound {
+	if !errors.Is(err, jobs.ErrCkptNotFound) {
 		t.Fatalf("checkpoint not found: want ErrCkptNotFound, got %v", err)
 	}
 }

@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,21 +25,8 @@ type sandboxPolicyFile struct {
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
 func LoadSandboxPolicy(path, workspace string, decode Decoder) (*sandbox.SandboxPolicy, error) {
-	if strings.TrimSpace(workspace) == "" {
-		return nil, fmt.Errorf("workspace required")
-	}
-	if strings.TrimSpace(path) == "" {
-		path = SandboxPolicyPath(workspace)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read sandbox policy %s: %w", path, err)
-	}
 	var file sandboxPolicyFile
-	if decode == nil {
-		return nil, fmt.Errorf("decoder required")
-	}
-	if _, err := decode(path, data, &file); err != nil {
+	if err := loadAndDecode(path, workspace, decode, SandboxPolicyPath, &file); err != nil {
 		return nil, err
 	}
 	absWorkspace, err := filepath.Abs(workspace)

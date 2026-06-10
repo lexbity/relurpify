@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -219,9 +219,7 @@ func convertSessionOperations(values []string) []pol.SessionOperation {
 
 func convertExternalProvidersToStrings(values []string) []string {
 	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, value)
-	}
+	out = append(out, values...)
 	return out
 }
 

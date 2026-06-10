@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -27,7 +27,7 @@ func (t *nopBuiltTool) Name() string                      { return t.name }
 func (t *nopBuiltTool) Description() string               { return t.description }
 func (t *nopBuiltTool) Category() string                  { return t.category }
 func (t *nopBuiltTool) Parameters() []ports.ToolParameter { return nil }
-func (t *nopBuiltTool) Execute(_ context.Context, _ map[string]interface{}) (*ports.ToolResult, error) {
+func (t *nopBuiltTool) Execute(_ context.Context, _ map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil
 }
 func (t *nopBuiltTool) IsAvailable(_ context.Context) bool { return true }

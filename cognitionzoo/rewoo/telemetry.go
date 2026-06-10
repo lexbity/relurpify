@@ -9,14 +9,14 @@ import (
 // Phase 8: Observability integration for all workflow phases.
 // Emits structured telemetry events for monitoring and debugging.
 type RewooTelemetry struct {
-	client interface{} // core.Telemetry (avoiding import cycle)
-	debugf func(string, ...interface{})
+	client any // core.Telemetry (avoiding import cycle)
+	debugf func(string, ...any)
 }
 
 // NewRewooTelemetry creates a telemetry wrapper for ReWOO events.
-func NewRewooTelemetry(client interface{}, debugf func(string, ...interface{})) *RewooTelemetry {
+func NewRewooTelemetry(client any, debugf func(string, ...any)) *RewooTelemetry {
 	if debugf == nil {
-		debugf = func(string, ...interface{}) {}
+		debugf = func(string, ...any) {}
 	}
 	return &RewooTelemetry{client: client, debugf: debugf}
 }

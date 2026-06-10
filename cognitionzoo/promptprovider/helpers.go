@@ -28,13 +28,16 @@ func envelopeGetString(env *contextdata.Envelope, key string) string {
 	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
-// truncate caps a string at max bytes with an ellipsis.
 func truncate(s string, max int) string {
 	s = strings.TrimSpace(s)
-	if max <= 0 || len(s) <= max {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return strings.TrimSpace(s[:max]) + "..."
+	return string(runes[:max]) + "…"
 }
 
 // marshalJSON encodes v to indented JSON, returning "" on error.

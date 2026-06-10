@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -35,20 +34,6 @@ type SourceSummary struct {
 type ResolveOptions struct {
 }
 
-// ResolveEffectivePermissions merges defaults and manifest permissions.
-// Skills no longer contribute a Permissions block; that is handled by the
-// gVisor allowlist derived from the tool set.
-func ResolveEffectivePermissions(_ string, m *AgentManifest) (permissions.PermissionSet, error) {
-	var sets []*permissions.PermissionSet
-	if m != nil && m.Spec.Defaults != nil && m.Spec.Defaults.Permissions != nil {
-		sets = append(sets, m.Spec.Defaults.Permissions)
-	}
-	if m != nil {
-		sets = append(sets, &m.Spec.Permissions)
-	}
-	return MergePermissionSets(sets...), nil
-}
-
 // ResolveEffectiveResources merges defaults and manifest resources.
 func ResolveEffectiveResources(_ string, m *AgentManifest) (ResourceSpec, error) {
 	base := ResourceSpec{}
@@ -60,77 +45,6 @@ func ResolveEffectiveResources(_ string, m *AgentManifest) (ResourceSpec, error)
 		overlays = append(overlays, &m.Spec.Resources)
 	}
 	return MergeResourceSpecs(base, overlays...), nil
-}
-
-// MergePermissionSets unions multiple permission sets in order, de-duping
-// entries.
-func MergePermissionSets(sets ...*permissions.PermissionSet) permissions.PermissionSet {
-	var merged permissions.PermissionSet
-	fsSeen := make(map[string]struct{})
-	execSeen := make(map[string]struct{})
-	netSeen := make(map[string]struct{})
-	capSeen := make(map[string]struct{})
-	ipcSeen := make(map[string]struct{})
-
-	for _, set := range sets {
-		if set == nil {
-			continue
-		}
-		for _, perm := range set.FileSystem {
-			key := string(perm.Action) + ":" + perm.Path
-			if _, ok := fsSeen[key]; ok {
-				continue
-			}
-			fsSeen[key] = struct{}{}
-			merged.FileSystem = append(merged.FileSystem, perm)
-		}
-		for _, perm := range set.Executables {
-			key := perm.Binary + ":" + strings.Join(perm.Args, "|") + ":" + strings.Join(perm.Env, "|") + ":" + perm.Checksum
-			if perm.HITLRequired {
-				key += ":hitl"
-			}
-			if perm.ProxyRequired {
-				key += ":proxy"
-			}
-			if _, ok := execSeen[key]; ok {
-				continue
-			}
-			execSeen[key] = struct{}{}
-			merged.Executables = append(merged.Executables, perm)
-		}
-		for _, perm := range set.Network {
-			key := perm.Direction + ":" + perm.Protocol + ":" + perm.Host
-			if perm.Port > 0 {
-				key += ":" + strconv.Itoa(perm.Port)
-			}
-			if perm.HITLRequired {
-				key += ":hitl"
-			}
-			if _, ok := netSeen[key]; ok {
-				continue
-			}
-			netSeen[key] = struct{}{}
-			merged.Network = append(merged.Network, perm)
-		}
-		for _, perm := range set.Capabilities {
-			key := perm.Capability
-			if _, ok := capSeen[key]; ok {
-				continue
-			}
-			capSeen[key] = struct{}{}
-			merged.Capabilities = append(merged.Capabilities, perm)
-		}
-		for _, perm := range set.IPC {
-			key := perm.Kind + ":" + perm.Target
-			if _, ok := ipcSeen[key]; ok {
-				continue
-			}
-			ipcSeen[key] = struct{}{}
-			merged.IPC = append(merged.IPC, perm)
-		}
-		merged.HITLRequired = append(merged.HITLRequired, set.HITLRequired...)
-	}
-	return merged
 }
 
 // MergeResourceSpecs overlays non-empty resource fields on top of a base spec.
@@ -157,7 +71,8 @@ func MergeResourceSpecs(base ResourceSpec, overlays ...*ResourceSpec) ResourceSp
 }
 
 // ResolveEffectiveAgentContract merges manifest defaults and optional overlays
-// into one runtime-facing contract.
+// into one runtime-facing contract. Permission resolution (decode + merge) is
+// handled on the governance side via governance/permissions functions.
 func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts ResolveOptions) (*EffectiveAgentContract, error) {
 	if m == nil {
 		return nil, fmt.Errorf("agent manifest required")
@@ -166,10 +81,6 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		return nil, fmt.Errorf("workspace required")
 	}
 
-	permissions, err := ResolveEffectivePermissions(workspace, m)
-	if err != nil {
-		return nil, fmt.Errorf("resolve permissions: %w", err)
-	}
 	resources, err := ResolveEffectiveResources(workspace, m)
 	if err != nil {
 		return nil, fmt.Errorf("resolve resources: %w", err)
@@ -191,7 +102,7 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		AgentID:     m.Metadata.Name,
 		Manifest:    m,
 		AgentSpec:   baseSpec,
-		Permissions: permissions,
+		Permissions: m.Spec.Permissions,
 		Resources:   resources,
 		Sources:     sources,
 	}, nil

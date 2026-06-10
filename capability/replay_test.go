@@ -103,7 +103,7 @@ func TestToolPlayerExhaustedReturnsError(t *testing.T) {
 	}
 
 	_, err = player.InvokeCapability(context.Background(), nil, "only", nil)
-	if err != registry.ErrReplayExhausted {
+	if !errors.Is(err, registry.ErrReplayExhausted) {
 		t.Fatalf("expected registry.ErrReplayExhausted, got: %v", err)
 	}
 }

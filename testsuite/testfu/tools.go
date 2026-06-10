@@ -55,7 +55,7 @@ func (t *agentTool) Parameters() []ports.ToolParameter {
 		{Name: "timeout", Type: "string", Description: "Optional timeout duration.", Required: false},
 	}
 }
-func (t *agentTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *agentTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	if t == nil || t.agent == nil {
 		return nil, fmt.Errorf("testfu tool unavailable")
 	}
@@ -105,12 +105,12 @@ func (t *assertPassedTool) Category() string    { return "test" }
 func (t *assertPassedTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "passed", Type: "boolean", Description: "Passed flag from a prior testfu result.", Required: true}}
 }
-func (t *assertPassedTool) Execute(_ context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *assertPassedTool) Execute(_ context.Context, args map[string]any) (*ports.ToolResult, error) {
 	passed, _ := args["passed"].(bool)
 	if passed {
-		return &ports.ToolResult{Success: true, Data: map[string]interface{}{"passed": true}}, nil
+		return &ports.ToolResult{Success: true, Data: map[string]any{"passed": true}}, nil
 	}
-	return &ports.ToolResult{Success: false, Error: "report indicates failure", Data: map[string]interface{}{"passed": false}}, nil
+	return &ports.ToolResult{Success: false, Error: "report indicates failure", Data: map[string]any{"passed": false}}, nil
 }
 func (t *assertPassedTool) IsAvailable(context.Context) bool { return true }
 func (t *assertPassedTool) Permissions() ports.ToolPermissions {

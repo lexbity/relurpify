@@ -283,7 +283,7 @@ func (cb *ArtifactBudget) borrowTokensLocked(target string, tokens int) {
 		if available <= 0 {
 			continue
 		}
-		transfer := minInt(tokens, available)
+		transfer := min(tokens, available)
 		donor.MaxTokens -= transfer
 		cb.allocations[target].MaxTokens += transfer
 		tokens -= transfer
@@ -464,13 +464,6 @@ func (cb *ArtifactBudget) calculateAvailableLocked() {
 
 // ErrInvalidArtifactBudget signals misconfiguration in the policy.
 var ErrInvalidArtifactBudget = errors.New("invalid artifact budget configuration")
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // Compatibility helpers -------------------------------------------------------
 

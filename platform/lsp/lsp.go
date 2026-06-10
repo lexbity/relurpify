@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -89,28 +90,45 @@ type FormatRequest struct {
 	Code string
 }
 
-// Proxy manages multiple LSP clients.
-type Proxy struct {
-	mu      sync.RWMutex
-	clients map[string]LSPClient
-	cache   map[string]cacheEntry
-	ttl     time.Duration
+type lspCacheEntry struct {
+	key        string
+	value      any
+	expiration time.Time
+	element    *list.Element
 }
 
-type cacheEntry struct {
-	value      interface{}
-	expiration time.Time
+type inflightEntry struct {
+	ch  chan struct{}
+	val any
+	err error
+}
+
+// Proxy manages multiple LSP clients.
+type Proxy struct {
+	mu       sync.RWMutex
+	clients  map[string]LSPClient
+	cache    map[string]*lspCacheEntry
+	inflight map[string]*inflightEntry
+	ll       *list.List
+	ttl      time.Duration
+	maxSize  int
 }
 
 // NewProxy creates a proxy instance.
-func NewProxy(ttl time.Duration) *Proxy {
+func NewProxy(ttl time.Duration, maxSize int) *Proxy {
 	if ttl == 0 {
 		ttl = time.Minute
 	}
+	if maxSize <= 0 {
+		maxSize = 512
+	}
 	return &Proxy{
-		clients: make(map[string]LSPClient),
-		cache:   make(map[string]cacheEntry),
-		ttl:     ttl,
+		clients:  make(map[string]LSPClient),
+		cache:    make(map[string]*lspCacheEntry, maxSize),
+		inflight: make(map[string]*inflightEntry),
+		ll:       list.New(),
+		ttl:      ttl,
+		maxSize:  maxSize,
 	}
 }
 
@@ -132,22 +150,67 @@ func (p *Proxy) clientForFile(file string) (LSPClient, error) {
 	return client, nil
 }
 
-func (p *Proxy) cached(key string, fetch func() (interface{}, error)) (interface{}, error) {
+func (p *Proxy) cached(key string, fetch func() (any, error)) (any, error) {
+	p.mu.RLock()
+	if entry, ok := p.cache[key]; ok && time.Now().Before(entry.expiration) {
+		val := entry.value
+		p.mu.RUnlock()
+		p.mu.Lock()
+		p.ll.MoveToFront(entry.element)
+		p.mu.Unlock()
+		return val, nil
+	}
+	p.mu.RUnlock()
+
 	p.mu.Lock()
 	if entry, ok := p.cache[key]; ok && time.Now().Before(entry.expiration) {
 		val := entry.value
 		p.mu.Unlock()
 		return val, nil
 	}
-	p.mu.Unlock()
-	val, err := fetch()
-	if err != nil {
-		return nil, err
+
+	if inflight, ok := p.inflight[key]; ok {
+		p.mu.Unlock()
+		<-inflight.ch
+		return inflight.val, inflight.err
 	}
-	p.mu.Lock()
-	p.cache[key] = cacheEntry{value: val, expiration: time.Now().Add(p.ttl)}
+
+	inflight := &inflightEntry{ch: make(chan struct{})}
+	p.inflight[key] = inflight
 	p.mu.Unlock()
-	return val, nil
+
+	val, err := fetch()
+
+	p.mu.Lock()
+	delete(p.inflight, key)
+	if err == nil {
+		if len(p.cache) >= p.maxSize {
+			p.evictLocked()
+		}
+		entry := &lspCacheEntry{
+			key:        key,
+			value:      val,
+			expiration: time.Now().Add(p.ttl),
+		}
+		entry.element = p.ll.PushFront(entry)
+		p.cache[key] = entry
+	}
+	inflight.val = val
+	inflight.err = err
+	close(inflight.ch)
+	p.mu.Unlock()
+
+	return val, err
+}
+
+func (p *Proxy) evictLocked() {
+	back := p.ll.Back()
+	if back == nil {
+		return
+	}
+	entry := back.Value.(*lspCacheEntry)
+	p.ll.Remove(back)
+	delete(p.cache, entry.key)
 }
 
 // DefinitionTool implements the GetDefinition tool.
@@ -177,7 +240,7 @@ func (t *DefinitionTool) Parameters() []ports.ToolParameter {
 }
 
 // Execute implements Tool.
-func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *DefinitionTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -192,7 +255,7 @@ func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{
 		},
 	}
 	cacheKey := fmt.Sprintf("def:%s:%s:%d:%d", req.File, req.Symbol, req.Position.Line, req.Position.Character)
-	resAny, err := t.Proxy.cached(cacheKey, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached(cacheKey, func() (any, error) {
 		return client.GetDefinition(ctx, req)
 	})
 	if err != nil {
@@ -201,7 +264,7 @@ func (t *DefinitionTool) Execute(ctx context.Context, args map[string]interface{
 	res := resAny.(DefinitionResult)
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"location":  res.Location,
 			"snippet":   res.Snippet,
 			"signature": res.Signature,
@@ -237,7 +300,7 @@ func (t *ReferencesTool) Parameters() []ports.ToolParameter {
 		{Name: "character", Type: "int", Description: "Character offset", Required: true},
 	}
 }
-func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *ReferencesTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -251,7 +314,7 @@ func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{
 			Character: toInt(args["character"]),
 		},
 	}
-	resAny, err := t.Proxy.cached("refs:"+req.File+":"+req.Symbol, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached("refs:"+req.File+":"+req.Symbol, func() (any, error) {
 		return client.GetReferences(ctx, req)
 	})
 	if err != nil {
@@ -260,7 +323,7 @@ func (t *ReferencesTool) Execute(ctx context.Context, args map[string]interface{
 	res := resAny.([]Location)
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"locations": res,
 		},
 	}, nil
@@ -291,7 +354,7 @@ func (t *HoverTool) Parameters() []ports.ToolParameter {
 		{Name: "character", Type: "int", Required: true},
 	}
 }
-func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *HoverTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -304,7 +367,7 @@ func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*
 			Character: toInt(args["character"]),
 		},
 	}
-	resAny, err := t.Proxy.cached("hover:"+req.File, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached("hover:"+req.File, func() (any, error) {
 		return client.GetHover(ctx, req)
 	})
 	if err != nil {
@@ -313,7 +376,7 @@ func (t *HoverTool) Execute(ctx context.Context, args map[string]interface{}) (*
 	res := resAny.(HoverResult)
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"type": res.TypeInfo,
 			"docs": res.Docs,
 		},
@@ -341,13 +404,13 @@ func (t *DiagnosticsTool) Category() string { return "lsp" }
 func (t *DiagnosticsTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
 		return nil, err
 	}
-	resAny, err := t.Proxy.cached("diag:"+file, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached("diag:"+file, func() (any, error) {
 		return client.GetDiagnostics(ctx, file)
 	})
 	if err != nil {
@@ -356,7 +419,7 @@ func (t *DiagnosticsTool) Execute(ctx context.Context, args map[string]interface
 	res := resAny.([]Diagnostic)
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"diagnostics": res,
 		},
 	}, nil
@@ -383,9 +446,9 @@ func (t *SearchSymbolsTool) Category() string { return "lsp" }
 func (t *SearchSymbolsTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
-func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	query := fmt.Sprint(args["query"])
-	resAny, err := t.Proxy.cached("symbols:"+query, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached("symbols:"+query, func() (any, error) {
 		t.Proxy.mu.RLock()
 		defer t.Proxy.mu.RUnlock()
 		var combined []SymbolInformation
@@ -402,7 +465,7 @@ func (t *SearchSymbolsTool) Execute(ctx context.Context, args map[string]interfa
 		return nil, err
 	}
 	res := resAny.([]SymbolInformation)
-	return &ports.ToolResult{Success: true, Data: map[string]interface{}{"symbols": res}}, nil
+	return &ports.ToolResult{Success: true, Data: map[string]any{"symbols": res}}, nil
 }
 func (t *SearchSymbolsTool) IsAvailable(ctx context.Context) bool {
 	return t.Proxy != nil
@@ -426,13 +489,13 @@ func (t *DocumentSymbolsTool) Category() string { return "lsp" }
 func (t *DocumentSymbolsTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
 		return nil, err
 	}
-	resAny, err := t.Proxy.cached("doc_symbols:"+file, func() (interface{}, error) {
+	resAny, err := t.Proxy.cached("doc_symbols:"+file, func() (any, error) {
 		return client.GetDocumentSymbols(ctx, file)
 	})
 	if err != nil {
@@ -441,7 +504,7 @@ func (t *DocumentSymbolsTool) Execute(ctx context.Context, args map[string]inter
 	res := resAny.([]SymbolInformation)
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"symbols": res,
 		},
 	}, nil
@@ -469,7 +532,7 @@ func (t *FormatTool) Parameters() []ports.ToolParameter {
 		{Name: "code", Type: "string", Required: true},
 	}
 }
-func (t *FormatTool) Execute(ctx context.Context, args map[string]interface{}) (*ports.ToolResult, error) {
+func (t *FormatTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	client, err := t.Proxy.clientForFile(file)
 	if err != nil {
@@ -484,7 +547,7 @@ func (t *FormatTool) Execute(ctx context.Context, args map[string]interface{}) (
 	}
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"code": formatted,
 		},
 	}, nil
@@ -498,7 +561,7 @@ func (t *FormatTool) Permissions() ports.ToolPermissions {
 }
 func (t *FormatTool) Tags() []string { return []string{ports.TagDestructive} }
 
-func toInt(value interface{}) int {
+func toInt(value any) int {
 	switch v := value.(type) {
 	case int:
 		return v

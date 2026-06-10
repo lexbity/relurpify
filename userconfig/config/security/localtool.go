@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -20,21 +19,8 @@ type localToolPolicyFile struct {
 
 // LoadLocalToolPolicy loads and validates the local tool policy file.
 func LoadLocalToolPolicy(path, workspace string, decode Decoder) (map[string]agentspec.ToolPolicy, error) {
-	if strings.TrimSpace(workspace) == "" {
-		return nil, fmt.Errorf("workspace required")
-	}
-	if strings.TrimSpace(path) == "" {
-		path = LocalToolPolicyPath(workspace)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read local tool policy %s: %w", path, err)
-	}
 	var file localToolPolicyFile
-	if decode == nil {
-		return nil, fmt.Errorf("decoder required")
-	}
-	if _, err := decode(path, data, &file); err != nil {
+	if err := loadAndDecode(path, workspace, decode, LocalToolPolicyPath, &file); err != nil {
 		return nil, err
 	}
 	if err := validateLocalToolPolicies(file.Tools); err != nil {

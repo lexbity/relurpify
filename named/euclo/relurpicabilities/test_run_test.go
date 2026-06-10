@@ -47,7 +47,7 @@ func TestTestRunHandlerPassingTest(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"command": "go test ./...",
 	}
 
@@ -82,7 +82,7 @@ func TestTestRunHandlerFailingTest(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"command": "go test ./...",
 	}
 
@@ -119,7 +119,7 @@ func TestTestRunHandlerNilRunner(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"command": "go test ./...",
 	}
 
@@ -150,7 +150,7 @@ func TestTestRunHandlerCommandDenied(t *testing.T) {
 
 	ctx := context.Background()
 	envelope := contextdata.NewEnvelope("test-task", "test-session")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"command": "go test ./...",
 	}
 

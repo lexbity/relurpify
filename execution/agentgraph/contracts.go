@@ -11,7 +11,7 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -72,7 +72,7 @@ type NodeContract struct {
 	Idempotency          IdempotencyClass               `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
 	PreferredPlacement PlacementPreference           `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass       risk.RiskClass            `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	MaxRiskClass       risk.RiskClass                `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
 	RequiredTrustClass agentspec.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
 	Recoverability     NodeRecoverability            `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
 	CheckpointPolicy   CheckpointPolicyClass         `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`

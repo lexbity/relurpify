@@ -83,7 +83,7 @@ func renderCandidates(th *theme.Theme, frame interaction.InteractionFrame) strin
 		b.WriteString(th.Header().Render(label) + "\n")
 		b.WriteString("  " + c.Summary + "\n")
 		for k, v := range c.Properties {
-			b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(k+":"), v))
+			fmt.Fprintf(&b, "  %s %s\n", th.Dim().Render(k+":"), v)
 		}
 	}
 	if content.RecommendedID != "" {
@@ -143,7 +143,7 @@ func renderSelectionFrame(th *theme.Theme, frame interaction.InteractionFrame, t
 			} else {
 				prefix = th.Header().Render(prefix)
 			}
-			b.WriteString(fmt.Sprintf("  %s %s\n", prefix, choice))
+			fmt.Fprintf(&b, "  %s %s\n", prefix, choice)
 		}
 	}
 	if defaultChoice != "" {
@@ -175,14 +175,7 @@ func selectionOptionsFromSlots(slots []interaction.ActionSlot) []interaction.Sel
 	}
 	out := make([]interaction.SelectionOption, 0, len(slots))
 	for _, slot := range slots {
-		out = append(out, interaction.SelectionOption{
-			ID:       slot.ID,
-			Label:    slot.Label,
-			Shortcut: slot.Shortcut,
-			Action:   slot.Action,
-			Risk:     slot.Risk,
-			Default:  slot.Default,
-		})
+		out = append(out, interaction.SelectionOption(slot))
 	}
 	return out
 }
@@ -195,16 +188,16 @@ func renderComparison(th *theme.Theme, frame interaction.InteractionFrame) strin
 	var b strings.Builder
 	b.WriteString(th.Subhead().Render("Comparison") + "\n")
 	if len(content.Dimensions) > 0 {
-		b.WriteString(fmt.Sprintf("  %-12s", ""))
+		fmt.Fprintf(&b, "  %-12s", "")
 		for _, dim := range content.Dimensions {
-			b.WriteString(fmt.Sprintf("%-15s", th.Dim().Render(dim)))
+			fmt.Fprintf(&b, "%-15s", th.Dim().Render(dim))
 		}
 		b.WriteString("\n")
 		for i, row := range content.Matrix {
 			label := fmt.Sprintf("Option %d", i+1)
-			b.WriteString(fmt.Sprintf("  %-12s", th.Header().Render(label)))
+			fmt.Fprintf(&b, "  %-12s", th.Header().Render(label))
 			for _, cell := range row {
-				b.WriteString(fmt.Sprintf("%-15s", cell))
+				fmt.Fprintf(&b, "%-15s", cell)
 			}
 			b.WriteString("\n")
 		}
@@ -227,7 +220,7 @@ func renderDraft(th *theme.Theme, frame interaction.InteractionFrame) string {
 		if item.Editable {
 			marker = "~" + marker
 		}
-		b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(marker), item.Content))
+		fmt.Fprintf(&b, "  %s %s\n", th.Dim().Render(marker), item.Content)
 	}
 	return th.Panel().Render(b.String())
 }
@@ -256,10 +249,9 @@ func renderResultContent(th *theme.Theme, content interaction.ResultContent) str
 	}
 	b.WriteString(th.Subhead().Render("Result") + " " + statusLabel + "\n")
 	for _, ev := range content.Evidence {
-		b.WriteString(fmt.Sprintf("  %s %s\n",
+		fmt.Fprintf(&b, "  %s %s\n",
 			th.Dim().Render(ev.Kind+":"),
-			ev.Detail,
-		))
+			ev.Detail)
 	}
 	return th.Panel().Render(b.String())
 }
@@ -325,10 +317,9 @@ func renderTransition(th *theme.Theme, frame interaction.InteractionFrame) strin
 	}
 	var b strings.Builder
 	b.WriteString(th.Subhead().Render("Mode Transition") + "\n")
-	b.WriteString(fmt.Sprintf("  %s → %s\n",
+	fmt.Fprintf(&b, "  %s → %s\n",
 		th.Header().Render(content.FromMode),
-		th.Warning().Render(content.ToMode),
-	))
+		th.Warning().Render(content.ToMode))
 	if content.Reason != "" {
 		b.WriteString(th.Dim().Render("  "+content.Reason) + "\n")
 	}
@@ -356,7 +347,7 @@ func renderSessionList(th *theme.Theme, frame interaction.InteractionFrame) stri
 		if s.HasBKCContext {
 			status = th.Success().Render(" ✓BKC")
 		}
-		b.WriteString(fmt.Sprintf("%s %s %s\n", index, s.Instruction, mode))
+		fmt.Fprintf(&b, "%s %s %s\n", index, s.Instruction, mode)
 		b.WriteString(th.Dim().Render(fmt.Sprintf("    ID: %s%s\n", s.WorkflowID, status)))
 		if s.LastActiveAt != "" {
 			b.WriteString(th.Dim().Render(fmt.Sprintf("    Last active: %s\n", s.LastActiveAt)))
@@ -440,7 +431,7 @@ func renderFramePayload(th *theme.Theme, payload map[string]any) string {
 	sort.Strings(keys)
 	var b strings.Builder
 	for _, key := range keys {
-		b.WriteString(fmt.Sprintf("  %s %s\n", th.Dim().Render(key+":"), fmt.Sprint(payload[key])))
+		fmt.Fprintf(&b, "  %s %s\n", th.Dim().Render(key+":"), fmt.Sprint(payload[key]))
 	}
 	return b.String()
 }

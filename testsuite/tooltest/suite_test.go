@@ -3,6 +3,7 @@ package tooltest
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestAllToolTests(t *testing.T) {
 
 	count := 0
 	for _, entry := range entries {
-		if filepath.Ext(entry.Name()) != ".yaml" || !contains(entry.Name(), ".tooltest.") {
+		if filepath.Ext(entry.Name()) != ".yaml" || !strings.Contains(entry.Name(), ".tooltest.") {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
@@ -45,13 +46,4 @@ func TestAllToolTests(t *testing.T) {
 	if count < 10 {
 		t.Logf("warning: only %d tooltest files (want ≥10)", count)
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

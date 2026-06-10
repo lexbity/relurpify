@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 
@@ -42,7 +43,7 @@ func decodeStrictYAMLBody(path string, schemaLine int, body []byte, out any) err
 	var doc yaml.Node
 	dec := yaml.NewDecoder(bytes.NewReader(body))
 	if err := dec.Decode(&doc); err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return &SchemaError{
 				Path: path,
 				Line: schemaLine + 1,
@@ -67,7 +68,7 @@ func decodeStrictYAMLBody(path string, schemaLine int, body []byte, out any) err
 	dec = yaml.NewDecoder(bytes.NewReader(body))
 	dec.KnownFields(true)
 	if err := dec.Decode(out); err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return &SchemaError{
 				Path: path,
 				Line: schemaLine + 1,

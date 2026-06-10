@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
@@ -102,7 +102,7 @@ var layerRules = []layerRule{
 }
 
 // Invoke scans the import graph and returns any boundary violations.
-func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	if h.deps.Searcher == nil {
 		return failResult("index service not available"), nil
 	}
@@ -124,7 +124,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 		return failResult("failed to search nodes: " + err.Error()), nil
 	}
 
-	violations := make([]map[string]interface{}, 0)
+	violations := make([]map[string]any, 0)
 	seenViolations := make(map[string]struct{})
 	checked := 0
 
@@ -171,7 +171,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 						continue
 					}
 					seenViolations[key] = struct{}{}
-					violations = append(violations, map[string]interface{}{
+					violations = append(violations, map[string]any{
 						"importer": importerPath,
 						"importee": importeePkg,
 						"rule":     rule.name,
@@ -185,7 +185,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 	passed := len(violations) == 0
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":    true,
 			"passed":     passed,
 			"violations": mapsToInterfaces(violations),
@@ -207,8 +207,8 @@ func isLayerCandidate(node *ast.Node) bool {
 	}
 }
 
-func mapsToInterfaces(values []map[string]interface{}) []interface{} {
-	out := make([]interface{}, 0, len(values))
+func mapsToInterfaces(values []map[string]any) []any {
+	out := make([]any, 0, len(values))
 	for _, value := range values {
 		out = append(out, value)
 	}

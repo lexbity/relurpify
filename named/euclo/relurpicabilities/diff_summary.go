@@ -18,7 +18,7 @@ import (
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -101,7 +101,7 @@ func (h *DiffSummaryHandler) Descriptor(ctx context.Context, env ports.State) de
 }
 
 // Invoke runs git diff and returns a structured summary.
-func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args map[string]interface{}) (*ports.ToolResult, error) {
+func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
 	baseRef, _ := stringArg(args, "base_ref")
 	if baseRef == "" {
 		baseRef = "HEAD~1"
@@ -140,7 +140,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success": false,
 				"error":   fmt.Sprintf("git diff --stat failed: %v", err),
 			},
@@ -172,7 +172,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 	if err != nil {
 		return &ports.ToolResult{
 			Success: false,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"success": false,
 				"error":   fmt.Sprintf("git diff --name-only failed: %v", err),
 			},
@@ -199,7 +199,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 
 	return &ports.ToolResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"success":       true,
 			"summary":       summary,
 			"changed_files": changedFiles,
@@ -210,7 +210,7 @@ func (h *DiffSummaryHandler) Invoke(ctx context.Context, env ports.State, args m
 	}, nil
 }
 
-func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]interface{}) (string, error) {
+func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]any) (string, error) {
 	agent := reactpkg.New(&paradigm.Deps{
 		Model: h.model,
 	})
@@ -232,7 +232,7 @@ func (h *DiffSummaryHandler) runReactSummary(ctx context.Context, baseRef, headR
 		ID:          "euclo:cap.diff_summary",
 		Type:        string(execution.TaskTypeExplain),
 		Instruction: buildDiffSummaryInstruction(baseRef, headRef, scope, statOut, changedFiles, additions, deletions, riskAreas),
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"base_ref":      baseRef,
 			"head_ref":      headRef,
 			"scope":         scope,
@@ -279,8 +279,8 @@ func normalizedDiffScope(scope, workspace string) (string, error) {
 	return filepath.ToSlash(filepath.Clean(rel)), nil
 }
 
-func buildDiffSummaryInstruction(baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]interface{}) string {
-	payload, _ := json.Marshal(map[string]interface{}{
+func buildDiffSummaryInstruction(baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]any) string {
+	payload, _ := json.Marshal(map[string]any{
 		"base_ref":      baseRef,
 		"head_ref":      headRef,
 		"scope":         scope,
@@ -301,7 +301,7 @@ func summaryFromReActResult(env *contextdata.Envelope, result *execution.Result)
 		if summary, ok := contextdata.GetTyped[string](env, "react.synthetic_summary"); ok && strings.TrimSpace(summary) != "" {
 			return strings.TrimSpace(summary)
 		}
-		if output, ok := contextdata.GetTyped[map[string]interface{}](env, "react.final_output"); ok {
+		if output, ok := contextdata.GetTyped[map[string]any](env, "react.final_output"); ok {
 			if s := reactSummaryFromValue(output); s != "" {
 				return s
 			}
@@ -323,7 +323,7 @@ func summaryFromReActResult(env *contextdata.Envelope, result *execution.Result)
 }
 
 func reactSummaryFromValue(value any) string {
-	data, ok := value.(map[string]interface{})
+	data, ok := value.(map[string]any)
 	if !ok {
 		return ""
 	}
@@ -353,7 +353,7 @@ func parseStatSummary(stat string) (additions, deletions int) {
 }
 
 // identifyRiskAreas flags files in sensitive paths.
-func identifyRiskAreas(files []string) []map[string]interface{} {
+func identifyRiskAreas(files []string) []map[string]any {
 	riskPatterns := []struct {
 		pattern  string
 		reason   string
@@ -369,12 +369,12 @@ func identifyRiskAreas(files []string) []map[string]interface{} {
 		{"config", "configuration change", "low"},
 	}
 
-	var areas []map[string]interface{}
+	var areas []map[string]any
 	for _, file := range files {
 		lower := strings.ToLower(file)
 		for _, p := range riskPatterns {
 			if strings.Contains(lower, p.pattern) {
-				areas = append(areas, map[string]interface{}{
+				areas = append(areas, map[string]any{
 					"file":     file,
 					"reason":   p.reason,
 					"severity": p.severity,
