@@ -136,18 +136,20 @@ func (s *GraphIndexStore) SaveNodes(nodes []*Node) error {
 	if s.g.IsClosed() {
 		return errors.New("store is closed")
 	}
+	records := make([]graphdb.NodeRecord, 0, len(nodes))
 	for _, n := range nodes {
 		if n == nil {
 			continue
 		}
-		if err := s.saveNode(n); err != nil {
-			return err
-		}
+		records = append(records, nodeToRecord(n))
 	}
-	return nil
+	if len(records) == 0 {
+		return nil
+	}
+	return s.g.UpsertNodes(records)
 }
 
-func (s *GraphIndexStore) saveNode(n *Node) error {
+func nodeToRecord(n *Node) graphdb.NodeRecord {
 	props := mustMarshal(map[string]any{
 		"parent_id":    n.ParentID,
 		"file_id":      n.FileID,
@@ -174,13 +176,12 @@ func (s *GraphIndexStore) saveNode(n *Node) error {
 	if n.Name != "" {
 		labels = append(labels, "name:"+n.Name)
 	}
-
-	return s.g.UpsertNode(graphdb.NodeRecord{
+	return graphdb.NodeRecord{
 		ID:     n.ID,
 		Kind:   "ast_node",
 		Labels: labels,
 		Props:  props,
-	})
+	}
 }
 
 func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
@@ -329,24 +330,30 @@ func (s *GraphIndexStore) SaveEdges(edges []*Edge) error {
 	if s.g.IsClosed() {
 		return errors.New("store is closed")
 	}
+	records := make([]graphdb.EdgeRecord, 0, len(edges))
 	for _, e := range edges {
 		if e == nil {
 			continue
 		}
-		if err := s.saveEdge(e); err != nil {
-			return err
-		}
+		records = append(records, edgeToRecord(e))
 	}
-	return nil
+	if len(records) == 0 {
+		return nil
+	}
+	return s.g.LinkEdges(records)
 }
 
-func (s *GraphIndexStore) saveEdge(e *Edge) error {
+func edgeToRecord(e *Edge) graphdb.EdgeRecord {
 	props := mustMarshal(e.Attributes)
-	return s.g.Link(e.SourceID, e.TargetID, graphdb.EdgeKind(e.Type), "", 1, map[string]any{
-		"edge_id": e.ID,
-		"type":    string(e.Type),
-		"props":   string(props),
-	})
+	now := time.Now().UnixNano()
+	return graphdb.EdgeRecord{
+		SourceID:  e.SourceID,
+		TargetID:  e.TargetID,
+		Kind:      graphdb.EdgeKind(e.Type),
+		Weight:    1,
+		Props:     mustMarshal(map[string]any{"edge_id": e.ID, "type": string(e.Type), "props": string(props)}),
+		CreatedAt: now,
+	}
 }
 
 func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
@@ -671,16 +678,22 @@ func (t *graphTransaction) DeleteFile(fileID string) error {
 }
 
 func (t *graphTransaction) Commit() error {
+	// Delete files first (separate from node/edge batched commits).
 	for _, fileID := range t.files {
 		if err := t.store.DeleteFile(fileID); err != nil {
 			return err
 		}
 	}
-	if err := t.store.SaveNodes(t.nodes); err != nil {
-		return err
+	// Batch nodes and edges into single API calls.
+	if len(t.nodes) > 0 {
+		if err := t.store.SaveNodes(t.nodes); err != nil {
+			return err
+		}
 	}
-	if err := t.store.SaveEdges(t.edges); err != nil {
-		return err
+	if len(t.edges) > 0 {
+		if err := t.store.SaveEdges(t.edges); err != nil {
+			return err
+		}
 	}
 	return nil
 }

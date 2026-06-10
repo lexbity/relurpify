@@ -16,10 +16,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // InvokeCapability executes an invocable capability by capability ID or public name.
@@ -257,7 +258,7 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 		RuntimeFamily:  string(desc.RuntimeFamily),
 		ProviderKind:   providerKindForDescriptor(desc),
 		TrustClass:     string(desc.TrustClass),
-		RiskClasses:    desc.RiskClasses,
+		RiskClasses:    risk.Classify(desc.EffectClasses, desc.Source.Scope),
 		EffectClasses:  desc.EffectClasses,
 	}, ApprovalRequest{
 		AgentID: agentID,
@@ -338,7 +339,7 @@ func (r *CapabilityRegistry) InvocableCapabilities() []descriptor.CapabilityDesc
 
 func providerKindForDescriptor(desc descriptor.CapabilityDescriptor) string {
 	switch desc.Source.Scope {
-	case taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+	case classification.CapabilityScopeProvider, classification.CapabilityScopeRemote:
 		return "node-device"
 	default:
 		return "builtin"

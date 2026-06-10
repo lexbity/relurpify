@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 func (d CapabilityDescriptor) CapabilityID() string         { return d.ID }
@@ -15,7 +15,7 @@ func (d CapabilityDescriptor) LongRunning() int32       { return longRunning(d) 
 func (d CapabilityDescriptor) CapabilityRuntimeFamily() string {
 	return string(d.RuntimeFamily)
 }
-func (d CapabilityDescriptor) SourceScope() taxonomy.CapabilityScope { return scope(d) }
+func (d CapabilityDescriptor) SourceScope() classification.CapabilityScope { return scope(d) }
 func (d CapabilityDescriptor) SourceProviderID() string              { return sourceProviderID(d) }
 func (d CapabilityDescriptor) SourceSessionID() string               { return sourceSessionID(d) }
 
@@ -45,7 +45,7 @@ func longRunning(d CapabilityDescriptor) int32 {
 	return 0
 }
 
-func scope(d CapabilityDescriptor) taxonomy.CapabilityScope { return d.Source.Scope }
+func scope(d CapabilityDescriptor) classification.CapabilityScope { return d.Source.Scope }
 func sourceProviderID(d CapabilityDescriptor) string        { return d.Source.ProviderID }
 func sourceSessionID(d CapabilityDescriptor) string         { return d.Source.SessionID }
 

@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
@@ -38,11 +38,10 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descri
 		Category:      "testing",
 		Tags:          []string{"testing", "shell", "tool"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassExecute},
-		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassProcessSpawn},
+		EffectClasses: []classification.EffectClass{classification.EffectClassProcessSpawn},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

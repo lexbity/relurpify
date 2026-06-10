@@ -6,7 +6,8 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 type descriptorProfile struct {
@@ -14,11 +15,11 @@ type descriptorProfile struct {
 	name                        string
 	kind                        agentspec.CapabilityKind
 	runtimeFamily               agentspec.CapabilityRuntimeFamily
-	sourceScope                 taxonomy.CapabilityScope
+	sourceScope                 classification.CapabilityScope
 	trustClass                  agentspec.TrustClass
 	tags                        map[string]struct{}
-	riskClasses                 map[taxonomy.RiskClass]struct{}
-	effectClasses               map[taxonomy.EffectClass]struct{}
+	riskClasses                 map[risk.RiskClass]struct{}
+	effectClasses               map[classification.EffectClass]struct{}
 	coordinationRole            agentspec.CoordinationRole
 	coordinationTaskTypes       map[string]struct{}
 	coordinationExecutionModes  map[agentspec.CoordinationExecutionMode]struct{}
@@ -35,10 +36,10 @@ type compiledSelector struct {
 	runtimeFamilies             map[agentspec.CapabilityRuntimeFamily]struct{}
 	tags                        map[string]struct{}
 	excludeTags                 map[string]struct{}
-	sourceScopes                map[taxonomy.CapabilityScope]struct{}
+	sourceScopes                map[classification.CapabilityScope]struct{}
 	trustClasses                map[agentspec.TrustClass]struct{}
-	riskClasses                 map[taxonomy.RiskClass]struct{}
-	effectClasses               map[taxonomy.EffectClass]struct{}
+	riskClasses                 map[risk.RiskClass]struct{}
+	effectClasses               map[classification.EffectClass]struct{}
 	coordinationRoles           map[agentspec.CoordinationRole]struct{}
 	coordinationTaskTypes       map[string]struct{}
 	coordinationExecutionModes  map[agentspec.CoordinationExecutionMode]struct{}
@@ -65,8 +66,8 @@ func buildDescriptorProfile(desc descriptor.CapabilityDescriptor) descriptorProf
 		sourceScope:   desc.Source.Scope,
 		trustClass:    desc.TrustClass,
 		tags:          make(map[string]struct{}, len(desc.Tags)),
-		riskClasses:   make(map[taxonomy.RiskClass]struct{}, len(desc.RiskClasses)),
-		effectClasses: make(map[taxonomy.EffectClass]struct{}, len(desc.EffectClasses)),
+		riskClasses:   make(map[risk.RiskClass]struct{}),
+		effectClasses: make(map[classification.EffectClass]struct{}, len(desc.EffectClasses)),
 	}
 	for _, tag := range desc.Tags {
 		normalized := normalizeComparable(tag)
@@ -74,8 +75,8 @@ func buildDescriptorProfile(desc descriptor.CapabilityDescriptor) descriptorProf
 			profile.tags[normalized] = struct{}{}
 		}
 	}
-	for _, risk := range desc.RiskClasses {
-		profile.riskClasses[risk] = struct{}{}
+	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
+		profile.riskClasses[rc] = struct{}{}
 	}
 	for _, effect := range desc.EffectClasses {
 		profile.effectClasses[effect] = struct{}{}
@@ -261,11 +262,11 @@ func runtimeFamilySet(values []agentspec.CapabilityRuntimeFamily) map[agentspec.
 	return out
 }
 
-func scopeSet(values []taxonomy.CapabilityScope) map[taxonomy.CapabilityScope]struct{} {
+func scopeSet(values []classification.CapabilityScope) map[classification.CapabilityScope]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[taxonomy.CapabilityScope]struct{}, len(values))
+	out := make(map[classification.CapabilityScope]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
@@ -283,22 +284,22 @@ func trustClassSet(values []agentspec.TrustClass) map[agentspec.TrustClass]struc
 	return out
 }
 
-func riskClassSet(values []taxonomy.RiskClass) map[taxonomy.RiskClass]struct{} {
+func riskClassSet(values []risk.RiskClass) map[risk.RiskClass]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[taxonomy.RiskClass]struct{}, len(values))
+	out := make(map[risk.RiskClass]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
 	return out
 }
 
-func effectClassSet(values []taxonomy.EffectClass) map[taxonomy.EffectClass]struct{} {
+func effectClassSet(values []classification.EffectClass) map[classification.EffectClass]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make(map[taxonomy.EffectClass]struct{}, len(values))
+	out := make(map[classification.EffectClass]struct{}, len(values))
 	for _, value := range values {
 		out[value] = struct{}{}
 	}
@@ -345,7 +346,7 @@ func containsAnyNormalized(want, have map[string]struct{}) bool {
 	return false
 }
 
-func containsAnyRiskClass(want, have map[taxonomy.RiskClass]struct{}) bool {
+func containsAnyRiskClass(want, have map[risk.RiskClass]struct{}) bool {
 	for value := range want {
 		if _, ok := have[value]; ok {
 			return true
@@ -354,7 +355,7 @@ func containsAnyRiskClass(want, have map[taxonomy.RiskClass]struct{}) bool {
 	return false
 }
 
-func containsAnyEffectClass(want, have map[taxonomy.EffectClass]struct{}) bool {
+func containsAnyEffectClass(want, have map[classification.EffectClass]struct{}) bool {
 	for value := range want {
 		if _, ok := have[value]; ok {
 			return true

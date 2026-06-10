@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -186,20 +184,6 @@ func buildNetworkPolicy(perms []permissions.NetworkPermission) []governanceports
 		})
 	}
 	return rules
-}
-
-// Execute enforces permissions prior to delegating to the runtime executor.
-func (r *AgentRegistration) Execute(ctx context.Context, agent execution.AgentExecutor, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {
-	if agent == nil {
-		return nil, errors.New("agent missing")
-	}
-	if r == nil || r.Permissions == nil {
-		return nil, errors.New("permission subsystem missing")
-	}
-	if err := agent.Initialize(&execution.Config{Name: r.ID, NativeToolCalling: true}); err != nil {
-		return nil, err
-	}
-	return agent.Execute(ctx, task, state)
 }
 
 // QueryAudit proxies queries to the audit store.

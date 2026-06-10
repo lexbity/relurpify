@@ -7,7 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // InvocationPrecheck is checked after policy evaluation and before invocation.
@@ -45,7 +45,7 @@ func (p WritePathPrecheck) Check(desc descriptor.CapabilityDescriptor, args map[
 
 func hasWriteEffect(desc descriptor.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
-		if effect == taxonomy.EffectClassFilesystemMutation {
+		if effect == classification.EffectClassFilesystemMutation {
 			return true
 		}
 	}

@@ -252,6 +252,116 @@ func TestDomainCycleReport_liveTreeHasLessThan5Cycles(t *testing.T) {
 	}
 }
 
+func TestIsDomainVocabPackage_exempt(t *testing.T) {
+	dir := t.TempDir()
+	// Create capability/classification as a type-only package
+	mkDirAll(t, dir+"/capability/classification")
+	writeFile(t, dir+"/capability/classification/effects.go", "package classification\ntype EffectClass string\nconst (\n\tEffectClassReadOnly EffectClass = \"read-only\"\n)\ntype CapabilityScope string\nconst (\n\tCapabilityScopeBuiltin CapabilityScope = \"builtin\"\n)\n")
+
+	pkg := GoPackage{
+		ImportPath: ModulePath + "/capability/classification",
+		Dir:        dir + "/capability/classification",
+		GoFiles:    []string{"effects.go"},
+	}
+
+	if !isDomainVocabPackage(pkg, dir) {
+		t.Error("capability/classification type-only should be exempted as domain vocab")
+	}
+}
+
+func TestIsDomainVocabPackage_nonExempt(t *testing.T) {
+	dir := t.TempDir()
+	// framework/types is NOT a recognized domain root
+	mkDirAll(t, dir+"/framework/types")
+	writeFile(t, dir+"/framework/types/types.go", "package types\ntype A struct{}\n")
+
+	pkg := GoPackage{
+		ImportPath: ModulePath + "/framework/types",
+		Dir:        dir + "/framework/types",
+		GoFiles:    []string{"types.go"},
+	}
+
+	if isDomainVocabPackage(pkg, dir) {
+		t.Error("framework/types is not a recognized domain root, should NOT be exempted")
+	}
+}
+
+func TestIsDomainVocabPackage_exemptAtDomainRoot(t *testing.T) {
+	dir := t.TempDir()
+	// capability at root — type-only
+	mkDirAll(t, dir+"/capability")
+	writeFile(t, dir+"/capability/doc.go", "package capability\n// doc only\n")
+
+	pkg := GoPackage{
+		ImportPath: ModulePath + "/capability",
+		Dir:        dir + "/capability",
+		GoFiles:    []string{"doc.go"},
+	}
+
+	if !isDomainVocabPackage(pkg, dir) {
+		t.Error("capability root type-only should be exempted as domain vocab")
+	}
+}
+
+func TestCheckNoBucket_exemptsDomainVocab(t *testing.T) {
+	dir := t.TempDir()
+	// Create capability/classification — type-only vocabulary
+	mkDirAll(t, dir+"/capability/classification")
+	writeFile(t, dir+"/capability/classification/types.go", "package classification\ntype EffectClass string\nconst (\n\tA EffectClass = \"a\"\n)\n")
+
+	pkgs := []GoPackage{
+		{
+			ImportPath: ModulePath + "/capability/classification",
+			Dir:        dir + "/capability/classification",
+			GoFiles:    []string{"types.go"},
+		},
+		mkPkg(ModulePath + "/governance/risk"),
+		mkPkg(ModulePath + "/execution"),
+		mkPkg(ModulePath + "/context/knowledge"),
+	}
+	reverse := map[string][]string{
+		ModulePath + "/capability/classification": {
+			ModulePath + "/governance/risk",
+			ModulePath + "/execution",
+			ModulePath + "/context/knowledge",
+		},
+	}
+
+	vios := CheckNoBucket(pkgs, reverse, dir)
+	if len(vios) != 0 {
+		t.Errorf("expected 0 violations (domain vocab exempted by NFR-7), got %d: %v", len(vios), vios)
+	}
+}
+
+func TestCheckNoBucket_stillFlagsFrameworkTypes(t *testing.T) {
+	dir := t.TempDir()
+	mkDirAll(t, dir+"/framework/types")
+	writeFile(t, dir+"/framework/types/types.go", "package types\ntype A struct { X int }\n")
+
+	pkgs := []GoPackage{
+		{
+			ImportPath: ModulePath + "/framework/types",
+			Dir:        dir + "/framework/types",
+			GoFiles:    []string{"types.go"},
+		},
+		mkPkg(ModulePath + "/capability/a"),
+		mkPkg(ModulePath + "/context/b"),
+		mkPkg(ModulePath + "/execution/c"),
+	}
+	reverse := map[string][]string{
+		ModulePath + "/framework/types": {
+			ModulePath + "/capability/a",
+			ModulePath + "/context/b",
+			ModulePath + "/execution/c",
+		},
+	}
+
+	vios := CheckNoBucket(pkgs, reverse, dir)
+	if len(vios) != 1 {
+		t.Fatalf("expected 1 violation for framework/types, got %d: %v", len(vios), vios)
+	}
+}
+
 func mkDirAll(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0755); err != nil {

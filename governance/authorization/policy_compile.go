@@ -7,7 +7,8 @@ import (
 
 	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -239,12 +240,12 @@ func compileGlobalPolicy(key string, level string) (*pol.PolicyRule, error) {
 	switch key {
 	case "builtin-trusted", "workspace-trusted", "provider-local-untrusted", "remote-declared-untrusted", "remote-approved":
 		rule.Conditions.TrustClasses = []string{key}
-	case string(taxonomy.RiskClassReadOnly), string(taxonomy.RiskClassDestructive), string(taxonomy.RiskClassExecute), string(taxonomy.RiskClassNetwork), string(taxonomy.RiskClassCredentialed), string(taxonomy.RiskClassExfiltration), string(taxonomy.RiskClassSessioned):
-		rule.Conditions.MinRiskClasses = []taxonomy.RiskClass{taxonomy.RiskClass(key)}
+	case string(risk.RiskClassReadOnly), string(risk.RiskClassDestructive), string(risk.RiskClassExecute), string(risk.RiskClassNetwork), string(risk.RiskClassCredentialed), string(risk.RiskClassExfiltration), string(risk.RiskClassSessioned):
+		rule.Conditions.MinRiskClasses = []risk.RiskClass{risk.RiskClass(key)}
 	case "local-tool", "provider", "relurpic":
 		rule.Conditions.RuntimeFamilies = []string{key}
-	case string(taxonomy.EffectClassFilesystemMutation), string(taxonomy.EffectClassProcessSpawn), string(taxonomy.EffectClassNetworkEgress), string(taxonomy.EffectClassCredentialUse), string(taxonomy.EffectClassExternalState), string(taxonomy.EffectClassSessionCreation), string(taxonomy.EffectClassContextInsertion):
-		rule.Conditions.EffectClasses = []taxonomy.EffectClass{taxonomy.EffectClass(key)}
+	case string(classification.EffectClassFilesystemMutation), string(classification.EffectClassProcessSpawn), string(classification.EffectClassNetworkEgress), string(classification.EffectClassCredentialUse), string(classification.EffectClassExternalState), string(classification.EffectClassSessionCreation), string(classification.EffectClassContextInsertion):
+		rule.Conditions.EffectClasses = []classification.EffectClass{classification.EffectClass(key)}
 	default:
 		return nil, fmt.Errorf("unsupported global policy class %q", key)
 	}
@@ -260,9 +261,9 @@ func compileCapabilitySelector(selector ports.CapabilitySelectorView) (pol.Polic
 	}
 	conditions := pol.PolicyConditions{
 		TrustClasses:    append([]string{}, legacy.TrustClasses...),
-		MinRiskClasses:  append([]taxonomy.RiskClass{}, toRiskClasses(legacy.RiskClasses)...),
+		MinRiskClasses:  append([]risk.RiskClass{}, toRiskClasses(legacy.RiskClasses)...),
 		RuntimeFamilies: append([]string{}, legacy.RuntimeFamilies...),
-		EffectClasses:   append([]taxonomy.EffectClass{}, toEffectClasses(legacy.EffectClasses)...),
+		EffectClasses:   append([]classification.EffectClass{}, toEffectClasses(legacy.EffectClasses)...),
 	}
 	if legacy.ID != "" {
 		conditions.Capabilities = append(conditions.Capabilities, legacy.ID)
@@ -276,18 +277,18 @@ func compileCapabilitySelector(selector ports.CapabilitySelectorView) (pol.Polic
 	return conditions, nil
 }
 
-func toRiskClasses(values []string) []taxonomy.RiskClass {
-	out := make([]taxonomy.RiskClass, 0, len(values))
+func toRiskClasses(values []string) []risk.RiskClass {
+	out := make([]risk.RiskClass, 0, len(values))
 	for _, v := range values {
-		out = append(out, taxonomy.RiskClass(v))
+		out = append(out, risk.RiskClass(v))
 	}
 	return out
 }
 
-func toEffectClasses(values []string) []taxonomy.EffectClass {
-	out := make([]taxonomy.EffectClass, 0, len(values))
+func toEffectClasses(values []string) []classification.EffectClass {
+	out := make([]classification.EffectClass, 0, len(values))
 	for _, v := range values {
-		out = append(out, taxonomy.EffectClass(v))
+		out = append(out, classification.EffectClass(v))
 	}
 	return out
 }

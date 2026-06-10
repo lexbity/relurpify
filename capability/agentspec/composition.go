@@ -5,7 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 type MemoryMode string
@@ -104,16 +105,16 @@ func CloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
 		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
 	}
 	if selector.SourceScopes != nil {
-		selector.SourceScopes = append([]taxonomy.CapabilityScope{}, selector.SourceScopes...)
+		selector.SourceScopes = append([]classification.CapabilityScope{}, selector.SourceScopes...)
 	}
 	if selector.TrustClasses != nil {
 		selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
 	}
 	if selector.RiskClasses != nil {
-		selector.RiskClasses = append([]taxonomy.RiskClass{}, selector.RiskClasses...)
+		selector.RiskClasses = append([]risk.RiskClass{}, selector.RiskClasses...)
 	}
 	if selector.EffectClasses != nil {
-		selector.EffectClasses = append([]taxonomy.EffectClass{}, selector.EffectClasses...)
+		selector.EffectClasses = append([]classification.EffectClass{}, selector.EffectClasses...)
 	}
 	if selector.CoordinationRoles != nil {
 		selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
@@ -167,7 +168,7 @@ func runtimeFamiliesToStrings(values []CapabilityRuntimeFamily) []string {
 	return out
 }
 
-func capabilityScopesToStrings(values []taxonomy.CapabilityScope) []string {
+func capabilityScopesToStrings(values []classification.CapabilityScope) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -183,7 +184,7 @@ func trustClassesToStrings(values []TrustClass) []string {
 	return out
 }
 
-func riskClassesToStrings(values []taxonomy.RiskClass) []string {
+func riskClassesToStrings(values []risk.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -191,7 +192,7 @@ func riskClassesToStrings(values []taxonomy.RiskClass) []string {
 	return out
 }
 
-func effectClassesToStrings(values []taxonomy.EffectClass) []string {
+func effectClassesToStrings(values []classification.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))

@@ -1,11 +1,16 @@
 .PHONY: test-unit test-integ test-scenario test-all
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
 .PHONY: lint-layering lint-invariants lint-all lint-arch
-.PHONY: domain-check domain-cycles no-bucket no-dead
+.PHONY: domain-check domain-cycles no-bucket no-dead exception-count
 
 # Architecture invariant gates (GP-9). Replaces the shelved scripts/boundaryaudit.
+# governance-no-orch and no-bucket are now in enforce mode (Slice 7).
+# classification-ownership remains in warn mode — violations tracked in Q1.
 lint-arch:
-	go run ./tooling/arch/cmd/archcheck
+	go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
+	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
+	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=classification; \
+	exit $$EXIT_CODE
 
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.
 domain-check:
@@ -15,9 +20,31 @@ domain-check:
 domain-cycles:
 	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=cycles
 
-# No-bucket guard: flags any type-only package imported by ≥3 domains.
+# No-bucket guard (enforce mode, Slice 7): flags any type-only package
+# imported by ≥3 domains. Pure-vocabulary packages at <domain>/ or
+# <domain>/classification are exempt per NFR-7.
 no-bucket:
-	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=nobucket
+	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=nobucket
+
+# Governance-no-orchestration (enforce mode, Slice 7): flags governance → execution imports.
+governance-no-orch:
+	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch
+
+# Classification-ownership: flags capability → governance risk-vocab imports (Q1).
+classification:
+	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=classification
+
+# Exception-count gate: fails CI if exceptions.yaml gains net-new entries.
+# Current baseline: 7 direction violations (P7, P8, P10, P11, P12, P13, P15).
+# P6 and P14 were retired by Slices 1 and 3 respectively.
+exception-count:
+	@count=$$(rg -c 'src_domain:' tooling/arch/exceptions.yaml 2>/dev/null || echo 0); \
+	baseline=7; \
+	if [ "$$count" -gt "$$baseline" ]; then \
+		echo "[FAIL] exception-count: exceptions.yaml has $$count entries (baseline $$baseline) — net-new exceptions require extending the spec"; \
+		exit 1; \
+	fi; \
+	echo "[PASS] exception-count: $$count entries (baseline $$baseline)"
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:

@@ -18,7 +18,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
@@ -86,11 +86,10 @@ func (h *browserCapability) Descriptor(context.Context, ports.State) descriptor.
 		Category:    "browser",
 		Source: descriptor.CapabilitySource{
 			ProviderID: "browser",
-			Scope:      taxonomy.CapabilityScopeProvider,
+			Scope:      classification.CapabilityScopeProvider,
 		},
 		TrustClass:    agentspec.TrustClassProviderLocalUntrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassNetwork, taxonomy.RiskClassSessioned, taxonomy.RiskClassExfiltration},
-		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassContextInsertion, taxonomy.EffectClassSessionCreation},
+		EffectClasses: []classification.EffectClass{classification.EffectClassNetworkEgress, classification.EffectClassContextInsertion, classification.EffectClassSessionCreation},
 		InputSchema:   browserInputSchema(),
 		Availability: descriptor.AvailabilitySpec{
 			Available: true,

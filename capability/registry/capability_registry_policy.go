@@ -15,8 +15,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/safety"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/model"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -217,7 +218,7 @@ func defaultCapabilityExposure(desc descriptor.CapabilityDescriptor) agentspec.C
 		switch desc.Kind {
 		case agentspec.CapabilityKindTool:
 			switch desc.Source.Scope {
-			case taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+			case classification.CapabilityScopeProvider, classification.CapabilityScopeRemote:
 				return agentspec.CapabilityExposureInspectable
 			default:
 				return agentspec.CapabilityExposureCallable
@@ -600,8 +601,8 @@ func capabilityPolicyLabels(tool ports.Tool) []string {
 	}
 	labels := make(map[string]struct{})
 	desc := descriptor.ToolDescriptor(context.Background(), tool)
-	for _, class := range desc.RiskClasses {
-		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}
+	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
+		labels[strings.ToLower(strings.TrimSpace(string(rc)))] = struct{}{}
 	}
 	for _, class := range desc.EffectClasses {
 		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}
@@ -625,8 +626,8 @@ func capabilityPolicyLabels(tool ports.Tool) []string {
 
 func capabilityPolicyLabelsForDescriptor(desc descriptor.CapabilityDescriptor) []string {
 	labels := make(map[string]struct{})
-	for _, class := range desc.RiskClasses {
-		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}
+	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
+		labels[strings.ToLower(strings.TrimSpace(string(rc)))] = struct{}{}
 	}
 	for _, class := range desc.EffectClasses {
 		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}

@@ -12,7 +12,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -625,11 +626,11 @@ func clonePolicyRule(rule policy.PolicyRule) policy.PolicyRule {
 		RouteModes:                append([]string(nil), rule.Conditions.RouteModes...),
 		ProviderKinds:             append([]string(nil), rule.Conditions.ProviderKinds...),
 		ExternalProviders:         append([]string(nil), rule.Conditions.ExternalProviders...),
-		MinRiskClasses:            append([]taxonomy.RiskClass(nil), rule.Conditions.MinRiskClasses...),
+		MinRiskClasses:            append([]risk.RiskClass(nil), rule.Conditions.MinRiskClasses...),
 		TrustClasses:              append([]string(nil), rule.Conditions.TrustClasses...),
 		CapabilityKinds:           append([]string(nil), rule.Conditions.CapabilityKinds...),
 		RuntimeFamilies:           append([]string(nil), rule.Conditions.RuntimeFamilies...),
-		EffectClasses:             append([]taxonomy.EffectClass(nil), rule.Conditions.EffectClasses...),
+		EffectClasses:             append([]classification.EffectClass(nil), rule.Conditions.EffectClasses...),
 		Partitions:                append([]string(nil), rule.Conditions.Partitions...),
 		ChannelIDs:                append([]string(nil), rule.Conditions.ChannelIDs...),
 		SessionScopes:             append([]policy.SessionScope(nil), rule.Conditions.SessionScopes...),

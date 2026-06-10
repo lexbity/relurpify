@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // fakeDescriptor implements governanceports.DescriptorView for testing.
@@ -25,8 +26,8 @@ func (f *fakeDescriptor) Version() string                           { return "" 
 func (f *fakeDescriptor) Category() string                          { return "" }
 func (f *fakeDescriptor) Tags() []string                            { return nil }
 func (f *fakeDescriptor) TrustClass() string                        { return f.trustClass }
-func (f *fakeDescriptor) RiskClasses() []taxonomy.RiskClass         { return nil }
-func (f *fakeDescriptor) EffectClasses() []taxonomy.EffectClass     { return nil }
+func (f *fakeDescriptor) RiskClasses() []risk.RiskClass         { return nil }
+func (f *fakeDescriptor) EffectClasses() []classification.EffectClass     { return nil }
 func (f *fakeDescriptor) SourceProviderID() string                  { return "" }
 func (f *fakeDescriptor) SourceScope() string                       { return "" }
 func (f *fakeDescriptor) SourceSessionID() string                   { return "" }

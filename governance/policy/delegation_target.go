@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // DelegationTarget is the policy-relevant view of a delegation target.
@@ -13,7 +13,7 @@ type DelegationTarget interface {
 	CoordinationTarget() bool
 	LongRunning() int32
 	CapabilityRuntimeFamily() string
-	SourceScope() taxonomy.CapabilityScope
+	SourceScope() classification.CapabilityScope
 	SourceProviderID() string
 	SourceSessionID() string
 	CoordinationTaskTypes() []string

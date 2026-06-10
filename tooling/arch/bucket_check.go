@@ -72,6 +72,11 @@ func CheckBuckets(pkgs []GoPackage, reverse map[string][]string, threshold int, 
 			continue
 		}
 
+		// NFR-7: Exempt single-owner pure-vocabulary packages.
+		if isDomainVocabPackage(pkg, root) {
+			continue
+		}
+
 		domainList := make([]string, 0, len(domainSet))
 		for d := range domainSet {
 			domainList = append(domainList, d)

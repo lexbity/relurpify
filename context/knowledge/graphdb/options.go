@@ -32,6 +32,13 @@ type Options struct {
 	AOFRewriteThresholdBytes int64
 	MaintenanceInterval      time.Duration
 
+	// LRUCapacity controls the maximum number of nodes kept in the
+	// in-memory working set. When 0 (default), all nodes are loaded into
+	// RAM (legacy behaviour). When > 0, the engine serves reads via an
+	// LRU over Badger (NFR-9). The capacity should be derived from the
+	// sandbox RAM budget.
+	LRUCapacity int
+
 	// Observer receives structured events emitted by the engine. When nil
 	// (the default) events are silently dropped.
 	Observer EventObserver

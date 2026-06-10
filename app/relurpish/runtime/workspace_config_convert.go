@@ -4,7 +4,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -84,18 +85,18 @@ func convertRuntimeFamiliesToStrings(values []agentspec.CapabilityRuntimeFamily)
 	return out
 }
 
-func convertRuntimeScopes(values []string) []taxonomy.CapabilityScope {
+func convertRuntimeScopes(values []string) []classification.CapabilityScope {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]taxonomy.CapabilityScope, 0, len(values))
+	out := make([]classification.CapabilityScope, 0, len(values))
 	for _, value := range values {
-		out = append(out, taxonomy.CapabilityScope(strings.TrimSpace(value)))
+		out = append(out, classification.CapabilityScope(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeScopesToStrings(values []taxonomy.CapabilityScope) []string {
+func convertRuntimeScopesToStrings(values []classification.CapabilityScope) []string {
 	if len(values) == 0 {
 		return nil
 	}
@@ -128,18 +129,18 @@ func convertRuntimeTrustClassesToStrings(values []agentspec.TrustClass) []string
 	return out
 }
 
-func convertRuntimeRiskClasses(values []string) []taxonomy.RiskClass {
+func convertRuntimeRiskClasses(values []string) []risk.RiskClass {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]taxonomy.RiskClass, 0, len(values))
+	out := make([]risk.RiskClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, taxonomy.RiskClass(strings.TrimSpace(value)))
+		out = append(out, risk.RiskClass(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeRiskClassesToStrings(values []taxonomy.RiskClass) []string {
+func convertRuntimeRiskClassesToStrings(values []risk.RiskClass) []string {
 	if len(values) == 0 {
 		return nil
 	}
@@ -150,18 +151,18 @@ func convertRuntimeRiskClassesToStrings(values []taxonomy.RiskClass) []string {
 	return out
 }
 
-func convertRuntimeEffectClasses(values []string) []taxonomy.EffectClass {
+func convertRuntimeEffectClasses(values []string) []classification.EffectClass {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]taxonomy.EffectClass, 0, len(values))
+	out := make([]classification.EffectClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, taxonomy.EffectClass(strings.TrimSpace(value)))
+		out = append(out, classification.EffectClass(strings.TrimSpace(value)))
 	}
 	return out
 }
 
-func convertRuntimeEffectClassesToStrings(values []taxonomy.EffectClass) []string {
+func convertRuntimeEffectClassesToStrings(values []classification.EffectClass) []string {
 	if len(values) == 0 {
 		return nil
 	}

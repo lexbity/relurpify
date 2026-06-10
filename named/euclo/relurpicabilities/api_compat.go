@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type APICompatHandler struct {
@@ -34,10 +34,9 @@ func (h *APICompatHandler) Descriptor(ctx context.Context, env ports.State) desc
 		Description:   "Compares exported signatures between git refs and flags breaking changes",
 		Category:      "migration_compat",
 		Tags:          []string{"migration", "compatibility", "git", "api"},
-		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
+		Source:        descriptor.CapabilitySource{Scope: classification.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

@@ -216,8 +216,12 @@ func TestBadgerBackend_MutationResult(t *testing.T) {
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
-	require.Contains(t, store2.mutationResults, "mut-1")
-	require.Equal(t, MutationScopeNode, store2.mutationResults["mut-1"].Scope)
+	// Mutation results are no longer loaded into the adjacency store (FR-11).
+	// Read from Badger directly instead.
+	mutPtr, getErr := bb2.getMutationResult("mut-1")
+	require.NoError(t, getErr)
+	require.NotNil(t, mutPtr)
+	require.Equal(t, MutationScopeNode, mutPtr.Scope)
 }
 
 func TestBadgerBackend_AnnotateNode(t *testing.T) {
@@ -292,7 +296,6 @@ func TestBadgerBackend_LoadEmptyStore(t *testing.T) {
 	require.Empty(t, store.nodes)
 	require.Empty(t, store.forward)
 	require.Empty(t, store.reverse)
-	require.Empty(t, store.mutationResults)
 }
 
 func TestBadgerBackend_UpsertNodeThroughEngine(t *testing.T) {

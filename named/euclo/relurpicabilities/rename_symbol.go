@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type RenameSymbolHandler struct {
@@ -36,10 +36,9 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) d
 		Description:   "Renames a symbol across the workspace using AST-bounded text replacement",
 		Category:      "refactor_patch",
 		Tags:          []string{"refactor", "rename", "ast", "write"},
-		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
+		Source:        descriptor.CapabilitySource{Scope: classification.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassDestructive},
-		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},
+		EffectClasses: []classification.EffectClass{classification.EffectClassFilesystemMutation},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

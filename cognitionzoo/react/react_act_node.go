@@ -16,7 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -267,7 +267,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 				Description: call.Name,
 				TrustClass:  agentspec.TrustClassWorkspaceTrusted,
 				Source: descriptor.CapabilitySource{
-					Scope: taxonomy.CapabilityScopeWorkspace,
+					Scope: classification.CapabilityScopeWorkspace,
 				},
 			}
 		}

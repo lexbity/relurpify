@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 type CapabilityKind string
@@ -27,7 +28,7 @@ const (
 
 type CapabilitySource struct {
 	ProviderID string                   `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
-	Scope      taxonomy.CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Scope      classification.CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
 	SessionID  string                   `json:"session_id,omitempty" yaml:"session_id,omitempty"`
 }
 
@@ -53,8 +54,8 @@ type CapabilityDescriptor struct {
 	Tags          []string                    `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Source        CapabilitySource            `json:"source,omitempty" yaml:"source,omitempty"`
 	TrustClass    TrustClass                  `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
-	RiskClasses   []taxonomy.RiskClass        `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
-	EffectClasses []taxonomy.EffectClass      `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	RiskClasses   []risk.RiskClass        `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	EffectClasses []classification.EffectClass      `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
 	Coordination  *CoordinationTargetMetadata `json:"coordination,omitempty" yaml:"coordination,omitempty"`
 	Annotations   map[string]any              `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 }

@@ -81,16 +81,56 @@ func (e *Engine) DeleteNodes(ids []string) error {
 	return nil
 }
 
-// GetNode returns a node by ID.
-func (e *Engine) GetNode(id string) (NodeRecord, bool) {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-	node, ok := e.store.nodes[id]
-	if !ok || node.DeletedAt != 0 {
-		return NodeRecord{}, false
+// getNodeMaybe loads a node from cache or, in LRU mode, from the backend.
+// Returns nil when the node is not found. Unlike GetNode it avoids cloning
+// when the caller only needs a read-only reference and is called under
+// store.mu.RLock (traversal paths).
+func (e *Engine) getNodeMaybe(id string) *NodeRecord {
+	if e.store.nodes != nil {
+		if n := activeNode(e.store.nodes[id]); n != nil {
+			return n
+		}
 	}
-	out := cloneNode(node)
-	return out, true
+	// In LRU mode the warm-cache may not have this node; fetch from backend.
+	if e.bk != nil && e.store.lruMaxCapacity > 0 {
+		rec, err := e.bk.getNodeRecord(id)
+		if err != nil || rec == nil || rec.DeletedAt != 0 {
+			return nil
+		}
+		return rec
+	}
+	return nil
+}
+
+// GetNode returns a node by ID.  When the node is not in the in-memory
+// cache and the LRU is active, it lazy-loads from the backend.
+func (e *Engine) GetNode(id string) (NodeRecord, bool) {
+	// Fast path: cache hit.
+	e.store.mu.RLock()
+	node, ok := e.store.nodes[id]
+	if ok && node != nil && node.DeletedAt == 0 {
+		out := cloneNode(node)
+		e.store.mu.RUnlock()
+		return out, true
+	}
+	e.store.mu.RUnlock()
+
+	// Slow path: load from backend on cache miss (LRU mode).
+	if e.bk != nil && e.store.lruMaxCapacity > 0 {
+		rec, err := e.bk.getNodeRecord(id)
+		if err == nil && rec != nil && rec.DeletedAt == 0 {
+			e.store.mu.Lock()
+			n := *rec
+			e.store.nodes[id] = &n
+			e.store.addNodeSourceIndex(n)
+			e.store.addNodeLabels(n)
+			e.store.lruTouch(id)
+			e.store.lruEvict()
+			e.store.mu.Unlock()
+			return n, true
+		}
+	}
+	return NodeRecord{}, false
 }
 
 // ListNodes returns active nodes of the given kind.
@@ -172,9 +212,6 @@ func (e *Engine) applyUpsertNode(node NodeRecord) {
 	if ok && existing != nil && existing.DeletedAt == 0 && nodeRecordEqual(*existing, node) {
 		return
 	}
-	if ok && existing != nil {
-		e.store.nodeHistory[node.ID] = append(e.store.nodeHistory[node.ID], cloneNode(existing))
-	}
 	if ok && existing != nil && existing.SourceID != "" && existing.SourceID != node.SourceID {
 		e.store.removeNodeSourceIndex(existing.ID, existing.SourceID)
 	}
@@ -193,7 +230,6 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 	}
 	node, ok := e.store.nodes[id]
 	if ok {
-		e.store.nodeHistory[id] = append(e.store.nodeHistory[id], cloneNode(node))
 		e.store.removeNodeLabels(*node)
 		node.DeletedAt = deletedAt
 		node.UpdatedAt = deletedAt
@@ -243,7 +279,6 @@ func (e *Engine) annotateNodeLocked(id string, props map[string]any, updatedAt i
 	if slices.Equal(node.Props, merged) {
 		return nil
 	}
-	e.store.nodeHistory[id] = append(e.store.nodeHistory[id], cloneNode(node))
 	node.Props = merged
 	if updatedAt == 0 {
 		updatedAt = time.Now().UnixNano()
@@ -252,11 +287,17 @@ func (e *Engine) annotateNodeLocked(id string, props map[string]any, updatedAt i
 	return nil
 }
 
-// NodeRevisions returns the revision history for a node ID, oldest first.
+// NodeRevisions returns the revision history for a node ID from durable
+// storage, oldest first. History is disk-only per FR-11.
 func (e *Engine) NodeRevisions(id string) []NodeRecord {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-	return cloneNodeHistory(e.store.nodeHistory[id])
+	if e == nil || e.bk == nil {
+		return nil
+	}
+	history, err := e.bk.getNodeHistory(id)
+	if err != nil {
+		return nil
+	}
+	return history
 }
 
 func markEdgesDeleted(edges []EdgeRecord, deletedAt int64) []EdgeRecord {

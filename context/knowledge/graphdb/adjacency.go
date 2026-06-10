@@ -6,27 +6,63 @@ import (
 )
 
 type adjacencyStore struct {
-	mu              sync.RWMutex
-	nodes           map[string]*NodeRecord
-	nodeHistory     map[string][]NodeRecord
-	bySource        map[string]map[string]struct{}
-	forward         map[string][]EdgeRecord
-	reverse         map[string][]EdgeRecord
-	edgeHistory     map[string][]EdgeRecord
-	mutationResults map[string]MutationResult
-	labels          *LabelIndex
+	mu       sync.RWMutex
+	nodes    map[string]*NodeRecord
+	bySource map[string]map[string]struct{}
+	forward  map[string][]EdgeRecord
+	reverse  map[string][]EdgeRecord
+	labels   *LabelIndex
+
+	// lruMaxCapacity limits the number of nodes kept in RAM. 0 means
+	// unbounded (legacy full-hydration behaviour).
+	lruMaxCapacity int
+	// lruAccessOrder tracks node IDs from oldest-access to newest-access.
+	// When len(nodes) exceeds lruMaxCapacity the oldest entries are
+	// evicted. Only used when lruMaxCapacity > 0.
+	lruAccessOrder []string
 }
 
 func newAdjacencyStore() *adjacencyStore {
 	return &adjacencyStore{
-		nodes:           make(map[string]*NodeRecord),
-		nodeHistory:     make(map[string][]NodeRecord),
-		bySource:        make(map[string]map[string]struct{}),
-		forward:         make(map[string][]EdgeRecord),
-		reverse:         make(map[string][]EdgeRecord),
-		edgeHistory:     make(map[string][]EdgeRecord),
-		mutationResults: make(map[string]MutationResult),
-		labels:          NewLabelIndex(),
+		nodes:    make(map[string]*NodeRecord),
+		bySource: make(map[string]map[string]struct{}),
+		forward:  make(map[string][]EdgeRecord),
+		reverse:  make(map[string][]EdgeRecord),
+		labels:   NewLabelIndex(),
+	}
+}
+
+// lruTouch records a node access. Must be called with mu write-locked.
+func (s *adjacencyStore) lruTouch(id string) {
+	if s.lruMaxCapacity <= 0 {
+		return
+	}
+	// Move id to end (most recently used).
+	for i, v := range s.lruAccessOrder {
+		if v == id {
+			s.lruAccessOrder = append(s.lruAccessOrder[:i], s.lruAccessOrder[i+1:]...)
+			break
+		}
+	}
+	s.lruAccessOrder = append(s.lruAccessOrder, id)
+}
+
+// lruEvict removes excess entries from the in-memory cache when the
+// working set exceeds lruMaxCapacity. Must be called with mu write-locked.
+func (s *adjacencyStore) lruEvict() {
+	if s.lruMaxCapacity <= 0 {
+		return
+	}
+	for len(s.nodes) > s.lruMaxCapacity && len(s.lruAccessOrder) > 0 {
+		oldest := s.lruAccessOrder[0]
+		s.lruAccessOrder = s.lruAccessOrder[1:]
+		if n, ok := s.nodes[oldest]; ok && n != nil {
+			if n.SourceID != "" {
+				s.removeNodeSourceIndex(n.ID, n.SourceID)
+			}
+			s.removeNodeLabels(*n)
+		}
+		delete(s.nodes, oldest)
 	}
 }
 
@@ -52,58 +88,6 @@ func cloneEdges(edges []EdgeRecord) []EdgeRecord {
 	out := make([]EdgeRecord, 0, len(edges))
 	for _, edge := range edges {
 		out = append(out, cloneEdge(edge))
-	}
-	return out
-}
-
-func cloneNodeHistory(nodes []NodeRecord) []NodeRecord {
-	if len(nodes) == 0 {
-		return nil
-	}
-	out := make([]NodeRecord, len(nodes))
-	for i := range nodes {
-		out[i] = cloneNode(&nodes[i])
-	}
-	return out
-}
-
-func cloneEdgeHistory(edges []EdgeRecord) []EdgeRecord {
-	if len(edges) == 0 {
-		return nil
-	}
-	out := make([]EdgeRecord, len(edges))
-	for i := range edges {
-		out[i] = cloneEdge(edges[i])
-	}
-	return out
-}
-
-func cloneMutationResult(result MutationResult) MutationResult {
-	out := result
-	out.RecordIDs = slices.Clone(result.RecordIDs)
-	out.CreatedIDs = slices.Clone(result.CreatedIDs)
-	out.UpdatedIDs = slices.Clone(result.UpdatedIDs)
-	out.AnnotatedIDs = slices.Clone(result.AnnotatedIDs)
-	out.SupersededIDs = slices.Clone(result.SupersededIDs)
-	out.MatchedIDs = slices.Clone(result.MatchedIDs)
-	out.RejectedIDs = slices.Clone(result.RejectedIDs)
-	out.ConflictIDs = slices.Clone(result.ConflictIDs)
-	if result.Details != nil {
-		out.Details = make(map[string]any, len(result.Details))
-		for k, v := range result.Details {
-			out.Details[k] = v
-		}
-	}
-	return out
-}
-
-func cloneMutationResults(results map[string]MutationResult) map[string]MutationResult {
-	if len(results) == 0 {
-		return nil
-	}
-	out := make(map[string]MutationResult, len(results))
-	for key, result := range results {
-		out[key] = cloneMutationResult(result)
 	}
 	return out
 }
@@ -137,10 +121,6 @@ func edgeRecordEqual(a, b EdgeRecord) bool {
 		a.StateVersion == b.StateVersion &&
 		a.Weight == b.Weight &&
 		slices.Equal(a.Props, b.Props)
-}
-
-func edgeHistoryKey(sourceID, targetID string, kind EdgeKind) string {
-	return string(kind) + "|" + sourceID + "|" + targetID
 }
 
 func (s *adjacencyStore) addNodeSourceIndex(node NodeRecord) {

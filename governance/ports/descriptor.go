@@ -3,7 +3,10 @@
 // capability never needs to import governance for type information.
 package ports
 
-import "codeburg.org/lexbit/relurpify/governance/taxonomy"
+import (
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
+)
 
 // DescriptorView is the governance-owned view of a capability descriptor.
 // governance/policy and governance/authorization evaluate policy against
@@ -18,8 +21,8 @@ type DescriptorView interface {
 	Category() string
 	Tags() []string
 	TrustClass() string // e.g. "builtin-trusted", "workspace-trusted"
-	RiskClasses() []taxonomy.RiskClass
-	EffectClasses() []taxonomy.EffectClass
+	RiskClasses() []risk.RiskClass
+	EffectClasses() []classification.EffectClass
 	SourceProviderID() string
 	SourceScope() string // e.g. "builtin", "workspace", "provider", "remote"
 	SourceSessionID() string

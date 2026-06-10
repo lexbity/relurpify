@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // PolicyRule is a declarative security rule evaluated at invocation time.
@@ -30,11 +31,11 @@ type PolicyConditions struct {
 	RouteModes                []string               `yaml:"route_modes,omitempty"`
 	ProviderKinds             []string               `yaml:"provider_kinds,omitempty"`
 	ExternalProviders         []string               `yaml:"external_providers,omitempty"`
-	MinRiskClasses            []taxonomy.RiskClass   `yaml:"min_risk_classes,omitempty"`
+	MinRiskClasses            []risk.RiskClass       `yaml:"min_risk_classes,omitempty"`
 	TrustClasses              []string               `yaml:"trust_classes,omitempty"`
 	CapabilityKinds           []string               `yaml:"capability_kinds,omitempty"`
 	RuntimeFamilies           []string               `yaml:"runtime_families,omitempty"`
-	EffectClasses             []taxonomy.EffectClass `yaml:"effect_classes,omitempty"`
+	EffectClasses             []classification.EffectClass `yaml:"effect_classes,omitempty"`
 	Partitions                []string               `yaml:"partitions,omitempty"`
 	ChannelIDs                []string               `yaml:"channel_ids,omitempty"`
 	SessionScopes             []SessionScope         `yaml:"session_scopes,omitempty"`
@@ -94,8 +95,8 @@ type PolicyRequest struct {
 	ProviderKind           string
 	ProviderOrigin         string
 	TrustClass             string
-	RiskClasses            []taxonomy.RiskClass
-	EffectClasses          []taxonomy.EffectClass
+	RiskClasses            []risk.RiskClass
+	EffectClasses          []classification.EffectClass
 	Partition              string
 	ChannelID              string
 	SessionID              string

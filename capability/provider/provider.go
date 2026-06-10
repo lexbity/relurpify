@@ -8,7 +8,7 @@ import (
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type ProviderDescriptor struct {
@@ -245,7 +245,6 @@ func NormalizeProviderCapability(desc descriptor.CapabilityDescriptor, provider 
 }
 
 func normalizeRemoteCapabilityDescriptor(desc descriptor.CapabilityDescriptor, provider ProviderDescriptor) descriptor.CapabilityDescriptor {
-	desc.RiskClasses = nil
 	if desc.Kind != agentspec.CapabilityKindTool {
 		desc.EffectClasses = nil
 	}
@@ -261,24 +260,24 @@ func normalizeRemoteCapabilityDescriptor(desc descriptor.CapabilityDescriptor, p
 	return desc
 }
 
-func normalizeProviderCapabilityScope(scope taxonomy.CapabilityScope, provider ProviderDescriptor) taxonomy.CapabilityScope {
+func normalizeProviderCapabilityScope(scope classification.CapabilityScope, provider ProviderDescriptor) classification.CapabilityScope {
 	switch provider.Security.Origin {
 	case agentspec.ProviderOriginRemote:
-		return taxonomy.CapabilityScopeRemote
+		return classification.CapabilityScopeRemote
 	case agentspec.ProviderOriginLocal:
-		if scope == taxonomy.CapabilityScopeRemote {
-			return taxonomy.CapabilityScopeRemote
+		if scope == classification.CapabilityScopeRemote {
+			return classification.CapabilityScopeRemote
 		}
-		return taxonomy.CapabilityScopeProvider
+		return classification.CapabilityScopeProvider
 	default:
 		if scope != "" {
 			return scope
 		}
-		return taxonomy.CapabilityScopeProvider
+		return classification.CapabilityScopeProvider
 	}
 }
 
-func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope taxonomy.CapabilityScope) agentspec.TrustClass {
+func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope classification.CapabilityScope) agentspec.TrustClass {
 	if policy.DefaultTrust != "" {
 		return policy.DefaultTrust
 	}
@@ -286,11 +285,11 @@ func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentsp
 		return provider.TrustBaseline
 	}
 	switch scope {
-	case taxonomy.CapabilityScopeRemote:
+	case classification.CapabilityScopeRemote:
 		return agentspec.TrustClassRemoteDeclared
-	case taxonomy.CapabilityScopeWorkspace:
+	case classification.CapabilityScopeWorkspace:
 		return agentspec.TrustClassWorkspaceTrusted
-	case taxonomy.CapabilityScopeBuiltin:
+	case classification.CapabilityScopeBuiltin:
 		return agentspec.TrustClassBuiltinTrusted
 	default:
 		return agentspec.TrustClassProviderLocalUntrusted

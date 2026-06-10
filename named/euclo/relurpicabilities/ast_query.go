@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -36,11 +36,10 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 		Category:      "code_analysis",
 		Tags:          []string{"ast", "query", "read-only"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

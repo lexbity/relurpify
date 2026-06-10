@@ -8,7 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	agentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *capresult.CapabilityResultEnvelope) capresult.InsertionDecision {
@@ -66,7 +67,7 @@ func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc descr
 	if len(selector.TrustClasses) > 0 && !containsTrust(selector.TrustClasses, desc.TrustClass) {
 		return false
 	}
-	if len(selector.RiskClasses) > 0 && !containsAnyRisk(selector.RiskClasses, desc.RiskClasses) {
+	if len(selector.RiskClasses) > 0 && !containsAnyRisk(selector.RiskClasses, risk.Classify(desc.EffectClasses, desc.Source.Scope)) {
 		return false
 	}
 	if len(selector.EffectClasses) > 0 && !containsAnyEffect(selector.EffectClasses, desc.EffectClasses) {
@@ -100,7 +101,7 @@ func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc descr
 	return true
 }
 
-func containsScope(values []taxonomy.CapabilityScope, want taxonomy.CapabilityScope) bool {
+func containsScope(values []classification.CapabilityScope, want classification.CapabilityScope) bool {
 	for _, value := range values {
 		if value == want {
 			return true
@@ -158,7 +159,7 @@ func containsTrust(values []agentspec.TrustClass, want agentspec.TrustClass) boo
 	return false
 }
 
-func containsAnyRisk(values []taxonomy.RiskClass, haystack []taxonomy.RiskClass) bool {
+func containsAnyRisk(values []risk.RiskClass, haystack []risk.RiskClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {
@@ -169,7 +170,7 @@ func containsAnyRisk(values []taxonomy.RiskClass, haystack []taxonomy.RiskClass)
 	return false
 }
 
-func containsAnyEffect(values []taxonomy.EffectClass, haystack []taxonomy.EffectClass) bool {
+func containsAnyEffect(values []classification.EffectClass, haystack []classification.EffectClass) bool {
 	for _, needle := range values {
 		for _, value := range haystack {
 			if value == needle {

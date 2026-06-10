@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -53,7 +54,9 @@ func readMigrationState(txn *badger.Txn) (*migrationState, error) {
 func loadAOFStore(aofPath, snapPath string) (*adjacencyStore, error) {
 	store := newAdjacencyStore()
 
-	// 1. Load snapshot if present.
+	// 1. Load snapshot if present. History and mutation results from the
+	// snapshot are loaded into local maps — they are not stored in RAM in
+	// the adjacency store (per FR-11) but are still migrated to Badger.
 	state, err := readSnapshot(snapPath)
 	if err != nil {
 		return nil, fmt.Errorf("read snapshot: %w", err)
@@ -64,18 +67,9 @@ func loadAOFStore(aofPath, snapPath string) (*adjacencyStore, error) {
 		store.addNodeSourceIndex(node)
 		store.addNodeLabels(node)
 	}
-	for key, history := range state.NodeHistory {
-		store.nodeHistory[key] = cloneNodeHistory(history)
-	}
 	for _, edge := range state.Forward {
 		store.forward[edge.SourceID] = append(store.forward[edge.SourceID], cloneEdge(edge))
 		store.reverse[edge.TargetID] = append(store.reverse[edge.TargetID], cloneEdge(edge))
-	}
-	for key, history := range state.EdgeHistory {
-		store.edgeHistory[key] = cloneEdgeHistory(history)
-	}
-	for key, result := range state.MutationResults {
-		store.mutationResults[key] = cloneMutationResult(result)
 	}
 
 	// 2. Replay AOF over the loaded snapshot.
@@ -160,12 +154,20 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 			edgeList = append(edgeList, edge)
 		}
 	}
-
-	mutResults := make([]MutationResult, 0, len(src.mutationResults))
-	for _, result := range src.mutationResults {
-		mutResults = append(mutResults, result)
-	}
 	src.mu.RUnlock()
+
+	// Load history and mutation results directly from the snapshot file
+	// (they are not in the adjacency store per FR-11). We read the raw
+	// snapshot data and unmarshal history fields separately since the
+	// snapshotState struct no longer carries them.
+	var snapHistory struct {
+		NodeHistory     map[string][]NodeRecord   `json:"node_history,omitempty"`
+		EdgeHistory     map[string][]EdgeRecord   `json:"edge_history,omitempty"`
+		MutationResults map[string]MutationResult `json:"mutation_results,omitempty"`
+	}
+	if raw, err := os.ReadFile(snapPath); err == nil && len(raw) > 0 {
+		_ = json.Unmarshal(raw, &snapHistory)
+	}
 
 	// 6. Write nodes in chunks.
 	for i := 0; i < len(nodeList); i += migrationChunkSize {
@@ -215,17 +217,33 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 		}
 	}
 
-	// 8. Write mutation results individually.
-	for _, result := range mutResults {
-		if err := bb.commit(ctx, mutationBatch{
-			opName: "record_mutation_result",
-			op:     mutationResultOp{Result: result},
-		}); err != nil {
+	// 8. Migrate history entries from snapshot to Badger.
+	_ = bb.db.Update(func(txn *badger.Txn) error {
+		for _, history := range snapHistory.NodeHistory {
+			for _, node := range history {
+				key := keyNodeHistory(node.ID, node.UpdatedAt, uint64(node.StateVersion))
+				val, _ := json.Marshal(node)
+				_ = txn.Set(key, val)
+			}
+		}
+		for _, history := range snapHistory.EdgeHistory {
+			for _, edge := range history {
+				key := keyEdgeHistory(edge.SourceID, edge.Kind, edge.TargetID, edge.CreatedAt, uint64(edge.Weight))
+				val, _ := json.Marshal(edge)
+				_ = txn.Set(key, val)
+			}
+		}
+		return nil
+	})
+
+	// 9. Write mutation results individually.
+	for _, result := range snapHistory.MutationResults {
+		if err := bb.commit(ctx, singleOpBatch("record_mutation_result", mutationResultOp{Result: result})); err != nil {
 			return fmt.Errorf("graphdb migration: write mutation result: %w", err)
 		}
 	}
 
-	// 9. Rebuild indexes from canonical records.
+	// 10. Rebuild indexes from canonical records.
 	if err := bb.rebuildIndexes(); err != nil {
 		return fmt.Errorf("graphdb migration: rebuild indexes: %w", err)
 	}

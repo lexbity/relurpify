@@ -2,6 +2,11 @@ package arch
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -231,6 +236,11 @@ func DomainCycleReport(pkgs []GoPackage, forward map[string][]string) []string {
 // CheckNoBucket reports any package that is imported by ≥3 different domains
 // and is type-only (no exported functions). This guard detects nascent
 // shared-bucket packages (contracts/, core/, foundation/) forming.
+//
+// NFR-7 exemption: a package that is the public vocabulary of a single owning
+// domain (lives at <domain>/ or <domain>/classification, contains only
+// types/consts, zero funcs with logic) is NOT a bucket — it is owned by its
+// domain and is that domain's public API surface.
 func CheckNoBucket(pkgs []GoPackage, reverse map[string][]string, root string) []string {
 	pkgMap := make(map[string]GoPackage)
 	for _, pkg := range pkgs {
@@ -270,6 +280,11 @@ func CheckNoBucket(pkgs []GoPackage, reverse map[string][]string, root string) [
 			continue
 		}
 
+		// NFR-7: Exempt single-owner pure-vocabulary packages.
+		if isDomainVocabPackage(pkg, root) {
+			continue
+		}
+
 		domains := make([]string, 0, len(domainSet))
 		for d := range domainSet {
 			domains = append(domains, d)
@@ -279,4 +294,94 @@ func CheckNoBucket(pkgs []GoPackage, reverse map[string][]string, root string) [
 	}
 	sort.Strings(violations)
 	return violations
+}
+
+// isDomainVocabPackage reports whether a package is the public vocabulary of a
+// single owning domain. It must live at <domain>/ or <domain>/classification
+// and be type-only (no exported functions with logic). Such packages are
+// exempt from the no-bucket rule per NFR-7.
+func isDomainVocabPackage(pkg GoPackage, root string) bool {
+	rel := TrimModulePrefix(pkg.ImportPath)
+	if rel == "" {
+		return false
+	}
+	parts := strings.SplitN(rel, "/", 3)
+	if len(parts) < 1 {
+		return false
+	}
+	domain := parts[0]
+	// Must be a recognized domain root
+	if !isKnownDomain(domain) {
+		return false
+	}
+	// Must be at <domain>/ or <domain>/classification
+	if len(parts) == 1 {
+		// <domain>/ — domain root
+		return isTypeOnlyPackageForVocab(pkg, root)
+	}
+	if len(parts) >= 2 && parts[1] == "classification" {
+		// <domain>/classification[/…]
+		return isTypeOnlyPackageForVocab(pkg, root)
+	}
+	return false
+}
+
+// isKnownDomain reports whether a directory name is a recognized top-level domain.
+func isKnownDomain(name string) bool {
+	for _, d := range TopLevelDomains {
+		if d == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isTypeOnlyPackageForVocab is a non-error variant of isTypeOnlyPackage used
+// for the vocabulary exemption. Returns true if the package at root is type-only
+// (no exported functions other than init); false if files can't be parsed.
+func isTypeOnlyPackageForVocab(pkg GoPackage, root string) bool {
+	pkgDir := PackageDir(root, pkg.ImportPath)
+	files, err := os.ReadDir(pkgDir)
+	if err != nil {
+		return false
+	}
+
+	fset := token.NewFileSet()
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(f.Name(), ".go") {
+			continue
+		}
+		if strings.HasSuffix(f.Name(), "_test.go") {
+			continue
+		}
+
+		src, err := os.ReadFile(filepath.Join(pkgDir, f.Name()))
+		if err != nil {
+			return false
+		}
+
+		parsed, err := parser.ParseFile(fset, "", src, parser.SkipObjectResolution)
+		if err != nil {
+			return false
+		}
+
+		for _, decl := range parsed.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Name.IsExported() && d.Name.Name != "init" {
+					return false
+				}
+			case *ast.GenDecl:
+				if d.Tok != token.TYPE && d.Tok != token.CONST && d.Tok != token.VAR {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }

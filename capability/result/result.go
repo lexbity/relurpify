@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/safety"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type ContentDisposition string
@@ -38,7 +38,7 @@ type ApprovalBinding struct {
 	CapabilityName string                 `json:"capability_name,omitempty"`
 	ProviderID     string                 `json:"provider_id,omitempty"`
 	SessionID      string                 `json:"session_id,omitempty"`
-	EffectClasses  []taxonomy.EffectClass `json:"effect_classes,omitempty"`
+	EffectClasses  []classification.EffectClass `json:"effect_classes,omitempty"`
 	TargetResource string                 `json:"target_resource,omitempty"`
 	TaskID         string                 `json:"task_id,omitempty"`
 	WorkflowID     string                 `json:"workflow_id,omitempty"`

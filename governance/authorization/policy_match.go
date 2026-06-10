@@ -5,7 +5,8 @@ import (
 	"time"
 
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 func evaluateCompiledRules(rules []policy.PolicyRule, req policy.PolicyRequest) *policy.PolicyDecision {
@@ -127,7 +128,7 @@ func matchAnyActor(values []policy.ActorMatch, req policy.PolicyRequest) bool {
 	return false
 }
 
-func matchesMinRiskClasses(minValues []taxonomy.RiskClass, actual []taxonomy.RiskClass) bool {
+func matchesMinRiskClasses(minValues []risk.RiskClass, actual []risk.RiskClass) bool {
 	for _, minValue := range minValues {
 		threshold := riskRank(minValue)
 		for _, actualRisk := range actual {
@@ -211,7 +212,7 @@ func containsRuntimeFamily(values []string, want string) bool {
 	return false
 }
 
-func containsEffectClass(values []taxonomy.EffectClass, actual []taxonomy.EffectClass) bool {
+func containsEffectClass(values []classification.EffectClass, actual []classification.EffectClass) bool {
 	for _, value := range values {
 		for _, candidate := range actual {
 			if candidate == value {
@@ -258,21 +259,21 @@ func containsRouteMode(values []string, want string) bool {
 	return false
 }
 
-func riskRank(risk taxonomy.RiskClass) int {
-	switch risk {
-	case taxonomy.RiskClassReadOnly:
+func riskRank(r risk.RiskClass) int {
+	switch r {
+	case risk.RiskClassReadOnly:
 		return 1
-	case taxonomy.RiskClassSessioned:
+	case risk.RiskClassSessioned:
 		return 2
-	case taxonomy.RiskClassNetwork:
+	case risk.RiskClassNetwork:
 		return 3
-	case taxonomy.RiskClassExecute:
+	case risk.RiskClassExecute:
 		return 4
-	case taxonomy.RiskClassCredentialed:
+	case risk.RiskClassCredentialed:
 		return 5
-	case taxonomy.RiskClassExfiltration:
+	case risk.RiskClassExfiltration:
 		return 6
-	case taxonomy.RiskClassDestructive:
+	case risk.RiskClassDestructive:
 		return 7
 	default:
 		return 0

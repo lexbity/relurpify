@@ -22,7 +22,8 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -1043,7 +1044,7 @@ func capabilityAvailabilityLabel(spec descriptor.AvailabilitySpec) string {
 	return "unavailable"
 }
 
-func riskClassStrings(values []taxonomy.RiskClass) []string {
+func riskClassStrings(values []risk.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -1051,7 +1052,7 @@ func riskClassStrings(values []taxonomy.RiskClass) []string {
 	return out
 }
 
-func effectClassStrings(values []taxonomy.EffectClass) []string {
+func effectClassStrings(values []classification.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))

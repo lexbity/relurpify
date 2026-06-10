@@ -11,7 +11,8 @@ import (
 	ports "codeburg.org/lexbit/relurpify/capability/ports"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 type DelegationRegistry struct {
@@ -150,7 +151,7 @@ func descriptorFromView(view governanceports.DescriptorView) descriptor.Capabili
 		RuntimeFamily: agentspec.CapabilityRuntimeFamily(view.RuntimeFamily()),
 		Source: descriptor.CapabilitySource{
 			ProviderID: view.SourceProviderID(),
-			Scope:      taxonomy.CapabilityScope(view.SourceScope()),
+			Scope:      classification.CapabilityScope(view.SourceScope()),
 			SessionID:  view.SourceSessionID(),
 		},
 	}
@@ -201,10 +202,10 @@ func stringSliceToRuntimeFamilies(s []string) []agentspec.CapabilityRuntimeFamil
 	return out
 }
 
-func stringSliceToScopes(s []string) []taxonomy.CapabilityScope {
-	out := make([]taxonomy.CapabilityScope, len(s))
+func stringSliceToScopes(s []string) []classification.CapabilityScope {
+	out := make([]classification.CapabilityScope, len(s))
 	for i, v := range s {
-		out[i] = taxonomy.CapabilityScope(v)
+		out[i] = classification.CapabilityScope(v)
 	}
 	return out
 }
@@ -217,18 +218,18 @@ func stringSliceToTrustClasses(s []string) []agentspec.TrustClass {
 	return out
 }
 
-func stringSliceToRiskClasses(s []string) []taxonomy.RiskClass {
-	out := make([]taxonomy.RiskClass, len(s))
+func stringSliceToRiskClasses(s []string) []risk.RiskClass {
+	out := make([]risk.RiskClass, len(s))
 	for i, v := range s {
-		out[i] = taxonomy.RiskClass(v)
+		out[i] = risk.RiskClass(v)
 	}
 	return out
 }
 
-func stringSliceToEffectClasses(s []string) []taxonomy.EffectClass {
-	out := make([]taxonomy.EffectClass, len(s))
+func stringSliceToEffectClasses(s []string) []classification.EffectClass {
+	out := make([]classification.EffectClass, len(s))
 	for i, v := range s {
-		out[i] = taxonomy.EffectClass(v)
+		out[i] = classification.EffectClass(v)
 	}
 	return out
 }

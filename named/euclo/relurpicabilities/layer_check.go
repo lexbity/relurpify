@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // LayerCheckHandler implements the import boundary checker capability.
@@ -36,11 +36,10 @@ func (h *LayerCheckHandler) Descriptor(ctx context.Context, env ports.State) des
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "read-only"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

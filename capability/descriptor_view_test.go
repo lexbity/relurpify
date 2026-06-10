@@ -3,10 +3,10 @@ package capability
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 func TestCapabilityDescriptorView_CompileTimeAssertion(t *testing.T) {
@@ -24,8 +24,7 @@ func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {
 		Category:      "utility",
 		Tags:          []string{"tag1"},
 		TrustClass:    "builtin-trusted",
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassFilesystemMutation},
+		EffectClasses: []classification.EffectClass{classification.EffectClassFilesystemMutation},
 		Source: descriptor.CapabilitySource{
 			ProviderID: "prov-1",
 			Scope:      "builtin",
@@ -56,10 +55,10 @@ func TestCapabilityDescriptorView_RoundTrip(t *testing.T) {
 	if v.SourceScope() != "builtin" {
 		t.Errorf("SourceScope() = %q, want %q", v.SourceScope(), "builtin")
 	}
-	if len(v.RiskClasses()) != 1 || v.RiskClasses()[0] != taxonomy.RiskClassReadOnly {
-		t.Error("RiskClasses mismatch")
+	if len(v.RiskClasses()) != 0 {
+		t.Errorf("RiskClasses() = %v, want nil (capability no longer declares risk)", v.RiskClasses())
 	}
-	if len(v.EffectClasses()) != 1 || v.EffectClasses()[0] != taxonomy.EffectClassFilesystemMutation {
+	if len(v.EffectClasses()) != 1 || v.EffectClasses()[0] != classification.EffectClassFilesystemMutation {
 		t.Error("EffectClasses mismatch")
 	}
 	if v.CoordinationTarget() {

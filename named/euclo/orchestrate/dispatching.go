@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -907,12 +908,13 @@ func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, tokens []str
 }
 
 func capabilityRiskTokens(desc descriptor.CapabilityDescriptor) []string {
-	if len(desc.RiskClasses) == 0 {
+	riskClasses := risk.Classify(desc.EffectClasses, desc.Source.Scope)
+	if len(riskClasses) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(desc.RiskClasses))
-	for _, risk := range desc.RiskClasses {
-		out = append(out, strings.TrimSpace(string(risk)))
+	out := make([]string, 0, len(riskClasses))
+	for _, rc := range riskClasses {
+		out = append(out, strings.TrimSpace(string(rc)))
 	}
 	return out
 }
@@ -1126,7 +1128,7 @@ func compatibilityScore(desc descriptor.CapabilityDescriptor, inputs map[string]
 }
 
 func riskPenalty(desc descriptor.CapabilityDescriptor) int {
-	return len(desc.RiskClasses)
+	return len(risk.Classify(desc.EffectClasses, desc.Source.Scope))
 }
 
 func availabilityScore(a RouteAvailability) int {

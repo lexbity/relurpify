@@ -16,7 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -1288,7 +1288,7 @@ func insertionBadge(insertion tui.StructuredInsertion) string {
 	}
 }
 
-func effectClassLabels(classes []taxonomy.EffectClass) []string {
+func effectClassLabels(classes []classification.EffectClass) []string {
 	if len(classes) == 0 {
 		return nil
 	}

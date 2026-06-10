@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -32,7 +32,7 @@ func LLMToolSpecFromDescriptor(d descriptor.CapabilityDescriptor) model.LLMToolS
 // fencedDescription returns the description wrapped in a provenance fence for
 // remote capabilities. For local capabilities the description is returned as-is.
 func fencedDescription(d descriptor.CapabilityDescriptor) string {
-	if d.Source.Scope != taxonomy.CapabilityScopeRemote {
+	if d.Source.Scope != classification.CapabilityScopeRemote {
 		return d.Description
 	}
 	provider := d.Source.ProviderID

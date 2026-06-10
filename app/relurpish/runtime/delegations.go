@@ -10,9 +10,9 @@ import (
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -69,7 +69,7 @@ func (r *Runtime) SnapshotDelegations() []policy.DelegationSnapshot {
 	return r.Delegations.SnapshotDelegations()
 }
 
-func (r *Runtime) PersistDelegations(ctx context.Context, repo agentlifecycle.Repository, workflowID, runID string) error {
+func (r *Runtime) PersistDelegations(ctx context.Context, repo governanceports.DelegationRepository, workflowID, runID string) error {
 	if r == nil || r.Delegations == nil {
 		return fmt.Errorf("runtime delegations unavailable")
 	}

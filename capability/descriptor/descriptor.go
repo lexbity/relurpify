@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
 )
 
 type CapabilitySource struct {
 	ProviderID string                   `json:"provider_id,omitempty"`
-	Scope      taxonomy.CapabilityScope `json:"scope,omitempty"`
+	Scope      classification.CapabilityScope `json:"scope,omitempty"`
 	SessionID  string                   `json:"session_id,omitempty"`
 }
 
@@ -67,8 +67,7 @@ type CapabilityDescriptor struct {
 	Tags            []string                          `json:"tags,omitempty"`
 	Source          CapabilitySource                  `json:"source,omitempty"`
 	TrustClass      agentspec.TrustClass              `json:"trust_class,omitempty"`
-	RiskClasses     []taxonomy.RiskClass              `json:"risk_classes,omitempty"`
-	EffectClasses   []taxonomy.EffectClass            `json:"effect_classes,omitempty"`
+	EffectClasses   []classification.EffectClass `json:"effect_classes,omitempty"`
 	SessionAffinity string                            `json:"session_affinity,omitempty"`
 	InputSchema     *schemacoerce.Schema              `json:"input_schema,omitempty"`
 	OutputSchema    *schemacoerce.Schema              `json:"output_schema,omitempty"`
@@ -97,12 +96,8 @@ type CapabilityTrustProvider interface {
 	TrustClass() agentspec.TrustClass
 }
 
-type CapabilityRiskProvider interface {
-	RiskClasses() []taxonomy.RiskClass
-}
-
 type CapabilityEffectProvider interface {
-	EffectClasses() []taxonomy.EffectClass
+	EffectClasses() []classification.EffectClass
 }
 
 type SessionAffinityProvider interface {
@@ -151,10 +146,7 @@ func ToolDescriptor(ctx context.Context, tool ports.Tool) CapabilityDescriptor {
 		if desc.TrustClass == "" {
 			desc.TrustClass = ToolTrustClass(tool)
 		}
-		if len(desc.RiskClasses) == 0 {
-			desc.RiskClasses = ToolRiskClasses(tool)
-		}
-		if len(desc.EffectClasses) == 0 {
+			if len(desc.EffectClasses) == 0 {
 			desc.EffectClasses = ToolEffectClasses(tool)
 		}
 		if desc.Source.Scope == "" {
@@ -181,7 +173,6 @@ func ToolDescriptor(ctx context.Context, tool ports.Tool) CapabilityDescriptor {
 		Version:       ToolVersion(tool),
 		Source:        ToolCapabilitySource(tool),
 		TrustClass:    ToolTrustClass(tool),
-		RiskClasses:   ToolRiskClasses(tool),
 		EffectClasses: ToolEffectClasses(tool),
 		InputSchema:   ToolInputSchema(tool),
 		Availability: AvailabilitySpec{
@@ -227,16 +218,16 @@ func ToolVersion(tool ports.Tool) string {
 
 func ToolCapabilitySource(tool ports.Tool) CapabilitySource {
 	if tool == nil {
-		return CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin}
+		return CapabilitySource{Scope: classification.CapabilityScopeBuiltin}
 	}
 	if provider, ok := tool.(CapabilitySourceProvider); ok {
 		source := provider.CapabilitySource()
 		if source.Scope == "" {
-			source.Scope = taxonomy.CapabilityScopeBuiltin
+			source.Scope = classification.CapabilityScopeBuiltin
 		}
 		return source
 	}
-	return CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin}
+	return CapabilitySource{Scope: classification.CapabilityScopeBuiltin}
 }
 
 func ToolCapabilityRuntimeFamily(tool ports.Tool) agentspec.CapabilityRuntimeFamily {
@@ -250,7 +241,7 @@ func ToolCapabilityRuntimeFamily(tool ports.Tool) agentspec.CapabilityRuntimeFam
 	}
 	source := ToolCapabilitySource(tool)
 	switch source.Scope {
-	case taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+	case classification.CapabilityScopeProvider, classification.CapabilityScopeRemote:
 		return agentspec.CapabilityRuntimeFamilyProvider
 	default:
 		return agentspec.CapabilityRuntimeFamilyLocalTool
@@ -267,11 +258,11 @@ func ToolTrustClass(tool ports.Tool) agentspec.TrustClass {
 		}
 	}
 	switch ToolCapabilitySource(tool).Scope {
-	case taxonomy.CapabilityScopeWorkspace:
+	case classification.CapabilityScopeWorkspace:
 		return agentspec.TrustClassWorkspaceTrusted
-	case taxonomy.CapabilityScopeProvider:
+	case classification.CapabilityScopeProvider:
 		return agentspec.TrustClassProviderLocalUntrusted
-	case taxonomy.CapabilityScopeRemote:
+	case classification.CapabilityScopeRemote:
 		return agentspec.TrustClassRemoteDeclared
 	default:
 		return agentspec.TrustClassBuiltinTrusted
@@ -285,77 +276,32 @@ func ToolCapabilityTags(tool ports.Tool) []string {
 	return normalizeCapabilityTags(tool.Tags())
 }
 
-func ToolRiskClasses(tool ports.Tool) []taxonomy.RiskClass {
-	if tool == nil {
-		return nil
-	}
-	if provider, ok := tool.(CapabilityRiskProvider); ok {
-		return normalizeRiskClasses(provider.RiskClasses())
-	}
-	set := make(map[taxonomy.RiskClass]struct{})
-	for _, tag := range tool.Tags() {
-		switch strings.ToLower(strings.TrimSpace(tag)) {
-		case string(taxonomy.RiskClassReadOnly):
-			set[taxonomy.RiskClassReadOnly] = struct{}{}
-		case string(taxonomy.RiskClassDestructive):
-			set[taxonomy.RiskClassDestructive] = struct{}{}
-		case string(taxonomy.RiskClassExecute):
-			set[taxonomy.RiskClassExecute] = struct{}{}
-		case string(taxonomy.RiskClassNetwork):
-			set[taxonomy.RiskClassNetwork] = struct{}{}
-		case string(taxonomy.RiskClassCredentialed):
-			set[taxonomy.RiskClassCredentialed] = struct{}{}
-		case string(taxonomy.RiskClassExfiltration):
-			set[taxonomy.RiskClassExfiltration] = struct{}{}
-		case string(taxonomy.RiskClassSessioned):
-			set[taxonomy.RiskClassSessioned] = struct{}{}
-		}
-	}
-	perms := tool.Permissions().Permissions
-	if perms != nil {
-		if len(perms.Executables) > 0 || len(perms.Capabilities) > 0 || len(perms.IPC) > 0 {
-			set[taxonomy.RiskClassExecute] = struct{}{}
-		}
-		if len(perms.Network) > 0 {
-			set[taxonomy.RiskClassNetwork] = struct{}{}
-			set[taxonomy.RiskClassExfiltration] = struct{}{}
-		}
-		if hasFilesystemMutation(perms) {
-			set[taxonomy.RiskClassDestructive] = struct{}{}
-		}
-		if len(set) == 0 && hasFilesystemReadOnly(perms) {
-			set[taxonomy.RiskClassReadOnly] = struct{}{}
-		}
-	}
-	return riskClassSetToSlice(set)
-}
-
-func ToolEffectClasses(tool ports.Tool) []taxonomy.EffectClass {
+func ToolEffectClasses(tool ports.Tool) []classification.EffectClass {
 	if tool == nil {
 		return nil
 	}
 	if provider, ok := tool.(CapabilityEffectProvider); ok {
 		return normalizeEffectClasses(provider.EffectClasses())
 	}
-	set := make(map[taxonomy.EffectClass]struct{})
+	set := make(map[classification.EffectClass]struct{})
 	perms := tool.Permissions().Permissions
 	if perms != nil {
 		for _, fs := range perms.FileSystem {
 			if fs.Action == permissions.FileSystemWrite || fs.Action == permissions.FileSystemExecute {
-				set[taxonomy.EffectClassFilesystemMutation] = struct{}{}
+				set[classification.EffectClassFilesystemMutation] = struct{}{}
 				break
 			}
 		}
 		if len(perms.Executables) > 0 || len(perms.Capabilities) > 0 || len(perms.IPC) > 0 {
-			set[taxonomy.EffectClassProcessSpawn] = struct{}{}
+			set[classification.EffectClassProcessSpawn] = struct{}{}
 		}
 		if len(perms.Network) > 0 {
-			set[taxonomy.EffectClassNetworkEgress] = struct{}{}
-			set[taxonomy.EffectClassExternalState] = struct{}{}
+			set[classification.EffectClassNetworkEgress] = struct{}{}
+			set[classification.EffectClassExternalState] = struct{}{}
 		}
 	}
 	if _, ok := tool.(SessionAffinityProvider); ok {
-		set[taxonomy.EffectClassSessionCreation] = struct{}{}
+		set[classification.EffectClassSessionCreation] = struct{}{}
 	}
 	return effectClassSetToSlice(set)
 }
@@ -397,10 +343,9 @@ func normalizeCapabilityDescriptor(desc CapabilityDescriptor) CapabilityDescript
 		desc.RuntimeFamily = defaultCapabilityRuntimeFamily(desc)
 	}
 	if desc.Source.Scope == "" {
-		desc.Source.Scope = taxonomy.CapabilityScopeBuiltin
+		desc.Source.Scope = classification.CapabilityScopeBuiltin
 	}
 	desc.Tags = normalizeCapabilityTags(desc.Tags)
-	desc.RiskClasses = normalizeRiskClasses(desc.RiskClasses)
 	desc.EffectClasses = normalizeEffectClasses(desc.EffectClasses)
 	desc.Coordination = normalizeCoordinationTargetMetadata(desc.Coordination, desc.InputSchema, desc.OutputSchema)
 	return desc
@@ -470,17 +415,17 @@ func ValidateCoordinationTargetMetadata(metadata *CoordinationTargetMetadata) er
 func defaultCapabilityRuntimeFamily(desc CapabilityDescriptor) agentspec.CapabilityRuntimeFamily {
 	switch desc.Kind {
 	case agentspec.CapabilityKindPrompt, agentspec.CapabilityKindResource, agentspec.CapabilityKindSession, agentspec.CapabilityKindSubscription:
-		if desc.Source.ProviderID != "" || desc.Source.Scope == taxonomy.CapabilityScopeProvider || desc.Source.Scope == taxonomy.CapabilityScopeRemote {
+		if desc.Source.ProviderID != "" || desc.Source.Scope == classification.CapabilityScopeProvider || desc.Source.Scope == classification.CapabilityScopeRemote {
 			return agentspec.CapabilityRuntimeFamilyProvider
 		}
 		return agentspec.CapabilityRuntimeFamilyRelurpic
 	case agentspec.CapabilityKindTool:
-		if desc.Source.Scope == taxonomy.CapabilityScopeProvider || desc.Source.Scope == taxonomy.CapabilityScopeRemote || desc.Source.ProviderID != "" {
+		if desc.Source.Scope == classification.CapabilityScopeProvider || desc.Source.Scope == classification.CapabilityScopeRemote || desc.Source.ProviderID != "" {
 			return agentspec.CapabilityRuntimeFamilyProvider
 		}
 		return agentspec.CapabilityRuntimeFamilyLocalTool
 	default:
-		if desc.Source.Scope == taxonomy.CapabilityScopeProvider || desc.Source.Scope == taxonomy.CapabilityScopeRemote || desc.Source.ProviderID != "" {
+		if desc.Source.Scope == classification.CapabilityScopeProvider || desc.Source.Scope == classification.CapabilityScopeRemote || desc.Source.ProviderID != "" {
 			return agentspec.CapabilityRuntimeFamilyProvider
 		}
 		return agentspec.CapabilityRuntimeFamilyRelurpic
@@ -619,44 +564,26 @@ func isReservedSecurityTag(tag string) bool {
 		string(agentspec.TrustClassProviderLocalUntrusted),
 		string(agentspec.TrustClassRemoteDeclared),
 		string(agentspec.TrustClassRemoteApproved),
-		string(taxonomy.RiskClassCredentialed),
-		string(taxonomy.RiskClassExfiltration),
-		string(taxonomy.RiskClassSessioned),
-		string(taxonomy.EffectClassFilesystemMutation),
-		string(taxonomy.EffectClassProcessSpawn),
-		string(taxonomy.EffectClassNetworkEgress),
-		string(taxonomy.EffectClassCredentialUse),
-		string(taxonomy.EffectClassExternalState),
-		string(taxonomy.EffectClassSessionCreation),
-		string(taxonomy.EffectClassContextInsertion):
+		string(classification.EffectClassFilesystemMutation),
+		string(classification.EffectClassProcessSpawn),
+		string(classification.EffectClassNetworkEgress),
+		string(classification.EffectClassCredentialUse),
+		string(classification.EffectClassExternalState),
+		string(classification.EffectClassSessionCreation),
+		string(classification.EffectClassContextInsertion):
 		return true
 	default:
 		return false
 	}
 }
 
-func normalizeRiskClasses(classes []taxonomy.RiskClass) []taxonomy.RiskClass {
+func normalizeEffectClasses(classes []classification.EffectClass) []classification.EffectClass {
 	if len(classes) == 0 {
 		return nil
 	}
-	set := make(map[taxonomy.RiskClass]struct{}, len(classes))
+	set := make(map[classification.EffectClass]struct{}, len(classes))
 	for _, class := range classes {
-		class = taxonomy.RiskClass(strings.TrimSpace(string(class)))
-		if class == "" {
-			continue
-		}
-		set[class] = struct{}{}
-	}
-	return riskClassSetToSlice(set)
-}
-
-func normalizeEffectClasses(classes []taxonomy.EffectClass) []taxonomy.EffectClass {
-	if len(classes) == 0 {
-		return nil
-	}
-	set := make(map[taxonomy.EffectClass]struct{}, len(classes))
-	for _, class := range classes {
-		class = taxonomy.EffectClass(strings.TrimSpace(string(class)))
+		class = classification.EffectClass(strings.TrimSpace(string(class)))
 		if class == "" {
 			continue
 		}
@@ -665,11 +592,11 @@ func normalizeEffectClasses(classes []taxonomy.EffectClass) []taxonomy.EffectCla
 	return effectClassSetToSlice(set)
 }
 
-func riskClassSetToSlice(set map[taxonomy.RiskClass]struct{}) []taxonomy.RiskClass {
+func effectClassSetToSlice(set map[classification.EffectClass]struct{}) []classification.EffectClass {
 	if len(set) == 0 {
 		return nil
 	}
-	out := make([]taxonomy.RiskClass, 0, len(set))
+	out := make([]classification.EffectClass, 0, len(set))
 	for class := range set {
 		out = append(out, class)
 	}
@@ -677,38 +604,4 @@ func riskClassSetToSlice(set map[taxonomy.RiskClass]struct{}) []taxonomy.RiskCla
 	return out
 }
 
-func effectClassSetToSlice(set map[taxonomy.EffectClass]struct{}) []taxonomy.EffectClass {
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]taxonomy.EffectClass, 0, len(set))
-	for class := range set {
-		out = append(out, class)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
 
-func hasFilesystemMutation(perms *permissions.PermissionSet) bool {
-	if perms == nil {
-		return false
-	}
-	for _, fs := range perms.FileSystem {
-		if fs.Action == permissions.FileSystemWrite || fs.Action == permissions.FileSystemExecute {
-			return true
-		}
-	}
-	return false
-}
-
-func hasFilesystemReadOnly(perms *permissions.PermissionSet) bool {
-	if perms == nil || len(perms.FileSystem) == 0 {
-		return false
-	}
-	for _, fs := range perms.FileSystem {
-		if fs.Action != permissions.FileSystemRead && fs.Action != permissions.FileSystemList {
-			return false
-		}
-	}
-	return true
-}

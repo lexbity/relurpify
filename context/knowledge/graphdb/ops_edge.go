@@ -118,10 +118,6 @@ func (e *Engine) applyLinkEdge(edge EdgeRecord) {
 				if edgeRecordEqual(current, edge) {
 					return
 				}
-				e.store.edgeHistory[edgeHistoryKey(edge.SourceID, edge.TargetID, edge.Kind)] = append(
-					e.store.edgeHistory[edgeHistoryKey(edge.SourceID, edge.TargetID, edge.Kind)],
-					cloneEdge(current),
-				)
 				break
 			}
 		}
@@ -143,13 +139,6 @@ func upsertEdge(edges []EdgeRecord, edge EdgeRecord) []EdgeRecord {
 func (e *Engine) applyUnlink(sourceID, targetID string, kind EdgeKind, hard bool, deletedAt int64) {
 	if deletedAt == 0 {
 		deletedAt = time.Now().UnixNano()
-	}
-	key := edgeHistoryKey(sourceID, targetID, kind)
-	for _, edge := range e.store.forward[sourceID] {
-		if edge.SourceID == sourceID && edge.TargetID == targetID && edge.Kind == kind {
-			e.store.edgeHistory[key] = append(e.store.edgeHistory[key], cloneEdge(edge))
-			break
-		}
 	}
 	e.store.forward[sourceID] = mutateEdgeSlice(e.store.forward[sourceID], sourceID, targetID, kind, hard, deletedAt)
 	e.store.reverse[targetID] = mutateEdgeSlice(e.store.reverse[targetID], sourceID, targetID, kind, hard, deletedAt)
@@ -193,8 +182,6 @@ func (e *Engine) annotateEdgeLocked(sourceID, targetID string, kind EdgeKind, pr
 		if slices.Equal(edges[i].Props, merged) {
 			return nil
 		}
-		key := edgeHistoryKey(sourceID, targetID, kind)
-		e.store.edgeHistory[key] = append(e.store.edgeHistory[key], cloneEdge(edges[i]))
 		edges[i].Props = merged
 		e.store.forward[sourceID][i] = edges[i]
 		for j := range e.store.reverse[targetID] {
@@ -215,11 +202,17 @@ func (e *Engine) ReplaceEdge(oldSourceID, oldTargetID string, oldKind EdgeKind, 
 	return e.LinkEdges([]EdgeRecord{replacement})
 }
 
-// EdgeRevisions returns the revision history for an edge, oldest first.
+// EdgeRevisions returns the revision history for an edge from durable
+// storage, oldest first. History is disk-only per FR-11.
 func (e *Engine) EdgeRevisions(sourceID, targetID string, kind EdgeKind) []EdgeRecord {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-	return cloneEdgeHistory(e.store.edgeHistory[edgeHistoryKey(sourceID, targetID, kind)])
+	if e == nil || e.bk == nil {
+		return nil
+	}
+	history, err := e.bk.getEdgeHistory(sourceID, targetID, kind)
+	if err != nil {
+		return nil
+	}
+	return history
 }
 
 func mutateEdgeSlice(edges []EdgeRecord, sourceID, targetID string, kind EdgeKind, hard bool, deletedAt int64) []EdgeRecord {

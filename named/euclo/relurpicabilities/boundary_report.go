@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 type BoundaryReportHandler struct {
@@ -33,10 +33,9 @@ func (h *BoundaryReportHandler) Descriptor(ctx context.Context, env ports.State)
 		Description:   "Generates a workspace layering report with dependency counts and violations",
 		Category:      "architecture",
 		Tags:          []string{"architecture", "imports", "report"},
-		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeBuiltin},
+		Source:        descriptor.CapabilitySource{Scope: classification.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

@@ -37,3 +37,6 @@ testsuite/agenttest_fixtures/**/*.pyc
 /docs/website/
 .aider*
 /CLAUDE.md
+
+# Build artifacts: test binaries must not be committed
+*.test

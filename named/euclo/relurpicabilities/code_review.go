@@ -19,7 +19,7 @@ import (
 	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -47,11 +47,10 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) des
 		Category:      "review_synthesis",
 		Tags:          []string{"review", "llm", "relurpic"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

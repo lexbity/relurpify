@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // CloneCapabilitySelectors returns a deep copy of selector slices so callers
@@ -34,16 +35,16 @@ func CloneCapabilitySelector(selector agentspec.CapabilitySelector) agentspec.Ca
 		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
 	}
 	if selector.SourceScopes != nil {
-		selector.SourceScopes = append([]taxonomy.CapabilityScope{}, selector.SourceScopes...)
+		selector.SourceScopes = append([]classification.CapabilityScope{}, selector.SourceScopes...)
 	}
 	if selector.TrustClasses != nil {
 		selector.TrustClasses = append([]agentspec.TrustClass{}, selector.TrustClasses...)
 	}
 	if selector.RiskClasses != nil {
-		selector.RiskClasses = append([]taxonomy.RiskClass{}, selector.RiskClasses...)
+		selector.RiskClasses = append([]risk.RiskClass{}, selector.RiskClasses...)
 	}
 	if selector.EffectClasses != nil {
-		selector.EffectClasses = append([]taxonomy.EffectClass{}, selector.EffectClasses...)
+		selector.EffectClasses = append([]classification.EffectClass{}, selector.EffectClasses...)
 	}
 	if selector.CoordinationRoles != nil {
 		selector.CoordinationRoles = append([]agentspec.CoordinationRole{}, selector.CoordinationRoles...)
@@ -99,7 +100,7 @@ func runtimeFamiliesToStrings(values []agentspec.CapabilityRuntimeFamily) []stri
 	return out
 }
 
-func capabilityScopesToStrings(values []taxonomy.CapabilityScope) []string {
+func capabilityScopesToStrings(values []classification.CapabilityScope) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -115,7 +116,7 @@ func trustClassesToStrings(values []agentspec.TrustClass) []string {
 	return out
 }
 
-func riskClassesToStrings(values []taxonomy.RiskClass) []string {
+func riskClassesToStrings(values []risk.RiskClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -123,7 +124,7 @@ func riskClassesToStrings(values []taxonomy.RiskClass) []string {
 	return out
 }
 
-func effectClassesToStrings(values []taxonomy.EffectClass) []string {
+func effectClassesToStrings(values []classification.EffectClass) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, string(value))
@@ -188,7 +189,7 @@ func ValidateCapabilitySelector(selector agentspec.CapabilitySelector) error {
 	}
 	for _, scope := range selector.SourceScopes {
 		switch scope {
-		case taxonomy.CapabilityScopeBuiltin, taxonomy.CapabilityScopeWorkspace, taxonomy.CapabilityScopeProvider, taxonomy.CapabilityScopeRemote:
+		case classification.CapabilityScopeBuiltin, classification.CapabilityScopeWorkspace, classification.CapabilityScopeProvider, classification.CapabilityScopeRemote:
 		default:
 			return fmt.Errorf("source scope %s invalid", scope)
 		}
@@ -207,16 +208,16 @@ func ValidateCapabilitySelector(selector agentspec.CapabilitySelector) error {
 			return fmt.Errorf("trust class %s invalid", trust)
 		}
 	}
-	for _, risk := range selector.RiskClasses {
-		switch risk {
-		case taxonomy.RiskClassReadOnly, taxonomy.RiskClassDestructive, taxonomy.RiskClassExecute, taxonomy.RiskClassNetwork, taxonomy.RiskClassCredentialed, taxonomy.RiskClassExfiltration, taxonomy.RiskClassSessioned:
+	for _, rc := range selector.RiskClasses {
+		switch rc {
+		case risk.RiskClassReadOnly, risk.RiskClassDestructive, risk.RiskClassExecute, risk.RiskClassNetwork, risk.RiskClassCredentialed, risk.RiskClassExfiltration, risk.RiskClassSessioned:
 		default:
-			return fmt.Errorf("risk class %s invalid", risk)
+			return fmt.Errorf("risk class %s invalid", rc)
 		}
 	}
 	for _, effect := range selector.EffectClasses {
 		switch effect {
-		case taxonomy.EffectClassFilesystemMutation, taxonomy.EffectClassProcessSpawn, taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassCredentialUse, taxonomy.EffectClassExternalState, taxonomy.EffectClassSessionCreation, taxonomy.EffectClassContextInsertion:
+		case classification.EffectClassFilesystemMutation, classification.EffectClassProcessSpawn, classification.EffectClassNetworkEgress, classification.EffectClassCredentialUse, classification.EffectClassExternalState, classification.EffectClassSessionCreation, classification.EffectClassContextInsertion:
 		default:
 			return fmt.Errorf("effect class %s invalid", effect)
 		}

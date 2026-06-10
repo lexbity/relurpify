@@ -49,30 +49,38 @@ func newBadgerBackend(opts BadgerOptions) (*badgerBackend, error) {
 // ────────────────────────────────────────────────────────────────────
 
 func (b *badgerBackend) load(_ context.Context, store *adjacencyStore) error {
+	// When LRU is active, skip full hydration — reads lazy-load on
+	// cache miss (NFR-4). We still need the store's labels for
+	// ListNodesByLabel and the index must be built from Badger.
+	hydrateNodes := store.lruMaxCapacity <= 0
+
 	return b.db.View(func(txn *badger.Txn) error {
-		// ── Nodes ──
-		nit := txn.NewIterator(badger.DefaultIteratorOptions)
-		nodePrefix := keyPrefix(famNode)
-		for nit.Seek(nodePrefix); nit.ValidForPrefix(nodePrefix); nit.Next() {
-			item := nit.Item()
-			if err := item.Value(func(val []byte) error {
-				var node NodeRecord
-				if err := json.Unmarshal(val, &node); err != nil {
+		if hydrateNodes {
+			// ── Nodes ──
+			nit := txn.NewIterator(badger.DefaultIteratorOptions)
+			nodePrefix := keyPrefix(famNode)
+			for nit.Seek(nodePrefix); nit.ValidForPrefix(nodePrefix); nit.Next() {
+				item := nit.Item()
+				if err := item.Value(func(val []byte) error {
+					var node NodeRecord
+					if err := json.Unmarshal(val, &node); err != nil {
+						return err
+					}
+					n := node
+					store.nodes[node.ID] = &n
+					store.addNodeSourceIndex(node)
+					store.addNodeLabels(node)
+					return nil
+				}); err != nil {
+					nit.Close()
 					return err
 				}
-				n := node
-				store.nodes[node.ID] = &n
-				store.addNodeSourceIndex(node)
-				store.addNodeLabels(node)
-				return nil
-			}); err != nil {
-				nit.Close()
-				return err
 			}
+			nit.Close()
 		}
-		nit.Close()
 
-		// ── Edges (outgoing) ──
+		// ── Edges (outgoing) — always hydrate for fast traversal.
+		// Edge count is bounded by node count and rarely causes OOM.
 		eit := txn.NewIterator(badger.DefaultIteratorOptions)
 		edgePrefix := keyPrefix(famEdgeOut)
 		for eit.Seek(edgePrefix); eit.ValidForPrefix(edgePrefix); eit.Next() {
@@ -92,64 +100,6 @@ func (b *badgerBackend) load(_ context.Context, store *adjacencyStore) error {
 		}
 		eit.Close()
 
-		// ── Mutation results ──
-		mit := txn.NewIterator(badger.DefaultIteratorOptions)
-		mutPrefix := keyPrefix(famMutation)
-		for mit.Seek(mutPrefix); mit.ValidForPrefix(mutPrefix); mit.Next() {
-			item := mit.Item()
-			if err := item.Value(func(val []byte) error {
-				var result MutationResult
-				if err := json.Unmarshal(val, &result); err != nil {
-					return err
-				}
-				store.mutationResults[result.StableID] = cloneMutationResult(result)
-				return nil
-			}); err != nil {
-				mit.Close()
-				return err
-			}
-		}
-		mit.Close()
-
-		// ── Node history ──
-		nhit := txn.NewIterator(badger.DefaultIteratorOptions)
-		nhPrefix := keyPrefix(famHistoryNode)
-		for nhit.Seek(nhPrefix); nhit.ValidForPrefix(nhPrefix); nhit.Next() {
-			item := nhit.Item()
-			if err := item.Value(func(val []byte) error {
-				var node NodeRecord
-				if err := json.Unmarshal(val, &node); err != nil {
-					return err
-				}
-				store.nodeHistory[node.ID] = append(store.nodeHistory[node.ID], cloneNode(&node))
-				return nil
-			}); err != nil {
-				nhit.Close()
-				return err
-			}
-		}
-		nhit.Close()
-
-		// ── Edge history ──
-		ehit := txn.NewIterator(badger.DefaultIteratorOptions)
-		ehPrefix := keyPrefix(famHistoryEdge)
-		for ehit.Seek(ehPrefix); ehit.ValidForPrefix(ehPrefix); ehit.Next() {
-			item := ehit.Item()
-			if err := item.Value(func(val []byte) error {
-				var edge EdgeRecord
-				if err := json.Unmarshal(val, &edge); err != nil {
-					return err
-				}
-				key := edgeHistoryKey(edge.SourceID, edge.TargetID, edge.Kind)
-				store.edgeHistory[key] = append(store.edgeHistory[key], cloneEdge(edge))
-				return nil
-			}); err != nil {
-				ehit.Close()
-				return err
-			}
-		}
-		ehit.Close()
-
 		return nil
 	})
 }
@@ -167,7 +117,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		if !ok {
 			return errors.New("graphdb: invalid upsert_node payload")
 		}
-		if old, _ := b.getNodeRecord(txn, op.Node.ID); old != nil {
+		if old, _ := b.getNodeRecordInTxn(txn, op.Node.ID); old != nil {
 			deleteNodeIndexes(txn, *old)
 			// Persist old version to history before overwriting.
 			if err := b.putNodeHistory(txn, *old); err != nil {
@@ -186,7 +136,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 			return errors.New("graphdb: invalid upsert_nodes payload")
 		}
 		for _, node := range op.Nodes {
-			if old, _ := b.getNodeRecord(txn, node.ID); old != nil {
+			if old, _ := b.getNodeRecordInTxn(txn, node.ID); old != nil {
 				deleteNodeIndexes(txn, *old)
 				if err := b.putNodeHistory(txn, *old); err != nil {
 					return err
@@ -204,7 +154,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		if !ok {
 			return errors.New("graphdb: invalid delete_node payload")
 		}
-		old, err := b.getNodeRecord(txn, op.ID)
+		old, err := b.getNodeRecordInTxn(txn, op.ID)
 		if err != nil {
 			return err
 		}
@@ -227,7 +177,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		}
 		now := time.Now().UnixNano()
 		for _, id := range op.IDs {
-			old, err := b.getNodeRecord(txn, id)
+			old, err := b.getNodeRecordInTxn(txn, id)
 			if err != nil {
 				return err
 			}
@@ -297,7 +247,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		if !ok {
 			return errors.New("graphdb: invalid annotate_node payload")
 		}
-		existing, err := b.getNodeRecord(txn, op.ID)
+		existing, err := b.getNodeRecordInTxn(txn, op.ID)
 		if err != nil {
 			return err
 		}
@@ -564,7 +514,7 @@ func (b *badgerBackend) putNodeRecord(txn *badger.Txn, node NodeRecord) error {
 	return txn.Set(key, val)
 }
 
-func (b *badgerBackend) getNodeRecord(txn *badger.Txn, id string) (*NodeRecord, error) {
+func (b *badgerBackend) getNodeRecordInTxn(txn *badger.Txn, id string) (*NodeRecord, error) {
 	key := keyNodeByID(id)
 	item, err := txn.Get(key)
 	if errors.Is(err, badger.ErrKeyNotFound) {
@@ -674,6 +624,237 @@ func (b *badgerBackend) putEdgeHistory(txn *badger.Txn, edge EdgeRecord) error {
 		return err
 	}
 	return txn.Set(key, val)
+}
+
+// getNodeHistory reads all history entries for a node from Badger.
+// History entries are keyed (entityID, timestamp, seq) and ordered by
+// timestamp. Returns nil, nil when no history exists.
+func (b *badgerBackend) getNodeHistory(id string) ([]NodeRecord, error) {
+	if id == "" {
+		return nil, nil
+	}
+	var history []NodeRecord
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := encodeKey(famHistoryNode, id)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var node NodeRecord
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &node)
+			}); err != nil {
+				return err
+			}
+			history = append(history, node)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+// getEdgeHistory reads all history entries for an edge from Badger.
+func (b *badgerBackend) getEdgeHistory(sourceID, targetID string, kind EdgeKind) ([]EdgeRecord, error) {
+	if sourceID == "" || targetID == "" || kind == "" {
+		return nil, nil
+	}
+	var history []EdgeRecord
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := encodeKey(famHistoryEdge, sourceID, string(kind), targetID)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var edge EdgeRecord
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &edge)
+			}); err != nil {
+				return err
+			}
+			history = append(history, edge)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+// getMutationResult reads a single mutation result from Badger.
+func (b *badgerBackend) getMutationResult(stableID string) (*MutationResult, error) {
+	if stableID == "" {
+		return nil, nil
+	}
+	key := keyMutationByStable(stableID)
+	var result MutationResult
+	if err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &result)
+		})
+	}); err != nil {
+		return nil, err
+	}
+	if result.StableID == "" {
+		return nil, nil
+	}
+	return &result, nil
+}
+
+// listMutationResults returns all stored mutation results from Badger.
+func (b *badgerBackend) listMutationResults() ([]MutationResult, error) {
+	var results []MutationResult
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := keyPrefix(famMutation)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var result MutationResult
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &result)
+			}); err != nil {
+				return err
+			}
+			results = append(results, result)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// getNodeRecord reads a single canonical node record from Badger.
+func (b *badgerBackend) getNodeRecord(id string) (*NodeRecord, error) {
+	if id == "" {
+		return nil, nil
+	}
+	key := keyNodeByID(id)
+	var node NodeRecord
+	if err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &node)
+		})
+	}); err != nil {
+		return nil, err
+	}
+	if node.ID == "" {
+		return nil, nil
+	}
+	return &node, nil
+}
+
+// listNodeIDs returns all canonical node IDs from Badger.
+func (b *badgerBackend) listNodeIDs() ([]string, error) {
+	var ids []string
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := keyPrefix(famNode)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			key := it.Item().Key()
+			segs, err := decodeKey(key)
+			if err != nil || len(segs) < 2 {
+				continue
+			}
+			ids = append(ids, segs[1])
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// edgesBySource returns all outgoing edges for a source node from Badger.
+func (b *badgerBackend) edgesBySource(sourceID string) ([]EdgeRecord, error) {
+	if sourceID == "" {
+		return nil, nil
+	}
+	var edges []EdgeRecord
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := encodeKey(famEdgeOut, sourceID)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var edge EdgeRecord
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &edge)
+			}); err != nil {
+				return err
+			}
+			edges = append(edges, edge)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return edges, nil
+}
+
+// edgesByTarget returns all incoming edges for a target node from Badger.
+func (b *badgerBackend) edgesByTarget(targetID string) ([]EdgeRecord, error) {
+	if targetID == "" {
+		return nil, nil
+	}
+	// Incoming edges are found by scanning all edge_out records.
+	var edges []EdgeRecord
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := keyPrefix(famEdgeOut)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var edge EdgeRecord
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &edge)
+			}); err != nil {
+				return err
+			}
+			if edge.TargetID == targetID {
+				edges = append(edges, edge)
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return edges, nil
+}
+
+// allEdges returns all edges from Badger organized by source ID.
+func (b *badgerBackend) allEdges() (map[string][]EdgeRecord, error) {
+	out := make(map[string][]EdgeRecord)
+	if err := b.db.View(func(txn *badger.Txn) error {
+		prefix := keyPrefix(famEdgeOut)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			var edge EdgeRecord
+			if err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &edge)
+			}); err != nil {
+				return err
+			}
+			out[edge.SourceID] = append(out[edge.SourceID], edge)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (b *badgerBackend) putMutationResult(txn *badger.Txn, result MutationResult) error {

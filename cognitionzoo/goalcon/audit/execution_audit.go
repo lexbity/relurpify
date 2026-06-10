@@ -10,7 +10,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/result"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // AuditEntry represents a single capability invocation in the audit trail.
@@ -24,8 +25,8 @@ type AuditEntry struct {
 
 	// Classification
 	TrustClass    agentspec.TrustClass   `json:"trust_class" yaml:"trust_class"`
-	EffectClasses []taxonomy.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	RiskClasses   []taxonomy.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
+	EffectClasses []classification.EffectClass `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	RiskClasses   []risk.RiskClass   `json:"risk_classes,omitempty" yaml:"risk_classes,omitempty"`
 
 	// Execution
 	InputSummary  string `json:"input_summary,omitempty" yaml:"input_summary,omitempty"`
@@ -97,7 +98,7 @@ func (t *CapabilityAuditTrail) RecordInvocation(stepID string, envelope *capresu
 		CapabilityName:  envelope.Descriptor.Name,
 		TrustClass:      envelope.Descriptor.TrustClass,
 		EffectClasses:   envelope.Descriptor.EffectClasses,
-		RiskClasses:     envelope.Descriptor.RiskClasses,
+		RiskClasses:     risk.Classify(envelope.Descriptor.EffectClasses, envelope.Descriptor.Source.Scope),
 		Success:         envelope.Result != nil && envelope.Result.Success,
 		ErrorMessage:    "",
 		Duration:        0,

@@ -3,7 +3,8 @@ package agentspec
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,7 @@ func TestAgentRuntimeSpecValidateCapabilityPolicies(t *testing.T) {
 			{
 				Selector: CapabilitySelector{
 					Kind:        CapabilityKindTool,
-					RiskClasses: []taxonomy.RiskClass{taxonomy.RiskClassExecute},
+					RiskClasses: []risk.RiskClass{risk.RiskClassExecute},
 				},
 				Execute: AgentPermissionAsk,
 			},
@@ -40,7 +41,7 @@ func TestAgentRuntimeSpecValidateCapabilityPolicies(t *testing.T) {
 			},
 		},
 		GlobalPolicies: map[string]AgentPermissionLevel{
-			string(taxonomy.RiskClassNetwork): AgentPermissionDeny,
+			string(risk.RiskClassNetwork): AgentPermissionDeny,
 		},
 		ProviderPolicies: map[string]ProviderPolicy{
 			"remote-plugin": {
@@ -184,10 +185,10 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 		RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
 		Tags:                        []string{"lang:go"},
 		ExcludeTags:                 []string{"unsafe"},
-		SourceScopes:                []taxonomy.CapabilityScope{taxonomy.CapabilityScopeProvider},
+		SourceScopes:                []classification.CapabilityScope{classification.CapabilityScopeProvider},
 		TrustClasses:                []TrustClass{TrustClassRemoteDeclared},
-		RiskClasses:                 []taxonomy.RiskClass{taxonomy.RiskClassExecute},
-		EffectClasses:               []taxonomy.EffectClass{taxonomy.EffectClassProcessSpawn},
+		RiskClasses:                 []risk.RiskClass{risk.RiskClassExecute},
+		EffectClasses:               []classification.EffectClass{classification.EffectClassProcessSpawn},
 		CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
 		CoordinationTaskTypes:       []string{"review"},
 		CoordinationExecutionModes:  []CoordinationExecutionMode{CoordinationExecutionModeBackgroundAgent},
@@ -201,10 +202,10 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 	cloned[0].RuntimeFamilies[0] = CapabilityRuntimeFamilyProvider
 	cloned[0].Tags[0] = "lang:rust"
 	cloned[0].ExcludeTags[0] = "mutated"
-	cloned[0].SourceScopes[0] = taxonomy.CapabilityScopeWorkspace
+	cloned[0].SourceScopes[0] = classification.CapabilityScopeWorkspace
 	cloned[0].TrustClasses[0] = TrustClassWorkspaceTrusted
-	cloned[0].RiskClasses[0] = taxonomy.RiskClassNetwork
-	cloned[0].EffectClasses[0] = taxonomy.EffectClassNetworkEgress
+	cloned[0].RiskClasses[0] = risk.RiskClassNetwork
+	cloned[0].EffectClasses[0] = classification.EffectClassNetworkEgress
 	cloned[0].CoordinationRoles[0] = CoordinationRolePlanner
 	cloned[0].CoordinationTaskTypes[0] = "plan"
 	cloned[0].CoordinationExecutionModes[0] = CoordinationExecutionModeSessionBacked
@@ -214,10 +215,10 @@ func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
 	require.Equal(t, CapabilityRuntimeFamilyRelurpic, input[0].RuntimeFamilies[0])
 	require.Equal(t, "lang:go", input[0].Tags[0])
 	require.Equal(t, "unsafe", input[0].ExcludeTags[0])
-	require.Equal(t, taxonomy.CapabilityScopeProvider, input[0].SourceScopes[0])
+	require.Equal(t, classification.CapabilityScopeProvider, input[0].SourceScopes[0])
 	require.Equal(t, TrustClassRemoteDeclared, input[0].TrustClasses[0])
-	require.Equal(t, taxonomy.RiskClassExecute, input[0].RiskClasses[0])
-	require.Equal(t, taxonomy.EffectClassProcessSpawn, input[0].EffectClasses[0])
+	require.Equal(t, risk.RiskClassExecute, input[0].RiskClasses[0])
+	require.Equal(t, classification.EffectClassProcessSpawn, input[0].EffectClasses[0])
 	require.Equal(t, CoordinationRoleReviewer, input[0].CoordinationRoles[0])
 	require.Equal(t, "review", input[0].CoordinationTaskTypes[0])
 	require.Equal(t, CoordinationExecutionModeBackgroundAgent, input[0].CoordinationExecutionModes[0])
@@ -263,8 +264,8 @@ func TestMergeCapabilitySelectorsDeduplicatesAndDeepCopies(t *testing.T) {
 }
 
 func TestValidatePolicyClassKeyAcceptsCapabilityClasses(t *testing.T) {
-	require.NoError(t, ValidatePolicyClassKey(string(taxonomy.RiskClassExecute)))
-	require.NoError(t, ValidatePolicyClassKey(string(taxonomy.EffectClassNetworkEgress)))
+	require.NoError(t, ValidatePolicyClassKey(string(risk.RiskClassExecute)))
+	require.NoError(t, ValidatePolicyClassKey(string(classification.EffectClassNetworkEgress)))
 	require.NoError(t, ValidatePolicyClassKey(string(TrustClassRemoteDeclared)))
 	require.NoError(t, ValidatePolicyClassKey(string(CapabilityRuntimeFamilyRelurpic)))
 }

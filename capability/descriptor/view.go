@@ -1,8 +1,9 @@
 package descriptor
 
 import (
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // DescriptorViewAdapter wraps CapabilityDescriptor to implement
@@ -26,8 +27,8 @@ func (a *DescriptorViewAdapter) Version() string                       { return 
 func (a *DescriptorViewAdapter) Category() string                      { return a.D.Category }
 func (a *DescriptorViewAdapter) Tags() []string                        { return a.D.Tags }
 func (a *DescriptorViewAdapter) TrustClass() string                    { return string(a.D.TrustClass) }
-func (a *DescriptorViewAdapter) RiskClasses() []taxonomy.RiskClass     { return a.D.RiskClasses }
-func (a *DescriptorViewAdapter) EffectClasses() []taxonomy.EffectClass { return a.D.EffectClasses }
+func (a *DescriptorViewAdapter) RiskClasses() []risk.RiskClass               { return nil }
+func (a *DescriptorViewAdapter) EffectClasses() []classification.EffectClass { return a.D.EffectClasses }
 func (a *DescriptorViewAdapter) SourceProviderID() string              { return a.D.Source.ProviderID }
 func (a *DescriptorViewAdapter) SourceScope() string                   { return string(a.D.Source.Scope) }
 func (a *DescriptorViewAdapter) SourceSessionID() string               { return a.D.Source.SessionID }

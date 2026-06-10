@@ -170,7 +170,12 @@ func TestMigrateAOFToBadger_WithMutationResults(t *testing.T) {
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
-	require.Contains(t, store.mutationResults, "mig-mut-1")
+	// Mutation results are no longer in the adjacency store (FR-11).
+	// Verify they exist in Badger directly.
+	mutPtr, loadErr := bb.getMutationResult("mig-mut-1")
+	require.NoError(t, loadErr)
+	require.NotNil(t, mutPtr)
+	require.Equal(t, "mig-mut-1", mutPtr.StableID)
 }
 
 func TestMigrateAOFToBadger_WithLabelsAndSource(t *testing.T) {

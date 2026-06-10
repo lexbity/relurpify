@@ -13,7 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // RecipeCapabilityNode is a graph node that registers a compiled thought recipe
@@ -85,7 +85,7 @@ func (h *recipeCapabilityHandler) Descriptor(ctx context.Context, env ports.Stat
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic,
 		Name:          name,
-		Source:        descriptor.CapabilitySource{Scope: taxonomy.CapabilityScopeWorkspace},
+		Source:        descriptor.CapabilitySource{Scope: classification.CapabilityScopeWorkspace},
 		Availability:  descriptor.AvailabilitySpec{Available: true},
 	}
 }

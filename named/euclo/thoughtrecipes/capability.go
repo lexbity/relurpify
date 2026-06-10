@@ -6,7 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -226,23 +227,23 @@ func CapabilityRequirementsSatisfied(trigger TriggerPolicyRequirements, capabili
 func capabilityRequiresWrite(desc descriptor.CapabilityDescriptor) bool {
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case taxonomy.EffectClassFilesystemMutation,
-			taxonomy.EffectClassProcessSpawn,
-			taxonomy.EffectClassNetworkEgress,
-			taxonomy.EffectClassCredentialUse,
-			taxonomy.EffectClassExternalState,
-			taxonomy.EffectClassSessionCreation:
+		case classification.EffectClassFilesystemMutation,
+			classification.EffectClassProcessSpawn,
+			classification.EffectClassNetworkEgress,
+			classification.EffectClassCredentialUse,
+			classification.EffectClassExternalState,
+			classification.EffectClassSessionCreation:
 			return true
 		}
 	}
-	for _, risk := range desc.RiskClasses {
-		switch risk {
-		case taxonomy.RiskClassDestructive,
-			taxonomy.RiskClassExecute,
-			taxonomy.RiskClassNetwork,
-			taxonomy.RiskClassCredentialed,
-			taxonomy.RiskClassExfiltration,
-			taxonomy.RiskClassSessioned:
+	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
+		switch rc {
+		case risk.RiskClassDestructive,
+			risk.RiskClassExecute,
+			risk.RiskClassNetwork,
+			risk.RiskClassCredentialed,
+			risk.RiskClassExfiltration,
+			risk.RiskClassSessioned:
 			return true
 		}
 	}

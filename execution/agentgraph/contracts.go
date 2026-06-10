@@ -11,7 +11,8 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // SideEffectClass describes the replay sensitivity of a node's execution.
@@ -71,7 +72,7 @@ type NodeContract struct {
 	Idempotency          IdempotencyClass               `json:"idempotency,omitempty" yaml:"idempotency,omitempty"`
 
 	PreferredPlacement PlacementPreference           `json:"preferred_placement,omitempty" yaml:"preferred_placement,omitempty"`
-	MaxRiskClass       taxonomy.RiskClass            `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
+	MaxRiskClass       risk.RiskClass            `json:"max_risk_class,omitempty" yaml:"max_risk_class,omitempty"`
 	RequiredTrustClass agentspec.TrustClass          `json:"required_trust_class,omitempty" yaml:"required_trust_class,omitempty"`
 	Recoverability     NodeRecoverability            `json:"recoverability,omitempty" yaml:"recoverability,omitempty"`
 	CheckpointPolicy   CheckpointPolicyClass         `json:"checkpoint_policy,omitempty" yaml:"checkpoint_policy,omitempty"`
@@ -248,11 +249,11 @@ func classifyToolSideEffects(desc descriptor.CapabilityDescriptor) SideEffectCla
 	hasExternal := false
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case taxonomy.EffectClassContextInsertion:
+		case classification.EffectClassContextInsertion:
 			continue
-		case taxonomy.EffectClassFilesystemMutation, taxonomy.EffectClassProcessSpawn:
+		case classification.EffectClassFilesystemMutation, classification.EffectClassProcessSpawn:
 			hasContextOnly = false
-		case taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassCredentialUse, taxonomy.EffectClassExternalState, taxonomy.EffectClassSessionCreation:
+		case classification.EffectClassNetworkEgress, classification.EffectClassCredentialUse, classification.EffectClassExternalState, classification.EffectClassSessionCreation:
 			hasContextOnly = false
 			hasExternal = true
 		default:
@@ -275,13 +276,13 @@ func classifyToolIdempotency(desc descriptor.CapabilityDescriptor) IdempotencyCl
 	}
 	for _, effect := range desc.EffectClasses {
 		switch effect {
-		case taxonomy.EffectClassFilesystemMutation, taxonomy.EffectClassNetworkEgress, taxonomy.EffectClassCredentialUse, taxonomy.EffectClassExternalState, taxonomy.EffectClassSessionCreation:
+		case classification.EffectClassFilesystemMutation, classification.EffectClassNetworkEgress, classification.EffectClassCredentialUse, classification.EffectClassExternalState, classification.EffectClassSessionCreation:
 			return IdempotencySingleShot
 		}
 	}
-	for _, risk := range desc.RiskClasses {
-		switch risk {
-		case taxonomy.RiskClassDestructive, taxonomy.RiskClassNetwork, taxonomy.RiskClassCredentialed, taxonomy.RiskClassExfiltration, taxonomy.RiskClassSessioned:
+	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
+		switch rc {
+		case risk.RiskClassDestructive, risk.RiskClassNetwork, risk.RiskClassCredentialed, risk.RiskClassExfiltration, risk.RiskClassSessioned:
 			return IdempotencySingleShot
 		}
 	}

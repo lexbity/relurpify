@@ -7,8 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 var testBackendBuilders = []BuildOption{
@@ -319,9 +320,9 @@ func TestWrapWithCapabilityProvidesManifestRiskClasses(t *testing.T) {
 			},
 		},
 	)
-	provider, ok := tool.(interface{ RiskClasses() []taxonomy.RiskClass })
+	provider, ok := tool.(interface{ RiskClasses() []risk.RiskClass })
 	require.True(t, ok)
-	require.Equal(t, []taxonomy.RiskClass{"execute", "network"}, provider.RiskClasses())
+	require.Equal(t, []risk.RiskClass{"execute", "network"}, provider.RiskClasses())
 }
 
 func TestWrapWithCapabilityProvidesManifestEffectClasses(t *testing.T) {
@@ -334,10 +335,10 @@ func TestWrapWithCapabilityProvidesManifestEffectClasses(t *testing.T) {
 		},
 	)
 	provider, ok := tool.(interface {
-		EffectClasses() []taxonomy.EffectClass
+		EffectClasses() []classification.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []taxonomy.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
+	require.Equal(t, []classification.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
 }
 
 func TestWrapWithCapabilityReturnsOriginalWhenNoCapability(t *testing.T) {
@@ -390,15 +391,15 @@ func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
 	require.True(t, ok, "Build must wrap tools with TrustClass provider")
 	require.Equal(t, agentspec.TrustClass("untrusted"), trustProv.TrustClass())
 
-	riskProv, ok := tools[0].(interface{ RiskClasses() []taxonomy.RiskClass })
+	riskProv, ok := tools[0].(interface{ RiskClasses() []risk.RiskClass })
 	require.True(t, ok)
-	require.Equal(t, []taxonomy.RiskClass{"execute"}, riskProv.RiskClasses())
+	require.Equal(t, []risk.RiskClass{"execute"}, riskProv.RiskClasses())
 
 	effectProv, ok := tools[0].(interface {
-		EffectClasses() []taxonomy.EffectClass
+		EffectClasses() []classification.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []taxonomy.EffectClass{"process_spawn"}, effectProv.EffectClasses())
+	require.Equal(t, []classification.EffectClass{"process_spawn"}, effectProv.EffectClasses())
 }
 
 func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {

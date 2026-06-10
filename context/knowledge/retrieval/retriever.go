@@ -129,13 +129,22 @@ func (r *Retriever) traversalCandidates(query RetrievalQuery) []knowledge.ChunkI
 		}
 	}
 
-	nodes, _ := r.store.Graph.Subgraph(graphdb.GraphQuery{
-		RootIDs:   anchorIDs,
-		EdgeKinds: edgeKinds,
-		Direction: direction,
-		MaxDepth:  spec.MaxDepth,
-		Limit:     math.MaxInt32,
+	page, _ := r.store.Graph.SubgraphPage(context.Background(), graphdb.GraphPageQuery{
+		GraphQuery: graphdb.GraphQuery{
+			RootIDs:   anchorIDs,
+			EdgeKinds: edgeKinds,
+			Direction: direction,
+			MaxDepth:  spec.MaxDepth,
+			Limit:     math.MaxInt32,
+		},
+		PageSize: math.MaxInt32,
 	})
+	nodes := make([]graphdb.NodeRecord, 0, len(page.Items))
+	for _, elem := range page.Items {
+		if elem.Node.ID != "" {
+			nodes = append(nodes, elem.Node)
+		}
+	}
 	if len(nodes) == 0 {
 		return nil
 	}

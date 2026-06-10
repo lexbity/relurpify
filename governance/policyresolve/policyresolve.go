@@ -6,7 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 // RegistryView is the governance-owned view of the capability registry for
@@ -277,7 +278,7 @@ func containsAnyInSlice(values, wants []string) bool {
 	return false
 }
 
-func containsAnyInRiskClass(values []string, want []taxonomy.RiskClass) bool {
+func containsAnyInRiskClass(values []string, want []risk.RiskClass) bool {
 	for _, w := range want {
 		for _, v := range values {
 			if string(w) == v {
@@ -288,7 +289,7 @@ func containsAnyInRiskClass(values []string, want []taxonomy.RiskClass) bool {
 	return false
 }
 
-func containsAnyInEffectClass(values []string, want []taxonomy.EffectClass) bool {
+func containsAnyInEffectClass(values []string, want []classification.EffectClass) bool {
 	for _, w := range want {
 		for _, v := range values {
 			if string(w) == v {

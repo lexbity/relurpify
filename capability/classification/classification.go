@@ -1,19 +1,14 @@
-// Package taxonomy defines the canonical risk, effect, and scope
-// classification vocabulary used across the system.
-package taxonomy
-
-// RiskClass classifies the risk of a capability.
-type RiskClass string
-
-const (
-	RiskClassReadOnly     RiskClass = "read-only"
-	RiskClassDestructive  RiskClass = "destructive"
-	RiskClassExecute      RiskClass = "execute"
-	RiskClassNetwork      RiskClass = "network"
-	RiskClassCredentialed RiskClass = "credentialed"
-	RiskClassExfiltration RiskClass = "exfiltration-sensitive"
-	RiskClassSessioned    RiskClass = "sessioned"
-)
+// Package classification defines the self-declared facts about a capability:
+// what effects it has and what scope it operates in.
+//
+// Per Q1: EffectClass and CapabilityScope are owned by capability (the tool
+// knows what it does and where it comes from). RiskClass — a governance
+// judgment — lives in governance/risk.
+//
+// This is a pure vocabulary package: types and consts only, zero exported
+// functions. It is not a cross-domain bucket — it is the public vocabulary
+// of the capability domain.
+package classification
 
 // EffectClass classifies the effect of a capability.
 type EffectClass string

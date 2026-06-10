@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -47,11 +47,10 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 		Category:      "git",
 		Tags:          []string{"git", "blame", "read-only"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassReadOnly},
-		EffectClasses: []taxonomy.EffectClass{},
+		EffectClasses: []classification.EffectClass{},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

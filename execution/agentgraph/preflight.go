@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
 type CapabilityCatalog interface {
@@ -176,7 +176,7 @@ func filterDescriptorsForContract(contract NodeContract, descriptors []descripto
 		if contract.RequiredTrustClass != "" && trustRank(desc.TrustClass) < trustRank(contract.RequiredTrustClass) {
 			continue
 		}
-		if contract.MaxRiskClass != "" && riskExceeds(contract.MaxRiskClass, desc.RiskClasses) {
+		if contract.MaxRiskClass != "" && riskExceeds(contract.MaxRiskClass, risk.Classify(desc.EffectClasses, desc.Source.Scope)) {
 			continue
 		}
 		out = append(out, desc)
@@ -186,7 +186,7 @@ func filterDescriptorsForContract(contract NodeContract, descriptors []descripto
 
 func placementScore(preference PlacementPreference, desc descriptor.CapabilityDescriptor) int {
 	score := trustRank(desc.TrustClass) * 100
-	score -= maxRiskRank(desc.RiskClasses) * 10
+	score -= maxRiskRank(risk.Classify(desc.EffectClasses, desc.Source.Scope)) * 10
 	switch preference {
 	case PlacementPreferenceLocal:
 		if desc.Source.ProviderID == "" {
@@ -244,44 +244,44 @@ func blockingPreflightError(issues []PreflightIssue) error {
 	return nil
 }
 
-func riskExceeds(max taxonomy.RiskClass, actual []taxonomy.RiskClass) bool {
+func riskExceeds(max risk.RiskClass, actual []risk.RiskClass) bool {
 	if max == "" {
 		return false
 	}
 	limit := riskRank(max)
-	for _, risk := range actual {
-		if riskRank(risk) > limit {
+	for _, rc := range actual {
+		if riskRank(rc) > limit {
 			return true
 		}
 	}
 	return false
 }
 
-func maxRiskRank(risks []taxonomy.RiskClass) int {
+func maxRiskRank(risks []risk.RiskClass) int {
 	max := 0
-	for _, risk := range risks {
-		if rank := riskRank(risk); rank > max {
+	for _, rc := range risks {
+		if rank := riskRank(rc); rank > max {
 			max = rank
 		}
 	}
 	return max
 }
 
-func riskRank(risk taxonomy.RiskClass) int {
-	switch risk {
-	case taxonomy.RiskClassReadOnly:
+func riskRank(r risk.RiskClass) int {
+	switch r {
+	case risk.RiskClassReadOnly:
 		return 1
-	case taxonomy.RiskClassSessioned:
+	case risk.RiskClassSessioned:
 		return 2
-	case taxonomy.RiskClassNetwork:
+	case risk.RiskClassNetwork:
 		return 3
-	case taxonomy.RiskClassExecute:
+	case risk.RiskClassExecute:
 		return 4
-	case taxonomy.RiskClassCredentialed:
+	case risk.RiskClassCredentialed:
 		return 5
-	case taxonomy.RiskClassExfiltration:
+	case risk.RiskClassExfiltration:
 		return 6
-	case taxonomy.RiskClassDestructive:
+	case risk.RiskClassDestructive:
 		return 7
 	default:
 		return 0

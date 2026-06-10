@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -36,11 +36,10 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 		Category:      "verification",
 		Tags:          []string{"testing", "coverage", "shell", "tool"},
 		Source: descriptor.CapabilitySource{
-			Scope: taxonomy.CapabilityScopeBuiltin,
+			Scope: classification.CapabilityScopeBuiltin,
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
-		RiskClasses:   []taxonomy.RiskClass{taxonomy.RiskClassExecute},
-		EffectClasses: []taxonomy.EffectClass{taxonomy.EffectClassProcessSpawn},
+		EffectClasses: []classification.EffectClass{classification.EffectClassProcessSpawn},
 		InputSchema: &schemacoerce.Schema{
 			Type: "object",
 			Properties: map[string]*schemacoerce.Schema{

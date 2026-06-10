@@ -13,10 +13,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/governance/taxonomy"
+	"codeburg.org/lexbit/relurpify/capability/classification"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
@@ -52,7 +51,7 @@ type DelegationExecutionOptions struct {
 	BackgroundRunner DelegationBackgroundRunner
 	AgentSpec        governanceports.SpecView
 	State            *contextdata.Envelope
-	LifecycleRepo    agentlifecycle.Repository
+	LifecycleRepo    governanceports.DelegationRepository
 	WorkflowRunID    string
 	WorkflowStepID   string
 	CallerAgentID    string
@@ -360,7 +359,7 @@ func (m *DelegationManager) SnapshotDelegations() []policy.DelegationSnapshot {
 	return m.ListDelegations(policy.DelegationFilter{})
 }
 
-func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentlifecycle.Repository, workflowID, runID string) error {
+func (m *DelegationManager) PersistDelegations(ctx context.Context, repo governanceports.DelegationRepository, workflowID, runID string) error {
 	if m == nil {
 		return fmt.Errorf("delegation manager unavailable")
 	}
@@ -374,7 +373,7 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentli
 		if strings.TrimSpace(workflowID) != "" && snapshot.Request.WorkflowID != "" && snapshot.Request.WorkflowID != workflowID {
 			continue
 		}
-		record := agentlifecycle.DelegationEntry{
+		record := governanceports.DelegationEntry{
 			DelegationID:   snapshot.Request.ID,
 			WorkflowID:     firstNonEmpty(snapshot.Request.WorkflowID, workflowID),
 			RunID:          strings.TrimSpace(runID),
@@ -392,7 +391,7 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentli
 		if err := repo.UpsertDelegation(ctx, record); err != nil {
 			return err
 		}
-		transition := agentlifecycle.DelegationTransitionEntry{
+		transition := governanceports.DelegationTransitionEntry{
 			TransitionID: delegationTransitionID(snapshot),
 			DelegationID: snapshot.Request.ID,
 			WorkflowID:   record.WorkflowID,
@@ -471,7 +470,7 @@ func validateDelegationTargetPolicy(request policy.DelegationRequest, target gov
 	if coordination.MaxDelegationDepth > 0 && request.Depth > coordination.MaxDelegationDepth {
 		return fmt.Errorf("delegation depth %d exceeds max %d", request.Depth, coordination.MaxDelegationDepth)
 	}
-	if target.RuntimeFamily() == "provider" && target.SourceScope() == string(taxonomy.CapabilityScopeRemote) && !coordination.AllowRemoteDelegation {
+	if target.RuntimeFamily() == "provider" && target.SourceScope() == string(classification.CapabilityScopeRemote) && !coordination.AllowRemoteDelegation {
 		return fmt.Errorf("remote delegation to %s is not allowed", target.CapabilityName())
 	}
 	if target.CoordinationLongRunning() == 1 && !coordination.AllowBackgroundDelegation {
@@ -570,7 +569,7 @@ func delegationMatchesFilter(snapshot policy.DelegationSnapshot, filter policy.D
 	return true
 }
 
-func projectDelegationResources(ctx context.Context, refs []string, repo agentlifecycle.Repository) ([]string, error) {
+func projectDelegationResources(ctx context.Context, refs []string, repo governanceports.DelegationRepository) ([]string, error) {
 	// TODO: Implement resource projection via lifecycle repository in Phase 4
 	// For now, return nil
 	return nil, nil
@@ -784,17 +783,17 @@ func delegationTransitionID(snapshot policy.DelegationSnapshot) string {
 	return fmt.Sprintf("%s:%s:%d", snapshot.Request.ID, snapshot.State, when.UTC().UnixNano())
 }
 
-func promotedDelegationArtifact(snapshot policy.DelegationSnapshot, workflowID, runID string) *agentlifecycle.WorkflowArtifactRecord {
+func promotedDelegationArtifact(snapshot policy.DelegationSnapshot, workflowID, runID string) *governanceports.WorkflowArtifactRecord {
 	if snapshot.Result == nil || (snapshot.State != policy.DelegationStateSucceeded && snapshot.State != policy.DelegationStateFailed && snapshot.State != policy.DelegationStateCancelled) {
 		return nil
 	}
-	return &agentlifecycle.WorkflowArtifactRecord{
+	return &governanceports.WorkflowArtifactRecord{
 		ArtifactID:        "delegation-result:" + snapshot.Request.ID,
 		WorkflowID:        workflowID,
 		RunID:             strings.TrimSpace(runID),
 		Kind:              "delegation_result",
 		ContentType:       "application/json",
-		StorageKind:       agentlifecycle.ArtifactStorageInline,
+		StorageKind:       governanceports.ArtifactStorageInline,
 		SummaryText:       delegationSummary(snapshot),
 		SummaryMetadata:   delegationArtifactMetadata(snapshot),
 		InlineRawText:     marshalDelegationArtifact(snapshot),

@@ -36,6 +36,7 @@ func Open(opts Options) (*Engine, error) {
 		store:  newAdjacencyStore(),
 		stopCh: make(chan struct{}),
 	}
+	engine.store.lruMaxCapacity = opts.LRUCapacity
 	engine.emitEvent(Event{Kind: EventOpenStart})
 
 	if opts.DataDir == "" {
@@ -222,26 +223,17 @@ func (e *Engine) snapshotState() snapshotState {
 	defer e.store.mu.RUnlock()
 
 	state := snapshotState{
-		Nodes:       make([]NodeRecord, 0, len(e.store.nodes)),
-		Forward:     make([]EdgeRecord, 0),
-		NodeHistory: make(map[string][]NodeRecord, len(e.store.nodeHistory)),
-		EdgeHistory: make(map[string][]EdgeRecord, len(e.store.edgeHistory)),
+		Nodes:   make([]NodeRecord, 0, len(e.store.nodes)),
+		Forward: make([]EdgeRecord, 0),
 	}
 	for _, node := range e.store.nodes {
 		state.Nodes = append(state.Nodes, cloneNode(node))
-	}
-	for key, history := range e.store.nodeHistory {
-		state.NodeHistory[key] = cloneNodeHistory(history)
 	}
 	for _, edges := range e.store.forward {
 		for _, edge := range edges {
 			state.Forward = append(state.Forward, cloneEdge(edge))
 		}
 	}
-	for key, history := range e.store.edgeHistory {
-		state.EdgeHistory[key] = cloneEdgeHistory(history)
-	}
-	state.MutationResults = cloneMutationResults(e.store.mutationResults)
 	return state
 }
 
@@ -250,7 +242,7 @@ func (e *Engine) persist(kind string, payload any) error {
 		return nil
 	}
 	start := time.Now()
-	batch := mutationBatch{opName: kind, op: payload}
+	batch := singleOpBatch(kind, payload)
 	if err := e.bk.commit(context.TODO(), batch); err != nil {
 		e.emitEvent(Event{
 			Kind:       EventBackendCommitFail,
@@ -295,27 +287,28 @@ func (e *Engine) RecordMutationResult(result MutationResult) error {
 	return nil
 }
 
-// MutationResult returns a stored mutation result by stable ID.
+// MutationResult returns a stored mutation result by stable ID from durable
+// storage. History is disk-only per FR-11.
 func (e *Engine) MutationResult(stableID string) (MutationResult, bool) {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-	result, ok := e.store.mutationResults[stableID]
-	if !ok {
+	if e == nil || e.bk == nil {
 		return MutationResult{}, false
 	}
-	return cloneMutationResult(result), true
+	result, err := e.bk.getMutationResult(stableID)
+	if err != nil || result == nil {
+		return MutationResult{}, false
+	}
+	return *result, true
 }
 
-// MutationResults returns all stored mutation results in stable-ID order.
+// MutationResults returns all stored mutation results in stable-ID order
+// from durable storage.
 func (e *Engine) MutationResults() []MutationResult {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-	if len(e.store.mutationResults) == 0 {
+	if e == nil || e.bk == nil {
 		return nil
 	}
-	results := make([]MutationResult, 0, len(e.store.mutationResults))
-	for _, result := range e.store.mutationResults {
-		results = append(results, cloneMutationResult(result))
+	results, err := e.bk.listMutationResults()
+	if err != nil || len(results) == 0 {
+		return nil
 	}
 	sort.SliceStable(results, func(i, j int) bool {
 		return results[i].StableID < results[j].StableID
@@ -324,16 +317,9 @@ func (e *Engine) MutationResults() []MutationResult {
 }
 
 func (e *Engine) applyMutationResult(result MutationResult) {
-	if e == nil {
-		return
-	}
-	if result.StableID == "" {
-		result.Normalize(result.TaskID, result.SessionID)
-	}
-	if e.store.mutationResults == nil {
-		e.store.mutationResults = make(map[string]MutationResult)
-	}
-	e.store.mutationResults[result.StableID] = cloneMutationResult(result)
+	// Mutation results are persisted to Badger during commit.
+	// No RAM storage needed per FR-11. The Badger commit in
+	// recordMutationResult already writes the result to disk.
 }
 
 func (e *Engine) applyBinaryOp(op binaryOp) error {
